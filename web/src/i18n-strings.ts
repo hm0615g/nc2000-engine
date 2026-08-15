@@ -124,6 +124,18 @@ export interface UIStrings {
   settingsLabel: string;
   settingsTitle: string;
   settingsValue: (pool: string, prior: string) => string;
+  // META-NASH v1's conclusion mode (`?nash`, info-mode.ts): blind rules, but
+  // the opponent is drawn from the solved three-team mixture and nothing on
+  // the screen is configurable. nashBanner replaces blindBanner in the same
+  // one-line slot; it has to say what blind's says (sets hidden both ways,
+  // new opponent every battle) AND why the opponent row below it is now
+  // worth opening. The mixture's weights are shown, deliberately: the claim
+  // is that knowing the distribution does not help, so hiding it would be
+  // demonstrating something weaker than what was proved.
+  nashBanner: string;
+  nashTitle: string;
+  nashMixNote: string;
+  nashSource: (file: string) => string;
   // community belief prior (M18): a distribution table that fills in an
   // unidentifiable opponent's sets. Loaded by hand, never automatically.
   priorLabel: string;
@@ -192,6 +204,8 @@ export interface UIStrings {
   srSwitchTo: (species: string, hpPct: number) => string;
   srPicked: (order: number) => string;
   srDeleteFor: (name: string) => string;
+  /** The study board (`?solver`). */
+  solver: SolverStrings;
 }
 
 /** File sizes for the pool loader's cap line, in the unit a file manager
@@ -201,6 +215,108 @@ export interface UIStrings {
 function fileSize(bytes: number): string {
   if (bytes < 1_000_000) return `${Math.max(1, Math.round(bytes / 1000))} KB`;
   return `${(bytes / 1_000_000).toFixed(1).replace(/\.0$/, "")} MB`;
+}
+
+
+/** Study-board copy. Kept in its own interface so the screen's strings can
+ * be read as a unit — and so a translator can see, at a glance, that every
+ * number the board prints is hedged the same way in both languages: the
+ * search's estimate is an estimate, and a field that rests on an imputed
+ * opponent set says so. */
+export interface SolverStrings {
+  title: string;
+  intro: string;
+  yourSide: string;
+  foeSide: string;
+  fieldSection: string;
+  fromPool: string;
+  fromPaste: string;
+  fromCustom: string;
+  clear: string;
+  noTeamYet: string;
+  noFoeYet: string;
+  activeLabel: string;
+  setActive: string;
+  faintedLabel: string;
+  broughtLabel: string;
+  hpLabel: string;
+  statusLabel: string;
+  restLabel: string;
+  boostsLabel: string;
+  volatilesLabel: string;
+  ppLabel: string;
+  revealedLabel: string;
+  revealedHelp: string;
+  addMove: string;
+  itemLabel: string;
+  itemUnknown: string;
+  itemNone: string;
+  turnLabel: string;
+  weatherLabel: string;
+  weatherNone: string;
+  forceSwitchLabel: string;
+  trappedLabel: string;
+  previewLabel: string;
+  solve: string;
+  solving: string;
+  deeper: string;
+  stop: string;
+  budgetLabel: string;
+  reset: string;
+  save: string;
+  load: string;
+  problems: string;
+  problemOwnTeam: string;
+  problemFoeTeam: string;
+  problemOwnActive: string;
+  problemFoeActive: string;
+  problemHp: string;
+  problemFainted: string;
+  rejected: (why: string) => string;
+  // results
+  resultTitle: string;
+  estimateNote: string;
+  iterationsDone: (n: number, ms: number) => string;
+  beliefCount: (n: number) => string;
+  beliefOffPool: string;
+  colOption: string;
+  colShare: string;
+  colWinRate: string;
+  colWorst: string;
+  colMix: string;
+  colVisits: string;
+  positionValue: (pct: string) => string;
+  valueHelp: string;
+  mixHelp: string;
+  availableIn: (pct: string) => string;
+  dominatedTag: string;
+  matrixTitle: string;
+  matrixHelp: string;
+  matrixEmptyCell: string;
+  damageTitle: string;
+  damageMine: string;
+  damageTheirs: string;
+  damageAssumed: string;
+  koAlways: string;
+  koPossible: string;
+  koNever: (hits: number) => string;
+  koNone: string;
+  critLabel: string;
+  lineTitle: string;
+  lineAssumed: string;
+  lineHelp: string;
+  lineUs: string;
+  lineThem: string;
+  lineOdds: (pct: string) => string;
+  lineIn: string;
+  lineFainted: string;
+  lineCured: string;
+  understood: string;
+  understoodHelp: string;
+  unknownMon: (pos: number) => string;
+  pickedLabel: string;
+  seenLabel: string;
+  itemHeldLabel: string;
 }
 
 const EN: UIStrings = {
@@ -310,6 +426,17 @@ const EN: UIStrings = {
   settingsLabel: "Blind setup",
   settingsTitle: "Blind setup",
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
+  nashBanner:
+    "The solved mixture — neither side sees the other's sets; each battle " +
+    "the bot draws one of three teams at the odds below. Build whatever you " +
+    "like: knowing the mixture is the point.",
+  nashTitle: "The solved mixture",
+  nashMixNote:
+    "META-NASH v1's shipped answer: against a best-response search given the " +
+    "same budget, no team and no blend beat this one. The bot samples it " +
+    "afresh every battle, so which of the three you are facing stays hidden " +
+    "until the game ends — the odds do not.",
+  nashSource: (file) => `Solution: ${file}`,
   priorLabel: "Belief prior",
   priorNone: "None",
   priorHelp:
@@ -377,6 +504,107 @@ const EN: UIStrings = {
   srPicked: (order) =>
     order === 0 ? "picked as lead" : `picked, number ${order + 1}`,
   srDeleteFor: (name) => `Delete team ${name}`,
+  solver: {
+    title: "Solver",
+    intro:
+      "Describe a position and the bot scores every option on it — under the same information it gets on ladder: your sets exactly, the opponent by what has been shown.",
+    yourSide: "Your side",
+    foeSide: "Their side",
+    fieldSection: "Field",
+    fromPool: "From the pool",
+    fromPaste: "Paste a team",
+    fromCustom: "Saved teams",
+    clear: "Clear",
+    noTeamYet: "Load your six sets to begin.",
+    noFoeYet: "Name their six Pokémon (species and level are public at preview).",
+    activeLabel: "Out",
+    setActive: "Send out",
+    faintedLabel: "Fainted",
+    broughtLabel: "Brought",
+    hpLabel: "HP %",
+    statusLabel: "Status",
+    restLabel: "from Rest",
+    boostsLabel: "Stat changes",
+    volatilesLabel: "On the field",
+    ppLabel: "PP left",
+    revealedLabel: "Moves shown",
+    revealedHelp: "Only moves you have actually seen. Everything else stays hidden — which is the point.",
+    addMove: "Add a move",
+    itemLabel: "Item",
+    itemUnknown: "Unknown",
+    itemNone: "None (gone)",
+    turnLabel: "Turn",
+    weatherLabel: "Weather",
+    weatherNone: "None",
+    forceSwitchLabel: "You must switch (yours fainted)",
+    trappedLabel: "You cannot switch out",
+    previewLabel: "Team preview (choosing three)",
+    solve: "Analyze",
+    solving: "Thinking",
+    deeper: "Think longer",
+    stop: "Stop",
+    budgetLabel: "Search",
+    reset: "New position",
+    save: "Save",
+    load: "Load",
+    problems: "Finish the position first:",
+    problemOwnTeam: "load your six sets",
+    problemFoeTeam: "name their six Pokémon",
+    problemOwnActive: "say which of yours is out",
+    problemFoeActive: "say which of theirs is out",
+    problemHp: "an HP value is out of range",
+    problemFainted: "a Pokémon at 0 HP is not marked fainted",
+    rejected: (why) => `That position cannot happen: ${why}`,
+    resultTitle: "What the bot sees",
+    estimateNote:
+      "Win rates are the search's own estimate, not a solved value. Read them next to the visit counts: a line it barely looked at barely means anything.",
+    iterationsDone: (n, ms) => `${n.toLocaleString()} playouts in ${(ms / 1000).toFixed(1)}s`,
+    beliefCount: (n) => (n === 1 ? "their team is identified" : `${n} teams still fit`),
+    beliefOffPool: "no known team fits — imputing set by set",
+    colOption: "Option",
+    colShare: "Search share",
+    colWinRate: "Win rate",
+    colWorst: "Their best reply",
+    colMix: "Play it",
+    colVisits: "Playouts",
+    positionValue: (pct) => `This position is worth ${pct} to you`,
+    valueHelp:
+      "Win rate = what the option is worth when they answer it as well as this matrix says they can. The next column is what it is worth against the single reply that hurts it most: a gap between the two is a move that needs them to guess wrong.",
+    mixHelp:
+      "How often to choose each option. Both sides pick at the same time, so in many positions no single move is right every time — a split here is the answer, not indecision.",
+    availableIn: (pct) => `in ${pct} of their possible sets`,
+    dominatedTag: "proven pointless",
+    matrixTitle: "Against each of their replies",
+    matrixHelp:
+      "Your option down the side, their reply across the top. This is what the single number hides: a move can be strong into a stay and lose to a switch.",
+    matrixEmptyCell: "never tried",
+    damageTitle: "Damage",
+    damageMine: "You hit them",
+    damageTheirs: "They hit you",
+    damageAssumed: "assumed set",
+    koAlways: "always KOs",
+    koPossible: "KOs on a high roll",
+    koNever: (hits) => `${hits}HKO`,
+    koNone: "no damage",
+    critLabel: "crit",
+    lineTitle: "How it expects this to go",
+    lineAssumed: "assuming their set is",
+    lineHelp:
+      "Every ply is searched fresh, so both sides play the best move they can find from that board — under one guess at their hidden set, and knowing it. Chance is not rolled: each step follows the single likeliest outcome, and says how likely that was.",
+    lineUs: "you",
+    lineThem: "them",
+    lineOdds: (pct) => `this outcome: ${pct}`,
+    lineIn: "comes in",
+    lineFainted: "faints",
+    lineCured: "cured",
+    understood: "The board it read",
+    understoodHelp:
+      "Their HP lands in the middle of the percentage you gave — that is all a percentage says.",
+    unknownMon: (pos) => `bench ${pos}`,
+    pickedLabel: "Picked",
+    seenLabel: "Seen",
+    itemHeldLabel: "holds an item",
+  },
 };
 
 const JA: UIStrings = {
@@ -484,6 +712,17 @@ const JA: UIStrings = {
   settingsLabel: "ブラインド設定",
   settingsTitle: "ブラインド設定",
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
+  nashBanner:
+    "結論の混合戦略 — 互いの構成(技・持ち物)は非公開。ボットは毎回、下の" +
+    "確率で3チームから1つを引きます。あなたの編成は自由 — 混合を知られても" +
+    "崩れないことが結論の中身です。",
+  nashTitle: "結論の混合戦略",
+  nashMixNote:
+    "META-NASH v1 の出荷解です。同じ予算を与えた最適応答探索でも、単体の" +
+    "チームでも混合でも、これを上回るものは出ませんでした。ボットは毎回" +
+    "引き直すので、今どれと当たっているかは終局まで伏せられます — 確率は" +
+    "最初から公開です。",
+  nashSource: (file) => `解: ${file}`,
   priorLabel: "相手構成の事前分布",
   priorNone: "なし",
   priorHelp:
@@ -549,6 +788,107 @@ const JA: UIStrings = {
   srPicked: (order) =>
     order === 0 ? "選出済み・先発" : `選出済み・${order + 1}番目`,
   srDeleteFor: (name) => `チーム「${name}」を削除`,
+  solver: {
+    title: "ソルバ",
+    intro:
+      "盤面を書くと、bot が全部の選択肢に点数を付ける。情報はラダーと同じ — 自分のセットは正確に、相手は見えたものだけ。",
+    yourSide: "自分",
+    foeSide: "相手",
+    fieldSection: "場",
+    fromPool: "プールから",
+    fromPaste: "貼り付け",
+    fromCustom: "保存したチーム",
+    clear: "クリア",
+    noTeamYet: "まず自分の6体のセットを読み込む。",
+    noFoeYet: "相手の6体を入れる（種族とレベルは選出画面で公開されている）。",
+    activeLabel: "場",
+    setActive: "場に出す",
+    faintedLabel: "ひんし",
+    broughtLabel: "選出済み",
+    hpLabel: "HP %",
+    statusLabel: "状態",
+    restLabel: "ねむる由来",
+    boostsLabel: "ランク",
+    volatilesLabel: "場の状態",
+    ppLabel: "残りPP",
+    revealedLabel: "判明した技",
+    revealedHelp: "実際に見た技だけ。それ以外は隠れたまま — そこが肝心。",
+    addMove: "技を追加",
+    itemLabel: "道具",
+    itemUnknown: "不明",
+    itemNone: "無し（消費済み）",
+    turnLabel: "ターン",
+    weatherLabel: "天候",
+    weatherNone: "なし",
+    forceSwitchLabel: "交代を選ぶ場面（自分がひんし）",
+    trappedLabel: "交代できない",
+    previewLabel: "選出画面（3体を選ぶ）",
+    solve: "解析",
+    solving: "思考中",
+    deeper: "もっと考える",
+    stop: "中断",
+    budgetLabel: "探索量",
+    reset: "新しい盤面",
+    save: "保存",
+    load: "読み込み",
+    problems: "まだ足りない:",
+    problemOwnTeam: "自分の6体のセット",
+    problemFoeTeam: "相手の6体",
+    problemOwnActive: "自分のどれが場に出ているか",
+    problemFoeActive: "相手のどれが場に出ているか",
+    problemHp: "HP の値が範囲外",
+    problemFainted: "HP 0 なのに「ひんし」になっていない",
+    rejected: (why) => `その盤面は成立しない: ${why}`,
+    resultTitle: "bot の見え方",
+    estimateNote:
+      "勝率は探索の推定値であって解ではない。試行回数と並べて読むこと — ほとんど見ていない手の数字はほとんど何も言っていない。",
+    iterationsDone: (n, ms) => `${n.toLocaleString()} 回の playout / ${(ms / 1000).toFixed(1)}秒`,
+    beliefCount: (n) => (n === 1 ? "相手のチームは特定済み" : `候補はまだ ${n} チーム`),
+    beliefOffPool: "既知のチームに当てはまらない — 1体ずつ推定している",
+    colOption: "選択肢",
+    colShare: "探索の配分",
+    colWinRate: "勝率",
+    colWorst: "相手最善",
+    colMix: "選ぶ割合",
+    colVisits: "playout",
+    positionValue: (pct) => `この局面の値: ${pct}`,
+    valueHelp:
+      "勝率＝この表の範囲で相手が最善に返してきたときの値。次の列は「一番刺さる1手で返されたとき」。差が大きい手は、相手が読み違えることに賭けている手。",
+    mixHelp:
+      "それぞれをどの割合で選ぶか。同時に手を出す以上、常に同じ手が正解とは限らない — 割れているのが答えであって、迷いではない。",
+    availableIn: (pct) => `相手候補の ${pct} にしか無い手`,
+    dominatedTag: "無意味と証明済み",
+    matrixTitle: "相手の手ごとの勝率",
+    matrixHelp:
+      "縦が自分の手、横が相手の手。1つの数字が潰してしまうのはここ — 居座りには強いが交代に負ける技、というのが見える。",
+    matrixEmptyCell: "未探索",
+    damageTitle: "ダメージ",
+    damageMine: "自分→相手",
+    damageTheirs: "相手→自分",
+    damageAssumed: "推定セット",
+    koAlways: "確定KO",
+    koPossible: "乱数KO",
+    koNever: (hits) => `確定${hits}発`,
+    koNone: "ダメージ無し",
+    critLabel: "急所",
+    lineTitle: "この後の読み筋",
+    lineAssumed: "相手のセットを次と仮定",
+    lineHelp:
+      "1手ごとに探索し直しているので、双方その盤面での最善を指している（相手のセットは1通りに仮定し、それを互いに知っている前提）。乱数は振らず、各手で最も起こりやすい結果だけを辿り、その確率を併記する。",
+    lineUs: "自分",
+    lineThem: "相手",
+    lineOdds: (pct) => `この結果になる確率 ${pct}`,
+    lineIn: "登場",
+    lineFainted: "ひんし",
+    lineCured: "回復",
+    understood: "ソルバが読み取った盤面",
+    understoodHelp:
+      "相手の HP は入力した％の中央値になる — ％が言えるのはそこまで。",
+    unknownMon: (pos) => `控え${pos}`,
+    pickedLabel: "選出",
+    seenLabel: "出てきた",
+    itemHeldLabel: "道具あり",
+  },
 };
 
 export const STRINGS: Record<Locale, UIStrings> = { en: EN, ja: JA };

@@ -61,9 +61,11 @@
 
 use std::sync::Arc;
 
+use nc2000_engine::battle::enumerate::enumerate_step_with_damage_mode;
 use nc2000_engine::battle::SearchChoice;
-use nc2000_engine::dex::Dex;
+use nc2000_engine::dex::{Dex, SpeciesId};
 use nc2000_engine::fxhash::FxHashMap;
+use nc2000_engine::prng::DamageRollMode;
 use nc2000_engine::state::Battle;
 
 use crate::agent::Agent;
@@ -72,7 +74,7 @@ use crate::observe::Observer;
 use crate::preview::{MetaPool, TableSet};
 use crate::prior::BeliefPrior;
 use crate::rng::SplitMix64;
-use crate::smmcts::{key_of, run_iteration, Node, RmConfig};
+use crate::smmcts::{key_of, run_iteration, Node, RmConfig, SkuctSearch};
 
 struct GameState {
     side: usize,
@@ -292,6 +294,24 @@ pub struct BlindSearch {
     nodes: Vec<Node>,
     table: FxHashMap<u64, usize>,
     done: u32,
+    /// Root joint statistics: `(own root action index, the opponent action
+    /// it met, samples, summed reward from THIS side)`. Free — every entry
+    /// comes from an iteration the search was running anyway — and it is the
+    /// only place the simultaneous structure is visible at all: the per-side
+    /// visit counts marginalize it away, so "this move is good, but only
+    /// because they rarely stay in" cannot be read off `visits()`.
+    ///
+    /// Keyed by the opponent's `SearchChoice`, never by its index: the
+    /// opponent's legal list is determinization-dependent (an imputed set
+    /// decides which moves exist), so an index means nothing across
+    /// iterations while a `Move(id)` means the same move every time.
+    joint: Vec<(usize, SearchChoice, u32, f64)>,
+    /// How often each opponent action was even LEGAL, across iterations.
+    /// A blind root's opponent action list is determinization-dependent — a
+    /// move exists only in the candidates that carry it — so a column's
+    /// sample count conflates "rarely chosen" with "rarely available", and
+    /// only this tells them apart.
+    avail: Vec<(SearchChoice, u32)>,
 }
 
 impl BlindSearch {
@@ -334,6 +354,8 @@ impl BlindSearch {
             nodes: Vec::new(),
             table: FxHashMap::default(),
             done: 0,
+            joint: Vec::new(),
+            avail: Vec::new(),
         }
     }
 
@@ -378,6 +400,7 @@ impl BlindSearch {
             &mut joint,
             &mut 0,
         );
+        self.record_joint(root, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
         r
@@ -432,9 +455,177 @@ impl BlindSearch {
             &mut joint,
             &mut 0,
         );
+        self.record_joint(root, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
         r
+    }
+
+    /// Fold one iteration's root joint into the matrix. Silently drops the
+    /// iterations where the opponent owed nothing (a forced switch on our
+    /// side alone) — there is no cell for "they did not act".
+    fn record_joint(&mut self, root: usize, my_pick: usize, joint: [usize; 2], r: f64) {
+        let opp = 1 - self.side;
+        let acts = &self.nodes[root].acts[opp];
+        for &c in acts.iter() {
+            match self.avail.iter_mut().find(|(x, _)| *x == c) {
+                Some((_, n)) => *n += 1,
+                None => self.avail.push((c, 1)),
+            }
+        }
+        let acts = &self.nodes[root].acts[opp];
+        let Some(&opp_act) = acts.get(joint[opp]) else { return };
+        let mine = if self.side == 0 { r } else { 1.0 - r };
+        match self
+            .joint
+            .iter_mut()
+            .find(|(a, c, _, _)| *a == my_pick && *c == opp_act)
+        {
+            Some((_, _, n, w)) => {
+                *n += 1;
+                *w += mine;
+            }
+            None => self.joint.push((my_pick, opp_act, 1, mine)),
+        }
+    }
+
+    /// The root joint cells: `(own action index, opponent action, samples,
+    /// mean reward from this side)`. Unvisited cells are absent rather than
+    /// zero — "never tried" and "tried and scored 0" are different answers,
+    /// and a reader that cannot tell them apart will draw the wrong one.
+    pub fn root_matrix(&self) -> Vec<(usize, SearchChoice, u32, f64)> {
+        self.joint
+            .iter()
+            .map(|&(a, c, n, w)| (a, c, n, if n > 0 { w / n as f64 } else { 0.5 }))
+            .collect()
+    }
+
+    /// The line both sides would play from here — the "読み筋" a study screen
+    /// shows under the score.
+    ///
+    /// Three things make this a line rather than a branch, and each one is a
+    /// correction of the obvious implementation:
+    ///
+    /// - **Each ply is its own search.** Reading a continuation off the
+    ///   blind tree's visit counts looks right and is not: below the root
+    ///   those nodes are state-keyed across determinizations, HP-bucketed,
+    ///   and often entered a handful of times, so their argmax is noise
+    ///   wearing the search's authority. A fresh `SkuctSearch` per ply costs
+    ///   a fraction of the root search and answers the question actually
+    ///   being asked — what would a good player do HERE.
+    /// - **Chance is not sampled.** Advancing with the battle's own PRNG
+    ///   shows one roll of the dice as though it were the plan; a paralysis
+    ///   that lands 30% of the time reads exactly like one that always does.
+    ///   Every step is enumerated exactly instead (`enumerate_step`, damage
+    ///   collapsed to its probability-weighted mean) and the line follows the
+    ///   single most likely outcome, carrying its probability so the reader
+    ///   can see how typical it is.
+    /// - **It stops rather than guess.** No leaves under the cap, nothing
+    ///   left to choose, or the game over — the line ends there.
+    ///
+    /// One assumption remains, and it is stated rather than hidden: the whole
+    /// continuation runs inside ONE determinization, so `assumed` reports the
+    /// opponent set it was played against, and both sides play as if that set
+    /// were common knowledge.
+    pub fn principal_line(
+        &self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        seed: u64,
+        plies: usize,
+        iters: u32,
+        from: Option<SearchChoice>,
+    ) -> PrincipalLine {
+        let mut rng = SplitMix64::new(seed);
+        let mut sim = belief.determinize(dex, &self.base, obs, &mut rng);
+        sim.set_log_enabled(false);
+        let assumed = sim.sides[1 - self.side]
+            .roster
+            .iter()
+            .map(|p| {
+                (
+                    p.species,
+                    p.base_move_slots.iter().map(|m| m.id).collect::<Vec<_>>(),
+                )
+            })
+            .collect();
+        let mut steps = Vec::new();
+        for ply in 0..plies {
+            if sim.outcome().is_some() {
+                break;
+            }
+            let mut search =
+                SkuctSearch::new(&sim, dex, self.cfg.clone(), seed ^ (0x9E37_79B9 * (ply as u64 + 1)));
+            search.step(dex, iters);
+            let mut joint = [search.best(0), search.best(1)];
+            // The line exists to explain the move the analysis recommends, so
+            // that move opens it. Without this the first ply comes from a
+            // different search than the score above it — full information
+            // instead of the blind root, a tenth of the playouts — and the
+            // two can disagree, leaving the screen recommending one move and
+            // illustrating another.
+            if ply == 0 {
+                if let Some(c) = from {
+                    if search.actions(self.side).contains(&c) {
+                        joint[self.side] = Some(c);
+                    }
+                }
+            }
+            if joint == [None, None] {
+                break;
+            }
+            let Some(step) =
+                enumerate_step_with_damage_mode(dex, &sim, joint, LINE_ENUM_CAP, DamageRollMode::Mean)
+            else {
+                break;
+            };
+            let Some(leaf) = step
+                .leaves
+                .into_iter()
+                .max_by(|a, b| a.prob.partial_cmp(&b.prob).unwrap_or(std::cmp::Ordering::Equal))
+            else {
+                break;
+            };
+            // Resolve switch targets before the step, while the party that
+            // `switch N` indexes into is still the one the choice was made
+            // against. A bare "switch 3" is not a reading of the line.
+            let target = |side: usize, c: Option<SearchChoice>| -> Option<SpeciesId> {
+                match c {
+                    Some(SearchChoice::Switch(pos)) => sim.sides[side]
+                        .party
+                        .get(pos as usize - 1)
+                        .map(|&slot| sim.sides[side].roster[slot as usize].species),
+                    _ => None,
+                }
+            };
+            let mine_target = target(self.side, joint[self.side]);
+            let theirs_target = target(1 - self.side, joint[1 - self.side]);
+            let effects = diff_actives(&sim, &leaf.battle);
+            let mut next = leaf.battle;
+            // The enumerator hands back a spent Oracle; the next ply's search
+            // plays seeded rollouts off this state.
+            next.reseed(rng.next());
+            steps.push(LineStep {
+                mine: joint[self.side],
+                theirs: joint[1 - self.side],
+                mine_target,
+                theirs_target,
+                iterations: iters,
+                prob: leaf.prob,
+                effects,
+                outcome: next.outcome(),
+            });
+            sim = next;
+        }
+        PrincipalLine { assumed, steps }
+    }
+
+    /// Per opponent action, the number of iterations in which it was legal.
+    /// Read next to `root_matrix`: a reply available in a third of the
+    /// determinizations is a statement about a third of the candidate teams.
+    pub fn root_replies(&self) -> &[(SearchChoice, u32)] {
+        &self.avail
     }
 
     /// Pump `n` iterations, return the total run so far.
@@ -716,4 +907,112 @@ impl Agent for BlindAgent {
         }
         self.search(battle, dex, side, choices)
     }
+}
+
+/// One turn of a [`PrincipalLine`].
+#[derive(Clone, Debug)]
+pub struct LineStep {
+    /// The analyzing side's action (`None` = it owed nothing).
+    pub mine: Option<SearchChoice>,
+    pub theirs: Option<SearchChoice>,
+    /// Species a `Switch` action brings in, resolved against the party as it
+    /// stood when the choice was made.
+    pub mine_target: Option<SpeciesId>,
+    pub theirs_target: Option<SpeciesId>,
+    /// Playouts behind this step's two choices.
+    pub iterations: u32,
+    /// Probability of the outcome shown, over this step's chance events
+    /// (1.0 when the step had none). The line follows the likeliest branch;
+    /// this is how likely that was.
+    pub prob: f64,
+    /// What changed on the board — the line's content, in place of a
+    /// protocol log the enumerator never produces.
+    pub effects: Vec<LineEffect>,
+    pub outcome: Option<nc2000_engine::battle::Outcome>,
+}
+
+/// One Pokémon the step moved. Only the mons that actually changed appear,
+/// so a step reads as its consequences rather than as a board dump.
+#[derive(Clone, Debug)]
+pub struct LineEffect {
+    pub side: usize,
+    pub slot: u8,
+    pub species: nc2000_engine::dex::SpeciesId,
+    pub hp_before: i32,
+    pub hp_after: i32,
+    pub maxhp: i32,
+    pub status_before: nc2000_engine::state::Status,
+    pub status_after: nc2000_engine::state::Status,
+    /// It is the one standing on the field after the step.
+    pub active: bool,
+    /// It came in during the step (a switch, or a replacement after a faint).
+    pub switched_in: bool,
+}
+
+/// Engine runs one line step may spend on exact chance enumeration. Damage
+/// is already collapsed to its mean, so a normal step resolves in a handful;
+/// the cap only bounds the pathological ones (multi-hit into a Substitute
+/// into a berry), which end the line instead of being approximated.
+const LINE_ENUM_CAP: usize = 256;
+
+/// Per-mon board diff across one step.
+fn diff_actives(before: &Battle, after: &Battle) -> Vec<LineEffect> {
+    let mut out = Vec::new();
+    for side in 0..2 {
+        for slot in 0..after.sides[side].roster.len() {
+            let (b, a) = (&before.sides[side].roster[slot], &after.sides[side].roster[slot]);
+            let active = after.sides[side].active == Some(slot as u8);
+            let switched_in = active && before.sides[side].active != Some(slot as u8);
+            if b.hp == a.hp && b.status == a.status && !switched_in {
+                continue;
+            }
+            // A mon that was already down and stayed down did not do
+            // anything this step; the faint bookkeeping around its status is
+            // not a board event and reads as one.
+            if b.hp == 0 && a.hp == 0 && !switched_in {
+                continue;
+            }
+            out.push(LineEffect {
+                side,
+                slot: slot as u8,
+                species: a.species,
+                hp_before: b.hp,
+                hp_after: a.hp,
+                maxhp: a.maxhp,
+                status_before: b.status,
+                status_after: a.status,
+                active,
+                switched_in,
+            });
+        }
+    }
+    out
+}
+
+/// A searched continuation under one assumed opponent team.
+#[derive(Clone, Debug)]
+pub struct PrincipalLine {
+    /// The opponent roster the line assumed: `(species, the four moves the
+    /// determinizer gave it)` per roster slot. Meaningful for the mons whose
+    /// set is still hidden; for a revealed one it is just the truth.
+    pub assumed: Vec<(nc2000_engine::dex::SpeciesId, Vec<nc2000_engine::dex::MoveId>)>,
+    pub steps: Vec<LineStep>,
+}
+
+/// Most-visited action index, skipping dominated ones while any alternative
+/// survives — the same play rule as `BlindSearch::best`.
+fn argmax_visits(visits: &[u32], dominated: Option<&[bool]>) -> usize {
+    let ok = |i: usize| dominated.map(|d| !d.get(i).copied().unwrap_or(false)).unwrap_or(true);
+    let mut best = None;
+    for i in 0..visits.len() {
+        if !ok(i) {
+            continue;
+        }
+        if best.map(|b: usize| visits[i] > visits[b]).unwrap_or(true) {
+            best = Some(i);
+        }
+    }
+    best.unwrap_or_else(|| {
+        (0..visits.len()).max_by_key(|&i| visits[i]).unwrap_or(0)
+    })
 }

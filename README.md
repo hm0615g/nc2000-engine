@@ -21,6 +21,9 @@ data/learnsets-gen2.json   per-species format-legal move sets + level floors + H
                            acceptance sets — cross-move compatibility deliberately not encoded)
 data/meta-pool-v0/         curated meta team pool (M8): 34 tournament/expert teams, provenance in its README
 data/preview-tables-v0/    baked team-preview equilibria per matchup (M8), format in its README
+data/meta-nash-v1/         META-NASH v1 artifacts: pairwise cells, BR lineages, gate results, and
+                           `pool-artifact.json` = the shipped team mixture (the app's `?nash`
+                           door fetches this one file; the rest is audit trail)
 fixtures/prng-vectors.json PRNG vectors
 fixtures/corpus-v1/        60 battles (30 puredata + 30 full; 2,268 turns / 2,585 snapshots)
 crates/engine/             the engine (prng / dex / state / choice / battle; battle/search.rs = M3 search
@@ -31,12 +34,17 @@ crates/bot/                bots: random / max-damage / open-loop DUCT MCTS (M5) 
                            best-response exploitability probe (M7) + baked preview tables, baked/counter
                            agents (M8) + observation tracker, meta-pool belief, hidden-field determinizer
                            (M10a), blind imperfect-info agent (M10b) + its stepped form BlindSearch
-                           (M10c), open-team-sheet agent — pinned true-sets belief (M14);
-                           examples: arena / play / tune / profile_mcts / bake_preview
+                           (M10c), open-team-sheet agent — pinned true-sets belief (M14),
+                           hand-entered positions (position.rs = the `nc2000-position-v1` document
+                           + its tracker round trip) and the solver report (analysis.rs = scored
+                           actions + root matrix + engine-truth damage + a searched line);
+                           examples: arena / play / tune / profile_mcts / bake_preview /
+                           solve_position
 crates/wasm/               nc2000-wasm JS bridge (M9): Dex / Battle / Searcher (stepped skuct — the
                            ponder substrate) / PreviewTables / BlindSearcher (M10c per-game imperfect-
                            info agent: observe/step/best + beliefInfo; pinOpponent = M12 open-team-sheet
                            mode) / Validator (M14a validateTeam+canonicalizeTeam, embedded learnsets),
+                           ProtocolSearcher.setPosition/report (the solver's entry point),
                            JSON-string API, embedded dex; build.sh = tuned wasm-pack build;
                            tests-node/ = parity + bench twins vs native
 web/                       Vite+Preact browser demo (M9): worker-threaded bot with ponder, baked-table
@@ -46,7 +54,9 @@ web/                       Vite+Preact browser demo (M9): worker-threaded bot wi
                            PS-export paste import (ps-import.ts) -> wasm canonicalize/validate ->
                            localStorage, played under the same open-sheet policy; meta pool + pair
                            tables fetched from <base>data/* at runtime (never bundled — the background
-                           bake extends the app in place; the Pages build copies data/ into dist/)
+                           bake extends the app in place; the Pages build copies data/ into dist/);
+                           `?solver` (solver.tsx + position.ts + solver-worker.ts) is a fourth door
+                           and not a battle at all: a position is typed in and every option scored
 .github/workflows/pages.yml GH Pages build+deploy (M12): wasm build -> vite build (NC2000_BASE=
                            /nc2000-engine/) -> data copy -> actions/deploy-pages
 PORTING.md                 porting checklist (377 callbacks, generated)
@@ -112,8 +122,14 @@ node tools/ps-client.js --server ws://127.0.0.1:8123 --name bot1 --team pool:ran
 #        extras: --timer (battle timer on), --mode open --opp-team-file F (pinned sheets),
 #        --drop preview:pre,move4:pre,fs:pre (reconnect chaos: kill the socket at those decision
 #        points; auto-resume rebuilds from the replayed room log and proves stateView bit-identity)
+# solver (study board): score every option on a hand-entered position — the browser's
+#   `?solver` screen and this print the same report (analysis::report), so a number on the
+#   screen is reproducible here. POSITION.json = a `nc2000-position-v1` document
+#   (crates/bot/src/position.rs); `--json` emits the raw report.
+cargo run --release -p nc2000-bot --example solve_position -- POSITION.json --iters 30000
 # wasm (M9): tuned build (fat LTO + wasm-opt -O3; native profile untouched), parity, throughput
 crates/wasm/build.sh nodejs && node crates/wasm/tests-node/parity.js
+node crates/wasm/tests-node/solver.js    # solver report shape; NC2000_NATIVE_PARITY=1 adds the twin
 node crates/wasm/tests-node/bench.js     # wasm iters/s; native twin: -p nc2000-wasm --example native_bench
 # browser demo (pkg-web via crates/wasm/build.sh): dev server, or typecheck+build+serve the dist
 cd web && npm run dev                    # 0.0.0.0:8000 (auto-bumps port if busy)
@@ -247,7 +263,7 @@ Milestones:
 
 Scope decisions (2026-07-21, settled with the owner after the first ladder exposure — real losses to a strong community player, the 2026-07-20 six-way audit, and the regulation migration + synthesis-bug fixes shipped in the second deploy):
 
-- **M11 metagame research: CUT.** Proximate causes: the bake it fed on was ruled meaningless (exact-signature table lookup contributes zero against custom ladder teams — measured in both losses) and its fitness gauntlet came from the wrong regulation. Deeper cause is ordering: optimizing teams with a bot whose search/eval still has structural holes optimizes noise. The M11a machinery (teamgen operators, gauntlet fitness, `research_meta`, `bake_preview --candidate`) stays in-tree; re-decide inclusion only after the bot is complete and stably operating.
+- **M11 metagame research: CUT** (reopened and settled 2026-08-12 by META-NASH v1, below). Proximate causes: the bake it fed on was ruled meaningless (exact-signature table lookup contributes zero against custom ladder teams — measured in both losses) and its fitness gauntlet came from the wrong regulation. Deeper cause is ordering: optimizing teams with a bot whose search/eval still has structural holes optimizes noise. The M11a machinery (teamgen operators, gauntlet fitness, `research_meta`, `bake_preview --candidate`) stays in-tree; re-decide inclusion only after the bot is complete and stably operating.
 - **New goal: bot/eval sanity verification, then strengthening.** Measurement before fixes, fixes before features — three questions: (i) does the bot judge equity correctly, (ii) do its decisions track strong human play, (iii) what structural blind spots remain. Plug the measured holes; only then look for strength gains. Method lesson carried in: the theory audit predicted 11 eval divergences, measurement found 2 and refuted 1 — every question gets a harness first, and every later change re-runs the harnesses.
 - Standing assets: `examples/damage_conformance.rs` (eval-vs-engine damage diff; 2 known bugs), the 570-battle / 12,226-turn human spectator corpus (87.9% of battles contain a condition the eval cannot see), the layered blind-spot map (L4 tables dead → L3 belief → **L2 rollout = the bottleneck** → L1 eval; fix L2 before L1 — the rollout decides which positions the eval is ever asked to score), the replay-postmortem harnesses, the M15 importer (replays protocol logs into engine states), and live ladder access for end-to-end re-exposure.
 
@@ -298,10 +314,62 @@ Milestones:
       - **Clusters 3–5: DEMOTED pending re-derivation at 30k.** Their cells (219+160, 120+48, 52/47/38) are at or inside the noise floor above, and clusters 3 and 5 are subsets of cluster 2's pattern anyway (`curse` and `perishsong` are its two largest entries). Re-derive before spending work on them.
       - **L3 imputation** — `belief.rs` merges revealed moves first, prior filler after, and the shipped Web game is pinned open-sheet (only which three were picked is hidden), so the remaining exposure is blind mode: the corpus harness and `tools/ps-client.js`.
 
+- **META-NASH v1 — the shipping team mixture: DONE (2026-08-12, OR gate PASS on Route B).** Owner-reopened metagame research, run under a pre-registered OR gate and merged from the `claude/ai-metapool-design-94shyi` branch. 52-team pairwise matrix (1,326 pairs x 64 games, `skuct:300`, seed-paired) solved with RM+, best responses supplied by 13 `TeamGen` hill-climb lineages. **Route B (strength) passed**: against same-budget adversarial exploiters the Nash pool is exploited to 0.398 +/- 0.031 (300 iters) and 0.303 +/- 0.040 (1,000 iters) where the curated-34 uniform pool concedes 0.588 / 0.621 — CIs disjoint at every budget through 30k, and the gap widens with budget. **Route A (diversity) failed**: evolution rediscovers the meta's species core but produced 20 teams < the 24-team bar, and the AI-only pool regressed (0.453 +/- 0.025). Shipped artifact `data/meta-nash-v1/pool-artifact.json` = `ship-3000`: sample-07 0.575 / sample-08 0.222 / sample-10 0.201, a mixture closing a real 07>08>10 cycle that no BR lineage, set-level neighborhood sweep, or full-candidate column could break. Exact equilibrium weights are **not** claimed budget-invariant; the exploitability separation is. Method and pre-registrations: [`docs/META-NASH-V1.md`](docs/META-NASH-V1.md); the signature-information experiment it degenerated from is [`docs/EXP-signature-info-value.md`](docs/EXP-signature-info-value.md) (deception pays, hiding does not). **Wired to the app behind `?nash`** (info-mode.ts's third door, alongside `/` and `?blind`): blind information rules, the opponent drawn afresh from the mixture every battle (start and rematch alike), the human free to bring anything, and no controls at all — the pool swap and the belief prior are `?blind`'s, and a nash page inherits neither. The distribution is shown on the start screen on purpose: an equilibrium is a strategy that survives the opponent knowing it, so the demonstration is stronger with the odds on the table. What stays hidden is what blind always hides — which arm was drawn, and every set in it, until the game ends. Scope is unchanged from the study: **bot self-team choice only; the opponent belief still reads the curated 32-team pool**. Contract in `web/tests/nash.spec.ts`.
+
+
+- **Solver (the study board, `?solver`): DONE (2026-08-14).** The app's fourth door, and the first
+  screen that is not a battle: the visitor describes a position — their own six sets exactly, the
+  opponent by public facts only — and every legal option comes back scored, under the information
+  structure the ladder bot actually plays with. Built on the M15 importer rather than beside it: a
+  `PositionSpec` (`crates/bot/src/position.rs`, schema `nc2000-position-v1`) is a complete, hand-
+  writable serialization of what `ProtocolTracker` + `Observer` know, so `set_position` lands on the
+  same `synthesize` → `BlindSearch` path `on_request` does (one shared `install`, so the live and
+  typed paths cannot drift). **Gate — the round trip, on real battles:** `tests/import.rs` now
+  exports every decision point of the 60-fixture corpus replay to a spec, sends it through JSON,
+  rebuilds tracker + observer + belief from it, and re-synthesizes with the same seed — **8,236
+  decision points, 0 divergences, 0 inexpressible** (state_key128 equality; team preview included).
+  A hand-typed position is therefore the same kind of object as a live one, which is the claim the
+  whole feature rests on. Beyond the score, three answers to *why*, because a number alone teaches
+  nothing: the **root matrix** (per (our action, their reply) cell — accumulated free from
+  iterations the search was running anyway, and keyed by the opponent's action identity rather than
+  its index, since a blind root's action list is determinization-dependent), **engine-truth damage**
+  through `get_damage_synthetic` (min/max roll, crit, guaranteed hits-to-KO), and a **searched
+  line**. That line is not read off the blind tree's visit counts, which below the root are
+  state-keyed across determinizations, HP-bucketed and often entered a handful of times — an argmax
+  there is noise wearing the search's authority, and it showed: the first version answered a
+  position by playing a move its own damage table rated at half the alternative. Every ply is now
+  its own `SkuctSearch` (a tenth of the analysis's budget, full information inside one
+  determinization), the recommended move opens it so the line explains the score above it, and
+  chance is enumerated rather than rolled — `enumerate_step` with damage collapsed to its
+  probability-weighted mean, following the likeliest outcome and printing how likely that was.
+  Every figure that leans on an imputed set is labelled as one, and unsampled matrix cells read
+  "never tried" rather than zero.
+  The headline number is **not** the search's own per-action mean: that averages over whichever
+  replies UCB explored, so it sits above the worst case and flatters any move a rare answer
+  punishes (measured on a real position: 85.7% quoted where the opponent's best reply holds it to
+  83.6%). What is shown instead is the sampled matrix solved with the same RM+ the preview tables
+  use — the position's value, each option against the opponent's equilibrium mixture, its floor
+  against their single best reply, and the mixture to play. Both summaries read the same evidence
+  (cells thinner than 20 playouts are stand-ins, not measurements), so the floor can never print
+  above the value. Each column also carries how often that reply was even legal: in blind play a
+  move exists only in the candidate sets that carry it. Parity: `crates/wasm/tests-node/solver.js` checks the bridge's report against
+  `examples/solve_position` — same actions, order, visit counts and matrix samples exactly, averaged
+  values to 1e-9 (libm's `exp`/`ln` are not bit-identical across targets). Contract in
+  `web/tests/solver.spec.ts`, which also pins the blind claim on this screen: loading the opponent's
+  roster from a pool team copies six species, levels, genders and item flags — never their sets —
+  and no move of theirs is treated as known unless the user typed it into "moves shown".
+  **One bug the screen found in the belief machinery, fixed with it:** `appeared` and "has switched
+  in at least once" are the same statement, and `Belief::determinize` reads the second
+  (`previously_switched_in`) to decide which party slots still hold unseen picks. A hand-written
+  position states only the first, so `from_spec` restores the other — without it the determinizer
+  shuffled a live bench mon into the slot where the user had just watched something faint, and the
+  search answered about a team the opponent did not have (regression:
+  `a_dead_opponent_bench_stays_dead`). Live play was never affected: a real tracker sets both on the
+  same switch line.
 
 Parked (not scheduled, not dead-by-principle):
 
-- M11 metagame research (re-decide after stable operation), preview-table baking in any form (owner-ruled meaningless 2026-07-21 — revisit only with a lookup that generalizes off-pool), and M11 certification tables.
+- Preview-table baking in any form (owner-ruled meaningless 2026-07-21 — revisit only with a lookup that generalizes off-pool), and M11 certification tables.
 - **The Web open-sheet budget gate (M17b Web tier), parked 2026-07-25 by the owner on UX grounds.** 30k + ponder is the product's sweet spot: on the certified device (iPad, 12,987 it/s) 15k/30k/60k are 1.2/2.3/4.6 s per move, so of the gate's three outcomes lowering is unwanted, retaining is a no-op, and only a large 60k gain would justify doubling the wait — which lands precisely on the points ponder cannot hide (bot-only forced replacements, and moves the human commits fast). The gate also does not measure the shipped configuration: it fixes both budgets while the product ponders past its budget to a 10x cap, so at simultaneous decision points the real budget is already 30k–300k depending on human think time. Prior evidence says the effect is small anyway — the native tier's own doubling (10k→20k) scored 0.5238 [0.4918, 0.5557], ≈ +17 Elo point / +39 Elo at the 95% edge, and that was measured in a steeper part of the curve. Cost avoided: ≈ 2–10.5 h on a 16-vCPU worker depending on which branches fire. Reopen if a ladder postmortem attributes a loss to search depth at a non-pondered decision point, or if device/engine speed makes 60k fit inside 2–3 s.
 
 Non-goals: exploitation/opponent modeling, large NNs / GPU inference, minor-party *optimization* (custom parties are accepted since the 2026-07-17 decision, but priors/tables/evaluation still specialize on the meta pool), whole-game equilibrium solving, unpermissioned main-ladder botting. Longer-term verification ideas stay live: coverage-forcing corpora, expert scenario fixtures, predicted-vs-actual diffing during live play.
