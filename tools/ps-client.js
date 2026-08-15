@@ -87,9 +87,15 @@ if (args.help || args.h) {
   --accept WHO      accept challenges: 'any' or comma list of names
   --games N         number of complete battles to play (default 1; 0 = unlimited)
   --mode M          blind (default; pool-prior belief) | open (pin the
-                    opponent's true sets — needs --opp-team-file, only
-                    meaningful where sheets are genuinely open)
-  --opp-team-file F opponent sets JSON for --mode open
+                    opponent's true sets). Open uses --opp-team-file when
+                    supplied; otherwise NC2000 direct challenges use the
+                    server-fed authenticated dynamic-open path
+  --opp-team-file F opponent sets JSON for static --mode open
+                    (omit for authenticated dynamic open)
+  NC2000_DYNAMIC_OPEN_TOKEN
+                    shared secret for server-fed dynamic open (environment;
+                    at least 32 characters; required when --mode open has no
+                    --opp-team-file)
   --iters N         search iterations per decision (default 30000 — the
                     shipped Web budget; see the note by ITERS)
   --seed N          searcher / random-mode seed (default 1)
@@ -141,6 +147,8 @@ const CHALLENGE = args.challenge && args.challenge !== true ? String(args.challe
 const ACCEPT = args.accept && args.accept !== true ? String(args.accept) : '';
 const GAMES = parseInt(args.games || '1', 10);
 const MODE = String(args.mode || 'blind');
+const DYNAMIC_OPEN_FORMAT_ID = 'gen2nintendocup2000noohkostadium2strict';
+const BOT_AUTH_TOKEN = String(process.env.NC2000_DYNAMIC_OPEN_TOKEN || '').trim();
 // Aligned to the shipped Web budget (M12b: open sheet, 30k + ponder) so that
 // ladder/postmortem evidence is about the configuration that actually ships.
 // It used to default to 10000, which was only ever a seed-stability FLOOR, not
@@ -404,19 +412,32 @@ if (!RANDOM) {
 }
 let oppTeamJson = '';
 let oppTeamSets = null;
+let DYNAMIC_OPEN = false;
 if (MODE === 'open') {
 	const f = args['opp-team-file'];
-	if (!f || f === true) {
-		console.error('--mode open needs --opp-team-file (the opponent\'s true sets)');
-		process.exit(2);
+	if (f && f !== true) {
+		const raw = JSON.parse(fs.readFileSync(String(f), 'utf8'));
+		oppTeamSets = Array.isArray(raw) ? raw : raw.sets;
+		if (!Array.isArray(oppTeamSets) || !oppTeamSets.length) {
+			console.error('--opp-team-file must contain a non-empty sets array');
+			process.exit(2);
+		}
+		oppTeamJson = JSON.stringify(oppTeamSets);
+	} else {
+		DYNAMIC_OPEN = true;
+		if (toID(FORMATID) !== DYNAMIC_OPEN_FORMAT_ID) {
+			console.error(`dynamic --mode open is only supported for ${DYNAMIC_OPEN_FORMAT_ID}`);
+			process.exit(2);
+		}
+		if (!CHALLENGE && !ACCEPT) {
+			console.error('dynamic --mode open needs --challenge or --accept');
+			process.exit(2);
+		}
+		if (BOT_AUTH_TOKEN.length < 32) {
+			console.error('dynamic --mode open needs NC2000_DYNAMIC_OPEN_TOKEN with at least 32 characters');
+			process.exit(2);
+		}
 	}
-	const raw = JSON.parse(fs.readFileSync(String(f), 'utf8'));
-	oppTeamSets = Array.isArray(raw) ? raw : raw.sets;
-	if (!Array.isArray(oppTeamSets) || !oppTeamSets.length) {
-		console.error('--opp-team-file must contain a non-empty sets array');
-		process.exit(2);
-	}
-	oppTeamJson = JSON.stringify(oppTeamSets);
 }
 
 // ------------------------------------------------------- M18 belief prior
@@ -638,6 +659,8 @@ class BattleDriver {
 		this.room = room;
 		this.battleIdx = battleIdx;
 		this.searcher = null;
+		this.opponentTeamJson = oppTeamJson;
+		this.opponentTeamSets = oppTeamSets;
 		this.side = -1;
 		this.lineBuffer = [];
 		this.visibleLines = [];
@@ -890,6 +913,29 @@ class BattleDriver {
 
 	onLine(line) {
 		if (!line.startsWith('|')) return;
+		if (line.startsWith('|nc2000openteam|')) {
+			if (!DYNAMIC_OPEN) return;
+			const packed = line.slice('|nc2000openteam|'.length);
+			try {
+				const unpacked = Teams.unpack(packed);
+				const sets = normalizeImportedTeam(unpacked, 'server-fed opponent team');
+				const json = JSON.stringify(sets);
+				if (this.opponentTeamJson && this.opponentTeamJson !== json) {
+					stats.desyncs++;
+					this.log('DESYNC: received a different server-fed opponent team for this battle');
+					this.pendingReq = null;
+					return;
+				}
+				this.opponentTeamSets = sets;
+				this.opponentTeamJson = json;
+				this.log(`authenticated open sheet received (${sets.length} sets)`);
+			} catch (e) {
+				stats.desyncs++;
+				this.log(`DESYNC: invalid server-fed opponent team (${e.message || e})`);
+				this.pendingReq = null;
+			}
+			return;
+		}
 		this.observeOpponentLine(line);
 		const cmd = line.split('|')[2] !== undefined ? line.split('|')[1] : line.slice(1);
 		if (cmd === 'request') {
@@ -1003,13 +1049,17 @@ class BattleDriver {
 			return;
 		}
 
+		if (DYNAMIC_OPEN && !this.opponentTeamJson) {
+			return this.holdForMoreLines('open mode waiting for authenticated server-fed opponent team');
+		}
+
 		if (!this.searcher) {
 			this.side = req.side && req.side.id === 'p2' ? 1 : 0;
 			const activePoolJson = this.client.currentTeam && this.client.currentTeam.poolJson ?
 				this.client.currentTeam.poolJson : loadPoolSnapshot().poolJson;
 			this.searcher = new wasm.ProtocolSearcher(dex, this.side, activePoolJson, SEED * 1000 + this.battleIdx);
 			this.searcher.setOwnTeam(JSON.stringify(this.client.currentTeam.sets));
-			if (MODE === 'open') this.searcher.pinOpponent(oppTeamJson);
+			if (MODE === 'open') this.searcher.pinOpponent(this.opponentTeamJson);
 			// after pinOpponent on purpose: if the two ever coexist the binding
 			// refuses out loud rather than contaminating the open-sheet belief
 			if (priorText) reportPrior(this.searcher.setBeliefPrior(priorText), m => this.log(m));
@@ -1110,7 +1160,7 @@ class BattleDriver {
 			teamLabel: this.client.currentTeam.label.startsWith('pool:') ?
 				this.client.currentTeam.label : path.basename(this.client.currentTeam.label),
 			ownTeam: this.client.currentTeam.sets,
-			opponentTeam: MODE === 'open' ? oppTeamSets : null,
+			opponentTeam: MODE === 'open' ? this.opponentTeamSets : null,
 			request: req,
 			protocolReset: this.protocolReset,
 			protocolDelta,
@@ -1169,6 +1219,8 @@ class PSClient {
 		this.ws = null;
 		this.challstr = '';
 		this.loggedIn = false;
+		this.dynamicOpenAuthed = !DYNAMIC_OPEN;
+		this.dynamicOpenAuthTimer = null;
 		this.triedAssertion = false;
 		this.drivers = new Map();
 		this.battleIdx = 0;
@@ -1188,6 +1240,9 @@ class PSClient {
 		this.ws.on('error', err => this.log(`socket error: ${err.message}`));
 		this.ws.on('close', () => {
 			this.loggedIn = false;
+			if (DYNAMIC_OPEN) this.dynamicOpenAuthed = false;
+			if (this.dynamicOpenAuthTimer) clearTimeout(this.dynamicOpenAuthTimer);
+			this.dynamicOpenAuthTimer = null;
 			if (this.shuttingDown) return;
 			this.log(`socket closed; reconnecting in ${RECONNECT_MS}ms`);
 			stats.reconnects++;
@@ -1204,6 +1259,14 @@ class PSClient {
 			this.ws.send(msg);
 		} else {
 			this.log(`SEND DROPPED (socket not open): ${msg.slice(0, 80)}`);
+		}
+	}
+
+	sendSensitive(msg) {
+		if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+			this.ws.send(msg);
+		} else {
+			this.log('SEND DROPPED (socket not open): [sensitive command]');
 		}
 	}
 
@@ -1247,6 +1310,20 @@ class PSClient {
 					this.loggedIn = true;
 					this.log(`logged in as ${rawName.trim()}`);
 					this.onLoggedIn();
+				}
+				break;
+			}
+			case 'nc2000botauth': {
+				if (!DYNAMIC_OPEN) break;
+				const [status, detail = ''] = rest.split('|');
+				if (status === 'ok') {
+					this.dynamicOpenAuthed = true;
+					if (this.dynamicOpenAuthTimer) clearTimeout(this.dynamicOpenAuthTimer);
+					this.dynamicOpenAuthTimer = null;
+					this.log('dynamic-open connection authenticated');
+				} else {
+					console.error(`dynamic-open authentication failed${detail ? `: ${detail}` : ''}`);
+					process.exit(2);
 				}
 				break;
 			}
@@ -1339,6 +1416,17 @@ class PSClient {
 	}
 
 	onLoggedIn() {
+		if (DYNAMIC_OPEN) {
+			this.dynamicOpenAuthed = false;
+			this.sendSensitive(`|/nc2000botauth ${BOT_AUTH_TOKEN}`);
+			this.log('authenticating dynamic-open connection');
+			if (this.dynamicOpenAuthTimer) clearTimeout(this.dynamicOpenAuthTimer);
+			this.dynamicOpenAuthTimer = setTimeout(() => {
+				if (this.dynamicOpenAuthed || this.shuttingDown) return;
+				console.error('dynamic-open authentication timed out; is the v2 server plugin installed and token configured?');
+				process.exit(2);
+			}, 5000);
+		}
 		if (LOBBY_ROOM) {
 			this.send(`|/join ${LOBBY_ROOM}`);
 			this.log(`joining ${LOBBY_ROOM}`);
@@ -1361,6 +1449,7 @@ class PSClient {
 
 	onTick() {
 		if (!this.loggedIn || this.shuttingDown) return;
+		if (DYNAMIC_OPEN && !this.dynamicOpenAuthed) return;
 		if (reachedGameLimit()) return this.shutdown();
 		if (this.activeBattles() > 0) return;
 		if (CHALLENGE) {
@@ -1403,6 +1492,8 @@ class PSClient {
 		if (this.shuttingDown) return;
 		this.shuttingDown = true;
 		clearInterval(this.tick);
+		if (this.dynamicOpenAuthTimer) clearTimeout(this.dynamicOpenAuthTimer);
+		this.dynamicOpenAuthTimer = null;
 		summarize();
 		try {
 			this.ws.close();
