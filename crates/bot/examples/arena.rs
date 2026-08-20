@@ -7,9 +7,11 @@
 //!   cargo run --release -p nc2000-bot --example arena -- \
 //!       mcts:300 maxdamage --games 100 [--seed 1] [--threads N] [--max-turns 500] \
 //!       [--pool fixtures|meta[:LO-HI]] [--tables data/preview-tables-v0]
+//!       [--heal-min N] [--phaze-min N] [--sleeptalk-min N]   a-priori TEAM filters
+//!       [--type-min ghost:1[,ground:1]]                    a-priori TEAM filter
 //!
 //! Agent specs:
-//!   random | maxdamage
+//!   random | maxdamage | greedy
 //!   mcts[:ITERS[:C[:EPS[:TURNS]]]]   M6 heavy playout (ε-greedy + truncated + eval)
 //!   mcts5[:ITERS[:C]]                M5 baseline (uniform full rollouts, HP eval)
 //!   rm[:ITERS[:PROBE[:THRESHOLD[:BUCKETS]]]]  M7 state-keyed MCTS + RM-solved mixed root
@@ -19,6 +21,26 @@
 //!                                    determinization; baked-table preview when the
 //!                                    opponent's pool identity resolves publicly
 //!                                    (battles run log-ON for its observer)
+//!   blind[...][:RULE[,RULE...]]    any trailing NON-NUMERIC field names root-mask rules
+//!                                    (`smmcts::MaskRules`), so a mask A/B is two blind
+//!                                    specs differing only there. `NAME` turns a rule on,
+//!                                    `-NAME` off; known names are sleep_talk_awake,
+//!                                    immunity_ignores_switch_read, immunity_all_switchins.
+//!                                    Numeric fields keep their positions, so
+//!                                    `blind:300:immunity_all_switchins` and
+//!                                    `blind:300:1:16:-sleep_talk_awake` both parse.
+//!   blindlegacy[:ITERS[:C[:BUCKETS]]] alias for `blind:...:-sleep_talk_awake`, the
+//!                                    ABLATION arm of the 2026-08-19 A/B. Only `best()`
+//!                                    reads the mask, so RmAgent specs (skuct/rm/mcts)
+//!                                    return an exact null on any mask change; pair this
+//!                                    with `blind` at the same budget, and concentrate the
+//!                                    firing rate with --sleeptalk-min 1
+//!
+//! Mask A/Bs want --crn-seeds: both agents of a side-swap pair are then built
+//! from the SAME seed, so two specs that are textually identical must score
+//! exactly 0.500 with zero split pairs. Run that null control first — without
+//! it an identical-arm duel is only 0.5 in expectation and cannot tell a
+//! working seam from a broken one.
 //!   open[:ITERS[:C[:BUCKETS]]]       M14 open-team-sheet agent (the M12 product
 //!                                    policy): the blind machinery with the opponent's
 //!                                    TRUE sets pinned as a singleton belief — only
@@ -40,7 +62,7 @@ use std::sync::Arc;
 use conformance::fixture::{corpus_files, repo_root, Fixture};
 use conformance::load_dex;
 use nc2000_bot::preview::{load_meta_pool, MetaPool};
-use nc2000_bot::smmcts::SelRule;
+use nc2000_bot::smmcts::{MaskRules, SelRule};
 use nc2000_bot::{
     run_duel, Agent, BakedPreviewAgent, BlindAgent, BrAgent, CounterPickAgent, DuelSpec,
     EvalWeights, MaxDamageAgent, MctsAgent, MctsConfig, OpenAgent, Playout, PreviewMode,
@@ -52,6 +74,12 @@ use nc2000_engine::battle::PokemonSet;
 enum AgentSpec {
     Random,
     MaxDamage,
+    /// `MaxDamageAgent::conformant()` — the same greedy policy with the
+    /// dex-`basePower` scorer replaced by `eval::expected_hit_fraction`, the
+    /// model `examples/damage_conformance.rs` gates against the engine. The
+    /// legacy `maxdamage` spec stays frozen because the README ladder and the
+    /// `skuct:300 vs maxdamage seed 1 = 14W 6L` fingerprint are anchored on it.
+    Greedy,
     Mcts { iterations: u32, c: f64, eps: f64, turns: u16 },
     Mcts5 { iterations: u32, c: f64 },
     Rm { iterations: u32, probe: f64, threshold: f64, buckets: i64 },
@@ -62,7 +90,12 @@ enum AgentSpec {
     SkUctThr { iterations: u32, c: f64, buckets: i64 },
     /// Threshold key + damage-bookkeeping-free key (the full abstraction).
     SkUctAbs { iterations: u32, c: f64, buckets: i64 },
-    Blind { iterations: u32, c: f64, buckets: i64 },
+    /// The shipped ladder agent. `mask` is the A/B seam: `RmAgent` never
+    /// calls `best()`, so `skuct`/`rm` duels are exactly blind to the root
+    /// mask; two blind agents in one process differing only in
+    /// `RmConfig::mask_rules` is the only CRN-paired A/B there is
+    /// (`smmcts::SkuctSearch::root_dominated`).
+    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules },
     Open { iterations: u32, c: f64, buckets: i64 },
     Exploit(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
@@ -76,12 +109,79 @@ fn opt_num<T: std::str::FromStr>(parts: &[&str], i: usize, what: &str) -> Result
         .transpose()
 }
 
+/// The ablation arm of the 2026-08-19 Sleep Talk A/B, kept as a name.
+fn legacy_mask() -> MaskRules {
+    MaskRules { sleep_talk_awake: false, ..MaskRules::default() }
+}
+
+/// Every `MaskRules` field, as the token that names it on the command line.
+/// One place, so a new rule cannot be parseable but unprintable (or the
+/// reverse) — an arm whose label does not say what it ran is how an A/B gets
+/// misfiled.
+fn mask_fields(m: &MaskRules) -> [(&'static str, bool); 3] {
+    [
+        ("sleep_talk_awake", m.sleep_talk_awake),
+        ("immunity_ignores_switch_read", m.immunity_ignores_switch_read),
+        ("immunity_all_switchins", m.immunity_all_switchins),
+    ]
+}
+
+fn apply_mask_token(m: &mut MaskRules, tok: &str) -> Result<(), String> {
+    let (on, name) = match tok.strip_prefix('-') {
+        Some(rest) => (false, rest),
+        None => (true, tok),
+    };
+    let norm: String =
+        name.chars().map(|c| if c == '-' { '_' } else { c.to_ascii_lowercase() }).collect();
+    match norm.as_str() {
+        "sleep_talk_awake" => m.sleep_talk_awake = on,
+        "immunity_ignores_switch_read" => m.immunity_ignores_switch_read = on,
+        "immunity_all_switchins" => m.immunity_all_switchins = on,
+        other => {
+            let known: Vec<&str> =
+                mask_fields(&MaskRules::default()).iter().map(|(n, _)| *n).collect();
+            return Err(format!("unknown mask rule `{other}` (known: {})", known.join(", ")));
+        }
+    }
+    Ok(())
+}
+
+/// `blind`'s fields: numeric ones keep their positions, non-numeric ones are
+/// comma-separated mask-rule tokens. Splitting on "starts with a digit"
+/// rather than on position is what lets `blind:300:immunity_all_switchins`
+/// mean iters=300 with the default c and buckets.
+fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String> {
+    let mut nums: Vec<&str> = Vec::new();
+    for part in &parts[1..] {
+        if part.is_empty() {
+            return Err("empty field in a blind spec".into());
+        }
+        if part.starts_with(|c: char| c.is_ascii_digit()) {
+            nums.push(part);
+        } else {
+            for tok in part.split(',').filter(|t| !t.is_empty()) {
+                apply_mask_token(&mut mask, tok)?;
+            }
+        }
+    }
+    if nums.len() > 3 {
+        return Err(format!("too many numeric fields in a blind spec: {nums:?}"));
+    }
+    Ok(AgentSpec::Blind {
+        iterations: opt_num(&nums, 0, "iters")?.unwrap_or(1000),
+        c: opt_num(&nums, 1, "c")?.unwrap_or(1.0),
+        buckets: opt_num(&nums, 2, "buckets")?.unwrap_or(16),
+        mask,
+    })
+}
+
 impl AgentSpec {
     fn parse(s: &str) -> Result<AgentSpec, String> {
         let parts: Vec<&str> = s.split(':').collect();
         match parts[0] {
             "random" => Ok(AgentSpec::Random),
             "maxdamage" => Ok(AgentSpec::MaxDamage),
+            "greedy" => Ok(AgentSpec::Greedy),
             "mcts" => Ok(AgentSpec::Mcts {
                 iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
@@ -118,11 +218,8 @@ impl AgentSpec {
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
                 buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
             }),
-            "blind" => Ok(AgentSpec::Blind {
-                iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
-                c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
-                buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
-            }),
+            "blind" => parse_blind(&parts, MaskRules::default()),
+            "blindlegacy" => parse_blind(&parts, legacy_mask()),
             "open" => Ok(AgentSpec::Open {
                 iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
@@ -201,6 +298,7 @@ impl AgentSpec {
         match self {
             AgentSpec::Random => Box::new(RandomAgent::new(seed)),
             AgentSpec::MaxDamage => Box::new(MaxDamageAgent::new()),
+            AgentSpec::Greedy => Box::new(MaxDamageAgent::conformant()),
             AgentSpec::Mcts { iterations, c, eps, turns } => Box::new(MctsAgent::new(
                 MctsConfig {
                     iterations: *iterations,
@@ -271,12 +369,13 @@ impl AgentSpec {
                 },
                 seed,
             )),
-            AgentSpec::Blind { iterations, c, buckets } => Box::new(BlindAgent::new(
+            AgentSpec::Blind { iterations, c, buckets, mask } => Box::new(BlindAgent::new(
                 RmConfig {
                     iterations: *iterations,
                     rule: SelRule::Ucb,
                     c: *c,
                     hp_buckets: *buckets,
+                    mask_rules: *mask,
                     ..Default::default()
                 },
                 pool.expect("blind agents need the meta pool").clone(),
@@ -318,6 +417,7 @@ impl AgentSpec {
         match self {
             AgentSpec::Random => "random".into(),
             AgentSpec::MaxDamage => "maxdamage".into(),
+            AgentSpec::Greedy => "greedy".into(),
             AgentSpec::Mcts { iterations, c, eps, turns } => {
                 format!("mcts:{iterations}:{c}:{eps}:{turns}")
             }
@@ -337,8 +437,21 @@ impl AgentSpec {
             AgentSpec::SkUctAbs { iterations, c, buckets } => {
                 format!("skuctabs:{iterations}:{c}:{buckets}")
             }
-            AgentSpec::Blind { iterations, c, buckets } => {
-                format!("blind:{iterations}:{c}:{buckets}")
+            AgentSpec::Blind { iterations, c, buckets, mask } => {
+                // The one pre-existing named ablation keeps its own label, so
+                // every artifact written before 2026-08-20 still compares.
+                if *mask == legacy_mask() {
+                    return format!("blindlegacy:{iterations}:{c}:{buckets}");
+                }
+                let diff: Vec<String> = mask_fields(mask)
+                    .into_iter()
+                    .zip(mask_fields(&MaskRules::default()))
+                    .filter(|((_, cur), (_, def))| cur != def)
+                    .map(|((name, cur), _)| if cur { name.into() } else { format!("-{name}") })
+                    .collect();
+                let suffix =
+                    if diff.is_empty() { String::new() } else { format!(":{}", diff.join(",")) };
+                format!("blind:{iterations}:{c}:{buckets}{suffix}")
             }
             AgentSpec::Open { iterations, c, buckets } => {
                 format!("open:{iterations}:{c}:{buckets}")
@@ -518,7 +631,7 @@ fn main() {
         return;
     }
     if args.len() < 2 {
-        eprintln!("usage: arena <agentA> <agentB> [--games N] [--seed S] [--threads T] [--max-turns M] [--jsonl FILE]\n       arena --validate-jsonl FILE");
+        eprintln!("usage: arena <agentA> <agentB> [--games N] [--seed S] [--threads T] [--max-turns M] [--crn-seeds] [--jsonl FILE]\n       arena --validate-jsonl FILE");
         std::process::exit(2);
     }
     let spec_a = AgentSpec::parse(&args[0]).unwrap();
@@ -526,6 +639,10 @@ fn main() {
     let games: usize = flag(&args, "--games").map(|v| v.parse().unwrap()).unwrap_or(100);
     let base_seed: u64 = flag(&args, "--seed").map(|v| v.parse().unwrap()).unwrap_or(1);
     let max_turns: u16 = flag(&args, "--max-turns").map(|v| v.parse().unwrap()).unwrap_or(500);
+    // CRN over agent seeds as well as battle seeds: for an A/B whose arms
+    // differ only by config this is what makes the identical-arm null exact
+    // (`DuelSpec::crn_agent_seeds`).
+    let crn_seeds = args.iter().any(|a| a == "--crn-seeds");
     let threads: usize = flag(&args, "--threads")
         .map(|v| v.parse().unwrap())
         .unwrap_or_else(|| std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4));
@@ -579,12 +696,62 @@ fn main() {
         for (name, keys) in [
             ("--heal-min", &["rest", "recover", "softboiled", "milkdrink"][..]),
             ("--phaze-min", &["roar", "whirlwind"][..]),
+            // `--sleeptalk-min 1` selects the teams that can exercise the
+            // awake-Sleep-Talk rule at all. No value GUARANTEES a carrier in
+            // every legal 3-of-6 triple (the meta pool's max is 3 per team, and
+            // 6-h >= 3 needs h >= 4), so this concentrates the firing rate, it
+            // does not force it.
+            ("--sleeptalk-min", &["sleeptalk", "snore"][..]),
         ] {
             if let Some(n) = flag(&args, name).map(|v| v.parse::<usize>().unwrap()) {
                 let before = teams.len();
                 teams.retain(|sets| carries(sets, keys) >= n);
                 eprintln!("{name} {n}: {before} -> {} teams", teams.len());
                 assert!(teams.len() >= 2, "{name} {n} left fewer than 2 teams");
+            }
+        }
+        // `--type-min ghost:1[,ground:1]` is the immunity A/B's analogue of
+        // `--sleeptalk-min`: the type-immunity gate's exposure is a property
+        // of the DEFENDING type (Ghost blanks Normal/Fighting, Ground blanks
+        // Electric, Flying blanks Ground, Steel blanks Poison, Dark blanks
+        // Psychic), so the rule can only fire in a game whose pool can put
+        // such a mon in front. No value GUARANTEES a carrier in every legal
+        // 3-of-6 triple (the meta pool's maximum is 3 immunity-granting mons
+        // per team), so this concentrates the firing rate, it does not force
+        // it. Filtering happens BEFORE `pool_fingerprint`, so a filtered arm
+        // is a distinct pool in the artifact and cannot be misfiled as the
+        // full-pool one.
+        if let Some(spec) = flag(&args, "--type-min") {
+            for term in spec.split(',').filter(|t| !t.is_empty()) {
+                let (ty, n) = term.split_once(':').expect("--type-min TYPE:N");
+                let n: usize = n.parse().expect("--type-min TYPE:N");
+                let ty = ty.to_ascii_lowercase();
+                let before = teams.len();
+                teams.retain(|sets: &Vec<PokemonSet>| {
+                    sets.iter()
+                        .filter(|s| {
+                            let key: String = s
+                                .species
+                                .chars()
+                                .filter(|c| c.is_ascii_alphanumeric())
+                                .flat_map(|c| c.to_lowercase())
+                                .collect();
+                            dex.species
+                                .id(&key)
+                                .map(|id| {
+                                    dex.species
+                                        .get(id)
+                                        .types
+                                        .iter()
+                                        .any(|t| t.to_ascii_lowercase() == ty)
+                                })
+                                .unwrap_or(false)
+                        })
+                        .count()
+                        >= n
+                });
+                eprintln!("--type-min {ty}:{n}: {before} -> {} teams", teams.len());
+                assert!(teams.len() >= 2, "--type-min {ty}:{n} left fewer than 2 teams");
             }
         }
         teams
@@ -607,7 +774,15 @@ fn main() {
         &teams,
         &|seed| spec_a.build(seed, tables.as_ref(), meta.as_ref()),
         &|seed| spec_b.build(seed, tables.as_ref(), meta.as_ref()),
-        DuelSpec { games, base_seed, threads, max_turns, progress: true, log_on: is_blind },
+        DuelSpec {
+            games,
+            base_seed,
+            threads,
+            max_turns,
+            progress: true,
+            log_on: is_blind,
+            crn_agent_seeds: crn_seeds,
+        },
     );
 
     // Hash only after all measured work. Reading the executable and large
@@ -647,6 +822,17 @@ fn main() {
         "turn caps {}   think p95/p99 ms A {:.1}/{:.1} B {:.1}/{:.1}",
         stats.turn_caps, stats.a_p95_ms, stats.a_p99_ms, stats.b_p95_ms, stats.b_p99_ms
     );
+    // A side-swap pair scores 0.5 exactly when its two games agree on which
+    // CONFIGURATION won, so `split` counts the pairs where swapping sides
+    // changed the answer. Under --crn-seeds with two identical specs it must
+    // be 0 and the score exactly 0.500; anything else means the arms are not
+    // the same experiment and no A/B below it means anything.
+    let split = stats.pair_scores.iter().filter(|s| **s != 0.5).count();
+    println!(
+        "split pairs {split}/{}   crn agent seeds {}",
+        stats.pair_scores.len(),
+        crn_seeds
+    );
 
     if let Some(path) = flag(&args, "--jsonl") {
         let ci95 = stats.ci95.is_finite().then_some(stats.ci95);
@@ -665,6 +851,7 @@ fn main() {
                 "teams": teams.len(),
                 "baked_tables": tables.as_ref().map_or(0, |t| t.len()),
                 "log_on": is_blind,
+                "crn_agent_seeds": crn_seeds,
             },
             "result": {
                 "games": stats.games,
@@ -678,6 +865,7 @@ fn main() {
                 "ci95": ci95,
                 "ci_unit": "side_swap_pair",
                 "pair_scores": &stats.pair_scores,
+                "split_pairs": split,
                 "turns_sum": stats.turns_sum,
                 "avg_turns": stats.avg_turns,
                 "wall_secs": stats.secs,
