@@ -1,0 +1,52 @@
+Alakazam (M) @ PRZCureBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 10 Atk
+- Psychic
+- Fire Punch
+- Encore
+- Recover
+
+Snorlax (M) @ BrightPowder
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Fire Blast
+- Curse
+- Rest
+
+Umbreon (F) @ MiracleBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Double Team
+- Substitute
+- Baton Pass
+- Moonlight
+
+Marowak (M) @ Thick Club
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 14 HP / 24 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Flying]
+- Swords Dance
+
+Heracross (M) @ Mint Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 HP / 24 Atk / 24 Def
+- Megahorn
+- Hidden Power [Fighting]
+- Curse
+- Rest
+
+Smeargle (F) @ Leftovers
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Seismic Toss
+- Leech Seed
+- Confuse Ray
+- Substitute

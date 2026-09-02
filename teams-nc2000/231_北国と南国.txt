@@ -1,0 +1,50 @@
+Nidoking (M) @ Mint Berry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Earthquake
+- Fire Blast
+- Thunderbolt
+- Ice Beam
+
+Blissey (F) @ NeverMeltIce
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Ice Beam
+- Thunder Wave
+- Reflect
+- Soft-Boiled
+
+Snorlax (M) @ BrightPowder
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Dynamic Punch
+- Rest
+- Sleep Talk
+
+Misdreavus (F) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Thunderbolt
+- Mean Look
+- Perish Song
+- Rest
+
+Skarmory (M) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Drill Peck
+- Toxic
+- Whirlwind
+- Rest
+
+Exeggutor (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Psychic
+- Hidden Power [Bug]
+- Leech Seed
+- Substitute

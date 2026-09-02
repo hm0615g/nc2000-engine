@@ -1,0 +1,49 @@
+Tyranitar (M) @ Mint Berry
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Rock Slide
+- Pursuit
+- Flamethrower
+- Rest
+
+Venusaur (M) @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Swords Dance
+- Leech Seed
+- Synthesis
+
+Snorlax (M) @ BrightPowder
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Dynamic Punch
+- Rest
+- Sleep Talk
+
+Marowak (M) @ Thick Club
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 14 HP / 24 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Flying]
+- Swords Dance
+
+Skarmory (M) @ Leftovers
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Drill Peck
+- Toxic
+- Whirlwind
+- Protect
+
+Misdreavus (F) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Pain Split
+- Mean Look
+- Perish Song
+- Destiny Bond

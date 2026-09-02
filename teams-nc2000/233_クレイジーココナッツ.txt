@@ -1,0 +1,51 @@
+Exeggutor (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Psychic
+- Leech Seed
+- Sleep Powder
+- Explosion
+
+Moltres @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Whirlwind
+- Reflect
+- Rest
+
+Snorlax (M) @ Scope Lens
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Earthquake
+- Rest
+- Sleep Talk
+
+Marowak (M) @ Thick Club
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 14 HP / 24 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Flying]
+- Swords Dance
+
+Heracross (M) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 HP / 26 Atk / 24 Def
+- Megahorn
+- Hidden Power [Rock]
+- Endure
+- Reversal
+
+Alakazam (F) @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Psychic
+- Fire Punch
+- Counter
+- Recover

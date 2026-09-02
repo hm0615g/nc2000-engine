@@ -1,0 +1,51 @@
+Marowak (M) @ Thick Club
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 14 HP / 24 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Flying]
+- Swords Dance
+
+Pikachu (F) @ Light Ball
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Thunder
+- Surf
+- Thunder Wave
+- Substitute
+
+Snorlax (M) @ Scope Lens
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Dynamic Punch
+- Rest
+- Sleep Talk
+
+Moltres @ MiracleBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Reflect
+- Sunny Day
+- Rain Dance
+
+Skarmory (M) @ Leftovers
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Drill Peck
+- Toxic
+- Whirlwind
+- Protect
+
+Jynx (F) @ Gold Berry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Ice Beam
+- Psychic
+- Lovely Kiss
+- Substitute

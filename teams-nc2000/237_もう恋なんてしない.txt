@@ -1,0 +1,51 @@
+Porygon2 @ PRZCureBerry
+Level: 53
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Ice Beam
+- Curse
+- Recover
+
+Starmie @ Leftovers
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Confuse Ray
+- Thunder Wave
+- Substitute
+
+Zapdos @ Gold Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunder
+- Drill Peck
+- Reflect
+- Whirlwind
+
+Suicune @ BrightPowder
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Ice Beam
+- Rest
+- Sleep Talk
+
+Raikou @ Mint Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 Atk / 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Toxic
+- Rest
+
+Entei @ MiracleBerry
+Level: 53
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 HP / 24 Atk / 24 Def
+- Fire Blast
+- Hidden Power [Fighting]
+- Sunny Day
+- Solar Beam
