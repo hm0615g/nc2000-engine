@@ -241,7 +241,8 @@ before any games start. A strength-test pass still needs the thinking-budget
 and product-path checks before adoption.
 
 The Web bot and PS client share [search profiles](data/search-profiles.json).
-The position solver uses the blind profile. Explicit PS `--iters` arguments
+The browser and CLI position solvers use the blind profile; the CLI also accepts
+an explicit `--c` coefficient. Explicit PS `--iters` arguments
 and solver budget selections override their default iteration counts; Web
 pondering uses ten times the selected profile's normal budget as its cap.
 PS decision logs include `searchC`, and the regret reader accepts both these

@@ -33,13 +33,12 @@ const pool = JSON.parse(poolJson);
 
 const ITERS = 2000;
 const SEED = 7;
+const PROFILE = JSON.parse(readData("search-profiles.json")).blind;
 
-/** An action row without its averaged value — everything the search decides
- * discretely, which must match the native twin exactly. */
+/** Averaged values and equilibrium weights use the libm tolerance below. */
 function strip(a) {
-  const { mean, ...rest } = a;
-  void mean;
-  return rest;
+  return Object.fromEntries(Object.entries(a).filter(([key]) =>
+    !["mean", "equity", "worst", "mix"].includes(key)));
 }
 
 function checkClose(a, b, what) {
@@ -77,7 +76,7 @@ const spec = {
 };
 const specJson = JSON.stringify(spec);
 
-const searcher = new wasm.ProtocolSearcher(dex, 0, poolJson, SEED);
+const searcher = new wasm.ProtocolSearcher(dex, 0, poolJson, SEED, PROFILE.c);
 searcher.setPosition(specJson);
 searcher.step(ITERS);
 const report = JSON.parse(searcher.report(0, SEED));
@@ -156,7 +155,7 @@ check(
 
 // the searched line, when asked for, is searched rather than sampled
 {
-  const withLine = new wasm.ProtocolSearcher(dex, 0, poolJson, SEED);
+  const withLine = new wasm.ProtocolSearcher(dex, 0, poolJson, SEED, PROFILE.c);
   withLine.setPosition(specJson);
   withLine.step(ITERS);
   const line = JSON.parse(withLine.report(3, SEED)).line;
@@ -196,24 +195,29 @@ if (process.env.NC2000_NATIVE_PARITY === "1") {
   const file = path.join(os.tmpdir(), `nc2000-solver-parity-${process.pid}.json`);
   fs.writeFileSync(file, specJson);
   try {
-    const out = execFileSync(
+    const nativeReport = (extra = []) => JSON.parse(execFileSync(
       "cargo",
       [
         "run", "--release", "-q", "-p", "nc2000-bot", "--example", "solve_position",
         "--", file, "--iters", String(ITERS), "--seed", String(SEED),
-        "--plies", "0", "--json",
+        "--plies", "0", "--pool", path.join(REPO, "data/meta-pool-v0/meta-pool.json"),
+        "--json", ...extra,
       ],
       { cwd: REPO, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }
-    );
-    const native = JSON.parse(out);
+    ));
+    const native = nativeReport();
     checkEq(
       native.actions.map(strip),
       report.actions.map(strip),
       "native ≡ wasm: scored actions (order, visits, shares)"
     );
-    native.actions.forEach((a, i) =>
-      checkClose(a.mean, report.actions[i].mean, `action ${a.input} win rate`)
-    );
+    native.actions.forEach((a, i) => {
+      for (const key of ["mean", "equity", "worst", "mix"]) {
+        const b = report.actions[i][key], what = `action ${a.input} ${key}`;
+        if (a[key] === null || b === null) checkEq(a[key], b, what);
+        else checkClose(a[key], b, what);
+      }
+    });
     checkEq(
       native.matrix.cols.map((c) => ({ ...c, available: undefined })),
       report.matrix.cols.map((c) => ({ ...c, available: undefined })),
@@ -233,6 +237,18 @@ if (process.env.NC2000_NATIVE_PARITY === "1") {
       })
     );
     checkEq(native.damage, report.damage, "native ≡ wasm: damage table");
+    const overridden = new wasm.ProtocolSearcher(dex, 0, poolJson, SEED, 1);
+    try {
+      overridden.setPosition(specJson);
+      overridden.step(ITERS);
+      const legacy = JSON.parse(overridden.report(0, SEED));
+      checkEq(nativeReport(["--c", "1"]).actions.map(strip), legacy.actions.map(strip),
+        "explicit CLI coefficient matches the wasm override");
+      check(JSON.stringify(legacy.actions.map(strip)) !== JSON.stringify(report.actions.map(strip)),
+        "the coefficient control changes the search");
+    } finally {
+      overridden.free();
+    }
     console.log("  solver: native twin agrees");
   } finally {
     fs.unlinkSync(file);

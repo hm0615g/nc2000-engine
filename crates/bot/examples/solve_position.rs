@@ -1,17 +1,3 @@
-//! Solve a hand-entered position: the CLI twin of the browser's solver
-//! screen. Same `PositionSpec` in, same `analysis::report` out, so a number
-//! the screen shows can always be reproduced here — and a disagreement
-//! between the two is a wasm bug, not a matter of opinion.
-//!
-//! ```text
-//! cargo run --release -p nc2000-bot --example solve_position -- POSITION.json
-//!     [--iters 30000] [--seed 1] [--plies 6] [--pool FILE] [--json]
-//! ```
-//!
-//! The position's own side is analyzed under the product's information
-//! structure: its sets exact, the opponent public-only, hidden fields left
-//! to the belief.
-
 use conformance::fixture::repo_root;
 use conformance::load_dex;
 use nc2000_bot::analysis;
@@ -21,10 +7,22 @@ use nc2000_bot::preview::load_meta_pool;
 use nc2000_bot::smmcts::RmConfig;
 use serde_json::Value;
 
+#[derive(serde::Deserialize)]
+struct SearchProfile {
+    c: f64,
+    iterations: u32,
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    let profiles: std::collections::HashMap<String, SearchProfile> = serde_json::from_str(
+        &std::fs::read_to_string(repo_root().join("data/search-profiles.json"))
+            .expect("read search profiles"),
+    ).expect("parse search profiles");
+    let profile = &profiles["blind"];
     let mut path = None;
-    let mut iters = 30_000u32;
+    let mut iters = profile.iterations;
+    let mut c = profile.c;
     let mut seed = 1u64;
     let mut plies = 6usize;
     let mut pool_path = repo_root().join("data/belief-pool-v1/belief-pool.json");
@@ -35,6 +33,10 @@ fn main() {
             "--iters" => {
                 i += 1;
                 iters = args[i].parse().expect("--iters");
+            }
+            "--c" => {
+                i += 1;
+                c = args[i].parse().expect("--c");
             }
             "--seed" => {
                 i += 1;
@@ -54,9 +56,10 @@ fn main() {
         i += 1;
     }
     let path = path.unwrap_or_else(|| {
-        eprintln!("usage: solve_position POSITION.json [--iters N] [--seed N] [--plies N] [--pool FILE] [--json]");
+        eprintln!("usage: solve_position POSITION.json [--iters N] [--c C] [--seed N] [--plies N] [--pool FILE] [--json]");
         std::process::exit(2);
     });
+    assert!(iters > 0 && c.is_finite() && c > 0.0, "iterations and c must be positive and finite");
 
     let dex = load_dex();
     let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read {path}: {e}"));
@@ -65,7 +68,7 @@ fn main() {
         std::process::exit(1);
     });
     let pool = load_meta_pool(&pool_path);
-    let cfg = RmConfig { rule: nc2000_bot::smmcts::SelRule::Ucb, ..RmConfig::default() };
+    let cfg = RmConfig { rule: nc2000_bot::smmcts::SelRule::Ucb, c, ..RmConfig::default() };
     let mut agent = ProtocolAgent::new(&dex, spec.side, pool, cfg, seed);
     if let Err(e) = agent.set_position(&dex, &spec) {
         eprintln!("position rejected: {e}");
