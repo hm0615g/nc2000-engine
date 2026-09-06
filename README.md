@@ -135,6 +135,7 @@ node crates/wasm/tests-node/bench.js     # wasm iters/s; native twin: -p nc2000-
 cd web && npm run dev                    # 0.0.0.0:8000 (auto-bumps port if busy)
 cd web && npm run build && npm run preview   # <base>data/* served from repo data/ in dev AND preview
 cd web && npm run test:e2e               # built-dist custom-party full-game gates
+cd web && npm run test:worker            # search profiles, early flush, and ponder cap through real workers
 # GH Pages build locally (same as .github/workflows/pages.yml; serves at /nc2000-engine/)
 cd web && NC2000_BASE=/nc2000-engine/ npm run build && NC2000_BASE=/nc2000-engine/ npm run preview
 # M14a: regenerate the learnset export, then cross-check the wasm validator
@@ -238,6 +239,13 @@ resumes interrupted games, and stops at the first completed checkpoint whose
 lower bound exceeds 0.5. The registration fixes the sample cap and evaluator
 before any games start. A strength-test pass still needs the thinking-budget
 and product-path checks before adoption.
+
+The Web bot and PS client share [search profiles](data/search-profiles.json).
+The position solver uses the blind profile. Explicit PS `--iters` arguments
+and solver budget selections override their default iteration counts; Web
+pondering uses ten times the selected profile's normal budget as its cap.
+PS decision logs include `searchC`, and the regret reader accepts both these
+logs and older logs that omitted the coefficient.
 
 ### Search API (M3)
 

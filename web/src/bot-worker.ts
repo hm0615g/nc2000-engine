@@ -39,6 +39,7 @@
 // stepped search ponders (src "search").
 
 import init, { Dex, Battle, BlindSearcher } from "../../crates/wasm/pkg-web/nc2000_wasm";
+import { searchProfile } from "./search-profile";
 
 export type WorkerRequest =
   | {
@@ -134,6 +135,7 @@ async function handle(m: WorkerRequest): Promise<void> {
         m.searcher.side,
         m.searcher.poolJson,
         m.searcher.seed >>> 0,
+        searchProfile(mode).c,
       );
       if (mode === "open") {
         // Open team sheet: pin the belief to the opponent's true sets.

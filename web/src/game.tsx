@@ -25,7 +25,7 @@
 //
 // Bot preview comes from the M8 baked table whenever the matchup is baked
 // (the worker reports "table"), else the live search at the preview root
-// ("search"). Strength is fixed at max (BUDGET) — ponder hides the wait.
+// ("search").
 
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
@@ -73,7 +73,8 @@ import {
 import { announce, announceAssertive } from "./announcer";
 import { moveNote } from "./behavior-notes";
 import { noteRef } from "./tooltip";
-import { BUDGET, type SelectedTeam } from "./app";
+import type { SelectedTeam } from "./app";
+import { searchProfile } from "./search-profile";
 import { Modal } from "./modal";
 import { sheetMon } from "./set-info";
 import { MonSheet, TeamSheets } from "./team-sheet";
@@ -393,6 +394,7 @@ export function Game(props: {
 
   async function searchBot(req: Request, legal: Choice[]) {
     const bot = botRef.current!;
+    const budget = searchProfile(props.mode).iterations;
     // Ponder iff the human still owes a pick at launch: the search then
     // keeps running past its budget (bonus strength) until the human
     // commits (humanPick -> flush) or the ponder cap.
@@ -400,10 +402,10 @@ export function Game(props: {
     // A non-ponder search is a genuine wait for the human — say so once.
     // Ponder searches run behind the human's own deliberation: silent.
     if (!ponder) announce(ui().srBotThinking);
-    setThinking({ done: 0, budget: BUDGET });
+    setThinking({ done: 0, budget });
     const r = await bot.search(
       BOT,
-      BUDGET,
+      budget,
       randomSeed32(),
       ponder,
       (done, b) => {

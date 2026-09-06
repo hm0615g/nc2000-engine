@@ -83,8 +83,8 @@ if (args.help || args.h) {
                     opponent's true sets — needs --opp-team-file, only
                     meaningful where sheets are genuinely open)
   --opp-team-file F opponent sets JSON for --mode open
-  --iters N         search iterations per decision (default 30000 — the
-                    shipped Web budget; see the note by ITERS)
+  --iters N         search iterations per decision (default 27000 in blind
+                    mode, 30000 in open mode)
   --seed N          searcher / random-mode seed (default 1)
   --random          random driver mode (no searcher; uniform legal choice)
   --timer           turn the battle timer on in every game
@@ -123,19 +123,9 @@ const CHALLENGE = args.challenge && args.challenge !== true ? String(args.challe
 const ACCEPT = args.accept && args.accept !== true ? String(args.accept) : '';
 const GAMES = parseInt(args.games || '1', 10);
 const MODE = String(args.mode || 'blind');
-// Aligned to the shipped Web budget (M12b: open sheet, 30k + ponder) so that
-// ladder/postmortem evidence is about the configuration that actually ships.
-// It used to default to 10000, which was only ever a seed-stability FLOOR, not
-// an operating point: 1000 iters left flat roots as a visit-count lottery
-// (battle-3623 T6: argmax split 23/16/7/4 over 50 seeds; unanimous at 10000 —
-// replay_postmortem_3623). That floor still holds; 30000 sits above it.
-// Latency: the searcher is single-threaded wasm-in-node, so the .wslconfig core
-// cap (processors=12 of 16, set for host responsiveness) does not touch per-move
-// time. The host's processor-performance state does, and this box runs capped
-// (~70-80% of base clock). The figures below were measured under that cap and
-// already include it: blind:1000 was 367-395 ms avg / 603-653 ms max (M15b gates
-// a+c), so 30k lands around 11-20 s/move, still ~8x inside PS's 150 s per turn.
-const ITERS = parseInt(args.iters || '30000', 10);
+if (!['blind', 'open'].includes(MODE)) throw new Error('--mode must be blind or open');
+const PROFILE = require('../data/search-profiles.json')[MODE];
+const ITERS = parseInt(args.iters || String(PROFILE.iterations), 10);
 const SEED = parseInt(args.seed || '1', 10);
 const RANDOM = !!args.random;
 const TIMER = !!args.timer;
@@ -560,7 +550,7 @@ class BattleDriver {
 
 		if (!this.searcher) {
 			this.side = req.side && req.side.id === 'p2' ? 1 : 0;
-			this.searcher = new wasm.ProtocolSearcher(dex, this.side, poolJson, SEED * 1000 + this.battleIdx);
+			this.searcher = new wasm.ProtocolSearcher(dex, this.side, poolJson, SEED * 1000 + this.battleIdx, PROFILE.c);
 			this.searcher.setOwnTeam(JSON.stringify(this.client.currentTeam.sets));
 			if (MODE === 'open') this.searcher.pinOpponent(oppTeamJson);
 			// after pinOpponent on purpose: if the two ever coexist the binding
@@ -655,6 +645,7 @@ class BattleDriver {
 			format: FORMATID,
 			mode: MODE,
 			driver,
+			searchC: PROFILE.c,
 			iterations: driver === 'search' ? ITERS : 0,
 			seed: SEED * 1000 + this.battleIdx,
 			teamLabel: this.client.currentTeam.label.startsWith('pool:') ?

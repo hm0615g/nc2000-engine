@@ -53,16 +53,6 @@ import { Game } from "./game";
 import { Solver } from "./solver";
 import { loadJaNames, locale, setLocale, ui, type Locale } from "./i18n";
 
-/** The fixed bot strength: the former "Max" tier, always on. Browser E2E
- * builds use Vite's explicit `test` mode to exercise whole games cheaply;
- * production mode cannot observe or honor that override. */
-const testBudget =
-  import.meta.env.MODE === "test"
-    ? Number(import.meta.env.VITE_NC2000_TEST_BUDGET)
-    : Number.NaN;
-export const BUDGET =
-  Number.isSafeInteger(testBudget) && testBudget > 0 ? testBudget : 30000;
-
 /** `SelectedTeam` moved to pool-pick.ts, next to the pool draw that builds
  * one; re-exported here so the existing `from "./app"` imports keep
  * working. */

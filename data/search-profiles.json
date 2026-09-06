@@ -1,0 +1,4 @@
+{
+  "blind": { "c": 0.4, "iterations": 27000 },
+  "open": { "c": 1.0, "iterations": 30000 }
+}
