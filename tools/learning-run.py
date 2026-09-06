@@ -23,6 +23,10 @@ def main():
     parser.add_argument("--b-model", type=Path)
     parser.add_argument("--a-leaf-model", type=Path)
     parser.add_argument("--b-leaf-model", type=Path)
+    parser.add_argument("--a-pick-prior", type=Path)
+    parser.add_argument("--b-pick-prior", type=Path)
+    parser.add_argument("--a-pick-preview", action="store_true")
+    parser.add_argument("--b-pick-preview", action="store_true")
     parser.add_argument("--a-prune-root", action="store_true")
     parser.add_argument("--b-prune-root", action="store_true")
     parser.add_argument("--a-leaf-preview-iters", type=int, default=0)
@@ -31,9 +35,12 @@ def main():
     parser.add_argument("--b-shared-iters", type=int)
     parser.add_argument("--a-iters", type=int, default=30000)
     parser.add_argument("--b-iters", type=int, default=30000)
+    parser.add_argument("--a-c", type=float, default=1.0)
+    parser.add_argument("--b-c", type=float, default=1.0)
     parser.add_argument("--a-temperature", type=float, default=0.0)
     parser.add_argument("--b-temperature", type=float, default=0.0)
     parser.add_argument("--record", action="store_true")
+    parser.add_argument("--preview-only", action="store_true")
     parser.add_argument("--crn-agent-seeds", action="store_true")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--prepare-only", action="store_true")
@@ -48,7 +55,7 @@ def main():
         if (args.a_model and args.a_leaf_model) or (args.b_model and args.b_leaf_model):
             parser.error("a worker can use either a direct policy or a leaf model")
         inputs = [args.arena, args.worker, args.b_worker or args.worker, args.pool, args.belief_pool,
-                  root/"data/gen2stadium2.json"] + [p for p in [args.a_model, args.b_model, args.a_leaf_model, args.b_leaf_model] if p]
+                  root/"data/gen2stadium2.json"] + [p for p in [args.a_model, args.b_model, args.a_leaf_model, args.b_leaf_model, args.a_pick_prior, args.b_pick_prior] if p]
         for path in inputs:
             if not path.is_file():
                 parser.error(f"missing input {path}; build the Rust examples first")
@@ -67,11 +74,20 @@ def main():
         belief = freeze(args.belief_pool)
         dex = freeze(root/"data/gen2stadium2.json")
         agents = []
-        for worker, model, leaf_model, preview_iters, shared_iters, prune, iters, temperature in [
-            (args.worker, args.a_model, args.a_leaf_model, args.a_leaf_preview_iters, args.a_shared_iters, args.a_prune_root, args.a_iters, args.a_temperature),
-            (args.b_worker or args.worker, args.b_model, args.b_leaf_model, args.b_leaf_preview_iters, args.b_shared_iters, args.b_prune_root, args.b_iters, args.b_temperature),
-        ]:
+        for agent_index, (worker, model, leaf_model, preview_iters, shared_iters, prune, iters, c, temperature) in enumerate([
+            (args.worker, args.a_model, args.a_leaf_model, args.a_leaf_preview_iters, args.a_shared_iters, args.a_prune_root, args.a_iters, args.a_c, args.a_temperature),
+            (args.b_worker or args.worker, args.b_model, args.b_leaf_model, args.b_leaf_preview_iters, args.b_shared_iters, args.b_prune_root, args.b_iters, args.b_c, args.b_temperature),
+        ]):
             spec = {"program": freeze(worker), "args": ["--iters", str(iters), "--pool", belief, "--dex", dex], "artifacts": [belief, dex]}
+            if c != 1.0:
+                spec["args"] += ["--c", str(c)]
+            pick_prior = [args.a_pick_prior, args.b_pick_prior][agent_index]
+            if pick_prior:
+                frozen_prior = freeze(pick_prior)
+                spec["args"] += ["--pick-prior", frozen_prior]
+                spec["artifacts"].append(frozen_prior)
+            if [args.a_pick_preview, args.b_pick_preview][agent_index]:
+                spec["args"].append("--pick-preview")
             if model:
                 frozen_model = freeze(model)
                 spec["args"] += ["--model", frozen_model, "--temperature", str(temperature)]
@@ -90,9 +106,9 @@ def main():
                 spec["args"].append("--features")
             agents.append(spec)
         config = {
-            "schema": "nc2000-learning-arena-v1", "seed": args.seed, "games": args.games,
+            "schema": "nc2000-preview-collection-v1" if args.preview_only else "nc2000-learning-arena-v1", "seed": args.seed, "games": args.games,
             "threads": args.threads, "pool": pool, "dex": dex, "agents": agents,
-            "record": args.record, "crn_agent_seeds": args.crn_agent_seeds,
+            "record": args.record or args.preview_only, "crn_agent_seeds": args.crn_agent_seeds,
         }
         (out/"config.json").write_text(json.dumps(config, indent=2)+"\n")
         (out/"launcher.json").write_text(json.dumps({"arena": arena}, indent=2)+"\n")

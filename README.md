@@ -198,6 +198,17 @@ learned logit correction around a remaining-health baseline; `--select brier`
 selects the checkpoint by value prediction error. `--a-prune-root` removes
 actions already excluded by the existing final-choice rules from root sampling.
 These options remain experimental; none changes the default blind bot.
+
+`--a-c` changes the blind search's exploration coefficient. Selection modeling
+uses `tools/fit-pick-prior.py TEACHER/games.jsonl --out PICKS.json` with complete
+recorded games from one frozen teacher. `--preview-only` on the collection
+launcher records just the two initial selections, without inventing outcomes.
+The prior combines matchup counts with team-wide tendencies and uniform
+smoothing. `--a-pick-prior PICKS.json` conditions hidden bench samples on public
+reveals; `--a-pick-preview` also models the opponent's initial selection during
+preview search. Unknown teams retain uniform sampling. These are experimental
+options. `tools/score-pick-prior.py` measures prediction on separate recorded
+games; its prediction scores do not establish playing strength.
 `--a-shared-iters N` runs another experimental search: own action statistics
 are shared across sampled unrevealed opposing benches, while opponent statistics
 retain their sampled states. It uses the existing rollout evaluation and uses

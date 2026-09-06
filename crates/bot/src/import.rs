@@ -1901,6 +1901,8 @@ pub struct ProtocolAgent {
     /// M18 community belief prior for the hidden-team fallback imputation.
     /// `None` (the default) leaves it exactly as shipped.
     prior: Option<std::sync::Arc<crate::prior::BeliefPrior>>,
+    pick_prior: Option<std::sync::Arc<crate::pick_prior::PickPrior>>,
+    pick_preview: bool,
     tracker: ProtocolTracker,
     history: Vec<String>,
     observer: Option<Observer>,
@@ -1936,6 +1938,8 @@ impl ProtocolAgent {
             own_sets: Vec::new(),
             pinned_sets: None,
             prior: None,
+            pick_prior: None,
+            pick_preview: false,
             tracker: ProtocolTracker::new(side),
             history: Vec::new(),
             observer: None,
@@ -1964,6 +1968,14 @@ impl ProtocolAgent {
     /// fallback imputation; a pinned (open-sheet) belief ignores it.
     pub fn set_belief_prior(&mut self, prior: std::sync::Arc<crate::prior::BeliefPrior>) {
         self.prior = Some(prior);
+    }
+
+    pub fn set_pick_prior(&mut self, prior: std::sync::Arc<crate::pick_prior::PickPrior>) {
+        self.pick_prior = Some(prior);
+    }
+
+    pub fn set_pick_preview(&mut self, enabled: bool) {
+        self.pick_preview = enabled;
     }
 
     pub fn add_pair_json(&mut self, json: &str) -> Result<(), String> {
@@ -2050,6 +2062,17 @@ impl ProtocolAgent {
         let obs = self.observer.as_ref().unwrap();
         let belief = self.belief.as_mut().unwrap();
         belief.sync_checked(dex, obs)?;
+        if let Some(prior) = &self.pick_prior {
+            let preview: Vec<_> = self.tracker.sides[self.side].mons.iter().map(|mon| {
+                crate::pick_prior::PreviewMon {
+                    species: dex.species.key(mon.species).to_string(),
+                    level: mon.level,
+                    gender: mon.gender.as_str().to_string(),
+                    item: mon.preview_item,
+                }
+            }).collect();
+            belief.condition_pick_prior(dex, prior, &preview, obs);
+        }
 
         // synthesize
         let pick = belief.alive().first().copied();
@@ -2061,6 +2084,7 @@ impl ProtocolAgent {
         // search + preview policy
         let mut search =
             BlindSearch::new(&battle, dex, self.cfg.clone(), self.side, self.rng.next());
+        search.set_opponent_preview_prior(self.pick_preview);
         self.baked = None;
         self.forced = None;
         if search.is_preview() {

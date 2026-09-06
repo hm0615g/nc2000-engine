@@ -108,12 +108,16 @@ fn play(
 ) -> Result<Value, String> {
     let pair = game / 2;
     let swap = game % 2;
-    let mut schedule = SplitMix64(
+    let mut schedule = SplitMix64(SplitMix64(
         config
             .seed
             .wrapping_add((pair as u64).wrapping_mul(0x9E3779B97F4A7C15)),
-    );
-    let team_ids = [schedule.below(teams.len()), schedule.below(teams.len())];
+    ).next());
+    let team_ids = if config.schema == "nc2000-preview-collection-v1" {
+        [(pair / teams.len()) % teams.len(), pair % teams.len()]
+    } else {
+        [schedule.below(teams.len()), schedule.below(teams.len())]
+    };
     let battle_seed = schedule.battle_seed();
     let seed_a = schedule.next();
     let seed_b = if config.crn_agent_seeds {
@@ -203,6 +207,14 @@ fn play(
         if picks == [None, None] {
             return Err("no choices in unfinished battle".into());
         }
+        if config.schema == "nc2000-preview-collection-v1" {
+            return Ok(json!({
+                "type": "preview", "game": game, "pair": pair, "swap": swap,
+                "team_ids": team_ids, "battle_seed": battle_seed, "agent_seeds": agent_seeds,
+                "elapsed_ns": started.elapsed().as_nanos() as u64,
+                "decision_ns": timing, "worker_ns": worker_timing, "frames": frames,
+            }));
+        }
         battle
             .apply_choices(dex, picks)
             .map_err(|e| format!("apply choices: {e:?}"))?;
@@ -217,12 +229,16 @@ fn run() -> Result<(), String> {
     let config: Config =
         serde_json::from_str(&std::fs::read_to_string(&args[1]).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
-    if config.schema != "nc2000-learning-arena-v1"
+    if !["nc2000-learning-arena-v1", "nc2000-preview-collection-v1"]
+        .contains(&config.schema.as_str())
         || config.games == 0
         || config.games % 2 != 0
         || config.threads == 0
     {
         return Err("invalid schema, games (positive/even), or threads".into());
+    }
+    if config.schema == "nc2000-preview-collection-v1" && !config.record {
+        return Err("preview collection requires recording".into());
     }
     let worker_hashes: Vec<Value> = config
         .agents
@@ -260,11 +276,15 @@ fn run() -> Result<(), String> {
             let row: Value = serde_json::from_str(&row.map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;
             let game = row["game"].as_u64().ok_or("resume row has no game")? as usize;
-            if row["type"] != "game"
-                || game >= config.games
-                || row["capped"] != false
-                || !completed.insert(game)
-            {
+            let valid_kind = if config.schema == "nc2000-preview-collection-v1" {
+                row["type"] == "preview"
+                    && row["frames"]
+                        .as_array()
+                        .is_some_and(|frames| frames.len() == 2)
+            } else {
+                row["type"] == "game" && row["capped"] == false
+            };
+            if !valid_kind || game >= config.games || !completed.insert(game) {
                 return Err("invalid/duplicate resume row".into());
             }
         }
@@ -354,10 +374,14 @@ fn run() -> Result<(), String> {
                 writeln!(writer).map_err(|e| e.to_string())?;
                 writer.flush().map_err(|e| e.to_string())?;
                 count += 1;
-                eprintln!(
-                    "{count}/{} game={} score={} turns={}",
-                    config.games, row["game"], row["score"], row["turns"]
-                );
+                if row["type"] == "preview" {
+                    eprintln!("{count}/{} preview={}", config.games, row["game"]);
+                } else {
+                    eprintln!(
+                        "{count}/{} game={} score={} turns={}",
+                        config.games, row["game"], row["score"], row["turns"]
+                    );
+                }
             }
             Err(e) => {
                 eprintln!("ERROR {e}");

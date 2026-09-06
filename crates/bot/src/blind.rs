@@ -290,6 +290,7 @@ pub struct BlindSearch {
     /// (`smmcts::certain_noop`): `best()` never argmaxes them while an
     /// alternative exists.
     my_dominated: Vec<bool>,
+    opponent_preview_prior: bool,
     /// Per-determinization roots + everything below (state-keyed).
     nodes: Vec<Node>,
     table: FxHashMap<u64, usize>,
@@ -306,6 +307,8 @@ pub struct BlindSearch {
     /// decides which moves exist), so an index means nothing across
     /// iterations while a `Move(id)` means the same move every time.
     joint: Vec<(usize, SearchChoice, u32, f64)>,
+    joint_index: FxHashMap<(usize, SearchChoice), usize>,
+    root_avail: FxHashMap<usize, Vec<usize>>,
     /// How often each opponent action was even LEGAL, across iterations.
     /// A blind root's opponent action list is determinization-dependent — a
     /// move exists only in the candidates that carry it — so a column's
@@ -315,6 +318,10 @@ pub struct BlindSearch {
 }
 
 impl BlindSearch {
+    pub fn set_opponent_preview_prior(&mut self, enabled: bool) {
+        self.opponent_preview_prior = enabled;
+    }
+
     pub fn new(battle: &Battle, dex: &Dex, cfg: RmConfig, side: usize, seed: u64) -> BlindSearch {
         Self::with_rng(battle, dex, cfg, side, SplitMix64::new(seed))
     }
@@ -350,11 +357,14 @@ impl BlindSearch {
             my_w: vec![0.0; my_acts.len()],
             my_mask: None,
             my_dominated,
+            opponent_preview_prior: false,
             my_acts,
             nodes: Vec::new(),
             table: FxHashMap::default(),
             done: 0,
             joint: Vec::new(),
+            joint_index: FxHashMap::default(),
+            root_avail: FxHashMap::default(),
             avail: Vec::new(),
         }
     }
@@ -372,7 +382,8 @@ impl BlindSearch {
         obs: &Observer,
         leaf: Option<&mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64>,
     ) -> f64 {
-        let mut sim = belief.determinize(dex, &self.base, obs, &mut self.rng);
+        let pick = belief.sample(&mut self.rng);
+        let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut self.rng);
         let key = key_of(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
             Some(&i) => i,
@@ -396,6 +407,11 @@ impl BlindSearch {
         );
         let mut force = [None, None];
         force[self.side] = Some(my_pick);
+        if self.opponent_preview_prior && self.is_preview() {
+            force[1 - self.side] = belief.sample_preview_prior(
+                pick, obs, &self.nodes[root].acts[1 - self.side], &mut self.rng,
+            );
+        }
         let mut joint = [0usize; 2];
         let r = if let Some(leaf) = leaf {
             crate::smmcts::run_iteration_with_leaf(
@@ -440,7 +456,8 @@ impl BlindSearch {
             self.my_mask.as_ref().map_or(true, |mask| mask[my_pick]),
             "forced root action is masked"
         );
-        let mut sim = belief.determinize(dex, &self.base, obs, &mut self.rng);
+        let pick = belief.sample(&mut self.rng);
+        let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut self.rng);
         let key = key_of(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
             Some(&i) => i,
@@ -458,6 +475,11 @@ impl BlindSearch {
         self.my_n[my_pick] += 1;
         let mut force = [None, None];
         force[self.side] = Some(my_pick);
+        if self.opponent_preview_prior && self.is_preview() {
+            force[1 - self.side] = belief.sample_preview_prior(
+                pick, obs, &self.nodes[root].acts[1 - self.side], &mut self.rng,
+            );
+        }
         let mut joint = [0usize; 2];
         let r = run_iteration(
             &self.cfg,
@@ -484,26 +506,31 @@ impl BlindSearch {
     fn record_joint(&mut self, root: usize, my_pick: usize, joint: [usize; 2], r: f64) {
         let opp = 1 - self.side;
         let acts = &self.nodes[root].acts[opp];
-        for &c in acts.iter() {
-            match self.avail.iter_mut().find(|(x, _)| *x == c) {
-                Some((_, n)) => *n += 1,
-                None => self.avail.push((c, 1)),
-            }
+        let indices = self.root_avail.entry(root).or_insert_with(|| {
+            acts.iter().map(|&choice| {
+                match self.avail.iter().position(|(action, _)| *action == choice) {
+                    Some(index) => index,
+                    None => {
+                        self.avail.push((choice, 0));
+                        self.avail.len() - 1
+                    }
+                }
+            }).collect()
+        });
+        for &index in indices.iter() {
+            self.avail[index].1 += 1;
         }
-        let acts = &self.nodes[root].acts[opp];
         let Some(&opp_act) = acts.get(joint[opp]) else { return };
         let mine = if self.side == 0 { r } else { 1.0 - r };
-        match self
-            .joint
-            .iter_mut()
-            .find(|(a, c, _, _)| *a == my_pick && *c == opp_act)
-        {
-            Some((_, _, n, w)) => {
-                *n += 1;
-                *w += mine;
+        let index = match self.joint_index.entry((my_pick, opp_act)) {
+            std::collections::hash_map::Entry::Occupied(entry) => *entry.get(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                self.joint.push((my_pick, opp_act, 0, 0.0));
+                *entry.insert(self.joint.len() - 1)
             }
-            None => self.joint.push((my_pick, opp_act, 1, mine)),
-        }
+        };
+        self.joint[index].2 += 1;
+        self.joint[index].3 += mine;
     }
 
     /// The root joint cells: `(own action index, opponent action, samples,

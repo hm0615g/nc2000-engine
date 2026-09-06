@@ -45,6 +45,7 @@ pub mod m17e_artifact;
 pub mod observe;
 pub mod position;
 pub mod player;
+pub mod pick_prior;
 pub mod preview;
 pub mod prior;
 pub mod regret;

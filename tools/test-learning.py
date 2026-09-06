@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import copy
 import importlib.util
+import hashlib
 import json
 import tempfile
 import unittest
@@ -9,6 +10,10 @@ from pathlib import Path
 spec = importlib.util.spec_from_file_location("evaluate_learning", Path(__file__).with_name("evaluate-learning.py"))
 evaluation = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(evaluation)
+
+spec = importlib.util.spec_from_file_location("fit_pick_prior", Path(__file__).with_name("fit-pick-prior.py"))
+pick_prior = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(pick_prior)
 
 
 class PairedEvaluationTests(unittest.TestCase):
@@ -78,6 +83,55 @@ class PairedEvaluationTests(unittest.TestCase):
         self.write()
         with self.assertRaisesRegex(ValueError, "score"):
             evaluation.summarize(self.path)
+
+
+class PickPriorTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        root = Path(self.directory.name)
+        self.path = root / "preview.jsonl"
+        pool_path = root / "pool.json"
+        sets = [{"species": name} for name in "abcdef"]
+        pool_path.write_text(json.dumps({"teams": [{"id": "one", "sets": sets}, {"id": "two", "sets": sets}]}))
+        self.manifest = {"type": "manifest", "config": {
+            "schema": "nc2000-preview-collection-v1", "games": 4,
+            "pool": str(pool_path), "agents": [{}, {}],
+        }, "hashes": {"pool": "sha256:" + hashlib.sha256(pool_path.read_bytes()).hexdigest(), "agents": [{}, {}]}}
+        lines = [f"|poke|p{side+1}|{name}, L50, M|item" for side in range(2) for name in "abcdef"]
+        self.rows = []
+        for game in range(4):
+            frames = []
+            for side in range(2):
+                frames.append({"side": side, "agent": side ^ (game % 2), "turn": 0,
+                    "frame": {"lines": lines, "request": {"teamPreview": True, "side": {
+                        "pokemon": [{"details": f"{name}, L50, M"} for name in "abcdef"],
+                    }}, "legal_actions": ["team 3, 1, 2"]},
+                    "response": {"action": "team 3, 1, 2", "iterations": 30000, "legality_drift": 0, "projections": 0}})
+            self.rows.append({"type": "preview", "game": game, "pair": game//2, "swap": game%2,
+                              "team_ids": [0, game//2], "agent_seeds": [2*game, 2*game+1], "frames": frames})
+
+    def write(self):
+        self.path.write_text("\n".join(json.dumps(row) for row in [self.manifest] + self.rows) + "\n")
+
+    def test_publicly_identical_enemy_teams_share_the_prior_and_lead_order_is_preserved(self):
+        self.write()
+        model = pick_prior.fit(self.path, .2)
+        own = [row for row in model["rows"] if row["team"] == "one" and row["side"] == 0 and row["enemy_preview"]]
+        self.assertEqual(len(own), 1)
+        self.assertEqual(own[0]["choices"], [{"species": ["c", "a", "b"], "count": 4}])
+
+    def test_incomplete_collection_is_rejected(self):
+        self.rows.pop()
+        self.write()
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            pick_prior.fit(self.path, .2)
+
+    def test_duplicate_query_seed_is_rejected(self):
+        self.rows[1]["agent_seeds"] = list(reversed(self.rows[0]["agent_seeds"]))
+        self.write()
+        with self.assertRaisesRegex(ValueError, "duplicate query seed"):
+            pick_prior.fit(self.path, .2)
 
 
 if __name__ == "__main__":

@@ -28,12 +28,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut index = 1;
     while index < args.len() {
         match args[index].as_str() {
-            "--features" | "--describe" | "--prune-root" | "--shared-search" => index += 1,
+            "--features" | "--describe" | "--prune-root" | "--shared-search" | "--pick-preview" => index += 1,
             "--iters"
+            | "--c"
             | "--pool"
             | "--dex"
             | "--model"
             | "--leaf-model"
+            | "--pick-prior"
             | "--leaf-preview-iters"
             | "--shared-iters"
             | "--temperature" => {
@@ -57,6 +59,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if iterations == 0 {
         return Err("--iters must be positive".into());
     }
+    let ucb_c: f64 = flag("--c").map(|s| s.parse()).transpose()?.unwrap_or(1.0);
+    if !ucb_c.is_finite() || ucb_c <= 0.0 {
+        return Err("--c must be positive and finite".into());
+    }
+    let search_config = RmConfig {
+        c: ucb_c,
+        ..RmConfig::default()
+    };
     let leaf_preview_iterations: u32 = flag("--leaf-preview-iters")
         .map(|s| s.parse())
         .transpose()?
@@ -105,6 +115,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             nc2000_bot::learned::PolicyValue::from_json(&text, &dex)
         })
         .transpose()?;
+    let pick_prior = flag("--pick-prior").map(|path| {
+        let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        nc2000_bot::pick_prior::PickPrior::from_json(&text).map(std::sync::Arc::new)
+    }).transpose()?;
+    let pick_preview = args.iter().any(|arg| arg == "--pick-preview");
+    if pick_preview && (pick_prior.is_none() || model.is_some()) {
+        return Err("--pick-preview requires a pick prior and search".into());
+    }
     if model.is_some() && leaf_model.is_some() {
         return Err("choose either --model or --leaf-model".into());
     }
@@ -128,8 +146,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     return Err("side must be 0 or 1".into());
                 }
                 let mut next =
-                    ProtocolAgent::new(&dex, side, pool.clone(), RmConfig::default(), seed);
+                    ProtocolAgent::new(&dex, side, pool.clone(), search_config.clone(), seed);
                 next.set_own_team(team);
+                if let Some(prior) = &pick_prior {
+                    next.set_pick_prior(prior.clone());
+                }
+                next.set_pick_preview(pick_preview);
                 agent = Some(next);
                 policy_rng = SplitMix64::new(seed ^ 0xC6BC279692B5C323);
                 json!({"ready": true, "iterations": iterations})
@@ -205,7 +227,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         agent.battle().ok_or("no battle")?,
                         &dex,
                         agent.side(),
-                        RmConfig::default(),
+                        search_config.clone(),
                         policy_rng.next(),
                     );
                     search.step(
