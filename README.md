@@ -222,12 +222,15 @@ described by [Waudby-Smith and Ramdas](https://arxiv.org/abs/2010.09686).
 For pair scores `x` and a proposed mean `m`, each fixed fraction `f` contributes
 `product(1-f+f*x/m)`; the implementation averages these products. Under an
 independent-pair null with mean at most `m`, each product has expectation at
-most one. Markov's inequality bounds rejection at `2/alpha`, and inversion of
-both tails gives the interval. Fractions are fixed before evaluation. Tests
+most one. Ville's inequality bounds crossing `2/alpha` at any checkpoint, and
+inversion of both tails gives the interval. Fractions are fixed before evaluation. Tests
 enumerate null distributions, including tied pairs, to verify unit expected
 capital and control of false positives. The other intervals remain diagnostics;
 partial runs never set the positive-evidence flag.
-Final acceptance requires a new, fixed-size held-out run after candidate selection.
+Final acceptance requires fresh held-out blocks after candidate selection.
+Freeze the candidate, baseline, sample cap, and complete-block checkpoints
+before starting confirmation. Pass multiple completed run files to the evaluator
+to combine checkpoints; it rejects changed configurations and repeated schedules.
 
 ### Search API (M3)
 

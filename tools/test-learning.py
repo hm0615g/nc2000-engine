@@ -85,6 +85,39 @@ class PairedEvaluationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "score"):
             evaluation.summarize(self.path)
 
+    def prepare_shards(self):
+        self.manifest["config"].update(seed=101, agents=[{"args": ["--iters", "30000"]} for _ in range(2)])
+        self.manifest["hashes"] = {"arena": "arena", "pool": "pool", "dex": "dex",
+                                   "agents": [{"program": "worker", "artifacts": []} for _ in range(2)]}
+        self.write()
+        first = self.path
+        self.path = first.with_name("second.jsonl")
+        self.manifest["config"]["seed"] = 103
+        for row in self.rows:
+            row["battle_seed"] = "second-" + row["battle_seed"]
+        self.write()
+        return first, self.path
+
+    def test_shards_combine_pairs_without_recounting_game_outcomes_as_independent(self):
+        paths = self.prepare_shards()
+        result = evaluation.combine(paths)
+        self.assertEqual(result["games"], 8)
+        self.assertEqual(result["complete_pairs"], 4)
+        self.assertEqual(result["score"], .5)
+        self.assertFalse(result["positive_strength_evidence"])
+
+    def test_combining_a_run_twice_is_rejected(self):
+        first, _ = self.prepare_shards()
+        with self.assertRaisesRegex(ValueError, "duplicate run seed"):
+            evaluation.combine([first, first])
+
+    def test_changed_candidate_cannot_enter_the_same_confirmation(self):
+        paths = self.prepare_shards()
+        self.manifest["config"]["agents"][0]["args"] += ["--c", "0.4"]
+        self.write()
+        with self.assertRaisesRegex(ValueError, "identities differ"):
+            evaluation.combine(paths)
+
 
 class PickPriorTests(unittest.TestCase):
     def setUp(self):
@@ -159,6 +192,26 @@ class BettingIntervalTests(unittest.TestCase):
                 wealth = evaluation.log_betting_evalue({0.0: losses, .5: ties, 1.0: wins}, .5)
                 expectation += probability*math.exp(wealth)
         self.assertAlmostEqual(expectation, 1.0, places=12)
+
+    def test_repeated_checkpoints_control_the_probability_of_ever_rejecting(self):
+        for mean in [.2, .5, .8]:
+            surviving = {0: 1.0}
+            rejected = 0.0
+            for trial in range(1, 41):
+                next_surviving = {}
+                for previous_wins, mass in surviving.items():
+                    for outcome, probability in [(0, 1-mean), (1, mean)]:
+                        wins = previous_wins+outcome
+                        counts = {0.0: trial-wins, 1.0: wins}
+                        opposite = {1.0: trial-wins, 0.0: wins}
+                        crossed = max(evaluation.log_betting_evalue(counts, mean),
+                                      evaluation.log_betting_evalue(opposite, 1-mean)) >= math.log(40)
+                        if crossed:
+                            rejected += mass*probability
+                        else:
+                            next_surviving[wins] = next_surviving.get(wins, 0.0)+mass*probability
+                surviving = next_surviving
+            self.assertLessEqual(rejected, .05)
 
     def test_intervals_include_fractional_draw_scores_and_invert_each_tail(self):
         samples = [0.0, .25, .5, .5, .75, 1.0]*8

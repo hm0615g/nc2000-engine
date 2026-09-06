@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 from collections import Counter
+import hashlib
 import json
 import math
 import statistics
@@ -37,6 +38,25 @@ def betting_interval(samples, alpha=.05):
                 hi = mean
         return lo
     return [lower(Counter(samples)), 1-lower(Counter(1-value for value in samples))]
+
+
+def score_intervals(pairs):
+    mean = statistics.mean(pairs) if pairs else None
+    margin = 1.959963984540054 * statistics.stdev(pairs) / math.sqrt(len(pairs)) if len(pairs) > 1 else None
+    interval = [mean - margin, mean + margin] if margin is not None else None
+    bounded_margin = math.sqrt(math.log(40) / (2 * len(pairs))) if pairs else None
+    bounded = [max(0, mean - bounded_margin), min(1, mean + bounded_margin)] if pairs else None
+    bernstein = None
+    if len(pairs) > 1:
+        log = math.log(4 / .05)
+        width = math.sqrt(2 * statistics.variance(pairs) * log / len(pairs)) + 7 * log / (3 * (len(pairs) - 1))
+        bernstein = [max(0, mean - width), min(1, mean + width)]
+    return {
+        "complete_pairs": len(pairs), "score": mean, "normal95": interval, "hoeffding95": bounded,
+        "empirical_bernstein95": bernstein, "betting95": betting_interval(pairs),
+        "strength_test": "fixed-fraction-mixture-v1",
+        "log_evalue_at_half": log_betting_evalue(Counter(pairs), .5) if pairs else None,
+    }
 
 
 def summarize(path, require_complete=True):
@@ -78,17 +98,7 @@ def summarize(path, require_complete=True):
         if a["team_ids"] != b["team_ids"] or a["battle_seed"] != b["battle_seed"]:
             raise ValueError("side-swap pair changed teams or battle seed")
         pairs.append((a["score"] + b["score"]) / 2)
-    mean = statistics.mean(pairs) if pairs else None
-    margin = 1.959963984540054 * statistics.stdev(pairs) / math.sqrt(len(pairs)) if len(pairs) > 1 else None
-    interval = [mean - margin, mean + margin] if margin is not None else None
-    bounded_margin = math.sqrt(math.log(40) / (2 * len(pairs))) if pairs else None
-    bounded = [max(0, mean - bounded_margin), min(1, mean + bounded_margin)] if pairs else None
-    bernstein = None
-    if len(pairs) > 1:
-        log = math.log(4 / .05)
-        width = math.sqrt(2 * statistics.variance(pairs) * log / len(pairs)) + 7 * log / (3 * (len(pairs) - 1))
-        bernstein = [max(0, mean - width), min(1, mean + width)]
-    betting = betting_interval(pairs)
+    intervals = score_intervals(pairs)
     times = []
     for side in range(2):
         xs = sorted(x / 1e6 for row in games.values() for x in row["decision_ns"][side])
@@ -99,25 +109,73 @@ def summarize(path, require_complete=True):
         })
     return {
         "complete": complete, "games": len(games), "planned_games": count,
-        "complete_pairs": len(pairs), "score": mean, "normal95": interval, "hoeffding95": bounded,
-        "empirical_bernstein95": bernstein,
-        "betting95": betting, "strength_test": "fixed-fraction-mixture-v1",
-        "log_evalue_at_half": log_betting_evalue(Counter(pairs), .5) if pairs else None,
+        **intervals,
         "wins": sum(row["score"] == 1 for row in games.values()),
         "losses": sum(row["score"] == 0 for row in games.values()),
         "ties": sum(row["score"] == .5 for row in games.values()),
         "timing": times,
-        "positive_strength_evidence": bool(complete and betting and betting[0] > .5),
+        "positive_strength_evidence": bool(complete and intervals["betting95"] and intervals["betting95"][0] > .5),
         "pair_scores": pairs,
+    }
+
+
+def run_identity(manifest):
+    config, hashes = manifest["config"], manifest["hashes"]
+    agents = []
+    if len(config["agents"]) != 2 or len(hashes["agents"]) != 2:
+        raise ValueError("a run must have two agents")
+    for spec, record in zip(config["agents"], hashes["agents"]):
+        artifacts = {item["path"]: item["hash"] for item in record["artifacts"]}
+        agents.append({"program": record["program"], "args": [artifacts.get(arg, arg) for arg in spec["args"]],
+                       "artifacts": sorted(artifacts.values())})
+    return {"schema": config["schema"], "arena": hashes["arena"], "pool": hashes["pool"], "dex": hashes["dex"],
+            "agents": agents, "crn_agent_seeds": config.get("crn_agent_seeds", False)}
+
+
+def combine(paths, require_complete=True):
+    summaries, sources = [], []
+    seeds, schedules = set(), set()
+    identity = None
+    for path in paths:
+        summaries.append(summarize(path, require_complete))
+        with Path(path).open() as file:
+            manifest = json.loads(next(file))
+            current = run_identity(manifest)
+            if identity is not None and current != identity:
+                raise ValueError("run identities differ: agents, arguments, data, or arena changed")
+            identity = current
+            seed = manifest["config"]["seed"]
+            if seed in seeds:
+                raise ValueError("duplicate run seed")
+            seeds.add(seed)
+            for line in file:
+                row = json.loads(line)
+                if row["swap"] == 0:
+                    key = (row["battle_seed"], tuple(row["team_ids"]))
+                    if key in schedules:
+                        raise ValueError("duplicate battle seed and teams across blocks")
+                    schedules.add(key)
+        sources.append({"path": str(path), "sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest(), "seed": seed})
+    if not summaries:
+        raise ValueError("no runs to combine")
+    pairs = [score for summary in summaries for score in summary["pair_scores"]]
+    intervals = score_intervals(pairs)
+    complete = all(summary["complete"] for summary in summaries)
+    return {
+        "complete": complete, **intervals,
+        **{key: sum(summary[key] for summary in summaries) for key in ["games", "planned_games", "wins", "losses", "ties"]},
+        "positive_strength_evidence": bool(complete and intervals["betting95"] and intervals["betting95"][0] > .5),
+        "pair_scores": pairs, "sources": sources, "identity": identity,
+        "timing_by_run": [summary["timing"] for summary in summaries],
     }
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("path")
+    parser.add_argument("path", nargs="+")
     parser.add_argument("--partial", action="store_true")
     args = parser.parse_args()
-    result = summarize(args.path, not args.partial)
+    result = summarize(args.path[0], not args.partial) if len(args.path) == 1 else combine(args.path, not args.partial)
     print(json.dumps(result, indent=2, allow_nan=False))
 
 
