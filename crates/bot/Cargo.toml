@@ -25,3 +25,4 @@ mi = ["dep:mimalloc"]
 [dev-dependencies]
 conformance = { path = "../conformance" }
 pprof = { version = "0.15.0", features = ["flamegraph"] }
+sha2 = "0.10"

@@ -149,6 +149,43 @@ node tools/gen-fixtures.js --n 30 --pool full     --out fixtures/corpus-v1/full 
 
 Porting loop: port one callback → tick it off in `PORTING.md` → keep the replay test green as the legal pool grows. On divergence, `compare::Divergence` auto-localizes to the first differing snapshot + JSON path + that turn's log lines.
 
+Learning experiments use `learning_arena` and separate `blind_worker` processes.
+Workers receive only their own team, player-visible protocol lines, and their
+own request. `tools/learning-run.py` freezes the executables, dex, team pools,
+and model files before starting; each complete game is flushed immediately,
+and `--resume` verifies the same inputs before continuing missing games.
+The training scripts require PyTorch 2.8; model inference is implemented in
+Rust and needs no Python runtime.
+
+```bash
+cargo build --release -p nc2000-bot --example blind_worker --example learning_arena
+python3 tools/learning-run.py --out tmp/learning/teacher --games 128 --record
+target/release/examples/blind_worker --describe > tmp/learning/vocabulary.json
+python3 tools/train-policy.py tmp/learning/teacher/games.jsonl \
+  --vocabulary tmp/learning/vocabulary.json --out tmp/learning/policy.json
+python3 tools/check-policy-parity.py --worker target/release/examples/blind_worker \
+  --model tmp/learning/policy.json --games tmp/learning/teacher/games.jsonl
+python3 tools/learning-run.py --out tmp/learning/development --seed 73517 \
+  --a-model tmp/learning/policy.json --games 400
+python3 tools/evaluate-learning.py tmp/learning/development/games.jsonl
+```
+
+`--a-model` / `--b-model` select learned policies; without a model a worker
+runs the unchanged blind search (`--a-iters` / `--b-iters`, default 30,000).
+Use `--b-worker` with the teacher run's frozen worker path to retain that exact
+opponent after further code changes. `--pool` controls evaluation teams and
+`--belief-pool` independently controls both agents' prior. Training and
+validation split by battle seed and team pair, keeping the side-swapped games
+together. Teacher labels are the actual selected actions and terminal outcomes.
+
+For policy improvement, collect a recorded run with `--a-model MODEL
+--a-temperature 1 --b-model OPPONENT_MODEL`, then run
+`tools/improve-policy.py RUN/games.jsonl --model MODEL --out NEXT_MODEL`.
+PPO verifies the parent model hash and every recorded behavior log probability
+before updating. Proxy-opponent results and imitation accuracy are development
+measurements; strength acceptance requires a separately frozen candidate's
+direct blind matches against the frozen 30k bot and a matched latency check.
+
 ### Search API (M3)
 
 `Battle` is a plain deep-clonable value; DUCT/MCTS drives it like this:
