@@ -247,6 +247,10 @@ and solver budget selections override their default iteration counts; Web
 pondering uses ten times the selected profile's normal budget as its cap.
 PS decision logs include `searchC`, and the regret reader accepts both these
 logs and older logs that omitted the coefficient.
+The blind profile passed [confirmation on fresh seeds](data/blind-c04-confirmation-v1.json)
+through both `BlindAgent` and the player-visible protocol against the frozen 30k
+baseline. The artifact retains paired scores, registered seeds, executable hashes,
+matched WebAssembly timings, and checks of the product entry points.
 For a matched WebAssembly timing comparison, run
 `node tools/compare-wasm-search.js GAMES.jsonl TIMING.json 0.4 1 27000 30000 40`.
 The comparator warms separate searches, alternates measurement order, preserves
