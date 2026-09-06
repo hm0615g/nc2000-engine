@@ -231,6 +231,13 @@ Final acceptance requires fresh held-out blocks after candidate selection.
 Freeze the candidate, baseline, sample cap, and complete-block checkpoints
 before starting confirmation. Pass multiple completed run files to the evaluator
 to combine checkpoints; it rejects changed configurations and repeated schedules.
+Prepare each block with `tools/learning-run.py --prepare-only`, then register
+them with `python3 tools/confirm-learning.py freeze gate.json BLOCK_DIR...`.
+`python3 tools/confirm-learning.py run gate.json` verifies the frozen inputs,
+resumes interrupted games, and stops at the first completed checkpoint whose
+lower bound exceeds 0.5. The registration fixes the sample cap and evaluator
+before any games start. A strength-test pass still needs the thinking-budget
+and product-path checks before adoption.
 
 ### Search API (M3)
 

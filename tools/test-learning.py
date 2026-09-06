@@ -16,6 +16,56 @@ spec = importlib.util.spec_from_file_location("fit_pick_prior", Path(__file__).w
 pick_prior = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pick_prior)
 
+spec = importlib.util.spec_from_file_location("confirm_learning", Path(__file__).with_name("confirm-learning.py"))
+confirmation = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(confirmation)
+
+
+class ConfirmationTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.gate = self.root / "gate.json"
+        self.worker = self.root / "worker"
+        self.worker.write_text("frozen worker")
+        self.blocks = []
+        for index in range(2):
+            block = self.root / str(index)
+            block.mkdir()
+            config = {"schema": "nc2000-learning-arena-v1", "seed": 101+index, "games": 4,
+                      "pool": str(self.worker), "dex": str(self.worker),
+                      "agents": [{"program": str(self.worker), "args": ["--iters", "30"], "artifacts": []} for _ in range(2)]}
+            (block / "config.json").write_text(json.dumps(config))
+            (block / "launcher.json").write_text(json.dumps({"arena": str(self.worker)}))
+            self.blocks.append(block)
+
+    def test_registration_freezes_cumulative_checkpoints_and_inputs(self):
+        confirmation.freeze(self.gate, self.blocks)
+        gate = confirmation.verify(self.gate)
+        self.assertEqual([block["checkpoint_games"] for block in gate["blocks"]], [4, 8])
+        self.assertEqual(gate["sample_cap_games"], 8)
+        self.worker.write_text("different worker")
+        with self.assertRaisesRegex(ValueError, "artifact changed"):
+            confirmation.verify(self.gate)
+
+    def test_started_runs_cannot_be_registered_after_viewing_results(self):
+        (self.blocks[0] / "games.jsonl").touch()
+        with self.assertRaisesRegex(ValueError, "before any games"):
+            confirmation.freeze(self.gate, self.blocks)
+
+    def test_registration_rejects_adaptive_candidate_changes(self):
+        path = self.blocks[1] / "config.json"
+        config = json.loads(path.read_text())
+        config["agents"][0]["args"] += ["--c", "0.4"]
+        path.write_text(json.dumps(config))
+        with self.assertRaisesRegex(ValueError, "remain fixed"):
+            confirmation.freeze(self.gate, self.blocks)
+
+    def test_registration_rejects_repeated_schedules(self):
+        with self.assertRaisesRegex(ValueError, "repeated seed"):
+            confirmation.freeze(self.gate, self.blocks + self.blocks[:1])
+
 
 class PairedEvaluationTests(unittest.TestCase):
     def setUp(self):
