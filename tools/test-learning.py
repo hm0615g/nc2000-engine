@@ -2,6 +2,7 @@
 import copy
 import importlib.util
 import hashlib
+import math
 import json
 import tempfile
 import unittest
@@ -132,6 +133,41 @@ class PickPriorTests(unittest.TestCase):
         self.write()
         with self.assertRaisesRegex(ValueError, "duplicate query seed"):
             pick_prior.fit(self.path, .2)
+
+
+class BettingIntervalTests(unittest.TestCase):
+    def test_mixture_has_unit_expectation_and_controls_null_rejection_exactly(self):
+        trials = 12
+        for mean in [.2, .5, .8]:
+            expectation = rejected = 0.0
+            for wins in range(trials+1):
+                probability = math.comb(trials, wins)*mean**wins*(1-mean)**(trials-wins)
+                wealth = evaluation.log_betting_evalue({0.0: trials-wins, 1.0: wins}, mean)
+                opposite = evaluation.log_betting_evalue({1.0: trials-wins, 0.0: wins}, 1-mean)
+                expectation += probability*math.exp(wealth)
+                rejected += probability*int(max(wealth, opposite) >= math.log(40))
+            self.assertAlmostEqual(expectation, 1.0, places=12)
+            self.assertLessEqual(rejected, .05)
+
+    def test_null_expectation_with_tied_pairs_is_also_one(self):
+        trials = 12
+        expectation = 0.0
+        for wins in range(trials+1):
+            for losses in range(trials-wins+1):
+                ties = trials-wins-losses
+                probability = math.comb(trials, wins)*math.comb(trials-wins, losses)*.2**(wins+losses)*.6**ties
+                wealth = evaluation.log_betting_evalue({0.0: losses, .5: ties, 1.0: wins}, .5)
+                expectation += probability*math.exp(wealth)
+        self.assertAlmostEqual(expectation, 1.0, places=12)
+
+    def test_intervals_include_fractional_draw_scores_and_invert_each_tail(self):
+        samples = [0.0, .25, .5, .5, .75, 1.0]*8
+        lower, upper = evaluation.betting_interval(samples)
+        self.assertLess(lower, .5)
+        self.assertGreater(upper, .5)
+        self.assertAlmostEqual(lower, 1-upper, places=12)
+        self.assertLess(evaluation.betting_interval([1.0, 1.0])[0], .5)
+        self.assertGreater(evaluation.betting_interval([1.0]*32)[0], .5)
 
 
 if __name__ == "__main__":

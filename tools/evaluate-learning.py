@@ -1,9 +1,42 @@
 #!/usr/bin/env python3
 import argparse
+from collections import Counter
 import json
 import math
 import statistics
 from pathlib import Path
+
+
+BETTING_FRACTIONS = (.025, .05, .1, .2, .3, .4, .5, .7, .9)
+
+
+def log_betting_evalue(counts, null_mean):
+    if not 0 < null_mean <= 1:
+        raise ValueError("null mean must be in (0, 1]")
+    if any(not 0 <= value <= 1 or count < 0 for value, count in counts.items()):
+        raise ValueError("scores must be bounded by zero and one")
+    logs = [sum(count*math.log1p(fraction*(value/null_mean-1)) for value, count in counts.items())
+            for fraction in BETTING_FRACTIONS]
+    maximum = max(logs)
+    return maximum + math.log(sum(math.exp(value-maximum) for value in logs)/len(logs))
+
+
+def betting_interval(samples, alpha=.05):
+    if not 0 < alpha < 1:
+        raise ValueError("alpha must be in (0, 1)")
+    if not samples:
+        return None
+    threshold = math.log(2/alpha)
+    def lower(counts):
+        lo, hi = 0.0, 1.0
+        for _ in range(60):
+            mean = (lo+hi)/2
+            if log_betting_evalue(counts, mean) >= threshold:
+                lo = mean
+            else:
+                hi = mean
+        return lo
+    return [lower(Counter(samples)), 1-lower(Counter(1-value for value in samples))]
 
 
 def summarize(path, require_complete=True):
@@ -55,6 +88,7 @@ def summarize(path, require_complete=True):
         log = math.log(4 / .05)
         width = math.sqrt(2 * statistics.variance(pairs) * log / len(pairs)) + 7 * log / (3 * (len(pairs) - 1))
         bernstein = [max(0, mean - width), min(1, mean + width)]
+    betting = betting_interval(pairs)
     times = []
     for side in range(2):
         xs = sorted(x / 1e6 for row in games.values() for x in row["decision_ns"][side])
@@ -67,11 +101,13 @@ def summarize(path, require_complete=True):
         "complete": complete, "games": len(games), "planned_games": count,
         "complete_pairs": len(pairs), "score": mean, "normal95": interval, "hoeffding95": bounded,
         "empirical_bernstein95": bernstein,
+        "betting95": betting, "strength_test": "fixed-fraction-mixture-v1",
+        "log_evalue_at_half": log_betting_evalue(Counter(pairs), .5) if pairs else None,
         "wins": sum(row["score"] == 1 for row in games.values()),
         "losses": sum(row["score"] == 0 for row in games.values()),
         "ties": sum(row["score"] == .5 for row in games.values()),
         "timing": times,
-        "positive_strength_evidence": bool(complete and bernstein and bernstein[0] > .5),
+        "positive_strength_evidence": bool(complete and betting and betting[0] > .5),
         "pair_scores": pairs,
     }
 

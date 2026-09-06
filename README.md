@@ -215,10 +215,18 @@ retain their sampled states. It uses the existing rollout evaluation and uses
 `--a-iters` for the original team-preview search.
 
 The evaluator treats a side-swapped pair as one bounded observation. It reports
-normal, Hoeffding, and empirical Bernstein intervals; its automatic positive
-evidence flag uses the two-sided empirical Bernstein bound from
-[Maurer and Pontil, Theorem 4](https://arxiv.org/html/0907.3740#S1.SS1),
-with failure probability 0.025 for each tail. A partial run cannot set that flag.
+normal, Hoeffding, empirical Bernstein, and fixed-fraction betting intervals.
+Its positive-evidence flag requires a complete run and a betting 95% lower
+bound above 0.5. This uses a finite mixture of the nonnegative capital processes
+described by [Waudby-Smith and Ramdas](https://arxiv.org/abs/2010.09686).
+For pair scores `x` and a proposed mean `m`, each fixed fraction `f` contributes
+`product(1-f+f*x/m)`; the implementation averages these products. Under an
+independent-pair null with mean at most `m`, each product has expectation at
+most one. Markov's inequality bounds rejection at `2/alpha`, and inversion of
+both tails gives the interval. Fractions are fixed before evaluation. Tests
+enumerate null distributions, including tied pairs, to verify unit expected
+capital and control of false positives. The other intervals remain diagnostics;
+partial runs never set the positive-evidence flag.
 Final acceptance requires a new, fixed-size held-out run after candidate selection.
 
 ### Search API (M3)
