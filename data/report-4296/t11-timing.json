@@ -1,0 +1,44 @@
+[
+  {
+    "candidate": "single",
+    "seed": 62001,
+    "elapsed_ms": 1892,
+    "best": "move hiddenpower",
+    "matches_archived_statistics": true
+  },
+  {
+    "candidate": "ensemble",
+    "seed": 62001,
+    "elapsed_ms": 1560,
+    "best": "move earthquake",
+    "matches_archived_statistics": true
+  },
+  {
+    "candidate": "single",
+    "seed": 62002,
+    "elapsed_ms": 2270,
+    "best": "move hiddenpower",
+    "matches_archived_statistics": true
+  },
+  {
+    "candidate": "ensemble",
+    "seed": 62002,
+    "elapsed_ms": 1882,
+    "best": "move earthquake",
+    "matches_archived_statistics": true
+  },
+  {
+    "candidate": "single",
+    "seed": 62003,
+    "elapsed_ms": 1945,
+    "best": "move hiddenpower",
+    "matches_archived_statistics": true
+  },
+  {
+    "candidate": "ensemble",
+    "seed": 62003,
+    "elapsed_ms": 1576,
+    "best": "move earthquake",
+    "matches_archived_statistics": true
+  }
+]

@@ -169,5 +169,48 @@
       "missing opponent sheet in open mode"
     ],
     "open_initialization_regression": "The four-trial Fire Punch case at seed 9985201 completes after initializing both agents before the forced action."
+  },
+  "t11_followup": {
+    "base_revision": "0262e04",
+    "candidate": "30 independent 1000-simulation searches, sum root visits; total 30000, c=1",
+    "screen_seeds": [
+      62001,
+      62008
+    ],
+    "heldout_t11_seeds": [
+      65001,
+      65032
+    ],
+    "heldout_other_turn_seeds": [
+      65001,
+      65016
+    ],
+    "seed_ranges_inclusive": true,
+    "t11_earthquake": {
+      "selected": 32,
+      "decisions": 32
+    },
+    "t26_thunderbolt": {
+      "selected": 16,
+      "decisions": 16
+    },
+    "production_defaults_changed": false,
+    "general_strength_nonregression": "not tested",
+    "sources": {
+      "crates/bot/examples/reported_decisions.rs": "b5706699fe1da999f7b08db700767a377fffcec230b69440061227f2d6ec0cd7",
+      "crates/bot/src/mcts.rs": "8c201e300173d476a622d6b2983d3a3ed9b2115fed7c233d2cd514a1b69a7c18"
+    },
+    "final_validation_executable_sha256": "a20a29ae214750e03c03b91a0691010126ec89b215fe501d71b3ebb791c0b936",
+    "artifacts": {
+      "T11.md": "3065cfbe3609b092c3a115ffd434ab20804675f4385d7eac8126b0e7cf9800f4",
+      "t11-followup.jsonl": "d76e434c972bf765ca0b68e7ce80222ee99ea96fdfd4f3ff54cde769afb72800",
+      "t11-followup.summary.json": "e017b9afebae890a514ac71997049abfc78aaee4e14a5bf291b33c07035dbdbb",
+      "t11-timing.json": "a809e480e9364c44f1b1fa7d34f11e90e66039064944a749354d40d7e9ee755d"
+    },
+    "validation": {
+      "mechanic_tests_passed": 4,
+      "unchanged_archived_root_statistics_on_final_build": 6,
+      "ensemble_member_aggregation": "Every archived member count, weighted reward and selected root action checked."
+    }
   }
 }

@@ -330,7 +330,8 @@ fn status_pseudo_score(
     }
 }
 
-pub(crate) fn playout_value(
+/// Unfinished rollouts return a leaf evaluation rather than a terminal outcome.
+pub fn playout_value(
     sim: &mut Battle,
     dex: &Dex,
     playout: &Playout,
