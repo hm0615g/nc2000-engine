@@ -22,6 +22,7 @@ def main():
     parser.add_argument("games", type=Path)
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--agent", type=int, choices=[0, 1], required=True)
+    parser.add_argument("--condition-on-opening-lead", action="store_true")
     args = parser.parse_args()
     evaluation = load_module("evaluate_learning", "evaluate-learning.py")
     fitting = load_module("fit_pick_prior", "fit-pick-prior.py")
@@ -61,19 +62,22 @@ def main():
                 sources = [(specific or general, 1.0)]
             else:
                 sources = []
-            combinations = list(itertools.combinations(sorted(roster), 3))
-            smoothing = model["smoothing"] if sources else 1.0
-            probabilities = {pick: smoothing/len(combinations) for pick in combinations}
-            for choices, weight in sources:
-                total = sum(c["count"] for c in choices)
-                for choice in choices:
-                    probabilities[tuple(sorted(choice["species"]))] += (1-smoothing)*weight*choice["count"]/total
             action = entry["response"]["action"]
             if action not in entry["frame"]["legal_actions"]:
                 raise ValueError("illegal recorded selection")
             slots = [int(s.strip())-1 for s in action[5:].split(",")]
             lead = roster[slots[0]]
             truth = tuple(sorted(roster[slot] for slot in slots))
+            combinations = list(itertools.combinations(sorted(roster), 3))
+            smoothing = model["smoothing"] if sources else 1.0
+            uniform = smoothing/len(combinations)/(3 if args.condition_on_opening_lead else 1)
+            probabilities = {pick: uniform for pick in combinations}
+            for choices, weight in sources:
+                total = sum(c["count"] for c in choices)
+                for choice in choices:
+                    if args.condition_on_opening_lead and choice["species"][0] != lead:
+                        continue
+                    probabilities[tuple(sorted(choice["species"]))] += (1-smoothing)*weight*choice["count"]/total
             support = {pick: p for pick, p in probabilities.items() if lead in pick}
             probability = support[truth] / sum(support.values())
             gain = math.log(probability*len(support))
@@ -83,6 +87,7 @@ def main():
         raise ValueError("calibration requires paired games")
     gains = [statistics.mean(values) for values in pairs.values()]
     print(json.dumps({"games": len(predictions), "pairs": len(gains), "coverage": dict(coverage),
+        "condition_on_opening_lead": args.condition_on_opening_lead,
         "mean_log_gain_over_uniform_given_lead": statistics.mean(gains),
         "mean_true_bench_probability": statistics.mean(p["p_true_bench"] for p in predictions),
         "model_sha256": hashlib.sha256(args.model.read_bytes()).hexdigest(),
