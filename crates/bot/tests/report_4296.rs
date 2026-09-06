@@ -125,11 +125,20 @@ fn confusion_does_not_make_fire_punch_as_likely_to_ko_as_thunderbolt() {
     let dex = load_dex();
     let mut b = position(&dex, 26);
     let target = b.active_id(0).unwrap();
-    for hp in [23, 24] {
+    for hp in [22, 23] {
         b.poke_mut(target).hp = hp;
+        assert_eq!(
+            nc2000_bot::import::announce_hp(hp, b.poke(target).maxhp, 100),
+            13
+        );
         let (_, thunderbolt) = ko_probabilities(&dex, &b, "move thunderbolt", "move confuseray");
         let (_, fire_punch) = ko_probabilities(&dex, &b, "move firepunch", "move confuseray");
         assert!((thunderbolt - 0.5).abs() < 1e-9);
-        assert!((fire_punch - 1.0 / 32.0).abs() < 1e-9);
+        assert!(fire_punch < thunderbolt);
+        if hp == 23 {
+            assert!((fire_punch - 1.0 / 32.0).abs() < 1e-9);
+        } else {
+            assert!(fire_punch > 1.0 / 32.0);
+        }
     }
 }

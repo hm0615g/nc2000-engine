@@ -1,0 +1,173 @@
+{
+  "battle": "4296",
+  "source_html_sha256": "6ff1a5dfa594e239e4ce196a6839ee13a6b571d9123ccf1e52294989a31645b1",
+  "source_revision": "d89f5efab04f18ba4fefdea9e7a6a970671a571e",
+  "mode": "OpenSheet, confirmed by reporter",
+  "opponent_sets": "Exact reporter-supplied six sets, canonicalized by the local Gen2 validator. Abilities and nature normalized only; supplied EVs and IVs retained. Gender filled from replay / Gen2 DVs.",
+  "own_team_assumption": "meta-pool-v0 index 13 / sample-23, consistent with preview and all revealed moves/items; original private request unavailable",
+  "hp": "Spectator percentage import. Own hp_exact is imputed, not a private observation. In particular T24 uses 7/166; the poison sequence implies 6/166 for this assumed own set. The exact one-step check covers both.",
+  "excluded_evidence": "All initial blind-mode runs and all runs with assumed opponent sets A/B are excluded. The first OpenAgent continuation pass is also excluded: the forced first move bypassed own-agent initialization, allowing a consumed berry to be mistaken for an originally empty item slot. Corrected runs initialize both agents before the intervention.",
+  "reproduction": {
+    "profile": "open",
+    "iterations": 30000,
+    "c": 1,
+    "seeds": [
+      61001,
+      61064
+    ],
+    "seed_range_inclusive": true
+  },
+  "final_counterfactual": {
+    "trials_per_action": 1024,
+    "seeds": [
+      9973401,
+      9973402,
+      9973403,
+      9973404
+    ],
+    "trials_per_seed": 256,
+    "own_iterations": 1000,
+    "foe_iterations": 1000,
+    "policy": "skuct",
+    "tail": "search",
+    "first_reply": "independent search, same seeded initial response for each paired own action",
+    "primary_comparisons": [
+      {
+        "turn": 11,
+        "a": "move earthquake",
+        "b": "switch 2",
+        "difference": 0.09375,
+        "exact_mcnemar_p": 3.615483678179504e-06,
+        "holm_p": 1.807741839089752e-05
+      },
+      {
+        "turn": 11,
+        "a": "move earthquake",
+        "b": "move hiddenpowerbug",
+        "difference": 0.0771484375,
+        "exact_mcnemar_p": 6.658284595907759e-05,
+        "holm_p": 0.00019974853787723277
+      },
+      {
+        "turn": 18,
+        "a": "move swordsdance",
+        "b": "move hiddenpowerbug",
+        "difference": -0.013671875,
+        "exact_mcnemar_p": 0.5513179148875468,
+        "holm_p": 0.5513179148875468
+      },
+      {
+        "turn": 24,
+        "a": "move earthquake",
+        "b": "move swordsdance",
+        "difference": 0.0556640625,
+        "exact_mcnemar_p": 0.003409023562710986,
+        "holm_p": 0.006818047125421972
+      },
+      {
+        "turn": 24,
+        "a": "switch 2",
+        "b": "move swordsdance",
+        "difference": 0.0810546875,
+        "exact_mcnemar_p": 1.549543832250485e-05,
+        "holm_p": 6.19817532900194e-05
+      },
+      {
+        "turn": 24,
+        "a": "move earthquake",
+        "b": "move hiddenpowerbug",
+        "difference": 0.095703125,
+        "exact_mcnemar_p": 1.4074368673946972e-07,
+        "holm_p": 9.85205807176288e-07
+      },
+      {
+        "turn": 26,
+        "a": "move thunderbolt",
+        "b": "move firepunch",
+        "difference": 0.0751953125,
+        "exact_mcnemar_p": 1.9763334877027007e-06,
+        "holm_p": 1.1858000926216203e-05
+      }
+    ],
+    "multiple_comparisons": "Holm adjustment of exact McNemar p-values across the seven listed comparisons; no pooling with the earlier screens."
+  },
+  "open_tail_sensitivity": {
+    "trials_per_action": 256,
+    "seed": 9985201,
+    "own_iterations": 1000,
+    "foe_iterations": 1000,
+    "policy": "open",
+    "tail": "search"
+  },
+  "status": "Complete: fixed-sample measurements and existing-configuration screens; no production change adopted",
+  "execution_interruption": "The initial foreground final controller exited with SIGTERM after roughly ten minutes. All complete trial rows are retained; only missing trial indices are resumed with the same initial state and RNG stream.",
+  "completed_utc": "2026-09-06T23:14:53.780982+00:00",
+  "hp6_sensitivity": {
+    "reproduction_seeds": [
+      61001,
+      61064
+    ],
+    "policy": "skuct",
+    "seed": 9853219,
+    "trials_per_action": 128,
+    "iterations": 1000
+  },
+  "measured_executables": {
+    "reported_decisions": "31f6d7722db547e3aafb6e2d5c10e00b09277618ed4c385254662d9f491c6e18",
+    "position_counterfactual": "bd1644a782fb681a1e78f89a49a662c76848168a1bbf05d84259366a5fe37399",
+    "position_counterfactual_resumable": "e3d6af37ae34669e5c70402e74bd800b84d3e2ba39ed6d5910744a804434341c",
+    "position_counterfactual_open_initialized": "2bfbc57faea7d58170b3e68811ff8e824dae0742f46e9832fd650c6d9408a83d"
+  },
+  "harness_sources": {
+    "crates/bot/examples/reported_decisions.rs": "abc68b50d1f635eb75aa340337ef5fda66578049cf15a7b55caa60f894e7004d",
+    "crates/bot/examples/position_counterfactual.rs": "feee5d1d3a734be164c11d7281d6ede43e2f5f9ea83b90714781ab4485062917",
+    "crates/bot/tests/report_4296.rs": "dd010eb3a4ab0b1135230e2e0b92994c27fbbea298a33e67b1720cd9c34dc30f",
+    "tools/summarize-counterfactual.py": "d5aef25f0fd0bd22204e6d3316aea61bed410db4946121e6a72a0b28bd94bf69"
+  },
+  "inputs_and_results": {
+    "battle.raw.log": "66583728027382465fff8de4dd7fe612e3742b4ca72cdc6eef8b996e2c857939",
+    "candidates.jsonl": "9176d2cf6aff1bbf565ce37cd762b165fd9a437e8ba7e0600e93572a622f0cb2",
+    "confirmation.summary.json": "0d7cd8f72403e5d08ff7194a538d97211eb62d9b252aaaa957bbe1f6cc75da7b",
+    "controls.summary.json": "c717ddbbc480a84075985a0bce92c8f056e57863ca1cc515467a254c8cf6bf45",
+    "final-skuct.jsonl": "19a2df78c589d85bc1264f48ee500da97758203316f1608e7a029857f920b40c",
+    "final-skuct.summary.json": "16ed12461bbf92f2e9ab97fcae77a3949918692d960bbfb836b85695ed7cb6a9",
+    "hp6-counterfactual.jsonl": "d84564d07e122547fbc8c0b7411109d10833cf03f02d7d3ce33badf3d81799aa",
+    "hp6-counterfactual.summary.json": "122f9fca17203e58b44702389972eb5e7458aa281b64a8706a580c66de2e1190",
+    "hp6-reproduction.jsonl": "7dc11df209b1f4c7e9f1895ef839ec5159e6e8168cf47490e64fb1c7210ccf31",
+    "one-step.jsonl": "a56c1b33b9f0ff76985fba186a910184eda3142df3f32f4dbedf341da8851dfc",
+    "open-tail.jsonl": "48983b7d0dd975b6d6e264c53f440846f8584ff5efb2ef78479579508c2c0b60",
+    "open-tail.summary.json": "8dc93b450a7cc940423e406a16e609c6a57c8d947cc59807ac434be1a8d32218",
+    "opponent-submitted.json": "1481f4362143379d212128ff9ab7bde2ab8b882f69cd4a542c0c3431f5b748eb",
+    "opponent-team.json": "e4005fcdb852a3e242864ce8e4f08e2fedcb4efb8a70bf68161ddd03fc48a6f5",
+    "opponent-validation.json": "0a1471272bf53beb2ca8cab6322d2c2e6d6040bf322a6a8d812b6e8a3d153fda",
+    "own-team.json": "ece04d2b2d6be1722d433878fc3aa6b6ab06310bd79d4640d2dceb93fbc900d9",
+    "reproduction.jsonl": "5dc77005c58a97c5599476cadcba56d299e6ca355ed57ebf7e56f15d0832260b",
+    "screen.summary.json": "80892e40bcb5bb7fa444ba7e9234fddc578fbdd9e40c11130dcdf48d397a0fcf",
+    "turn-11.json": "e509476b22e35774122ac6dd30039a0283c7d22e56e75a2275c8b80f0616980b",
+    "turn-18.json": "5dd6ff83e915a5dcb64d1bbff6b01f0571382689c45c6277fd54420e52c0714f",
+    "turn-24-hp6.json": "6381e8b601c2c096d11d9827722eaa272459c1562b585371bb69f9282588a4fd",
+    "turn-24.json": "a406962e2d52f563a6abf6131051a51f2dba2d95c6e680eb59ffba088e303b79",
+    "turn-26.json": "c4779ae4a3c8911ec8179ed5485158d7daf72affeb94de834b3cf08f15817ae1"
+  },
+  "toolchain": "rustc 1.94.0 (4a4ef493e 2026-03-02), cargo build --release",
+  "validation": {
+    "regression_tests": {
+      "command": "cargo test --release -p nc2000-bot --test report_4296",
+      "passed": 4,
+      "failed": 0
+    },
+    "mode_check": "All 256 reproduction decisions use a singleton actual opponent sheet and c=1, 30000 iterations.",
+    "resumption_check": "Current harness matches 16 frozen trial windows across all four positions, including outcome, battle seed, step count and final turn.",
+    "aggregation_checks": [
+      "exact opposite outcomes",
+      "duplicate-trial rejection",
+      "capped outcomes retain unknown score and bounds"
+    ],
+    "input_rejection_checks": [
+      "illegal action",
+      "zero trials",
+      "missing opponent sheet in open mode"
+    ],
+    "open_initialization_regression": "The four-trial Fire Punch case at seed 9985201 completes after initializing both agents before the forced action."
+  }
+}

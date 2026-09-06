@@ -1,0 +1,325 @@
+[
+  {
+    "turn": 11,
+    "policy": "open",
+    "iters": 1000,
+    "foe_iters": 1000,
+    "reply": "search",
+    "tail": "search",
+    "actions": {
+      "move earthquake": {
+        "trials": 256,
+        "wins": 81,
+        "losses": 175,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.31640625,
+        "score_bounds": [
+          0.31640625,
+          0.31640625
+        ]
+      },
+      "move hiddenpowerbug": {
+        "trials": 256,
+        "wins": 73,
+        "losses": 183,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.28515625,
+        "score_bounds": [
+          0.28515625,
+          0.28515625
+        ]
+      },
+      "switch 2": {
+        "trials": 256,
+        "wins": 66,
+        "losses": 190,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.2578125,
+        "score_bounds": [
+          0.2578125,
+          0.2578125
+        ]
+      }
+    },
+    "pairs": [
+      {
+        "a": "move earthquake",
+        "b": "move hiddenpowerbug",
+        "paired_trials": 256,
+        "difference": 0.03125,
+        "normal95_interval": [
+          -0.04381463717957984,
+          0.10631463717957984
+        ],
+        "a_only_wins": 52,
+        "b_only_wins": 44,
+        "exact_mcnemar_p": 0.4751520499865724
+      },
+      {
+        "a": "move earthquake",
+        "b": "switch 2",
+        "paired_trials": 256,
+        "difference": 0.05859375,
+        "normal95_interval": [
+          -0.01816515861207839,
+          0.1353526586120784
+        ],
+        "a_only_wins": 58,
+        "b_only_wins": 43,
+        "exact_mcnemar_p": 0.16327926185142788
+      },
+      {
+        "a": "move hiddenpowerbug",
+        "b": "switch 2",
+        "paired_trials": 256,
+        "difference": 0.02734375,
+        "normal95_interval": [
+          -0.05043853690845723,
+          0.10512603690845723
+        ],
+        "a_only_wins": 55,
+        "b_only_wins": 48,
+        "exact_mcnemar_p": 0.5546010666648742
+      }
+    ]
+  },
+  {
+    "turn": 18,
+    "policy": "open",
+    "iters": 1000,
+    "foe_iters": 1000,
+    "reply": "search",
+    "tail": "search",
+    "actions": {
+      "move hiddenpowerbug": {
+        "trials": 256,
+        "wins": 117,
+        "losses": 139,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.45703125,
+        "score_bounds": [
+          0.45703125,
+          0.45703125
+        ]
+      },
+      "move swordsdance": {
+        "trials": 256,
+        "wins": 113,
+        "losses": 143,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.44140625,
+        "score_bounds": [
+          0.44140625,
+          0.44140625
+        ]
+      }
+    },
+    "pairs": [
+      {
+        "a": "move hiddenpowerbug",
+        "b": "move swordsdance",
+        "paired_trials": 256,
+        "difference": 0.015625,
+        "normal95_interval": [
+          -0.06258317141437582,
+          0.09383317141437582
+        ],
+        "a_only_wins": 54,
+        "b_only_wins": 50,
+        "exact_mcnemar_p": 0.7687918101386728
+      }
+    ]
+  },
+  {
+    "turn": 24,
+    "policy": "open",
+    "iters": 1000,
+    "foe_iters": 1000,
+    "reply": "search",
+    "tail": "search",
+    "actions": {
+      "move earthquake": {
+        "trials": 256,
+        "wins": 63,
+        "losses": 193,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.24609375,
+        "score_bounds": [
+          0.24609375,
+          0.24609375
+        ]
+      },
+      "move hiddenpowerbug": {
+        "trials": 256,
+        "wins": 48,
+        "losses": 208,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.1875,
+        "score_bounds": [
+          0.1875,
+          0.1875
+        ]
+      },
+      "move swordsdance": {
+        "trials": 256,
+        "wins": 55,
+        "losses": 201,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.21484375,
+        "score_bounds": [
+          0.21484375,
+          0.21484375
+        ]
+      },
+      "switch 2": {
+        "trials": 256,
+        "wins": 74,
+        "losses": 182,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.2890625,
+        "score_bounds": [
+          0.2890625,
+          0.2890625
+        ]
+      }
+    },
+    "pairs": [
+      {
+        "a": "move earthquake",
+        "b": "move hiddenpowerbug",
+        "paired_trials": 256,
+        "difference": 0.05859375,
+        "normal95_interval": [
+          -0.010923624414135122,
+          0.12811112441413514
+        ],
+        "a_only_wins": 49,
+        "b_only_wins": 34,
+        "exact_mcnemar_p": 0.12385305946180145
+      },
+      {
+        "a": "move earthquake",
+        "b": "move swordsdance",
+        "paired_trials": 256,
+        "difference": 0.03125,
+        "normal95_interval": [
+          -0.042229980933851746,
+          0.10472998093385175
+        ],
+        "a_only_wins": 50,
+        "b_only_wins": 42,
+        "exact_mcnemar_p": 0.4657074457730625
+      },
+      {
+        "a": "move earthquake",
+        "b": "switch 2",
+        "paired_trials": 256,
+        "difference": -0.04296875,
+        "normal95_interval": [
+          -0.11988322891813852,
+          0.03394572891813852
+        ],
+        "a_only_wins": 45,
+        "b_only_wins": 56,
+        "exact_mcnemar_p": 0.3197273207002655
+      },
+      {
+        "a": "move hiddenpowerbug",
+        "b": "move swordsdance",
+        "paired_trials": 256,
+        "difference": -0.02734375,
+        "normal95_interval": [
+          -0.09798948200715812,
+          0.043301982007158124
+        ],
+        "a_only_wins": 39,
+        "b_only_wins": 46,
+        "exact_mcnemar_p": 0.5154257318839004
+      },
+      {
+        "a": "move hiddenpowerbug",
+        "b": "switch 2",
+        "paired_trials": 256,
+        "difference": -0.1015625,
+        "normal95_interval": [
+          -0.17326276447550834,
+          -0.02986223552449166
+        ],
+        "a_only_wins": 32,
+        "b_only_wins": 58,
+        "exact_mcnemar_p": 0.008045928133225098
+      },
+      {
+        "a": "move swordsdance",
+        "b": "switch 2",
+        "paired_trials": 256,
+        "difference": -0.07421875,
+        "normal95_interval": [
+          -0.14843181350764634,
+          -5.686492353648709e-06
+        ],
+        "a_only_wins": 38,
+        "b_only_wins": 57,
+        "exact_mcnemar_p": 0.06421280662713101
+      }
+    ]
+  },
+  {
+    "turn": 26,
+    "policy": "open",
+    "iters": 1000,
+    "foe_iters": 1000,
+    "reply": "search",
+    "tail": "search",
+    "actions": {
+      "move firepunch": {
+        "trials": 256,
+        "wins": 64,
+        "losses": 192,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.25,
+        "score_bounds": [
+          0.25,
+          0.25
+        ]
+      },
+      "move thunderbolt": {
+        "trials": 256,
+        "wins": 83,
+        "losses": 173,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.32421875,
+        "score_bounds": [
+          0.32421875,
+          0.32421875
+        ]
+      }
+    },
+    "pairs": [
+      {
+        "a": "move firepunch",
+        "b": "move thunderbolt",
+        "paired_trials": 256,
+        "difference": -0.07421875,
+        "normal95_interval": [
+          -0.13912577529345227,
+          -0.00931172470654773
+        ],
+        "a_only_wins": 27,
+        "b_only_wins": 46,
+        "exact_mcnemar_p": 0.034415913668175036
+      }
+    ]
+  }
+]
