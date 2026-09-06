@@ -28,8 +28,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut index = 1;
     while index < args.len() {
         match args[index].as_str() {
-            "--features" | "--describe" => index += 1,
-            "--iters" | "--pool" | "--dex" | "--model" | "--temperature" => {
+            "--features" | "--describe" | "--prune-root" | "--shared-search" => index += 1,
+            "--iters"
+            | "--pool"
+            | "--dex"
+            | "--model"
+            | "--leaf-model"
+            | "--leaf-preview-iters"
+            | "--shared-iters"
+            | "--temperature" => {
                 if index + 1 == args.len() {
                     return Err(format!("missing value for {}", args[index]).into());
                 }
@@ -50,6 +57,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if iterations == 0 {
         return Err("--iters must be positive".into());
     }
+    let leaf_preview_iterations: u32 = flag("--leaf-preview-iters")
+        .map(|s| s.parse())
+        .transpose()?
+        .unwrap_or(0);
     let pool_path = flag("--pool")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| repo_root().join("data/meta-pool-v0/meta-pool.json"));
@@ -66,6 +77,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     let features = args.iter().any(|a| a == "--features");
+    let prune_root = args.iter().any(|a| a == "--prune-root");
+    let shared_search = args.iter().any(|a| a == "--shared-search");
+    let shared_iterations: u32 = flag("--shared-iters")
+        .map(|s| s.parse())
+        .transpose()?
+        .unwrap_or(iterations);
+    if shared_iterations == 0 || (flag("--shared-iters").is_some() && !shared_search) {
+        return Err("--shared-iters requires --shared-search and a positive budget".into());
+    }
     let temperature: f64 = flag("--temperature")
         .map(|s| s.parse())
         .transpose()?
@@ -79,6 +99,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             nc2000_bot::learned::PolicyValue::from_json(&text, &dex)
         })
         .transpose()?;
+    let leaf_model = flag("--leaf-model")
+        .map(|path| {
+            let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+            nc2000_bot::learned::PolicyValue::from_json(&text, &dex)
+        })
+        .transpose()?;
+    if model.is_some() && leaf_model.is_some() {
+        return Err("choose either --model or --leaf-model".into());
+    }
+    if model.is_some() && prune_root {
+        return Err("--prune-root requires search".into());
+    }
+    if shared_search && (model.is_some() || leaf_model.is_some() || prune_root) {
+        return Err("--shared-search is a separate search arm".into());
+    }
+    if leaf_preview_iterations > 0 && leaf_model.is_none() {
+        return Err("--leaf-preview-iters requires --leaf-model".into());
+    }
     let mut agent: Option<ProtocolAgent> = None;
     let mut policy_rng = SplitMix64::new(0);
     let mut output = std::io::BufWriter::new(std::io::stdout().lock());
@@ -105,6 +143,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if !agent.on_request(&dex, &frame.request.to_string())? {
                     return Err("choose on wait request".into());
                 }
+                if prune_root {
+                    agent.prune_root()?;
+                }
                 let encoded = if features || model.is_some() {
                     Some(nc2000_bot::learning::observation(agent, &dex)?)
                 } else {
@@ -115,6 +156,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .map(|model| model.predict(encoded.as_ref().unwrap()))
                     .transpose()?;
                 let mut log_prob = None;
+                let mut leaf_calls = 0;
+                let mut shared_metrics = None;
+                let mut shared_policy = None;
                 let action = if let Some((logits, _)) = &prediction {
                     let encoded = encoded.as_ref().unwrap();
                     let eligible: Vec<usize> = logits
@@ -153,8 +197,79 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         best
                     };
                     encoded.actions[best].input.clone()
+                } else if shared_search
+                    && !agent.search().is_some_and(|s| s.is_preview())
+                    && frame.legal_actions.len() > 1
+                {
+                    let mut search = nc2000_bot::shared_search::SharedSearch::new(
+                        agent.battle().ok_or("no battle")?,
+                        &dex,
+                        agent.side(),
+                        RmConfig::default(),
+                        policy_rng.next(),
+                    );
+                    search.step(
+                        &dex,
+                        agent.belief().ok_or("no belief")?,
+                        agent.observer().ok_or("no observer")?,
+                        shared_iterations,
+                    );
+                    let action = nc2000_bot::player::action_input(&dex, search.best());
+                    shared_metrics = Some(
+                        json!({"nodes": search.node_count(), "mean_depth": search.mean_depth()}),
+                    );
+                    shared_policy = Some(json!({
+                        "iterations": shared_iterations,
+                        "actions": search.root_policy().iter().map(|&(action, visits, mean)| json!({
+                            "input": nc2000_bot::player::action_input(&dex, action), "visits": visits, "mean": mean,
+                        })).collect::<Vec<_>>(),
+                    }));
+                    action
                 } else {
-                    agent.step(&dex, iterations)?;
+                    if leaf_preview_iterations > 0 && agent.search().is_some_and(|s| s.is_preview())
+                    {
+                        agent.step(&dex, leaf_preview_iterations)?;
+                    } else if let Some(model) = &leaf_model {
+                        let root_observer = agent.observer().ok_or("no observer")?.clone();
+                        let belief = agent.belief().ok_or("no belief")?;
+                        let fallback = belief.is_fallback();
+                        let candidates = belief.candidate_count();
+                        let side = agent.side();
+                        let mut error = None;
+                        agent.step_with_leaf(&dex, iterations, &mut |sim, _, _| {
+                            leaf_calls += 1;
+                            let mut observed = root_observer.clone();
+                            observed.observe(sim, &dex);
+                            let input = nc2000_bot::learning::state_observation(
+                                sim,
+                                &dex,
+                                &observed,
+                                side,
+                                fallback,
+                                candidates,
+                                &[],
+                                &[],
+                            );
+                            match model.predict_value(&input) {
+                                Ok(value) => {
+                                    if side == 0 {
+                                        value as f64
+                                    } else {
+                                        1.0 - value as f64
+                                    }
+                                }
+                                Err(message) => {
+                                    error = Some(message);
+                                    0.5
+                                }
+                            }
+                        })?;
+                        if let Some(error) = error {
+                            return Err(error.into());
+                        }
+                    } else {
+                        agent.step(&dex, iterations)?;
+                    }
                     agent.best(&dex).ok_or("no selected action")?
                 };
                 if !frame.legal_actions.contains(&action) {
@@ -164,12 +279,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut response = json!({
                     "action": action,
                     "elapsed_ns": elapsed_ns,
-                    "iterations": agent.iterations(),
+                    "iterations": if shared_metrics.is_some() { shared_iterations } else { agent.iterations() },
                     "legality_drift": agent.legality_drift,
                     "projections": agent.projections,
+                    "leaf_calls": leaf_calls,
                 });
                 if features {
                     response["observation"] = serde_json::to_value(encoded)?;
+                    response["root_policy"] = match shared_policy {
+                        Some(policy) => policy,
+                        None => serde_json::from_str(&agent.root_policy(&dex))?,
+                    };
+                }
+                if let Some(metrics) = shared_metrics {
+                    response["shared_search"] = metrics;
                 }
                 if let Some((logits, value)) = prediction {
                     response["logits"] = serde_json::to_value(logits)?;

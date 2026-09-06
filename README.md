@@ -186,6 +186,30 @@ before updating. Proxy-opponent results and imitation accuracy are development
 measurements; strength acceptance requires a separately frozen candidate's
 direct blind matches against the frozen 30k bot and a matched latency check.
 
+Training saves an atomic checkpoint after every epoch. Repeat the same command
+with `--resume` after an interruption; the trainer verifies the data, code,
+vocabulary, initialization, and hyperparameters, and restores optimizer and RNG
+state. The best completed epoch is also available as `MODEL.checkpoints/best.json`.
+
+Search experiments can use `--a-leaf-model MODEL` to replace rollout evaluation
+with the learned value. `--a-leaf-preview-iters 30000` retains the original
+30k rollout search for team preview. The trainer's `--material-value` bounds the
+learned logit correction around a remaining-health baseline; `--select brier`
+selects the checkpoint by value prediction error. `--a-prune-root` removes
+actions already excluded by the existing final-choice rules from root sampling.
+These options remain experimental; none changes the default blind bot.
+`--a-shared-iters N` runs another experimental search: own action statistics
+are shared across sampled unrevealed opposing benches, while opponent statistics
+retain their sampled states. It uses the existing rollout evaluation and uses
+`--a-iters` for the original team-preview search.
+
+The evaluator treats a side-swapped pair as one bounded observation. It reports
+normal, Hoeffding, and empirical Bernstein intervals; its automatic positive
+evidence flag uses the two-sided empirical Bernstein bound from
+[Maurer and Pontil, Theorem 4](https://arxiv.org/html/0907.3740#S1.SS1),
+with failure probability 0.025 for each tail. A partial run cannot set that flag.
+Final acceptance requires a new, fixed-size held-out run after candidate selection.
+
 ### Search API (M3)
 
 `Battle` is a plain deep-clonable value; DUCT/MCTS drives it like this:

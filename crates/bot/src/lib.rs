@@ -51,6 +51,7 @@ pub mod regret;
 pub mod rng;
 pub mod runner;
 pub mod smmcts;
+pub mod shared_search;
 pub mod stall;
 pub mod teamgen;
 

@@ -362,6 +362,16 @@ impl BlindSearch {
     /// One iteration: fresh determinization, global-UCB own root pick
     /// forced into the shared `run_iteration`. Returns the side-0 reward.
     pub fn step_one(&mut self, dex: &Dex, belief: &Belief, obs: &Observer) -> f64 {
+        self.step_one_impl(dex, belief, obs, None)
+    }
+
+    fn step_one_impl(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        leaf: Option<&mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64>,
+    ) -> f64 {
         let mut sim = belief.determinize(dex, &self.base, obs, &mut self.rng);
         let key = key_of(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
@@ -387,19 +397,26 @@ impl BlindSearch {
         let mut force = [None, None];
         force[self.side] = Some(my_pick);
         let mut joint = [0usize; 2];
-        let r = run_iteration(
-            &self.cfg,
-            &mut self.rng,
-            &mut self.nodes,
-            &mut self.table,
-            &mut sim,
-            dex,
-            self.turn_cap,
-            root,
-            force,
-            &mut joint,
-            &mut 0,
-        );
+        let r = if let Some(leaf) = leaf {
+            crate::smmcts::run_iteration_with_leaf(
+                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
+                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0, leaf,
+            )
+        } else {
+            run_iteration(
+                &self.cfg,
+                &mut self.rng,
+                &mut self.nodes,
+                &mut self.table,
+                &mut sim,
+                dex,
+                self.turn_cap,
+                root,
+                force,
+                &mut joint,
+                &mut 0,
+            )
+        };
         self.record_joint(root, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
@@ -636,6 +653,21 @@ impl BlindSearch {
         self.done
     }
 
+    /// The callback returns a side-0 reward in [0, 1]; the flag marks a newly expanded leaf.
+    pub fn step_with_leaf(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        n: u32,
+        leaf: &mut impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64,
+    ) -> u32 {
+        for _ in 0..n {
+            self.step_one_impl(dex, belief, obs, Some(leaf));
+        }
+        self.done
+    }
+
     /// Distinct states in the determinized tree (see `SkuctSearch::node_count`).
     pub fn node_count(&self) -> usize {
         self.nodes.len()
@@ -687,6 +719,15 @@ impl BlindSearch {
         assert_eq!(allowed.len(), self.my_acts.len(), "mask length mismatch");
         assert!(allowed.iter().any(|&a| a), "mask leaves no legal action");
         self.my_mask = Some(allowed.to_vec());
+    }
+
+    pub fn prune_dominated(&mut self) {
+        let allowed: Vec<bool> = self.my_dominated.iter().enumerate()
+            .map(|(i, &dominated)| !dominated && self.my_mask.as_ref().map_or(true, |m| m[i]))
+            .collect();
+        if allowed.iter().any(|&x| x) {
+            self.mask_actions(&allowed);
+        }
     }
 
     /// Current best choice: argmax visits over the global root stats (the

@@ -82,6 +82,8 @@ pub struct PolicyValue {
     pub action: Linear,
     pub policy: Linear,
     pub value: Linear,
+    #[serde(default)]
+    pub value_baseline: Option<String>,
     pub training: serde_json::Value,
 }
 
@@ -93,8 +95,12 @@ impl PolicyValue {
     }
 
     pub fn validate(&self, dex: &Dex) -> Result<(), String> {
-        if self.schema != "nc2000-policy-value-v1" || self.observation_schema != OBSERVATION_SCHEMA
-        {
+        let schema_matches = match self.value_baseline.as_deref() {
+            None => self.schema == "nc2000-policy-value-v1",
+            Some("material") => self.schema == "nc2000-policy-value-v2",
+            _ => false,
+        };
+        if !schema_matches || self.observation_schema != OBSERVATION_SCHEMA {
             return Err("unsupported model/observation schema".into());
         }
         if self.vocabulary != Vocabulary::from_dex(dex) {
@@ -111,11 +117,10 @@ impl PolicyValue {
         Ok(())
     }
 
-    pub fn predict(&self, observation: &LearningObservation) -> Result<(Vec<f32>, f32), String> {
+    fn encode(&self, observation: &LearningObservation) -> Result<Vec<f32>, String> {
         if observation.schema != OBSERVATION_SCHEMA
             || observation.mons.len() != 12
             || observation.global.len() != GLOBAL_FEATURES
-            || observation.actions.is_empty()
         {
             return Err("invalid observation shape".into());
         }
@@ -140,7 +145,38 @@ impl PolicyValue {
         if state.iter().any(|x| !x.is_finite()) {
             return Err("non-finite observation".into());
         }
-        let context = self.context.apply(&state, true);
+        Ok(self.context.apply(&state, true))
+    }
+
+    pub fn predict_value(&self, observation: &LearningObservation) -> Result<f32, String> {
+        let context = self.encode(observation)?;
+        let value = self.value_probability(observation, &context);
+        if !value.is_finite() {
+            return Err("non-finite model output".into());
+        }
+        Ok(value)
+    }
+
+    fn value_probability(&self, observation: &LearningObservation, context: &[f32]) -> f32 {
+        let mut logit = self.value.apply(context, false)[0];
+        if self.value_baseline.is_some() {
+            let mut health = [observation.global[4] * 6.0, observation.global[5] * 6.0];
+            for (side, health) in health.iter_mut().enumerate() {
+                for mon in &observation.mons[side * 6..side * 6 + 6] {
+                    let f = &mon.features;
+                    *health -= (1.0 - f[1]) * f[4] * (1.0 - f[7]);
+                }
+            }
+            logit = 2.0 * (health[0] - health[1]) + 0.5 * logit.tanh();
+        }
+        1.0 / (1.0 + (-logit).exp())
+    }
+
+    pub fn predict(&self, observation: &LearningObservation) -> Result<(Vec<f32>, f32), String> {
+        if observation.actions.is_empty() {
+            return Err("policy observation has no actions".into());
+        }
+        let context = self.encode(observation)?;
         let logits = observation
             .actions
             .iter()
@@ -156,7 +192,7 @@ impl PolicyValue {
                 Ok(self.policy.apply(&self.action.apply(&x, true), false)[0])
             })
             .collect::<Result<Vec<_>, String>>()?;
-        let value = 1.0 / (1.0 + (-self.value.apply(&context, false)[0]).exp());
+        let value = self.value_probability(observation, &context);
         if !value.is_finite() || logits.iter().any(|x| !x.is_finite()) {
             return Err("non-finite model output".into());
         }

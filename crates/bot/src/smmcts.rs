@@ -353,6 +353,33 @@ pub(crate) fn run_iteration(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
 ) -> f64 {
+    run_iteration_with_leaf(
+        cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root,
+        root_joint, depth_out, &mut |sim, rng, rollout| {
+            if rollout {
+                playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_m16c)
+            } else {
+                leaf_eval(cfg, sim, dex)
+            }
+        },
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_iteration_with_leaf(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<Node>,
+    table: &mut FxHashMap<u64, usize>,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+    leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
+) -> f64 {
     let mut path: Vec<(usize, usize, usize)> = Vec::new(); // (node, side, act)
     let mut node_idx = start;
 
@@ -387,7 +414,7 @@ pub(crate) fn run_iteration(
         if joint == [None, None] {
             // defensive: a rest point where neither side owes a choice
             // (never reached in practice — battles end instead)
-            break leaf_eval(cfg, sim, dex);
+            break leaf(sim, rng, false);
         }
         sim.apply_choices(dex, joint)
             .expect("cached legal choice rejected (state_key collision?)");
@@ -395,7 +422,7 @@ pub(crate) fn run_iteration(
             break outcome_reward(o);
         }
         if sim.turn > turn_cap {
-            break leaf_eval(cfg, sim, dex);
+            break leaf(sim, rng, false);
         }
         let key = key_of(cfg, dex, sim);
         match table.get(&key) {
@@ -408,7 +435,7 @@ pub(crate) fn run_iteration(
                 let child = nodes.len();
                 nodes.push(Node::at(sim, dex));
                 table.insert(key, child);
-                break playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_m16c);
+                break leaf(sim, rng, true);
             }
         }
     };

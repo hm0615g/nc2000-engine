@@ -2146,6 +2146,27 @@ impl ProtocolAgent {
         self.search.as_ref().map_or(0, |s| s.iterations())
     }
 
+    pub fn prune_root(&mut self) -> Result<(), String> {
+        self.search.as_mut().ok_or("prune before on_request")?.prune_dominated();
+        Ok(())
+    }
+
+    /// The callback returns a side-0 reward in [0, 1]; the flag marks a newly expanded leaf.
+    pub fn step_with_leaf(
+        &mut self,
+        dex: &Dex,
+        n: u32,
+        leaf: &mut impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64,
+    ) -> Result<u32, String> {
+        let search = self.search.as_mut().ok_or("step before on_request")?;
+        if self.baked.is_some() || self.forced.is_some() {
+            return Ok(search.iterations());
+        }
+        let belief = self.belief.as_ref().ok_or("no belief")?;
+        let obs = self.observer.as_ref().ok_or("no observer")?;
+        Ok(search.step_with_leaf(dex, belief, obs, n, leaf))
+    }
+
     /// Current best choice, projected onto the request-legal set (never
     /// submits something PS rejects).
     pub fn best(&mut self, dex: &Dex) -> Option<String> {

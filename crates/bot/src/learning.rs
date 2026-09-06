@@ -4,6 +4,7 @@ use nc2000_engine::state::{RequestState, Status};
 use serde::{Deserialize, Serialize};
 
 use crate::import::ProtocolAgent;
+use crate::observe::Observer;
 use crate::player::action_input;
 
 pub const OBSERVATION_SCHEMA: &str = "nc2000-observation-v1";
@@ -88,6 +89,32 @@ pub fn observation(agent: &ProtocolAgent, dex: &Dex) -> Result<LearningObservati
     let b = agent.battle().ok_or("observation before request")?;
     let obs = agent.observer().ok_or("observation before observer")?;
     let me = agent.side();
+    let search = agent.search().ok_or("observation without search")?;
+    let belief = agent.belief().ok_or("observation without belief")?;
+    Ok(state_observation(
+        b,
+        dex,
+        obs,
+        me,
+        belief.is_fallback(),
+        belief.candidate_count(),
+        search.actions(),
+        search.dominated(),
+    ))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn state_observation(
+    b: &nc2000_engine::state::Battle,
+    dex: &Dex,
+    obs: &Observer,
+    me: usize,
+    fallback: bool,
+    candidate_count: usize,
+    choices: &[SearchChoice],
+    dominated: &[bool],
+) -> LearningObservation {
+    assert_eq!(choices.len(), dominated.len());
     let mut global = vec![0.0; GLOBAL_FEATURES];
     global[0] = b.turn as f32 / 1000.0;
     global[1] = f32::from(b.request_state == RequestState::TeamPreview);
@@ -110,10 +137,8 @@ pub fn observation(agent: &ProtocolAgent, dex: &Dex) -> Result<LearningObservati
             );
         }
     }
-    if let Some(belief) = agent.belief() {
-        global[19] = f32::from(belief.is_fallback());
-        global[20] = (belief.candidate_count() as f32).ln_1p() / 5.0;
-    }
+    global[19] = f32::from(fallback);
+    global[20] = (candidate_count as f32).ln_1p() / 5.0;
     let mut mons = Vec::with_capacity(12);
     for relative in 0..2 {
         let side = me ^ relative;
@@ -190,10 +215,8 @@ pub fn observation(agent: &ProtocolAgent, dex: &Dex) -> Result<LearningObservati
             });
         }
     }
-    let search = agent.search().ok_or("observation without search")?;
-    let any_eligible = search.dominated().iter().any(|d| !d);
-    let actions = search
-        .actions()
+    let any_eligible = dominated.iter().any(|d| !d);
+    let actions = choices
         .iter()
         .enumerate()
         .map(|(index, &choice)| {
@@ -230,16 +253,16 @@ pub fn observation(agent: &ProtocolAgent, dex: &Dex) -> Result<LearningObservati
             }
             LearningAction {
                 input: action_input(dex, choice),
-                eligible: !any_eligible || !search.dominated()[index],
+                eligible: !any_eligible || !dominated[index],
                 move_id,
                 features: f,
             }
         })
         .collect();
-    Ok(LearningObservation {
+    LearningObservation {
         schema: OBSERVATION_SCHEMA.into(),
         global,
         mons,
         actions,
-    })
+    }
 }

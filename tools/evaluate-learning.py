@@ -50,6 +50,11 @@ def summarize(path, require_complete=True):
     interval = [mean - margin, mean + margin] if margin is not None else None
     bounded_margin = math.sqrt(math.log(40) / (2 * len(pairs))) if pairs else None
     bounded = [max(0, mean - bounded_margin), min(1, mean + bounded_margin)] if pairs else None
+    bernstein = None
+    if len(pairs) > 1:
+        log = math.log(4 / .05)
+        width = math.sqrt(2 * statistics.variance(pairs) * log / len(pairs)) + 7 * log / (3 * (len(pairs) - 1))
+        bernstein = [max(0, mean - width), min(1, mean + width)]
     times = []
     for side in range(2):
         xs = sorted(x / 1e6 for row in games.values() for x in row["decision_ns"][side])
@@ -61,11 +66,12 @@ def summarize(path, require_complete=True):
     return {
         "complete": complete, "games": len(games), "planned_games": count,
         "complete_pairs": len(pairs), "score": mean, "normal95": interval, "hoeffding95": bounded,
+        "empirical_bernstein95": bernstein,
         "wins": sum(row["score"] == 1 for row in games.values()),
         "losses": sum(row["score"] == 0 for row in games.values()),
         "ties": sum(row["score"] == .5 for row in games.values()),
         "timing": times,
-        "positive_strength_evidence": bool(complete and bounded and bounded[0] > .5),
+        "positive_strength_evidence": bool(complete and bernstein and bernstein[0] > .5),
         "pair_scores": pairs,
     }
 

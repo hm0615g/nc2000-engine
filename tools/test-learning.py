@@ -53,6 +53,7 @@ class PairedEvaluationTests(unittest.TestCase):
         result = evaluation.summarize(self.path)
         self.assertEqual(result["normal95"], [1.0, 1.0])
         self.assertLess(result["hoeffding95"][0], .5)
+        self.assertLess(result["empirical_bernstein95"][0], .5)
         self.assertFalse(result["positive_strength_evidence"])
 
     def test_capped_games_cannot_be_substituted_for_real_draws(self):
