@@ -87,6 +87,8 @@ pub enum SelRule {
 pub struct RmConfig {
     /// Simulations per decision.
     pub iterations: u32,
+    /// Independent in-battle trees for BlindAgent and OpenAgent; their total budget is `iterations`.
+    pub root_trees: u32,
     /// Root behavior: RM-solved mixed play vs argmax.
     pub rule: SelRule,
     /// Fraction of the budget spent on root-matrix probes (the rest builds
@@ -136,6 +138,7 @@ impl Default for RmConfig {
     fn default() -> Self {
         RmConfig {
             iterations: 1000,
+            root_trees: 1,
             rule: SelRule::Rm,
             probe: 0.25,
             mix_actions: 3,

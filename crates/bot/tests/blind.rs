@@ -91,6 +91,15 @@ fn projection(
 
 #[test]
 fn no_psychic_tells_on_the_collision_pair() {
+    check_collision_pair(1);
+}
+
+#[test]
+fn ensemble_has_no_psychic_tells_on_the_collision_pair() {
+    check_collision_pair(30);
+}
+
+fn check_collision_pair(root_trees: u32) {
     let dex = load_dex();
     let meta = pool();
     let (ci, cj) = collision_pair(&meta);
@@ -107,7 +116,7 @@ fn no_psychic_tells_on_the_collision_pair() {
         // outer battles log-ON: the observer's log channel is part of the
         // surface under test
 
-        let cfg = RmConfig { iterations: 96, ..Default::default() };
+        let cfg = RmConfig { iterations: 96, root_trees, ..Default::default() };
         let agent_seed = 0xB11D + run as u64;
         let mut agent_a = BlindAgent::new(cfg.clone(), meta.clone(), None, agent_seed);
         let mut agent_b = BlindAgent::new(cfg.clone(), meta.clone(), None, agent_seed);
@@ -215,6 +224,30 @@ fn no_psychic_tells_on_the_collision_pair() {
         "no in-battle checkpoint had both collision candidates alive — the ambiguity was \
          never exercised"
     );
+}
+
+#[test]
+fn ensemble_preserves_live_preview_choices() {
+    let dex = load_dex();
+    let meta = pool();
+    let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &meta.teams[0].sets, &meta.teams[1].sets).unwrap();
+    let choices = battle.legal_choices(&dex, 0);
+    assert!(matches!(choices[0], SearchChoice::Team(_)));
+    for open in [false, true] {
+        for seed in [17, 83] {
+            let mut selected = Vec::new();
+            for root_trees in [1, 30] {
+                let cfg = RmConfig { iterations: 96, root_trees, ..Default::default() };
+                let mut agent: Box<dyn Agent> = if open {
+                    Box::new(nc2000_bot::OpenAgent::new(cfg, None, seed))
+                } else {
+                    Box::new(BlindAgent::new(cfg, meta.clone(), None, seed))
+                };
+                selected.push(agent.choose(&battle, &dex, 0, &choices));
+            }
+            assert_eq!(selected[0], selected[1]);
+        }
+    }
 }
 
 // -------------------------------------------------------- lifecycle smoke

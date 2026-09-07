@@ -1,0 +1,115 @@
+{
+  "schema": "nc2000-ensemble-regression-v1",
+  "source_revision": "bde8828",
+  "candidate": "Thirty independent in-battle belief searches; sum root visits; shared persistent public observer and belief; independent member RNG seeds drawn from agent RNG. Preview remains one tree.",
+  "provenance": "The arena implementation shares the earlier allocation rule; its per-member seeds now come from a persistent agent RNG instead of reconstructing thirty ProtocolAgents. T11 and T26 must be rechecked with this implementation.",
+  "primary": [
+    {
+      "mode": "open",
+      "candidate": "ensemble:30:open:30000:1:16",
+      "baseline": "open:30000:1:16",
+      "games": 256,
+      "seeds": [
+        7310101,
+        7310102,
+        7310103,
+        7310104,
+        7310105,
+        7310106,
+        7310107,
+        7310108
+      ]
+    },
+    {
+      "mode": "blind",
+      "candidate": "ensemble:30:blind:27000:0.4:16",
+      "baseline": "blind:27000:0.4:16",
+      "games": 256,
+      "seeds": [
+        7410101,
+        7410102,
+        7410103,
+        7410104,
+        7410105,
+        7410106,
+        7410107,
+        7410108
+      ]
+    }
+  ],
+  "schedule": {
+    "games_per_shard": 32,
+    "pool": "meta",
+    "crn_agent_seeds": true,
+    "max_turns": 1100,
+    "independent_unit": "same teams and battle seed, two games with agent assignments swapped"
+  },
+  "analysis": {
+    "estimand": "candidate terminal score against current policy on the fixed meta pool, win=1, tie=0.5, loss=0",
+    "noninferiority_margin": 0.05,
+    "confidence": "Normal approximation over side-swap pair means. Report 95% per-mode intervals and simultaneous two-mode 95% intervals using Bonferroni (97.5% per mode).",
+    "noninferiority": "simultaneous lower confidence bound > 0.45",
+    "improvement": "simultaneous lower confidence bound > 0.50",
+    "regression": "simultaneous upper confidence bound < 0.50",
+    "caps": "Any turn cap invalidates the terminal-score gate; never count a capped game as evidence of a draw.",
+    "stopping": "Complete all 256 games per mode. No tuning or optional expansion based on partial scores."
+  },
+  "controls": {
+    "null": "Each identical-arm CRN duel must give score 0.5 with no split pairs.",
+    "floor": "Random agent is the intentionally empty policy; current and ensemble arms must beat it in separate controls.",
+    "ablation": "Current single-tree policy at the same total budget is the primary comparator.",
+    "information": "Blind ensemble must preserve behavior across the existing public-view-equivalent hidden-truth collision test.",
+    "default_identity": "Compare current default agent results with the saved pre-change arena executable.",
+    "parameters": {
+      "null": {
+        "seeds": {
+          "open": 7500101,
+          "blind": 7500102
+        },
+        "games_per_arm": 8,
+        "iterations": 1000,
+        "arms": [
+          "single vs same single",
+          "ensemble vs same ensemble"
+        ]
+      },
+      "default_identity": {
+        "seeds": {
+          "open": 7520201,
+          "blind": 7520202
+        },
+        "games_per_mode_and_executable": 16,
+        "iterations": 1000,
+        "opponent": "greedy"
+      },
+      "floor": {
+        "seeds": {
+          "open": 7510101,
+          "blind": 7510102
+        },
+        "games_per_arm": 8,
+        "iterations": "full mode budget",
+        "arms": [
+          "single vs random",
+          "ensemble vs random"
+        ]
+      }
+    }
+  },
+  "position_checks": {
+    "turns": [
+      11,
+      26
+    ],
+    "modes": [
+      "open",
+      "blind"
+    ],
+    "seeds": [
+      7600101,
+      7600116
+    ],
+    "seed_range_inclusive": true
+  },
+  "production_defaults_changed": false
+}

@@ -46,6 +46,7 @@
 //!                                    TRUE sets pinned as a singleton belief — only
 //!                                    picks stay hidden; preview by public-signature
 //!                                    table lookup, else pinned live search
+//!   ensemble:TREES:<open|blind spec> split the in-battle budget across independent trees
 //!   exploit:<inner>                  best-response probe vs a frozen <inner> policy
 //!                                    (3-sample seed-marginal oracle, own budget = 3x inner's)
 //!   baked:<inner> | bakedarg:<inner>       M8 baked preview (mixed sample / argmax),
@@ -95,8 +96,8 @@ enum AgentSpec {
     /// mask; two blind agents in one process differing only in
     /// `RmConfig::mask_rules` is the only CRN-paired A/B there is
     /// (`smmcts::SkuctSearch::root_dominated`).
-    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules },
-    Open { iterations: u32, c: f64, buckets: i64 },
+    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, trees: u32 },
+    Open { iterations: u32, c: f64, buckets: i64, trees: u32 },
     Exploit(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
     Counter { inner: Box<AgentSpec>, target: PreviewMode },
@@ -172,6 +173,7 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
         c: opt_num(&nums, 1, "c")?.unwrap_or(1.0),
         buckets: opt_num(&nums, 2, "buckets")?.unwrap_or(16),
         mask,
+        trees: 1,
     })
 }
 
@@ -179,6 +181,22 @@ impl AgentSpec {
     fn parse(s: &str) -> Result<AgentSpec, String> {
         let parts: Vec<&str> = s.split(':').collect();
         match parts[0] {
+            "ensemble" => {
+                let trees: u32 = opt_num(&parts, 1, "trees")?.ok_or("ensemble needs a tree count")?;
+                let input = s.splitn(3, ':').nth(2).ok_or("ensemble needs an open or blind spec")?;
+                let mut inner = Self::parse(input)?;
+                match &mut inner {
+                    AgentSpec::Open { iterations, trees: n, .. }
+                    | AgentSpec::Blind { iterations, trees: n, .. } => {
+                        if *n != 1 || trees == 0 || trees > *iterations {
+                            return Err("invalid ensemble tree count".into());
+                        }
+                        *n = trees;
+                    }
+                    _ => return Err("ensemble supports open and blind agents".into()),
+                }
+                Ok(inner)
+            }
             "random" => Ok(AgentSpec::Random),
             "maxdamage" => Ok(AgentSpec::MaxDamage),
             "greedy" => Ok(AgentSpec::Greedy),
@@ -224,6 +242,7 @@ impl AgentSpec {
                 iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
                 buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
+                trees: 1,
             }),
             "exploit" => {
                 let inner = s.strip_prefix("exploit:").ok_or("exploit needs an inner spec")?;
@@ -369,9 +388,10 @@ impl AgentSpec {
                 },
                 seed,
             )),
-            AgentSpec::Blind { iterations, c, buckets, mask } => Box::new(BlindAgent::new(
+            AgentSpec::Blind { iterations, c, buckets, mask, trees } => Box::new(BlindAgent::new(
                 RmConfig {
                     iterations: *iterations,
+                    root_trees: *trees,
                     rule: SelRule::Ucb,
                     c: *c,
                     hp_buckets: *buckets,
@@ -382,9 +402,10 @@ impl AgentSpec {
                 tables.cloned(),
                 seed,
             )),
-            AgentSpec::Open { iterations, c, buckets } => Box::new(OpenAgent::new(
+            AgentSpec::Open { iterations, c, buckets, trees } => Box::new(OpenAgent::new(
                 RmConfig {
                     iterations: *iterations,
+                    root_trees: *trees,
                     rule: SelRule::Ucb,
                     c: *c,
                     hp_buckets: *buckets,
@@ -437,11 +458,12 @@ impl AgentSpec {
             AgentSpec::SkUctAbs { iterations, c, buckets } => {
                 format!("skuctabs:{iterations}:{c}:{buckets}")
             }
-            AgentSpec::Blind { iterations, c, buckets, mask } => {
+            AgentSpec::Blind { iterations, c, buckets, mask, trees } => {
+                let prefix = if *trees > 1 { format!("ensemble:{trees}:") } else { String::new() };
                 // The one pre-existing named ablation keeps its own label, so
                 // every artifact written before 2026-08-20 still compares.
                 if *mask == legacy_mask() {
-                    return format!("blindlegacy:{iterations}:{c}:{buckets}");
+                    return format!("{prefix}blindlegacy:{iterations}:{c}:{buckets}");
                 }
                 let diff: Vec<String> = mask_fields(mask)
                     .into_iter()
@@ -451,10 +473,11 @@ impl AgentSpec {
                     .collect();
                 let suffix =
                     if diff.is_empty() { String::new() } else { format!(":{}", diff.join(",")) };
-                format!("blind:{iterations}:{c}:{buckets}{suffix}")
+                format!("{prefix}blind:{iterations}:{c}:{buckets}{suffix}")
             }
-            AgentSpec::Open { iterations, c, buckets } => {
-                format!("open:{iterations}:{c}:{buckets}")
+            AgentSpec::Open { iterations, c, buckets, trees } => {
+                let prefix = if *trees > 1 { format!("ensemble:{trees}:") } else { String::new() };
+                format!("{prefix}open:{iterations}:{c}:{buckets}")
             }
             AgentSpec::Exploit(inner) => format!("exploit:{}", inner.label()),
             AgentSpec::Baked { inner, mode } => match mode {
