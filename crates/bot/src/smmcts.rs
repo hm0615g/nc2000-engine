@@ -164,6 +164,20 @@ pub(crate) struct Node {
     pub(crate) preview: bool,
 }
 
+pub enum SearchTrace<'a> {
+    /// With multiple legal actions, visits include this selection; rewards exclude its backpropagation.
+    Choice {
+        battle: &'a Battle,
+        node: usize,
+        actions: &'a [Vec<SearchChoice>; 2],
+        visits: &'a [Vec<u32>; 2],
+        rewards: &'a [Vec<f64>; 2],
+        chosen: [Option<SearchChoice>; 2],
+    },
+    Leaf { battle: &'a Battle, rng: &'a SplitMix64, rollout: bool },
+    Result { battle: &'a Battle, reward0: f64 },
+}
+
 impl Node {
     pub(crate) fn at(sim: &mut Battle, dex: &Dex) -> Node {
         let acts = [sim.legal_choices(dex, 0), sim.legal_choices(dex, 1)];
@@ -361,7 +375,7 @@ pub(crate) fn run_iteration(
             } else {
                 leaf_eval(cfg, sim, dex)
             }
-        },
+        }, None,
     )
 }
 
@@ -379,6 +393,7 @@ pub(crate) fn run_iteration_with_leaf(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
     leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
+    mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
 ) -> f64 {
     let mut path: Vec<(usize, usize, usize)> = Vec::new(); // (node, side, act)
     let mut node_idx = start;
@@ -411,9 +426,19 @@ pub(crate) fn run_iteration_with_leaf(
                 root_joint[s] = ai;
             }
         }
+        if let Some(trace) = trace.as_deref_mut() {
+            let node = &nodes[node_idx];
+            trace(SearchTrace::Choice {
+                battle: sim, node: node_idx, actions: &node.acts,
+                visits: &node.n, rewards: &node.w, chosen: joint,
+            });
+        }
         if joint == [None, None] {
             // defensive: a rest point where neither side owes a choice
             // (never reached in practice — battles end instead)
+            if let Some(trace) = trace.as_deref_mut() {
+                trace(SearchTrace::Leaf { battle: sim, rng, rollout: false });
+            }
             break leaf(sim, rng, false);
         }
         sim.apply_choices(dex, joint)
@@ -422,6 +447,9 @@ pub(crate) fn run_iteration_with_leaf(
             break outcome_reward(o);
         }
         if sim.turn > turn_cap {
+            if let Some(trace) = trace.as_deref_mut() {
+                trace(SearchTrace::Leaf { battle: sim, rng, rollout: false });
+            }
             break leaf(sim, rng, false);
         }
         let key = key_of(cfg, dex, sim);
@@ -435,10 +463,17 @@ pub(crate) fn run_iteration_with_leaf(
                 let child = nodes.len();
                 nodes.push(Node::at(sim, dex));
                 table.insert(key, child);
+                if let Some(trace) = trace.as_deref_mut() {
+                    trace(SearchTrace::Leaf { battle: sim, rng, rollout: true });
+                }
                 break leaf(sim, rng, true);
             }
         }
     };
+
+    if let Some(trace) = trace {
+        trace(SearchTrace::Result { battle: sim, reward0 });
+    }
 
     // ---- backprop: UCB stats along the path
     for (ni, s, ai) in path {

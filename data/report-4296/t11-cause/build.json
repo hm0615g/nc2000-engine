@@ -1,0 +1,63 @@
+{
+  "schema": "nc2000-t11-search-cause-build-v1",
+  "base_revision": "19c434a",
+  "config": {
+    "side": 1,
+    "mode": "open",
+    "iterations": 30000,
+    "c": 1.0,
+    "hp_buckets": 16,
+    "rollout_turns": 8,
+    "rollout_eps": 0.2,
+    "seeds": [
+      61001,
+      62001,
+      62002,
+      62003,
+      62004
+    ]
+  },
+  "source_sha256": {
+    "crates/bot/src/blind.rs": "0b104a36c47c673b43dc980ed7891963bff7f483bbe62a77d9a6f38a801b7cc5",
+    "crates/bot/src/smmcts.rs": "895d7718f53358c1301141bf48246c9af4ab6c76253afc47be1306a56716be02",
+    "crates/bot/src/import.rs": "2bf5d6b93c18a3297cd66f5dd976d44ee5a9b8260143900fcfee444effd65222",
+    "crates/bot/examples/trace_decision.rs": "5f212db1a41c7617ee5682f18ae566aed981a34ce23fef0aa6041d862b415cd2",
+    "crates/bot/tests/report_4296.rs": "986b5ec64dd15590d585ba343ccb42c785f8bbe232128949369600a651071110",
+    "crates/engine/src/state.rs": "eff14309e3fc8d92fcacdeef093b5b320bc27b15c6b60c39a15c988aaf0717e5",
+    "crates/engine/src/battle/conditions.rs": "4c5503d95a3f488d27f1ced049e7b35fa210af4ffcde5d2dfd6127c8e080c34b",
+    "crates/engine/src/battle/search.rs": "27e70c6d58104d8861bda911f9686fcbce7dcee1f253cf8512cad4280035b045"
+  },
+  "binary_sha256": "1241f36d604f589f1ea1150169406566ecc3f51cec1c088a9bdb7ad893e29360",
+  "input_sha256": {
+    "data/report-4296/turn-11.json": "e509476b22e35774122ac6dd30039a0283c7d22e56e75a2275c8b80f0616980b",
+    "data/report-4296/opponent-team.json": "e4005fcdb852a3e242864ce8e4f08e2fedcb4efb8a70bf68161ddd03fc48a6f5",
+    "data/meta-pool-v0/meta-pool.json": "6a9791ad02c1d1699069b4f169a4a0be732282a930cdbf464f3aa91ca63b0253",
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+  },
+  "validation": {
+    "original_seed_61001_action_visits_and_means_exact": true,
+    "observed_vs_ordinary_seeds": [
+      61001,
+      62001,
+      62002,
+      62003,
+      62004
+    ],
+    "observed_comparison": [
+      "visits",
+      "means",
+      "root_matrix",
+      "node_count"
+    ],
+    "subsequent_unobserved_iterations_compared": 100,
+    "production_policy_changed": false,
+    "final_build_full_trace_bytes_identical": true
+  },
+  "artifact_sha256": {
+    "root-checkpoints.jsonl": "8f539bdfcc28eaee00f8c1a16ba7f0a404bdee95b035069821dbad033971989e",
+    "probe-24418.json": "f213460cf18670ac4b98269cf3992aafb862aeb8ed10c7452689582ef3cfc349",
+    "summary.json": "d1cb6a0156a0805b9b5f5fc711bc6b1af1ee06af8e9d07b5d161052f22f3ad7d",
+    "examples.jsonl": "fb5e5cc2a5fd177d2fbd5d54ab1bbedbb5417766d4f3efeeef38379cfa9f959d",
+    "analyze.py": "1e215184142807de34f6cbcdeeb47da98d82e22118a205b2c21b4a854884d7c7"
+  }
+}

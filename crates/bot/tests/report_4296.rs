@@ -50,6 +50,60 @@ fn ko_probabilities(dex: &Dex, b: &Battle, action: &str, reply: &str) -> (f64, f
 }
 
 #[test]
+fn observing_search_preserves_statistics_and_subsequent_rng() {
+    use nc2000_bot::{import::ProtocolAgent, mcts::Playout, smmcts::{RmConfig, SearchTrace}};
+    let dex = load_dex();
+    let root = repo_root();
+    let spec = PositionSpec::parse(&std::fs::read_to_string(root.join("data/report-4296/turn-11.json")).unwrap()).unwrap();
+    let sets: Vec<PokemonSet> = serde_json::from_str(&std::fs::read_to_string(root.join("data/report-4296/opponent-team.json")).unwrap()).unwrap();
+    let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+    for playout in [Playout::heavy(), Playout::Uniform] {
+        let cfg = RmConfig { playout, ..RmConfig::default() };
+        let [mut observed, mut ordinary] = std::array::from_fn(|_| {
+            let mut agent = ProtocolAgent::new(&dex, 1, pool.clone(), cfg.clone(), 61001);
+            agent.pin_opponent(sets.clone());
+            agent.set_position(&dex, &spec).unwrap();
+            agent
+        });
+        let mut results = 0;
+        let mut rewards = 0.0;
+        let mut choices = 0;
+        observed.step_observed(&dex, 1200, &mut |event| match event {
+            SearchTrace::Choice { battle, chosen, .. } => {
+                choices += 1;
+                assert_ne!(chosen, [None, None]);
+                let mut copy = battle.clone();
+                copy.apply_choices(&dex, chosen).unwrap();
+            },
+            SearchTrace::Leaf { rng, .. } => {
+                let mut copy = rng.clone();
+                std::hint::black_box(copy.next());
+            },
+            SearchTrace::Result { reward0, .. } => {
+                results += 1;
+                rewards += 1.0-reward0;
+            },
+        }).unwrap();
+        ordinary.step(&dex, 1200).unwrap();
+        assert_eq!(results, 1200);
+        assert!(choices >= results);
+        let search = observed.search().unwrap();
+        let backed_up: f64 = search.visits().iter().zip(search.means()).map(|(n,w)|*n as f64*w).sum();
+        assert!((rewards-backed_up).abs()<1e-9);
+        for extra in [0, 100] {
+            observed.step(&dex, extra).unwrap();
+            ordinary.step(&dex, extra).unwrap();
+            let a = observed.search().unwrap();
+            let b = ordinary.search().unwrap();
+            assert_eq!(a.visits(), b.visits());
+            assert_eq!(a.means(), b.means());
+            assert_eq!(a.root_matrix(), b.root_matrix());
+            assert_eq!(a.node_count(), b.node_count());
+        }
+    }
+}
+
+#[test]
 fn submitted_sheet_is_legal_and_pinned_with_consumed_items_preserved() {
     let dex = load_dex();
     let root = repo_root();

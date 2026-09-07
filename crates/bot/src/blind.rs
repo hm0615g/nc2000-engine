@@ -372,7 +372,7 @@ impl BlindSearch {
     /// One iteration: fresh determinization, global-UCB own root pick
     /// forced into the shared `run_iteration`. Returns the side-0 reward.
     pub fn step_one(&mut self, dex: &Dex, belief: &Belief, obs: &Observer) -> f64 {
-        self.step_one_impl(dex, belief, obs, None)
+        self.step_one_impl(dex, belief, obs, None, None)
     }
 
     fn step_one_impl(
@@ -381,6 +381,7 @@ impl BlindSearch {
         belief: &Belief,
         obs: &Observer,
         leaf: Option<&mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64>,
+        trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
     ) -> f64 {
         let pick = belief.sample(&mut self.rng);
         let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut self.rng);
@@ -416,7 +417,22 @@ impl BlindSearch {
         let r = if let Some(leaf) = leaf {
             crate::smmcts::run_iteration_with_leaf(
                 &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
-                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0, leaf,
+                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0, leaf, None,
+            )
+        } else if let Some(trace) = trace {
+            crate::smmcts::run_iteration_with_leaf(
+                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
+                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
+                &mut |sim, rng, rollout| {
+                    if rollout {
+                        crate::mcts::playout_value(sim, dex, &self.cfg.playout, self.turn_cap, rng, self.cfg.rollout_m16c)
+                    } else {
+                        match &self.cfg.playout {
+                            crate::mcts::Playout::Uniform => crate::mcts::hp_eval(sim),
+                            crate::mcts::Playout::Heavy { weights, .. } => crate::eval::eval_leaf(sim, dex, weights),
+                        }
+                    }
+                }, Some(trace),
             )
         } else {
             run_iteration(
@@ -690,7 +706,21 @@ impl BlindSearch {
         leaf: &mut impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64,
     ) -> u32 {
         for _ in 0..n {
-            self.step_one_impl(dex, belief, obs, Some(leaf));
+            self.step_one_impl(dex, belief, obs, Some(leaf), None);
+        }
+        self.done
+    }
+
+    pub fn step_observed(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        n: u32,
+        trace: &mut impl FnMut(crate::smmcts::SearchTrace<'_>),
+    ) -> u32 {
+        for _ in 0..n {
+            self.step_one_impl(dex, belief, obs, None, Some(trace));
         }
         self.done
     }
