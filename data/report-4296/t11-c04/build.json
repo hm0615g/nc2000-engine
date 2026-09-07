@@ -1,0 +1,52 @@
+{
+  "base_commit": "92e933ebe1b5909854143777d9064203503876db",
+  "rustc": "rustc 1.94.0 (4a4ef493e 2026-03-02)",
+  "build_command": "cargo build --release -p nc2000-bot --example trace_decision",
+  "config": {
+    "mode": "open",
+    "iterations": 30000,
+    "c": [
+      1.0,
+      0.4
+    ],
+    "rollout_eps": 0.2,
+    "rollout_turns": 8,
+    "hp_buckets": 16
+  },
+  "hashes": {
+    "Cargo.lock": "f18790002017f75dc8ef66950316f31e133967c3a9e9816597221d688d9c963e",
+    "crates/bot/examples/trace_decision.rs": "7d3134ec7f0e6a6e2e9be229a0d419b30bf24e4bef7ed9c54b371cc354eb6b64",
+    "crates/bot/src/smmcts.rs": "895d7718f53358c1301141bf48246c9af4ab6c76253afc47be1306a56716be02",
+    "crates/bot/src/blind.rs": "9faecf8825abd0549f1f1d3d25de60cb796a2f5f2a487d3cc489ea6af7f42e68",
+    "crates/bot/src/import.rs": "2bf5d6b93c18a3297cd66f5dd976d44ee5a9b8260143900fcfee444effd65222",
+    "crates/bot/src/mcts.rs": "8c201e300173d476a622d6b2983d3a3ed9b2115fed7c233d2cd514a1b69a7c18",
+    "crates/bot/src/belief.rs": "975257fea58e6d8bf88e5c5ada5fc870252ea41c3475b0da45232cfacc91ec8c",
+    "crates/engine/src/state.rs": "eff14309e3fc8d92fcacdeef093b5b320bc27b15c6b60c39a15c988aaf0717e5",
+    "crates/engine/src/battle/search.rs": "27e70c6d58104d8861bda911f9686fcbce7dcee1f253cf8512cad4280035b045",
+    "data/search-profiles.json": "2e19480f1fd457bb104a54c2fc6717a6e09efc672638b6579f96d7ea5bb2dfc6",
+    "data/report-4296/turn-11.json": "e509476b22e35774122ac6dd30039a0283c7d22e56e75a2275c8b80f0616980b",
+    "data/report-4296/turn-26.json": "c4779ae4a3c8911ec8179ed5485158d7daf72affeb94de834b3cf08f15817ae1",
+    "data/report-4296/opponent-team.json": "e4005fcdb852a3e242864ce8e4f08e2fedcb4efb8a70bf68161ddd03fc48a6f5",
+    "data/meta-pool-v0/meta-pool.json": "6a9791ad02c1d1699069b4f169a4a0be732282a930cdbf464f3aa91ca63b0253",
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "data/report-4296/t11-cause/analyze.py": "1e215184142807de34f6cbcdeeb47da98d82e22118a205b2c21b4a854884d7c7",
+    "data/report-4296/t11-c04/compare.py": "e63f7dc62268be7d5b26abed891000e86859dfb03b6ec9900ad3b00f255be7e7",
+    "target/release/examples/trace_decision": "28ebc3227af78338e55ba4c2353582594002a5a5b513c68ec32c8b6d2f893ae9"
+  },
+  "validation": {
+    "example_check": "passed",
+    "default_c1_all_archived_root_fields_exact": 61001,
+    "observed_vs_ordinary_plus_100_iterations_exact": [
+      61001,
+      62001,
+      62002,
+      62003,
+      62004
+    ],
+    "aggregate_trace_rewards_reproduce_final_root_statistics": true,
+    "heldout_t11_paired_seeds": 32,
+    "t26_paired_seeds": 16,
+    "production_profiles_changed": false,
+    "independent_terminal_strength_tested": false
+  }
+}

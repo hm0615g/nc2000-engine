@@ -6,6 +6,8 @@ This investigation changes observation only. It adds no corrective policy, actio
 
 The subsequent [fixed-policy correction experiment](../t11-frozen/README.md) tests this mechanism by separating training from evaluation. It is not adopted as a production fix; the report retains the failed candidate and its causal controls.
 
+The later [c=0.4 OpenSheet comparison](../t11-c04/README.md) reduces measured exploratory selections but does not establish a T11 improvement and regresses the targeted T26 decision check. The production coefficient remains unchanged.
+
 ## The actual selection rule
 
 At the information-set root, `blind::select_global` selects an unvisited action first, then maximizes

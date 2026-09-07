@@ -69,6 +69,7 @@ fn main() {
     let seeds: u64 = arg("--seeds", "1").parse().unwrap();
     let iterations: u32 = arg("--iters", "30000").parse().unwrap();
     let interval: u32 = arg("--interval", "1000").parse().unwrap();
+    let c: f64 = arg("--c", "1").parse().unwrap();
     let trace_path = arg("--trace-out", "");
     let probe_iteration: u32 = arg("--probe-iteration", "0").parse().unwrap();
     let probe_step: usize = arg("--probe-step", "0").parse().unwrap();
@@ -80,8 +81,8 @@ fn main() {
     assert!(probe_iteration == 0 || (trace_out.is_some() && probe_step > 0
         && !probe_action.is_empty() && !probe_out.is_empty() && seeds == 1
         && probe_iteration <= iterations));
-    assert!(interval > 0 && iterations > 0);
-    let cfg = RmConfig { iterations, rule: SelRule::Ucb, ..RmConfig::default() };
+    assert!(interval > 0 && iterations > 0 && seeds > 0 && c.is_finite() && c >= 0.0);
+    let cfg = RmConfig { iterations, c, rule: SelRule::Ucb, ..RmConfig::default() };
     let pool = load_meta_pool(&repo_root().join("data/meta-pool-v0/meta-pool.json"));
     let mut out = std::io::BufWriter::new(std::io::stdout().lock());
     for seed in first..first + seeds {
@@ -130,7 +131,7 @@ fn main() {
                         },
                         SearchTrace::Result { battle, reward0 } => {
                             writeln!(trace_out,"{}",json!({
-                                "seed":seed,"iteration":iteration+1,"tree":tree,"leaf":leaf,
+                                "seed":seed,"c":c,"iteration":iteration+1,"tree":tree,"leaf":leaf,
                                 "end":state(battle,&dex),"terminal":battle.outcome().is_some(),
                                 "reward":if spec.side==0 {reward0} else {1.0-reward0},
                             })).unwrap();
@@ -163,7 +164,7 @@ fn main() {
                 "reply":reply.to_input(&dex), "visits":n, "mean":mean,
             })).collect::<Vec<_>>();
             writeln!(out, "{}", json!({
-                "seed":seed,"iterations":done,"nodes":search.node_count(),
+                "seed":seed,"c":c,"iterations":done,"nodes":search.node_count(),
                 "best":search.best().unwrap().to_input(&dex),
                 "actions":actions,"matrix":matrix,
             })).unwrap();
