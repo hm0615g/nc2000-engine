@@ -171,7 +171,9 @@ impl BlindAgent {
     }
 }
 
-/// Team preview uses one tree; in-battle search shares the configured total budget.
+/// One full `cfg.iterations` blind search at a decision point — the agent
+/// loop over `BlindSearch`, shared by `BlindAgent` and `OpenAgent` (same
+/// operation order as the original `BlindAgent::search`, bit-identical).
 fn search_choose(
     cfg: &RmConfig,
     rng: &mut SplitMix64,
@@ -181,11 +183,6 @@ fn search_choose(
     side: usize,
     choices: &[SearchChoice],
 ) -> SearchChoice {
-    if cfg.root_trees > 1 && !matches!(choices.first(), Some(SearchChoice::Team(_))) {
-        let result = ensemble_search(cfg, rng, battle, dex, side, &g.belief, &g.observer);
-        debug_assert_eq!(result.actions, choices);
-        return result.best().expect("search called with a non-empty choice list");
-    }
     let mut bs = BlindSearch::with_rng(battle, dex, cfg.clone(), side, rng.clone());
     debug_assert_eq!(bs.actions(), choices, "root action set drifted from caller's choices");
     for _ in 0..cfg.iterations {
@@ -193,65 +190,6 @@ fn search_choose(
     }
     *rng = bs.rng.clone();
     bs.best().expect("search called with a non-empty choice list")
-}
-
-pub struct EnsembleResult {
-    pub actions: Vec<SearchChoice>,
-    pub visits: Vec<u32>,
-    pub rewards: Vec<f64>,
-    pub dominated: Vec<bool>,
-    pub member_seeds: Vec<u64>,
-    pub member_iterations: Vec<u32>,
-}
-
-impl EnsembleResult {
-    pub fn best(&self) -> Option<SearchChoice> {
-        (0..self.actions.len())
-            .filter(|&i| !self.dominated[i])
-            .max_by_key(|&i| self.visits[i])
-            .or_else(|| (0..self.actions.len()).max_by_key(|&i| self.visits[i]))
-            .map(|i| self.actions[i])
-    }
-}
-
-pub fn ensemble_search(
-    cfg: &RmConfig,
-    rng: &mut SplitMix64,
-    battle: &Battle,
-    dex: &Dex,
-    side: usize,
-    belief: &Belief,
-    observer: &Observer,
-) -> EnsembleResult {
-    assert!(cfg.root_trees > 0 && cfg.root_trees <= cfg.iterations);
-    let mut result = EnsembleResult {
-        actions: Vec::new(), visits: Vec::new(), rewards: Vec::new(),
-        dominated: Vec::new(), member_seeds: Vec::new(), member_iterations: Vec::new(),
-    };
-    for member in 0..cfg.root_trees {
-        let seed = rng.next();
-        let iterations = cfg.iterations / cfg.root_trees + u32::from(member < cfg.iterations % cfg.root_trees);
-        let mut search = BlindSearch::new(battle, dex, cfg.clone(), side, seed);
-        assert!(!search.is_preview());
-        if member == 0 {
-            result.actions = search.actions().to_vec();
-            result.dominated = search.dominated().to_vec();
-            result.visits = vec![0; result.actions.len()];
-            result.rewards = vec![0.0; result.actions.len()];
-        } else {
-            assert_eq!(result.actions, search.actions());
-            assert_eq!(result.dominated, search.dominated());
-        }
-        search.step(dex, belief, observer, iterations);
-        for i in 0..result.actions.len() {
-            result.visits[i] += search.my_n[i];
-            result.rewards[i] += search.my_w[i];
-        }
-        result.member_seeds.push(seed);
-        result.member_iterations.push(iterations);
-    }
-    assert_eq!(result.visits.iter().sum::<u32>(), cfg.iterations);
-    result
 }
 
 /// Belief-mediated M8 table lookup at team preview: own side by signature
@@ -931,8 +869,7 @@ impl OpenAgent {
 
 impl Agent for OpenAgent {
     fn name(&self) -> String {
-        let prefix = if self.cfg.root_trees > 1 { format!("ensemble:{}:", self.cfg.root_trees) } else { String::new() };
-        format!("{prefix}open:{}:{}:{}", self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets)
+        format!("open:{}:{}:{}", self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets)
     }
 
     fn choose(
@@ -988,8 +925,7 @@ impl Agent for OpenAgent {
 
 impl Agent for BlindAgent {
     fn name(&self) -> String {
-        let prefix = if self.cfg.root_trees > 1 { format!("ensemble:{}:", self.cfg.root_trees) } else { String::new() };
-        format!("{prefix}blind:{}:{}:{}", self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets)
+        format!("blind:{}:{}:{}", self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets)
     }
 
     fn choose(

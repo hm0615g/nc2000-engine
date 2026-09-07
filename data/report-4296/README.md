@@ -2,7 +2,7 @@
 
 The final reference comparison supports Earthquake at T11, Earthquake or switching at T24, and Thunderbolt at T26. It does not support the blanket T18 claim. The separate OpenSheet continuation sample points in the same direction for the supported comparisons, but T11 and T24 are not independently established at its smaller sample size. T24's Earthquake result also changes sign under the 6-HP correction; switching is the more consistent candidate. No tested configuration establishes an improvement without regressions, so the production policy is unchanged.
 
-The [T11 follow-up](T11.md) finds a concrete fixed-budget candidate: 30 independent 1,000-simulation searches, aggregated by visits, select Earthquake on 32/32 held-out seeds and retain Thunderbolt at T26 on 16/16. General strength non-regression remains untested.
+The [T11 follow-up](T11.md) records a 30-tree candidate that selected Earthquake on 32/32 held-out seeds and retained Thunderbolt at T26 on 16/16. That repeatable action change did not identify or repair the underlying decision defect. The candidate was withdrawn, its agent integration reverted, and the subsequent [regression experiment](../ensemble-regression-v1/README.md) stopped before completion. The cause remains unresolved.
 
 The reporter supplied the opponent's complete six sets and confirmed OpenSheet mode. `opponent-submitted.json` preserves the submitted stats, moves, items and abilities; genders are filled from the replay and Gen2 DVs. `opponent-team.json` is the local Gen2 validator's canonical result. Only the ability and nature fields change. The EVs and IVs remain as submitted.
 

@@ -76,8 +76,6 @@ fn main() {
     let trace_leaves = args.iter().any(|s| s == "--trace-leaves");
     let leaf_search_iters: u32 = arg("--leaf-search-iters", "0").parse().unwrap();
     let trees: u32 = arg("--trees", "1").parse().unwrap();
-    let shared_ensemble = args.iter().any(|s| s == "--shared-ensemble");
-    assert!(!shared_ensemble || (trees > 1 && !balanced && !trace_leaves && leaf_search_iters == 0));
     assert!(trees > 0 && trees <= iters);
     assert!(trees == 1 || (!balanced && !trace_leaves && leaf_search_iters == 0));
     assert!(!balanced || (!trace_leaves && leaf_search_iters == 0));
@@ -134,23 +132,7 @@ fn main() {
                 .unwrap();
             }
             let start = std::time::Instant::now();
-            let result = if shared_ensemble {
-                let mut ensemble_cfg = cfg.clone();
-                ensemble_cfg.root_trees = trees;
-                let result = nc2000_bot::blind::ensemble_search(
-                    &ensemble_cfg, &mut nc2000_bot::SplitMix64::new(seed),
-                    agent.battle().unwrap(), &dex, side,
-                    agent.belief().unwrap(), agent.observer().unwrap(),
-                );
-                let actions = result.actions.iter().enumerate().map(|(i, a)| json!({
-                    "input":a.to_input(&dex),"visits":result.visits[i],
-                    "mean":result.rewards[i] / result.visits[i].max(1) as f64,
-                    "dominated":result.dominated[i]
-                })).collect::<Vec<_>>();
-                json!({"best":result.best().unwrap().to_input(&dex),"analysis":{"actions":actions},
-                    "member_seeds":result.member_seeds,"member_iterations":result.member_iterations,
-                    "estimand":"ensemble-root-search-reward"})
-            } else if trees > 1 {
+            let result = if trees > 1 {
                 let acts = agent.search().unwrap().actions().to_vec();
                 let dominated = agent.search().unwrap().dominated().to_vec();
                 let mut counts = vec![0u32; acts.len()];
@@ -323,7 +305,6 @@ fn main() {
                 "rollout_turns":rollout_turns,"eps":eps,"m16c":m16c,"key_no_damage":key_no_damage,
                 "leaf_search_iters":leaf_search_iters,"trace_leaves":trace_leaves,
                 "trees":trees,
-                "shared_ensemble":shared_ensemble,
                 "elapsed_ms":start.elapsed().as_millis(),"result":result})
             )
             .unwrap();
