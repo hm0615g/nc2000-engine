@@ -50,6 +50,82 @@ fn ko_probabilities(dex: &Dex, b: &Battle, action: &str, reply: &str) -> (f64, f
 }
 
 #[test]
+fn frozen_evaluation_preserves_training_and_simultaneous_root_information() {
+    use nc2000_bot::{frozen::FrozenPolicy, import::ProtocolAgent, smmcts::RmConfig};
+    let dex = load_dex();
+    let root = repo_root();
+    let spec = PositionSpec::parse(&std::fs::read_to_string(root.join("data/report-4296/turn-11.json")).unwrap()).unwrap();
+    let sets: Vec<PokemonSet> = serde_json::from_str(&std::fs::read_to_string(root.join("data/report-4296/opponent-team.json")).unwrap()).unwrap();
+    let pool = load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+    for pinned in [false, true] {
+        let [mut evaluated, mut ordinary] = std::array::from_fn(|_| {
+            let mut agent = ProtocolAgent::new(&dex, spec.side, pool.clone(), RmConfig::default(), 61001);
+            if pinned { agent.pin_opponent(sets.clone()); }
+            agent.set_position(&dex, &spec).unwrap();
+            agent.step(&dex, 600).unwrap();
+            agent
+        });
+        let search = evaluated.search().unwrap();
+        if pinned {
+            let earthquake = *search.actions().iter().find(|c| c.to_input(&dex) == "move earthquake").unwrap();
+            let mut base = evaluated.resynthesize(&dex, 991).unwrap();
+            let replies: Vec<_> = base.legal_choices(&dex, 1-spec.side).into_iter()
+                .filter(|c| matches!(c, nc2000_engine::battle::SearchChoice::Move(_))).collect();
+            assert_eq!(replies.len(), 4);
+            for seed in 991..1023 {
+                let results: Vec<_> = replies.iter().map(|&reply| {
+                    let mut forced = [None, None];
+                    forced[spec.side] = Some(earthquake);
+                    forced[1-spec.side] = Some(reply);
+                    search.evaluate_frozen_joint(&dex, evaluated.belief().unwrap(), evaluated.observer().unwrap(),
+                        forced, [FrozenPolicy::MostVisited; 2], seed, &mut |_| {}).reward0
+                }).collect();
+                assert!(results.iter().all(|r| *r == results[0]));
+            }
+        }
+        let mut reference_root = None;
+        for policy in [FrozenPolicy::MostVisited, FrozenPolicy::SampleVisits] {
+            for &action in search.actions() {
+                let mut repeated = Vec::new();
+                for _ in 0..2 {
+                    let mut seen_root = false;
+                    let result = search.evaluate_frozen(&dex, evaluated.belief().unwrap(), evaluated.observer().unwrap(),
+                        action, [policy; 2], 991, &mut |event| {
+                            let mut copy = event.battle.clone();
+                            for side in 0..2 {
+                                if let Some(choice) = event.chosen[side] {
+                                    assert!(copy.legal_choices(&dex, side).contains(&choice));
+                                }
+                            }
+                            if !seen_root {
+                                assert_eq!(event.chosen[spec.side], Some(action));
+                                let root = (event.battle.state_key_bucketed(0), event.chosen[1-spec.side]);
+                                assert_eq!(*reference_root.get_or_insert(root), root);
+                                seen_root = true;
+                            }
+                        });
+                    assert!(seen_root);
+                    assert!((0.0..=1.0).contains(&result.reward0));
+                    repeated.push((result.reward0, result.terminal, result.prefix_choices));
+                }
+                assert_eq!(repeated[0], repeated[1]);
+            }
+        }
+        for extra in [0, 100] {
+            evaluated.step(&dex, extra).unwrap();
+            ordinary.step(&dex, extra).unwrap();
+            let a = evaluated.search().unwrap();
+            let b = ordinary.search().unwrap();
+            assert_eq!(a.iterations(), b.iterations());
+            assert_eq!(a.visits(), b.visits());
+            assert_eq!(a.means(), b.means());
+            assert_eq!(a.root_matrix(), b.root_matrix());
+            assert_eq!(a.node_count(), b.node_count());
+        }
+    }
+}
+
+#[test]
 fn observing_search_preserves_statistics_and_subsequent_rng() {
     use nc2000_bot::{import::ProtocolAgent, mcts::Playout, smmcts::{RmConfig, SearchTrace}};
     let dex = load_dex();

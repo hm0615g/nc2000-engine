@@ -730,6 +730,45 @@ impl BlindSearch {
         self.nodes.len()
     }
 
+    /// Evaluates a fixed root action without updating the tree or its search RNG.
+    #[allow(clippy::too_many_arguments)]
+    pub fn evaluate_frozen(
+        &self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        action: SearchChoice,
+        policy: [crate::frozen::FrozenPolicy; 2],
+        seed: u64,
+        trace: &mut impl FnMut(crate::frozen::FrozenChoice<'_>),
+    ) -> crate::frozen::FrozenResult {
+        assert!(self.my_acts.contains(&action));
+        let mut forced = [None, None];
+        forced[self.side] = Some(action);
+        self.evaluate_frozen_joint(dex, belief, obs, forced, policy, seed, trace)
+    }
+
+    /// Forced opponent actions must be legal in every sampled determinization.
+    #[allow(clippy::too_many_arguments)]
+    pub fn evaluate_frozen_joint(
+        &self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        forced: [Option<SearchChoice>; 2],
+        policy: [crate::frozen::FrozenPolicy; 2],
+        seed: u64,
+        trace: &mut impl FnMut(crate::frozen::FrozenChoice<'_>),
+    ) -> crate::frozen::FrozenResult {
+        let mut rng = SplitMix64::new(seed);
+        let pick = belief.sample(&mut rng);
+        let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut rng);
+        crate::frozen::evaluate_sim(
+            dex, &self.cfg, &mut sim, &self.nodes, &self.table,
+            forced, policy, &mut rng, trace,
+        )
+    }
+
     pub fn iterations(&self) -> u32 {
         self.done
     }

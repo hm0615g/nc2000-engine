@@ -4,6 +4,8 @@ The unchanged single-tree search credits wins caused by the opponent's explorato
 
 This investigation changes observation only. It adds no corrective policy, action override in the live search, new allocation rule, or production setting.
 
+The subsequent [fixed-policy correction experiment](../t11-frozen/README.md) tests this mechanism by separating training from evaluation. It is not adopted as a production fix; the report retains the failed candidate and its causal controls.
+
 ## The actual selection rule
 
 At the information-set root, `blind::select_global` selects an unvisited action first, then maximizes

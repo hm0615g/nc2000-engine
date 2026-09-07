@@ -37,6 +37,7 @@ pub mod duel;
 pub mod eval;
 pub mod exact;
 pub mod exploit;
+pub mod frozen;
 pub mod import;
 pub mod learning;
 pub mod learned;
