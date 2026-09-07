@@ -8,6 +8,8 @@ Rust port of Pokemon Showdown's **`[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 St
 
 ## Layout
 
+Bot-search investigation: [Battle 4296 and deferred algorithm research](data/report-4296/README.md#deferred-algorithm-research) records the T11 diagnosis, rejected corrections, algorithm sources and the scoped feasibility estimate.
+
 ```
 tools/            Node scripts run against the reference PS build (needs PS_ROOT=PS repo, `node build` done)
   export-dex.js            dump the flattened gen2stadium2 dex into data/
