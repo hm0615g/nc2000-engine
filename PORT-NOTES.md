@@ -81,7 +81,7 @@ Read once from PS; keep updated as the port progresses. All line refs are PS rep
 - sandstorm(base + gen2): onFieldResidualOrder 2; onWeather(gen2): damage(target.baseMaxhp/8); onFieldResidual '-weather|Sandstorm|[upkeep]' + isWeather check + eachEvent('Weather'); damage via spreadDamage w/ Weather effect → immunity check runStatusImmunity('sandstorm') (typechart sandstorm 3 for Rock/Ground/Steel) → '-damage|poke|hp|[from] Sandstorm'.
 - stall(gen2): duration 2; counter=127; onStallMove randomChance(counter,255); onRestart counter/=2 duration=2. (M2 — protect/detect/endure callback moves)
 - lockedmove(gen2), twoturnmove(base), trapped(base), futuremove, choicelock, mustrecharge: M2 (callback moves only).
-- Rules: stadiumsleepclause.onSetStatus: source ally → undefined; slp && any target.side.pokemon hp&&slp → '-message Sleep Clause activated. (In official formats...)' + false. freezeclausemod.onSetStatus: frz && any target side pokemon frz → '-message Freeze Clause activated.' + false.
+- Operational rules: `set_status` under Stadium Sleep Clause forfeits the inflicting side after a successful foe-sourced sleep when another living teammate of the target is asleep, including from Rest. `restore_status` initializes observed status state without infliction events. `freezeclausemod.onSetStatus` still prevents a second freeze independently of sleep.
 
 ## Misc parity landmines
 
@@ -274,9 +274,10 @@ installed into the local PS reference at `~/pokemon-showdown`). Deltas ported:
   LAST type), level=typeIndex(defender's LAST type); JS `|| 1` maps Normal
   (index 0) and unlisted types to 1. Type indexes are the GSC internals
   (Fire=20, Water=21, ..., Dark=27).
-- **Sleep Clause Mod** replaces Stadium Sleep Clause: only FOE-sourced sleep
-  engages the clause (Rest does not), message differs. PS-verified scripts in
-  `crates/conformance/tests/sleep_clause.rs`.
+- **Frozen PS Sleep Clause Mod**: only FOE-sourced sleep engages prevention
+  (Rest does not). PS-verified scripts in `crates/conformance/tests/ps_sleep_clause.rs`
+  use `conformance::ps_reference_battle`. Operational battles use the sleep-forfeit
+  rule described in the README and `crates/engine/tests/sleep_clause.rs`.
 - **HP Percentage Mod**: shared log HP is `ceil(100*hp/maxhp)` (100-but-not-
   full knocked to 99), replacing the 48-pixel bar.
 - Rule lines / tier line / format-effect id all follow the server's replays.

@@ -50,7 +50,7 @@ fn main() {
     let root = repo_root().join("fixtures/corpus-v1");
     let path = &corpus_files(&root.join("full"))[0];
     let fx = Fixture::load(path).unwrap();
-    let mut b = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+    let mut b = conformance::ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
     b.set_log_enabled(false);
     let half = fx.choices.len() / 2;
     for line in &fx.choices[..half] {

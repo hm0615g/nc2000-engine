@@ -436,9 +436,7 @@ fn main() {
             flagged += dom.len();
             for (choice, why) in dom {
                 *by_rule.entry(why).or_default() += 1;
-                // A self-KO is a certain LOSS, not a no-op: it resolves
-                // normally and there is nothing for this audit to check.
-                if why.starts_with("self-KO") {
+                if why.starts_with("self-KO") || why.contains("forfeit") {
                     continue;
                 }
                 let SearchChoice::Move(id) = choice else { continue };

@@ -482,7 +482,7 @@ impl Battle {
         battle.add(&["gametype", "singles"]);
 
         // Rules with runtime handlers become pseudo-weathers at construction.
-        for rule in ["maxtotallevel", "sleepclausemod", "freezeclausemod"] {
+        for rule in ["maxtotallevel", "stadiumsleepclause", "freezeclausemod"] {
             let cid = dex.conds_id(rule).expect("rule condition interned");
             let state = EffectState { id: EffId::Cond(cid), ..Default::default() };
             let state = battle.init_effect_state(state, true);
@@ -748,11 +748,9 @@ impl Battle {
         self.started = true;
         self.add(&["gen", "2"]);
         self.add(&["tier", "[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict"]);
-        // rule onBegin log lines, in ruleset order (matches the community
-        // server's replay logs for this format verbatim)
         self.add(&["rule", "Species Clause: Limit one of each Pokémon"]);
         self.add(&["rule", "Item Clause: Limit 1 of each item"]);
-        self.add(&["rule", "Sleep Clause Mod: Limit one foe put to sleep"]);
+        self.add(&["rule", "Stadium Sleep Clause: Putting another foe to sleep while any teammate sleeps forfeits the battle"]);
         self.add(&["rule", "Freeze Clause Mod: Limit one foe frozen"]);
         self.add(&["rule", "OHKO Clause: OHKO moves are banned"]);
         self.add(&["rule", "HP Percentage Mod: HP is shown in percentages"]);
@@ -799,4 +797,3 @@ impl Side {
         }
     }
 }
-

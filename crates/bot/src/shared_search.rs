@@ -123,8 +123,7 @@ impl SharedSearch {
         let dominated = actions
             .iter()
             .map(|&action| {
-                crate::smmcts::certain_self_loss(&base, dex, side, action)
-                    || crate::smmcts::certain_noop(&base, dex, side, action, cfg.mask_rules)
+                crate::smmcts::dominated_reason(&base, dex, side, action, cfg.mask_rules).is_some()
             })
             .collect();
         Self {

@@ -285,10 +285,7 @@ pub struct BlindSearch {
     /// preview — is enforced by the engine's own enumeration since the
     /// 2026-07-17 preview-space fix; the API stays (harmless, generic).
     my_mask: Option<Vec<bool>>,
-    /// Dominated root actions — certain immediate self-loss
-    /// (`smmcts::certain_self_loss`) or provable no-op
-    /// (`smmcts::certain_noop`): `best()` never argmaxes them while an
-    /// alternative exists.
+    /// Final-choice exclusions: self-KO, sleep-forfeit risk, and proven no-ops.
     my_dominated: Vec<bool>,
     opponent_preview_prior: bool,
     /// Per-determinization roots + everything below (state-keyed).
@@ -343,8 +340,7 @@ impl BlindSearch {
         let my_dominated = my_acts
             .iter()
             .map(|&c| {
-                crate::smmcts::certain_self_loss(&base, dex, side, c)
-                    || crate::smmcts::certain_noop(&base, dex, side, c, cfg.mask_rules)
+                crate::smmcts::dominated_reason(&base, dex, side, c, cfg.mask_rules).is_some()
             })
             .collect();
         BlindSearch {
@@ -783,12 +779,7 @@ impl BlindSearch {
         &self.my_n
     }
 
-    /// Per-action dominated flags — the guaranteed-fail / certain-self-loss
-    /// mask [`Self::best`] applies. Exposed because a harness that ranks by
-    /// raw visits does NOT reproduce the shipped choice: it can report a move
-    /// the product would never play (2026-07-27, `human_agreement` was doing
-    /// exactly that, which sent a corpus review chasing a Swagger the bot
-    /// could not have chosen).
+    /// Final-choice exclusions applied by `best`; raw visits do not include this filter.
     pub fn dominated(&self) -> &[bool] {
         &self.my_dominated
     }

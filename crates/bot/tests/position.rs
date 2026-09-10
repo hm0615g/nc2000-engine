@@ -88,6 +88,37 @@ fn demo_position() -> Value {
 }
 
 #[test]
+fn restoring_foe_sleep_and_rest_sleep_does_not_forfeit_in_either_order() {
+    let dex = load_dex();
+    let pool = pool();
+    for side in [0, 1] {
+        for reverse in [false, true] {
+            let mut value = demo_position();
+            value["sides"][1]["mons"][3] = mon("Cloyster", 50);
+            let slots = if side == 0 { [1, 5] } else { [0, 4] };
+            for (i, slot) in slots.into_iter().enumerate() {
+                let p = &mut value["sides"][side]["mons"][slot];
+                p["appeared"] = json!(true);
+                p["hp_num"] = json!(100);
+                p["status"] = json!("slp");
+                p["rest"] = json!((i == 0) == reverse);
+            }
+            let spec = PositionSpec::parse(&value.to_string()).unwrap();
+            let mut b = synthesize_spec(&dex, &spec, &pool, None, 7).unwrap();
+            assert_eq!(b.outcome(), None);
+            assert_eq!(b.needs_choice(), [true, true]);
+            let sleepers = b.sides[side].party.iter().filter(|&&slot| b.sides[side].roster[slot as usize].status == Status::Slp).count();
+            assert_eq!(sleepers, 2);
+            let target = b.active_id(side).unwrap();
+            let source = b.active_id(1 - side).unwrap();
+            b.cure_status(&dex, target, false);
+            b.try_set_status(&dex, target, "slp", Some(source), nc2000_engine::battle::EffectHandle::None);
+            assert_eq!(b.outcome(), Some(if side == 0 { nc2000_engine::battle::Outcome::P1Win } else { nc2000_engine::battle::Outcome::P2Win }));
+        }
+    }
+}
+
+#[test]
 fn a_hand_written_position_becomes_the_battle_it_describes() {
     let dex = load_dex();
     let spec = PositionSpec::parse(&demo_position().to_string()).unwrap();

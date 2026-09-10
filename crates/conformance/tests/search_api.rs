@@ -8,7 +8,7 @@
 //!    terminates cleanly (engine's own turn-1000 tie is the backstop).
 
 use conformance::fixture::{corpus_files, repo_root, Fixture};
-use conformance::load_dex;
+use conformance::{load_dex, ps_reference_battle};
 use nc2000_engine::state::Battle;
 
 fn all_fixtures() -> Vec<Fixture> {
@@ -36,7 +36,7 @@ fn side_index(side: &str) -> usize {
 fn legal_choices_cover_corpus() {
     let dex = load_dex();
     for fx in all_fixtures() {
-        let mut battle = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+        let mut battle = ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
         for (i, line) in fx.choices.iter().enumerate() {
             let side_n = side_index(&line.side);
             let legal = battle.legal_choices(&dex, side_n);
@@ -76,8 +76,8 @@ fn legal_choices_cover_corpus() {
 fn nolog_replay_reaches_identical_state() {
     let dex = load_dex();
     for fx in all_fixtures() {
-        let mut on = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
-        let mut off = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+        let mut on = ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+        let mut off = ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
         off.set_log_enabled(false);
         let frozen_log_len = off.log.len();
         for line in &fx.choices {

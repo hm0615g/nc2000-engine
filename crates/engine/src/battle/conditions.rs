@@ -528,28 +528,8 @@ fn dispatch_cond(
             RV::Undef
         }
         // ----------------------------------------------------------- rules
-        ("stadiumsleepclause", "onSetStatus") => {
-            // (status, target, source): ally source → undefined
-            let t = tpoke.unwrap();
-            if let Some(src) = source {
-                if src.side == t.side {
-                    return RV::Undef;
-                }
-            }
-            if relay == RV::Str("slp".to_string()) {
-                let side = t.side as usize;
-                let any_slp = b.sides[side]
-                    .party
-                    .iter()
-                    .map(|&slot| &b.sides[side].roster[slot as usize])
-                    .any(|p| p.hp > 0 && p.status == Status::Slp);
-                if any_slp {
-                    b.add(&["-message", "Sleep Clause activated. (In official formats, Sleep Clause activates if any of the opponent's Pokemon are asleep, even if self-inflicted from Rest)"]);
-                    return RV::False;
-                }
-            }
-            RV::Undef
-        }
+        // SetStatus listener order is part of the PS PRNG contract; set_status adjudicates after Start.
+        ("stadiumsleepclause", "onSetStatus") => RV::Undef,
         ("sleepclausemod", "onSetStatus") => {
             // Unlike Stadium Sleep Clause, self-/ally-inflicted sleep (Rest)
             // does not engage the clause: only foe-sourced sleep counts.

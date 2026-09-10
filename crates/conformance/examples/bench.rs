@@ -42,7 +42,6 @@ fn alloc_snapshot() -> (u64, u64) {
 
 use conformance::fixture::{corpus_files, repo_root, Fixture};
 use conformance::load_dex;
-use nc2000_engine::state::Battle;
 
 struct TestRng(u64);
 
@@ -73,7 +72,7 @@ fn main() {
     let t = Instant::now();
     for _ in 0..reps {
         for fx in &fixtures {
-            let mut b = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+            let mut b = conformance::ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
             for line in &fx.choices {
                 let side_n = if line.side == "p1" { 0 } else { 1 };
                 b.choose(&dex, side_n, &line.choice).unwrap();
@@ -95,7 +94,7 @@ fn main() {
     let t = Instant::now();
     for _ in 0..reps {
         for fx in &fixtures {
-            let mut b = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+            let mut b = conformance::ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
             b.set_log_enabled(false);
             for line in &fx.choices {
                 let side_n = if line.side == "p1" { 0 } else { 1 };
@@ -127,7 +126,7 @@ fn main() {
     let t = Instant::now();
     for (fi, fx) in fixtures.iter().enumerate() {
         for p in 0..playouts_per_fixture {
-            let mut b = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+            let mut b = conformance::ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
             b.set_log_enabled(false);
             b.reseed(0xFEED ^ ((fi as u64) << 20) ^ p);
             while b.outcome().is_none() {
@@ -160,7 +159,7 @@ fn main() {
     let mut battles = 0u64;
     let t = Instant::now();
     for (fi, fx) in fixtures.iter().enumerate() {
-        let mut base = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+        let mut base = conformance::ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
         base.set_log_enabled(false);
         for line in &fx.choices[..fx.choices.len() / 2] {
             let side_n = if line.side == "p1" { 0 } else { 1 };
@@ -197,7 +196,7 @@ fn main() {
 
     // 4. clone cost on a mid-battle state (log off → log stays small)
     let fx = &fixtures[0];
-    let mut b = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+    let mut b = conformance::ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
     b.set_log_enabled(false);
     let half = fx.choices.len() / 2;
     for line in &fx.choices[..half] {
@@ -220,7 +219,7 @@ fn main() {
     );
 
     // 5. clone cost with the protocol log still attached (for reference)
-    let mut b = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+    let mut b = conformance::ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
     for line in &fx.choices[..half] {
         let side_n = if line.side == "p1" { 0 } else { 1 };
         b.choose(&dex, side_n, &line.choice).unwrap();

@@ -1500,6 +1500,9 @@ impl Battle {
         }
         self.move_used(dex, pokemon, move_id, None);
         self.use_move(dex, move_id, pokemon, target, source_effect);
+        if self.ended {
+            return;
+        }
         self.single_event(
             dex,
             &ev::AfterMove,
@@ -1715,6 +1718,9 @@ impl Battle {
             if !matches!(damage, MoveOutcome::Fail) {
                 move_result = true;
             }
+        }
+        if self.ended {
+            return move_result;
         }
         if !self.poke(pokemon).hp.is_positive() {
             self.pokemon_faint(pokemon, Some(pokemon), EffectHandle::MoveEff(move_id));
@@ -2009,6 +2015,9 @@ impl Battle {
             self.active_move.as_mut().unwrap().total_damage = damage.num().map(|n| n as i64);
         }
 
+        if self.ended {
+            return damage;
+        }
         if self.active_move.as_ref().unwrap().category != Category::Status {
             self.got_attacked(target, Some(move_id), damage.num(), pokemon);
         }
@@ -2235,6 +2244,9 @@ impl Battle {
             // status
             if let Some(st) = &md.status {
                 let r = self.try_set_status(dex, t, st, Some(pokemon), move_eff);
+                if self.ended {
+                    return damage;
+                }
                 let move_status = self.active_move.as_ref().unwrap().status.is_some();
                 if !r.truthy() && move_status {
                     // return hitResult (false/null) — no further processing

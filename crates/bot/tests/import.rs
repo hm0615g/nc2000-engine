@@ -211,10 +211,6 @@ struct Stats {
     mismatches: u32,
     illegal_choices: u32,
     vol_diffs: u32,
-    /// Sleeping mons whose reconstructed `status_state.source` was checked
-    /// against the protocol. Sleep Clause Mod and Freeze Clause Mod read
-    /// nothing else, so a self-attributed foe-inflicted sleep silently
-    /// disengages both for the rest of the battle.
     sleep_sources: u32,
     /// Decision points exported to a `PositionSpec` and rebuilt from it.
     roundtrips: u32,
@@ -535,11 +531,6 @@ fn replay(dex: &Dex, fixture: &Value, side: usize, pinned: bool, stats: &mut Sta
             &ctx,
             stats,
         );
-        // Who inflicted a sleep is the whole input to Sleep Clause Mod
-        // (`conditions.rs` sleepclausemod/onSetStatus: ally-sourced → the
-        // clause stays open). The protocol says which it was; the synthesized
-        // battle must agree, or the bot searches a world where it can sleep
-        // a second foe mon.
         for s in 0..2usize {
             for slot in 0..battle.sides[s].roster.len() {
                 let p = &battle.sides[s].roster[slot];
