@@ -388,3 +388,205 @@ fn forfeit_stops_after_move_damage_and_the_remaining_turn() {
         assert_eq!(b.poke(actor).hp, hp);
     }
 }
+
+#[test]
+fn curing_sleep_before_a_slower_sleep_move_makes_the_infliction_legal() {
+    let d = dex();
+    let ours = [mk("Parasect", "", &["Spore"])];
+    let theirs = [
+        mk("Miltank", "", &["Heal Bell", "Defense Curl"]),
+        mk("Snorlax", "", &["Rest"]),
+    ];
+    for cure_team in [false, true] {
+        let mut b = Battle::from_fixture(&d, "1,2,3,4", &ours, &theirs).unwrap();
+        b.choose(&d, 0, "team 1").unwrap();
+        b.choose(&d, 1, "team 1,2").unwrap();
+        let target = b.active_id(1).unwrap();
+        let sleeper = if cure_team { mon(&b, 1, 1) } else { target };
+        b.restore_status(&d, sleeper, Status::Slp, Some(sleeper));
+        b.poke_mut(sleeper)
+            .status_state
+            .set_int(nc2000_engine::state::DK::Time, 1);
+        b.log.clear();
+        turn(
+            &d,
+            &mut b,
+            "move spore",
+            if cure_team {
+                "move healbell"
+            } else {
+                "move defensecurl"
+            },
+        );
+        assert_eq!(b.outcome(), None, "{:?}", b.log);
+        assert_eq!(b.poke(target).status, Status::Slp);
+        if cure_team {
+            assert_eq!(b.poke(sleeper).status, Status::None);
+        }
+    }
+}
+
+#[test]
+fn unpicked_sleepers_do_not_engage_the_clause() {
+    let d = dex();
+    let ours = [mk("Parasect", "", &["Spore"])];
+    let theirs = [
+        mk("Snorlax", "", &["Rest"]),
+        mk("Blissey", "", &["Rest"]),
+        mk("Miltank", "", &["Rest"]),
+        mk("Mr. Mime", "", &["Rest"]),
+    ];
+    let mut b = Battle::from_fixture(&d, "1,2,3,4", &ours, &theirs).unwrap();
+    b.choose(&d, 0, "team 1").unwrap();
+    b.choose(&d, 1, "team 1,2,3").unwrap();
+    let unpicked = PokeId { side: 1, slot: 3 };
+    b.restore_status(&d, unpicked, Status::Slp, Some(unpicked));
+    assert!(!b.has_sleeping_pokemon(1));
+    let actor = b.active_id(0).unwrap();
+    let target = b.active_id(1).unwrap();
+    assert_eq!(
+        b.try_set_status(&d, target, "slp", Some(actor), EffectHandle::None),
+        RV::True
+    );
+    assert_eq!(b.outcome(), None);
+    let next = mon(&b, 1, 1);
+    b.try_set_status(&d, next, "slp", Some(actor), EffectHandle::None);
+    assert_forfeit(&d, &mut b, 0);
+}
+
+#[test]
+fn sleep_talk_and_mirror_move_attribute_sleep_to_the_caller() {
+    let d = dex();
+    for sleep_talk in [false, true] {
+        for caller_side in [0, 1] {
+            let caller = [if sleep_talk {
+                mk("Smeargle", "", &["Sleep Talk", "Spore"])
+            } else {
+                mk("Pidgeot", "", &["Mirror Move"])
+            }];
+            let targets = [
+                mk("Parasect", "Mint Berry", &["Spore", "Swords Dance"]),
+                mk("Snorlax", "", &["Rest"]),
+            ];
+            let teams: [&[PokemonSet]; 2] = if caller_side == 0 {
+                [&caller, &targets]
+            } else {
+                [&targets, &caller]
+            };
+            let mut b = Battle::from_fixture(&d, "1,2,3,4", teams[0], teams[1]).unwrap();
+            b.choose(&d, caller_side, "team 1").unwrap();
+            b.choose(&d, 1 - caller_side, "team 1,2").unwrap();
+            let actor = b.active_id(caller_side).unwrap();
+            let target = b.active_id(1 - caller_side).unwrap();
+            let sleeper = mon(&b, 1 - caller_side, 1);
+            b.restore_status(&d, sleeper, Status::Slp, Some(sleeper));
+            if sleep_talk {
+                b.restore_status(&d, actor, Status::Slp, Some(actor));
+                b.poke_mut(actor)
+                    .status_state
+                    .set_int(nc2000_engine::state::DK::Time, 3);
+            } else {
+                b.restore_status(&d, actor, Status::Psn, Some(target));
+                b.poke_mut(target).last_move = d.moves.id("spore");
+            }
+            let hp = b.poke(actor).hp;
+            b.log.clear();
+            b.choose(
+                &d,
+                caller_side,
+                if sleep_talk {
+                    "move sleeptalk"
+                } else {
+                    "move mirrormove"
+                },
+            )
+            .unwrap();
+            b.choose(&d, 1 - caller_side, "move swordsdance").unwrap();
+            assert_eq!(b.poke(target).status_state.source, Some(actor));
+            assert_eq!(b.poke(actor).hp, hp);
+            assert_forfeit(&d, &mut b, caller_side);
+        }
+    }
+}
+
+#[test]
+fn first_sleep_berries_cure_normally_and_release_the_clause() {
+    let d = dex();
+    for item in ["Mint Berry", "Miracle Berry"] {
+        let mut b = start(&d, item);
+        turn(&d, &mut b, "move spore", "switch 2");
+        let target = b.active_id(1).unwrap();
+        assert_eq!(b.outcome(), None);
+        assert_eq!(b.poke(target).status, Status::None);
+        assert!(b.poke(target).item.is_none());
+        assert!(!b.has_sleeping_pokemon(1));
+        turn(&d, &mut b, "move spore", "switch 3");
+        assert_eq!(b.outcome(), None);
+        assert_eq!(b.poke(b.active_id(1).unwrap()).status, Status::Slp);
+    }
+}
+
+#[test]
+fn thawing_releases_only_the_freeze_clause() {
+    let d = dex();
+    let mut b = start(&d, "");
+    let actor = b.active_id(0).unwrap();
+    let first = mon(&b, 1, 0);
+    let sleeper = mon(&b, 1, 1);
+    let third = mon(&b, 1, 2);
+    b.restore_status(&d, first, Status::Frz, Some(actor));
+    b.restore_status(&d, sleeper, Status::Slp, Some(sleeper));
+    assert_eq!(
+        b.try_set_status(&d, third, "frz", Some(actor), EffectHandle::None),
+        RV::False
+    );
+    assert!(b.cure_status(&d, first, false));
+    assert_eq!(
+        b.try_set_status(&d, third, "frz", Some(actor), EffectHandle::None),
+        RV::True
+    );
+    assert_eq!(b.outcome(), None);
+    assert_eq!(
+        b.try_set_status(&d, first, "slp", Some(actor), EffectHandle::None),
+        RV::True
+    );
+    assert_forfeit(&d, &mut b, 0);
+}
+
+#[test]
+fn restoring_non_sleep_status_preserves_companion_effects() {
+    let d = dex();
+    for status in [
+        Status::Brn,
+        Status::Par,
+        Status::Psn,
+        Status::Tox,
+        Status::Frz,
+    ] {
+        let base = start(&d, "");
+        let target = base.active_id(1).unwrap();
+        let actor = base.active_id(0).unwrap();
+        let mut inflicted = base.clone();
+        let mut restored = base;
+        assert_eq!(
+            inflicted.try_set_status(&d, target, status.as_str(), Some(actor), EffectHandle::None),
+            RV::True
+        );
+        assert_eq!(
+            restored.restore_status(&d, target, status, Some(actor)),
+            RV::True
+        );
+        for battle in [&mut inflicted, &mut restored] {
+            battle.log.clear();
+            battle.reseed(71);
+            turn(&d, battle, "move swordsdance", "move amnesia");
+        }
+        assert_eq!(inflicted.essence(&d), restored.essence(&d), "{status:?}");
+        assert_eq!(inflicted.log, restored.log, "{status:?}");
+        assert_eq!(
+            inflicted.prng.seed_str(),
+            restored.prng.seed_str(),
+            "{status:?}"
+        );
+    }
+}
