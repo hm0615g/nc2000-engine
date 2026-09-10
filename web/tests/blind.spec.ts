@@ -437,6 +437,14 @@ test("the sample belief prior loads, applies, and governs the bot's read", async
   page,
 }) => {
   const errors = guardConsole(page);
+  const samplePrior = JSON.parse(
+    readFileSync(
+      new URL("../../data/belief-prior-v0.sample.json", import.meta.url),
+      "utf8",
+    ),
+  ) as { species: Record<string, unknown> };
+  const speciesCount = Object.keys(samplePrior.species).length;
+  expect(speciesCount).toBeGreaterThan(0);
   expect(mixTwins, "the mixed party must not be a pool signature").toEqual([]);
   await seedStorage(page, {
     customs: [customBlind],
@@ -462,9 +470,8 @@ test("the sample belief prior loads, applies, and governs the bot's read", async
   // file chooser needed, and the same code path behind it).
   await expect(page.locator('[data-testid="prior-file"]')).toHaveCount(1);
   await page.locator('[data-testid="prior-sample"]').click();
-  // 42 species is the sample table's content, so this also proves the
-  // table was really parsed rather than merely stored.
-  await expect(report).toContainText("42 species");
+  await expect(report).toContainText(`${speciesCount} species`);
+  await expect(report).toContainText("0 entries skipped");
   await expect(report).toContainText("Applied");
   await expect(report).not.toContainText("NOT applied");
   // Each verdict box belongs to the file it is about: loading a prior must
@@ -503,7 +510,7 @@ test("the sample belief prior loads, applies, and governs the bot's read", async
   // and clears cleanly.
   await page.locator(".battle-screen .quit-btn").click();
   await page.locator('[data-party="settings"]').click();
-  await expect(report).toContainText("42 species");
+  await expect(report).toContainText(`${speciesCount} species`);
   await page.locator('[data-testid="prior-clear"]').click();
   // All the way back to the line this screen opened with — not merely
   // "no longer the file name", which a half-cleared state would also pass.
