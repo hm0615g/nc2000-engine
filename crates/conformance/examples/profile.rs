@@ -4,7 +4,6 @@
 
 use conformance::fixture::{corpus_files, repo_root, Fixture};
 use conformance::load_dex;
-use nc2000_engine::state::Battle;
 
 struct TestRng(u64);
 
@@ -33,7 +32,7 @@ fn main() {
     // log-off replay
     for _ in 0..10 {
         for fx in &fixtures {
-            let mut b = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+            let mut b = conformance::ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
             b.set_log_enabled(false);
             for line in &fx.choices {
                 let side_n = if line.side == "p1" { 0 } else { 1 };
@@ -45,7 +44,7 @@ fn main() {
     let mut rng = TestRng(0xBADC_0DE);
     for (fi, fx) in fixtures.iter().enumerate() {
         for p in 0..15u64 {
-            let mut b = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+            let mut b = conformance::ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
             b.set_log_enabled(false);
             b.reseed(0xFEED ^ ((fi as u64) << 20) ^ p);
             while b.outcome().is_none() {

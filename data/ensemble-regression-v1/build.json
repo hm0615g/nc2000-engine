@@ -1,0 +1,15 @@
+{
+  "source_sha256": {
+    "crates/bot/src/blind.rs": "3dd9d5549009638bd787b5eab878a0fd6ae75e00f343daefff7ea7a06b21ae10",
+    "crates/bot/src/smmcts.rs": "5df3cd231324c3fcb3c68678e46ad7cd522554b651316616118b3ecb4b5fd6e2",
+    "crates/bot/examples/arena.rs": "eb26bf1f91425cddcbe764de0cd4293c22f906a32d11d903c4e2a83350a3792e",
+    "crates/bot/examples/reported_decisions.rs": "b39a1266eddd1ad119216aea5b4fcb9241dbf249c24970c16be4306fca0ac99a",
+    "crates/bot/tests/blind.rs": "ad80c7ed2896911aa93455d6191b78b93c26eac85b8c93dd354165199eea2360"
+  },
+  "executable_sha256": {
+    "arena": "5599fd5e2ea73a225f0b29127a37e28a18e9d577219d3c2b1dcf7e105eff0a47",
+    "arena-before": "3343770a83babe803cf5815463e23a2940307b1c8b36d84dc22112b6b71624e1",
+    "reported_decisions": "741cc5559843d0dccd6f9d07a88fd28a9ebeef5517fb3ee75a8f626c2ad23cc1"
+  },
+  "plan_sha256": "684147e08816775ebfa4fbe8050eb74e3ad05e221af9aba95ac65a6de492bc19"
+}

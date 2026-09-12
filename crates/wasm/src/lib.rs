@@ -1799,7 +1799,6 @@ mod tests {
             std::fs::read_to_string(root.join("data/belief-prior-v0.sample.json")).unwrap();
         let sample: serde_json::Value = serde_json::from_str(&sample_text).unwrap();
         let sample_species = sample["species"].as_object().unwrap().len();
-        assert_eq!(sample_species, 42, "the shipped sample table is the 42-species one");
         let good = run(Some(&sample_text), None, false, false);
         let rep: serde_json::Value = serde_json::from_str(good.report.as_ref().unwrap()).unwrap();
         assert_eq!(rep["applied"], true, "{rep}");

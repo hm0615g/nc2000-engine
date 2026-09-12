@@ -7,9 +7,32 @@ pub mod fixture;
 
 use compare::{first_diff, Divergence};
 use fixture::{Fixture, Snapshot};
-use nc2000_engine::battle::EngineError;
+use nc2000_engine::battle::{EngineError, PokemonSet};
 use nc2000_engine::dex::Dex;
-use nc2000_engine::state::Battle;
+use nc2000_engine::state::{Battle, EffId};
+
+/// Frozen PS fixtures use prevention-based Sleep Clause Mod, not the operational forfeit rule.
+pub fn ps_reference_battle(
+    dex: &Dex,
+    seed: &str,
+    p1: &[PokemonSet],
+    p2: &[PokemonSet],
+) -> Result<Battle, EngineError> {
+    let mut battle = Battle::from_fixture(dex, seed, p1, p2)?;
+    let operational = dex.conds_id("stadiumsleepclause").unwrap();
+    let reference = dex.conds_id("sleepclausemod").unwrap();
+    let (id, state) = battle.field.pseudo_weather.iter_mut()
+        .find(|(id, _)| *id == operational).unwrap();
+    *id = reference;
+    state.id = EffId::Cond(reference);
+    for line in &mut battle.log {
+        if line.starts_with("|rule|Stadium Sleep Clause:") {
+            *line = "|rule|Sleep Clause Mod: Limit one foe put to sleep".into();
+        }
+    }
+    battle.battle_mask = battle.recompute_battle_mask(dex);
+    Ok(battle)
+}
 
 #[derive(Debug)]
 pub enum ReplayError {
@@ -111,7 +134,7 @@ fn check_snapshot(
 
 /// Replays one fixture on the Rust engine, checking every snapshot.
 pub fn replay(dex: &Dex, fx: &Fixture) -> Result<(), ReplayError> {
-    let mut battle = Battle::from_fixture(dex, &fx.seed, &fx.p1team, &fx.p2team)
+    let mut battle = ps_reference_battle(dex, &fx.seed, &fx.p1team, &fx.p2team)
         .map_err(|e| ReplayError::Engine(format!("{e:?}")))?;
 
     let mut snap_idx = 0;

@@ -1,0 +1,71 @@
+{
+  "schema": "nc2000-ensemble-regression-stopped-v1",
+  "status": "stopped_on_user_request",
+  "stopped_utc": "2026-09-07T01:23:40.715910+00:00",
+  "reason": "The user withdrew the ensemble direction because the underlying decision defect had not been explained or corrected.",
+  "candidate_implementation_revision": "1f9ea54f75aec2e5b829e76e5b9adcc004b6629e",
+  "source_restored_to": "bde8828",
+  "terminal_strength_gate_evaluated": false,
+  "interpretation": "Incomplete run. Completion order can depend on battle duration; complete shards are a selected subset. Do not apply the registered final confidence intervals or use this subset as a completed strength test.",
+  "groups": {
+    "open": {
+      "planned_games": 256,
+      "complete_shards": 3,
+      "saved_complete_games": 96,
+      "wins": 40,
+      "losses": 56,
+      "ties": 0,
+      "turn_caps": 0,
+      "invalid_games": 0,
+      "seeds": [
+        7310101,
+        7310102,
+        7310103
+      ],
+      "shard_sha256": {
+        "primary-open-00.jsonl": "6e0535940976316b2ce9e922b175dac4a98c8ec002a9e07467158c1f6fd3ee87",
+        "primary-open-01.jsonl": "64ccb0cf589c18dbf9f4deb600fbc7f7373aa8f05de50f706aa0df2674db84ca",
+        "primary-open-02.jsonl": "35dfaca067d07d73bc8833f610f7150a76fb270a56145e364137502ea3bf2d45"
+      }
+    },
+    "blind": {
+      "planned_games": 256,
+      "complete_shards": 3,
+      "saved_complete_games": 96,
+      "wins": 35,
+      "losses": 61,
+      "ties": 0,
+      "turn_caps": 0,
+      "invalid_games": 0,
+      "seeds": [
+        7410101,
+        7410102,
+        7410103
+      ],
+      "shard_sha256": {
+        "primary-blind-00.jsonl": "01bec36f755202a646eedddb7481dc872c685989c7e25135f8a69f750c6354d0",
+        "primary-blind-01.jsonl": "157aa34ed94ffb19df04251ddfa7ff76d200f9f454f54ac4892d82022aa56ebf",
+        "primary-blind-02.jsonl": "fcc42308c366f1d68d4ff8c2bbb53bf35d1f2ac2521c26e9d3ff87ba0254cc16"
+      }
+    },
+    "fixtures_blind": {
+      "planned_games": 128,
+      "complete_shards": 2,
+      "saved_complete_games": 64,
+      "wins": 29,
+      "losses": 35,
+      "ties": 0,
+      "turn_caps": 0,
+      "invalid_games": 0,
+      "seeds": [
+        7710101,
+        7710102
+      ],
+      "shard_sha256": {
+        "fixtures-blind-7710101.jsonl": "00c65e720122be75391ffd50b63de73efe46e99222bb682e0874c4b1507a9106",
+        "fixtures-blind-7710102.jsonl": "5b635eb248b7c71617a161c1e261c4a40fcaa5363084fd2a57c226f89d4fdb2e"
+      }
+    }
+  },
+  "production_defaults_changed": false
+}

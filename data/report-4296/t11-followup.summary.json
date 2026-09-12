@@ -1,0 +1,204 @@
+{
+  "nodmg": {
+    "rows": 8,
+    "raw_sha256": "999f36a7d2b0d0c0a3424a6438ba7e486c36df1f99d5c050458f84f915d665ad",
+    "choices": {
+      "11": {
+        "move hiddenpower": 8
+      }
+    }
+  },
+  "budget120k": {
+    "rows": 2,
+    "raw_sha256": "184c73d159937253d94d42bbe32d31f218fcdf517dcb00f31cdd76669d8302ef",
+    "choices": {
+      "11": {
+        "switch 2": 2
+      }
+    }
+  },
+  "eps0": {
+    "rows": 2,
+    "raw_sha256": "d5af7accb0991e65da7c3f42e508da937d19d5a8447fad1fb29814b9be2693f5",
+    "choices": {
+      "11": {
+        "move hiddenpower": 2
+      }
+    }
+  },
+  "eps1": {
+    "rows": 2,
+    "raw_sha256": "110dbd802ddeef5a95c4fc081676259964bbd5fbdafad61aac92b61c0fce372b",
+    "choices": {
+      "11": {
+        "move hiddenpower": 2
+      }
+    }
+  },
+  "static": {
+    "rows": 2,
+    "raw_sha256": "7be74f9b2dce1c9f109254283911164cb3ccffffbd3770e937ef0646846e9277",
+    "choices": {
+      "11": {
+        "move hiddenpower": 2
+      }
+    }
+  },
+  "long": {
+    "rows": 2,
+    "raw_sha256": "ecf0ad04cfe8d9530efc8f005f35aa0d6377f0ee64b6369a6ffc5431220877af",
+    "choices": {
+      "11": {
+        "move hiddenpower": 2
+      }
+    }
+  },
+  "trace8": {
+    "rows": 8,
+    "raw_sha256": "2914403f7a93cca6d0b8d37ea447046979614e5fd17f52cc974915491cb67202",
+    "choices": {
+      "11": {
+        "move hiddenpower": 8
+      }
+    }
+  },
+  "trace-long-v2": {
+    "rows": 1,
+    "raw_sha256": "ff75b1125c6fce7becf560778309352f21ea74ed3f1d25dad86138b5fb34e84d",
+    "choices": {
+      "11": {
+        "move hiddenpower": 1
+      }
+    }
+  },
+  "nested16": {
+    "rows": 2,
+    "raw_sha256": "bc00875f83b82dac72a215237de33fb051e8edc8485b9b8a7c63a934738a5b19",
+    "choices": {
+      "11": {
+        "move earthquake": 2
+      }
+    }
+  },
+  "nested64": {
+    "rows": 2,
+    "raw_sha256": "11ccadbb3a82f47af6b8b9ec81f8a217b14347658b9350cfc8a4b861a4f3b42e",
+    "choices": {
+      "11": {
+        "move earthquake": 2
+      }
+    }
+  },
+  "outer-ablation": {
+    "rows": 8,
+    "raw_sha256": "5cfa7f69ee0cd519902e1c130e314fb1102a44617420588c9e17f14d509c306a",
+    "choices": {
+      "11": {
+        "move earthquake": 6,
+        "move hiddenpower": 1,
+        "move rockslide": 1
+      }
+    }
+  },
+  "holdout11a": {
+    "rows": 16,
+    "raw_sha256": "97b51723c609418bf16c050e0cd5b43a1918ca22dc95797485de1cd44d8ef610",
+    "choices": {
+      "11": {
+        "move hiddenpower": 11,
+        "move earthquake": 3,
+        "move swordsdance": 1,
+        "move rockslide": 1
+      }
+    }
+  },
+  "holdout11b": {
+    "rows": 16,
+    "raw_sha256": "8d0da26800c982b28f72a3adb9cff4ad1b3454ddb6373dd0a23cc9018421cc87",
+    "choices": {
+      "11": {
+        "move hiddenpower": 6,
+        "move earthquake": 7,
+        "move rockslide": 3
+      }
+    }
+  },
+  "other-turns": {
+    "rows": 48,
+    "raw_sha256": "e9a3ec2f272315a689490cce3e7336f72ac03b422878389810be31d9c3f56ab8",
+    "choices": {
+      "18": {
+        "move swordsdance": 8,
+        "move hiddenpower": 2,
+        "move rockslide": 1,
+        "move earthquake": 5
+      },
+      "24": {
+        "move earthquake": 10,
+        "move rockslide": 6
+      },
+      "26": {
+        "move thunderbolt": 16
+      }
+    }
+  },
+  "ensemble-screen": {
+    "rows": 32,
+    "raw_sha256": "7c1199d4205da632ca9a36f8be0ef1b4809a9d7d8f4feabc671099ce33f32c9e",
+    "choices": {
+      "11": {
+        "move earthquake": 8
+      },
+      "18": {
+        "move earthquake": 7,
+        "move hiddenpower": 1
+      },
+      "24": {
+        "move hiddenpower": 5,
+        "move earthquake": 2,
+        "move rockslide": 1
+      },
+      "26": {
+        "move thunderbolt": 8
+      }
+    }
+  },
+  "ensemble-holdout11": {
+    "rows": 32,
+    "raw_sha256": "be9dc993ff6524f2a0069b186a687efa167c514f0ea5cb8d0042b7df91c455ca",
+    "choices": {
+      "11": {
+        "move earthquake": 32
+      }
+    }
+  },
+  "ensemble-holdout-rest": {
+    "rows": 48,
+    "raw_sha256": "69dcecc7eceba0b674502ce36eb0d0ba0b50baa7c96bd71ee3f454c273abc0b9",
+    "choices": {
+      "18": {
+        "move earthquake": 9,
+        "move rockslide": 2,
+        "move hiddenpower": 5
+      },
+      "24": {
+        "move hiddenpower": 13,
+        "move earthquake": 3
+      },
+      "26": {
+        "move thunderbolt": 16
+      }
+    }
+  },
+  "nested64-holdout": {
+    "rows": 16,
+    "raw_sha256": "824637c457a1be290545c84fa418d7836c7f66ebddbb84d84762b95fd279a914",
+    "choices": {
+      "11": {
+        "move rockslide": 5,
+        "move earthquake": 9,
+        "move hiddenpower": 2
+      }
+    }
+  }
+}

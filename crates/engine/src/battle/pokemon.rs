@@ -250,9 +250,6 @@ impl Battle {
             }
         }
 
-        let prev_status = self.poke(id).status;
-        let prev_state = self.poke(id).status_state.clone();
-
         if !status.is_empty() {
             let result = self.run_event(
                 dex,
@@ -268,6 +265,73 @@ impl Battle {
                 return result;
             }
         }
+
+        if !self.start_status(dex, id, status, source, source_effect).truthy() {
+            return RV::False;
+        }
+        if status == "slp"
+            && source.is_some_and(|s| s.side != id.side)
+            && self.field.pseudo_weather.iter().any(|(c, _)| {
+                Some(*c) == crate::cond_id!(dex, "stadiumsleepclause")
+            })
+            && self.sides[id.side as usize].party.iter().any(|&slot| {
+                let p = &self.sides[id.side as usize].roster[slot as usize];
+                slot != id.slot && p.hp > 0 && p.status == Status::Slp
+            })
+        {
+            self.add(&["-message", "Sleep Clause violated: the player who inflicted sleep forfeits."]);
+            self.win(Some(id.side as usize));
+            return RV::True;
+        }
+        if !status.is_empty() {
+            let after = self.run_event(
+                dex,
+                &ev::AfterSetStatus,
+                EvTarget::Poke(id),
+                source,
+                source_effect,
+                Some(RV::Str(status.to_string())),
+                false,
+                false,
+            );
+            if !after.truthy() {
+                return RV::False;
+            }
+        }
+        RV::True
+    }
+
+    /// Restore an observed status without treating it as a new infliction.
+    pub fn restore_status(
+        &mut self,
+        dex: &Dex,
+        id: PokeId,
+        status: Status,
+        source: Option<PokeId>,
+    ) -> RV {
+        if self.poke(id).hp <= 0 {
+            return RV::False;
+        }
+        self.start_status(dex, id, status.as_str(), source.or(Some(id)), EffectHandle::None)
+    }
+
+    pub fn has_sleeping_pokemon(&self, side: usize) -> bool {
+        self.sides[side].party.iter().any(|&slot| {
+            let p = &self.sides[side].roster[slot as usize];
+            p.hp > 0 && p.status == Status::Slp
+        })
+    }
+
+    fn start_status(
+        &mut self,
+        dex: &Dex,
+        id: PokeId,
+        status: &str,
+        source: Option<PokeId>,
+        source_effect: EffectHandle,
+    ) -> RV {
+        let prev_status = self.poke(id).status;
+        let prev_state = self.poke(id).status_state.clone();
 
         self.poke_mut(id).status = Status::from_str(status);
         self.refresh_poke_mask(dex, id);
@@ -285,7 +349,6 @@ impl Battle {
         let target_active = self.poke(id).is_active;
         let state = self.init_effect_state(state, target_active && !status.is_empty());
         self.poke_mut(id).status_state = state;
-        // (statuses in gen2 have no durationCallback)
 
         if !status.is_empty() {
             let c = cond.expect("status condition must exist");
@@ -303,19 +366,6 @@ impl Battle {
                 self.poke_mut(id).status = prev_status;
                 self.poke_mut(id).status_state = prev_state;
                 self.refresh_poke_mask(dex, id);
-                return RV::False;
-            }
-            let after = self.run_event(
-                dex,
-                &ev::AfterSetStatus,
-                EvTarget::Poke(id),
-                source,
-                source_effect,
-                Some(RV::Str(status.to_string())),
-                false,
-                false,
-            );
-            if !after.truthy() {
                 return RV::False;
             }
         }

@@ -1,0 +1,352 @@
+{
+  "hashes": {
+    "discovery.jsonl": "eb1ae4ff986e22f76f7f518fd1ed9d1920ab6735534c038c6e8be45180b3d593",
+    "confirmation-known.jsonl": "7bcb87e17f3d110ea1b3cbdfb279628a8c45639a5f0ac8381d7c50aaea6062c9",
+    "confirmation-new.jsonl": "27f69c87a6f709c05288bfdbec56869d7d0c3dd625711b6a05ab6fac1341993d",
+    "matrix-discovery.jsonl": "1c5c9f0f33904904ca8cb182259905ac1ac5bd0d2cb099fd1e96e073b534bf8b",
+    "matrix-confirmation.jsonl": "ca4f0a4934c94c707cbff08e449d1ac407c0fe570816b043cacb2d9dccd546d9"
+  },
+  "all_13": {
+    "execute_both": {
+      "choices": {
+        "switch 2": 10,
+        "move rockslide": 1,
+        "move swordsdance": 2
+      },
+      "hp_minus_eq": {
+        "n": 13,
+        "mean": -0.00901567790043892,
+        "ci95": [
+          -0.04344283216479168,
+          0.025411476363913846
+        ]
+      },
+      "terminal_fraction_range": [
+        0.698,
+        0.9986666666666667
+      ]
+    },
+    "sample_ours": {
+      "choices": {
+        "switch 2": 12,
+        "move rockslide": 1
+      },
+      "hp_minus_eq": {
+        "n": 13,
+        "mean": 0.004965379913435499,
+        "ci95": [
+          -0.02188627128342822,
+          0.03181703111029922
+        ]
+      },
+      "terminal_fraction_range": [
+        0.7006666666666667,
+        0.9973333333333333
+      ]
+    },
+    "sample_foe": {
+      "choices": {
+        "move hiddenpowerbug": 8,
+        "move rockslide": 3,
+        "move earthquake": 2
+      },
+      "hp_minus_eq": {
+        "n": 13,
+        "mean": 0.01339151672994028,
+        "ci95": [
+          0.002329692371265235,
+          0.024453341088615323
+        ]
+      },
+      "terminal_fraction_range": [
+        0.6846666666666666,
+        0.9946666666666667
+      ]
+    },
+    "sample_both": {
+      "choices": {
+        "move rockslide": 5,
+        "switch 2": 2,
+        "move hiddenpowerbug": 6
+      },
+      "hp_minus_eq": {
+        "n": 13,
+        "mean": 0.018326887914837036,
+        "ci95": [
+          0.005243573401962321,
+          0.03141020242771175
+        ]
+      },
+      "terminal_fraction_range": [
+        0.6653333333333333,
+        0.9946666666666667
+      ]
+    },
+    "baseline": {
+      "choices": {
+        "move hiddenpowerbug": 13
+      },
+      "hp_minus_eq": {
+        "n": 13,
+        "mean": 0.021151527234797178,
+        "ci95": [
+          0.01864293584760287,
+          0.023660118621991487
+        ]
+      },
+      "terminal_fraction_range": null
+    },
+    "paired_effects": {
+      "opponent_sampling:move earthquake": {
+        "n": 13,
+        "mean": 0.13804998506115423,
+        "ci95": [
+          0.12339002552198634,
+          0.1527099446003221
+        ]
+      },
+      "opponent_sampling:move hiddenpowerbug": {
+        "n": 13,
+        "mean": 0.16045717969153342,
+        "ci95": [
+          0.13631816883161335,
+          0.1845961905514535
+        ]
+      },
+      "opponent_sampling:hp_minus_eq": {
+        "n": 13,
+        "mean": 0.0224071946303792,
+        "ci95": [
+          -0.009426110375318347,
+          0.054240499636076744
+        ]
+      },
+      "own_sampling:move earthquake": {
+        "n": 13,
+        "mean": -0.05882556724128923,
+        "ci95": [
+          -0.07622752090366242,
+          -0.04142361357891604
+        ]
+      },
+      "own_sampling:move hiddenpowerbug": {
+        "n": 13,
+        "mean": -0.04484450942741481,
+        "ci95": [
+          -0.060975440924667834,
+          -0.028713577930161785
+        ]
+      },
+      "own_sampling:hp_minus_eq": {
+        "n": 13,
+        "mean": 0.013981057813874419,
+        "ci95": [
+          -0.012046724531382646,
+          0.04000884015913148
+        ]
+      }
+    }
+  },
+  "new_8": {
+    "execute_both": {
+      "choices": {
+        "switch 2": 6,
+        "move swordsdance": 2
+      },
+      "hp_minus_eq": {
+        "n": 8,
+        "mean": -0.013189800391765961,
+        "ci95": [
+          -0.06650176462030735,
+          0.040122163836775436
+        ]
+      },
+      "terminal_fraction_range": [
+        0.726,
+        0.9986666666666667
+      ]
+    },
+    "sample_ours": {
+      "choices": {
+        "switch 2": 7,
+        "move rockslide": 1
+      },
+      "hp_minus_eq": {
+        "n": 8,
+        "mean": 0.005311830562536507,
+        "ci95": [
+          -0.0323577905991779,
+          0.04298145172425091
+        ]
+      },
+      "terminal_fraction_range": [
+        0.7266666666666667,
+        0.9973333333333333
+      ]
+    },
+    "sample_foe": {
+      "choices": {
+        "move hiddenpowerbug": 5,
+        "move rockslide": 2,
+        "move earthquake": 1
+      },
+      "hp_minus_eq": {
+        "n": 8,
+        "mean": 0.012739597563635657,
+        "ci95": [
+          -0.002918558603677273,
+          0.028397753730948588
+        ]
+      },
+      "terminal_fraction_range": [
+        0.6846666666666666,
+        0.994
+      ]
+    },
+    "sample_both": {
+      "choices": {
+        "move hiddenpowerbug": 5,
+        "switch 2": 1,
+        "move rockslide": 2
+      },
+      "hp_minus_eq": {
+        "n": 8,
+        "mean": 0.016189679047509092,
+        "ci95": [
+          -0.005086227893550104,
+          0.03746558598856829
+        ]
+      },
+      "terminal_fraction_range": [
+        0.6733333333333333,
+        0.9913333333333333
+      ]
+    },
+    "baseline": {
+      "choices": {
+        "move hiddenpowerbug": 8
+      },
+      "hp_minus_eq": {
+        "n": 8,
+        "mean": 0.02143686878340194,
+        "ci95": [
+          0.017430966093401813,
+          0.025442771473402064
+        ]
+      },
+      "terminal_fraction_range": null
+    },
+    "paired_effects": {
+      "opponent_sampling:move earthquake": {
+        "n": 8,
+        "mean": 0.14233120080312897,
+        "ci95": [
+          0.1237843898633884,
+          0.16087801174286953
+        ]
+      },
+      "opponent_sampling:move hiddenpowerbug": {
+        "n": 8,
+        "mean": 0.16826059875853058,
+        "ci95": [
+          0.1308616005549782,
+          0.20565959696208297
+        ]
+      },
+      "opponent_sampling:hp_minus_eq": {
+        "n": 8,
+        "mean": 0.02592939795540162,
+        "ci95": [
+          -0.0236368925104316,
+          0.07549568842123483
+        ]
+      },
+      "own_sampling:move earthquake": {
+        "n": 8,
+        "mean": -0.05730030134804941,
+        "ci95": [
+          -0.0778939356353288,
+          -0.03670666706077001
+        ]
+      },
+      "own_sampling:move hiddenpowerbug": {
+        "n": 8,
+        "mean": -0.03879867039374694,
+        "ci95": [
+          -0.06402665760569357,
+          -0.013570683181800311
+        ]
+      },
+      "own_sampling:hp_minus_eq": {
+        "n": 8,
+        "mean": 0.01850163095430247,
+        "ci95": [
+          -0.01516012555074512,
+          0.05216338745935006
+        ]
+      }
+    }
+  },
+  "matrix": [
+    {
+      "seed": 61001,
+      "modal_action": "switch 2",
+      "policy": {
+        "move earthquake": 2.7674987417460616e-07,
+        "move rockslide": 9.995002498750623e-08,
+        "move hiddenpowerbug": 0.4651506771360226,
+        "move swordsdance": 1.35401154051446e-07,
+        "switch 2": 0.5348488107629241
+      },
+      "equal_earthquake_staying_cells": true
+    },
+    {
+      "seed": 62001,
+      "modal_action": "move rockslide",
+      "policy": {
+        "move earthquake": 9.995002498750624e-08,
+        "move rockslide": 0.6729019616701531,
+        "move hiddenpowerbug": 0.1779801205419446,
+        "move swordsdance": 9.995002498750624e-08,
+        "switch 2": 0.1491177178878523
+      },
+      "equal_earthquake_staying_cells": true
+    },
+    {
+      "seed": 62002,
+      "modal_action": "move hiddenpowerbug",
+      "policy": {
+        "move earthquake": 3.881264162548601e-07,
+        "move rockslide": 3.2281783151056414e-07,
+        "move hiddenpowerbug": 0.994588584936358,
+        "move swordsdance": 9.995002498750621e-08,
+        "switch 2": 0.0054106041693691475
+      },
+      "equal_earthquake_staying_cells": true
+    },
+    {
+      "seed": 62003,
+      "modal_action": "move earthquake",
+      "policy": {
+        "move earthquake": 0.9995185845378568,
+        "move rockslide": 9.995002498750627e-08,
+        "move hiddenpowerbug": 2.2482026985683957e-06,
+        "move swordsdance": 0.0001864505422479391,
+        "switch 2": 0.00029261676717174794
+      },
+      "equal_earthquake_staying_cells": true
+    },
+    {
+      "seed": 62004,
+      "modal_action": "switch 2",
+      "policy": {
+        "move earthquake": 0.001375648011965188,
+        "move rockslide": 8.4411423011212e-05,
+        "move hiddenpowerbug": 0.22786765814538648,
+        "move swordsdance": 1.2183949288973957e-06,
+        "switch 2": 0.7706710640247082
+      },
+      "equal_earthquake_staying_cells": true
+    }
+  ]
+}

@@ -285,11 +285,9 @@ pub struct BlindSearch {
     /// preview — is enforced by the engine's own enumeration since the
     /// 2026-07-17 preview-space fix; the API stays (harmless, generic).
     my_mask: Option<Vec<bool>>,
-    /// Dominated root actions — certain immediate self-loss
-    /// (`smmcts::certain_self_loss`) or provable no-op
-    /// (`smmcts::certain_noop`): `best()` never argmaxes them while an
-    /// alternative exists.
+    /// Final-choice exclusions: self-KO, sleep-forfeit risk, and proven no-ops.
     my_dominated: Vec<bool>,
+    opponent_preview_prior: bool,
     /// Per-determinization roots + everything below (state-keyed).
     nodes: Vec<Node>,
     table: FxHashMap<u64, usize>,
@@ -306,6 +304,8 @@ pub struct BlindSearch {
     /// decides which moves exist), so an index means nothing across
     /// iterations while a `Move(id)` means the same move every time.
     joint: Vec<(usize, SearchChoice, u32, f64)>,
+    joint_index: FxHashMap<(usize, SearchChoice), usize>,
+    root_avail: FxHashMap<usize, Vec<usize>>,
     /// How often each opponent action was even LEGAL, across iterations.
     /// A blind root's opponent action list is determinization-dependent — a
     /// move exists only in the candidates that carry it — so a column's
@@ -315,6 +315,10 @@ pub struct BlindSearch {
 }
 
 impl BlindSearch {
+    pub fn set_opponent_preview_prior(&mut self, enabled: bool) {
+        self.opponent_preview_prior = enabled;
+    }
+
     pub fn new(battle: &Battle, dex: &Dex, cfg: RmConfig, side: usize, seed: u64) -> BlindSearch {
         Self::with_rng(battle, dex, cfg, side, SplitMix64::new(seed))
     }
@@ -336,8 +340,7 @@ impl BlindSearch {
         let my_dominated = my_acts
             .iter()
             .map(|&c| {
-                crate::smmcts::certain_self_loss(&base, dex, side, c)
-                    || crate::smmcts::certain_noop(&base, dex, side, c, cfg.mask_rules)
+                crate::smmcts::dominated_reason(&base, dex, side, c, cfg.mask_rules).is_some()
             })
             .collect();
         BlindSearch {
@@ -350,11 +353,14 @@ impl BlindSearch {
             my_w: vec![0.0; my_acts.len()],
             my_mask: None,
             my_dominated,
+            opponent_preview_prior: false,
             my_acts,
             nodes: Vec::new(),
             table: FxHashMap::default(),
             done: 0,
             joint: Vec::new(),
+            joint_index: FxHashMap::default(),
+            root_avail: FxHashMap::default(),
             avail: Vec::new(),
         }
     }
@@ -362,7 +368,19 @@ impl BlindSearch {
     /// One iteration: fresh determinization, global-UCB own root pick
     /// forced into the shared `run_iteration`. Returns the side-0 reward.
     pub fn step_one(&mut self, dex: &Dex, belief: &Belief, obs: &Observer) -> f64 {
-        let mut sim = belief.determinize(dex, &self.base, obs, &mut self.rng);
+        self.step_one_impl(dex, belief, obs, None, None)
+    }
+
+    fn step_one_impl(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        leaf: Option<&mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64>,
+        trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
+    ) -> f64 {
+        let pick = belief.sample(&mut self.rng);
+        let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut self.rng);
         let key = key_of(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
             Some(&i) => i,
@@ -386,20 +404,47 @@ impl BlindSearch {
         );
         let mut force = [None, None];
         force[self.side] = Some(my_pick);
+        if self.opponent_preview_prior && self.is_preview() {
+            force[1 - self.side] = belief.sample_preview_prior(
+                pick, obs, &self.nodes[root].acts[1 - self.side], &mut self.rng,
+            );
+        }
         let mut joint = [0usize; 2];
-        let r = run_iteration(
-            &self.cfg,
-            &mut self.rng,
-            &mut self.nodes,
-            &mut self.table,
-            &mut sim,
-            dex,
-            self.turn_cap,
-            root,
-            force,
-            &mut joint,
-            &mut 0,
-        );
+        let r = if let Some(leaf) = leaf {
+            crate::smmcts::run_iteration_with_leaf(
+                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
+                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0, leaf, None,
+            )
+        } else if let Some(trace) = trace {
+            crate::smmcts::run_iteration_with_leaf(
+                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
+                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
+                &mut |sim, rng, rollout| {
+                    if rollout {
+                        crate::mcts::playout_value(sim, dex, &self.cfg.playout, self.turn_cap, rng, self.cfg.rollout_m16c)
+                    } else {
+                        match &self.cfg.playout {
+                            crate::mcts::Playout::Uniform => crate::mcts::hp_eval(sim),
+                            crate::mcts::Playout::Heavy { weights, .. } => crate::eval::eval_leaf(sim, dex, weights),
+                        }
+                    }
+                }, Some(trace),
+            )
+        } else {
+            run_iteration(
+                &self.cfg,
+                &mut self.rng,
+                &mut self.nodes,
+                &mut self.table,
+                &mut sim,
+                dex,
+                self.turn_cap,
+                root,
+                force,
+                &mut joint,
+                &mut 0,
+            )
+        };
         self.record_joint(root, my_pick, joint, r);
         self.my_w[my_pick] += if self.side == 0 { r } else { 1.0 - r };
         self.done += 1;
@@ -423,7 +468,8 @@ impl BlindSearch {
             self.my_mask.as_ref().map_or(true, |mask| mask[my_pick]),
             "forced root action is masked"
         );
-        let mut sim = belief.determinize(dex, &self.base, obs, &mut self.rng);
+        let pick = belief.sample(&mut self.rng);
+        let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut self.rng);
         let key = key_of(&self.cfg, dex, &mut sim);
         let root = match self.table.get(&key) {
             Some(&i) => i,
@@ -441,6 +487,11 @@ impl BlindSearch {
         self.my_n[my_pick] += 1;
         let mut force = [None, None];
         force[self.side] = Some(my_pick);
+        if self.opponent_preview_prior && self.is_preview() {
+            force[1 - self.side] = belief.sample_preview_prior(
+                pick, obs, &self.nodes[root].acts[1 - self.side], &mut self.rng,
+            );
+        }
         let mut joint = [0usize; 2];
         let r = run_iteration(
             &self.cfg,
@@ -467,26 +518,31 @@ impl BlindSearch {
     fn record_joint(&mut self, root: usize, my_pick: usize, joint: [usize; 2], r: f64) {
         let opp = 1 - self.side;
         let acts = &self.nodes[root].acts[opp];
-        for &c in acts.iter() {
-            match self.avail.iter_mut().find(|(x, _)| *x == c) {
-                Some((_, n)) => *n += 1,
-                None => self.avail.push((c, 1)),
-            }
+        let indices = self.root_avail.entry(root).or_insert_with(|| {
+            acts.iter().map(|&choice| {
+                match self.avail.iter().position(|(action, _)| *action == choice) {
+                    Some(index) => index,
+                    None => {
+                        self.avail.push((choice, 0));
+                        self.avail.len() - 1
+                    }
+                }
+            }).collect()
+        });
+        for &index in indices.iter() {
+            self.avail[index].1 += 1;
         }
-        let acts = &self.nodes[root].acts[opp];
         let Some(&opp_act) = acts.get(joint[opp]) else { return };
         let mine = if self.side == 0 { r } else { 1.0 - r };
-        match self
-            .joint
-            .iter_mut()
-            .find(|(a, c, _, _)| *a == my_pick && *c == opp_act)
-        {
-            Some((_, _, n, w)) => {
-                *n += 1;
-                *w += mine;
+        let index = match self.joint_index.entry((my_pick, opp_act)) {
+            std::collections::hash_map::Entry::Occupied(entry) => *entry.get(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                self.joint.push((my_pick, opp_act, 0, 0.0));
+                *entry.insert(self.joint.len() - 1)
             }
-            None => self.joint.push((my_pick, opp_act, 1, mine)),
-        }
+        };
+        self.joint[index].2 += 1;
+        self.joint[index].3 += mine;
     }
 
     /// The root joint cells: `(own action index, opponent action, samples,
@@ -636,9 +692,77 @@ impl BlindSearch {
         self.done
     }
 
+    /// The callback returns a side-0 reward in [0, 1]; the flag marks a newly expanded leaf.
+    pub fn step_with_leaf(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        n: u32,
+        leaf: &mut impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64,
+    ) -> u32 {
+        for _ in 0..n {
+            self.step_one_impl(dex, belief, obs, Some(leaf), None);
+        }
+        self.done
+    }
+
+    pub fn step_observed(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        n: u32,
+        trace: &mut impl FnMut(crate::smmcts::SearchTrace<'_>),
+    ) -> u32 {
+        for _ in 0..n {
+            self.step_one_impl(dex, belief, obs, None, Some(trace));
+        }
+        self.done
+    }
+
     /// Distinct states in the determinized tree (see `SkuctSearch::node_count`).
     pub fn node_count(&self) -> usize {
         self.nodes.len()
+    }
+
+    /// Evaluates a fixed root action without updating the tree or its search RNG.
+    #[allow(clippy::too_many_arguments)]
+    pub fn evaluate_frozen(
+        &self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        action: SearchChoice,
+        policy: [crate::frozen::FrozenPolicy; 2],
+        seed: u64,
+        trace: &mut impl FnMut(crate::frozen::FrozenChoice<'_>),
+    ) -> crate::frozen::FrozenResult {
+        assert!(self.my_acts.contains(&action));
+        let mut forced = [None, None];
+        forced[self.side] = Some(action);
+        self.evaluate_frozen_joint(dex, belief, obs, forced, policy, seed, trace)
+    }
+
+    /// Forced opponent actions must be legal in every sampled determinization.
+    #[allow(clippy::too_many_arguments)]
+    pub fn evaluate_frozen_joint(
+        &self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        forced: [Option<SearchChoice>; 2],
+        policy: [crate::frozen::FrozenPolicy; 2],
+        seed: u64,
+        trace: &mut impl FnMut(crate::frozen::FrozenChoice<'_>),
+    ) -> crate::frozen::FrozenResult {
+        let mut rng = SplitMix64::new(seed);
+        let pick = belief.sample(&mut rng);
+        let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut rng);
+        crate::frozen::evaluate_sim(
+            dex, &self.cfg, &mut sim, &self.nodes, &self.table,
+            forced, policy, &mut rng, trace,
+        )
     }
 
     pub fn iterations(&self) -> u32 {
@@ -655,12 +779,7 @@ impl BlindSearch {
         &self.my_n
     }
 
-    /// Per-action dominated flags — the guaranteed-fail / certain-self-loss
-    /// mask [`Self::best`] applies. Exposed because a harness that ranks by
-    /// raw visits does NOT reproduce the shipped choice: it can report a move
-    /// the product would never play (2026-07-27, `human_agreement` was doing
-    /// exactly that, which sent a corpus review chasing a Swagger the bot
-    /// could not have chosen).
+    /// Final-choice exclusions applied by `best`; raw visits do not include this filter.
     pub fn dominated(&self) -> &[bool] {
         &self.my_dominated
     }
@@ -687,6 +806,15 @@ impl BlindSearch {
         assert_eq!(allowed.len(), self.my_acts.len(), "mask length mismatch");
         assert!(allowed.iter().any(|&a| a), "mask leaves no legal action");
         self.my_mask = Some(allowed.to_vec());
+    }
+
+    pub fn prune_dominated(&mut self) {
+        let allowed: Vec<bool> = self.my_dominated.iter().enumerate()
+            .map(|(i, &dominated)| !dominated && self.my_mask.as_ref().map_or(true, |m| m[i]))
+            .collect();
+        if allowed.iter().any(|&x| x) {
+            self.mask_actions(&allowed);
+        }
     }
 
     /// Current best choice: argmax visits over the global root stats (the

@@ -164,6 +164,7 @@ impl MonObs {
 /// Observation tracker for one side of one battle. Construct at battle
 /// start (team preview — item *presence* is read then), call `observe`
 /// at every real decision point.
+#[derive(Clone)]
 pub struct Observer {
     side: usize,
     mons: Vec<MonObs>,

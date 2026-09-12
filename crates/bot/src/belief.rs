@@ -49,8 +49,9 @@
 //!   of `Pokemon`, so a new state field fails the build here until it is
 //!   triaged public/hidden, the `state_key` trick);
 //! - the identity of never-appeared opponent picks: which of the 6 roster
-//!   mons occupy the unseen party slots is resampled uniformly from the
-//!   not-yet-appeared roster (the true picks stay in the support);
+//!   mons occupy the unseen party slots is resampled from the unappeared
+//!   roster, uniformly unless a selection prior is installed and conditioned
+//!   on the current observation revision;
 //! - a pending, not-yet-executed opponent `Move` action in the queue (only
 //!   reachable at a mid-turn Baton Pass switch request — on faints gen 2
 //!   cancels all pending moves): its move id is *chosen but unannounced*,
@@ -84,6 +85,7 @@ use nc2000_engine::validate::{validate_team, Learnsets};
 
 use crate::observe::{move_matches, MonObs, Observer};
 use crate::preview::MetaPool;
+use crate::pick_prior::{PickDistribution, PickPrior, PreviewMon};
 use crate::prior::BeliefPrior;
 use crate::rng::SplitMix64;
 
@@ -303,6 +305,7 @@ pub struct Belief {
     fallback_policy: FallbackPolicy,
     /// M18: the community belief prior, when the owner loaded one.
     prior: Option<Arc<BeliefPrior>>,
+    pick_draws: Option<(u64, Vec<Option<PickDistribution>>)>,
     /// M18: per-fallback-slot draw plans, rebuilt alongside `fallback`.
     /// `None` whenever no prior governs any slot — which is the shipped
     /// default and keeps `determinize` bit-identical to pre-M18, rng draws
@@ -342,6 +345,7 @@ impl Belief {
             frozen: false,
             fallback_policy,
             prior: None,
+            pick_draws: None,
             draws: None,
             synced: None,
         };
@@ -407,6 +411,7 @@ impl Belief {
             frozen: false,
             fallback_policy: FallbackPolicy::Layered,
             prior: None,
+            pick_draws: None,
             draws: None,
             synced: Some(obs.revision()),
         })
@@ -433,6 +438,7 @@ impl Belief {
             frozen: false,
             fallback_policy: FallbackPolicy::Layered,
             prior: None,
+            pick_draws: None,
             draws: None,
             synced: Some(obs.revision()),
         }
@@ -547,6 +553,40 @@ impl Belief {
         self.prior.as_deref().is_some_and(|p| !p.is_empty())
     }
 
+    pub fn condition_pick_prior(
+        &mut self,
+        dex: &Dex,
+        prior: &PickPrior,
+        own_preview: &[PreviewMon],
+        obs: &Observer,
+    ) {
+        if self.pinned {
+            self.pick_draws = None;
+            return;
+        }
+        let roster: Vec<String> = obs.mons().iter()
+            .map(|m| dex.species.key(m.species).to_string()).collect();
+        let appeared = obs.mons().iter().enumerate()
+            .fold(0u8, |mask, (i, m)| mask | (u8::from(m.appeared) << i));
+        let plans = self.cands.iter().map(|candidate| {
+            prior.condition(&candidate.id, own_preview, obs.opp(), &roster, appeared)
+        }).collect();
+        self.pick_draws = Some((obs.revision(), plans));
+    }
+
+    pub(crate) fn sample_preview_prior(
+        &self,
+        pick: Option<usize>,
+        obs: &Observer,
+        actions: &[nc2000_engine::battle::SearchChoice],
+        rng: &mut SplitMix64,
+    ) -> Option<usize> {
+        self.pick_draws.as_ref()
+            .filter(|(revision, _)| *revision == obs.revision())
+            .and_then(|(_, plans)| pick.and_then(|i| plans[i].as_ref()))?
+            .sample_preview(actions, rng)
+    }
+
     /// Which fallback roster slots the installed prior currently governs, in
     /// observer roster order (`false` = today's deterministic filler). Empty
     /// when nothing is governed. A coverage surface for the M18 gate.
@@ -654,13 +694,6 @@ impl Belief {
         let opp = obs.opp();
         let roster_len = out.sides[opp].roster.len();
 
-        // ---- hidden pick identities: never-appeared party slots hold one
-        // of the not-yet-appeared roster mons — resample uniformly.
-        // Position bookkeeping is rebuilt from scratch afterwards: pairwise
-        // position swaps corrupt `party`/`position` coherence when the
-        // sampled mon already sits in the party at another hidden slot
-        // (party[i] duplicated, a party member left with an off-party
-        // `position` — switch_in then indexes party[] out of bounds).
         if out.sides[opp].party.len() < roster_len {
             let appeared: Vec<bool> = out.sides[opp]
                 .roster
@@ -673,6 +706,19 @@ impl Belief {
                 .collect();
             let mut pool: Vec<u8> =
                 (0..roster_len as u8).filter(|&s| !appeared[s as usize]).collect();
+            if party_len == 3 && !hidden_positions.is_empty() {
+                if let Some(distribution) = self.pick_draws.as_ref()
+                    .filter(|(revision, _)| *revision == obs.revision())
+                    .and_then(|(_, plans)| pick.and_then(|i| plans[i].as_ref()))
+                {
+                    let mask = distribution.sample(rng);
+                    let selected: Vec<u8> = pool.iter().copied()
+                        .filter(|slot| mask & (1 << slot) != 0).collect();
+                    if selected.len() == hidden_positions.len() {
+                        pool = selected;
+                    }
+                }
+            }
             for &pos in &hidden_positions {
                 let new_slot = pool.swap_remove(rng.below(pool.len()));
                 out.sides[opp].party[pos] = new_slot;
@@ -1424,6 +1470,7 @@ mod fallback_tests {
             frozen: false,
             fallback_policy: FallbackPolicy::Layered,
             prior: None,
+            pick_draws: None,
             draws: None,
             synced: None,
         }

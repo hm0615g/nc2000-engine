@@ -1,7 +1,4 @@
-// Native≡wasm parity: replay golden fixtures through the wasm build and
-// assert bit-exactness at every snapshot point — PRNG seed (RNG-consumption
-// order), turn, and the protocol log chunk — plus the final state view
-// (hp/status/fainted per mon) and outcome against the fixture's record.
+// PS fixture parity outside the sleep-rule declaration, plus operational forfeits.
 "use strict";
 
 const { wasm, loadFixture, check, checkEq, finish } = require("./common");
@@ -31,7 +28,9 @@ for (const rel of FIXTURES) {
     checkEq(battle.turn(), snap.turn, `${rel} ${where}: turn`);
     checkEq(
       JSON.parse(battle.takeNewLog()),
-      snap.log,
+      snap.log.map((line) => line === "|rule|Sleep Clause Mod: Limit one foe put to sleep"
+        ? "|rule|Stadium Sleep Clause: Putting another foe to sleep while any teammate sleeps forfeits the battle"
+        : line),
       `${rel} ${where}: log chunk`
     );
   };
@@ -81,6 +80,48 @@ for (const rel of FIXTURES) {
   console.log(
     `  ${rel}: ${fx.choices.length} choices, ${snaps.length} snapshots bit-exact`
   );
+}
+
+function set(species, item, moves) {
+  return {
+    name: species, species, item, moves, level: 50, ability: "No Ability",
+    evs: { hp: 255, atk: 255, def: 255, spa: 255, spd: 255, spe: 255 },
+    ivs: { hp: 30, atk: 30, def: 30, spa: 30, spd: 30, spe: 30 },
+    happiness: 255,
+  };
+}
+
+for (const rest of [false, true]) {
+  for (const item of ["", "Mint Berry", "Miracle Berry"]) {
+    const ours = [
+      set("Parasect", "", ["Spore", "Slash", "Swords Dance"]),
+      set("Jynx", "", ["Lovely Kiss", "Psychic"]),
+      set("Clefable", "", ["Metronome"]),
+    ];
+    const theirs = [
+      set("Snorlax", "", ["Amnesia", "Rest"]),
+      set("Mr. Mime", item, ["Reflect"]),
+      set("Blissey", "", ["Defense Curl"]),
+    ];
+    const battle = new wasm.Battle(dex, JSON.stringify(ours), JSON.stringify(theirs), "1,2,3,4");
+    const turn = (a, b) => {
+      battle.applyChoice(0, a);
+      battle.applyChoice(1, b);
+    };
+    turn("team 1,2,3", "team 1,2,3");
+    if (rest) {
+      turn("move slash", "move amnesia");
+      turn("move swordsdance", "move rest");
+    } else {
+      turn("move spore", "move amnesia");
+    }
+    turn("move spore", "switch 2");
+    checkEq(battle.outcome(), "p2", `sleep forfeit: rest=${rest}, item=${item}`);
+    const log = JSON.parse(battle.takeNewLog());
+    check(log.some((line) => line.includes("Sleep Clause violated")), "forfeit reason is logged");
+    checkEq(log.at(-1), "|win|P2", "forfeit ends the turn");
+    battle.free();
+  }
 }
 
 finish("parity");

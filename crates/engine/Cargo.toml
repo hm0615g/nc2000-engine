@@ -2,7 +2,7 @@
 name = "nc2000-engine"
 version = "0.1.0"
 edition = "2021"
-description = "Rust port of Pokemon Showdown's [Gen 2] NC 2000 format (gen2stadium2), bit-exact against PS fixtures"
+description = "NC2000 battle engine with operational sleep forfeits and PS fixture conformance"
 license.workspace = true
 repository.workspace = true
 

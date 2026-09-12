@@ -1,4 +1,5 @@
-//! Sleep Clause Mod conformance, hand-carried from a scripted PS battle
+//! Frozen PS Sleep Clause Mod conformance; operational sleep tests live in
+//! `crates/engine/tests/sleep_clause.rs`. Hand-carried from a scripted PS battle
 //! (RandomPlayerAI never produces the pattern, so the corpus can't cover it).
 //!
 //! PS reference (gen2nintendocup2000noohkostadium2strict, verified live
@@ -6,7 +7,7 @@
 //! `|-message|Sleep Clause Mod activated.`; a side whose only sleeper is
 //! Rest-sleeping (ally-sourced) can still be slept.
 
-use conformance::load_dex;
+use conformance::{load_dex, ps_reference_battle};
 use nc2000_engine::battle::PokemonSet;
 use nc2000_engine::state::{Battle, Status};
 
@@ -41,7 +42,12 @@ fn teams() -> (Vec<PokemonSet>, Vec<PokemonSet>) {
     (p1, p2)
 }
 
-fn poke_status(b: &Battle, side: usize, species_key: &str, dex: &nc2000_engine::dex::Dex) -> Status {
+fn poke_status(
+    b: &Battle,
+    side: usize,
+    species_key: &str,
+    dex: &nc2000_engine::dex::Dex,
+) -> Status {
     let side_ref = &b.sides[side];
     let slot = side_ref
         .roster
@@ -55,18 +61,25 @@ fn poke_status(b: &Battle, side: usize, species_key: &str, dex: &nc2000_engine::
 fn second_foe_sleep_is_blocked() {
     let dex = load_dex();
     let (p1, p2) = teams();
-    let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+    let mut b = ps_reference_battle(&dex, "1,2,3,4", &p1, &p2).unwrap();
     b.choose(&dex, 0, "team 1,2,3").unwrap();
     b.choose(&dex, 1, "team 1,2,3").unwrap();
     b.choose(&dex, 0, "move spore").unwrap();
     b.choose(&dex, 1, "move bodyslam").unwrap();
-    assert_eq!(poke_status(&b, 1, "snorlax", &dex), Status::Slp, "{:?}", b.log);
+    assert_eq!(
+        poke_status(&b, 1, "snorlax", &dex),
+        Status::Slp,
+        "{:?}",
+        b.log
+    );
     b.choose(&dex, 0, "move slash").unwrap();
     b.choose(&dex, 1, "switch 2").unwrap();
     b.choose(&dex, 0, "move spore").unwrap();
     b.choose(&dex, 1, "move psychic").unwrap();
     assert!(
-        b.log.iter().any(|l| l == "|-message|Sleep Clause Mod activated."),
+        b.log
+            .iter()
+            .any(|l| l == "|-message|Sleep Clause Mod activated."),
         "clause message missing: {:?}",
         b.log
     );
@@ -77,7 +90,7 @@ fn second_foe_sleep_is_blocked() {
 fn rest_sleep_does_not_engage_the_clause() {
     let dex = load_dex();
     let (p1, p2) = teams();
-    let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+    let mut b = ps_reference_battle(&dex, "1,2,3,4", &p1, &p2).unwrap();
     b.choose(&dex, 0, "team 1,2,3").unwrap();
     b.choose(&dex, 1, "team 1,2,3").unwrap();
     // damage Snorlax so Rest is usable, then Rest (ally-sourced sleep)
@@ -85,7 +98,12 @@ fn rest_sleep_does_not_engage_the_clause() {
     b.choose(&dex, 1, "move bodyslam").unwrap();
     b.choose(&dex, 0, "move slash").unwrap();
     b.choose(&dex, 1, "move rest").unwrap();
-    assert_eq!(poke_status(&b, 1, "snorlax", &dex), Status::Slp, "{:?}", b.log);
+    assert_eq!(
+        poke_status(&b, 1, "snorlax", &dex),
+        Status::Slp,
+        "{:?}",
+        b.log
+    );
     b.choose(&dex, 0, "move slash").unwrap();
     b.choose(&dex, 1, "switch 2").unwrap();
     // foe sleep on Exeggutor must SUCCEED: the sleeping Snorlax is
@@ -94,9 +112,16 @@ fn rest_sleep_does_not_engage_the_clause() {
     b.choose(&dex, 0, "move spore").unwrap();
     b.choose(&dex, 1, "move psychic").unwrap();
     assert!(
-        !b.log.iter().any(|l| l == "|-message|Sleep Clause Mod activated."),
+        !b.log
+            .iter()
+            .any(|l| l == "|-message|Sleep Clause Mod activated."),
         "clause engaged wrongly: {:?}",
         b.log
     );
-    assert_eq!(poke_status(&b, 1, "exeggutor", &dex), Status::Slp, "{:?}", b.log);
+    assert_eq!(
+        poke_status(&b, 1, "exeggutor", &dex),
+        Status::Slp,
+        "{:?}",
+        b.log
+    );
 }

@@ -1,0 +1,194 @@
+[
+  {
+    "name": "Starmie",
+    "species": "Starmie",
+    "item": "Miracle Berry",
+    "ability": "No Ability",
+    "moves": [
+      "Surf",
+      "Psychic",
+      "Confuse Ray",
+      "Recover"
+    ],
+    "nature": "Serious",
+    "evs": {
+      "hp": 252,
+      "atk": 1,
+      "def": 252,
+      "spa": 252,
+      "spd": 252,
+      "spe": 252
+    },
+    "gender": "N",
+    "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+    },
+    "level": 55,
+    "happiness": 255
+  },
+  {
+    "name": "Zapdos",
+    "species": "Zapdos",
+    "item": "Magnet",
+    "ability": "No Ability",
+    "moves": [
+      "Thunder",
+      "Thunderbolt",
+      "Rest",
+      "Sleep Talk"
+    ],
+    "nature": "Serious",
+    "evs": {
+      "hp": 252,
+      "atk": 1,
+      "def": 252,
+      "spa": 252,
+      "spd": 252,
+      "spe": 252
+    },
+    "gender": "N",
+    "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+    },
+    "level": 55,
+    "happiness": 255
+  },
+  {
+    "name": "Shuckle",
+    "species": "Shuckle",
+    "item": "Gold Berry",
+    "ability": "No Ability",
+    "moves": [
+      "Toxic",
+      "Encore",
+      "Rest",
+      "Sleep Talk"
+    ],
+    "nature": "Serious",
+    "evs": {
+      "hp": 252,
+      "atk": 1,
+      "def": 252,
+      "spa": 252,
+      "spd": 252,
+      "spe": 252
+    },
+    "gender": "F",
+    "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+    },
+    "level": 50,
+    "happiness": 255
+  },
+  {
+    "name": "Snorlax",
+    "species": "Snorlax",
+    "item": "Mint Berry",
+    "ability": "No Ability",
+    "moves": [
+      "Body Slam",
+      "Curse",
+      "Rest",
+      "Self-Destruct"
+    ],
+    "nature": "Serious",
+    "evs": {
+      "hp": 252,
+      "atk": 252,
+      "def": 252,
+      "spa": 252,
+      "spd": 252,
+      "spe": 252
+    },
+    "gender": "M",
+    "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+    },
+    "level": 50,
+    "happiness": 255
+  },
+  {
+    "name": "Misdreavus",
+    "species": "Misdreavus",
+    "item": "Leftovers",
+    "ability": "No Ability",
+    "moves": [
+      "Toxic",
+      "Confuse Ray",
+      "Pain Split",
+      "Perish Song"
+    ],
+    "nature": "Serious",
+    "evs": {
+      "hp": 252,
+      "atk": 1,
+      "def": 252,
+      "spa": 252,
+      "spd": 252,
+      "spe": 252
+    },
+    "gender": "F",
+    "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+    },
+    "level": 50,
+    "happiness": 255
+  },
+  {
+    "name": "Blissey",
+    "species": "Blissey",
+    "item": "Quick Claw",
+    "ability": "No Ability",
+    "moves": [
+      "Ice Beam",
+      "Present",
+      "Heal Bell",
+      "Soft-Boiled"
+    ],
+    "nature": "Serious",
+    "evs": {
+      "hp": 252,
+      "atk": 1,
+      "def": 252,
+      "spa": 252,
+      "spd": 252,
+      "spe": 252
+    },
+    "gender": "F",
+    "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+    },
+    "level": 50,
+    "happiness": 255
+  }
+]

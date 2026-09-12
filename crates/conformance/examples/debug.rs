@@ -4,14 +4,13 @@
 
 use conformance::fixture::Fixture;
 use conformance::load_dex;
-use nc2000_engine::state::Battle;
 
 fn main() {
     let path = std::env::args().nth(1).expect("fixture path");
     let from: usize = std::env::args().nth(2).and_then(|s| s.parse().ok()).unwrap_or(0);
     let dex = load_dex();
     let fx = Fixture::load(std::path::Path::new(&path)).unwrap();
-    let mut battle = Battle::from_fixture(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
+    let mut battle = conformance::ps_reference_battle(&dex, &fx.seed, &fx.p1team, &fx.p2team).unwrap();
     let mut snap_idx = 1; // snapshot 0 is construction
     let mut log_pos = battle.log.len();
     for line in &fx.choices {

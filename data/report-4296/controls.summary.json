@@ -1,0 +1,48 @@
+[
+  {
+    "turn": 11,
+    "policy": "skuct",
+    "iters": 300,
+    "foe_iters": 300,
+    "reply": "search",
+    "tail": "greedy",
+    "actions": {
+      "move earthquake": {
+        "trials": 128,
+        "wins": 48,
+        "losses": 80,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.375,
+        "score_bounds": [
+          0.375,
+          0.375
+        ]
+      }
+    },
+    "pairs": []
+  },
+  {
+    "turn": 11,
+    "policy": "skuct",
+    "iters": 300,
+    "foe_iters": 300,
+    "reply": "search",
+    "tail": "random",
+    "actions": {
+      "move earthquake": {
+        "trials": 128,
+        "wins": 9,
+        "losses": 119,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.0703125,
+        "score_bounds": [
+          0.0703125,
+          0.0703125
+        ]
+      }
+    },
+    "pairs": []
+  }
+]

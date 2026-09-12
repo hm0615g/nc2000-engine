@@ -1,0 +1,62 @@
+{
+  "base_commit": "e60efd2d9147f8bc73dbcfc09aa2b1ab4c09376a",
+  "build_command": "cargo build --release -p nc2000-bot --example frozen_decision",
+  "rustc": "rustc 1.94.0 (4a4ef493e 2026-03-02)",
+  "hashes": {
+    "Cargo.lock": "f18790002017f75dc8ef66950316f31e133967c3a9e9816597221d688d9c963e",
+    "crates/bot/src/frozen.rs": "8e5718b9fff5ba198b0c1e5ed664cec52477c8d5081b4fb13708450aab64d1fb",
+    "crates/bot/src/blind.rs": "9faecf8825abd0549f1f1d3d25de60cb796a2f5f2a487d3cc489ea6af7f42e68",
+    "crates/bot/src/lib.rs": "bd305ffcc9f712ff6f847a0876a52bdc2cb91a08ed98fd50053f943f0300fe4d",
+    "crates/bot/src/smmcts.rs": "895d7718f53358c1301141bf48246c9af4ab6c76253afc47be1306a56716be02",
+    "crates/bot/src/mcts.rs": "8c201e300173d476a622d6b2983d3a3ed9b2115fed7c233d2cd514a1b69a7c18",
+    "crates/bot/src/belief.rs": "975257fea58e6d8bf88e5c5ada5fc870252ea41c3475b0da45232cfacc91ec8c",
+    "crates/bot/src/import.rs": "2bf5d6b93c18a3297cd66f5dd976d44ee5a9b8260143900fcfee444effd65222",
+    "crates/bot/tests/report_4296.rs": "2eef459f035d3619ae9bfe11800221ee115e91974f1f8a519b71c96f5c711b23",
+    "crates/bot/examples/frozen_decision.rs": "e63cdb8b71a3930173e186dadbe9c79a9248e0f3cb62212f5c8c8dded3b4ac3f",
+    "data/report-4296/turn-11.json": "e509476b22e35774122ac6dd30039a0283c7d22e56e75a2275c8b80f0616980b",
+    "data/report-4296/opponent-team.json": "e4005fcdb852a3e242864ce8e4f08e2fedcb4efb8a70bf68161ddd03fc48a6f5",
+    "data/meta-pool-v0/meta-pool.json": "6a9791ad02c1d1699069b4f169a4a0be732282a930cdbf464f3aa91ca63b0253",
+    "data/report-4296/t11-frozen/analyze.py": "79f3b906ed5387da9d5d3cab91306455ed37d4ddca28953d5160df7b11aed4f2",
+    "target/release/examples/frozen_decision": "9a92bb0dd31b58a1b7ae168ad2730efc27fd7799a8a0597682d57c250b0f2f2b",
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "crates/engine/src/state.rs": "eff14309e3fc8d92fcacdeef093b5b320bc27b15c6b60c39a15c988aaf0717e5",
+    "crates/engine/src/battle/search.rs": "27e70c6d58104d8861bda911f9686fcbce7dcee1f253cf8512cad4280035b045",
+    "crates/engine/src/battle/conditions.rs": "4c5503d95a3f488d27f1ced049e7b35fa210af4ffcde5d2dfd6127c8e080c34b"
+  },
+  "validation": {
+    "estimator_unit_tests": 2,
+    "focused_integration_tests": 14,
+    "workspace_all_targets": "passed",
+    "archived_baseline_root_statistics": "exact equality at 30000 iterations for 61001 and 62001-62004",
+    "initial_vs_final_results": "policy statistics exactly identical after excluding timing and additive trace fields",
+    "production_policy_changed": false,
+    "candidate_adopted": false,
+    "blind_strength_tested": false
+  },
+  "config": {
+    "mode": "open",
+    "side": 1,
+    "iterations": 30000,
+    "training": 22500,
+    "evaluation": 7500,
+    "c": 1.0,
+    "hp_buckets": 16,
+    "rollout_turns": 8,
+    "rollout_eps": 0.2,
+    "seeds": [
+      61001,
+      62001,
+      62002,
+      62003,
+      62004,
+      63001,
+      63002,
+      63003,
+      63004,
+      63005,
+      63006,
+      63007,
+      63008
+    ]
+  }
+}

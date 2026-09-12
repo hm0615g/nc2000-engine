@@ -1,0 +1,205 @@
+{
+  "estimand": "Same-budget OpenSheet action selection and adaptive-search behavior, not independent terminal win rates.",
+  "heldout_t11": {
+    "1.0": {
+      "seeds": 32,
+      "choices": {
+        "move hiddenpowerbug": 32
+      },
+      "mean_hp_minus_eq": 0.02141994262235059
+    },
+    "0.4": {
+      "seeds": 32,
+      "choices": {
+        "move hiddenpowerbug": 7,
+        "switch 2": 22,
+        "move swordsdance": 2,
+        "move earthquake": 1
+      },
+      "mean_hp_minus_eq": 0.011727318000951923
+    }
+  },
+  "paired_choices": {
+    "move hiddenpowerbug -> move hiddenpowerbug": 7,
+    "move hiddenpowerbug -> switch 2": 22,
+    "move hiddenpowerbug -> move swordsdance": 2,
+    "move hiddenpowerbug -> move earthquake": 1
+  },
+  "t26": {
+    "1.0": {
+      "seeds": 16,
+      "choices": {
+        "move thunderbolt": 16
+      },
+      "mean_hp_minus_eq": null
+    },
+    "0.4": {
+      "seeds": 16,
+      "choices": {
+        "move thunderbolt": 5,
+        "move firepunch": 7,
+        "move dynamicpunch": 4
+      },
+      "mean_hp_minus_eq": null
+    }
+  },
+  "mechanism": {
+    "1.0": {
+      "all": {
+        "move earthquake": {
+          "encounters": 20280,
+          "surf": 16603,
+          "surf_fraction": 0.8186883629191322,
+          "recover": 537,
+          "recover_fraction": 0.0264792899408284,
+          "visited_below_max_mean": 3246,
+          "visited_below_max_mean_fraction": 0.16005917159763314,
+          "unvisited": 218,
+          "unvisited_fraction": 0.010749506903353058,
+          "either_exploration_fraction": 0.1708086785009862,
+          "mean_prior_node_samples": 1262.4381656804733
+        },
+        "move hiddenpowerbug": {
+          "encounters": 25258,
+          "surf": 14611,
+          "surf_fraction": 0.5784701876633146,
+          "recover": 1935,
+          "recover_fraction": 0.07660939108401299,
+          "visited_below_max_mean": 7673,
+          "visited_below_max_mean_fraction": 0.3037849394251326,
+          "unvisited": 2364,
+          "unvisited_fraction": 0.09359410879721276,
+          "either_exploration_fraction": 0.3973790482223454,
+          "mean_prior_node_samples": 132.35410562989944
+        }
+      },
+      "move encore": {
+        "move earthquake": {
+          "encounters": 12671,
+          "surf": 11080,
+          "surf_fraction": 0.8744376923684003,
+          "recover": 214,
+          "recover_fraction": 0.01688895904032831,
+          "visited_below_max_mean": 1472,
+          "visited_below_max_mean_fraction": 0.11617078367926761,
+          "unvisited": 42,
+          "unvisited_fraction": 0.0033146555125877987,
+          "either_exploration_fraction": 0.11948543919185542,
+          "mean_prior_node_samples": 1483.160445110883
+        },
+        "move hiddenpowerbug": {
+          "encounters": 17078,
+          "surf": 10809,
+          "surf_fraction": 0.6329195456142406,
+          "recover": 1064,
+          "recover_fraction": 0.06230237732755592,
+          "visited_below_max_mean": 5137,
+          "visited_below_max_mean_fraction": 0.30079634617636725,
+          "unvisited": 806,
+          "unvisited_fraction": 0.047195221922941795,
+          "either_exploration_fraction": 0.34799156809930903,
+          "mean_prior_node_samples": 153.9612952336339
+        }
+      }
+    },
+    "0.4": {
+      "all": {
+        "move earthquake": {
+          "encounters": 9876,
+          "surf": 8815,
+          "surf_fraction": 0.8925678412312678,
+          "recover": 101,
+          "recover_fraction": 0.010226812474686108,
+          "visited_below_max_mean": 538,
+          "visited_below_max_mean_fraction": 0.054475496152288375,
+          "unvisited": 79,
+          "unvisited_fraction": 0.00799918995544755,
+          "either_exploration_fraction": 0.062474686107735926,
+          "mean_prior_node_samples": 636.7360267314702
+        },
+        "move hiddenpowerbug": {
+          "encounters": 14982,
+          "surf": 9636,
+          "surf_fraction": 0.6431718061674009,
+          "recover": 883,
+          "recover_fraction": 0.05893739153651048,
+          "visited_below_max_mean": 1621,
+          "visited_below_max_mean_fraction": 0.10819650246963022,
+          "unvisited": 2191,
+          "unvisited_fraction": 0.14624215725537312,
+          "either_exploration_fraction": 0.25443865972500335,
+          "mean_prior_node_samples": 83.9443331998398
+        }
+      },
+      "move encore": {
+        "move earthquake": {
+          "encounters": 4571,
+          "surf": 4086,
+          "surf_fraction": 0.8938963027783855,
+          "recover": 29,
+          "recover_fraction": 0.006344344782323342,
+          "visited_below_max_mean": 235,
+          "visited_below_max_mean_fraction": 0.051411069787792606,
+          "unvisited": 19,
+          "unvisited_fraction": 0.004156639684970466,
+          "either_exploration_fraction": 0.05556770947276307,
+          "mean_prior_node_samples": 704.1321373878801
+        },
+        "move hiddenpowerbug": {
+          "encounters": 6338,
+          "surf": 4280,
+          "surf_fraction": 0.6752918901861786,
+          "recover": 281,
+          "recover_fraction": 0.0443357526033449,
+          "visited_below_max_mean": 767,
+          "visited_below_max_mean_fraction": 0.12101609340485958,
+          "unvisited": 610,
+          "unvisited_fraction": 0.096244872199432,
+          "either_exploration_fraction": 0.21726096560429156,
+          "mean_prior_node_samples": 94.67292521300095
+        }
+      }
+    }
+  },
+  "same_node_coefficient_intervention": [
+    {
+      "action": "move surf",
+      "ucb_c1": 0.7905552352234697,
+      "ucb_c04": 0.49269268232468205
+    },
+    {
+      "action": "move psychic",
+      "ucb_c1": 0.7964245762548824,
+      "ucb_c04": 0.46819602923211123
+    },
+    {
+      "action": "move confuseray",
+      "ucb_c1": 0.7613332926569996,
+      "ucb_c04": 0.4331047456342284
+    },
+    {
+      "action": "move recover",
+      "ucb_c1": 0.7736421045960302,
+      "ucb_c04": 0.3094568418384121
+    },
+    {
+      "action": "switch 3",
+      "ucb_c1": 0.7613332926569996,
+      "ucb_c04": 0.4331047456342284
+    }
+  ],
+  "sha256": {
+    "t11-c04/root-known-c04.jsonl": "25199343f065de7fb07b340d766896da181e74bce667b2f26bcc9819bafc6ba8",
+    "t11-c04/root-known8-c04.jsonl": "5ee60f3ddf957992fee626a7be051390bb00f147fa8b9637f8465e7f11eec633",
+    "t11-c04/t26-c04.jsonl": "eb18a71a06b54cb7c9f762b5257b55b913dccd9d52415245324617284544ad04",
+    "t11-c04/heldout-c04-b.jsonl": "bf0c2a0ca10561db697eb34e368d9f4830de4cb7dd15ab46101151ff801c1402",
+    "t11-c04/root-61001-c04.jsonl": "b21216923cadbcb120d82c9c0987135b80359f545fc6d09175a6fb69e5e57d35",
+    "t11-c04/heldout-c1-a.jsonl": "63c8277014116a1a484c17120ee5cbe7f6d69e9e98e11edf015feaef13d6487f",
+    "t11-c04/heldout-c1-b.jsonl": "5894cc4bb46e79b67c91aae1d732ed2443428ff89b237ff629cfe83c2674d50a",
+    "t11-c04/t26-c1.jsonl": "8ff26fd540c6ecfe53f96da6f53bcb86086be319443e96a0ade4943fe1b4e052",
+    "t11-c04/heldout-c04-a.jsonl": "0ed9b8d28792848cac1247fddbc5461a89ab31a222fe623200b2dadd13481191",
+    "t11-c04/trace-summary/summary.json": "68c8c39a4aea8248cdbeb22233f0ab78765bb8937c317635b1c03943beb28dc0",
+    "t11-cause/summary.json": "d1cb6a0156a0805b9b5f5fc711bc6b1af1ee06af8e9d07b5d161052f22f3ad7d",
+    "t11-cause/probe-24418.json": "f213460cf18670ac4b98269cf3992aafb862aeb8ed10c7452689582ef3cfc349"
+  }
+}

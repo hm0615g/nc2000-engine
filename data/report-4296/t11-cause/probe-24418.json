@@ -1,0 +1,393 @@
+{
+  "before": {
+    "turn": 13,
+    "quick_claw": true,
+    "key": "a1d0911e6168fe2d",
+    "sides": [
+      {
+        "active": 0,
+        "party": [
+          {
+            "slot": 0,
+            "species": "starmie",
+            "hp": 182,
+            "maxhp": 182,
+            "status": "",
+            "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+            "volatiles": [],
+            "durations": []
+          },
+          {
+            "slot": 2,
+            "species": "shuckle",
+            "hp": 0,
+            "maxhp": 126,
+            "status": "",
+            "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+            "volatiles": [],
+            "durations": []
+          },
+          {
+            "slot": 5,
+            "species": "blissey",
+            "hp": 298,
+            "maxhp": 361,
+            "status": "",
+            "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+            "volatiles": [],
+            "durations": []
+          }
+        ]
+      },
+      {
+        "active": 3,
+        "party": [
+          {
+            "slot": 3,
+            "species": "marowak",
+            "hp": 156,
+            "maxhp": 166,
+            "status": "tox",
+            "boosts": "[2, 0, 0, 0, 0, 0, 0]",
+            "volatiles": [
+              "residualdmg",
+              "encore"
+            ],
+            "durations": [
+              [
+                "residualdmg",
+                null
+              ],
+              [
+                "encore",
+                3
+              ]
+            ]
+          },
+          {
+            "slot": 0,
+            "species": "ampharos",
+            "hp": 215,
+            "maxhp": 215,
+            "status": "",
+            "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+            "volatiles": [],
+            "durations": []
+          },
+          {
+            "slot": 5,
+            "species": "snorlax",
+            "hp": 0,
+            "maxhp": 266,
+            "status": "",
+            "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+            "volatiles": [],
+            "durations": []
+          }
+        ]
+      }
+    ]
+  },
+  "branches": [
+    {
+      "chosen": [
+        "move psychic",
+        "move hiddenpowerbug"
+      ],
+      "ko_probability": [
+        0.977564102577162,
+        0.022435897422838025
+      ],
+      "leaves": 123,
+      "probability_mass": 1.0,
+      "sample_after": {
+        "turn": 13,
+        "quick_claw": true,
+        "key": "fc096b2dffedbfe8",
+        "sides": [
+          {
+            "active": 0,
+            "party": [
+              {
+                "slot": 0,
+                "species": "starmie",
+                "hp": 0,
+                "maxhp": 182,
+                "status": "fnt",
+                "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+                "volatiles": [],
+                "durations": []
+              },
+              {
+                "slot": 2,
+                "species": "shuckle",
+                "hp": 0,
+                "maxhp": 126,
+                "status": "",
+                "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+                "volatiles": [],
+                "durations": []
+              },
+              {
+                "slot": 5,
+                "species": "blissey",
+                "hp": 298,
+                "maxhp": 361,
+                "status": "",
+                "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+                "volatiles": [],
+                "durations": []
+              }
+            ]
+          },
+          {
+            "active": 3,
+            "party": [
+              {
+                "slot": 3,
+                "species": "marowak",
+                "hp": 73,
+                "maxhp": 166,
+                "status": "tox",
+                "boosts": "[2, 0, 0, 0, 0, 0, 0]",
+                "volatiles": [
+                  "residualdmg",
+                  "encore"
+                ],
+                "durations": [
+                  [
+                    "residualdmg",
+                    null
+                  ],
+                  [
+                    "encore",
+                    3
+                  ]
+                ]
+              },
+              {
+                "slot": 0,
+                "species": "ampharos",
+                "hp": 215,
+                "maxhp": 215,
+                "status": "",
+                "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+                "volatiles": [],
+                "durations": []
+              },
+              {
+                "slot": 5,
+                "species": "snorlax",
+                "hp": 0,
+                "maxhp": 266,
+                "status": "",
+                "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+                "volatiles": [],
+                "durations": []
+              }
+            ]
+          }
+        ]
+      },
+      "sample_log": [
+        "|",
+        "|move|p1a: Starmie|Psychic|p2a: Marowak",
+        "|split|p2",
+        "|-damage|p2a: Marowak|73/166 tox",
+        "|-damage|p2a: Marowak|44/100 tox",
+        "|move|p2a: Marowak|Hidden Power Bug|p1a: Starmie",
+        "|-supereffective|p1a: Starmie",
+        "|split|p1",
+        "|-damage|p1a: Starmie|0 fnt",
+        "|-damage|p1a: Starmie|0 fnt",
+        "|faint|p1a: Starmie"
+      ]
+    },
+    {
+      "chosen": [
+        "move surf",
+        "move hiddenpowerbug"
+      ],
+      "ko_probability": [
+        0.24038461546297185,
+        0.7596153845370281
+      ],
+      "leaves": 17,
+      "probability_mass": 1.0,
+      "sample_after": {
+        "turn": 13,
+        "quick_claw": true,
+        "key": "fa1be79c22195f00",
+        "sides": [
+          {
+            "active": 0,
+            "party": [
+              {
+                "slot": 0,
+                "species": "starmie",
+                "hp": 182,
+                "maxhp": 182,
+                "status": "",
+                "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+                "volatiles": [],
+                "durations": []
+              },
+              {
+                "slot": 2,
+                "species": "shuckle",
+                "hp": 0,
+                "maxhp": 126,
+                "status": "",
+                "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+                "volatiles": [],
+                "durations": []
+              },
+              {
+                "slot": 5,
+                "species": "blissey",
+                "hp": 298,
+                "maxhp": 361,
+                "status": "",
+                "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+                "volatiles": [],
+                "durations": []
+              }
+            ]
+          },
+          {
+            "active": 3,
+            "party": [
+              {
+                "slot": 3,
+                "species": "marowak",
+                "hp": 0,
+                "maxhp": 166,
+                "status": "fnt",
+                "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+                "volatiles": [],
+                "durations": []
+              },
+              {
+                "slot": 0,
+                "species": "ampharos",
+                "hp": 215,
+                "maxhp": 215,
+                "status": "",
+                "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+                "volatiles": [],
+                "durations": []
+              },
+              {
+                "slot": 5,
+                "species": "snorlax",
+                "hp": 0,
+                "maxhp": 266,
+                "status": "",
+                "boosts": "[0, 0, 0, 0, 0, 0, 0]",
+                "volatiles": [],
+                "durations": []
+              }
+            ]
+          }
+        ]
+      },
+      "sample_log": [
+        "|",
+        "|move|p1a: Starmie|Surf|p2a: Marowak",
+        "|-supereffective|p2a: Marowak",
+        "|split|p2",
+        "|-damage|p2a: Marowak|0 fnt",
+        "|-damage|p2a: Marowak|0 fnt",
+        "|faint|p2a: Marowak"
+      ]
+    }
+  ],
+  "dominated": [
+    [
+      "move recover",
+      "healing at full HP, and faster"
+    ]
+  ],
+  "selection": {
+    "node": 4164,
+    "actions": [
+      {
+        "action": "move surf",
+        "visits_before": 17,
+        "mean": 0.29411764705882354,
+        "exploration_bonus": 0.4964375881646462,
+        "ucb": 0.7905552352234697
+      },
+      {
+        "action": "move psychic",
+        "visits_before": 14,
+        "mean": 0.24937699788359716,
+        "exploration_bonus": 0.5470475783712853,
+        "ucb": 0.7964245762548824
+      },
+      {
+        "action": "move confuseray",
+        "visits_before": 14,
+        "mean": 0.21428571428571427,
+        "exploration_bonus": 0.5470475783712853,
+        "ucb": 0.7613332926569996
+      },
+      {
+        "action": "move recover",
+        "visits_before": 7,
+        "mean": 0.0,
+        "exploration_bonus": 0.7736421045960302,
+        "ucb": 0.7736421045960302
+      },
+      {
+        "action": "switch 3",
+        "visits_before": 14,
+        "mean": 0.21428571428571427,
+        "exploration_bonus": 0.5470475783712853,
+        "ucb": 0.7613332926569996
+      }
+    ]
+  },
+  "seed": 61001,
+  "iteration": 24418,
+  "tree_step": 4,
+  "root_before": {
+    "visits": [
+      3335,
+      4474,
+      12170,
+      1525,
+      2913
+    ],
+    "means": [
+      0.6387927277843906,
+      0.6463129918589002,
+      0.6650791402343638,
+      0.6123564187469613,
+      0.6349921224659006
+    ]
+  },
+  "root_after": {
+    "visits": [
+      3335,
+      4474,
+      12171,
+      1525,
+      2913
+    ],
+    "means": [
+      0.6387927277843906,
+      0.6463129918589002,
+      0.6651066581753518,
+      0.6123564187469613,
+      0.6349921224659006
+    ],
+    "actions": [
+      "move earthquake",
+      "move rockslide",
+      "move hiddenpowerbug",
+      "move swordsdance",
+      "switch 2"
+    ]
+  }
+}

@@ -15,6 +15,7 @@
 // question is more search, not a restart.
 
 import init, { Dex, ProtocolSearcher } from "../../crates/wasm/pkg-web/nc2000_wasm";
+import { searchProfile } from "./search-profile";
 
 export type SolverRequest =
   | {
@@ -91,7 +92,7 @@ async function handle(m: SolverRequest): Promise<void> {
       searcher = null;
       seed = m.seed >>> 0;
       plies = m.plies;
-      const s = new ProtocolSearcher(dex, JSON.parse(m.spec).side ?? 0, m.poolJson, seed);
+      const s = new ProtocolSearcher(dex, JSON.parse(m.spec).side ?? 0, m.poolJson, seed, searchProfile("blind").c);
       if (m.priorJson) s.setBeliefPrior(m.priorJson);
       try {
         s.setPosition(m.spec);

@@ -1625,31 +1625,9 @@ impl ProtocolTracker {
     }
 
     fn plant_status(&self, dex: &Dex, b: &mut Battle, id: PokeId, tm: &TrackMon) {
-        // Who inflicted it is not cosmetic: Sleep Clause Mod and Freeze
-        // Clause Mod both return early on an ally-sourced status
-        // (`conditions.rs` sleepclausemod/freezeclausemod onSetStatus), and
-        // `set_status` defaults a `None` source to the mon ITSELF
-        // (`pokemon.rs::set_status`). Planting with no source therefore made
-        // every reconstructed status look self-inflicted and disengaged both
-        // clauses for the whole battle — measured over the 570-battle corpus:
-        // of 447 decisions where the server had Sleep Clause engaged against
-        // the acting side, the reconstruction blocked 0 and landed a second
-        // sleep in 127 (53 of them with the acting side moving first, where
-        // the block is certain). Rest is the only self-inflicted status here
-        // and the tracker knows it, so everything else is foe-sourced; the
-        // clauses only compare sides, so any mon over there will do.
         let self_inflicted = tm.status == Status::Slp && tm.rest;
-        let source = (!self_inflicted).then(|| PokeId { side: 1 - id.side, slot: 0 });
-        // plant through the engine so companion state (residualdmg counter,
-        // brnattackdrop, rolled sleep turns) comes from the real code paths
-        let r = b.set_status(dex, id, tm.status.as_str(), source, EffectHandle::None, true);
-        if !r.truthy() {
-            // defensive: force the enum (e.g. an immunity edge the tracker
-            // cannot see) — public status is authoritative
-            b.poke_mut(id).status = tm.status;
-            b.poke_mut(id).status_state.source = source.or(Some(id));
-            b.refresh_poke_mask(dex, id);
-        }
+        let source = Some(if self_inflicted { id } else { PokeId { side: 1 - id.side, slot: 0 } });
+        b.restore_status(dex, id, tm.status, source);
         match tm.status {
             Status::Slp => {
                 let p = b.poke_mut(id);
@@ -1901,6 +1879,8 @@ pub struct ProtocolAgent {
     /// M18 community belief prior for the hidden-team fallback imputation.
     /// `None` (the default) leaves it exactly as shipped.
     prior: Option<std::sync::Arc<crate::prior::BeliefPrior>>,
+    pick_prior: Option<std::sync::Arc<crate::pick_prior::PickPrior>>,
+    pick_preview: bool,
     tracker: ProtocolTracker,
     history: Vec<String>,
     observer: Option<Observer>,
@@ -1937,6 +1917,8 @@ impl ProtocolAgent {
             own_sets: Vec::new(),
             pinned_sets: None,
             prior: None,
+            pick_prior: None,
+            pick_preview: false,
             tracker: ProtocolTracker::new(side),
             history: Vec::new(),
             observer: None,
@@ -1966,6 +1948,14 @@ impl ProtocolAgent {
     /// fallback imputation; a pinned (open-sheet) belief ignores it.
     pub fn set_belief_prior(&mut self, prior: std::sync::Arc<crate::prior::BeliefPrior>) {
         self.prior = Some(prior);
+    }
+
+    pub fn set_pick_prior(&mut self, prior: std::sync::Arc<crate::pick_prior::PickPrior>) {
+        self.pick_prior = Some(prior);
+    }
+
+    pub fn set_pick_preview(&mut self, enabled: bool) {
+        self.pick_preview = enabled;
     }
 
     pub fn add_pair_json(&mut self, json: &str) -> Result<(), String> {
@@ -2053,6 +2043,17 @@ impl ProtocolAgent {
         let obs = self.observer.as_ref().unwrap();
         let belief = self.belief.as_mut().unwrap();
         belief.sync_checked(dex, obs)?;
+        if let Some(prior) = &self.pick_prior {
+            let preview: Vec<_> = self.tracker.sides[self.side].mons.iter().map(|mon| {
+                crate::pick_prior::PreviewMon {
+                    species: dex.species.key(mon.species).to_string(),
+                    level: mon.level,
+                    gender: mon.gender.as_str().to_string(),
+                    item: mon.preview_item,
+                }
+            }).collect();
+            belief.condition_pick_prior(dex, prior, &preview, obs);
+        }
 
         // synthesize
         let pick = belief.alive().first().copied();
@@ -2065,6 +2066,7 @@ impl ProtocolAgent {
         // search + preview policy
         let mut search =
             BlindSearch::new(&battle, dex, self.cfg.clone(), self.side, self.rng.next());
+        search.set_opponent_preview_prior(self.pick_preview);
         self.baked = None;
         self.forced = None;
         if search.is_preview() {
@@ -2148,6 +2150,42 @@ impl ProtocolAgent {
 
     pub fn iterations(&self) -> u32 {
         self.search.as_ref().map_or(0, |s| s.iterations())
+    }
+
+    pub fn step_observed(
+        &mut self,
+        dex: &Dex,
+        n: u32,
+        trace: &mut impl FnMut(crate::smmcts::SearchTrace<'_>),
+    ) -> Result<u32, String> {
+        let search = self.search.as_mut().ok_or("step before on_request")?;
+        if self.baked.is_some() || self.forced.is_some() {
+            return Ok(search.iterations());
+        }
+        let belief = self.belief.as_ref().ok_or("no belief")?;
+        let obs = self.observer.as_ref().ok_or("no observer")?;
+        Ok(search.step_observed(dex, belief, obs, n, trace))
+    }
+
+    pub fn prune_root(&mut self) -> Result<(), String> {
+        self.search.as_mut().ok_or("prune before on_request")?.prune_dominated();
+        Ok(())
+    }
+
+    /// The callback returns a side-0 reward in [0, 1]; the flag marks a newly expanded leaf.
+    pub fn step_with_leaf(
+        &mut self,
+        dex: &Dex,
+        n: u32,
+        leaf: &mut impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64,
+    ) -> Result<u32, String> {
+        let search = self.search.as_mut().ok_or("step before on_request")?;
+        if self.baked.is_some() || self.forced.is_some() {
+            return Ok(search.iterations());
+        }
+        let belief = self.belief.as_ref().ok_or("no belief")?;
+        let obs = self.observer.as_ref().ok_or("no observer")?;
+        Ok(search.step_with_leaf(dex, belief, obs, n, leaf))
     }
 
     /// Current best choice, projected onto the request-legal set (never

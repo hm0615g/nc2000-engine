@@ -1,0 +1,20 @@
+{
+  "schema": "nc2000-ensemble-regression-supplement-v1",
+  "registered_unix_time": 1788739634.1134765,
+  "rationale": "Most meta-pool previews identify one known set candidate. Add a frozen fixture-pool Blind comparison to exercise opponents outside that prior and assess transfer to unknown sets.",
+  "candidate": "ensemble:30:blind:27000:0.4:16",
+  "baseline": "blind:27000:0.4:16",
+  "pool": "fixtures",
+  "games": 128,
+  "games_per_shard": 32,
+  "seeds": [
+    7710101,
+    7710102,
+    7710103,
+    7710104
+  ],
+  "crn_agent_seeds": true,
+  "max_turns": 1100,
+  "analysis": "Separate transfer sensitivity, not pooled with the primary meta tests. 95% interval over side-swap pairs; any cap or invalid game blocks the terminal-score gate.",
+  "stopping": "Complete the fixed 128 games without tuning or data-dependent extension."
+}

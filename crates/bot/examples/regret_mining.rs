@@ -525,6 +525,7 @@ struct LiveLogRow {
     format: String,
     mode: String,
     driver: String,
+    search_c: Option<f64>,
     iterations: u32,
     seed: i64,
     team_label: String,
@@ -570,6 +571,9 @@ fn validate_live_row(path: &str, line_no: usize, row: &LiveLogRow) {
     }
     if !matches!(row.driver.as_str(), "search" | "random") {
         bad("driver must be search or random");
+    }
+    if row.search_c.is_some_and(|c| !c.is_finite() || c <= 0.0) {
+        bad("searchC must be finite and positive");
     }
     if row.own_team.is_empty() {
         bad("ownTeam is empty");
@@ -908,6 +912,7 @@ fn live_base(
         "room":row.room, "rqid":row.rqid, "battle":row.battle,
         "decision":row.decision, "side":row.side, "turn":row.turn,
         "driver":row.driver, "live_mode":row.mode,
+        "driver_config":{"c":row.search_c.unwrap_or(1.0), "iterations":row.iterations},
         "submitted_raw":row.submitted,
     })
 }
@@ -3010,6 +3015,16 @@ mod live_tests {
         let row = v2_row("battle-test-1", 1, false, &["|turn|1"]);
         let parsed: LiveLogRow = serde_json::from_value(row.clone()).unwrap();
         validate_live_row("synthetic", 1, &parsed);
+        assert_eq!(parsed.search_c, None);
+
+        let mut configured = row.clone();
+        configured["searchC"] = serde_json::json!(0.4);
+        let parsed: LiveLogRow = serde_json::from_value(configured.clone()).unwrap();
+        validate_live_row("synthetic", 1, &parsed);
+        assert_eq!(parsed.search_c, Some(0.4));
+        configured["searchC"] = serde_json::json!(0.0);
+        let parsed: LiveLogRow = serde_json::from_value(configured).unwrap();
+        assert!(std::panic::catch_unwind(|| validate_live_row("synthetic", 1, &parsed)).is_err());
 
         let mut extra = row;
         extra["unexpected"] = serde_json::json!(true);

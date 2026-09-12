@@ -69,19 +69,9 @@ import {
 } from "./position";
 import { PositionRejected, SolverWorker, type SolveResult } from "./solver-client";
 import type { MetaPool, StateView } from "./types";
+import { searchProfile } from "./search-profile";
 
-/** Search budgets the button offers. The default matches the shipped bot
- * (app.tsx BUDGET), so "what would the bot do here" is answerable exactly;
- * the larger ones are the study case, where waiting is the point. Browser
- * E2E builds use Vite's explicit `test` mode to make a whole analysis cheap
- * — the same override app.tsx applies to the game, restated here rather than
- * imported, because importing it would close a cycle (app renders this). */
-const testBudget =
-  import.meta.env.MODE === "test"
-    ? Number(import.meta.env.VITE_NC2000_TEST_BUDGET)
-    : Number.NaN;
-const DEFAULT_BUDGET =
-  Number.isSafeInteger(testBudget) && testBudget > 0 ? testBudget : 30_000;
+const DEFAULT_BUDGET = searchProfile("blind").iterations;
 const BUDGETS = [...new Set([DEFAULT_BUDGET, 3_000, 30_000, 100_000, 300_000])].sort(
   (a, b) => a - b,
 );

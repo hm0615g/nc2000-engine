@@ -1,0 +1,746 @@
+[
+  {
+    "turn": 11,
+    "policy": "skuct",
+    "iters": 300,
+    "foe_iters": 300,
+    "reply": "search",
+    "tail": "search",
+    "actions": {
+      "move earthquake": {
+        "trials": 128,
+        "wins": 52,
+        "losses": 76,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.40625,
+        "score_bounds": [
+          0.40625,
+          0.40625
+        ]
+      },
+      "move hiddenpowerbug": {
+        "trials": 128,
+        "wins": 29,
+        "losses": 99,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.2265625,
+        "score_bounds": [
+          0.2265625,
+          0.2265625
+        ]
+      },
+      "move rockslide": {
+        "trials": 128,
+        "wins": 44,
+        "losses": 84,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.34375,
+        "score_bounds": [
+          0.34375,
+          0.34375
+        ]
+      },
+      "move swordsdance": {
+        "trials": 128,
+        "wins": 34,
+        "losses": 94,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.265625,
+        "score_bounds": [
+          0.265625,
+          0.265625
+        ]
+      },
+      "switch 2": {
+        "trials": 128,
+        "wins": 43,
+        "losses": 85,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.3359375,
+        "score_bounds": [
+          0.3359375,
+          0.3359375
+        ]
+      }
+    },
+    "pairs": [
+      {
+        "a": "move earthquake",
+        "b": "move hiddenpowerbug",
+        "paired_trials": 128,
+        "difference": 0.1796875,
+        "normal95_interval": [
+          0.07671680373106986,
+          0.28265819626893013
+        ],
+        "a_only_wins": 36,
+        "b_only_wins": 13,
+        "exact_mcnemar_p": 0.001402688503695515
+      },
+      {
+        "a": "move earthquake",
+        "b": "move rockslide",
+        "paired_trials": 128,
+        "difference": 0.0625,
+        "normal95_interval": [
+          -0.04994136704799548,
+          0.17494136704799548
+        ],
+        "a_only_wins": 31,
+        "b_only_wins": 23,
+        "exact_mcnemar_p": 0.34089094122009733
+      },
+      {
+        "a": "move earthquake",
+        "b": "move swordsdance",
+        "paired_trials": 128,
+        "difference": 0.140625,
+        "normal95_interval": [
+          0.028216476933148577,
+          0.25303352306685145
+        ],
+        "a_only_wins": 37,
+        "b_only_wins": 19,
+        "exact_mcnemar_p": 0.022241389472860112
+      },
+      {
+        "a": "move earthquake",
+        "b": "switch 2",
+        "paired_trials": 128,
+        "difference": 0.0703125,
+        "normal95_interval": [
+          -0.05108990936146894,
+          0.19171490936146895
+        ],
+        "a_only_wins": 36,
+        "b_only_wins": 27,
+        "exact_mcnemar_p": 0.31350305329645284
+      },
+      {
+        "a": "move hiddenpowerbug",
+        "b": "move rockslide",
+        "paired_trials": 128,
+        "difference": -0.1171875,
+        "normal95_interval": [
+          -0.23349489722122574,
+          -0.0008801027787742749
+        ],
+        "a_only_wins": 22,
+        "b_only_wins": 37,
+        "exact_mcnemar_p": 0.06744461190078899
+      },
+      {
+        "a": "move hiddenpowerbug",
+        "b": "move swordsdance",
+        "paired_trials": 128,
+        "difference": -0.0390625,
+        "normal95_interval": [
+          -0.13963862322877788,
+          0.061513623228777875
+        ],
+        "a_only_wins": 19,
+        "b_only_wins": 24,
+        "exact_mcnemar_p": 0.542384011856484
+      },
+      {
+        "a": "move hiddenpowerbug",
+        "b": "switch 2",
+        "paired_trials": 128,
+        "difference": -0.109375,
+        "normal95_interval": [
+          -0.214167384144108,
+          -0.004582615855892008
+        ],
+        "a_only_wins": 17,
+        "b_only_wins": 31,
+        "exact_mcnemar_p": 0.05946337525377032
+      },
+      {
+        "a": "move rockslide",
+        "b": "move swordsdance",
+        "paired_trials": 128,
+        "difference": 0.078125,
+        "normal95_interval": [
+          -0.031892991884899566,
+          0.18814299188489958
+        ],
+        "a_only_wins": 31,
+        "b_only_wins": 21,
+        "exact_mcnemar_p": 0.21160856876151612
+      },
+      {
+        "a": "move rockslide",
+        "b": "switch 2",
+        "paired_trials": 128,
+        "difference": 0.0078125,
+        "normal95_interval": [
+          -0.10618615406526054,
+          0.12181115406526054
+        ],
+        "a_only_wins": 28,
+        "b_only_wins": 27,
+        "exact_mcnemar_p": 1
+      },
+      {
+        "a": "move swordsdance",
+        "b": "switch 2",
+        "paired_trials": 128,
+        "difference": -0.0703125,
+        "normal95_interval": [
+          -0.1857275406703689,
+          0.04510254067036891
+        ],
+        "a_only_wins": 24,
+        "b_only_wins": 33,
+        "exact_mcnemar_p": 0.2892437471090205
+      }
+    ]
+  },
+  {
+    "turn": 18,
+    "policy": "skuct",
+    "iters": 300,
+    "foe_iters": 300,
+    "reply": "search",
+    "tail": "search",
+    "actions": {
+      "move earthquake": {
+        "trials": 128,
+        "wins": 65,
+        "losses": 63,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.5078125,
+        "score_bounds": [
+          0.5078125,
+          0.5078125
+        ]
+      },
+      "move hiddenpowerbug": {
+        "trials": 128,
+        "wins": 63,
+        "losses": 65,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.4921875,
+        "score_bounds": [
+          0.4921875,
+          0.4921875
+        ]
+      },
+      "move rockslide": {
+        "trials": 128,
+        "wins": 62,
+        "losses": 66,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.484375,
+        "score_bounds": [
+          0.484375,
+          0.484375
+        ]
+      },
+      "move swordsdance": {
+        "trials": 128,
+        "wins": 69,
+        "losses": 59,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.5390625,
+        "score_bounds": [
+          0.5390625,
+          0.5390625
+        ]
+      },
+      "switch 2": {
+        "trials": 128,
+        "wins": 66,
+        "losses": 62,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.515625,
+        "score_bounds": [
+          0.515625,
+          0.515625
+        ]
+      }
+    },
+    "pairs": [
+      {
+        "a": "move earthquake",
+        "b": "move hiddenpowerbug",
+        "paired_trials": 128,
+        "difference": 0.015625,
+        "normal95_interval": [
+          -0.09304219797776413,
+          0.12429219797776413
+        ],
+        "a_only_wins": 26,
+        "b_only_wins": 24,
+        "exact_mcnemar_p": 0.887724827340783
+      },
+      {
+        "a": "move earthquake",
+        "b": "move rockslide",
+        "paired_trials": 128,
+        "difference": 0.0234375,
+        "normal95_interval": [
+          -0.09655765233298115,
+          0.14343265233298114
+        ],
+        "a_only_wins": 32,
+        "b_only_wins": 29,
+        "exact_mcnemar_p": 0.798152627305718
+      },
+      {
+        "a": "move earthquake",
+        "b": "move swordsdance",
+        "paired_trials": 128,
+        "difference": -0.03125,
+        "normal95_interval": [
+          -0.1481985194467523,
+          0.0856985194467523
+        ],
+        "a_only_wins": 27,
+        "b_only_wins": 31,
+        "exact_mcnemar_p": 0.6940040940761316
+      },
+      {
+        "a": "move earthquake",
+        "b": "switch 2",
+        "paired_trials": 128,
+        "difference": -0.0078125,
+        "normal95_interval": [
+          -0.1355002351025543,
+          0.1198752351025543
+        ],
+        "a_only_wins": 34,
+        "b_only_wins": 35,
+        "exact_mcnemar_p": 1
+      },
+      {
+        "a": "move hiddenpowerbug",
+        "b": "move rockslide",
+        "paired_trials": 128,
+        "difference": 0.0078125,
+        "normal95_interval": [
+          -0.1198752351025543,
+          0.1355002351025543
+        ],
+        "a_only_wins": 35,
+        "b_only_wins": 34,
+        "exact_mcnemar_p": 1
+      },
+      {
+        "a": "move hiddenpowerbug",
+        "b": "move swordsdance",
+        "paired_trials": 128,
+        "difference": -0.046875,
+        "normal95_interval": [
+          -0.173378835315019,
+          0.07962883531501899
+        ],
+        "a_only_wins": 31,
+        "b_only_wins": 37,
+        "exact_mcnemar_p": 0.5446122234192591
+      },
+      {
+        "a": "move hiddenpowerbug",
+        "b": "switch 2",
+        "paired_trials": 128,
+        "difference": -0.0234375,
+        "normal95_interval": [
+          -0.15471835677306076,
+          0.10784335677306076
+        ],
+        "a_only_wins": 35,
+        "b_only_wins": 38,
+        "exact_mcnemar_p": 0.8151212352249975
+      },
+      {
+        "a": "move rockslide",
+        "b": "move swordsdance",
+        "paired_trials": 128,
+        "difference": -0.0546875,
+        "normal95_interval": [
+          -0.18015821496460963,
+          0.07078321496460963
+        ],
+        "a_only_wins": 30,
+        "b_only_wins": 37,
+        "exact_mcnemar_p": 0.4638176178968696
+      },
+      {
+        "a": "move rockslide",
+        "b": "switch 2",
+        "paired_trials": 128,
+        "difference": -0.03125,
+        "normal95_interval": [
+          -0.15601981759179484,
+          0.09351981759179485
+        ],
+        "a_only_wins": 31,
+        "b_only_wins": 35,
+        "exact_mcnemar_p": 0.7122308826373508
+      },
+      {
+        "a": "move swordsdance",
+        "b": "switch 2",
+        "paired_trials": 128,
+        "difference": 0.0234375,
+        "normal95_interval": [
+          -0.10603074151039243,
+          0.15290574151039243
+        ],
+        "a_only_wins": 37,
+        "b_only_wins": 34,
+        "exact_mcnemar_p": 0.8125886494061618
+      }
+    ]
+  },
+  {
+    "turn": 24,
+    "policy": "skuct",
+    "iters": 300,
+    "foe_iters": 300,
+    "reply": "search",
+    "tail": "search",
+    "actions": {
+      "move earthquake": {
+        "trials": 128,
+        "wins": 45,
+        "losses": 83,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.3515625,
+        "score_bounds": [
+          0.3515625,
+          0.3515625
+        ]
+      },
+      "move hiddenpowerbug": {
+        "trials": 128,
+        "wins": 34,
+        "losses": 94,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.265625,
+        "score_bounds": [
+          0.265625,
+          0.265625
+        ]
+      },
+      "move rockslide": {
+        "trials": 128,
+        "wins": 42,
+        "losses": 86,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.328125,
+        "score_bounds": [
+          0.328125,
+          0.328125
+        ]
+      },
+      "move swordsdance": {
+        "trials": 128,
+        "wins": 41,
+        "losses": 87,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.3203125,
+        "score_bounds": [
+          0.3203125,
+          0.3203125
+        ]
+      },
+      "switch 2": {
+        "trials": 128,
+        "wins": 42,
+        "losses": 86,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.328125,
+        "score_bounds": [
+          0.328125,
+          0.328125
+        ]
+      }
+    },
+    "pairs": [
+      {
+        "a": "move earthquake",
+        "b": "move hiddenpowerbug",
+        "paired_trials": 128,
+        "difference": 0.0859375,
+        "normal95_interval": [
+          -0.027085259487439117,
+          0.19896025948743912
+        ],
+        "a_only_wins": 33,
+        "b_only_wins": 22,
+        "exact_mcnemar_p": 0.17700136477035816
+      },
+      {
+        "a": "move earthquake",
+        "b": "move rockslide",
+        "paired_trials": 128,
+        "difference": 0.0234375,
+        "normal95_interval": [
+          -0.0945718165311102,
+          0.1414468165311102
+        ],
+        "a_only_wins": 31,
+        "b_only_wins": 28,
+        "exact_mcnemar_p": 0.7948436539828609
+      },
+      {
+        "a": "move earthquake",
+        "b": "move swordsdance",
+        "paired_trials": 128,
+        "difference": 0.03125,
+        "normal95_interval": [
+          -0.08967242054862523,
+          0.15217242054862523
+        ],
+        "a_only_wins": 33,
+        "b_only_wins": 29,
+        "exact_mcnemar_p": 0.7035366713552734
+      },
+      {
+        "a": "move earthquake",
+        "b": "switch 2",
+        "paired_trials": 128,
+        "difference": 0.0234375,
+        "normal95_interval": [
+          -0.10043385332257627,
+          0.14730885332257626
+        ],
+        "a_only_wins": 34,
+        "b_only_wins": 31,
+        "exact_mcnemar_p": 0.8043170001933986
+      },
+      {
+        "a": "move hiddenpowerbug",
+        "b": "move rockslide",
+        "paired_trials": 128,
+        "difference": -0.0625,
+        "normal95_interval": [
+          -0.17281964117212517,
+          0.04781964117212516
+        ],
+        "a_only_wins": 22,
+        "b_only_wins": 30,
+        "exact_mcnemar_p": 0.3317497633694906
+      },
+      {
+        "a": "move hiddenpowerbug",
+        "b": "move swordsdance",
+        "paired_trials": 128,
+        "difference": -0.0546875,
+        "normal95_interval": [
+          -0.16619730112439077,
+          0.05682230112439077
+        ],
+        "a_only_wins": 23,
+        "b_only_wins": 30,
+        "exact_mcnemar_p": 0.4101027163746913
+      },
+      {
+        "a": "move hiddenpowerbug",
+        "b": "switch 2",
+        "paired_trials": 128,
+        "difference": -0.0625,
+        "normal95_interval": [
+          -0.17906902081673853,
+          0.05406902081673855
+        ],
+        "a_only_wins": 25,
+        "b_only_wins": 33,
+        "exact_mcnemar_p": 0.3581433018061379
+      },
+      {
+        "a": "move rockslide",
+        "b": "move swordsdance",
+        "paired_trials": 128,
+        "difference": 0.0078125,
+        "normal95_interval": [
+          -0.11025937946010737,
+          0.1258843794601074
+        ],
+        "a_only_wins": 30,
+        "b_only_wins": 29,
+        "exact_mcnemar_p": 1
+      },
+      {
+        "a": "move rockslide",
+        "b": "switch 2",
+        "paired_trials": 128,
+        "difference": 0.0,
+        "normal95_interval": [
+          -0.12488813892477733,
+          0.12488813892477733
+        ],
+        "a_only_wins": 33,
+        "b_only_wins": 33,
+        "exact_mcnemar_p": 1
+      },
+      {
+        "a": "move swordsdance",
+        "b": "switch 2",
+        "paired_trials": 128,
+        "difference": -0.0078125,
+        "normal95_interval": [
+          -0.1258843794601074,
+          0.11025937946010737
+        ],
+        "a_only_wins": 29,
+        "b_only_wins": 30,
+        "exact_mcnemar_p": 1
+      }
+    ]
+  },
+  {
+    "turn": 26,
+    "policy": "skuct",
+    "iters": 300,
+    "foe_iters": 300,
+    "reply": "search",
+    "tail": "search",
+    "actions": {
+      "move dynamicpunch": {
+        "trials": 128,
+        "wins": 32,
+        "losses": 96,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.25,
+        "score_bounds": [
+          0.25,
+          0.25
+        ]
+      },
+      "move firepunch": {
+        "trials": 128,
+        "wins": 38,
+        "losses": 90,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.296875,
+        "score_bounds": [
+          0.296875,
+          0.296875
+        ]
+      },
+      "move thunderbolt": {
+        "trials": 128,
+        "wins": 50,
+        "losses": 78,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.390625,
+        "score_bounds": [
+          0.390625,
+          0.390625
+        ]
+      },
+      "move thunderwave": {
+        "trials": 128,
+        "wins": 33,
+        "losses": 95,
+        "ties": 0,
+        "caps": 0,
+        "score": 0.2578125,
+        "score_bounds": [
+          0.2578125,
+          0.2578125
+        ]
+      }
+    },
+    "pairs": [
+      {
+        "a": "move dynamicpunch",
+        "b": "move firepunch",
+        "paired_trials": 128,
+        "difference": -0.046875,
+        "normal95_interval": [
+          -0.12780993957431264,
+          0.034059939574312637
+        ],
+        "a_only_wins": 11,
+        "b_only_wins": 17,
+        "exact_mcnemar_p": 0.34492845088243484
+      },
+      {
+        "a": "move dynamicpunch",
+        "b": "move thunderbolt",
+        "paired_trials": 128,
+        "difference": -0.140625,
+        "normal95_interval": [
+          -0.23217791311908403,
+          -0.04907208688091595
+        ],
+        "a_only_wins": 10,
+        "b_only_wins": 28,
+        "exact_mcnemar_p": 0.0050976432976312935
+      },
+      {
+        "a": "move dynamicpunch",
+        "b": "move thunderwave",
+        "paired_trials": 128,
+        "difference": -0.0078125,
+        "normal95_interval": [
+          -0.09058569487677316,
+          0.07496069487677316
+        ],
+        "a_only_wins": 14,
+        "b_only_wins": 15,
+        "exact_mcnemar_p": 1
+      },
+      {
+        "a": "move firepunch",
+        "b": "move thunderbolt",
+        "paired_trials": 128,
+        "difference": -0.09375,
+        "normal95_interval": [
+          -0.18453337708588566,
+          -0.002966622914114342
+        ],
+        "a_only_wins": 12,
+        "b_only_wins": 24,
+        "exact_mcnemar_p": 0.06524533522315323
+      },
+      {
+        "a": "move firepunch",
+        "b": "move thunderwave",
+        "paired_trials": 128,
+        "difference": 0.0390625,
+        "normal95_interval": [
+          -0.05162931541146891,
+          0.12975431541146892
+        ],
+        "a_only_wins": 20,
+        "b_only_wins": 15,
+        "exact_mcnemar_p": 0.49955983320251107
+      },
+      {
+        "a": "move thunderbolt",
+        "b": "move thunderwave",
+        "paired_trials": 128,
+        "difference": 0.1328125,
+        "normal95_interval": [
+          0.039630563731208185,
+          0.22599443626879182
+        ],
+        "a_only_wins": 28,
+        "b_only_wins": 11,
+        "exact_mcnemar_p": 0.009475304279476404
+      }
+    ]
+  }
+]

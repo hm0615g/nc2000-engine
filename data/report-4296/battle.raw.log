@@ -1,0 +1,367 @@
+|gametype|singles
+|player|p1|Player|
+|player|p2|Bot|
+|gen|2
+|tier|[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict
+|rule|Species Clause: Limit one of each Pokémon
+|rule|Item Clause: Limit 1 of each item
+|rule|Stadium Sleep Clause: Limit one foe put to sleep
+|rule|Freeze Clause Mod: Limit one foe frozen
+|rule|OHKO Clause: OHKO moves are banned
+|rule|HP Percentage Mod: HP is shown in percentages
+|clearpoke
+|poke|p1|Starmie, L55|item
+|poke|p1|Zapdos, L55|item
+|poke|p1|Shuckle, L50, F|item
+|poke|p1|Snorlax, L50, M|item
+|poke|p1|Misdreavus, L50, F|item
+|poke|p1|Blissey, L50, F|item
+|poke|p2|Ampharos, L55, M|item
+|poke|p2|Starmie, L55|item
+|poke|p2|Cloyster, L50, M|item
+|poke|p2|Marowak, L50, M|item
+|poke|p2|Misdreavus, L50, M|item
+|poke|p2|Snorlax, L50, M|item
+|teampreview|3
+|
+|teamsize|p1|3
+|teamsize|p2|3
+|start
+|switch|p1a: Starmie|Starmie, L55|100/100
+|switch|p2a: Marowak|Marowak, L50, M|100/100
+|turn|1
+|
+|switch|p2a: Snorlax|Snorlax, L50, M|100/100
+|move|p1a: Starmie|Surf|p2a: Snorlax
+|-crit|p2a: Snorlax
+|-damage|p2a: Snorlax|51/100
+|
+|upkeep
+|turn|2
+|
+|switch|p1a: Shuckle|Shuckle, L50, F|100/100
+|move|p2a: Snorlax|Body Slam|p1a: Shuckle
+|-resisted|p1a: Shuckle
+|-damage|p1a: Shuckle|89/100
+|
+|upkeep
+|turn|3
+|
+|move|p2a: Snorlax|Body Slam|p1a: Shuckle
+|-resisted|p1a: Shuckle
+|-damage|p1a: Shuckle|77/100
+|move|p1a: Shuckle|Toxic|p2a: Snorlax
+|-status|p2a: Snorlax|tox
+|
+|upkeep
+|turn|4
+|
+|move|p2a: Snorlax|Earthquake|p1a: Shuckle
+|-damage|p1a: Shuckle|58/100
+|-damage|p2a: Snorlax|45/100 tox|[from] psn
+|move|p1a: Shuckle|Encore|p2a: Snorlax
+|-start|p2a: Snorlax|Encore
+|
+|upkeep
+|turn|5
+|
+|switch|p2a: Ampharos|Ampharos, L55, M|100/100
+|switch|p1a: Starmie|Starmie, L55|100/100
+|
+|upkeep
+|turn|6
+|
+|switch|p1a: Blissey|Blissey, L50, F|100/100
+|move|p2a: Ampharos|Thunderbolt|p1a: Blissey
+|-damage|p1a: Blissey|83/100
+|
+|upkeep
+|turn|7
+|
+|switch|p2a: Snorlax|Snorlax, L50, M|45/100 tox
+|-status|p2a: Snorlax|psn|[silent]
+|-damage|p2a: Snorlax|32/100 psn|[from] psn
+|move|p1a: Blissey|Present|p2a: Snorlax
+|-hint|Gen 2 Present has a glitched damage calculation using the secondary types of the Pokemon for the Attacker's Level and Defender's Defense.
+|-damage|p2a: Snorlax|24/100 psn
+|
+|upkeep
+|turn|8
+|
+|switch|p1a: Shuckle|Shuckle, L50, F|58/100
+|move|p2a: Snorlax|Body Slam|p1a: Shuckle
+|-resisted|p1a: Shuckle
+|-damage|p1a: Shuckle|45/100
+|-damage|p2a: Snorlax|11/100 psn|[from] psn|[of] p1a: Shuckle
+|
+|-enditem|p1a: Shuckle|Gold Berry|[eat]
+|-heal|p1a: Shuckle|69/100|[from] item: Gold Berry
+|upkeep
+|turn|9
+|
+|move|p2a: Snorlax|Body Slam|p1a: Shuckle
+|-resisted|p1a: Shuckle
+|-damage|p1a: Shuckle|56/100
+|-damage|p2a: Snorlax|0 fnt|[from] psn|[of] p1a: Shuckle
+|faint|p2a: Snorlax
+|
+|switch|p2a: Marowak|Marowak, L50, M|100/100
+|
+|upkeep
+|turn|10
+|
+|move|p2a: Marowak|Swords Dance|p2a: Marowak
+|-boost|p2a: Marowak|atk|2
+|move|p1a: Shuckle|Toxic|p2a: Marowak
+|-status|p2a: Marowak|tox
+|
+|upkeep
+|turn|11
+|
+|switch|p2a: Ampharos|Ampharos, L55, M|100/100
+|move|p1a: Shuckle|Rest|p1a: Shuckle
+|-status|p1a: Shuckle|slp|[from] move: Rest
+|-heal|p1a: Shuckle|100/100 slp|[silent]
+|
+|upkeep
+|turn|12
+|
+|move|p2a: Ampharos|Thunderbolt|p1a: Shuckle
+|-crit|p1a: Shuckle
+|-damage|p1a: Shuckle|29/100 slp
+|cant|p1a: Shuckle|slp
+|move|p1a: Shuckle|Sleep Talk|p1a: Shuckle
+|move|p1a: Shuckle|Toxic|p2a: Ampharos|[from] Sleep Talk|[miss]
+|-miss|p1a: Shuckle
+|
+|upkeep
+|turn|13
+|
+|switch|p1a: Blissey|Blissey, L50, F|83/100
+|move|p2a: Ampharos|Dynamic Punch|p1a: Blissey|[miss]
+|-miss|p2a: Ampharos
+|
+|upkeep
+|turn|14
+|
+|move|p2a: Ampharos|Dynamic Punch|p1a: Blissey
+|-supereffective|p1a: Blissey
+|-damage|p1a: Blissey|29/100
+|-start|p1a: Blissey|confusion
+|-activate|p1a: Blissey|confusion
+|-damage|p1a: Blissey|28/100|[from] confusion
+|
+|upkeep
+|turn|15
+|
+|switch|p2a: Marowak|Marowak, L50, M|100/100 tox
+|-status|p2a: Marowak|psn|[silent]
+|-damage|p2a: Marowak|88/100 psn|[from] psn
+|switch|p1a: Shuckle|Shuckle, L50, F|29/100 slp
+|
+|upkeep
+|turn|16
+|
+|switch|p2a: Ampharos|Ampharos, L55, M|100/100
+|cant|p1a: Shuckle|slp
+|move|p1a: Shuckle|Sleep Talk|p1a: Shuckle
+|move|p1a: Shuckle|Encore|p2a: Ampharos|[from] Sleep Talk
+|-fail|p2a: Ampharos
+|
+|upkeep
+|turn|17
+|
+|switch|p2a: Marowak|Marowak, L50, M|88/100 psn
+|-damage|p2a: Marowak|76/100 psn|[from] psn
+|-curestatus|p1a: Shuckle|slp|[msg]
+|move|p1a: Shuckle|Rest|p1a: Shuckle
+|-status|p1a: Shuckle|slp|[from] move: Rest
+|-heal|p1a: Shuckle|100/100 slp|[silent]
+|
+|upkeep
+|turn|18
+|
+|move|p2a: Marowak|Hidden Power|p1a: Shuckle
+|-damage|p1a: Shuckle|78/100 slp
+|-damage|p2a: Marowak|64/100 psn|[from] psn|[of] p1a: Shuckle
+|cant|p1a: Shuckle|slp
+|move|p1a: Shuckle|Sleep Talk|p1a: Shuckle
+|move|p1a: Shuckle|Encore|p2a: Marowak|[from] Sleep Talk
+|-start|p2a: Marowak|Encore
+|
+|upkeep
+|turn|19
+|
+|move|p2a: Marowak|Hidden Power|p1a: Shuckle
+|-damage|p1a: Shuckle|57/100 slp
+|-damage|p2a: Marowak|52/100 psn|[from] psn|[of] p1a: Shuckle
+|cant|p1a: Shuckle|slp
+|move|p1a: Shuckle|Sleep Talk|p1a: Shuckle
+|move|p1a: Shuckle|Rest|p1a: Shuckle|[from] Sleep Talk
+|-status|p1a: Shuckle|slp|[from] move: Rest
+|-heal|p1a: Shuckle|100/100 slp|[silent]
+|
+|upkeep
+|turn|20
+|
+|move|p2a: Marowak|Hidden Power|p1a: Shuckle
+|-damage|p1a: Shuckle|78/100 slp
+|-damage|p2a: Marowak|40/100 psn|[from] psn|[of] p1a: Shuckle
+|cant|p1a: Shuckle|slp
+|move|p1a: Shuckle|Sleep Talk|p1a: Shuckle
+|move|p1a: Shuckle|Rest|p1a: Shuckle|[from] Sleep Talk
+|-status|p1a: Shuckle|slp|[from] move: Rest
+|-heal|p1a: Shuckle|100/100 slp|[silent]
+|
+|-end|p2a: Marowak|Encore
+|upkeep
+|turn|21
+|
+|move|p2a: Marowak|Hidden Power|p1a: Shuckle
+|-damage|p1a: Shuckle|78/100 slp
+|-damage|p2a: Marowak|28/100 psn|[from] psn|[of] p1a: Shuckle
+|cant|p1a: Shuckle|slp
+|move|p1a: Shuckle|Sleep Talk|p1a: Shuckle
+|move|p1a: Shuckle|Encore|p2a: Marowak|[from] Sleep Talk
+|-start|p2a: Marowak|Encore
+|
+|upkeep
+|turn|22
+|
+|move|p2a: Marowak|Hidden Power|p1a: Shuckle
+|-crit|p1a: Shuckle
+|-damage|p1a: Shuckle|35/100 slp
+|-damage|p2a: Marowak|16/100 psn|[from] psn|[of] p1a: Shuckle
+|cant|p1a: Shuckle|slp
+|move|p1a: Shuckle|Sleep Talk|p1a: Shuckle
+|move|p1a: Shuckle|Rest|p1a: Shuckle|[from] Sleep Talk
+|-status|p1a: Shuckle|slp|[from] move: Rest
+|-heal|p1a: Shuckle|100/100 slp|[silent]
+|
+|upkeep
+|turn|23
+|
+|move|p2a: Marowak|Hidden Power|p1a: Shuckle
+|-damage|p1a: Shuckle|81/100 slp
+|-damage|p2a: Marowak|4/100 psn|[from] psn|[of] p1a: Shuckle
+|cant|p1a: Shuckle|slp
+|move|p1a: Shuckle|Sleep Talk|p1a: Shuckle
+|move|p1a: Shuckle|Toxic||[from] Sleep Talk|[still]
+|-fail|p1a: Shuckle
+|
+|-end|p2a: Marowak|Encore
+|upkeep
+|turn|24
+|
+|switch|p1a: Starmie|Starmie, L55|100/100
+|move|p2a: Marowak|Swords Dance|p2a: Marowak
+|-boost|p2a: Marowak|atk|2
+|-damage|p2a: Marowak|0 fnt|[from] psn
+|faint|p2a: Marowak
+|
+|switch|p2a: Ampharos|Ampharos, L55, M|100/100
+|
+|upkeep
+|turn|25
+|
+|move|p1a: Starmie|Confuse Ray|p2a: Ampharos
+|-start|p2a: Ampharos|confusion
+|-enditem|p2a: Ampharos|Miracle Berry|[eat]
+|-end|p2a: Ampharos|confusion
+|move|p2a: Ampharos|Thunderbolt|p1a: Starmie
+|-supereffective|p1a: Starmie
+|-damage|p1a: Starmie|13/100
+|
+|upkeep
+|turn|26
+|
+|move|p1a: Starmie|Confuse Ray|p2a: Ampharos
+|-start|p2a: Ampharos|confusion
+|-activate|p2a: Ampharos|confusion
+|move|p2a: Ampharos|Fire Punch|p1a: Starmie
+|-resisted|p1a: Starmie
+|-damage|p1a: Starmie|3/100
+|
+|upkeep
+|turn|27
+|
+|move|p1a: Starmie|Surf|p2a: Ampharos
+|-damage|p2a: Ampharos|71/100
+|-activate|p2a: Ampharos|confusion
+|-damage|p2a: Ampharos|61/100|[from] confusion
+|
+|upkeep
+|turn|28
+|
+|move|p1a: Starmie|Surf|p2a: Ampharos
+|-damage|p2a: Ampharos|27/100
+|-end|p2a: Ampharos|confusion
+|move|p2a: Ampharos|Thunderbolt|p1a: Starmie
+|-supereffective|p1a: Starmie
+|-damage|p1a: Starmie|0 fnt
+|faint|p1a: Starmie
+|
+|switch|p1a: Shuckle|Shuckle, L50, F|81/100 slp
+|
+|upkeep
+|turn|29
+|
+|move|p2a: Ampharos|Thunderbolt|p1a: Shuckle
+|-damage|p1a: Shuckle|48/100 slp
+|cant|p1a: Shuckle|slp
+|move|p1a: Shuckle|Sleep Talk|p1a: Shuckle
+|move|p1a: Shuckle|Encore|p2a: Ampharos|[from] Sleep Talk
+|-start|p2a: Ampharos|Encore
+|
+|upkeep
+|turn|30
+|
+|move|p2a: Ampharos|Thunderbolt|p1a: Shuckle
+|-damage|p1a: Shuckle|14/100 slp
+|-curestatus|p1a: Shuckle|slp|[msg]
+|move|p1a: Shuckle|Rest|p1a: Shuckle
+|-status|p1a: Shuckle|slp|[from] move: Rest
+|-heal|p1a: Shuckle|100/100 slp|[silent]
+|
+|upkeep
+|turn|31
+|
+|move|p2a: Ampharos|Thunderbolt|p1a: Shuckle
+|-damage|p1a: Shuckle|67/100 slp
+|cant|p1a: Shuckle|slp
+|move|p1a: Shuckle|Sleep Talk|p1a: Shuckle
+|move|p1a: Shuckle|Toxic|p2a: Ampharos|[from] Sleep Talk
+|-status|p2a: Ampharos|tox
+|
+|upkeep
+|turn|32
+|
+|move|p2a: Ampharos|Thunderbolt|p1a: Shuckle
+|-damage|p1a: Shuckle|35/100 slp
+|-damage|p2a: Ampharos|21/100 tox|[from] psn
+|cant|p1a: Shuckle|slp
+|move|p1a: Shuckle|Sleep Talk|p1a: Shuckle
+|move|p1a: Shuckle|Rest|p1a: Shuckle|[from] Sleep Talk
+|-status|p1a: Shuckle|slp|[from] move: Rest
+|-heal|p1a: Shuckle|100/100 slp|[silent]
+|
+|upkeep
+|turn|33
+|
+|move|p2a: Ampharos|Thunderbolt|p1a: Shuckle
+|-damage|p1a: Shuckle|66/100 slp
+|-damage|p2a: Ampharos|9/100 tox|[from] psn
+|cant|p1a: Shuckle|slp
+|move|p1a: Shuckle|Sleep Talk|p1a: Shuckle
+|move|p1a: Shuckle|Toxic|p2a: Ampharos|[from] Sleep Talk
+|-fail|p2a: Ampharos|tox
+|
+|upkeep
+|turn|34
+|
+|move|p2a: Ampharos|Thunderbolt|p1a: Shuckle
+|-damage|p1a: Shuckle|33/100 slp
+|-damage|p2a: Ampharos|0 fnt|[from] psn
+|faint|p2a: Ampharos
+|
+|win|Player

@@ -164,6 +164,20 @@ pub(crate) struct Node {
     pub(crate) preview: bool,
 }
 
+pub enum SearchTrace<'a> {
+    /// With multiple legal actions, visits include this selection; rewards exclude its backpropagation.
+    Choice {
+        battle: &'a Battle,
+        node: usize,
+        actions: &'a [Vec<SearchChoice>; 2],
+        visits: &'a [Vec<u32>; 2],
+        rewards: &'a [Vec<f64>; 2],
+        chosen: [Option<SearchChoice>; 2],
+    },
+    Leaf { battle: &'a Battle, rng: &'a SplitMix64, rollout: bool },
+    Result { battle: &'a Battle, reward0: f64 },
+}
+
 impl Node {
     pub(crate) fn at(sim: &mut Battle, dex: &Dex) -> Node {
         let acts = [sim.legal_choices(dex, 0), sim.legal_choices(dex, 1)];
@@ -353,6 +367,34 @@ pub(crate) fn run_iteration(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
 ) -> f64 {
+    run_iteration_with_leaf(
+        cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root,
+        root_joint, depth_out, &mut |sim, rng, rollout| {
+            if rollout {
+                playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_m16c)
+            } else {
+                leaf_eval(cfg, sim, dex)
+            }
+        }, None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_iteration_with_leaf(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<Node>,
+    table: &mut FxHashMap<u64, usize>,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+    leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
+    mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
+) -> f64 {
     let mut path: Vec<(usize, usize, usize)> = Vec::new(); // (node, side, act)
     let mut node_idx = start;
 
@@ -384,10 +426,20 @@ pub(crate) fn run_iteration(
                 root_joint[s] = ai;
             }
         }
+        if let Some(trace) = trace.as_deref_mut() {
+            let node = &nodes[node_idx];
+            trace(SearchTrace::Choice {
+                battle: sim, node: node_idx, actions: &node.acts,
+                visits: &node.n, rewards: &node.w, chosen: joint,
+            });
+        }
         if joint == [None, None] {
             // defensive: a rest point where neither side owes a choice
             // (never reached in practice — battles end instead)
-            break leaf_eval(cfg, sim, dex);
+            if let Some(trace) = trace.as_deref_mut() {
+                trace(SearchTrace::Leaf { battle: sim, rng, rollout: false });
+            }
+            break leaf(sim, rng, false);
         }
         sim.apply_choices(dex, joint)
             .expect("cached legal choice rejected (state_key collision?)");
@@ -395,7 +447,10 @@ pub(crate) fn run_iteration(
             break outcome_reward(o);
         }
         if sim.turn > turn_cap {
-            break leaf_eval(cfg, sim, dex);
+            if let Some(trace) = trace.as_deref_mut() {
+                trace(SearchTrace::Leaf { battle: sim, rng, rollout: false });
+            }
+            break leaf(sim, rng, false);
         }
         let key = key_of(cfg, dex, sim);
         match table.get(&key) {
@@ -408,10 +463,17 @@ pub(crate) fn run_iteration(
                 let child = nodes.len();
                 nodes.push(Node::at(sim, dex));
                 table.insert(key, child);
-                break playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_m16c);
+                if let Some(trace) = trace.as_deref_mut() {
+                    trace(SearchTrace::Leaf { battle: sim, rng, rollout: true });
+                }
+                break leaf(sim, rng, true);
             }
         }
     };
+
+    if let Some(trace) = trace {
+        trace(SearchTrace::Result { battle: sim, reward0 });
+    }
 
     // ---- backprop: UCB stats along the path
     for (ni, s, ai) in path {
@@ -448,30 +510,8 @@ pub struct SkuctSearch {
     table: FxHashMap<u64, usize>,
     done: u32,
     depth_sum: u64,
-    /// Per-side mask over the root action lists: `true` = the action is
-    /// dominated — a certain immediate self-loss ([`certain_self_loss`]) or
-    /// a provable no-op ([`certain_noop`]); `best()` never argmaxes these
-    /// while any alternative exists.
-    ///
-    /// **Only [`SkuctSearch::best`] consults this, so only callers that go
-    /// through `best()` are masked at all.** [`BlindAgent`](crate::BlindAgent)
-    /// does (it keeps its own copy and filters there), and that is the shipped
-    /// ladder client, so play is masked in production; so does
-    /// [`OpenAgent`](crate::OpenAgent), which shares `search_choose` — the web
-    /// product policy is masked too. [`RmAgent::choose`]
-    /// does NOT: it picks straight off the visit counts and never calls
-    /// `best()`. Every RmAgent consumer is therefore unmasked — `runner`,
-    /// `duel`, `eval_ab_duel`, and arena's `skuct`/`rm` specs. Measured over
-    /// 600 skuct self-play games: 669 actions that `dominated_actions` flags
-    /// were chosen and played, 2.03% of 32,981 decisions.
-    ///
-    /// The consequence that bites: **a duel built on those harnesses cannot
-    /// measure a change to [`noop_reason`] and will return a null.** Gate mask
-    /// changes with arena's blind specs instead — and since both arms are the
-    /// same binary, the two rule sets have to differ by config, which is what
-    /// [`MaskRules`] on [`RmConfig`] and arena's `blindlegacy` spec are for.
-    /// `best_never_picks_masked_noop` covers `best()`, not `choose()`, which
-    /// is why this stayed invisible.
+    /// Final-choice exclusions from `dominated_reason`. Only `best()` uses
+    /// this mask; RmAgent's sampled policy reads unfiltered root statistics.
     root_dominated: [Vec<bool>; 2],
 }
 
@@ -489,22 +529,7 @@ pub(crate) fn certain_self_loss(b: &Battle, dex: &Dex, side: usize, c: SearchCho
     }
 }
 
-/// Provably-no-op moves, read off public state — the engine makes them fail
-/// outright: healing at full HP, re-casting a screen/Spikes that is already
-/// up (single layer in gen 2), a foe-directed status move onto an existing
-/// status or through a Substitute, re-inflicting a volatile the target
-/// already has (Substitute behind its own sub included). In flat or lost
-/// roots these tie with real actions and the argmax tie-break can pick them
-/// (2026-07-21 player reports: Reflect re-cast into |-fail|; Sleep Powder
-/// into a Substitute four turns running). Masked like [`certain_self_loss`]:
-/// never argmax'd while any alternative exists.
-///
-/// `rules` is the A/B seam. The mask is consulted ONLY by `best()`, so no
-/// `RmAgent` harness can see a rule change (`root_dominated`'s doc); the only
-/// way to duel one is to run two `BlindAgent`s in the same process with
-/// different [`MaskRules`], which is what `RmConfig::mask_rules` and arena's
-/// `blindlegacy` spec exist for. Every instrument that reports the SHIPPED
-/// mask passes `MaskRules::default()`.
+#[cfg(test)]
 pub(crate) fn certain_noop(
     b: &Battle,
     dex: &Dex,
@@ -563,10 +588,7 @@ impl Default for MaskRules {
     }
 }
 
-/// Every action the mask would refuse at this root, with the rule that
-/// refused it — the diagnostic surface for [`certain_noop`]. A mask that
-/// hides a *useful* move is a strength bug, so the rules have to be
-/// auditable one by one against real positions, not just unit cases.
+/// Final-choice exclusions and their reasons, including forfeit risk and no-ops.
 pub fn dominated_actions(b: &Battle, dex: &Dex, side: usize) -> Vec<(SearchChoice, &'static str)> {
     dominated_actions_with(b, dex, side, MaskRules::default())
 }
@@ -583,13 +605,31 @@ pub fn dominated_actions_with(
     b.clone()
         .legal_choices(dex, side)
         .into_iter()
-        .filter_map(|c| {
-            if certain_self_loss(b, dex, side, c) {
-                return Some((c, "self-KO with the last mon"));
-            }
-            noop_reason(b, dex, side, c, rules).map(|why| (c, why))
-        })
+        .filter_map(|c| dominated_reason(b, dex, side, c, rules).map(|why| (c, why)))
         .collect()
+}
+
+pub(crate) fn dominated_reason(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    c: SearchChoice,
+    rules: MaskRules,
+) -> Option<&'static str> {
+    if certain_self_loss(b, dex, side, c) {
+        return Some("self-KO with the last mon");
+    }
+    if let SearchChoice::Move(id) = c {
+        let ms = dex.move_static(id);
+        if ms.status.as_deref() == Some("slp")
+            && matches!(ms.target, "normal" | "allAdjacentFoes" | "allAdjacent")
+            && faster_than_foe(b, dex, side)
+            && b.has_sleeping_pokemon(1 - side)
+        {
+            return Some("inflicting sleep would forfeit under Sleep Clause");
+        }
+    }
+    noop_reason(b, dex, side, c, rules)
 }
 
 /// Whether the foe can leave before the move lands. **Switches resolve before
@@ -716,8 +756,7 @@ fn foe_switchin_candidates(b: &Battle, side: usize) -> Vec<PokeId> {
     out
 }
 
-/// [`certain_noop`] with the reason. Each arm names the engine site it
-/// mirrors; adding a rule here without one is how a false positive gets in.
+/// Proven move failures, excluding actions whose successful effect causes a forfeit.
 ///
 /// **What "certain" means here.** Every rule is read off the position as it
 /// stands at the decision, and a foe switch (switches resolve before moves)
@@ -941,26 +980,6 @@ fn noop_reason(
         if safeguard {
             yes!("Safeguard blocks foe-inflicted status");
         }
-        // Sleep Clause Mod (`conditions.rs` sleepclausemod/onSetStatus): a
-        // second FOE-SOURCED sleep on that side is refused outright, and
-        // Rest-sleep does not engage it. Like Safeguard this reads the whole
-        // side rather than the mon in front, so it survives a switch — a
-        // sleeper that leaves the field keeps its status, and the replacement
-        // cannot be slept either. What it does need is for us to move first:
-        // the one way the clause lifts before our move is the sleeper waking
-        // up on its own turn.
-        if ms.status.as_deref() == Some("slp") && faster_than_foe(b, dex, side) {
-            let opp = 1 - side;
-            let engaged = b.sides[opp].party.iter().any(|&slot| {
-                let p = &b.sides[opp].roster[slot as usize];
-                p.hp > 0
-                    && p.status == Status::Slp
-                    && p.status_state.source.map(|s| s.side as usize != opp).unwrap_or(true)
-            });
-            if engaged {
-                yes!("Sleep Clause Mod blocks a second foe-sourced sleep");
-            }
-        }
         if let Some(def) = foe {
             let d = b.poke(def);
             // One major status at a time (`pokemon.rs::set_status`) — but a
@@ -1135,8 +1154,7 @@ impl SkuctSearch {
             nodes[0].acts[s]
                 .iter()
                 .map(|&c| {
-                    certain_self_loss(&root, dex, s, c)
-                        || certain_noop(&root, dex, s, c, cfg.mask_rules)
+                    dominated_reason(&root, dex, s, c, cfg.mask_rules).is_some()
                 })
                 .collect::<Vec<bool>>()
         });
@@ -1639,59 +1657,30 @@ mod dominated_action_tests {
         }
     }
 
-    /// Sleep Clause Mod is the one foe-state rule that survives a switch: it
-    /// reads the whole side, and a sleeper that leaves the field stays
-    /// asleep. The mask has to refuse a second sleep even when the mon in
-    /// front is healthy and free to leave.
     #[test]
-    fn noop_mask_covers_sleep_clause() {
-        let (dex, b) = setup();
-        let noop = |b: &Battle, side: usize, key: &str| certain_noop(b, &dex, side, mv(&dex, key));
-        let me = b.active_id(0).unwrap();
-        let bench = PokeId { side: 1, slot: b.sides[1].party[1] };
-
-        // foe-sourced sleeper on the bench, healthy switchable mon in front
-        {
-            let mut b = b.clone();
-            b.set_status(&dex, bench, "slp", Some(me), EffectHandle::None, true);
-            assert!(noop(&b, 0, "sleeppowder"), "second foe-sourced sleep");
-            let def = b.active_id(1).unwrap();
+    fn sleep_forfeit_is_masked_as_risk_including_rest_sleep() {
+        let (dex, base) = setup();
+        let me = base.active_id(0).unwrap();
+        let bench = PokeId { side: 1, slot: base.sides[1].party[1] };
+        let sleep = mv(&dex, "sleeppowder");
+        for rest in [false, true] {
+            let mut b = base.clone();
+            b.set_status(&dex, bench, "slp", Some(if rest { bench } else { me }), EffectHandle::None, true);
+            assert!(!certain_noop(&b, &dex, 0, sleep));
+            assert_eq!(dominated_reason(&b, &dex, 0, sleep, MaskRules::default()),
+                Some("inflicting sleep would forfeit under Sleep Clause"));
             let mut after = b.clone();
-            after.set_log_enabled(true);
             after.choose(&dex, 0, "move sleeppowder").unwrap();
             after.choose(&dex, 1, "move bodyslam").unwrap();
-            assert!(
-                after.log.iter().any(|l| l.contains("Sleep Clause Mod activated")),
-                "engine did not engage the clause: {:?}",
-                after.log
-            );
-            assert_eq!(after.poke(def).status, Status::None, "no sleep landed");
-        }
+            assert_eq!(after.outcome(), Some(nc2000_engine::battle::Outcome::P2Win));
 
-        // Rest-sleep is ally-sourced and leaves the clause open
-        // (`conditions.rs` sleepclausemod/onSetStatus: ally source → Undef).
-        {
-            let mut b = b.clone();
-            b.set_status(&dex, bench, "slp", Some(bench), EffectHandle::None, true);
-            assert!(!noop(&b, 0, "sleeppowder"), "Rest sleep does not engage the clause");
-        }
-
-        // a fainted sleeper does not hold the clause either (`hp > 0`)
-        {
-            let mut b = b.clone();
-            b.set_status(&dex, bench, "slp", Some(me), EffectHandle::None, true);
+            let def = b.active_id(1).unwrap();
+            let mut slow = b.clone();
+            slow.poke_mut(def).boosts[4] = 6;
+            assert!(dominated_reason(&slow, &dex, 0, sleep, MaskRules::default()).is_none());
             b.poke_mut(bench).hp = 0;
             b.poke_mut(bench).fainted = true;
-            assert!(!noop(&b, 0, "sleeppowder"), "a fainted sleeper releases the clause");
-        }
-
-        // moving second is not a proof: the sleeper can wake on its own turn
-        {
-            let mut b = b.clone();
-            b.set_status(&dex, bench, "slp", Some(me), EffectHandle::None, true);
-            let def = b.active_id(1).unwrap();
-            b.poke_mut(def).boosts[4] = 6;
-            assert!(!noop(&b, 0, "sleeppowder"), "slower: the clause may lift first");
+            assert!(dominated_reason(&b, &dex, 0, sleep, MaskRules::default()).is_none());
         }
     }
 

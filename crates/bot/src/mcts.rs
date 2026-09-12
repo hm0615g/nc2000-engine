@@ -262,10 +262,7 @@ fn status_pseudo_score(
     };
     match ms.status.as_deref() {
         Some("slp") => {
-            let clause_free = sim.sides[1 - side]
-                .roster
-                .iter()
-                .all(|p| p.hp == 0 || p.status != Status::Slp);
+            let clause_free = !sim.has_sleeping_pokemon(1 - side);
             if clause_free && sim.poke(def).status == Status::None {
                 return PSEUDO_SLEEP * acc;
             }
@@ -330,7 +327,8 @@ fn status_pseudo_score(
     }
 }
 
-pub(crate) fn playout_value(
+/// Unfinished rollouts return a leaf evaluation rather than a terminal outcome.
+pub fn playout_value(
     sim: &mut Battle,
     dex: &Dex,
     playout: &Playout,

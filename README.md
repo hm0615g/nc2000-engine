@@ -2,11 +2,28 @@
 
 Rust port of Pokemon Showdown's **`[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict`** format (mod: `gen2stadium2nc2000` — the community server's no-OHKO regulation, the one with the larger player base and the one the bot actually plays on ladder; migrated from the OHKO-allowing `gen2nc2000` on 2026-07-21, see `PORT-NOTES.md`), built to raise bot-research search throughput by orders of magnitude.
 
-**The source of truth is PS as actually implemented.** Divergence from cartridge GSC or real Stadium 2 hardware is out of scope. Correctness is defined as **bit-exact parity** (state + PRNG seed, at every snapshot point) against golden fixtures generated from PS by `tools/gen-fixtures.js`. (One documented exception where PS itself crashes: `crates/conformance/tests/berry_confusion.rs`.)
+**Battle mechanics follow PS, with the operational sleep-forfeit rule below.**
+If a side already has any living Pokémon asleep, including from Rest, an opponent
+who successfully puts another Pokémon on that side to sleep loses immediately.
+A curing berry, Encore, Metronome, or a target switch does not exempt that
+infliction. Rest itself does not cause a forfeit. Freeze prevents a second freeze
+on the same side; one sleeping Pokémon and one frozen Pokémon may coexist.
+These rules are covered by `crates/engine/tests/sleep_clause.rs` and the bot's
+sleep-clause and position-restoration tests.
+
+The frozen PS fixtures use the older prevention-based Sleep Clause Mod.
+`conformance::ps_reference_battle` explicitly selects that reference rule for
+**bit-exact parity** checks (state + PRNG seed + log at every snapshot).
+Normal engine, bot, solver, and wasm construction always use the operational
+forfeit rule. Divergence from cartridge GSC or real Stadium 2 hardware otherwise
+remains out of scope. The separate PS confusion/berry crash exception is documented
+in `crates/conformance/tests/berry_confusion.rs`.
 
 **Status:** engine bit-exact vs PS (M1–M4), search bots through imperfect-info play (M5–M10), wasm + browser demo shipped (M9), published (M12), Japanese localization (M13). Current phase: **bot strengthening with fail-closed evaluation (M17 — see Roadmap (M17+))**. Playable demo: **https://puniu3.github.io/nc2000-engine/** Licensing: MIT, third-party attribution in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 
 ## Layout
+
+Bot-search investigation: [Battle 4296 and deferred algorithm research](data/report-4296/README.md#deferred-algorithm-research) records the T11 diagnosis, rejected corrections, algorithm sources and the scoped feasibility estimate.
 
 ```
 tools/            Node scripts run against the reference PS build (needs PS_ROOT=PS repo, `node build` done)
@@ -135,6 +152,7 @@ node crates/wasm/tests-node/bench.js     # wasm iters/s; native twin: -p nc2000-
 cd web && npm run dev                    # 0.0.0.0:8000 (auto-bumps port if busy)
 cd web && npm run build && npm run preview   # <base>data/* served from repo data/ in dev AND preview
 cd web && npm run test:e2e               # built-dist custom-party full-game gates
+cd web && npm run test:worker            # search profiles, early flush, and ponder cap through real workers
 # GH Pages build locally (same as .github/workflows/pages.yml; serves at /nc2000-engine/)
 cd web && NC2000_BASE=/nc2000-engine/ npm run build && NC2000_BASE=/nc2000-engine/ npm run preview
 # M14a: regenerate the learnset export, then cross-check the wasm validator
@@ -148,6 +166,113 @@ node tools/gen-fixtures.js --n 30 --pool full     --out fixtures/corpus-v1/full 
 ```
 
 Porting loop: port one callback → tick it off in `PORTING.md` → keep the replay test green as the legal pool grows. On divergence, `compare::Divergence` auto-localizes to the first differing snapshot + JSON path + that turn's log lines.
+
+Learning experiments use `learning_arena` and separate `blind_worker` processes.
+Workers receive only their own team, player-visible protocol lines, and their
+own request. `tools/learning-run.py` freezes the executables, dex, team pools,
+and model files before starting; each complete game is flushed immediately,
+and `--resume` verifies the same inputs before continuing missing games.
+The training scripts require PyTorch 2.8; model inference is implemented in
+Rust and needs no Python runtime.
+
+```bash
+cargo build --release -p nc2000-bot --example blind_worker --example learning_arena
+python3 tools/learning-run.py --out tmp/learning/teacher --games 128 --record
+target/release/examples/blind_worker --describe > tmp/learning/vocabulary.json
+python3 tools/train-policy.py tmp/learning/teacher/games.jsonl \
+  --vocabulary tmp/learning/vocabulary.json --out tmp/learning/policy.json
+python3 tools/check-policy-parity.py --worker target/release/examples/blind_worker \
+  --model tmp/learning/policy.json --games tmp/learning/teacher/games.jsonl
+python3 tools/learning-run.py --out tmp/learning/development --seed 73517 \
+  --a-model tmp/learning/policy.json --games 400
+python3 tools/evaluate-learning.py tmp/learning/development/games.jsonl
+```
+
+`--a-model` / `--b-model` select learned policies; without a model a worker
+runs the unchanged blind search (`--a-iters` / `--b-iters`, default 30,000).
+Use `--b-worker` with the teacher run's frozen worker path to retain that exact
+opponent after further code changes. `--pool` controls evaluation teams and
+`--belief-pool` independently controls both agents' prior. Training and
+validation split by battle seed and team pair, keeping the side-swapped games
+together. Teacher labels are the actual selected actions and terminal outcomes.
+
+For policy improvement, collect a recorded run with `--a-model MODEL
+--a-temperature 1 --b-model OPPONENT_MODEL`, then run
+`tools/improve-policy.py RUN/games.jsonl --model MODEL --out NEXT_MODEL`.
+PPO verifies the parent model hash and every recorded behavior log probability
+before updating. Proxy-opponent results and imitation accuracy are development
+measurements; strength acceptance requires a separately frozen candidate's
+direct blind matches against the frozen 30k bot and a matched latency check.
+
+Training saves an atomic checkpoint after every epoch. Repeat the same command
+with `--resume` after an interruption; the trainer verifies the data, code,
+vocabulary, initialization, and hyperparameters, and restores optimizer and RNG
+state. The best completed epoch is also available as `MODEL.checkpoints/best.json`.
+
+Search experiments can use `--a-leaf-model MODEL` to replace rollout evaluation
+with the learned value. `--a-leaf-preview-iters 30000` retains the original
+30k rollout search for team preview. The trainer's `--material-value` bounds the
+learned logit correction around a remaining-health baseline; `--select brier`
+selects the checkpoint by value prediction error. `--a-prune-root` removes
+actions already excluded by the existing final-choice rules from root sampling.
+These options remain experimental; none changes the default blind bot.
+
+`--a-c` changes the blind search's exploration coefficient. Selection modeling
+uses `tools/fit-pick-prior.py TEACHER/games.jsonl --out PICKS.json` with complete
+recorded games from one frozen teacher. `--preview-only` on the collection
+launcher records just the two initial selections, without inventing outcomes.
+The prior combines matchup counts with team-wide tendencies and uniform
+smoothing. `--a-pick-prior PICKS.json` conditions hidden bench samples on public
+reveals; `--a-pick-preview` also models the opponent's initial selection during
+preview search. Unknown teams retain uniform sampling. These are experimental
+options. `tools/score-pick-prior.py` measures prediction on separate recorded
+games; its prediction scores do not establish playing strength.
+`--a-shared-iters N` runs another experimental search: own action statistics
+are shared across sampled unrevealed opposing benches, while opponent statistics
+retain their sampled states. It uses the existing rollout evaluation and uses
+`--a-iters` for the original team-preview search.
+
+The evaluator treats a side-swapped pair as one bounded observation. It reports
+normal, Hoeffding, empirical Bernstein, and fixed-fraction betting intervals.
+Its positive-evidence flag requires a complete run and a betting 95% lower
+bound above 0.5. This uses a finite mixture of the nonnegative capital processes
+described by [Waudby-Smith and Ramdas](https://arxiv.org/abs/2010.09686).
+For pair scores `x` and a proposed mean `m`, each fixed fraction `f` contributes
+`product(1-f+f*x/m)`; the implementation averages these products. Under an
+independent-pair null with mean at most `m`, each product has expectation at
+most one. Ville's inequality bounds crossing `2/alpha` at any checkpoint, and
+inversion of both tails gives the interval. Fractions are fixed before evaluation. Tests
+enumerate null distributions, including tied pairs, to verify unit expected
+capital and control of false positives. The other intervals remain diagnostics;
+partial runs never set the positive-evidence flag.
+Final acceptance requires fresh held-out blocks after candidate selection.
+Freeze the candidate, baseline, sample cap, and complete-block checkpoints
+before starting confirmation. Pass multiple completed run files to the evaluator
+to combine checkpoints; it rejects changed configurations and repeated schedules.
+Prepare each block with `tools/learning-run.py --prepare-only`, then register
+them with `python3 tools/confirm-learning.py freeze gate.json BLOCK_DIR...`.
+`python3 tools/confirm-learning.py run gate.json` verifies the frozen inputs,
+resumes interrupted games, and stops at the first completed checkpoint whose
+lower bound exceeds 0.5. The registration fixes the sample cap and evaluator
+before any games start. A strength-test pass still needs the thinking-budget
+and product-path checks before adoption.
+
+The Web bot and PS client share [search profiles](data/search-profiles.json).
+The browser and CLI position solvers use the blind profile; the CLI also accepts
+an explicit `--c` coefficient. Explicit PS `--iters` arguments
+and solver budget selections override their default iteration counts; Web
+pondering uses ten times the selected profile's normal budget as its cap.
+PS decision logs include `searchC`, and the regret reader accepts both these
+logs and older logs that omitted the coefficient.
+The blind profile passed [confirmation on fresh seeds](data/blind-c04-confirmation-v1.json)
+through both `BlindAgent` and the player-visible protocol against the frozen 30k
+baseline. The artifact retains paired scores, registered seeds, executable hashes,
+matched WebAssembly timings, and checks of the product entry points.
+For a matched WebAssembly timing comparison, run
+`node tools/compare-wasm-search.js GAMES.jsonl TIMING.json 0.4 1 27000 30000 40`.
+The comparator warms separate searches, alternates measurement order, preserves
+the original seeds before converting to the WebAssembly interface's 32 bits,
+and records input and executable hashes. Append `preview` to sample only selections.
 
 ### Search API (M3)
 
@@ -256,7 +381,7 @@ Milestones:
     **M14b — import UI + open-sheet arena measurement: DONE (2026-07-17).** *Parser* (`web/src/ps-import.ts`): the standard PS teambuilder export format — multi-mon blocks (`Nick (Species) (M) @ Item` headers, Level/Shiny/Happiness/EVs/IVs/Nature/`- Move` lines, `Hidden Power [Ice]` brackets, `~` bullets, blank/`---` separators, `===` team headers → default save name, CRLF/BOM/indentation tolerated) — a faithful mirror of PS's `sim/teams.ts` importer with two deliberate divergences, both surfaced as findings instead of silent mangling: garbage PS silently drops (unrecognized property lines, bad EV/IV chunks, a property line where a mon header belongs) becomes a line-anchored `ps-*` error, and a missing `Level:` stays absent so the validator's `level-default` fix fills 55 (PS's importer force-fills 100, which this format would then reject). *Import UI* (team select screen, both locales, touch-first): paste → parse → `canonicalizeTeam` first ("fix it for me"): applied fixes listed as informational notes, remaining errors localized and anchored to mon/slot or paste line (`web/src/findings.ts` — the full validate.rs + parser code catalogue in en/ja, dex names through the M13 tables); on success saved to localStorage (`custom-teams.ts`), customs listed beside the pool teams (custom badge, two-tap delete), the bot's side stays pool-only. *Play path:* a custom team carries no pool index — the pair-table fetch is skipped, the worker pins the parsed team (`pinOpponent`, the M12 machinery — it never assumed pool membership), bot preview falls back to the live pinned search, battle hides picks only; rematch snapshots the sets, so deleting the saved team is safe. *Arena measurement* (the M14 gate item): new spec `open[:iters[:c[:buckets]]]` — `OpenAgent` (crates/bot), the M12 product policy in native form: the blind machinery with the opponent's true sets pinned (`Belief::pinned_from_battle`, certified ≡ `Belief::pinned` by bit-identical determinizations across whole games in tests/belief.rs) plus `open_preview_pick` baked previews; outer battles log-ON like `blind`. Measured vs perfect info including picks (equal budgets, 300 games, seed 1): **open:3000 vs skuct:3000 = 0.500 ± 0.057 on the 120-team fixture pool** (the free off-meta/custom-like population; think 1011 vs 972 ms/move) and **0.453 ± 0.056 on the meta pool** (in-distribution reference; 1032 vs 1020 ms/move). Reading: in-distribution, open-sheet ≈ blind-with-identified-sets (Gate A's 0.443 ± 0.056) — hiding picks alone costs a real but small ≈ −33 Elo; on the off-meta population the deficit disappears entirely (random fixture teams have less coherent pick synergy for perfect-info knowledge to exploit), and there is **no fixture-pool gap — off-meta sets do not hurt the determinized search itself**. Existing agents bit-identical (skuct:300 vs maxdamage seed 1 = 14W 6L; Gate B green; wasm parity 3-fixture bit-exact on the rebuilt binaries). *Verified* on the built dist with Playwright (en + ja): a PS-export paste with an injected illegal move + broken HP DV → localized, anchored errors (en "#3 Snorlax · Can't learn spikes" / ja 「#3 カビゴン · まきびしは覚えられません」, team-level clauses included); fixing the move imports with the applied fixes listed (HP DV derived, gender from Atk DV, EV/ability/nature fills); the saved team persists across reload, plays a **full game to the outcome banner** with the 30k think chip flipping to ponder at a live-search preview (no pair table for a custom matchup), zero console errors; two-tap delete persists across reload.
     **M14c — bot-side custom parties: DONE (2026-07-23).** Human and bot picks now share one persisted `PartyChoice` (`random | pool | custom`) and resolve at Start into independent snapshotted `SelectedTeam` values. The opponent picker exposes the same saved-party import/select/delete UI; deleting a party pinned on either or both sides atomically falls those start-screen picks back to random, while an active game and Rematch retain their captured sets. `Game` no longer indexes the bot through the pool: it constructs the battle, preview sheet, battle sheet, item display, and worker mirror from the bot snapshot. A baked pair is fetched only when **both** snapshots carry pool indices; pool-vs-custom and custom-vs-custom use the existing pinned live preview. Permanent built-dist Playwright gates (`web/tests/custom-bot.spec.ts`) cover both matchup classes through outcomes, exact bot item/move visibility in preview and battle sheets, import + reload persistence, deletion-safe rematch, stale-pick fallback, zero pair requests, and zero console/page errors. The E2E build has an explicit Vite `test`-mode 300-iteration budget; production mode remains hard-fixed at 30k.
 15. **M15 — PS interop: DONE (2026-07-17)**: (a) local sim-stream harness — the bot drives PS's own `BattleStream` (no networking) for cross-validation and games against PS-side bots; (b) websocket client (login, challenges, `|request|` handling) whose one genuinely new component is a **protocol→state importer**: the own side is fully known from request JSON; the opponent side has exactly M10's observer/belief/determinizer information structure (foe HP arrives at 1/48 granularity — imputed; purity is a declared non-goal), generalized to construct battles from public information instead of overwriting a known true state. Genuinely-hidden-set play (the parked full-blind policy) becomes the product policy here. Main-ladder botting requires PS staff permission; own-server/local play is unrestricted.
-    **M15a — local sim-stream harness + protocol→state importer: DONE (2026-07-17).** *Importer* (`crates/bot/src/import.rs`): `ProtocolTracker` parses the player-visible protocol (the vocabulary is closed — this engine emits it bit-exactly) into per-mon public state: HP (own exact / foe 1/48 pixels, imputed mid-bucket), status **with the public counters** (sleep turns, Rest's 2-turn clock, the Stadium `residualdmg` Toxic counter — which survives cures/Rest-replacement and is removed only by switching, mirrored exactly; `brnattackdrop`/`parspeeddrop` lifecycles incl. boost-triggered and Haze removal), boosts (Baton Pass transfers them + copyable volatiles), announced volatiles (durations clamped by publicly elapsed turns; encore/disable move ids captured; perish counts; bind traps ending under their move's name), move-implied volatiles (Defense Curl/Minimize/Rage/Destiny Bond/Fury Cutter streak), side conditions + weather (upkeep-counted remaining duration), and **PP marks with `run_move`'s exact deduction rule** — charge-turn `|move|` lines deduct, release turns don't, thrash-class (2–3 actions) and Rollout (5 hits, whiff ends it) continuations don't, called moves (`[from]` another move) don't but Pursuit's `[from] Pursuit` switch-interception does, Spite/Mystery Berry adjust counts. `synthesize` then builds `Battle::from_fixture(own sets, belief refs)` and performs the state surgery: picks/positions (the M10 canonical party scheme; hidden opponent picks imputed — the determinizer resamples them per iteration), per-mon fields, engine-API planting (`set_status`/`add_volatile`/`add_side_condition`/`set_weather` — companion state and rolled hidden durations come from the real code paths), request bookkeeping via the engine's own `make_request` (faint `switch_flag`s, forced-switch counters), and the mid-turn queue `Belief::determinize`'s pending-move scrub expects (pending foe move + residual at Baton-Pass switch requests). Reused wholesale from M10: `Observer` (log channel, protocol-fed via new `from_mons`/`ingest_line`), `Belief` (filtering / fallback / pinned / determinize; new `refs()` accessor + one lenient rule: PS normalizes typed Hidden Powers to plain `hiddenpower`, so plain-HP reveals match any typed slot — typed M10 reveals unaffected, bit-identity preserved), and `BlindSearch` (unchanged loop; new optional root mask because **PS enforces Max Total Level = 155 at preview and the engine's enumeration did not** — at the time an accepted port gap, so preview picks (search root + baked-table mixed sampling) were projected onto the legal subset. *Addendum 2026-07-17: superseded at preview — the engine now enforces the 155 cap in validation and enumeration (see the M8 correction); the mask API and the filtered table sampling stay as harmless defense in depth*). `ProtocolAgent` orchestrates (also wasm `ProtocolSearcher`: `pushLines`/`onRequest`/`step`/`best`/`stateView`), with every submission projected onto the request-derived legal set (projection counter stayed 0 — the synthesized battle's own legality matched PS's at every decision). *Native certification* (`crates/bot/tests/import.rs`): all 60 conformance fixtures replayed per-side as a player would see them (`|split|`-filtered lines + requests built from own-side truth), both belief modes — **9,710 decision points, 0 public-field mismatches (own side exact incl. per-move PP; foe status/boosts exact + HP bucket + PP marks), 0 fixture choices illegal in the synthesized battle**; 22 residual volatile-set diffs remain as documented inference limits (mid-turn `twoturnmove` edges, Rage expiry nuance, Lock-On, single-turn Endure/stall at mid-turn switches, the foe's hidden Pursuit choice — correctly unknowable). *Harness* (`tools/ps-arena.js`, PS clone at `~/pokemon-showdown`): hosts `BattleStream`, our side driven purely from its player stream (request-before-update ordering handled by acting at stream quiescence), opponent = `RandomPlayerAI` (level-cap-aware preview subclass) or a max-base-power scripted player; every decision point also reads the omniscient `battleStream.battle` and asserts the synthesized state against the truth. **Gate a — protocol soundness: 110/110 complete games (blind vs random ×30 + max-BP ×15 at 300 iters, open-sheet ×15, plus the 50 gate-c games; pool + fixture opponent teams mixed, sides alternated), zero choice rejections, zero desyncs/timeouts.** **Gate b — state tracking: 2,410 decision points across those games, zero mismatches** (own side exact; opponent species/level/status/boosts exact, HP within the announced 1/48 bucket, revealed-move PP marks exact, side conditions + weather). **Gate c — strength vs `RandomPlayerAI` at `blind:1000`: 49W 1L 0T over 50 games** (mixed pool+fixture teams, seed 21, avg 16.4 turns). Existing behavior bit-identical: full native suite green (Gate B included), corpus test green, wasm parity/smoke/determinism green on the rebuilt binaries, arena `skuct:300` vs `maxdamage` seed 1 = 14W 6L, and `blind:300` vs `skuct:300` (meta pool, seed 1) identical before vs after (9W 11L, avg 16.7 — the M10c-quoted 15.8 predates the grown table set). *M15b still needs:* the websocket client proper — login/challenge flow, `|request|`+rqid handling over the wire, timers, reconnect/resume (the importer is already stream-agnostic: lines + request JSON in, choices out).
+    **M15a — local sim-stream harness + protocol→state importer: DONE (2026-07-17).** *Importer* (`crates/bot/src/import.rs`): `ProtocolTracker` parses the player-visible protocol (the vocabulary is closed — this engine emits it bit-exactly) into per-mon public state: HP (own exact / foe 1/48 pixels, imputed mid-bucket), status **with the public counters** (sleep turns, Rest's 2-turn clock, the Stadium `residualdmg` Toxic counter — which survives cures/Rest-replacement and is removed only by switching, mirrored exactly; `brnattackdrop`/`parspeeddrop` lifecycles incl. boost-triggered and Haze removal), boosts (Baton Pass transfers them + copyable volatiles), announced volatiles (durations clamped by publicly elapsed turns; encore/disable move ids captured; perish counts; bind traps ending under their move's name), move-implied volatiles (Defense Curl/Minimize/Rage/Destiny Bond/Fury Cutter streak), side conditions + weather (upkeep-counted remaining duration), and **PP marks with `run_move`'s exact deduction rule** — charge-turn `|move|` lines deduct, release turns don't, thrash-class (2–3 actions) and Rollout (5 hits, whiff ends it) continuations don't, called moves (`[from]` another move) don't but Pursuit's `[from] Pursuit` switch-interception does, Spite/Mystery Berry adjust counts. `synthesize` then builds `Battle::from_fixture(own sets, belief refs)` and performs the state surgery: picks/positions (the M10 canonical party scheme; hidden opponent picks imputed — the determinizer resamples them per iteration), per-mon fields, engine-API restoration (`restore_status`/`add_volatile`/`add_side_condition`/`set_weather` — companion state and rolled hidden durations come from the real code paths), request bookkeeping via the engine's own `make_request` (faint `switch_flag`s, forced-switch counters), and the mid-turn queue `Belief::determinize`'s pending-move scrub expects (pending foe move + residual at Baton-Pass switch requests). Reused wholesale from M10: `Observer` (log channel, protocol-fed via new `from_mons`/`ingest_line`), `Belief` (filtering / fallback / pinned / determinize; new `refs()` accessor + one lenient rule: PS normalizes typed Hidden Powers to plain `hiddenpower`, so plain-HP reveals match any typed slot — typed M10 reveals unaffected, bit-identity preserved), and `BlindSearch` (unchanged loop; new optional root mask because **PS enforces Max Total Level = 155 at preview and the engine's enumeration did not** — at the time an accepted port gap, so preview picks (search root + baked-table mixed sampling) were projected onto the legal subset. *Addendum 2026-07-17: superseded at preview — the engine now enforces the 155 cap in validation and enumeration (see the M8 correction); the mask API and the filtered table sampling stay as harmless defense in depth*). `ProtocolAgent` orchestrates (also wasm `ProtocolSearcher`: `pushLines`/`onRequest`/`step`/`best`/`stateView`), with every submission projected onto the request-derived legal set (projection counter stayed 0 — the synthesized battle's own legality matched PS's at every decision). *Native certification* (`crates/bot/tests/import.rs`): all 60 conformance fixtures replayed per-side as a player would see them (`|split|`-filtered lines + requests built from own-side truth), both belief modes — **9,710 decision points, 0 public-field mismatches (own side exact incl. per-move PP; foe status/boosts exact + HP bucket + PP marks), 0 fixture choices illegal in the synthesized battle**; 22 residual volatile-set diffs remain as documented inference limits (mid-turn `twoturnmove` edges, Rage expiry nuance, Lock-On, single-turn Endure/stall at mid-turn switches, the foe's hidden Pursuit choice — correctly unknowable). *Harness* (`tools/ps-arena.js`, PS clone at `~/pokemon-showdown`): hosts `BattleStream`, our side driven purely from its player stream (request-before-update ordering handled by acting at stream quiescence), opponent = `RandomPlayerAI` (level-cap-aware preview subclass) or a max-base-power scripted player; every decision point also reads the omniscient `battleStream.battle` and asserts the synthesized state against the truth. **Gate a — protocol soundness: 110/110 complete games (blind vs random ×30 + max-BP ×15 at 300 iters, open-sheet ×15, plus the 50 gate-c games; pool + fixture opponent teams mixed, sides alternated), zero choice rejections, zero desyncs/timeouts.** **Gate b — state tracking: 2,410 decision points across those games, zero mismatches** (own side exact; opponent species/level/status/boosts exact, HP within the announced 1/48 bucket, revealed-move PP marks exact, side conditions + weather). **Gate c — strength vs `RandomPlayerAI` at `blind:1000`: 49W 1L 0T over 50 games** (mixed pool+fixture teams, seed 21, avg 16.4 turns). Existing behavior bit-identical: full native suite green (Gate B included), corpus test green, wasm parity/smoke/determinism green on the rebuilt binaries, arena `skuct:300` vs `maxdamage` seed 1 = 14W 6L, and `blind:300` vs `skuct:300` (meta pool, seed 1) identical before vs after (9W 11L, avg 16.7 — the M10c-quoted 15.8 predates the grown table set). *M15b still needs:* the websocket client proper — login/challenge flow, `|request|`+rqid handling over the wire, timers, reconnect/resume (the importer is already stream-agnostic: lines + request JSON in, choices out).
     **M15b — PS websocket client: DONE (2026-07-17).** *Client* (`tools/ps-client.js`, Node + `ws` — the only dependency, `tools/package.json`): connects to a PS server's `/showdown/websocket` (config: `--server` URL, `--name`, optional `--password` for registered accounts via the configured server's standard login endpoint; guest login = bare `/trn`, accepted by a `--no-security` server, with the `|challstr|` assertion flow against `--loginserver` as the fallback), sends or accepts challenges in `gen2nc2000` (`/utm` packed team — pool team by index / `pool:random` / a team file — then `/challenge`/`/accept`; challenge state is tracked from the modern `|pm|…|/challenge FORMAT|…` updates, an empty `/challenge` meaning resolved — this server no longer sends the legacy `|updatechallenges|` JSON, which is kept only as a fallback), and drives battles with M15a's wasm `ProtocolSearcher`: battle-room lines buffered (noise-filtered down to the M15a player-stream vocabulary), each `|request|` acted on after a 100ms quiescence debounce (the network analogue of the sim-stream idle wait; team-preview requests additionally hold until the `|poke|` lines land), choices submitted as `/choose <choice>|<rqid>` (server-side stale-request protection; client-side the newest request always wins). `|error|` recovery honors PS's two rejection kinds: `[Unavailable choice]` re-sends an updated request (the normal flow re-chooses); anything else leaves the request open with no re-send, so the client re-poses the last request itself and falls back to the always-legal `default` on repeat — every battle-room `|error|` counts against gate a regardless. Blind product policy by default; `--mode open` pins the opponent's true sets (`--opp-team-file`) for genuinely-open-sheet servers; `--random` turns the client into the uniform request-legal second driver (level-cap-aware at preview) for gate runs; `--games N` sequential battles, concurrency capped at 1. *Reconnect/resume:* on a socket drop the client reconnects, re-logs-in, and `/join`s every live battle; the server replays `|init|battle` + the full player-channel room log and then re-sends the open `|request|` (plus `|sentchoice|` if that request was already answered — the client then recomputes but withholds the re-send); the driver rebuilds a fresh searcher from the replayed log — the importer is stateless-rebuildable from full log + latest request — and the rebuild is **proven** by comparing the rebuilt `stateView` bit-for-bit against the pre-drop one whenever the rqid matches. *Verification* (local clone server, `node pokemon-showdown start --skip-build --no-security 8123`, all games complete over the real websocket): **gate a — 24 games at `blind:1000` vs the random driver: 23W 1L 0T, 339 decisions, 0 choice rejections, 0 desyncs/timeouts, 0 legality drift, 0 projections, max think 653ms (avg 395ms)**; **gate b — chaos socket kills (`--drop`) at team preview, mid-battle moves (incl. one right after the choice was sent), and forced-switch points: 7 drops across 7 games, every battle auto-resumed and finished with 0 rejections after resume; resume proofs 6/6 bit-identical wherever the pre-drop request was still open on rejoin, 1 skipped by design (the post-choice drop advanced the turn, so rqids differ)**; **gate c — 6 games with `/timer on` (server-confirmed in each battle): 6W 0L, 0 timer losses, max think latency 603ms (avg 367ms) against a 150s+ budget**. Open-mode smoke (pinned sheets over the wire) clean. POLICY: botting on the main ladder (play.pokemonshowdown.com) requires PS staff permission — `--server` has no default, the restriction is stated in `--help`, and the client is meant for the local clone or an explicitly-configured self-hosted server.
 
 ### Roadmap (M17+ — verification-first)

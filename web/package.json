@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "build:e2e": "tsc --noEmit && VITE_NC2000_TEST_BUDGET=300 vite build --mode test",
     "preview": "vite preview --host --port 8000",
+    "test:worker": "node tests/worker-profile.mjs",
     "test:e2e": "npm run build:e2e && node tests/run-e2e.mjs"
   },
   "dependencies": {
