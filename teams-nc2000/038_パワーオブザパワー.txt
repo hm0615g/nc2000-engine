@@ -1,5 +1,5 @@
 Machamp (M) @ Quick Claw
-Level: 50
+Level: 55
 EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
 IVs: 26 Atk / 26 Def
 - Cross Chop
