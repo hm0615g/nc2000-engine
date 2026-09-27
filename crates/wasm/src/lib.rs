@@ -166,6 +166,15 @@ impl WasmBattle {
         Ok(WasmBattle { dex: dex.dex.clone(), battle, log_cursor: 0 })
     }
 
+    #[wasm_bindgen(js_name = setPreviewLevelCap)]
+    pub fn set_preview_level_cap(&mut self, side: usize, cap: Option<u32>) -> Result<(), JsError> {
+        if side > 1 || self.battle.turn != 0 {
+            return Err(JsError::new("preview cap requires side 0 or 1 before battle start"));
+        }
+        self.battle.preview_level_caps[side] = cap;
+        Ok(())
+    }
+
     /// JSON `[bool, bool]` — which sides owe a choice. `[false, false]`
     /// means the battle has ended.
     #[wasm_bindgen(js_name = needsChoice)]

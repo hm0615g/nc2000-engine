@@ -138,17 +138,13 @@ impl Battle {
                 )));
             }
         }
-        // maxtotallevel onChooseTeam (PS rulesets.ts): the picked mons'
-        // level sum must not exceed MAX_TOTAL_LEVEL — see the constant's
-        // certificate. PS sums the positions after trimming/filling to
-        // pickedTeamSize, exactly like `positions` here.
         let total = self.picked_total_level(side_n, &positions);
-        if total > MAX_TOTAL_LEVEL {
+        if self.preview_level_caps[side_n].is_some_and(|cap| total > cap) {
             return Err(EngineError::InvalidChoice(format!(
                 "p{}: selected team has a total level of {}, above the {} cap",
                 side_n + 1,
                 total,
-                MAX_TOTAL_LEVEL
+                self.preview_level_caps[side_n].unwrap()
             )));
         }
         for (index, &pos) in positions.iter().enumerate() {

@@ -1368,6 +1368,7 @@ fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex) {
 /// or hidden-overwrite side of the determinizer.
 fn audit_battle_hidden(b: &Battle) {
     let Battle {
+        preview_level_caps: _,
         prng: _,               // HIDDEN → reseeded by determinize
         turn: _,               // public
         request_state: _,      // public

@@ -1,0 +1,193 @@
+.evaluate {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+  --accent: #a3b79d;
+  --accent-dim: #394837;
+}
+.evaluate header {
+  margin-bottom: 26px;
+}
+.evaluate h1 {
+  font-size: clamp(1.45rem, 4vw, 2rem);
+}
+.evaluate h2 {
+  margin-top: 0;
+}
+.evaluate p {
+  line-height: 1.65;
+}
+.eval-eyebrow {
+  color: #adbea6;
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+}
+.eval-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.eval-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px;
+  margin-bottom: 18px;
+  min-width: 0;
+}
+.evaluate textarea,
+.evaluate input {
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  min-width: 0;
+}
+.evaluate textarea {
+  display: block;
+  width: 100%;
+  min-height: 235px;
+  resize: vertical;
+  margin: 12px 0;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+.evaluate input[type="number"] {
+  width: 100px;
+  min-height: 44px;
+}
+.evaluate input[type="file"] {
+  width: 100%;
+}
+.eval-opponent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.eval-opponent strong {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.eval-opponent span {
+  width: 62px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.eval-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+.eval-actions label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.eval-start {
+  background: #394837;
+  border-color: #71856b;
+  font-weight: 600;
+}
+.eval-muted,
+.eval-empty {
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+.eval-empty {
+  padding: 18px 0;
+}
+.eval-warning {
+  color: #ddbe7a;
+}
+.eval-error {
+  color: #f0aaaa;
+  overflow-wrap: anywhere;
+}
+.eval-findings {
+  max-height: 180px;
+  overflow: auto;
+  padding-left: 22px;
+  font-size: 0.86rem;
+}
+.eval-table-wrap {
+  overflow-x: auto;
+}
+.evaluate table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.evaluate th,
+.evaluate td {
+  padding: 12px 10px;
+  text-align: right;
+  border-bottom: 1px solid var(--line);
+}
+.evaluate th:first-child,
+.evaluate td:first-child {
+  text-align: left;
+}
+.evaluate progress {
+  width: 100%;
+  accent-color: #95aa8d;
+}
+.evaluate summary {
+  cursor: pointer;
+  padding: 12px 0;
+}
+.evaluate fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .eval-columns {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .evaluate {
+    padding: 20px 12px 40px;
+  }
+  .eval-panel {
+    padding: 16px;
+  }
+}
+.eval-file {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+.eval-file input {
+  display: block;
+  margin: 6px 0 12px;
+}
+.eval-roster {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  margin: 8px 0 0;
+}
+.eval-progress {
+  min-height: 1.7em;
+  font-size: 0.86rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.eval-fingerprint {
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+}
+.evaluate select {
+  max-width: 100%;
+}
+.eval-actions .eval-file {
+  display: block;
+  flex: 1 1 220px;
+}

@@ -21,6 +21,32 @@ in `crates/conformance/tests/berry_confusion.rs`.
 
 **Status:** engine bit-exact vs PS (M1–M4), search bots through imperfect-info play (M5–M10), wasm + browser demo shipped (M9), published (M12), Japanese localization (M13). Current phase: **bot strengthening with fail-closed evaluation (M17 — see Roadmap (M17+))**. Playable demo: **https://puniu3.github.io/nc2000-engine/** Licensing: MIT, third-party attribution in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 
+## Party evaluator
+
+Open `?evaluate` on the browser demo to measure a custom party against a weighted
+opponent distribution. Paste Showdown export text, a team JSON array, or a `{ "sets": [...] }` object; opponent
+entries use `{ "teams": [{ "id": "name", "weight": 1, "sets": [...] }] }`.
+The shipped Nash mixture is the default. Both sides use blind search with the
+bundled belief pool; changing the opponent distribution only changes team draws.
+
+The default is 32 games at 3,000 iterations per decision. Each sampled matchup
+plays twice with P1/P2 reversed. Completed pairs are saved locally in IndexedDB
+and can be resumed or extended with the same build and configuration. Results
+export as JSON (inputs, seeds, build/data fingerprints and individual outcomes)
+or CSV (aggregate and individual results). Computation stops when the page closes.
+
+Format violations are warnings for both parties. A party with a total-level
+violation has its own preview cap removed; normal parties retain the 155 cap.
+Runtime sleep/freeze rules still apply. Inputs must remain engine-representable:
+1–6 Pokémon, known species/items/moves, levels 1–100 and at most four moves each.
+Canonicalization changes are shown before play.
+
+Scores are win=1, loss=0, tie/500-turn cap=0.5; caps and ties are counted separately.
+The 95% interval uses independent two-game means with the normal approximation
+and is omitted below two pairs. Small-sample, interim and extended-run intervals
+are descriptive, without automatic superiority claims. This measures this AI's
+performance against the selected distribution.
+
 ## Layout
 
 Bot-search investigation: [Battle 4296 and deferred algorithm research](data/report-4296/README.md#deferred-algorithm-research) records the T11 diagnosis, rejected corrections, algorithm sources and the scoped feasibility estimate.
