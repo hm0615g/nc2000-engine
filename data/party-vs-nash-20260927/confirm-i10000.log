@@ -1,0 +1,18 @@
+prior_exploit confirm-i10000: arm=pool:data/belief-pool-v1/belief-pool.json y=file:data/party-vs-nash-20260927/party.json (in belief pool: false) pool=87 teams, 256 games @10000 iters, seed 2026092702, 4 threads, 0 done
+  [confirm-i10000] 16/256 games, 37s elapsed
+  [confirm-i10000] 32/256 games, 70s elapsed
+  [confirm-i10000] 48/256 games, 116s elapsed
+  [confirm-i10000] 64/256 games, 144s elapsed
+  [confirm-i10000] 80/256 games, 189s elapsed
+  [confirm-i10000] 96/256 games, 223s elapsed
+  [confirm-i10000] 112/256 games, 253s elapsed
+  [confirm-i10000] 128/256 games, 292s elapsed
+  [confirm-i10000] 144/256 games, 332s elapsed
+  [confirm-i10000] 160/256 games, 376s elapsed
+  [confirm-i10000] 176/256 games, 406s elapsed
+  [confirm-i10000] 192/256 games, 452s elapsed
+  [confirm-i10000] 208/256 games, 483s elapsed
+  [confirm-i10000] 224/256 games, 518s elapsed
+  [confirm-i10000] 240/256 games, 558s elapsed
+  [confirm-i10000] 256/256 games, 596s elapsed
+confirm-i10000: X(blind, ship mixture) score 0.7383 ± 0.0564 over 256 games (128 blocks; 256 fallback) -> data/party-vs-nash-20260927/results/confirm-i10000.summary.json

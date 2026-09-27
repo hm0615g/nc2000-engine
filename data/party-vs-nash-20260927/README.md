@@ -58,3 +58,17 @@ means a demonstrated losing matchup; otherwise the result is unresolved.
 The 10,000-iteration run tests sensitivity to search budget, not an alternative
 primary endpoint. These results concern this bot, prior, and opponent mixture;
 they do not certify performance against every possible metagame opponent.
+
+## Results
+
+| Iterations | Games | Party wins | Party losses | Win rate | Paired 95% CI |
+|---|---:|---:|---:|---:|---:|
+| 3,000 | 1,024 | 322 | 702 | 31.4% | 28.5–34.3% |
+| 10,000 | 256 | 67 | 189 | 26.2% | 20.5–31.8% |
+
+No draws or turn caps occurred. The predeclared primary endpoint establishes
+a losing matchup against the mixture; increasing the search budget does not
+reverse that conclusion. The difference between budgets itself is not claimed
+as statistically established. All three opponent-specific point estimates
+are below 50% at both budgets. See `summary.json` for paired intervals and
+per-opponent counts, and `REPORT.txt` for the Japanese copy-ready report.
