@@ -33,10 +33,10 @@ The shipped Nash mixture is the default. Both sides use blind search with the
 bundled belief pool; changing the opponent distribution only changes team draws.
 
 The default is 32 games at 3,000 iterations per decision. Each sampled matchup
-plays twice with P1/P2 reversed. Completed pairs are kept in sessionStorage for
-the current tab, including across reloads, and can be resumed or extended with
-the same build and configuration. Closing the tab resets its results; previous
-IndexedDB results are no longer loaded. Results
+plays twice with P1/P2 reversed. Results stay in memory only and can be resumed
+or extended while the page remains open. Reloading or closing the tab resets
+results. The evaluator does not save to browser storage or load previous results.
+Files are saved only through the explicit export buttons. Results
 export as JSON (inputs, seeds, build/data fingerprints and individual outcomes)
 or CSV (aggregate and individual results). Computation stops when the page closes.
 

@@ -30,7 +30,6 @@ import {
   sha256,
   type OpponentDraft,
 } from "./evaluate-input";
-import { loadRuns, saveRun } from "./evaluate-store";
 import { searchProfile } from "./search-profile";
 import { TeamEditor, type EditorDex } from "./evaluate-team-editor";
 import "./evaluate.css";
@@ -128,7 +127,6 @@ export function Evaluate() {
   const [games, setGames] = useState("32");
   const [belief, setBelief] = useState({ json: "", hash: "" });
   const [error, setError] = useState("");
-  const [storageError, setStorageError] = useState("");
   const [run, setRun] = useState<EvaluationRun | null>(null);
   const [history, setHistory] = useState<EvaluationRun[]>([]);
   const [running, setRunning] = useState(false);
@@ -136,9 +134,7 @@ export function Evaluate() {
   const [notice, setNotice] = useState("");
   const worker = useRef<Worker | null>(null);
   const currentRun = useRef<EvaluationRun | null>(null);
-  const writes = useRef(Promise.resolve());
   const alive = useRef(true);
-  const generation = useRef(0);
 
   function selectRun(saved: EvaluationRun) {
     currentRun.current = saved;
@@ -157,7 +153,7 @@ export function Evaluate() {
     setNotice("");
   }
   useEffect(() => {
-    setLocale("ja");
+    setLocale("ja", false);
     document.title = "NC2000 — パーティ強度測定";
     void (async () => {
       try {
@@ -174,14 +170,6 @@ export function Evaluate() {
         setEditorDex(dex as EditorDex);
         setEntries(draft);
         setBelief({ json: pool.poolJson, hash });
-        try {
-          const saved = await loadRuns();
-          if (!alive.current) return;
-          setHistory(saved);
-          if (saved[0]) selectRun(saved[0]);
-        } catch (e) {
-          setStorageError(`保存した結果を読み込めません: ${String(e)}`);
-        }
         setReady(true);
       } catch (e) {
         setError(String(e));
@@ -250,35 +238,23 @@ export function Evaluate() {
         b.createdAt.localeCompare(a.createdAt),
       ),
     );
-    writes.current = writes.current
-      .then(() => saveRun(next))
-      .then(() => setStorageError(""))
-      .catch((e) =>
-        setStorageError(
-          `自動保存できません。「結果をファイルに保存」を使ってください: ${String(e)}`,
-        ),
-      );
-    return writes.current;
   }
   function stop(
     message = "停止しました。終わっていない2戦は、再開したときにやり直します。",
   ) {
-    generation.current++;
     worker.current?.terminate();
     worker.current = null;
     setRunning(false);
     setProgress("");
     setNotice(message);
   }
-  async function launch(next: EvaluationRun) {
+  function launch(next: EvaluationRun) {
     if (worker.current) return;
-    const launchGeneration = ++generation.current;
     setRunning(true);
     setError("");
     setNotice("");
     setProgress("対戦を準備しています…");
-    await retain(next);
-    if (!alive.current || generation.current !== launchGeneration) return;
+    retain(next);
     try {
       const w = new Worker(new URL("./evaluate-worker.ts", import.meta.url), {
         type: "module",
@@ -298,9 +274,8 @@ export function Evaluate() {
         if (msg.type === "pair") {
           try {
             const updated = appendPair(currentRun.current!, msg.pair);
-            void retain(updated).then(() => {
-              if (worker.current === w) w.postMessage({ type: "ack" });
-            });
+            retain(updated);
+            w.postMessage({ type: "ack" });
           } catch (e) {
             setError(String(e));
             stop("結果の集計中に停止しました。");
@@ -320,7 +295,7 @@ export function Evaluate() {
   }
   function newRun() {
     if (!config || !validCount || running) return;
-    void launch({
+    launch({
       version: 1,
       id:
         crypto.randomUUID?.() ??
@@ -334,7 +309,7 @@ export function Evaluate() {
   }
   function resume(add: boolean) {
     if (!run || !compatible || running || (add && !validCount)) return;
-    void launch({
+    launch({
       ...run,
       targetPairs: add ? run.pairs.length + count / 2 : run.targetPairs,
     });
@@ -364,11 +339,6 @@ export function Evaluate() {
       {error && (
         <p class="eval-error" role="alert">
           {error}
-        </p>
-      )}
-      {storageError && (
-        <p class="eval-warning" role="alert">
-          {storageError}
         </p>
       )}
       {!ready && !error && <p role="status">対戦データを読み込んでいます…</p>}
@@ -595,7 +565,7 @@ export function Evaluate() {
         </div>
         {run && !compatible && ready && (
           <p class="eval-warning">
-            パーティ・対戦設定・アプリのバージョンが保存時と異なります。この結果に追加せず、新しい計測を始めてください。
+            パーティ・対戦設定・アプリのバージョンが計測開始時と異なります。この結果に追加せず、新しい計測を始めてください。
           </p>
         )}
         {run && (
@@ -664,7 +634,7 @@ export function Evaluate() {
           勝率は勝った試合の割合です。「引き分けを含む成績」では、引き分けと500ターンでの打ち切りを半勝として数えます。「推定の幅」は偶然によるばらつきの目安です。試合が少ない間は、結果も大きく変わります。
         </p>
         <p class="eval-muted">
-          このコンピューターが、指定した相手と対戦したときの成績です。結果はこのタブを開いている間だけ残ります。タブを閉じるとリセットされます。残したい結果はファイルに保存してください。
+          このコンピューターが、指定した相手と対戦したときの成績です。結果は自動保存されません。再読み込みやタブを閉じる操作でリセットされます。残したい結果はファイルに保存してください。
         </p>
       </section>
     </main>

@@ -18,10 +18,10 @@ async function distribution(page: Page, sets = opponent) {
   });
   await expect(page.locator(".eval-opponent strong")).toHaveText(["fish"]);
 }
-async function saved(page: Page): Promise<EvaluationRun[]> {
-  return page.evaluate(() =>
-    JSON.parse(sessionStorage.getItem("nc2000-evaluations") ?? "[]"),
-  );
+async function exported(page: Page): Promise<EvaluationRun> {
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "結果をファイルに保存" }).click();
+  return JSON.parse(readFileSync((await (await download).path())!, "utf8"));
 }
 async function boot(page: Page) {
   await page.goto(route);
@@ -78,7 +78,7 @@ test("warnings allow illegal parties, invalid data blocks execution", async ({
   await expect(page.locator(".eval-opponent strong")).toHaveCount(3);
 });
 
-test("local wasm plays both sides, survives reload, resumes, separates changed configurations and exports", async ({
+test("local wasm plays both sides, resumes in memory, separates changed configurations and exports", async ({
   page,
 }) => {
   const failures: string[] = [];
@@ -100,11 +100,10 @@ test("local wasm plays both sides, survives reload, resumes, separates changed c
   await expect(page.getByRole("status")).toContainText("計測が完了", {
     timeout: 120000,
   });
-  await expect.poll(async () => (await saved(page))[0]?.pairs.length).toBe(1);
-  const initial = (await saved(page))[0];
+  const initial = await exported(page);
+  expect(initial.pairs).toHaveLength(1);
   expect(initial.pairs[0].games.map((g) => g.playerSide)).toEqual([0, 1]);
   expect(initial.pairs[0].games.map((g) => g.outcome)).toEqual(["win", "win"]);
-  await page.reload();
   await expect(
     page.getByRole("button", { name: "追加計測", exact: true }),
   ).toBeEnabled();
@@ -113,7 +112,7 @@ test("local wasm plays both sides, survives reload, resumes, separates changed c
   await expect(page.getByRole("status")).toContainText("計測が完了", {
     timeout: 120000,
   });
-  const updated = (await saved(page))[0];
+  const updated = await exported(page);
   expect(updated.pairs).toHaveLength(2);
   expect(updated.pairs[0]).toEqual(initial.pairs[0]);
   expect(updated.pairs[1].index).toBe(1);
@@ -168,12 +167,10 @@ test("local wasm plays both sides, survives reload, resumes, separates changed c
   await page.getByLabel("試合数", { exact: true }).fill("100");
   await page.getByRole("button", { name: "追加計測", exact: true }).click();
   await page.getByRole("button", { name: "停止", exact: true }).click();
-  await page.reload();
   await expect(
     page.getByRole("button", { name: "再開", exact: true }),
   ).toBeEnabled();
-  expect((await saved(page))[0].pairs.length).toBeGreaterThanOrEqual(2);
-  await page.getByText("テキストから読み込む", { exact: true }).click();
+  expect((await exported(page)).pairs.length).toBeGreaterThanOrEqual(2);
   await page
     .getByLabel("自分のパーティ", { exact: true })
     .fill(JSON.stringify([{ ...player[0], level: 99 }]));
@@ -186,10 +183,12 @@ test("local wasm plays both sides, survives reload, resumes, separates changed c
   expect(failures).toEqual([]);
 });
 
-test("closing a tab resets results and new tabs ignore previous persistent results", async ({
+test("results stay out of browser storage and reset on reload or tab closure", async ({
   page,
   context,
 }) => {
+  const downloads: string[] = [];
+  page.on("download", (file) => downloads.push(file.suggestedFilename()));
   await boot(page);
   await distribution(page);
   await page
@@ -200,53 +199,35 @@ test("closing a tab resets results and new tabs ignore previous persistent resul
   await expect(page.getByRole("status")).toContainText("計測が完了", {
     timeout: 120000,
   });
-  const [result] = await saved(page);
-  expect(result.pairs).toHaveLength(1);
-  await page.evaluate(
-    (run) =>
-      new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open("nc2000-evaluations", 1);
-        req.onupgradeneeded = () =>
-          req.result.createObjectStore("runs", { keyPath: "id" });
-        req.onerror = () => reject(req.error);
-        req.onsuccess = () => {
-          const db = req.result;
-          const tx = db.transaction("runs", "readwrite");
-          tx.objectStore("runs").put(run);
-          tx.oncomplete = () => {
-            db.close();
-            resolve();
-          };
-          tx.onabort = () => {
-            db.close();
-            reject(tx.error);
-          };
-        };
-      }),
-    result,
-  );
-  const other = await context.newPage();
-  await boot(other);
-  expect(await saved(other)).toEqual([]);
-  await expect(other.getByLabel("このタブの計測")).toHaveCount(0);
-  expect((await saved(page))[0]).toEqual(result);
+  expect(downloads).toEqual([]);
+  expect(await page.evaluate(async () => ({
+    local: localStorage.length,
+    session: sessionStorage.length,
+    databases: await indexedDB.databases(),
+  }))).toEqual({ local: 0, session: 0, databases: [] });
+  expect((await exported(page)).pairs).toHaveLength(1);
+  expect(downloads).toHaveLength(1);
+
+  await page.reload();
+  await expect(page.getByLabel("自分のパーティ", { exact: true })).toBeEnabled();
+  await expect(page.getByLabel("このタブの計測")).toHaveCount(0);
+  await expect(page.getByLabel("自分のパーティ", { exact: true })).toHaveValue("");
+  await expect(page.getByRole("button", { name: "結果をファイルに保存" })).toHaveCount(0);
+  await page.getByText("テキストから読み込む", { exact: true }).click();
+  await distribution(page);
+  await page.getByLabel("自分のパーティ", { exact: true }).fill(JSON.stringify(player));
+  await page.getByLabel("試合数", { exact: true }).fill("2");
+  await page.getByRole("button", { name: "計測を開始", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("計測が完了");
   await page.close();
-  await other.close();
 
   const reopened = await context.newPage();
   await boot(reopened);
-  expect(await saved(reopened)).toEqual([]);
   await expect(reopened.getByLabel("このタブの計測")).toHaveCount(0);
-  await expect(
-    reopened.getByLabel("自分のパーティ", { exact: true }),
-  ).toHaveValue("");
+  await expect(reopened.getByLabel("自分のパーティ", { exact: true })).toHaveValue("");
   await expect(reopened.locator(".eval-opponent strong")).toHaveCount(3);
-  await expect(
-    reopened.getByRole("button", { name: "計測を開始", exact: true }),
-  ).toBeVisible();
-  await expect(
-    reopened.getByText("タブを閉じるとリセットされます。", { exact: false }),
-  ).toBeVisible();
+  await expect(reopened.getByRole("button", { name: "計測を開始", exact: true })).toBeVisible();
+  await expect(reopened.getByText("結果は自動保存されません。", { exact: false })).toBeVisible();
 });
 
 test("relaxed high-level preview survives blind search and reaches outcomes", async ({
@@ -265,7 +246,7 @@ test("relaxed high-level preview survives blind search and reaches outcomes", as
   await expect(page.getByRole("status")).toContainText("計測が完了", {
     timeout: 120000,
   });
-  const result = (await saved(page))[0];
+  const result = await exported(page);
   expect(result.config.player.relaxed).toBe(true);
   expect(result.pairs[0].games.map((g) => g.outcome)).toEqual(["win", "win"]);
 });
@@ -287,7 +268,7 @@ test("ordinary six-Pokemon party completes against the default Nash mixture", as
   await expect(page.getByRole("status")).toContainText("計測が完了", {
     timeout: 180000,
   });
-  const result = (await saved(page))[0];
+  const result = await exported(page);
   expect(result.config.player.relaxed).toBe(false);
   expect(result.config.player.warnings).toEqual([]);
   expect(["sample-07", "sample-08", "sample-10"]).toContain(
@@ -296,16 +277,16 @@ test("ordinary six-Pokemon party completes against the default Nash mixture", as
   expect(result.pairs[0].games).toHaveLength(2);
 });
 
-test("storage failure remains visible while calculation and export still work", async ({
+test("calculation and explicit export work with all browser storage disabled", async ({
   page,
 }) => {
-  await page.addInitScript(() =>
-    Object.defineProperty(window, "sessionStorage", {
-      get() {
-        throw new Error("storage unavailable");
-      },
-    }),
-  );
+  await page.addInitScript(() => {
+    for (const name of ["localStorage", "sessionStorage", "indexedDB"]) {
+      Object.defineProperty(window, name, {
+        get() { throw new Error("storage unavailable"); },
+      });
+    }
+  });
   await boot(page);
   await distribution(page);
   await page
@@ -316,7 +297,8 @@ test("storage failure remains visible while calculation and export still work", 
   await expect(page.getByRole("status")).toContainText("計測が完了", {
     timeout: 120000,
   });
-  await expect(page.getByRole("alert")).toContainText("自動保存できません");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect((await exported(page)).pairs).toHaveLength(1);
   await expect(
     page.getByRole("button", { name: "結果をファイルに保存" }),
   ).toBeEnabled();
@@ -335,7 +317,7 @@ test("worker failure stops without inventing a game outcome", async ({
   await page.getByRole("button", { name: "計測を開始", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("エラーで停止");
   await expect(page.getByRole("alert")).toBeVisible();
-  expect((await saved(page))[0].pairs).toEqual([]);
+  expect((await exported(page)).pairs).toEqual([]);
 });
 
 test("Japanese party form works without secure-context APIs, preserving moves across members", async ({
@@ -396,7 +378,7 @@ test("Japanese party form works without secure-context APIs, preserving moves ac
   await expect(page.getByRole("status")).toContainText("計測が完了", {
     timeout: 120000,
   });
-  const result = (await saved(page))[0];
+  const result = await exported(page);
   expect(result.config.player.sets).toHaveLength(1);
   expect(result.config.player.sets[0]).toMatchObject({
     species: "Mewtwo",
@@ -405,10 +387,7 @@ test("Japanese party form works without secure-context APIs, preserving moves ac
   });
   expect(result.pairs[0].games.map((g) => g.outcome)).toEqual(["win", "win"]);
   expect(result.config.beliefHash).toHaveLength(64);
-  await page.reload();
-  await expect(
-    page.getByRole("button", { name: "追加計測", exact: true }),
-  ).toBeEnabled();
+
 });
 
 test("editing an imported party preserves custom stats and exposes no technical input by default", async ({
