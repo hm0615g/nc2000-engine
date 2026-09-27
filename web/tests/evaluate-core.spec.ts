@@ -134,3 +134,24 @@ test("only ordered complete pairs are appended, exports preserve perspective", (
     '"0","one","2","loss","0","2","123","1","2"',
   );
 });
+
+test("portable SHA-256 matches native hashing for UTF-8, padding boundaries and the belief pool", async () => {
+  const { createHash } = await import("node:crypto");
+  const { readFileSync } = await import("node:fs");
+  const { sha256Portable } = await import("../src/evaluate-hash");
+  const corpus = readFileSync(
+    new URL("../../data/belief-pool-v1/belief-pool.json", import.meta.url),
+    "utf8",
+  );
+  for (const value of [
+    "",
+    "abc",
+    "カビゴン🦋",
+    ...[1, 55, 56, 63, 64, 65, 127, 128, 129, 1000].map((n) => "a".repeat(n)),
+    corpus,
+  ]) {
+    expect(sha256Portable(value)).toBe(
+      createHash("sha256").update(value).digest("hex"),
+    );
+  }
+});

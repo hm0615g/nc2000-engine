@@ -27,7 +27,7 @@ export function readTeam(text: string): EvaluationTeam {
   }
   if (raw && typeof raw === "object" && "sets" in raw) raw = raw.sets;
   if (!Array.isArray(raw) || raw.length < 1 || raw.length > 6)
-    throw new Error("パーティJSONは1〜6匹の配列にしてください。");
+    throw new Error("ポケモンは1〜6匹で登録してください。");
   for (const [i, set] of raw.entries()) {
     if (!set || typeof set !== "object" || typeof set.species !== "string")
       throw new Error(`${i + 1}匹目: 種族を指定してください。`);
@@ -42,8 +42,12 @@ export function readTeam(text: string): EvaluationTeam {
         set.moves.some((m: unknown) => typeof m !== "string") ||
         set.moves.length > 4)
     )
-      throw new Error(`${i + 1}匹目: 技は4個以下の文字列配列にしてください。`);
+      throw new Error(`${i + 1}匹目: 技は4個以下で登録してください。`);
   }
+  raw = raw.map((set) => ({
+    ...set,
+    moves: (set.moves ?? []).filter((m: string) => m.trim()),
+  }));
   const result = JSON.parse(
     getValidator().canonicalizeTeam(JSON.stringify(raw)),
   ) as { team: unknown[]; applied: Finding[]; errors: Finding[] };
@@ -83,7 +87,8 @@ export function readOpponents(drafts: OpponentDraft[]): EvaluationOpponent[] {
     if (!id || seen.has(id))
       throw new Error("相手の名前は空欄にせず、重複しないようにしてください。");
     seen.add(id);
-    if (!d.weight.trim()) throw new Error(`${id}: 重みを入力してください。`);
+    if (!d.weight.trim())
+      throw new Error(`${id}: 出やすさを入力してください。`);
     return { id, weight: Number(d.weight), ...readTeam(d.text) };
   });
   return normalizeWeights(entries);
@@ -92,7 +97,9 @@ export function readOpponents(drafts: OpponentDraft[]): EvaluationOpponent[] {
 export function importDistribution(text: string): OpponentDraft[] {
   const raw = JSON.parse(text);
   if (!raw || !Array.isArray(raw.teams))
-    throw new Error("分布JSONには teams 配列が必要です。");
+    throw new Error(
+      "相手の設定ファイルを確認してください。パーティと出やすさをまとめたJSONファイルが必要です。",
+    );
   const drafts = raw.teams.map(
     (e: { id?: unknown; weight?: unknown; sets?: unknown }) => {
       if (
@@ -101,7 +108,7 @@ export function importDistribution(text: string): OpponentDraft[] {
         typeof e.weight !== "number" ||
         !Array.isArray(e.sets)
       )
-        throw new Error("各相手には id・weight・sets を指定してください。");
+        throw new Error("相手の名前・出やすさ・パーティの情報が足りません。");
       return {
         id: e.id,
         weight: String(e.weight),
@@ -113,12 +120,4 @@ export function importDistribution(text: string): OpponentDraft[] {
   return drafts;
 }
 
-export async function sha256(text: string): Promise<string> {
-  const hash = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(text),
-  );
-  return Array.from(new Uint8Array(hash), (b) =>
-    b.toString(16).padStart(2, "0"),
-  ).join("");
-}
+export { sha256 } from "./evaluate-hash";

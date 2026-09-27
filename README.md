@@ -24,7 +24,10 @@ in `crates/conformance/tests/berry_confusion.rs`.
 ## Party evaluator
 
 Open `?evaluate` on the browser demo to measure a custom party against a weighted
-opponent distribution. Paste Showdown export text, a team JSON array, or a `{ "sets": [...] }` object; opponent
+opponent distribution. Use the Japanese party editor to choose Pokémon, levels,
+items and moves; hiragana searches also find katakana names. Individual values,
+training and happiness are under the optional details. The text import panel
+also accepts Showdown exports, team JSON arrays and `{ "sets": [...] }` objects; opponent
 entries use `{ "teams": [{ "id": "name", "weight": 1, "sets": [...] }] }`.
 The shipped Nash mixture is the default. Both sides use blind search with the
 bundled belief pool; changing the opponent distribution only changes team draws.
@@ -39,7 +42,9 @@ Format violations are warnings for both parties. A party with a total-level
 violation has its own preview cap removed; normal parties retain the 155 cap.
 Runtime sleep/freeze rules still apply. Inputs must remain engine-representable:
 1–6 Pokémon, known species/items/moves, levels 1–100 and at most four moves each.
-Canonicalization changes are shown before play.
+The opponent panel shows party composition and draw probabilities; replacing its
+JSON file is the only way to edit the opponent settings. Canonicalization details
+are retained in exported results, while the screen shows rule warnings only.
 
 Scores are win=1, loss=0, tie/500-turn cap=0.5; caps and ties are counted separately.
 The 95% interval uses independent two-game means with the normal approximation

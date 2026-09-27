@@ -2,21 +2,21 @@ import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import type { EvaluationRun } from "../src/evaluate-core";
 
+test.use({ actionTimeout: 10000 });
+
 const route = `${process.env.NC2000_E2E_BASE ?? "/"}?evaluate`;
 const player = [{ species: "Mewtwo", level: 100, moves: ["Psychic"] }];
 const opponent = [{ species: "Magikarp", level: 1, moves: ["Splash"] }];
 
 async function distribution(page: Page, sets = opponent) {
-  await page
-    .getByLabel("分布JSONファイル")
-    .setInputFiles({
-      name: "mix.json",
-      mimeType: "application/json",
-      buffer: Buffer.from(
-        JSON.stringify({ teams: [{ id: "fish", weight: 1, sets }] }),
-      ),
-    });
-  await expect(page.locator(".eval-opponent strong")).toHaveText("fish");
+  await page.getByLabel("相手の設定ファイル").setInputFiles({
+    name: "mix.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify({ teams: [{ id: "fish", weight: 1, sets }] }),
+    ),
+  });
+  await expect(page.locator(".eval-opponent strong")).toHaveText(["fish"]);
 }
 async function saved(page: Page): Promise<EvaluationRun[]> {
   return page.evaluate(
@@ -41,28 +41,30 @@ async function boot(page: Page) {
   await expect(
     page.getByLabel("自分のパーティ", { exact: true }),
   ).toBeEnabled();
+  await page.getByText("テキストから読み込む", { exact: true }).click();
 }
 
 test("warnings allow illegal parties, invalid data blocks execution", async ({
   page,
 }) => {
   await boot(page);
-  await page
-    .getByLabel("自分のパーティ", { exact: true })
-    .fill(
-      JSON.stringify(
-        Array.from({ length: 6 }, () => ({
-          species: "Snorlax",
-          level: 55,
-          item: "Leftovers",
-          moves: ["Spikes"],
-        })),
-      ),
-    );
+  await page.getByLabel("自分のパーティ", { exact: true }).fill(
+    JSON.stringify(
+      Array.from({ length: 6 }, () => ({
+        species: "Snorlax",
+        level: 55,
+        item: "Leftovers",
+        moves: ["Spikes"],
+      })),
+    ),
+  );
   await expect(
-    page.getByText("このパーティは選出の合計155制限を解除します。", {
-      exact: true,
-    }),
+    page.getByText(
+      "このパーティは、選ぶ3匹のレベル合計が155を超えていても対戦できます。",
+      {
+        exact: true,
+      },
+    ),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "計測を開始", exact: true }),
@@ -76,11 +78,17 @@ test("warnings allow illegal parties, invalid data blocks execution", async ({
   await page
     .getByLabel("自分のパーティ", { exact: true })
     .fill(JSON.stringify(player));
-  await page.getByLabel("sample-07 の重み").fill("-1");
-  await expect(
-    page.getByRole("button", { name: "計測を開始", exact: true }),
-  ).toBeDisabled();
-  await expect(page.getByRole("alert")).toContainText("重み");
+  await page
+    .getByLabel("相手の設定ファイル")
+    .setInputFiles({
+      name: "invalid.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(
+        JSON.stringify({ teams: [{ id: "bad", weight: -1, sets: opponent }] }),
+      ),
+    });
+  await expect(page.getByRole("alert")).toContainText("出やすさ");
+  await expect(page.locator(".eval-opponent strong")).toHaveCount(3);
 });
 
 test("local wasm plays both sides, persists, resumes, separates changed configurations and exports", async ({
@@ -160,16 +168,16 @@ test("local wasm plays both sides, persists, resumes, separates changed configur
   expect(replayed).toEqual(updated.pairs);
 
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "結果JSONを出力" }).click();
+  await page.getByRole("button", { name: "結果をファイルに保存" }).click();
   const file = await download;
   expect(JSON.parse(readFileSync((await file.path())!, "utf8"))).toEqual(
     updated,
   );
-  await page.getByLabel("fish の重み").fill("0");
+  await distribution(page, [{ ...opponent[0], level: 2 }]);
   await expect(
     page.getByRole("button", { name: "追加計測", exact: true }),
   ).toBeDisabled();
-  await page.getByLabel("fish の重み").fill("1");
+  await distribution(page);
   await page.getByLabel("試合数", { exact: true }).fill("100");
   await page.getByRole("button", { name: "追加計測", exact: true }).click();
   await page.getByRole("button", { name: "停止", exact: true }).click();
@@ -178,6 +186,7 @@ test("local wasm plays both sides, persists, resumes, separates changed configur
     page.getByRole("button", { name: "再開", exact: true }),
   ).toBeEnabled();
   expect((await saved(page))[0].pairs.length).toBeGreaterThanOrEqual(2);
+  await page.getByText("テキストから読み込む", { exact: true }).click();
   await page
     .getByLabel("自分のパーティ", { exact: true })
     .fill(JSON.stringify([{ ...player[0], level: 99 }]));
@@ -259,7 +268,7 @@ test("storage failure remains visible while calculation and export still work", 
   });
   await expect(page.getByRole("alert")).toContainText("自動保存できません");
   await expect(
-    page.getByRole("button", { name: "結果JSONを出力" }),
+    page.getByRole("button", { name: "結果をファイルに保存" }),
   ).toBeEnabled();
 });
 
@@ -277,4 +286,138 @@ test("worker failure stops without inventing a game outcome", async ({
   await expect(page.getByRole("status")).toContainText("エラーで停止");
   await expect(page.getByRole("alert")).toBeVisible();
   expect((await saved(page))[0].pairs).toEqual([]);
+});
+
+test("Japanese party form works without secure-context APIs, preserving moves across members", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(Crypto.prototype, "subtle", { get: () => undefined });
+    Object.defineProperty(Crypto.prototype, "randomUUID", { value: undefined });
+  });
+  await page.goto(route);
+  const mon = page.getByRole("combobox", {
+    name: "自分のパーティ1匹目のポケモン",
+    exact: true,
+  });
+  await expect(mon).toBeEnabled();
+  await expect(page.getByLabel("自分のパーティ", { exact: true })).toBeHidden();
+  await mon.fill("みゅう");
+  await page.getByRole("option", { name: "ミュウツー", exact: true }).click();
+  await page
+    .getByLabel("自分のパーティ1匹目のレベル", { exact: true })
+    .fill("100");
+  await page
+    .getByRole("combobox", { name: "自分のパーティ1匹目の技1", exact: true })
+    .fill("サイコキネシス");
+  await page
+    .getByRole("heading", { name: "自分のパーティ", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "＋ ポケモンを追加", exact: true })
+    .first()
+    .click();
+  await page
+    .getByRole("combobox", {
+      name: "自分のパーティ2匹目のポケモン",
+      exact: true,
+    })
+    .fill("カビゴン");
+  await page
+    .getByRole("combobox", { name: "自分のパーティ2匹目の技1", exact: true })
+    .fill("のしかかり");
+  await page
+    .getByRole("button", { name: "1. ミュウツー", exact: true })
+    .click();
+  await expect(
+    page.getByRole("combobox", {
+      name: "自分のパーティ1匹目の技1",
+      exact: true,
+    }),
+  ).toHaveValue("サイコキネシス");
+  await page.getByRole("button", { name: "2. カビゴン", exact: true }).click();
+  await page
+    .getByRole("button", { name: "このポケモンを外す", exact: true })
+    .first()
+    .click();
+  await distribution(page);
+  await page.getByLabel("試合数", { exact: true }).fill("2");
+  await page.getByRole("button", { name: "計測を開始", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("計測が完了", {
+    timeout: 120000,
+  });
+  const result = (await saved(page))[0];
+  expect(result.config.player.sets).toHaveLength(1);
+  expect(result.config.player.sets[0]).toMatchObject({
+    species: "Mewtwo",
+    level: 100,
+    moves: ["Psychic"],
+  });
+  expect(result.pairs[0].games.map((g) => g.outcome)).toEqual(["win", "win"]);
+  expect(result.config.beliefHash).toHaveLength(64);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "追加計測", exact: true }),
+  ).toBeEnabled();
+});
+
+test("editing an imported party preserves custom stats and exposes no technical input by default", async ({
+  page,
+}) => {
+  await boot(page);
+  const original = {
+    species: "Raikou",
+    level: 55,
+    moves: ["Thunderbolt", "Hidden Power Ice"],
+    ivs: { hp: 30, atk: 22, def: 26, spa: 30, spd: 30, spe: 30 },
+    evs: { hp: 200, atk: 0, def: 128, spa: 255, spd: 255, spe: 255 },
+    happiness: 17,
+  };
+  await page
+    .getByLabel("自分のパーティ", { exact: true })
+    .fill(JSON.stringify([original]));
+  await page
+    .getByRole("combobox", { name: "自分のパーティ1匹目の持ち物", exact: true })
+    .fill("たべのこし");
+  const raw = JSON.parse(
+    await page.getByLabel("自分のパーティ", { exact: true }).inputValue(),
+  );
+  expect(raw[0]).toEqual({ ...original, item: "Leftovers" });
+  await page.getByText("テキストから読み込む", { exact: true }).first().click();
+  const visibleText = await page.locator("main").innerText();
+  expect(visibleText).not.toMatch(/WASM|belief|反復|BLIND|正規化/);
+  await expect(page.getByLabel("考える回数", { exact: true })).toHaveValue(
+    "3000",
+  );
+});
+
+test("opponent panel shows three parties and probabilities, with JSON as its only edit control", async ({
+  page,
+}) => {
+  await page.goto(route);
+  const panel = page.getByRole("region", { name: "対戦相手の設定" });
+  await expect(panel.locator(".eval-opponent strong")).toHaveText([
+    "基本の相手1",
+    "基本の相手2",
+    "基本の相手3",
+  ]);
+  await expect(panel.locator(".eval-opponent span")).toHaveText([
+    "57.6%",
+    "22.2%",
+    "20.1%",
+  ]);
+  await expect(panel.locator(".eval-opponent-roster li")).toHaveCount(18);
+  await expect(panel.locator("input")).toHaveCount(1);
+  await expect(panel.locator("input")).toHaveAttribute("type", "file");
+  await expect(panel.locator("textarea, select")).toHaveCount(0);
+  await expect(
+    page.getByText("自動で補った項目", { exact: false }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByLabel("考える回数", { exact: true }).locator("option"),
+  ).toHaveText(["3,000回", "10,000回", "27,000回"]);
+  await panel.getByText("技・持ち物を見る", { exact: true }).first().click();
+  await expect(
+    panel.locator(".eval-opponent-sets").first().locator("strong"),
+  ).toHaveCount(6);
 });
