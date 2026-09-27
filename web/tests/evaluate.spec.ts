@@ -19,21 +19,8 @@ async function distribution(page: Page, sets = opponent) {
   await expect(page.locator(".eval-opponent strong")).toHaveText(["fish"]);
 }
 async function saved(page: Page): Promise<EvaluationRun[]> {
-  return page.evaluate(
-    () =>
-      new Promise((resolve, reject) => {
-        const req = indexedDB.open("nc2000-evaluations", 1);
-        req.onsuccess = () => {
-          const db = req.result;
-          const read = db.transaction("runs").objectStore("runs").getAll();
-          read.onsuccess = () => {
-            db.close();
-            resolve(read.result);
-          };
-          read.onerror = () => reject(read.error);
-        };
-        req.onerror = () => reject(req.error);
-      }),
+  return page.evaluate(() =>
+    JSON.parse(sessionStorage.getItem("nc2000-evaluations") ?? "[]"),
   );
 }
 async function boot(page: Page) {
@@ -91,7 +78,7 @@ test("warnings allow illegal parties, invalid data blocks execution", async ({
   await expect(page.locator(".eval-opponent strong")).toHaveCount(3);
 });
 
-test("local wasm plays both sides, persists, resumes, separates changed configurations and exports", async ({
+test("local wasm plays both sides, survives reload, resumes, separates changed configurations and exports", async ({
   page,
 }) => {
   const failures: string[] = [];
@@ -199,6 +186,69 @@ test("local wasm plays both sides, persists, resumes, separates changed configur
   expect(failures).toEqual([]);
 });
 
+test("closing a tab resets results and new tabs ignore previous persistent results", async ({
+  page,
+  context,
+}) => {
+  await boot(page);
+  await distribution(page);
+  await page
+    .getByLabel("自分のパーティ", { exact: true })
+    .fill(JSON.stringify(player));
+  await page.getByLabel("試合数", { exact: true }).fill("2");
+  await page.getByRole("button", { name: "計測を開始", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("計測が完了", {
+    timeout: 120000,
+  });
+  const [result] = await saved(page);
+  expect(result.pairs).toHaveLength(1);
+  await page.evaluate(
+    (run) =>
+      new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open("nc2000-evaluations", 1);
+        req.onupgradeneeded = () =>
+          req.result.createObjectStore("runs", { keyPath: "id" });
+        req.onerror = () => reject(req.error);
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction("runs", "readwrite");
+          tx.objectStore("runs").put(run);
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onabort = () => {
+            db.close();
+            reject(tx.error);
+          };
+        };
+      }),
+    result,
+  );
+  const other = await context.newPage();
+  await boot(other);
+  expect(await saved(other)).toEqual([]);
+  await expect(other.getByLabel("このタブの計測")).toHaveCount(0);
+  expect((await saved(page))[0]).toEqual(result);
+  await page.close();
+  await other.close();
+
+  const reopened = await context.newPage();
+  await boot(reopened);
+  expect(await saved(reopened)).toEqual([]);
+  await expect(reopened.getByLabel("このタブの計測")).toHaveCount(0);
+  await expect(
+    reopened.getByLabel("自分のパーティ", { exact: true }),
+  ).toHaveValue("");
+  await expect(reopened.locator(".eval-opponent strong")).toHaveCount(3);
+  await expect(
+    reopened.getByRole("button", { name: "計測を開始", exact: true }),
+  ).toBeVisible();
+  await expect(
+    reopened.getByText("タブを閉じるとリセットされます。", { exact: false }),
+  ).toBeVisible();
+});
+
 test("relaxed high-level preview survives blind search and reaches outcomes", async ({
   page,
 }) => {
@@ -250,7 +300,7 @@ test("storage failure remains visible while calculation and export still work", 
   page,
 }) => {
   await page.addInitScript(() =>
-    Object.defineProperty(window, "indexedDB", {
+    Object.defineProperty(window, "sessionStorage", {
       get() {
         throw new Error("storage unavailable");
       },

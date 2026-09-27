@@ -375,9 +375,9 @@ export function Evaluate() {
       {history.length > 0 && (
         <section class="eval-panel">
           <label>
-            保存済みの計測{" "}
+            このタブの計測{" "}
             <select
-              aria-label="保存済みの計測"
+              aria-label="このタブの計測"
               disabled={running}
               value={run?.id}
               onChange={(e) => {
@@ -664,7 +664,7 @@ export function Evaluate() {
           勝率は勝った試合の割合です。「引き分けを含む成績」では、引き分けと500ターンでの打ち切りを半勝として数えます。「推定の幅」は偶然によるばらつきの目安です。試合が少ない間は、結果も大きく変わります。
         </p>
         <p class="eval-muted">
-          このコンピューターが、指定した相手と対戦したときの成績です。2戦終わるごとに結果をこの端末に保存します。ページを閉じた間は対戦しません。
+          このコンピューターが、指定した相手と対戦したときの成績です。結果はこのタブを開いている間だけ残ります。タブを閉じるとリセットされます。残したい結果はファイルに保存してください。
         </p>
       </section>
     </main>
