@@ -83,7 +83,8 @@ fn main() {
         iterations: iters,
         rule: SelRule::Ucb,
         c,
-        rollout_m16c: m16c,
+        rollout_status: m16c,
+        rollout_switch: m16c,
         key_no_damage,
         playout: nc2000_bot::mcts::Playout::Heavy {
             eps,
