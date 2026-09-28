@@ -78,6 +78,7 @@ import { searchProfile } from "./search-profile";
 import { Modal } from "./modal";
 import { sheetMon } from "./set-info";
 import { MonSheet, TeamSheets } from "./team-sheet";
+import { KifuExport } from "./kifu-export";
 
 const HUMAN = 0;
 const BOT = 1;
@@ -174,6 +175,7 @@ export function Game(props: {
     null,
   );
   const [sheetOpen, setSheetOpen] = useState(false); // battle: team-sheets modal
+  const [kifuOpen, setKifuOpen] = useState(false);
   // Blind only: the searcher's own read of the hidden opponent, refreshed
   // by the worker after every observe(). About the bot, not about the foe.
   const [belief, setBelief] = useState<{
@@ -239,11 +241,12 @@ export function Game(props: {
     aliveRef.current = true;
     const bot = new BotWorker();
     botRef.current = bot;
+    const initialSeed = newBattleSeed();
     const battle = new Battle(
       getDex(),
       JSON.stringify(humanTeam.sets),
       JSON.stringify(botTeam.sets),
-      newBattleSeed(),
+      initialSeed,
     );
     battleRef.current = battle;
     // Baked pair tables exist only between pool teams. If either side is
@@ -282,7 +285,7 @@ export function Game(props: {
       .newBattle(
         JSON.stringify(humanTeam.sets),
         JSON.stringify(botTeam.sets),
-        battle.seed(),
+        initialSeed,
         {
           poolJson: props.poolJson,
           side: BOT,
@@ -687,6 +690,7 @@ export function Game(props: {
         <button class="ghost sheets-btn" onClick={() => setSheetOpen(true)}>
           {ui().teamSheets}
         </button>
+        {phase !== "end" && <button class="ghost" aria-expanded={kifuOpen} onClick={() => setKifuOpen(!kifuOpen)}>棋譜</button>}
         <button class="ghost quit-btn" onClick={props.onNewTeams}>
           {ui().quit}
         </button>
@@ -744,6 +748,8 @@ export function Game(props: {
       </div>
 
       <LogPane log={log} />
+
+      {(kifuOpen || phase === "end") && battleRef.current && <KifuExport battle={battleRef.current} mode={props.mode} state={view} />}
 
       <section class="choice-panel" aria-label={ui().srYourAction}>
         {phase !== "end" && (

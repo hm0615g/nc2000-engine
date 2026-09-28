@@ -13,6 +13,7 @@ fn fork_4296(info: Info) -> ForkSpec {
     let position = PositionSpec::parse(&read("turn-11.json")).unwrap();
     let opponent_team: Vec<PokemonSet> = serde_json::from_str(&read("opponent-team.json")).unwrap();
     ForkSpec {
+        exact_replay: None,
         schema: SCHEMA.into(),
         label: "4296 T11".into(),
         info,
@@ -29,6 +30,46 @@ fn fork_4296(info: Info) -> ForkSpec {
 
 fn cfg(iterations: u32) -> RmConfig {
     RmConfig { iterations, rule: SelRule::Ucb, ..RmConfig::default() }
+}
+
+#[test]
+fn replay_forks_preserve_true_state_and_rebuild_both_information_sets() {
+    use nc2000_engine::{replay::{Recorder, Replay}, state::Battle};
+    use nc2000_bot::preview::MetaPool;
+    let dex = load_dex();
+    let mon = |species: &str| PokemonSet { name: species.into(), species: species.into(),
+        moves: ["batonpass", "rest", "sleeptalk", "tackle"].map(String::from).to_vec(),
+        item: String::new(), level: 50,
+        evs: Some(["hp", "atk", "def", "spa", "spd", "spe"].map(|k| (k.into(), 255)).into()),
+        ivs: None, ability: String::new(), happiness: None, gender: Some("M".into()) };
+    let team: Vec<_> = ["eevee", "vaporeon", "jolteon", "flareon", "espeon", "umbreon"].map(mon).to_vec();
+    let seed = "19,20,21,22";
+    let mut battle = Battle::from_fixture(&dex, seed, &team, &team).unwrap();
+    let mut recorder = Recorder::new(&dex, &battle, [team.clone(), team], seed);
+    for _ in 0..8 {
+        let choices: Vec<_> = (0..2).filter_map(|side| battle.legal_choices(&dex,side).first().copied().map(|c| (side,c.to_input(&dex)))).collect();
+        for (s,c) in choices { recorder.choose(&dex,&mut battle,s,&c).unwrap(); }
+    }
+    for open in [true,false] {
+        recorder.replay.open = open;
+        let code = recorder.replay.encode(&dex).unwrap();
+        let replay = Replay::decode(&dex,&code).unwrap();
+        let pool = MetaPool { teams: Vec::new() };
+        for round in 1..replay.rounds.len() {
+            let Some(played) = replay.rounds[round][1] else { continue };
+            let original = replay.at(&dex,round).unwrap();
+            let fork = ForkSpec::from_replay(&dex,&code,round,&played.to_input(&dex),&pool).unwrap();
+            for future_seed in [7,99] {
+                let restored = fork.battle(&dex,future_seed).unwrap();
+                assert_eq!(original.state_key128(),restored.state_key128(),"round {round}");
+                assert!(restored.log.is_empty());
+                assert_eq!(restored.prng.seed_str(),nc2000_engine::prng::Prng::new(future_seed).seed_str());
+            }
+            fork.bot_agent(&dex,pool.clone(),cfg(1),0).unwrap();
+            fork.opponent_agent(&dex,pool.clone(),cfg(1),0).unwrap();
+            fork.check(&dex).unwrap();
+        }
+    }
 }
 
 #[test]

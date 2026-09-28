@@ -60,11 +60,13 @@ export function ArenaPanel(props: {
   poolJson: string;
   armNames: string[];
   fileKey: string;
+  simple?: boolean;
+  autoStart?: boolean;
 }) {
   const { info } = props;
   const profile = searchProfile(info.info);
   const [trials, setTrials] = useState(32);
-  const [iters, setIters] = useState(3000);
+  const [iters, setIters] = useState(props.simple ? profile.iterations : 3000);
   const [foe, setFoe] = useState<Foe>(info.opponentView ? "protocol" : "skuct");
   const [seed, setSeed] = useState(() => randomSeed32());
   const [workers, setWorkers] = useState(defaultWorkers);
@@ -76,6 +78,7 @@ export function ArenaPanel(props: {
   const rerender = () => setTick((t) => t + 1);
 
   useEffect(() => () => poolRef.current.forEach((w) => w.terminate()), []);
+  useEffect(() => { if (props.autoStart) start(); }, []);
   useEffect(() => {
     if (!running) return;
     const id = setInterval(rerender, 1000);
@@ -208,7 +211,7 @@ export function ArenaPanel(props: {
 
   return (
     <section class="fork-panel" data-testid="arena-panel">
-      <h2>bot 同士で検証</h2>
+      <h2>{props.simple ? "bot同士で比較" : "bot 同士で検証"}</h2>
       <p class="fork-muted">
         同じ局面から bot 同士で対戦させ、bot の初手ごとの勝率を比べます。各試行ではすべての候補手を同じ乱数で打つので、候補手の差は初手とその後の展開だけから生まれます。相手も
         bot が打ちます。
@@ -225,7 +228,7 @@ export function ArenaPanel(props: {
             onInput={(e) => setTrials(Math.max(1, Number((e.currentTarget as HTMLInputElement).value) || 1))}
           />
         </label>
-        <label>
+        {!props.simple && <><label>
           思考量（1手あたり）
           <select
             value={iters}
@@ -270,7 +273,7 @@ export function ArenaPanel(props: {
             disabled={running}
             onInput={(e) => setWorkers(Math.max(1, Number((e.currentTarget as HTMLInputElement).value) || 1))}
           />
-        </label>
+        </label></>}
       </div>
       <div class="fork-actions">
         {running ? (
@@ -284,14 +287,14 @@ export function ArenaPanel(props: {
               : "検証を開始"}
           </button>
         )}
-        <button onClick={exportRows} disabled={running || rows.length === 0}>
+        {!props.simple && <button onClick={exportRows} disabled={running || rows.length === 0}>
           結果を書き出す (JSONL)
-        </button>
+        </button>}
         <button class="ghost" onClick={clear} disabled={running || run === null}>
           結果を消去
         </button>
       </div>
-      {error && <p class="fork-error">{error}</p>}
+      {error && <p class="fork-error" role="alert">{error}</p>}
       {run && (
         <>
           <p class="arena-progress" data-testid="arena-progress">
@@ -307,11 +310,17 @@ export function ArenaPanel(props: {
               />
             </div>
           )}
-          <ArenaTable info={info} armNames={props.armNames} rows={rows} />
-          {cli && <p class="fork-muted arena-cli">CLI で同じ試行: <code>{cli}</code></p>}
+          {props.simple ? <div class="kp-arena-results" aria-live="polite">{info.arms.map((arm, i) => {
+            const mine = rows.filter(row => row.action === arm.input);
+            return <div class="kp-card" key={arm.input}><h3>{arm.label} · {props.armNames[i]}</h3>
+              <p>{mine.filter(row => row.outcome === "win").length}勝 · {mine.filter(row => row.outcome === "loss").length}敗 · {mine.filter(row => row.outcome === "tie").length}引き分け</p>
+              <p class="kp-muted">{mine.length}対戦を完了{mine.some(row => row.outcome === "cap") && ` · ${mine.filter(row => row.outcome === "cap").length}対戦は打ち切り`}</p>
+            </div>;
+          })}</div> : <ArenaTable info={info} armNames={props.armNames} rows={rows} />}
+          {!props.simple && cli && <p class="fork-muted arena-cli">CLI で同じ試行: <code>{cli}</code></p>}
         </>
       )}
-      <p class="fork-muted">結果はこのページを閉じると消えます。残すには書き出してください。</p>
+      <p class="fork-muted">結果はこのページを閉じると消えます。{!props.simple && "残すには書き出してください。"}</p>
     </section>
   );
 }

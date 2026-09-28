@@ -2,10 +2,9 @@
 //! in which the bot's first action is fixed to one of several arms and both
 //! sides play freely afterwards.
 //!
-//! The battle is synthesized from the bot's own information set
-//! (`position`) with the opponent's true sets and picks substituted for the
-//! belief, so HP the protocol only announced as a percentage and hidden
-//! durations are imputed per seed exactly as the search imputes them.
+//! An `exact_replay` reconstructs the true battle from its initial seed and
+//! committed choices. Legacy positions without a replay synthesize hidden
+//! quantities from `position` and the supplied opponent team.
 //! The bot plays through [`ProtocolSeat`]: the ladder `ProtocolAgent`,
 //! installed from `position` and fed that side's player stream from the fork
 //! onwards, so its information set continues the recorded one.
@@ -13,6 +12,7 @@
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::{toid, Dex};
 use nc2000_engine::state::Battle;
+use nc2000_engine::replay::Replay;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -66,9 +66,60 @@ pub struct ForkSpec {
     #[serde(default)]
     pub opponent_position: Option<PositionSpec>,
     pub arms: Vec<Arm>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exact_replay: Option<ReplayOrigin>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReplayOrigin {
+    pub code: String,
+    pub round: usize,
+}
+
+impl ReplayOrigin {
+    fn agent(&self, dex: &Dex, pool: MetaPool, cfg: RmConfig, seed: u64, side: usize) -> Result<ProtocolAgent, String> {
+        let replay = Replay::decode(dex, &self.code)?;
+        if self.round >= replay.rounds.len() || side > 1 { return Err("invalid replay fork point".into()); }
+        let mut agent = ProtocolAgent::new(dex, side, pool, cfg, seed);
+        agent.set_own_team(replay.teams[side].clone());
+        if replay.open { agent.pin_opponent(replay.teams[1-side].clone()); }
+        let mut channel = PlayerChannel::new(side);
+        let mut battle = replay.initial(dex)?;
+        for round in 0..=self.round {
+            let frame = channel.frame(&mut battle, dex)?;
+            for line in &frame.lines { agent.push_line(dex, line); }
+            agent.on_request(dex, &frame.request.to_string())?;
+            if round < self.round { replay.apply(dex, &mut battle, round)?; }
+        }
+        Ok(agent)
+    }
 }
 
 impl ForkSpec {
+    pub fn from_replay(dex: &Dex, code: &str, round: usize, alternative: &str, pool: &MetaPool) -> Result<Self, String> {
+        let replay = Replay::decode(dex, code)?;
+        let bot = replay.bot_side;
+        let played = replay.rounds.get(round).and_then(|p| p[bot]).ok_or("bot has no recorded action here")?;
+        let mut battle = replay.at(dex, round)?;
+        if battle.turn == 0 { return Err("choose a battle turn".into()); }
+        let legal = battle.legal_choices(dex, bot);
+        let other = find_choice(dex, &legal, alternative).ok_or("alternative is not legal")?;
+        let origin = ReplayOrigin { code: code.into(), round };
+        let cfg = RmConfig::default();
+        let agent = origin.agent(dex, pool.clone(), cfg.clone(), 0, bot)?;
+        let position = agent.to_position_spec(dex).ok_or("missing bot position")?;
+        let foe = origin.agent(dex, pool.clone(), cfg, 0, 1-bot)?;
+        let mut arms = vec![Arm { input: played.to_input(dex), label: "元の手".into() }];
+        if other != played { arms.push(Arm { input: other.to_input(dex), label: "試す手".into() }); }
+        Ok(Self {
+            schema: SCHEMA.into(), label: format!("{}ターン目", battle.turn),
+            info: if replay.open { Info::Open } else { Info::Blind },
+            position, opponent_team: replay.teams[1-bot].clone(),
+            opponent_picks: battle.sides[1-bot].party.iter().map(|&s| dex.species.key(battle.sides[1-bot].roster[s as usize].base_species).into()).collect(),
+            opponent_position: foe.to_position_spec(dex), arms, exact_replay: Some(origin),
+        })
+    }
     pub fn parse(json: &str) -> Result<ForkSpec, String> {
         let spec: ForkSpec = serde_json::from_str(json).map_err(|e| format!("fork: {e}"))?;
         if spec.schema != SCHEMA {
@@ -85,9 +136,22 @@ impl ForkSpec {
         1 - self.position.side
     }
 
-    /// The true battle at the fork. `seed` fixes the battle PRNG and every
-    /// imputed hidden quantity; equal seeds give identical battles.
+    /// `seed` controls future chance; an exact replay preserves every other
+    /// battle field, including hidden durations and queued mid-turn actions.
     pub fn battle(&self, dex: &Dex, seed: u64) -> Result<Battle, String> {
+        if let Some(origin) = &self.exact_replay {
+            let replay = Replay::decode(dex, &origin.code)?;
+            if origin.round >= replay.rounds.len() || replay.bot_side != self.bot_side()
+                || replay.open != (self.info == Info::Open) {
+                return Err("replay metadata differs from fork".into());
+            }
+            let mut battle = replay.at(dex, origin.round)?;
+            if battle.turn != self.position.turn || battle.turn == 0 { return Err("replay turn differs from fork".into()); }
+            battle.reseed(seed);
+            battle.set_log_enabled(false);
+            battle.set_log_enabled(true);
+            return Ok(battle);
+        }
         self.check_static()?;
         let party = self.opponent_party()?;
         let pool = MetaPool { teams: Vec::new() };
@@ -132,6 +196,9 @@ impl ForkSpec {
         cfg: RmConfig,
         seed: u64,
     ) -> Result<ProtocolAgent, String> {
+        if let Some(origin) = &self.exact_replay {
+            return origin.agent(dex, pool, cfg, seed, self.bot_side());
+        }
         let mut agent = ProtocolAgent::new(dex, self.bot_side(), pool, cfg, seed);
         if self.info == Info::Open {
             agent.pin_opponent(self.opponent_team.clone());
@@ -148,6 +215,9 @@ impl ForkSpec {
         cfg: RmConfig,
         seed: u64,
     ) -> Result<ProtocolAgent, String> {
+        if let Some(origin) = &self.exact_replay {
+            return origin.agent(dex, pool, cfg, seed, self.opponent_side());
+        }
         let view = self
             .opponent_position
             .as_ref()

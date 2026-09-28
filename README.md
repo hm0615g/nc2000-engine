@@ -56,6 +56,14 @@ performance against the selected distribution.
 
 ## Counterfactual forks
 
+The bot battle screen can copy a compact `NC2-…` replay. Paste it into `?fork`,
+select a recorded scene and a legal alternative, then play or compare bots.
+These forks reconstruct the exact battle, including hidden durations and
+mid-turn actions, from the initial teams, seed and committed choices.
+See [compact replay API and compatibility](docs/replay.md) for integration into
+another UI; no backend or LLM is needed.
+
+The advanced workflow below also accepts manually assembled positions.
 When a player claims the bot had a better action at a recorded decision,
 both kinds of measurement start from one `nc2000-fork-v1` document
 ([`crates/bot/src/fork.rs`](crates/bot/src/fork.rs)): the bot's recorded
@@ -74,7 +82,7 @@ target/release/examples/fork_counterfactual --fork data/forks/NAME.json \
 python3 tools/summarize-counterfactual.py rows.jsonl
 ```
 
-The forked battle substitutes the player's true sets for the bot's belief.
+Without an exact replay, the forked battle substitutes the player's true sets for the bot's belief.
 HP announced only as a percentage and hidden durations are imputed per seed.
 The bot is the ladder `ProtocolAgent`, installed from its recorded information
 set and fed its own player stream. `blind` or `open` comes from the document,
@@ -86,7 +94,7 @@ agent from the player's reconstructed information set when the player also
 acted that turn; otherwise it is full-information `skuct` (`--foe`). Scores
 are the bot's; a step cap is recorded as unknown.
 
-The `?fork` page runs the same trials in a pool of workers through the wasm
+The `?fork&advanced` page runs the same trials in a pool of workers through the wasm
 `ForkArena`, which wraps the same `fork::Arena`. Equal seeds and settings give
 the native rows; `NC2000_NATIVE_PARITY=1 node crates/wasm/tests-node/fork.js`
 checks this against the release binary. The page defaults to 3,000 iterations
@@ -94,7 +102,7 @@ and prints the equivalent CLI command. Its results stay in memory until
 exported.
 
 **Human vs bot.** Open `?fork=NAME` for a document in `data/forks/`, or
-`?fork` to load or paste one. The player keeps their original side. Each game
+`?fork&advanced` to load or paste one. The player keeps their original side. Each game
 draws the bot's first action from shuffled blocks of the arms. The arm is
 shown only after the game; the bot's first move is visible from the first
 turn's log. Quitting counts as a bot win. Results persist in that browser per
@@ -236,6 +244,7 @@ cargo run --release -p nc2000-bot --example solve_position -- POSITION.json --it
 # wasm (M9): tuned build (fat LTO + wasm-opt -O3; native profile untouched), parity, throughput
 crates/wasm/build.sh nodejs && node crates/wasm/tests-node/parity.js
 node crates/wasm/tests-node/solver.js    # solver report shape; NC2000_NATIVE_PARITY=1 adds the twin
+node crates/wasm/tests-node/kifu.js      # compact replay, exact scenes and replay-backed forks
 node crates/wasm/tests-node/bench.js     # wasm iters/s; native twin: -p nc2000-wasm --example native_bench
 # browser demo (pkg-web via crates/wasm/build.sh): dev server, or typecheck+build+serve the dist
 cd web && npm run dev                    # 0.0.0.0:8000 (auto-bumps port if busy)

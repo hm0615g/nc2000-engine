@@ -5,6 +5,7 @@
 import init, {
   Dex,
   Battle,
+  Kifu,
   Validator,
   deriveBattleSeed,
   forkInfo,
@@ -12,7 +13,7 @@ import init, {
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
 import type { Choice, ForkInfo, PriorReport, StateView } from "./types";
 
-export { Battle };
+export { Battle, Kifu };
 
 let dex: Dex | null = null;
 let validator: Validator | null = null;

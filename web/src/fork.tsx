@@ -34,7 +34,7 @@ import "./fork.css";
 
 type BotOutcome = "win" | "loss" | "tie";
 
-interface GameRecord {
+export interface GameRecord {
   game: number;
   arm: number;
   input: string;
@@ -60,7 +60,7 @@ interface Session {
   revealed: boolean;
 }
 
-interface LoadedFork {
+export interface LoadedFork {
   json: string;
   info: ForkInfo;
   key: string;
@@ -547,7 +547,7 @@ interface Request {
   committed: boolean;
 }
 
-function ForkGame(props: {
+export function ForkGame(props: {
   fork: LoadedFork;
   record: GameRecord;
   poolJson: string;
@@ -556,6 +556,7 @@ function ForkGame(props: {
   onForfeit: (finalTurn: number) => void;
   onNext: () => void;
   onBack: () => void;
+  backLabel?: string;
 }) {
   const { info, json, humanSets } = props.fork;
   const BOT = info.botSide;
@@ -795,7 +796,7 @@ function ForkGame(props: {
                 次の対局
               </button>
               <button class="ghost" onClick={props.onBack}>
-                結果一覧へ
+                {props.backLabel ?? "結果一覧へ"}
               </button>
             </div>
           </div>

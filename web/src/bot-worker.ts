@@ -197,19 +197,13 @@ async function handle(m: WorkerRequest): Promise<void> {
       dropForked();
       battle?.free();
       battle = Battle.fromFork(dex, m.fork, m.seed >>> 0);
-      const doc = JSON.parse(m.fork) as {
-        position: unknown;
-        opponent_team: unknown;
-      };
-      const ps = new ProtocolSearcher(
+      const ps = ProtocolSearcher.fromFork(
         dex,
-        m.searcher.side,
+        m.fork,
         m.searcher.poolJson,
         m.searcher.seed >>> 0,
         searchProfile(mode).c,
       );
-      if (mode === "open") ps.pinOpponent(JSON.stringify(doc.opponent_team));
-      ps.setPosition(JSON.stringify(doc.position));
       forked = {
         channel: new PlayerChannel(m.searcher.side),
         searcher: ps,

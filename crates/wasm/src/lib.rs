@@ -48,6 +48,7 @@ use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::{Category, Dex};
 use nc2000_engine::state::{Battle, Pokemon, RequestKind, Status, BOOST_NAMES};
 use nc2000_engine::validate::{canonicalize_team, validate_team, Learnsets};
+use nc2000_engine::replay::{Recorder, Replay};
 
 /// data/gen2stadium2.json baked into the binary (~416 KB, ~150 KB gzipped
 /// over the wire) — one fetch fewer and no path plumbing for the common
@@ -147,6 +148,7 @@ pub struct WasmBattle {
     dex: Rc<Dex>,
     battle: Battle,
     log_cursor: usize,
+    recorder: Option<Recorder>,
 }
 
 #[wasm_bindgen(js_class = Battle)]
@@ -165,7 +167,8 @@ impl WasmBattle {
         let p1: Vec<PokemonSet> = serde_json::from_str(p1_team).map_err(js_err)?;
         let p2: Vec<PokemonSet> = serde_json::from_str(p2_team).map_err(js_err)?;
         let battle = Battle::from_fixture(&dex.dex, seed, &p1, &p2).map_err(js_err)?;
-        Ok(WasmBattle { dex: dex.dex.clone(), battle, log_cursor: 0 })
+        let recorder = Some(Recorder::new(&dex.dex, &battle, [p1, p2], seed));
+        Ok(WasmBattle { dex: dex.dex.clone(), battle, log_cursor: 0, recorder })
     }
 
     /// A `nc2000-fork-v1` document's battle, log ON and empty. Equal seeds
@@ -174,7 +177,7 @@ impl WasmBattle {
     pub fn from_fork(dex: &WasmDex, fork_json: &str, seed: u32) -> Result<WasmBattle, JsError> {
         let fork = ForkSpec::parse(fork_json).map_err(|e| JsError::new(&e))?;
         let battle = fork.battle(&dex.dex, seed as u64).map_err(|e| JsError::new(&e))?;
-        Ok(WasmBattle { dex: dex.dex.clone(), battle, log_cursor: 0 })
+        Ok(WasmBattle { dex: dex.dex.clone(), battle, log_cursor: 0, recorder: None })
     }
 
     #[wasm_bindgen(js_name = setPreviewLevelCap)]
@@ -183,6 +186,7 @@ impl WasmBattle {
             return Err(JsError::new("preview cap requires side 0 or 1 before battle start"));
         }
         self.battle.preview_level_caps[side] = cap;
+        if let Some(r) = &mut self.recorder { r.replay.caps = self.battle.preview_level_caps; }
         Ok(())
     }
 
@@ -220,7 +224,19 @@ impl WasmBattle {
     /// submits, the battle advances to the next request point (or ends).
     #[wasm_bindgen(js_name = applyChoice)]
     pub fn apply_choice(&mut self, side: usize, input: &str) -> Result<(), JsError> {
-        self.battle.choose(&self.dex, side, input).map_err(js_err)
+        if let Some(r) = &mut self.recorder {
+            r.choose(&self.dex, &mut self.battle, side, input).map_err(js_err)
+        } else {
+            self.battle.choose(&self.dex, side, input).map_err(js_err)
+        }
+    }
+
+    #[wasm_bindgen(js_name = exportKifu)]
+    pub fn export_kifu(&mut self, open: bool, bot_side: usize) -> Result<String, JsError> {
+        let r = self.recorder.as_mut().ok_or_else(|| JsError::new("this battle has no replay origin"))?;
+        r.replay.open = open;
+        r.replay.bot_side = bot_side;
+        r.replay.encode(&self.dex).map_err(|e| JsError::new(&e))
     }
 
     /// `"p1"` / `"p2"` / `"tie"`, or `null` while the battle is running.
@@ -773,6 +789,14 @@ impl WasmProtocolSearcher {
         Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, pinned: false })
     }
 
+    #[wasm_bindgen(js_name = fromFork)]
+    pub fn from_fork(dex: &WasmDex, fork_json: &str, pool_json: &str, seed: u32, c: Option<f64>) -> Result<WasmProtocolSearcher, JsError> {
+        let fork = ForkSpec::parse(fork_json).map_err(|e| JsError::new(&e))?;
+        let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
+        let agent = fork.bot_agent(&dex.dex, pool, skuct_config(c, None), seed as u64).map_err(|e| JsError::new(&e))?;
+        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, pinned: fork.info == nc2000_bot::fork::Info::Open })
+    }
+
     /// Our exact team, as submitted to PS (same JSON array shape as the
     /// `Battle` constructor). Required before the first request.
     #[wasm_bindgen(js_name = setOwnTeam)]
@@ -1283,7 +1307,7 @@ pub fn fork_info(dex: &WasmDex, fork_json: &str) -> Result<String, JsError> {
         "turn": fork.position.turn,
         "botSide": fork.bot_side(),
         "arms": arms,
-        "opponentView": fork.opponent_position.is_some(),
+        "opponentView": fork.opponent_position.is_some() || fork.exact_replay.is_some(),
     })
     .to_string())
 }
@@ -1316,7 +1340,7 @@ impl WasmForkArena {
         if arena.iters == 0 || arena.foe_iters == 0 {
             return Err(JsError::new("iterations must be positive"));
         }
-        if arena.foe == Policy::Protocol && fork.opponent_position.is_none() {
+        if arena.foe == Policy::Protocol && fork.opponent_position.is_none() && fork.exact_replay.is_none() {
             return Err(JsError::new("this fork has no opponent_position for a protocol opponent"));
         }
         Ok(WasmForkArena { dex: dex.dex.clone(), fork, pool, arena })
@@ -1328,6 +1352,54 @@ impl WasmForkArena {
             .play(&self.dex, &self.fork, &self.pool, trial as usize, arm as usize)
             .map(|row| row.to_string())
             .map_err(|e| JsError::new(&e))
+    }
+}
+
+#[wasm_bindgen(js_name = Kifu)]
+pub struct WasmKifu {
+    dex: Rc<Dex>,
+    replay: Replay,
+    code: String,
+}
+
+#[wasm_bindgen(js_class = Kifu)]
+impl WasmKifu {
+    #[wasm_bindgen(constructor)]
+    pub fn new(dex: &WasmDex, code: &str) -> Result<WasmKifu, JsError> {
+        let replay = Replay::decode(&dex.dex, code).map_err(|e| JsError::new(&e))?;
+        Ok(Self { dex: dex.dex.clone(), replay, code: code.into() })
+    }
+
+    pub fn scenes(&self) -> Result<String, JsError> {
+        let mut b = self.replay.initial(&self.dex).map_err(|e| JsError::new(&e))?;
+        let mut scenes = Vec::new();
+        for (round, picks) in self.replay.rounds.iter().enumerate() {
+            if b.turn > 0 {
+                if let Some(pick) = picks[self.replay.bot_side] {
+                    let active: Vec<_> = (0..2).map(|s| b.active_id(s).map(|id| self.dex.species.get(b.poke(id).species).name.clone())).collect();
+                    scenes.push(serde_json::json!({ "round": round, "turn": b.turn, "active": active,
+                        "played": choice_json(&b, &self.dex, self.replay.bot_side, pick) }));
+                }
+            }
+            self.replay.apply(&self.dex, &mut b, round).map_err(|e| JsError::new(&e))?;
+        }
+        Ok(serde_json::json!({ "scenes": scenes, "turns": b.turn.min(1000), "outcome": b.outcome().map(|o| format!("{o:?}")),
+            "botSide": self.replay.bot_side, "info": if self.replay.open { "open" } else { "blind" } }).to_string())
+    }
+
+    pub fn scene(&self, round: usize) -> Result<String, JsError> {
+        let pick = self.replay.rounds.get(round).and_then(|p| p[self.replay.bot_side]).ok_or_else(|| JsError::new("no bot action"))?;
+        let mut b = self.replay.at(&self.dex, round).map_err(|e| JsError::new(&e))?;
+        let legal = b.legal_choices(&self.dex, self.replay.bot_side);
+        let choices: Vec<_> = legal.iter().map(|&c| choice_json(&b, &self.dex, self.replay.bot_side, c)).collect();
+        Ok(serde_json::json!({ "view": state_view_json(&b, &self.dex), "choices": choices,
+            "played": choice_json(&b, &self.dex, self.replay.bot_side, pick), "log": b.log }).to_string())
+    }
+
+    pub fn fork(&self, round: usize, alternative: &str, pool_json: &str) -> Result<String, JsError> {
+        let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
+        let fork = ForkSpec::from_replay(&self.dex, &self.code, round, alternative, &pool).map_err(|e| JsError::new(&e))?;
+        serde_json::to_string(&fork).map_err(js_err)
     }
 }
 

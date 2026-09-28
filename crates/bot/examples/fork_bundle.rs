@@ -191,6 +191,7 @@ fn main() {
     }
 
     let mut fork = ForkSpec {
+        exact_replay: None,
         schema: SCHEMA.into(),
         label: arg("--label").unwrap_or_else(|| format!("{} turn {turn}", log_path.file_stem().unwrap().to_string_lossy())),
         info,

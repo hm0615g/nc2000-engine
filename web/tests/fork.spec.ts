@@ -84,7 +84,7 @@ test("a hosted fork plays, forfeits, reveals, exports and persists", async ({ pa
 
 test("a pasted fork is validated before any game starts", async ({ page }) => {
   await clearForkStorage(page);
-  await page.goto("/?fork");
+  await page.goto("/?fork&advanced");
   const bad = JSON.parse(forkJson);
   bad.arms.push({ input: "move thunderbolt", label: "" });
   await page.locator(".fork-panel textarea").fill(JSON.stringify(bad));

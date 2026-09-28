@@ -10,3 +10,8 @@ repository.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 smallvec = "1.15.2"
+miniz_oxide = "0.8"
+sha2 = "0.10"
+
+[build-dependencies]
+sha2 = "0.10"
