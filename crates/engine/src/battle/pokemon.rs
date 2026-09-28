@@ -615,16 +615,7 @@ impl Battle {
     }
 
     pub fn try_trap(&mut self, dex: &Dex, id: PokeId) -> bool {
-        // runStatusImmunity('trapped') without message
-        // (dex lookup needs dex; trapped immunity: Ghost)
-        // NOTE: callers pass through run_status_immunity when needed; PS
-        // tryTrap checks it — we do too via types directly.
-        let p = self.poke(id);
-        let ghost = p.types.has(dex.known_types.ghost);
-        if ghost {
-            return false;
-        }
-        if p.fainted {
+        if !self.run_status_immunity(dex, id, "trapped", false) {
             return false;
         }
         self.poke_mut(id).trapped = true;
