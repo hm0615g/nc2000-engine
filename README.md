@@ -86,6 +86,13 @@ agent from the player's reconstructed information set when the player also
 acted that turn; otherwise it is full-information `skuct` (`--foe`). Scores
 are the bot's; a step cap is recorded as unknown.
 
+The `?fork` page runs the same trials in a pool of workers through the wasm
+`ForkArena`, which wraps the same `fork::Arena`. Equal seeds and settings give
+the native rows; `NC2000_NATIVE_PARITY=1 node crates/wasm/tests-node/fork.js`
+checks this against the release binary. The page defaults to 3,000 iterations
+and prints the equivalent CLI command. Its results stay in memory until
+exported.
+
 **Human vs bot.** Open `?fork=NAME` for a document in `data/forks/`, or
 `?fork` to load or paste one. The player keeps their original side. Each game
 draws the bot's first action from shuffled blocks of the arms. The arm is
@@ -154,7 +161,8 @@ web/                       Vite+Preact browser demo (M9): worker-threaded bot wi
                            bake extends the app in place; the Pages build copies data/ into dist/);
                            `?solver` (solver.tsx + position.ts + solver-worker.ts) is a fourth door
                            and not a battle at all: a position is typed in and every option scored; `?fork` (fork.tsx)
-                           replays a `nc2000-fork-v1` position as human-vs-bot games
+                           replays a `nc2000-fork-v1` position as human-vs-bot games and
+                           bot-vs-bot trials (fork-arena.tsx + fork-arena-worker.ts)
 .github/workflows/pages.yml GH Pages build+deploy (M12): wasm build -> vite build (NC2000_BASE=
                            /nc2000-engine/) -> data copy -> actions/deploy-pages
 PORTING.md                 porting checklist (377 callbacks, generated)
