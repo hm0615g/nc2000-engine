@@ -46,7 +46,7 @@ fn escape_leaf(
             if actions.is_empty() {
                 return None;
             }
-            let normal = playout_pick(b, dex, &cfg.playout, s, &actions, rng, cfg.rollout_m16c);
+            let normal = playout_pick(b, dex, &cfg.playout, s, &actions, rng, cfg.rollout_rules());
             let expires = b.active_id(s).is_some_and(|id| {
                 dex.conds_id("perishsong")
                     .and_then(|c| b.poke(id).volatile(c))
@@ -156,7 +156,7 @@ fn traced_search(
                             s,
                             &actions[s],
                             &mut rng,
-                            cfg.rollout_m16c,
+                            cfg.rollout_rules(),
                         )
                     })
                 });

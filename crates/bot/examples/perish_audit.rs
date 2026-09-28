@@ -265,7 +265,7 @@ fn main() {
                                     s,
                                     &actions[s],
                                     &mut rng,
-                                    cfg.rollout_m16c,
+                                    cfg.rollout_rules(),
                                 ))
                             }
                         });

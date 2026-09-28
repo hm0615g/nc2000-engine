@@ -713,7 +713,8 @@ impl Agent for RolloutAgent {
     ) -> SearchChoice {
         // M8 screen self-play stays the historical no-switch policy (its role
         // is a cheap ranking signal; bit-identity with the baked tables).
-        crate::mcts::playout_pick(battle, dex, &self.playout, side, choices, &mut self.rng, false)
+        let rules = crate::mcts::RolloutRules::default();
+        crate::mcts::playout_pick(battle, dex, &self.playout, side, choices, &mut self.rng, rules)
     }
 }
 

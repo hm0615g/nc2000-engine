@@ -327,6 +327,22 @@ fn status_pseudo_score(
     }
 }
 
+/// Optional rules layered over the heavy rollout's ε-greedy pick. The
+/// default is none of them; the shipped set is
+/// `RmConfig::default().rollout_rules()`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RolloutRules {
+    /// The parked M16c upgrades: bad-matchup voluntary switching and
+    /// status-move pseudo-values (`RmConfig::rollout_m16c`).
+    pub m16c: bool,
+    /// A side whose active faints to Perish Song at the end of this turn
+    /// switches out whenever a switch is legal ([`perish_escape`]).
+    pub perish_escape: bool,
+    /// Rollout sides play the Perish trap and its counter ([`perish_combo`]).
+    /// Implies `perish_escape`, without which the combo kills its own singer.
+    pub perish_combo: bool,
+}
+
 /// Unfinished rollouts return a leaf evaluation rather than a terminal outcome.
 pub fn playout_value(
     sim: &mut Battle,
@@ -334,7 +350,7 @@ pub fn playout_value(
     playout: &Playout,
     turn_cap: u16,
     rng: &mut SplitMix64,
-    m16c: bool,
+    rules: RolloutRules,
 ) -> f64 {
     let cutoff = match playout {
         Playout::Uniform => turn_cap,
@@ -354,7 +370,7 @@ pub fn playout_value(
         for s in 0..2 {
             let cs = sim.legal_choices(dex, s);
             if !cs.is_empty() {
-                picks[s] = Some(playout_pick(sim, dex, playout, s, &cs, rng, m16c));
+                picks[s] = Some(playout_pick(sim, dex, playout, s, &cs, rng, rules));
             }
         }
         sim.apply_choices(dex, picks)
@@ -363,6 +379,31 @@ pub fn playout_value(
 }
 
 pub fn playout_pick(
+    sim: &Battle,
+    dex: &Dex,
+    playout: &Playout,
+    side: usize,
+    cs: &[SearchChoice],
+    rng: &mut SplitMix64,
+    rules: RolloutRules,
+) -> SearchChoice {
+    // The Perish rules override only after the ordinary pick has drawn its
+    // rng, so a rollout in which they never fire keeps its exact stream.
+    let pick = ordinary_pick(sim, dex, playout, side, cs, rng, rules.m16c);
+    if rules.perish_escape || rules.perish_combo {
+        if let Some(escape) = perish_escape(sim, dex, side, cs) {
+            return escape;
+        }
+    }
+    if rules.perish_combo {
+        if let Some(combo) = perish_combo(sim, dex, side, cs) {
+            return combo;
+        }
+    }
+    pick
+}
+
+fn ordinary_pick(
     sim: &Battle,
     dex: &Dex,
     playout: &Playout,
@@ -382,6 +423,119 @@ pub fn playout_pick(
         return cs[rng.below(cs.len())];
     }
     greedy_pick(sim, dex, side, cs, rng, m16c)
+}
+
+/// The switch a side makes when its active faints to Perish Song at the end
+/// of this turn (counter 1) and a switch is legal: the bench mon expected to
+/// keep the most HP through the foe active's best hit. `None` otherwise.
+///
+/// Without it no rollout ever leaves a Perish count, so every Perish line
+/// scores as both actives dying: Perish Song on a foe free to switch reads
+/// as a guaranteed trade, Mean Look adds nothing to it, and a trapper that
+/// escapes its own song is never on the board.
+pub fn perish_escape(
+    sim: &Battle,
+    dex: &Dex,
+    side: usize,
+    cs: &[SearchChoice],
+) -> Option<SearchChoice> {
+    if !cs.iter().any(|c| matches!(c, SearchChoice::Move(_))) {
+        return None;
+    }
+    let active = sim.active_id(side)?;
+    let cond = perishsong_id(dex)?;
+    if sim.poke(active).volatile(cond)?.duration != Some(1) {
+        return None;
+    }
+    let foe = sim.active_id(1 - side);
+    let kept = |c: &SearchChoice| {
+        let SearchChoice::Switch(pos) = *c else { return f64::NEG_INFINITY };
+        let s = &sim.sides[side];
+        let id = nc2000_engine::state::PokeId { side: side as u8, slot: s.party[(pos - 1) as usize] };
+        let p = sim.poke(id);
+        let incoming = foe.map_or(0.0, |foe| eval::best_hit_fraction(sim, dex, foe, id, true));
+        p.hp as f64 / p.maxhp as f64 * (1.0 - incoming).max(0.0)
+    };
+    cs.iter()
+        .copied()
+        .filter(|c| matches!(c, SearchChoice::Switch(_)))
+        .max_by(|a, b| kept(a).total_cmp(&kept(b)))
+}
+
+/// The Perish trap as a rollout side plays it, and the standard answer to it.
+/// Greedy damage never selects a status move, so without this no rollout
+/// ever traps, sings or phazes, and the search can value the combo only
+/// where its own tree happens to reach every step of it.
+///
+/// - A trapped mon counting down (2 or more turns left) phazes the trapper
+///   away, which also ends the trap.
+/// - Otherwise, when this side has a bench to escape to, is not itself
+///   trapped, and cannot expect to KO the foe this turn: Perish Song if the
+///   foe cannot switch (trapped or benchless) and is not counting yet, else
+///   Mean Look / Spider Web when this mon also carries Perish Song.
+///
+/// `None` leaves the ordinary pick in place.
+pub fn perish_combo(
+    sim: &Battle,
+    dex: &Dex,
+    side: usize,
+    cs: &[SearchChoice],
+) -> Option<SearchChoice> {
+    let ids = perish_moves(dex);
+    let usable = |m: Option<nc2000_engine::dex::MoveId>| {
+        m.map(SearchChoice::Move).filter(|c| cs.contains(c))
+    };
+    let song = usable(ids.song);
+    let phaze = ids.phazes.iter().find_map(|&m| usable(m));
+    if song.is_none() && phaze.is_none() {
+        return None;
+    }
+    let me_id = sim.active_id(side)?;
+    let foe_id = sim.active_id(1 - side)?;
+    let cond = perishsong_id(dex)?;
+    let me = sim.poke(me_id);
+    let foe = sim.poke(foe_id);
+    let foe_bench = sim.sides[1 - side].pokemon_left > 1;
+    if let Some(phaze) = phaze {
+        let counting = me.volatile(cond).and_then(|v| v.duration).is_some_and(|d| d >= 2);
+        if me.trapped && counting && foe_bench {
+            return Some(phaze);
+        }
+    }
+    let song = song?;
+    if me.trapped || sim.sides[side].pokemon_left < 2 || foe.has_volatile(cond) {
+        return None;
+    }
+    if eval::best_hit_fraction(sim, dex, me_id, foe_id, true) >= 1.0 {
+        return None;
+    }
+    if foe.trapped || !foe_bench {
+        return Some(song);
+    }
+    if foe.types.has(dex.known_types.ghost) {
+        return None;
+    }
+    ids.traps.iter().find_map(|&m| usable(m))
+}
+
+struct PerishMoves {
+    song: Option<nc2000_engine::dex::MoveId>,
+    traps: [Option<nc2000_engine::dex::MoveId>; 2],
+    phazes: [Option<nc2000_engine::dex::MoveId>; 2],
+}
+
+fn perish_moves(dex: &Dex) -> &'static PerishMoves {
+    static IDS: std::sync::OnceLock<PerishMoves> = std::sync::OnceLock::new();
+    IDS.get_or_init(|| PerishMoves {
+        song: dex.moves.id("perishsong"),
+        traps: [dex.moves.id("meanlook"), dex.moves.id("spiderweb")],
+        phazes: [dex.moves.id("roar"), dex.moves.id("whirlwind")],
+    })
+}
+
+fn perishsong_id(dex: &Dex) -> Option<nc2000_engine::dex::CondId> {
+    static ID: std::sync::OnceLock<Option<nc2000_engine::dex::CondId>> = std::sync::OnceLock::new();
+    *ID.get_or_init(|| dex.conds_id("perishsong"))
 }
 
 /// Greedy rollout move: strongest expected hit (never a voluntary switch);
@@ -593,4 +747,115 @@ pub(crate) fn select_ucb(
         }
     }
     best
+}
+
+#[cfg(test)]
+mod perish_rollout_tests {
+    use super::*;
+    use nc2000_engine::battle::PokemonSet;
+
+    fn set(species: &str, moves: &[&str]) -> serde_json::Value {
+        serde_json::json!({"name":species,"species":species,"item":"","ability":"No Ability",
+            "moves":moves,"nature":"Serious","gender":"M","level":50,
+            "evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255}})
+    }
+
+    fn teams() -> [Vec<PokemonSet>; 2] {
+        [
+            serde_json::from_value(serde_json::json!([
+                set("Misdreavus", &["Mean Look", "Perish Song", "Protect", "Thunderbolt"]),
+                set("Skarmory", &["Drill Peck", "Whirlwind", "Rest", "Toxic"]),
+                set("Blissey", &["Seismic Toss", "Soft-Boiled", "Toxic", "Heal Bell"]),
+            ]))
+            .unwrap(),
+            serde_json::from_value(serde_json::json!([
+                set("Snorlax", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+                set("Zapdos", &["Whirlwind", "Thunderbolt", "Rest", "Thunder Wave"]),
+                set("Cloyster", &["Surf", "Ice Beam", "Spikes", "Toxic"]),
+            ]))
+            .unwrap(),
+        ]
+    }
+
+    /// Both sides past team preview, side 1 leading with its `lead`-th mon.
+    fn start(lead: usize) -> (Dex, Battle) {
+        let dex = conformance::load_dex();
+        let [t0, t1] = teams();
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &t0, &t1).unwrap();
+        b.set_log_enabled(false);
+        b.choose(&dex, 0, "team 1, 2, 3").unwrap();
+        let order = if lead == 1 { "team 1, 2, 3" } else { "team 2, 1, 3" };
+        b.choose(&dex, 1, order).unwrap();
+        (dex, b)
+    }
+
+    fn mv(dex: &Dex, key: &str) -> SearchChoice {
+        SearchChoice::Move(dex.moves.id(key).unwrap())
+    }
+
+    fn turn(dex: &Dex, b: &mut Battle, moves: [&str; 2]) {
+        b.apply_choices(dex, [Some(mv(dex, moves[0])), Some(mv(dex, moves[1]))]).unwrap();
+    }
+
+    fn combo(dex: &Dex, b: &mut Battle, side: usize) -> Option<SearchChoice> {
+        let cs = b.legal_choices(dex, side);
+        perish_combo(b, dex, side, &cs)
+    }
+
+    fn escape(dex: &Dex, b: &mut Battle, side: usize) -> Option<SearchChoice> {
+        let cs = b.legal_choices(dex, side);
+        perish_escape(b, dex, side, &cs)
+    }
+
+    #[test]
+    fn rollout_trapper_traps_sings_and_escapes() {
+        let (dex, mut b) = start(1);
+        assert_eq!(combo(&dex, &mut b, 0), Some(mv(&dex, "meanlook")));
+        assert_eq!(combo(&dex, &mut b, 1), None, "Snorlax has no part in the combo");
+        turn(&dex, &mut b, ["meanlook", "curse"]);
+        assert!(b.poke(b.active_id(1).unwrap()).trapped);
+        assert_eq!(combo(&dex, &mut b, 0), Some(mv(&dex, "perishsong")));
+        turn(&dex, &mut b, ["perishsong", "curse"]);
+        assert_eq!(combo(&dex, &mut b, 0), None, "the foe is already counting");
+        for _ in 0..2 {
+            assert_eq!(escape(&dex, &mut b, 0), None);
+            turn(&dex, &mut b, ["thunderbolt", "curse"]);
+        }
+        assert!(matches!(escape(&dex, &mut b, 0), Some(SearchChoice::Switch(_))));
+        assert_eq!(escape(&dex, &mut b, 1), None, "the trapped foe has no switch");
+    }
+
+    #[test]
+    fn trapped_victim_phazes_while_it_still_has_time() {
+        let (dex, mut b) = start(2);
+        turn(&dex, &mut b, ["meanlook", "thunderwave"]);
+        turn(&dex, &mut b, ["perishsong", "thunderwave"]);
+        assert_eq!(combo(&dex, &mut b, 1), Some(mv(&dex, "whirlwind")));
+    }
+
+    #[test]
+    fn no_combo_from_the_last_mon_or_with_a_kill_on_the_board() {
+        let (dex, mut b) = start(1);
+        let foe = b.active_id(1).unwrap();
+        b.poke_mut(foe).hp = 1;
+        assert_eq!(combo(&dex, &mut b, 0), None, "an expected KO is taken instead");
+        let (dex, mut b) = start(1);
+        b.sides[0].pokemon_left = 1;
+        assert_eq!(combo(&dex, &mut b, 0), None, "Perish Song fails from the last mon");
+    }
+
+    #[test]
+    fn perish_rules_draw_the_same_rng_as_the_ordinary_pick() {
+        let (dex, mut b) = start(1);
+        let cs = b.legal_choices(&dex, 0);
+        let playout = Playout::heavy();
+        for seed in 0..64 {
+            let (mut r0, mut r1) = (SplitMix64::new(seed), SplitMix64::new(seed));
+            playout_pick(&b, &dex, &playout, 0, &cs, &mut r0, RolloutRules::default());
+            let rules = RolloutRules { perish_combo: true, ..Default::default() };
+            let pick = playout_pick(&b, &dex, &playout, 0, &cs, &mut r1, rules);
+            assert_eq!(pick, mv(&dex, "meanlook"));
+            assert_eq!(r0.next(), r1.next());
+        }
+    }
 }

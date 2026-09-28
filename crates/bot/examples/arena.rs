@@ -9,6 +9,7 @@
 //!       [--pool fixtures|meta[:LO-HI]] [--tables data/preview-tables-v0]
 //!       [--heal-min N] [--phaze-min N] [--sleeptalk-min N]   a-priori TEAM filters
 //!       [--type-min ghost:1[,ground:1]]                    a-priori TEAM filter
+//!       [--perish-min N]                                   a-priori TEAM filter
 //!
 //! Agent specs:
 //!   random | maxdamage | greedy
@@ -41,6 +42,11 @@
 //! exactly 0.500 with zero split pairs. Run that null control first — without
 //! it an identical-arm duel is only 0.5 in expectation and cannot tell a
 //! working seam from a broken one.
+//!   open[:ITERS[:C[:BUCKETS]]][:-perish_combo|:perish_escape]
+//!                                    (also on blind specs: the Perish rollout rules,
+//!                                    `RmConfig::rollout_perish` / `rollout_combo`;
+//!                                    the shipped combo is the default, `-perish_combo`
+//!                                    = no Perish rules, `perish_escape` = escape only)
 //!   open[:ITERS[:C[:BUCKETS]]]       M14 open-team-sheet agent (the M12 product
 //!                                    policy): the blind machinery with the opponent's
 //!                                    TRUE sets pinned as a singleton belief — only
@@ -95,8 +101,8 @@ enum AgentSpec {
     /// mask; two blind agents in one process differing only in
     /// `RmConfig::mask_rules` is the only CRN-paired A/B there is
     /// (`smmcts::SkuctSearch::root_dominated`).
-    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules },
-    Open { iterations: u32, c: f64, buckets: i64 },
+    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout },
+    Open { iterations: u32, c: f64, buckets: i64, perish: PerishRollout },
     Exploit(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
     Counter { inner: Box<AgentSpec>, target: PreviewMode },
@@ -152,6 +158,7 @@ fn apply_mask_token(m: &mut MaskRules, tok: &str) -> Result<(), String> {
 /// mean iters=300 with the default c and buckets.
 fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String> {
     let mut nums: Vec<&str> = Vec::new();
+    let mut perish = PerishRollout::shipped();
     for part in &parts[1..] {
         if part.is_empty() {
             return Err("empty field in a blind spec".into());
@@ -160,7 +167,9 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
             nums.push(part);
         } else {
             for tok in part.split(',').filter(|t| !t.is_empty()) {
-                apply_mask_token(&mut mask, tok)?;
+                if !apply_rollout_token(&mut perish, tok) {
+                    apply_mask_token(&mut mask, tok)?;
+                }
             }
         }
     }
@@ -172,6 +181,76 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
         c: opt_num(&nums, 1, "c")?.unwrap_or(1.0),
         buckets: opt_num(&nums, 2, "buckets")?.unwrap_or(16),
         mask,
+        perish,
+    })
+}
+
+/// Which Perish rollout rules an open/blind spec runs (`mcts::RolloutRules`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PerishRollout {
+    Off,
+    /// `perish_escape`: `RmConfig::rollout_perish`.
+    Escape,
+    /// `perish_combo`: `RmConfig::rollout_combo` (escape included).
+    Combo,
+}
+
+impl PerishRollout {
+    fn shipped() -> PerishRollout {
+        let cfg = RmConfig::default();
+        match (cfg.rollout_combo, cfg.rollout_perish) {
+            (true, _) => PerishRollout::Combo,
+            (false, true) => PerishRollout::Escape,
+            (false, false) => PerishRollout::Off,
+        }
+    }
+
+    /// Empty for the shipped rules, so a plain spec's label never changes.
+    fn label(self) -> &'static str {
+        if self == PerishRollout::shipped() {
+            return "";
+        }
+        match self {
+            PerishRollout::Off => ":-perish_combo",
+            PerishRollout::Escape => ":perish_escape",
+            PerishRollout::Combo => ":perish_combo",
+        }
+    }
+}
+
+/// `perish_escape` / `perish_combo` / their `-` forms; false when `tok`
+/// names something else.
+fn apply_rollout_token(perish: &mut PerishRollout, tok: &str) -> bool {
+    *perish = match tok {
+        "perish_escape" => PerishRollout::Escape,
+        "perish_combo" => PerishRollout::Combo,
+        "-perish_escape" | "-perish_combo" => PerishRollout::Off,
+        _ => return false,
+    };
+    true
+}
+
+/// `open`'s fields, split like [`parse_blind`]'s; the only named token is
+/// the rollout rule.
+fn parse_open(parts: &[&str]) -> Result<AgentSpec, String> {
+    let mut nums: Vec<&str> = Vec::new();
+    let mut perish = PerishRollout::shipped();
+    for part in &parts[1..] {
+        if part.starts_with(|c: char| c.is_ascii_digit()) {
+            nums.push(part);
+        } else {
+            for tok in part.split(',').filter(|t| !t.is_empty()) {
+                if !apply_rollout_token(&mut perish, tok) {
+                    return Err(format!("unknown open-spec token `{tok}`"));
+                }
+            }
+        }
+    }
+    Ok(AgentSpec::Open {
+        iterations: opt_num(&nums, 0, "iters")?.unwrap_or(1000),
+        c: opt_num(&nums, 1, "c")?.unwrap_or(1.0),
+        buckets: opt_num(&nums, 2, "buckets")?.unwrap_or(16),
+        perish,
     })
 }
 
@@ -220,11 +299,7 @@ impl AgentSpec {
             }),
             "blind" => parse_blind(&parts, MaskRules::default()),
             "blindlegacy" => parse_blind(&parts, legacy_mask()),
-            "open" => Ok(AgentSpec::Open {
-                iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
-                c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
-                buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
-            }),
+            "open" => parse_open(&parts),
             "exploit" => {
                 let inner = s.strip_prefix("exploit:").ok_or("exploit needs an inner spec")?;
                 Ok(AgentSpec::Exploit(Box::new(AgentSpec::parse(inner)?)))
@@ -369,25 +444,29 @@ impl AgentSpec {
                 },
                 seed,
             )),
-            AgentSpec::Blind { iterations, c, buckets, mask } => Box::new(BlindAgent::new(
+            AgentSpec::Blind { iterations, c, buckets, mask, perish } => Box::new(BlindAgent::new(
                 RmConfig {
                     iterations: *iterations,
                     rule: SelRule::Ucb,
                     c: *c,
                     hp_buckets: *buckets,
                     mask_rules: *mask,
+                    rollout_perish: *perish == PerishRollout::Escape,
+                    rollout_combo: *perish == PerishRollout::Combo,
                     ..Default::default()
                 },
                 pool.expect("blind agents need the meta pool").clone(),
                 tables.cloned(),
                 seed,
             )),
-            AgentSpec::Open { iterations, c, buckets } => Box::new(OpenAgent::new(
+            AgentSpec::Open { iterations, c, buckets, perish } => Box::new(OpenAgent::new(
                 RmConfig {
                     iterations: *iterations,
                     rule: SelRule::Ucb,
                     c: *c,
                     hp_buckets: *buckets,
+                    rollout_perish: *perish == PerishRollout::Escape,
+                    rollout_combo: *perish == PerishRollout::Combo,
                     ..Default::default()
                 },
                 tables.cloned(),
@@ -437,11 +516,12 @@ impl AgentSpec {
             AgentSpec::SkUctAbs { iterations, c, buckets } => {
                 format!("skuctabs:{iterations}:{c}:{buckets}")
             }
-            AgentSpec::Blind { iterations, c, buckets, mask } => {
+            AgentSpec::Blind { iterations, c, buckets, mask, perish } => {
+                let rollout = perish.label();
                 // The one pre-existing named ablation keeps its own label, so
                 // every artifact written before 2026-08-20 still compares.
                 if *mask == legacy_mask() {
-                    return format!("blindlegacy:{iterations}:{c}:{buckets}");
+                    return format!("blindlegacy:{iterations}:{c}:{buckets}{rollout}");
                 }
                 let diff: Vec<String> = mask_fields(mask)
                     .into_iter()
@@ -451,10 +531,11 @@ impl AgentSpec {
                     .collect();
                 let suffix =
                     if diff.is_empty() { String::new() } else { format!(":{}", diff.join(",")) };
-                format!("blind:{iterations}:{c}:{buckets}{suffix}")
+                format!("blind:{iterations}:{c}:{buckets}{suffix}{rollout}")
             }
-            AgentSpec::Open { iterations, c, buckets } => {
-                format!("open:{iterations}:{c}:{buckets}")
+            AgentSpec::Open { iterations, c, buckets, perish } => {
+                let rollout = perish.label();
+                format!("open:{iterations}:{c}:{buckets}{rollout}")
             }
             AgentSpec::Exploit(inner) => format!("exploit:{}", inner.label()),
             AgentSpec::Baked { inner, mode } => match mode {
@@ -709,6 +790,24 @@ fn main() {
                 eprintln!("{name} {n}: {before} -> {} teams", teams.len());
                 assert!(teams.len() >= 2, "{name} {n} left fewer than 2 teams");
             }
+        }
+        // `--perish-min 1` selects the teams that carry a trapper which can
+        // also sing (Mean Look / Spider Web AND Perish Song on one set) —
+        // the combo the Perish rollout rules exist for. Like the filters above it
+        // concentrates exposure; a 3-of-6 pick can still leave it home.
+        if let Some(n) = flag(&args, "--perish-min").map(|v| v.parse::<usize>().unwrap()) {
+            let norm = |m: &String| -> String {
+                m.chars().filter(|c| c.is_ascii_alphanumeric()).flat_map(|c| c.to_lowercase()).collect()
+            };
+            let combo = |s: &PokemonSet| {
+                let moves: Vec<String> = s.moves.iter().map(norm).collect();
+                moves.iter().any(|m| m == "perishsong")
+                    && moves.iter().any(|m| m == "meanlook" || m == "spiderweb")
+            };
+            let before = teams.len();
+            teams.retain(|sets| sets.iter().filter(|s| combo(s)).count() >= n);
+            eprintln!("--perish-min {n}: {before} -> {} teams", teams.len());
+            assert!(teams.len() >= 2, "--perish-min {n} left fewer than 2 teams");
         }
         // `--type-min ghost:1[,ground:1]` is the immunity A/B's analogue of
         // `--sleeptalk-min`: the type-immunity gate's exposure is a property

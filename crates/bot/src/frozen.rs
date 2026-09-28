@@ -108,7 +108,7 @@ pub(crate) fn evaluate_sim(
         }
         if missing {
             if tree_choices > 0 {
-                break playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_m16c);
+                break playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_rules());
             }
             for side in 0..2 {
                 if chosen[side].is_none() && !acts[side].is_empty() {
@@ -119,7 +119,7 @@ pub(crate) fn evaluate_sim(
                         side,
                         &acts[side],
                         rng,
-                        cfg.rollout_m16c,
+                        cfg.rollout_rules(),
                     ));
                 }
             }
@@ -134,7 +134,7 @@ pub(crate) fn evaluate_sim(
             .expect("frozen policy chose an illegal action");
         tree_choices += 1;
         if missing {
-            break playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_m16c);
+            break playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_rules());
         }
     };
     FrozenResult {

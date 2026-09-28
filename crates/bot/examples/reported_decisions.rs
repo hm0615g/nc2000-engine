@@ -239,7 +239,7 @@ fn main() {
                                         &cfg.playout,
                                         turn.saturating_add(cfg.horizon),
                                         rng,
-                                        cfg.rollout_m16c,
+                                        cfg.rollout_rules(),
                                     )
                                 } else {
                                     nc2000_bot::eval::eval_leaf(
