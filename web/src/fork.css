@@ -106,3 +106,36 @@
   color: var(--text-dim);
   font-size: 0.88rem;
 }
+.arena-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+.arena-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  min-width: 0;
+}
+.arena-settings input {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 44px;
+  padding: 6px 10px;
+  min-width: 0;
+}
+.arena-settings select {
+  min-width: 0;
+}
+.arena-progress {
+  margin: 14px 0 6px;
+}
+.arena-cli code {
+  word-break: break-all;
+}

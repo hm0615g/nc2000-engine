@@ -14,13 +14,15 @@ use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::{toid, Dex};
 use nc2000_engine::state::Battle;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 
 use crate::agent::Agent;
 use crate::import::{apply_party, ProtocolAgent};
 use crate::player::{action_input, PlayerChannel};
 use crate::position::{synthesize_spec, PositionSpec};
 use crate::preview::MetaPool;
-use crate::smmcts::RmConfig;
+use crate::rng::SplitMix64;
+use crate::smmcts::{RmAgent, RmConfig, SelRule};
 
 pub const SCHEMA: &str = "nc2000-fork-v1";
 
@@ -377,5 +379,125 @@ pub fn play_out(
         }
         battle.apply_choices(dex, choices).map_err(|e| format!("apply: {e:?}"))?;
         steps += 1;
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Policy {
+    /// The ladder agent from that side's recorded information set.
+    Protocol,
+    /// Full-information search over the true battle.
+    Skuct,
+}
+
+impl Policy {
+    pub fn name(self) -> &'static str {
+        match self {
+            Policy::Protocol => "protocol",
+            Policy::Skuct => "skuct",
+        }
+    }
+}
+
+/// A bot-vs-bot measurement of a fork. Trial `k` is fully determined by
+/// `seed` and `k`, and every arm of a trial shares its seeds.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Arena {
+    pub bot: Policy,
+    pub foe: Policy,
+    pub iters: u32,
+    pub foe_iters: u32,
+    /// Exploration constant of protocol seats.
+    pub c: f64,
+    pub seed: u64,
+    pub max_steps: u32,
+}
+
+impl Arena {
+    /// Battle, bot and opponent seeds of `trial`.
+    pub fn trial_seeds(&self, trial: usize) -> [u64; 3] {
+        let mut rng = SplitMix64::new(self.seed);
+        for _ in 0..trial * 3 {
+            rng.next();
+        }
+        [rng.next(), rng.next(), rng.next()]
+    }
+
+    /// Arm `arm` of `trial` as one `tools/summarize-counterfactual.py` row;
+    /// `score` is the bot's, `null` when the step cap ended the game.
+    pub fn play(
+        &self,
+        dex: &Dex,
+        fork: &ForkSpec,
+        pool: &MetaPool,
+        trial: usize,
+        arm: usize,
+    ) -> Result<Value, String> {
+        let [battle_seed, bot_seed, foe_seed] = self.trial_seeds(trial);
+        let bot_side = fork.bot_side();
+        let mut battle = fork.battle(dex, battle_seed)?;
+        let choice = *fork
+            .arm_choices(dex, &mut battle)?
+            .get(arm)
+            .ok_or_else(|| format!("fork: no arm {arm}"))?;
+        let bot = self.seat(dex, fork, pool, self.bot, true, self.iters, bot_seed)?;
+        let foe = self.seat(dex, fork, pool, self.foe, false, self.foe_iters, foe_seed)?;
+        let mut seats = if bot_side == 0 { [bot, foe] } else { [foe, bot] };
+        let result = play_out(&mut battle, dex, bot_side, choice, &mut seats, self.max_steps)
+            .map_err(|e| format!("trial {trial} arm {}: {e}", fork.arms[arm].input))?;
+        let (score, outcome) = match (result.outcome, bot_side) {
+            (None, _) => (None, "cap"),
+            (Some(Outcome::Tie), _) => (Some(0.5), "tie"),
+            (Some(Outcome::P1Win), 0) | (Some(Outcome::P2Win), 1) => (Some(1.0), "win"),
+            _ => (Some(0.0), "loss"),
+        };
+        let (drift, projections) = match &seats[bot_side] {
+            Seat::Protocol(seat) => (seat.agent.legality_drift, seat.agent.projections),
+            Seat::Engine(_) => (0, 0),
+        };
+        let info = match fork.info {
+            Info::Blind => "blind",
+            Info::Open => "open",
+        };
+        Ok(json!({
+            "fork": fork.label, "turn": fork.position.turn,
+            "trial": trial, "seed": self.seed, "battle_seed": battle_seed,
+            "action": fork.arms[arm].input, "arm_label": fork.arms[arm].label,
+            "reply": "search", "tail": self.bot.name(),
+            "policy": format!("fork/{info}/{}-vs-{}", self.bot.name(), self.foe.name()),
+            "iters": self.iters, "foe_iters": self.foe_iters,
+            "score": score, "outcome": outcome, "final_turn": battle.turn, "steps": result.steps,
+            "legality_drift": drift, "projections": projections,
+        }))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn seat(
+        &self,
+        dex: &Dex,
+        fork: &ForkSpec,
+        pool: &MetaPool,
+        policy: Policy,
+        bot: bool,
+        iters: u32,
+        seed: u64,
+    ) -> Result<Seat, String> {
+        Ok(match policy {
+            Policy::Skuct => Seat::Engine(Box::new(RmAgent::new(
+                RmConfig { iterations: iters, rule: SelRule::Ucb, ..RmConfig::default() },
+                seed,
+            ))),
+            Policy::Protocol => {
+                let cfg = RmConfig { rule: SelRule::Ucb, c: self.c, hp_buckets: 16, ..RmConfig::default() };
+                let agent = if bot {
+                    fork.bot_agent(dex, pool.clone(), cfg, seed)?
+                } else {
+                    fork.opponent_agent(dex, pool.clone(), cfg, seed)?
+                };
+                Seat::Protocol(ProtocolSeat::new(agent, iters))
+            }
+        })
     }
 }

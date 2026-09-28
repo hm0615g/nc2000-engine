@@ -3,10 +3,16 @@
 // installed at the fork's position and fed its `PlayerChannel` frames, the
 // other side a fixed policy standing in for the human.
 //
+// `ForkArena` runs the native `fork_counterfactual` trials; with
+// NC2000_NATIVE_PARITY=1 its rows are compared with the native binary's.
+//
 //   node crates/wasm/tests-node/fork.js
+//   NC2000_NATIVE_PARITY=1 node crates/wasm/tests-node/fork.js
 "use strict";
 
-const { wasm, readData, check, checkEq, finish } = require("./common");
+const path = require("path");
+const { execFileSync } = require("child_process");
+const { wasm, REPO, readData, check, checkEq, finish } = require("./common");
 
 const dex = new wasm.Dex();
 const poolJson = readData("meta-pool-v0/meta-pool.json");
@@ -18,6 +24,7 @@ const info = JSON.parse(wasm.forkInfo(dex, forkJson));
 checkEq(info.arms.map((a) => a.input), ["switch 2", "move earthquake"], "arm inputs");
 checkEq(info.botSide, 1, "bot side");
 checkEq(info.turn, 11, "fork turn");
+checkEq(info.opponentView, true, "the opponent's own view is present");
 
 let rejected = false;
 try {
@@ -85,6 +92,41 @@ for (const mode of ["blind", "open"]) {
       checkEq(b.log, a.log, `${mode} arm ${arm} seed ${seed} replays identically`);
     }
   }
+}
+
+const arenaConfig = {
+  bot: "protocol",
+  foe: "protocol",
+  iters: 200,
+  foe_iters: 200,
+  c: 0.4,
+  seed: 11,
+  max_steps: 3300,
+};
+const arena = new wasm.ForkArena(dex, forkJson, poolJson, JSON.stringify(arenaConfig));
+const rows = [];
+for (let trial = 0; trial < 3; trial++)
+  for (let arm = 0; arm < info.arms.length; arm++) rows.push(JSON.parse(arena.play(trial, arm)));
+checkEq(JSON.parse(arena.play(2, 1)), rows[5], "an arena trial replays identically");
+for (const row of rows) {
+  check(["win", "loss", "tie"].includes(row.outcome), `arena outcome ${row.outcome}`);
+  checkEq([row.legality_drift, row.projections], [0, 0], "arena legality");
+}
+checkEq(rows[0].battle_seed, rows[1].battle_seed, "arms of a trial share the battle seed");
+
+if (process.env.NC2000_NATIVE_PARITY === "1") {
+  const bin = path.join(REPO, "target/release/examples/fork_counterfactual");
+  const out = execFileSync(bin, [
+    "--fork", path.join(REPO, "data/forks/4296-t11.json"),
+    "--trials", "3", "--seed", "11", "--iters", "200", "--foe-iters", "200",
+    "--bot", "protocol", "--foe", "protocol", "--c", "0.4", "--threads", "1",
+  ], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  const native = out.trim().split("\n").map((l) => {
+    const row = JSON.parse(l);
+    delete row.elapsed_ms;
+    return row;
+  });
+  checkEq(rows, native, "wasm arena rows equal the native binary's");
 }
 
 finish("fork");

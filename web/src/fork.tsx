@@ -27,6 +27,8 @@ import { searchProfile } from "./search-profile";
 import { sha256 } from "./evaluate-hash";
 import { sheetMon } from "./set-info";
 import { announce, announceAssertive } from "./announcer";
+import { download, fisherP, pct, wilson } from "./fork-stats";
+import { ArenaPanel } from "./fork-arena";
 import type { Choice, ForkInfo, LogEntry, StateView } from "./types";
 import "./fork.css";
 
@@ -106,47 +108,6 @@ function shuffledArms(n: number): number[] {
 }
 
 const scoreOf = (o: BotOutcome) => (o === "win" ? 1 : o === "loss" ? 0 : 0.5);
-
-function wilson(k: number, n: number): [number, number] {
-  if (n === 0) return [0, 1];
-  const z = 1.96;
-  const p = k / n;
-  const d = 1 + (z * z) / n;
-  const c = (p + (z * z) / (2 * n)) / d;
-  const h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
-  return [Math.max(0, c - h), Math.min(1, c + h)];
-}
-
-function comb(n: number, k: number): number {
-  let r = 1;
-  for (let i = 1; i <= k; i++) r = (r * (n - k + i)) / i;
-  return r;
-}
-
-/** Two-sided Fisher exact test, same rule as tools/summarize-counterfactual.py. */
-function fisherP(wa: number, la: number, wb: number, lb: number): number {
-  const na = wa + la;
-  const nb = wb + lb;
-  const w = wa + wb;
-  const total = comb(na + nb, w);
-  const prob = (k: number) => (comb(na, k) * comb(nb, w - k)) / total;
-  const observed = prob(wa);
-  let p = 0;
-  for (let k = Math.max(0, w - nb); k <= Math.min(na, w); k++)
-    if (prob(k) <= observed * (1 + 1e-9)) p += prob(k);
-  return Math.min(1, p);
-}
-
-const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
-
-function download(name: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: "application/x-ndjson" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 function forkName(): string | null {
   const v = new URLSearchParams(location.search).get("fork")?.trim() ?? "";
@@ -328,6 +289,13 @@ export function Fork() {
           update(s);
         }}
       />
+      <ArenaPanel
+        info={fork.info}
+        json={fork.json}
+        poolJson={poolJson}
+        armNames={fork.armNames}
+        fileKey={fork.key}
+      />
     </main>
   );
 }
@@ -338,12 +306,12 @@ function ForkIntro() {
       <p class="fork-eyebrow">反実仮想フォーク対局</p>
       <h1>記録された局面から、bot と繰り返し対戦する</h1>
       <p>
-        対戦記録の1局面から対局を再開します。あなたは元の対戦と同じ側を持ちます。bot
-        の初手は候補手のどれか1つに固定され、どれになるかは対局ごとに無作為に決まり、ターンが進むまで分かりません。2手目以降は
-        bot がラダーと同じ設定で考えます。候補手ごとの bot の勝率を集計して、どの手が優れているかを比べます。
+        対戦記録の1局面から対局を再開し、bot の初手の候補ごとに勝率を比べます。比べ方は2つあります。あなたが元の対戦と同じ側を持って
+        bot と対戦するか、bot 同士で対戦させるかです。どちらも 2手目以降は bot がラダーと同じ仕組みで考えます。
       </p>
       <p class="fork-muted">
-        途中でやめた対局は投了（bot の勝ち）として記録します。記録はこのブラウザにだけ保存されます。
+        あなたとの対戦では、bot の初手は候補手のどれか1つに固定され、どれになるかは対局ごとに無作為に決まり、ターンが進むまで分かりません。途中でやめた対局は投了（bot
+        の勝ち）として記録します。記録はこのブラウザにだけ保存されます。
       </p>
     </header>
   );
@@ -458,7 +426,7 @@ function ForkSummary(props: {
               ? "あなたの構築を知らない（ラダーと同じ）"
               : "あなたの構築を知っている（オープンシート）"}
           </dd>
-          <dt>bot の思考量</dt>
+          <dt>対戦での bot の思考量</dt>
           <dd>1手あたり {session.budget.toLocaleString()} 回</dd>
           <dt>bot の初手の候補</dt>
           <dd>
@@ -477,8 +445,8 @@ function ForkSummary(props: {
         </button>
       </section>
 
-      <section class="fork-panel">
-        <h2>結果</h2>
+      <section class="fork-panel" data-testid="human-results">
+        <h2>あなたとの対戦結果</h2>
         <p>
           {done.length} 局終了 — あなたの {humanWins} 勝 {done.length - humanWins - ties} 敗
           {ties > 0 && ` ${ties} 分`}

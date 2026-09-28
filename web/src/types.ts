@@ -163,4 +163,6 @@ export interface ForkInfo {
   botSide: number;
   /** The bot's candidate first actions; `input` is `applyChoice`-ready. */
   arms: { input: string; label: string }[];
+  /** The opponent's own information set is present (protocol opponent). */
+  opponentView: boolean;
 }

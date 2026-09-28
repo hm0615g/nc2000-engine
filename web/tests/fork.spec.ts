@@ -62,13 +62,14 @@ test("a hosted fork plays, forfeits, reveals, exports and persists", async ({ pa
   await page.getByRole("button", { name: "投了" }).click();
   await expect(page.getByText("2 局終了")).toBeVisible();
 
-  await page.getByRole("button", { name: "候補ごとの結果を表示" }).click();
-  const rows = page.locator(".fork-table tbody tr");
+  const results = page.getByTestId("human-results");
+  await results.getByRole("button", { name: "候補ごとの結果を表示" }).click();
+  const rows = results.locator(".fork-table tbody tr");
   await expect(rows).toHaveCount(2);
   for (let i = 0; i < 2; i++) await expect(rows.nth(i).locator("td").nth(1)).toHaveText("1");
 
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "結果を書き出す (JSONL)" }).click();
+  await results.getByRole("button", { name: "結果を書き出す (JSONL)" }).click();
   const text = readFileSync(await (await download).path(), "utf8");
   const exported = text.trim().split("\n").map((l) => JSON.parse(l));
   expect(exported).toHaveLength(2);
@@ -93,4 +94,37 @@ test("a pasted fork is validated before any game starts", async ({ page }) => {
   await page.locator(".fork-panel textarea").fill(forkJson);
   await page.getByRole("button", { name: "貼り付けた定義を読み込む" }).click();
   await expect(page.getByRole("button", { name: "対局を始める" })).toBeVisible();
+});
+
+test("bot-vs-bot trials run in workers, pair their arms, and export rows", async ({ page }) => {
+  const errors = guardConsole(page);
+  await clearForkStorage(page);
+  await page.goto("/?fork=4296-t11");
+  const panel = page.getByTestId("arena-panel");
+  await expect(panel).toBeVisible();
+  await panel.getByLabel("試行数").fill("4");
+  await panel.getByLabel("思考量（1手あたり）").selectOption("1000");
+  await panel.getByLabel("シード").fill("11");
+  await panel.getByLabel("並列数").fill("2");
+  await panel.getByRole("button", { name: "検証を開始" }).click();
+  await expect(panel.getByTestId("arena-progress")).toContainText("4 / 4 試行", { timeout: 300_000 });
+  const rows = panel.locator("[data-testid=arena-table] tbody tr");
+  await expect(rows).toHaveCount(2);
+  for (let i = 0; i < 2; i++) await expect(rows.nth(i).locator("td").nth(1)).toHaveText("4");
+  await expect(panel).toContainText("--trials 4 --seed 11 --bot protocol --foe protocol --iters 1000");
+
+  const download = page.waitForEvent("download");
+  await panel.getByRole("button", { name: "結果を書き出す (JSONL)" }).click();
+  const exported = readFileSync(await (await download).path(), "utf8")
+    .trim()
+    .split("\n")
+    .map((l) => JSON.parse(l));
+  expect(exported).toHaveLength(8);
+  for (let trial = 0; trial < 4; trial++) {
+    const pair = exported.filter((r) => r.trial === trial);
+    expect(pair.map((r) => r.action).sort()).toEqual(["move earthquake", "switch 2"]);
+    expect(pair[0].battle_seed).toBe(pair[1].battle_seed);
+    expect(pair[0]).toMatchObject({ seed: 11, iters: 1000, policy: "fork/blind/protocol-vs-protocol" });
+  }
+  expect(errors).toEqual([]);
 });

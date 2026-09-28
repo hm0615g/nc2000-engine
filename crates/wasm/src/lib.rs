@@ -36,7 +36,7 @@ use std::sync::Arc;
 
 use wasm_bindgen::prelude::*;
 
-use nc2000_bot::fork::{ForkSpec, Info};
+use nc2000_bot::fork::{Arena, ForkSpec, Info, Policy};
 use nc2000_bot::player::PlayerChannel;
 use nc2000_bot::preview::{MetaPool, TableSet};
 use nc2000_bot::position::PositionSpec;
@@ -1283,8 +1283,52 @@ pub fn fork_info(dex: &WasmDex, fork_json: &str) -> Result<String, JsError> {
         "turn": fork.position.turn,
         "botSide": fork.bot_side(),
         "arms": arms,
+        "opponentView": fork.opponent_position.is_some(),
     })
     .to_string())
+}
+
+/// Bot-vs-bot trials of a fork, the same `Arena` the native
+/// `fork_counterfactual` runs: equal seeds and settings give the same trials.
+#[wasm_bindgen(js_name = ForkArena)]
+pub struct WasmForkArena {
+    dex: Rc<Dex>,
+    fork: ForkSpec,
+    pool: MetaPool,
+    arena: Arena,
+}
+
+#[wasm_bindgen(js_class = ForkArena)]
+impl WasmForkArena {
+    /// `arena_json`: `{bot, foe, iters, foe_iters, c, seed, max_steps}` with
+    /// policies `"protocol"` / `"skuct"`.
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        dex: &WasmDex,
+        fork_json: &str,
+        pool_json: &str,
+        arena_json: &str,
+    ) -> Result<WasmForkArena, JsError> {
+        let fork = ForkSpec::parse(fork_json).map_err(|e| JsError::new(&e))?;
+        fork.check(&dex.dex).map_err(|e| JsError::new(&e))?;
+        let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
+        let arena: Arena = serde_json::from_str(arena_json).map_err(js_err)?;
+        if arena.iters == 0 || arena.foe_iters == 0 {
+            return Err(JsError::new("iterations must be positive"));
+        }
+        if arena.foe == Policy::Protocol && fork.opponent_position.is_none() {
+            return Err(JsError::new("this fork has no opponent_position for a protocol opponent"));
+        }
+        Ok(WasmForkArena { dex: dex.dex.clone(), fork, pool, arena })
+    }
+
+    /// Arm `arm` of `trial` as one JSON row (the native rows minus `elapsed_ms`).
+    pub fn play(&self, trial: u32, arm: u32) -> Result<String, JsError> {
+        self.arena
+            .play(&self.dex, &self.fork, &self.pool, trial as usize, arm as usize)
+            .map(|row| row.to_string())
+            .map_err(|e| JsError::new(&e))
+    }
 }
 
 /// Derive a PS-format battle seed from a small integer (convenience for
