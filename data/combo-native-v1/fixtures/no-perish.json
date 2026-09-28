@@ -1,0 +1,57 @@
+{
+  "teams": [
+    "sample-23",
+    "hc75-top8-tezan"
+  ],
+  "picks": [
+    [
+      1,
+      6,
+      3
+    ],
+    [
+      2,
+      4,
+      3
+    ]
+  ],
+  "reveal_picks": true,
+  "prefix": [],
+  "expected": {
+    "0": {
+      "turn": 4,
+      "sides": [
+        {
+          "active": "ampharos",
+          "hp": 215,
+          "boosts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "trapped": false,
+          "perish": null
+        },
+        {
+          "active": "miltank",
+          "hp": 220,
+          "boosts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "trapped": false,
+          "perish": null
+        }
+      ]
+    }
+  }
+}

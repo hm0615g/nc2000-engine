@@ -1,0 +1,16 @@
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97001,"forced":"move thunderbolt","score":1.0,"turns":15,"decisions":18}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97002,"forced":"move thunderbolt","score":0.0,"turns":13,"decisions":16}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97003,"forced":"move thunderbolt","score":1.0,"turns":34,"decisions":38}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97004,"forced":"move thunderbolt","score":0.0,"turns":20,"decisions":23}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97005,"forced":"move thunderbolt","score":0.0,"turns":13,"decisions":16}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97006,"forced":"move thunderbolt","score":0.0,"turns":13,"decisions":16}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97007,"forced":"move thunderbolt","score":1.0,"turns":16,"decisions":20}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97008,"forced":"move thunderbolt","score":1.0,"turns":17,"decisions":20}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97001,"forced":"move whirlwind","score":1.0,"turns":15,"decisions":18}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97002,"forced":"move whirlwind","score":0.0,"turns":13,"decisions":16}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97003,"forced":"move whirlwind","score":1.0,"turns":34,"decisions":38}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97004,"forced":"move whirlwind","score":0.0,"turns":20,"decisions":23}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97005,"forced":"move whirlwind","score":0.0,"turns":13,"decisions":16}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97006,"forced":"move whirlwind","score":0.0,"turns":13,"decisions":16}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97007,"forced":"move whirlwind","score":1.0,"turns":16,"decisions":20}}
+{"stage":2,"side":1,"follow_iterations":10000,"continuation":{"seed":97008,"forced":"move whirlwind","score":1.0,"turns":17,"decisions":20}}

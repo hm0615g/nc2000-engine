@@ -1,0 +1,214 @@
+{
+  "teams": [
+    "sample-23",
+    "hc75-top8-tezan"
+  ],
+  "picks": [
+    [
+      5,
+      1,
+      6
+    ],
+    [
+      2,
+      4,
+      3
+    ]
+  ],
+  "reveal_picks": true,
+  "prefix": [
+    [
+      "move meanlook",
+      "move curse"
+    ],
+    [
+      "move perishsong",
+      "move curse"
+    ],
+    [
+      "move protect",
+      "move curse"
+    ],
+    [
+      "move protect",
+      "move curse"
+    ]
+  ],
+  "expected": {
+    "0": {
+      "turn": 4,
+      "sides": [
+        {
+          "active": "misdreavus",
+          "hp": 166,
+          "boosts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "trapped": false,
+          "perish": null
+        },
+        {
+          "active": "miltank",
+          "hp": 220,
+          "boosts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "trapped": false,
+          "perish": null
+        }
+      ]
+    },
+    "1": {
+      "turn": 5,
+      "sides": [
+        {
+          "active": "misdreavus",
+          "hp": 166,
+          "boosts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "trapped": false,
+          "perish": null
+        },
+        {
+          "active": "miltank",
+          "hp": 220,
+          "boosts": [
+            1,
+            1,
+            0,
+            0,
+            -1,
+            0,
+            0
+          ],
+          "trapped": true,
+          "perish": null
+        }
+      ]
+    },
+    "2": {
+      "turn": 6,
+      "sides": [
+        {
+          "active": "misdreavus",
+          "hp": 166,
+          "boosts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "trapped": false,
+          "perish": 3
+        },
+        {
+          "active": "miltank",
+          "hp": 220,
+          "boosts": [
+            2,
+            2,
+            0,
+            0,
+            -2,
+            0,
+            0
+          ],
+          "trapped": true,
+          "perish": 3
+        }
+      ]
+    },
+    "3": {
+      "turn": 7,
+      "sides": [
+        {
+          "active": "misdreavus",
+          "hp": 166,
+          "boosts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "trapped": false,
+          "perish": 2
+        },
+        {
+          "active": "miltank",
+          "hp": 220,
+          "boosts": [
+            3,
+            3,
+            0,
+            0,
+            -3,
+            0,
+            0
+          ],
+          "trapped": true,
+          "perish": 2
+        }
+      ]
+    },
+    "4": {
+      "turn": 8,
+      "sides": [
+        {
+          "active": "misdreavus",
+          "hp": 166,
+          "boosts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "trapped": false,
+          "perish": 1
+        },
+        {
+          "active": "miltank",
+          "hp": 220,
+          "boosts": [
+            4,
+            4,
+            0,
+            0,
+            -4,
+            0,
+            0
+          ],
+          "trapped": true,
+          "perish": 1
+        }
+      ]
+    }
+  }
+}
