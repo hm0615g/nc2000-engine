@@ -45,8 +45,9 @@ searches every legal action; only playouts change.
 - **Combo** (implies escape), for a side with a bench, not itself trapped,
   and with no expected KO this turn: Perish Song on a foe that cannot switch
   (trapped or benchless) and is not counting yet; otherwise Mean Look /
-  Spider Web if the mon also carries Perish Song (not into a Ghost). A
-  trapped mon with 2+ turns left on its count phazes with Roar/Whirlwind.
+  Spider Web if the mon also carries Perish Song (not into a mon the dex
+  makes immune to trapping). A trapped mon with 2+ turns left on its count
+  phazes with Roar/Whirlwind.
 
 ## Gauntlet: forced exposure, fixed opponent, paired arms
 
@@ -105,6 +106,21 @@ come from the 280 pairs with one, which scored 0.489 ± 0.038.
 Behavior change to know about: in full-pool self-play the combo arm fielded
 its own trapper in 1 of 800 games against 11 for the pre-change bot, whose
 Perish Songs were mostly aimed at foes free to switch.
+
+## Revalidation after the Ghost trapping correction
+
+Master gained `8349c26` (Ghost types are trappable in Gen 2, per the dex)
+and `038f897` (the Perish-deadline mask exception) while the gates above
+ran. The combo rule now asks the dex for trapping immunity instead of
+excluding Ghosts. On the merged code, shipped vs `-perish_combo`:
+
+| Run | Games | Result (95%) |
+|---|---|---|
+| offense gauntlet, seed 2 | 800 | 0.399 vs 0.312, **+0.086 ± 0.041** paired |
+| full-pool arena `open:3000`, seed 12 | 800 | 0.505 ± 0.027 (think 87.6 / 86.4 ms) |
+
+Foe mons fainted at count 1 in the offense run: 97 → 283; own: 179 → 97.
+Rows: `results/merged-off-s2.jsonl`, `results/merged-arena-s12.jsonl`.
 
 ## Limits
 

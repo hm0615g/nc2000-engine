@@ -512,7 +512,7 @@ pub fn perish_combo(
     if foe.trapped || !foe_bench {
         return Some(song);
     }
-    if foe.types.has(dex.known_types.ghost) {
+    if foe.types.iter().any(|t| dex.status_key_immune("trapped", t)) {
         return None;
     }
     ids.traps.iter().find_map(|&m| usable(m))
