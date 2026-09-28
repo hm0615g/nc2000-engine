@@ -1,0 +1,136 @@
+{
+  "main-i3000": {
+    "party_perspective": true,
+    "iterations": 3000,
+    "seed": 2026092701,
+    "overall": {
+      "games": 1024,
+      "paired_blocks": 512,
+      "wins": 322,
+      "losses": 702,
+      "draws": 0,
+      "turn_capped": 0,
+      "score": 0.314453125,
+      "ci95": [
+        0.28542863495831267,
+        0.34347761504168733
+      ],
+      "mean_turns": 18.18359375,
+      "nash_belief_fallback_games": 1024
+    },
+    "by_opponent": {
+      "sample-07": {
+        "games": 594,
+        "paired_blocks": 297,
+        "wins": 180,
+        "losses": 414,
+        "draws": 0,
+        "turn_capped": 0,
+        "score": 0.30303030303030304,
+        "ci95": [
+          0.26638705192155504,
+          0.33967355413905104
+        ],
+        "mean_turns": 16.747474747474747,
+        "nash_belief_fallback_games": 594
+      },
+      "sample-08": {
+        "games": 232,
+        "paired_blocks": 116,
+        "wins": 93,
+        "losses": 139,
+        "draws": 0,
+        "turn_capped": 0,
+        "score": 0.40086206896551724,
+        "ci95": [
+          0.33599832940546637,
+          0.4657258085255681
+        ],
+        "mean_turns": 25.17241379310345,
+        "nash_belief_fallback_games": 232
+      },
+      "sample-10": {
+        "games": 198,
+        "paired_blocks": 99,
+        "wins": 49,
+        "losses": 149,
+        "draws": 0,
+        "turn_capped": 0,
+        "score": 0.2474747474747475,
+        "ci95": [
+          0.18242424242424243,
+          0.31252525252525254
+        ],
+        "mean_turns": 14.303030303030303,
+        "nash_belief_fallback_games": 198
+      }
+    }
+  },
+  "confirm-i10000": {
+    "party_perspective": true,
+    "iterations": 10000,
+    "seed": 2026092702,
+    "overall": {
+      "games": 256,
+      "paired_blocks": 128,
+      "wins": 67,
+      "losses": 189,
+      "draws": 0,
+      "turn_capped": 0,
+      "score": 0.26171875,
+      "ci95": [
+        0.20527274859168326,
+        0.31816475140831674
+      ],
+      "mean_turns": 18.08203125,
+      "nash_belief_fallback_games": 256
+    },
+    "by_opponent": {
+      "sample-07": {
+        "games": 146,
+        "paired_blocks": 73,
+        "wins": 41,
+        "losses": 105,
+        "draws": 0,
+        "turn_capped": 0,
+        "score": 0.2808219178082192,
+        "ci95": [
+          0.20681699223575156,
+          0.3548268433806868
+        ],
+        "mean_turns": 19.123287671232877,
+        "nash_belief_fallback_games": 146
+      },
+      "sample-08": {
+        "games": 56,
+        "paired_blocks": 28,
+        "wins": 19,
+        "losses": 37,
+        "draws": 0,
+        "turn_capped": 0,
+        "score": 0.3392857142857143,
+        "ci95": [
+          0.20541526834525925,
+          0.47315616022616935
+        ],
+        "mean_turns": 20.267857142857142,
+        "nash_belief_fallback_games": 56
+      },
+      "sample-10": {
+        "games": 54,
+        "paired_blocks": 27,
+        "wins": 7,
+        "losses": 47,
+        "draws": 0,
+        "turn_capped": 0,
+        "score": 0.12962962962962962,
+        "ci95": [
+          0.0304833317010062,
+          0.22877592755825304
+        ],
+        "mean_turns": 13,
+        "nash_belief_fallback_games": 54
+      }
+    }
+  }
+}

@@ -44,12 +44,12 @@ export function locale(): Locale {
   return current;
 }
 
-export function setLocale(l: Locale): void {
+export function setLocale(l: Locale, persist = true): void {
   current = l;
-  try {
-    localStorage.setItem(LS_KEY, l);
-  } catch {
-    /* storage unavailable */
+  if (persist) {
+    try {
+      localStorage.setItem(LS_KEY, l);
+    } catch {}
   }
   applyDocumentLocale();
 }

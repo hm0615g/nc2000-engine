@@ -1,0 +1,18 @@
+{
+  "schema": "nc2000-prior-exploit-v1",
+  "label": "smoke-i3000",
+  "arm": "pool:data/belief-pool-v1/belief-pool.json",
+  "y": "file:data/party-vs-nash-20260927/party.json",
+  "y_in_belief_pool": false,
+  "belief_pool_teams": 87,
+  "games_done": 4,
+  "games_requested": 4,
+  "iters": 3000,
+  "seed": 2026092700,
+  "y_blind": true,
+  "x_score": 0.5,
+  "ci95": 0.0,
+  "blocks": 2,
+  "fallback_games": 4,
+  "secs": 8.050524
+}

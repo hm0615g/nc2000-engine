@@ -198,7 +198,7 @@ impl SharedSearch {
                         &self.cfg.playout,
                         cap,
                         &mut self.rng,
-                        self.cfg.rollout_m16c,
+                        self.cfg.rollout_rules(),
                     );
                 }
                 let mut joint = [None, None];
@@ -223,7 +223,7 @@ impl SharedSearch {
                         &self.cfg.playout,
                         cap,
                         &mut self.rng,
-                        self.cfg.rollout_m16c,
+                        self.cfg.rollout_rules(),
                     );
                 }
             };

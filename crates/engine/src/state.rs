@@ -1196,6 +1196,7 @@ impl ActiveMove {
 
 #[derive(Clone, Debug)]
 pub struct Battle {
+    pub preview_level_caps: [Option<u32>; 2],
     pub prng: BattleRng,
     pub turn: u16,
     pub request_state: RequestState,

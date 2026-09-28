@@ -1,0 +1,166 @@
+[
+  {
+    "name": "Starmie",
+    "species": "Starmie",
+    "item": "Leftovers",
+    "ability": "No Ability",
+    "moves": [
+      "Surf",
+      "Thunder Wave",
+      "Confuse Ray",
+      "Substitute"
+    ],
+    "level": 55,
+    "evs": {
+      "atk": 255,
+      "def": 255,
+      "hp": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+    },
+    "ivs": null,
+    "happiness": null,
+    "gender": "N",
+    "nature": "Serious"
+  },
+  {
+    "name": "Miltank",
+    "species": "Miltank",
+    "item": "Bright Powder",
+    "ability": "No Ability",
+    "moves": [
+      "Return",
+      "Curse",
+      "Double Team",
+      "Milk Drink"
+    ],
+    "level": 55,
+    "evs": {
+      "atk": 255,
+      "def": 255,
+      "hp": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+    },
+    "ivs": null,
+    "happiness": null,
+    "gender": "F",
+    "nature": "Serious"
+  },
+  {
+    "name": "Snorlax",
+    "species": "Snorlax",
+    "item": "Mint Berry",
+    "ability": "No Ability",
+    "moves": [
+      "Body Slam",
+      "Earthquake",
+      "Self-Destruct",
+      "Rest"
+    ],
+    "level": 50,
+    "evs": {
+      "atk": 255,
+      "def": 255,
+      "hp": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+    },
+    "ivs": null,
+    "happiness": null,
+    "gender": "M",
+    "nature": "Serious"
+  },
+  {
+    "name": "Zapdos",
+    "species": "Zapdos",
+    "item": "Miracle Berry",
+    "ability": "No Ability",
+    "moves": [
+      "Thunderbolt",
+      "Hidden Power Ice",
+      "Thunder Wave",
+      "Whirlwind"
+    ],
+    "level": 50,
+    "evs": {
+      "atk": 255,
+      "def": 255,
+      "hp": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+    },
+    "ivs": {
+      "atk": 31,
+      "def": 26,
+      "hp": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+    },
+    "happiness": 255,
+    "gender": "N",
+    "nature": "Serious"
+  },
+  {
+    "name": "Exeggutor",
+    "species": "Exeggutor",
+    "item": "Quick Claw",
+    "ability": "No Ability",
+    "moves": [
+      "Psychic",
+      "Hidden Power Bug",
+      "Sleep Powder",
+      "Explosion"
+    ],
+    "level": 50,
+    "evs": {
+      "atk": 255,
+      "def": 255,
+      "hp": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+    },
+    "ivs": {
+      "atk": 26,
+      "def": 26,
+      "hp": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+    },
+    "happiness": 255,
+    "gender": "M",
+    "nature": "Serious"
+  },
+  {
+    "name": "Misdreavus",
+    "species": "Misdreavus",
+    "item": "Gold Berry",
+    "ability": "No Ability",
+    "moves": [
+      "Mean Look",
+      "Perish Song",
+      "Protect",
+      "Destiny Bond"
+    ],
+    "level": 50,
+    "evs": {
+      "atk": 255,
+      "def": 255,
+      "hp": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+    },
+    "ivs": null,
+    "happiness": null,
+    "gender": "M",
+    "nature": "Serious"
+  }
+]

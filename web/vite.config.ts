@@ -24,6 +24,7 @@
 import { defineConfig, type Plugin, type Connect } from "vite";
 import path from "node:path";
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const webDir = path.dirname(fileURLToPath(import.meta.url));
@@ -73,8 +74,37 @@ function serveRepoData(): Plugin {
   };
 }
 
+function evaluatorBuildId(): string {
+  const hash = createHash("sha256");
+  const add = (relative: string) => {
+    const absolute = path.join(repoRoot, relative);
+    if (!fs.existsSync(absolute)) return;
+    if (fs.statSync(absolute).isDirectory()) {
+      for (const child of fs.readdirSync(absolute).sort())
+        add(`${relative}/${child}`);
+    } else {
+      hash.update(relative).update(fs.readFileSync(absolute));
+    }
+  };
+  for (const relative of [
+    "web/src",
+    "web/vite.config.ts",
+    "web/package-lock.json",
+    "Cargo.lock",
+    "Cargo.toml",
+    "crates/engine/src",
+    "crates/bot/src",
+    "crates/wasm/src",
+    "crates/wasm/pkg-web/nc2000_wasm_bg.wasm",
+  ])
+    add(relative);
+  hash.update(process.env.VITE_NC2000_TEST_BUDGET ?? "production");
+  return hash.digest("hex");
+}
+
 export default defineConfig({
   base,
+  define: { __EVALUATOR_BUILD__: JSON.stringify(evaluatorBuildId()) },
   plugins: [serveRepoData()],
   esbuild: {
     jsx: "automatic",

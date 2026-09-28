@@ -1,0 +1,5346 @@
+{
+  "blind_offense_screen": {
+    "choices": {
+      "before": {
+        "move meanlook": 4
+      },
+      "after": {
+        "move perishsong": 4
+      }
+    },
+    "rows": [
+      {
+        "seed": 81001,
+        "before": {
+          "best": "move meanlook",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 19929,
+              "mean": 0.5040848005846496,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 6132,
+              "mean": 0.49222146051135546,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 154,
+              "mean": 0.4069030137025752,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 671,
+              "mean": 0.4591723632644904,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 96,
+              "mean": 0.37947040567190093,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 18,
+              "mean": 0.21098267854324915,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26996,
+          "artifact_sha256": "2c5a77542b97f8ffa25eb4c54ce5829e5e2f4070c6ff5a2bd769fbf8b8102de9"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 43,
+              "mean": 0.3993580924137554,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26566,
+              "mean": 0.7576940420775309,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 52,
+              "mean": 0.41191531638208134,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 276,
+              "mean": 0.4996834853543127,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 51,
+              "mean": 0.4095569811153979,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 12,
+              "mean": 0.23586937724940324,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26999,
+          "artifact_sha256": "695cf1afcd0357ca2a7f4c83d8dd4edff9bcaf859f90adb17520110dc3225cae"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 81002,
+        "before": {
+          "best": "move meanlook",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 18162,
+              "mean": 0.5159164575051352,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 2467,
+              "mean": 0.46065330837016283,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 453,
+              "mean": 0.42827370547373617,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 5502,
+              "mean": 0.46873705471411736,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 409,
+              "mean": 0.425260593567312,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 7,
+              "mean": 0.0006990325610677044,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26997,
+          "artifact_sha256": "6298cbe13197356470b1bf1f9cbee7b76bee404d47d5e5610c755be5b630007f"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 223,
+              "mean": 0.5152833111307168,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26657,
+              "mean": 0.7454230466404422,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 4,
+              "mean": 0.0,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 67,
+              "mean": 0.45651868687989944,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 45,
+              "mean": 0.4288017218138326,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 4,
+              "mean": 0.0,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26993,
+          "artifact_sha256": "a25ea865d5381045e2fd53dc551f7b189a593cbf507cdf7e567cece4fe729bee"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 81003,
+        "before": {
+          "best": "move meanlook",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 19793,
+              "mean": 0.5296530926350271,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 4712,
+              "mean": 0.49709836024835297,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 71,
+              "mean": 0.3694863505365928,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 2323,
+              "mean": 0.48939822320025816,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 64,
+              "mean": 0.3575498360127038,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 37,
+              "mean": 0.31420040561314955,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26996,
+          "artifact_sha256": "ad0fad1a13e4a20f38d3a69511a5a26dff0eaad3a39eaad935f59d532a86633d"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 40,
+              "mean": 0.39820219225019216,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26580,
+              "mean": 0.7828136192830921,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 97,
+              "mean": 0.4614104799377397,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 214,
+              "mean": 0.49653210141626525,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 65,
+              "mean": 0.4318683857464742,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 4,
+              "mean": 0.0008471999616847664,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26981,
+          "artifact_sha256": "654c08ddba821292bfa9c014e63fceff8b5928364ac455a211804bc736ce5dd1"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 81004,
+        "before": {
+          "best": "move meanlook",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 16313,
+              "mean": 0.4840708501996623,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 7789,
+              "mean": 0.4740437679216983,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 1349,
+              "mean": 0.45381714046698723,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 1202,
+              "mean": 0.4518614264894115,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 304,
+              "mean": 0.41501444468417603,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 43,
+              "mean": 0.29361659369160015,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26996,
+          "artifact_sha256": "aca7eb3829fc82315d0421d32bb497a498cdb1616077a537deb704cc20160151"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 20,
+              "mean": 0.3216199278823948,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26377,
+              "mean": 0.7460965182620762,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 27,
+              "mean": 0.3559258322354881,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 398,
+              "mean": 0.5069648570578735,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 154,
+              "mean": 0.47423304401097616,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 24,
+              "mean": 0.3460383576004317,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 27000,
+          "artifact_sha256": "2ca9c5cfdd7c1f8fb964ff40214d8c7783519a912f5f3f8bd8fb78828b242ce3"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      }
+    ]
+  },
+  "blind_offense_holdout": {
+    "choices": {
+      "before": {
+        "move meanlook": 4,
+        "move rest": 3,
+        "move perishsong": 1
+      },
+      "after": {
+        "move perishsong": 8
+      }
+    },
+    "rows": [
+      {
+        "seed": 82001,
+        "before": {
+          "best": "move meanlook",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 11610,
+              "mean": 0.4966582498043674,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 10171,
+              "mean": 0.506758933956888,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 1462,
+              "mean": 0.47507187754762836,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 303,
+              "mean": 0.43569687154695214,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 208,
+              "mean": 0.4205625418656357,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 3246,
+              "mean": 0.4862149757648509,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26971,
+          "artifact_sha256": "80e35231b4dfea5d65f09cc3aebd98d984284a5cdddbe0bc79bb6d0b71dbbae0"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 16,
+              "mean": 0.29580103187269574,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26803,
+              "mean": 0.7514955038757699,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 39,
+              "mean": 0.39752660319233124,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 15,
+              "mean": 0.2959908273039807,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 122,
+              "mean": 0.45390153750917756,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 5,
+              "mean": 0.08409335157667638,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26995,
+          "artifact_sha256": "0ac28633876d720d9d8470bf4b3f4d1d68e264e1ed580c554766f7cbf1098223"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82002,
+        "before": {
+          "best": "move rest",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 80,
+              "mean": 0.33391211985861136,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 4632,
+              "mean": 0.45337591048973674,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 3406,
+              "mean": 0.45048430968597464,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 18763,
+              "mean": 0.48616880058944756,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 111,
+              "mean": 0.3528470618164791,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 8,
+              "mean": 0.023674723274112228,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26992,
+          "artifact_sha256": "f43570aaacaaa7dd56f212fb037315b26263a11068577a7b0fab66a28b389861"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 8,
+              "mean": 0.14013725207588457,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26354,
+              "mean": 0.7995045210436996,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 385,
+              "mean": 0.5061617016414822,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 208,
+              "mean": 0.48734894429768416,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 30,
+              "mean": 0.3610274980602842,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 15,
+              "mean": 0.26666666666666666,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26993,
+          "artifact_sha256": "6c1a3721e5bc510d7b60a04b3ae8636f7e00dc4bdcfed7747a4ccd64845c65e4"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82003,
+        "before": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 21,
+              "mean": 0.2032486879597173,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 11415,
+              "mean": 0.48774675915352844,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 5869,
+              "mean": 0.4798080759917406,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 2538,
+              "mean": 0.47115276451435806,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 94,
+              "mean": 0.36302507415325264,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 7063,
+              "mean": 0.4812779047222471,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26986,
+          "artifact_sha256": "42e4480cfb99569be57fb5f552b5d1b4947123aedcfe9aa62b0a6aa7c726867c"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 42,
+              "mean": 0.36481778262257747,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 25877,
+              "mean": 0.7502248340152887,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 778,
+              "mean": 0.4931008449580812,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 107,
+              "mean": 0.4253346455915434,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 175,
+              "mean": 0.44946035988935634,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 21,
+              "mean": 0.28979180691863227,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26995,
+          "artifact_sha256": "5a3f7cd2a76f3418e47fc4175867f0ea9e5b744a8b2bec298226074959fca549"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82004,
+        "before": {
+          "best": "move meanlook",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 13099,
+              "mean": 0.48761331588980217,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 7773,
+              "mean": 0.4642472214190964,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 3970,
+              "mean": 0.4584599119103879,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 2116,
+              "mean": 0.45099395968399625,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 34,
+              "mean": 0.2597872348318287,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 8,
+              "mean": 0.0010731173265784086,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26970,
+          "artifact_sha256": "3d7023dd3fd176c20433f1ed3a77a2d866ca128ac5aa9fb50dd31ffa011ff5e4"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 87,
+              "mean": 0.4695845378754007,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26826,
+              "mean": 0.7406059590515424,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 53,
+              "mean": 0.4393489346090796,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 21,
+              "mean": 0.34286738717104803,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 9,
+              "mean": 0.1923237054188772,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 4,
+              "mean": 0.0,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26993,
+          "artifact_sha256": "6f73edf3cbf9fbe996761f77bc97117066e829a742b28e0e01db15dd15b1f277"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82005,
+        "before": {
+          "best": "move meanlook",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 18508,
+              "mean": 0.49881255652037526,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 4800,
+              "mean": 0.46973818475427437,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 2379,
+              "mean": 0.4622608390270109,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 1210,
+              "mean": 0.45209555247830413,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 49,
+              "mean": 0.30639216177144735,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 54,
+              "mean": 0.3180067638256103,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26990,
+          "artifact_sha256": "683101b247a5e6c887c378e9f3d65f05219d91b2c2476158aeb8c9d750a9b9fe"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 102,
+              "mean": 0.4370669585066992,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 25947,
+              "mean": 0.767848008228264,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 45,
+              "mean": 0.3777039045064679,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 765,
+              "mean": 0.5047095494528452,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 137,
+              "mean": 0.4522091171838843,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 4,
+              "mean": 0.0,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26997,
+          "artifact_sha256": "3ee4f2c07e4cb1145480f3914eed9d63cc92cba8f65b7160fd2e85279e963af9"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82006,
+        "before": {
+          "best": "move meanlook",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 19298,
+              "mean": 0.5160642916848304,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 6921,
+              "mean": 0.5054956361503776,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 280,
+              "mean": 0.4454157210025001,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 284,
+              "mean": 0.4455090990635355,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 188,
+              "mean": 0.42756868427477984,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 29,
+              "mean": 0.27477399767981775,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 27000,
+          "artifact_sha256": "1f0acd42614acdc06a887a94ca75044e4a5272391e64201ffe22b29321c9dfeb"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 79,
+              "mean": 0.44024022354926456,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26648,
+              "mean": 0.7623113879713316,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 42,
+              "mean": 0.3913115479720988,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 115,
+              "mean": 0.462974260788606,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 111,
+              "mean": 0.46117602168697486,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 5,
+              "mean": 0.053216346317300975,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26958,
+          "artifact_sha256": "86b9bf1edadce2b070085d9c1b168f28ebab5696397e8c67b8f4fd4480c19014"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82007,
+        "before": {
+          "best": "move rest",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 90,
+              "mean": 0.35628936882166584,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 5058,
+              "mean": 0.47294834461765606,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 2359,
+              "mean": 0.4649525834314831,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 18873,
+              "mean": 0.508175933474796,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 272,
+              "mean": 0.41499781793492896,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 348,
+              "mean": 0.42377257994822903,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26999,
+          "artifact_sha256": "de1160ad0fabc8226b6567f78d938bf73b1b25aafd96bf4042da1c8c06d8db49"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 12,
+              "mean": 0.2742329657628823,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26928,
+              "mean": 0.7641977341312045,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 24,
+              "mean": 0.36276088167295,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 7,
+              "mean": 0.16524142334553507,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 23,
+              "mean": 0.3644089008128733,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 6,
+              "mean": 0.09092285948086726,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26997,
+          "artifact_sha256": "81b9afb9e2bf4b237f7260d6139192da66882c2aeab254088199cdd819aaf911"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82008,
+        "before": {
+          "best": "move rest",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 34,
+              "mean": 0.2728632062242052,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 2344,
+              "mean": 0.4592477520791422,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 140,
+              "mean": 0.3803349397556947,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 23801,
+              "mean": 0.4862506933830882,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 126,
+              "mean": 0.3770936921862621,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 555,
+              "mean": 0.43549799963500985,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26999,
+          "artifact_sha256": "9c8e2c1586855bebd1836b037c01033a68894fa9d63913777de2d8661fef70cb"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 406,
+              "mean": 0.519763039017463,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26277,
+              "mean": 0.7506766445917904,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 15,
+              "mean": 0.2741464899810026,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 137,
+              "mean": 0.47896676252352033,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 155,
+              "mean": 0.48332154396282156,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 10,
+              "mean": 0.20836356793670313,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26989,
+          "artifact_sha256": "e6d5963dbad6e6c283d1342b4d673e003d70af6128e26e66435f9be7700ae781"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      }
+    ]
+  },
+  "open_reconstructed_offense_holdout": {
+    "choices": {
+      "before": {
+        "move perishsong": 7,
+        "move meanlook": 1
+      },
+      "after": {
+        "move perishsong": 8
+      }
+    },
+    "rows": [
+      {
+        "seed": 82001,
+        "before": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 8929,
+              "mean": 0.49507526712667144,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 11434,
+              "mean": 0.5007207697676743,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 1576,
+              "mean": 0.4481107448639987,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 5700,
+              "mean": 0.4865489450591207,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 859,
+              "mean": 0.4192602778730681,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 1502,
+              "mean": 0.4461148725173373,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29995,
+          "artifact_sha256": "78935f1ad0731813d02847bcc990b8f3de26aed613b640533a4ffc4e33d62d75"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 499,
+              "mean": 0.4737527907132144,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 27962,
+              "mean": 0.651704214110434,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 437,
+              "mean": 0.4644497282754764,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 428,
+              "mean": 0.4635385580756555,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 624,
+              "mean": 0.4875870678458639,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 50,
+              "mean": 0.17450201776530372,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29980,
+          "artifact_sha256": "17a575583cc1bc20f3de6ff732f7e92b008d65ad34ee192a85af3dc54c5921c3"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82002,
+        "before": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 9680,
+              "mean": 0.49223229355158665,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 11023,
+              "mean": 0.49427031043632275,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 1724,
+              "mean": 0.44738714854819067,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 5448,
+              "mean": 0.4813423114713956,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 909,
+              "mean": 0.4183781445290094,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 1216,
+              "mean": 0.4472067962412584,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29990,
+          "artifact_sha256": "2f18214f16a7214fd8603d54da779f93f11e226a9b9dd6bcdc78dd8d821d4086"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 501,
+              "mean": 0.4743320758110851,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 28368,
+              "mean": 0.6356284848133488,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 280,
+              "mean": 0.4294637197038069,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 581,
+              "mean": 0.48433420656320403,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 217,
+              "mean": 0.40465728839065795,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 53,
+              "mean": 0.1870465155594935,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29989,
+          "artifact_sha256": "1e52fa1ce16bd2d7ca2598a1930da50f51ac0ff61bf92ac973f7223636126256"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82003,
+        "before": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 9870,
+              "mean": 0.5010037838587243,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 12117,
+              "mean": 0.5037246945231671,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 3231,
+              "mean": 0.4764237173972426,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 3341,
+              "mean": 0.47728785305572335,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 996,
+              "mean": 0.4308394192565812,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 445,
+              "mean": 0.3806612159029535,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29986,
+          "artifact_sha256": "731250161240536aebd4c0f0a69c5b373024f6c7c473e04316a889869d2e0f70"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 468,
+              "mean": 0.45761283774265377,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 27783,
+              "mean": 0.6311421878602721,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 719,
+              "mean": 0.48363621784740723,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 686,
+              "mean": 0.4815864678162417,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 261,
+              "mean": 0.4110615199402065,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 83,
+              "mean": 0.26760894493680054,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29985,
+          "artifact_sha256": "da090840649a0f4c13bac903f6727b92cc597658b5807eee64fbb3579e00879d"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82004,
+        "before": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 10112,
+              "mean": 0.4917820406077547,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 13152,
+              "mean": 0.494807475086618,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 2599,
+              "mean": 0.4596782638366426,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 3369,
+              "mean": 0.4674361533206179,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 544,
+              "mean": 0.3847905331603608,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 224,
+              "mean": 0.30776871988515014,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29983,
+          "artifact_sha256": "c71086523c18afb2f4ff690c34de92d4eb009dccec69b5ad868f5f596cd075d3"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 582,
+              "mean": 0.47448536787871015,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 27882,
+              "mean": 0.6370782213579269,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 441,
+              "mean": 0.45543044396504134,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 667,
+              "mean": 0.48237282733537046,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 390,
+              "mean": 0.4466908949348781,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 38,
+              "mean": 0.10178090678608759,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29989,
+          "artifact_sha256": "7f68f18f4e9ee3dca4d25cb2d0c15fef558b15e4c6baebff5495efdb296f7639"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82005,
+        "before": {
+          "best": "move meanlook",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 10908,
+              "mean": 0.5054291725253636,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 10560,
+              "mean": 0.5048467752779143,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 3559,
+              "mean": 0.48218385856579593,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 3826,
+              "mean": 0.48413128543961215,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 765,
+              "mean": 0.419558979996217,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 382,
+              "mean": 0.37118453595240825,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29979,
+          "artifact_sha256": "b10e6712c6cf5b4ced6819027514f42b6a9eade1391b3e504a80dce30b44dbd2"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 193,
+              "mean": 0.4036320511542941,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 28573,
+              "mean": 0.6510494184691111,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 233,
+              "mean": 0.42205681482719765,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 569,
+              "mean": 0.4932267638509623,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 350,
+              "mean": 0.4593296181579904,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 82,
+              "mean": 0.28328375416453794,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29980,
+          "artifact_sha256": "9148b4356016b329a8b0ee25232c182ec7887b5fb9cb840ec44bf53750053514"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82006,
+        "before": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 8983,
+              "mean": 0.4984082397919306,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 10525,
+              "mean": 0.5009976935500282,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 3272,
+              "mean": 0.4761093062888422,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 4868,
+              "mean": 0.48628917967142415,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 1330,
+              "mean": 0.4442420049108911,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 1022,
+              "mean": 0.464086061022386,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29992,
+          "artifact_sha256": "1961f387de6729c5d07d20d003e75a2975171c80edba4a337832ac2016d6eec1"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 228,
+              "mean": 0.4143687436467306,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 28904,
+              "mean": 0.65079673808837,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 285,
+              "mean": 0.43443325560533685,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 354,
+              "mean": 0.45431669512442086,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 178,
+              "mean": 0.3878006202323953,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 51,
+              "mean": 0.1865603398262789,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29981,
+          "artifact_sha256": "d5aa19e75e54c71b76799383472d4008b79ce65dcab7b4dc8fd45fbc0e3241d0"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82007,
+        "before": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 7664,
+              "mean": 0.49868849846863317,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 12598,
+              "mean": 0.5059608040361213,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 2519,
+              "mean": 0.47052043727175746,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 4840,
+              "mean": 0.4883738637902208,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 540,
+              "mean": 0.3958992650162132,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 1839,
+              "mean": 0.4595153446248138,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29996,
+          "artifact_sha256": "0b8ccf7a9bb30c0939dbc31ace73c4dea343a922607305d494503b3da435b4c1"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 454,
+              "mean": 0.4682739353356112,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 28100,
+              "mean": 0.6512107419199334,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 613,
+              "mean": 0.4886253006709721,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 454,
+              "mean": 0.4684038591223806,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 326,
+              "mean": 0.44294745576921746,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 53,
+              "mean": 0.18983302815200256,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29984,
+          "artifact_sha256": "59ba8871b4701e733e07e3899e24b1ef5f8257bac32f99e151a3aabaf5772ee0"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 82008,
+        "before": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 8688,
+              "mean": 0.48996867245908,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 12514,
+              "mean": 0.49625426528917377,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 1569,
+              "mean": 0.44331136779680375,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 4106,
+              "mean": 0.47424031677049877,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 1118,
+              "mean": 0.4281466222557936,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 2005,
+              "mean": 0.4525350484701843,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29992,
+          "artifact_sha256": "a0a83c4da4c7dbd62e387d3dbd9d466ef7a40f1d34996340fe009c53a6d6daa1"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 295,
+              "mean": 0.4354504362281717,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 28274,
+              "mean": 0.6559749644135879,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 386,
+              "mean": 0.45704404821895955,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 670,
+              "mean": 0.4946276759879114,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 293,
+              "mean": 0.4352902600599641,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 82,
+              "mean": 0.27117926146323107,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 27,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 110,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 217,
+                    "maxhp": 266,
+                    "perish": null,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29985,
+          "artifact_sha256": "ceb934f2d807e19dd03eefa3c43b5da48f79245bec6cd161db6ef0531141a395"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      }
+    ]
+  },
+  "blind_expiry_screen": {
+    "choices": {
+      "before": {
+        "move perishsong": 3,
+        "move meanlook": 1
+      },
+      "after": {
+        "move perishsong": 1,
+        "switch 2": 1,
+        "move meanlook": 2
+      }
+    },
+    "rows": [
+      {
+        "seed": 81001,
+        "before": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 12,
+              "mean": 0.5,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26884,
+              "mean": 0.9667466511304538,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 8,
+              "mean": 0.375,
+              "dominated": true
+            },
+            {
+              "action": "move rest",
+              "visits": 24,
+              "mean": 0.5833333333333334,
+              "dominated": true
+            },
+            {
+              "action": "switch 2",
+              "visits": 54,
+              "mean": 0.6513419813496948,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 18,
+              "mean": 0.5327261478461063,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 30,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": 1,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 25,
+                    "maxhp": 266,
+                    "perish": 1,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26716,
+          "artifact_sha256": "9d910e02304abf105db3149aacb9d7e5070a09bc18389cb8c8182d65d012a4de"
+        },
+        "after": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 18,
+              "mean": 0.5,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26761,
+              "mean": 0.9698994548216647,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 17,
+              "mean": 0.47058823529411764,
+              "dominated": true
+            },
+            {
+              "action": "move rest",
+              "visits": 21,
+              "mean": 0.5238095238095238,
+              "dominated": true
+            },
+            {
+              "action": "switch 2",
+              "visits": 179,
+              "mean": 0.6664400138599996,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 4,
+              "mean": 0.21198071519607345,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 30,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": 1,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 25,
+                    "maxhp": 266,
+                    "perish": 1,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26981,
+          "artifact_sha256": "7ed17cf02fb9aa593abbfe5101189f767827db9f10bc0285058dbd699fb97b9e"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 81002,
+        "before": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 4,
+              "mean": 0.25,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26878,
+              "mean": 0.9677128738454442,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 24,
+              "mean": 0.625,
+              "dominated": true
+            },
+            {
+              "action": "move rest",
+              "visits": 75,
+              "mean": 0.7066666666666667,
+              "dominated": true
+            },
+            {
+              "action": "switch 2",
+              "visits": 4,
+              "mean": 0.3204740302302707,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 15,
+              "mean": 0.530192803383588,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 30,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": 1,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 25,
+                    "maxhp": 266,
+                    "perish": 1,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26764,
+          "artifact_sha256": "6f1da788a50923767060dace2b566c9b46c902003084a04a3f821e2c8f1efcf2"
+        },
+        "after": {
+          "best": "switch 2",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 15,
+              "mean": 0.4666666666666667,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 12,
+              "mean": 0.4166666666666667,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 26820,
+              "mean": 0.9676399437874524,
+              "dominated": true
+            },
+            {
+              "action": "move rest",
+              "visits": 60,
+              "mean": 0.6165048905436143,
+              "dominated": true
+            },
+            {
+              "action": "switch 2",
+              "visits": 91,
+              "mean": 0.6349425321565046,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 2,
+              "mean": 0.0,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 30,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": 1,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 25,
+                    "maxhp": 266,
+                    "perish": 1,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26970,
+          "artifact_sha256": "6fd2ab5e6386609dbb144b1e9ac7a2697dbf30b55cc09f157903b1c59a9db581"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 81003,
+        "before": {
+          "best": "move perishsong",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 43,
+              "mean": 0.627906976744186,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 26854,
+              "mean": 0.9651606739680652,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 4,
+              "mean": 0.25,
+              "dominated": true
+            },
+            {
+              "action": "move rest",
+              "visits": 76,
+              "mean": 0.6710526315789473,
+              "dominated": true
+            },
+            {
+              "action": "switch 2",
+              "visits": 21,
+              "mean": 0.5607325673620162,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 2,
+              "mean": 0.00720583350220777,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 30,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": 1,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 25,
+                    "maxhp": 266,
+                    "perish": 1,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26736,
+          "artifact_sha256": "28194edb24dc4bf74c0dd14338f64bbec7177abcf15061870e35993000032fcb"
+        },
+        "after": {
+          "best": "move meanlook",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 26517,
+              "mean": 0.96619113511504,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 2,
+              "mean": 0.0,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 16,
+              "mean": 0.4375,
+              "dominated": true
+            },
+            {
+              "action": "move rest",
+              "visits": 5,
+              "mean": 0.2,
+              "dominated": true
+            },
+            {
+              "action": "switch 2",
+              "visits": 389,
+              "mean": 0.6517490312061797,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 71,
+              "mean": 0.5811825411915232,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 30,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": 1,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 25,
+                    "maxhp": 266,
+                    "perish": 1,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26978,
+          "artifact_sha256": "4b18cbdf326ac1bfe7e1fbdf8456718e59fd3eae9572681210d27e08ae85333c"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      },
+      {
+        "seed": 81004,
+        "before": {
+          "best": "move meanlook",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 26726,
+              "mean": 0.9564856365734679,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 4,
+              "mean": 0.25,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 70,
+              "mean": 0.6707472008847348,
+              "dominated": true
+            },
+            {
+              "action": "move rest",
+              "visits": 105,
+              "mean": 0.6952380952380952,
+              "dominated": true
+            },
+            {
+              "action": "switch 2",
+              "visits": 83,
+              "mean": 0.6827248611176445,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 12,
+              "mean": 0.4991205001168478,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 30,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": 1,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 25,
+                    "maxhp": 266,
+                    "perish": 1,
+                    "trapped": false,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26997,
+          "artifact_sha256": "82c4081e7340846906cf0780b80362a83f7cb7a32e7d862eac22022e3e4e306e"
+        },
+        "after": {
+          "best": "move meanlook",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move meanlook",
+              "visits": 26801,
+              "mean": 0.9673983375744364,
+              "dominated": false
+            },
+            {
+              "action": "move perishsong",
+              "visits": 2,
+              "mean": 0.0,
+              "dominated": false
+            },
+            {
+              "action": "move destinybond",
+              "visits": 158,
+              "mean": 0.722002573488545,
+              "dominated": true
+            },
+            {
+              "action": "move rest",
+              "visits": 25,
+              "mean": 0.6,
+              "dominated": true
+            },
+            {
+              "action": "switch 2",
+              "visits": 11,
+              "mean": 0.5138077652185165,
+              "dominated": false
+            },
+            {
+              "action": "switch 3",
+              "visits": 3,
+              "mean": 0.11120331549689792,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 30,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": 1,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "rest"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 25,
+                    "maxhp": 266,
+                    "perish": 1,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26976,
+          "artifact_sha256": "7ab863f2aed684fd1a5894ca81b8745d8829694ff8d203037462b5ae4cecffce"
+        },
+        "actions_identical": false,
+        "events_identical": false
+      }
+    ]
+  },
+  "blind_defense_control": {
+    "choices": {
+      "before": {
+        "move bodyslam": 3,
+        "move earthquake": 1
+      },
+      "after": {
+        "move bodyslam": 3,
+        "move earthquake": 1
+      }
+    },
+    "rows": [
+      {
+        "seed": 81001,
+        "before": {
+          "best": "move bodyslam",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move bodyslam",
+              "visits": 16994,
+              "mean": 0.09123290464795213,
+              "dominated": false
+            },
+            {
+              "action": "move earthquake",
+              "visits": 4915,
+              "mean": 0.08279391018069585,
+              "dominated": false
+            },
+            {
+              "action": "move selfdestruct",
+              "visits": 1985,
+              "mean": 0.07234895973983166,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 3106,
+              "mean": 0.07808292616161654,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 28,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 48,
+                    "maxhp": 166,
+                    "perish": 3,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "protect"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 170,
+                    "maxhp": 266,
+                    "perish": 3,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26925,
+          "artifact_sha256": "4fc79dd7fc758dc38929f283bced9fe7760363686fbb582c4f7e712057c2af71"
+        },
+        "after": {
+          "best": "move bodyslam",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move bodyslam",
+              "visits": 16994,
+              "mean": 0.09123290464795213,
+              "dominated": false
+            },
+            {
+              "action": "move earthquake",
+              "visits": 4915,
+              "mean": 0.08279391018069585,
+              "dominated": false
+            },
+            {
+              "action": "move selfdestruct",
+              "visits": 1985,
+              "mean": 0.07234895973983166,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 3106,
+              "mean": 0.07808292616161654,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 28,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 48,
+                    "maxhp": 166,
+                    "perish": 3,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "protect"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 170,
+                    "maxhp": 266,
+                    "perish": 3,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26925,
+          "artifact_sha256": "0c04d7fe7bd6c10066c6512ca02975e1a947a46048e542156684a30f5028e8c1"
+        },
+        "actions_identical": true,
+        "events_identical": true
+      },
+      {
+        "seed": 81002,
+        "before": {
+          "best": "move earthquake",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move bodyslam",
+              "visits": 9383,
+              "mean": 0.12780860311291123,
+              "dominated": false
+            },
+            {
+              "action": "move earthquake",
+              "visits": 14270,
+              "mean": 0.1303138981443706,
+              "dominated": false
+            },
+            {
+              "action": "move selfdestruct",
+              "visits": 1016,
+              "mean": 0.10080564054927785,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 2331,
+              "mean": 0.11449708530401127,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 28,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 48,
+                    "maxhp": 166,
+                    "perish": 3,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "protect"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 170,
+                    "maxhp": 266,
+                    "perish": 3,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26974,
+          "artifact_sha256": "713629695ce92f88cad1c63a880c812c74f80a676727563a712d97c1f41c1d74"
+        },
+        "after": {
+          "best": "move earthquake",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move bodyslam",
+              "visits": 9383,
+              "mean": 0.12780860311291123,
+              "dominated": false
+            },
+            {
+              "action": "move earthquake",
+              "visits": 14270,
+              "mean": 0.1303138981443706,
+              "dominated": false
+            },
+            {
+              "action": "move selfdestruct",
+              "visits": 1016,
+              "mean": 0.10080564054927785,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 2331,
+              "mean": 0.11449708530401127,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 28,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 48,
+                    "maxhp": 166,
+                    "perish": 3,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "protect"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 170,
+                    "maxhp": 266,
+                    "perish": 3,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26974,
+          "artifact_sha256": "97ba247f66014e1be2d2b209c2e184bd7a47e70cd9d70ae431c9217a61c99c24"
+        },
+        "actions_identical": true,
+        "events_identical": true
+      },
+      {
+        "seed": 81003,
+        "before": {
+          "best": "move bodyslam",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move bodyslam",
+              "visits": 17439,
+              "mean": 0.08992282124984496,
+              "dominated": false
+            },
+            {
+              "action": "move earthquake",
+              "visits": 3152,
+              "mean": 0.0768089245353633,
+              "dominated": false
+            },
+            {
+              "action": "move selfdestruct",
+              "visits": 2958,
+              "mean": 0.076091970241037,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 3451,
+              "mean": 0.0778222526244237,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 28,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 48,
+                    "maxhp": 166,
+                    "perish": 3,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "protect"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 170,
+                    "maxhp": 266,
+                    "perish": 3,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26704,
+          "artifact_sha256": "2bbec8c24b665a4f272f08d53379c5f45ff390a7138f1eb8a2d3b8e958db81a8"
+        },
+        "after": {
+          "best": "move bodyslam",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move bodyslam",
+              "visits": 17439,
+              "mean": 0.08992282124984496,
+              "dominated": false
+            },
+            {
+              "action": "move earthquake",
+              "visits": 3152,
+              "mean": 0.0768089245353633,
+              "dominated": false
+            },
+            {
+              "action": "move selfdestruct",
+              "visits": 2958,
+              "mean": 0.076091970241037,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 3451,
+              "mean": 0.0778222526244237,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 28,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 48,
+                    "maxhp": 166,
+                    "perish": 3,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "protect"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 170,
+                    "maxhp": 266,
+                    "perish": 3,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26704,
+          "artifact_sha256": "45970f65067c8c0241967675358af5f30a8d9ecb98812bea03e61e233525ae1f"
+        },
+        "actions_identical": true,
+        "events_identical": true
+      },
+      {
+        "seed": 81004,
+        "before": {
+          "best": "move bodyslam",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move bodyslam",
+              "visits": 18958,
+              "mean": 0.08294922328015439,
+              "dominated": false
+            },
+            {
+              "action": "move earthquake",
+              "visits": 1889,
+              "mean": 0.0628046204092248,
+              "dominated": false
+            },
+            {
+              "action": "move selfdestruct",
+              "visits": 1476,
+              "mean": 0.05895769249874696,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 4677,
+              "mean": 0.0735362225278486,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 28,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 48,
+                    "maxhp": 166,
+                    "perish": 3,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "protect"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 170,
+                    "maxhp": 266,
+                    "perish": 3,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26959,
+          "artifact_sha256": "e58d53e1b9baecca898e6bc580866360e59d1e68c4b53202ddc7f8947f1f12a5"
+        },
+        "after": {
+          "best": "move bodyslam",
+          "iterations": 27000,
+          "profile": "blind",
+          "c": 0.4,
+          "actions": [
+            {
+              "action": "move bodyslam",
+              "visits": 18958,
+              "mean": 0.08294922328015439,
+              "dominated": false
+            },
+            {
+              "action": "move earthquake",
+              "visits": 1889,
+              "mean": 0.0628046204092248,
+              "dominated": false
+            },
+            {
+              "action": "move selfdestruct",
+              "visits": 1476,
+              "mean": 0.05895769249874696,
+              "dominated": false
+            },
+            {
+              "action": "move rest",
+              "visits": 4677,
+              "mean": 0.0735362225278486,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 28,
+                "sides": [
+                  {
+                    "species": "misdreavus",
+                    "hp": 48,
+                    "maxhp": 166,
+                    "perish": 3,
+                    "trapped": false,
+                    "moves": [
+                      "meanlook",
+                      "perishsong",
+                      "destinybond",
+                      "protect"
+                    ]
+                  },
+                  {
+                    "species": "snorlax",
+                    "hp": 170,
+                    "maxhp": 266,
+                    "perish": 3,
+                    "trapped": true,
+                    "moves": [
+                      "bodyslam",
+                      "earthquake",
+                      "selfdestruct",
+                      "rest"
+                    ]
+                  }
+                ]
+              },
+              "n": 27000
+            }
+          ],
+          "leaf_replays": 26959,
+          "artifact_sha256": "fffb08d87ae61b258d12b4a2a67373501857e761956ab960e30739c21d94af86"
+        },
+        "actions_identical": true,
+        "events_identical": true
+      }
+    ]
+  },
+  "open_t11_control": {
+    "choices": {
+      "before": {
+        "move hiddenpowerbug": 4
+      },
+      "after": {
+        "move hiddenpowerbug": 4
+      }
+    },
+    "rows": [
+      {
+        "seed": 81001,
+        "before": {
+          "best": "move hiddenpowerbug",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move earthquake",
+              "visits": 4106,
+              "mean": 0.6338721079902617,
+              "dominated": false
+            },
+            {
+              "action": "move rockslide",
+              "visits": 5690,
+              "mean": 0.6413880540199915,
+              "dominated": false
+            },
+            {
+              "action": "move hiddenpowerbug",
+              "visits": 12272,
+              "mean": 0.6550088595367974,
+              "dominated": false
+            },
+            {
+              "action": "move swordsdance",
+              "visits": 2549,
+              "mean": 0.6202402363215765,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 5383,
+              "mean": 0.6411178337378826,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 11,
+                "sides": [
+                  {
+                    "species": "shuckle",
+                    "hp": 70,
+                    "maxhp": 126,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "toxic",
+                      "encore",
+                      "rest",
+                      "sleeptalk"
+                    ]
+                  },
+                  {
+                    "species": "marowak",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "earthquake",
+                      "rockslide",
+                      "hiddenpowerbug",
+                      "swordsdance"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 28877,
+          "artifact_sha256": "2133411ad69731c01fa5d214eeda9f656342838bef9de3ea80d56f6a1a3720ff"
+        },
+        "after": {
+          "best": "move hiddenpowerbug",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move earthquake",
+              "visits": 4106,
+              "mean": 0.6338721079902617,
+              "dominated": false
+            },
+            {
+              "action": "move rockslide",
+              "visits": 5690,
+              "mean": 0.6413880540199915,
+              "dominated": false
+            },
+            {
+              "action": "move hiddenpowerbug",
+              "visits": 12272,
+              "mean": 0.6550088595367974,
+              "dominated": false
+            },
+            {
+              "action": "move swordsdance",
+              "visits": 2549,
+              "mean": 0.6202402363215765,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 5383,
+              "mean": 0.6411178337378826,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 11,
+                "sides": [
+                  {
+                    "species": "shuckle",
+                    "hp": 70,
+                    "maxhp": 126,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "toxic",
+                      "encore",
+                      "rest",
+                      "sleeptalk"
+                    ]
+                  },
+                  {
+                    "species": "marowak",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "earthquake",
+                      "rockslide",
+                      "hiddenpowerbug",
+                      "swordsdance"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 28877,
+          "artifact_sha256": "a223cc6608223ba173a378bd705e791b4f81e4504f7321d13a933c1f4a55d19c"
+        },
+        "actions_identical": true,
+        "events_identical": true
+      },
+      {
+        "seed": 81002,
+        "before": {
+          "best": "move hiddenpowerbug",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move earthquake",
+              "visits": 3961,
+              "mean": 0.6356658506294308,
+              "dominated": false
+            },
+            {
+              "action": "move rockslide",
+              "visits": 4879,
+              "mean": 0.640722072897734,
+              "dominated": false
+            },
+            {
+              "action": "move hiddenpowerbug",
+              "visits": 14466,
+              "mean": 0.6600877769481126,
+              "dominated": false
+            },
+            {
+              "action": "move swordsdance",
+              "visits": 2024,
+              "mean": 0.615315783406013,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 4670,
+              "mean": 0.639648682110198,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 11,
+                "sides": [
+                  {
+                    "species": "shuckle",
+                    "hp": 70,
+                    "maxhp": 126,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "toxic",
+                      "encore",
+                      "rest",
+                      "sleeptalk"
+                    ]
+                  },
+                  {
+                    "species": "marowak",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "earthquake",
+                      "rockslide",
+                      "hiddenpowerbug",
+                      "swordsdance"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 28942,
+          "artifact_sha256": "798ed4eebb31f6c2f3226590608f0d5f6e1bdb98d0893fd2c14156873d7127c0"
+        },
+        "after": {
+          "best": "move hiddenpowerbug",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move earthquake",
+              "visits": 3961,
+              "mean": 0.6356658506294308,
+              "dominated": false
+            },
+            {
+              "action": "move rockslide",
+              "visits": 4879,
+              "mean": 0.640722072897734,
+              "dominated": false
+            },
+            {
+              "action": "move hiddenpowerbug",
+              "visits": 14466,
+              "mean": 0.6600877769481126,
+              "dominated": false
+            },
+            {
+              "action": "move swordsdance",
+              "visits": 2024,
+              "mean": 0.615315783406013,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 4670,
+              "mean": 0.639648682110198,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 11,
+                "sides": [
+                  {
+                    "species": "shuckle",
+                    "hp": 70,
+                    "maxhp": 126,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "toxic",
+                      "encore",
+                      "rest",
+                      "sleeptalk"
+                    ]
+                  },
+                  {
+                    "species": "marowak",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "earthquake",
+                      "rockslide",
+                      "hiddenpowerbug",
+                      "swordsdance"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 28942,
+          "artifact_sha256": "1815bd600d6aa6a5b9f4c05d645242ee63f88ec33d4acb5ddc35778d1f092720"
+        },
+        "actions_identical": true,
+        "events_identical": true
+      },
+      {
+        "seed": 81003,
+        "before": {
+          "best": "move hiddenpowerbug",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move earthquake",
+              "visits": 3965,
+              "mean": 0.6264228640782991,
+              "dominated": false
+            },
+            {
+              "action": "move rockslide",
+              "visits": 4894,
+              "mean": 0.6314909093637845,
+              "dominated": false
+            },
+            {
+              "action": "move hiddenpowerbug",
+              "visits": 12419,
+              "mean": 0.6487588895260589,
+              "dominated": false
+            },
+            {
+              "action": "move swordsdance",
+              "visits": 1645,
+              "mean": 0.5983003193138586,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 7077,
+              "mean": 0.6393068726821136,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 11,
+                "sides": [
+                  {
+                    "species": "shuckle",
+                    "hp": 70,
+                    "maxhp": 126,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "toxic",
+                      "encore",
+                      "rest",
+                      "sleeptalk"
+                    ]
+                  },
+                  {
+                    "species": "marowak",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "earthquake",
+                      "rockslide",
+                      "hiddenpowerbug",
+                      "swordsdance"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29031,
+          "artifact_sha256": "ebc3d2c5a3f40d7ffd6a8e45eebd62afe6decfea13db9cd6b807dc7bca1cfe14"
+        },
+        "after": {
+          "best": "move hiddenpowerbug",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move earthquake",
+              "visits": 3965,
+              "mean": 0.6264228640782991,
+              "dominated": false
+            },
+            {
+              "action": "move rockslide",
+              "visits": 4894,
+              "mean": 0.6314909093637845,
+              "dominated": false
+            },
+            {
+              "action": "move hiddenpowerbug",
+              "visits": 12419,
+              "mean": 0.6487588895260589,
+              "dominated": false
+            },
+            {
+              "action": "move swordsdance",
+              "visits": 1645,
+              "mean": 0.5983003193138586,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 7077,
+              "mean": 0.6393068726821136,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 11,
+                "sides": [
+                  {
+                    "species": "shuckle",
+                    "hp": 70,
+                    "maxhp": 126,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "toxic",
+                      "encore",
+                      "rest",
+                      "sleeptalk"
+                    ]
+                  },
+                  {
+                    "species": "marowak",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "earthquake",
+                      "rockslide",
+                      "hiddenpowerbug",
+                      "swordsdance"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 29031,
+          "artifact_sha256": "615dc85aff62afbf1f2c26dc46a94a6ddc5807fe265c5d38f845de821458ebbb"
+        },
+        "actions_identical": true,
+        "events_identical": true
+      },
+      {
+        "seed": 81004,
+        "before": {
+          "best": "move hiddenpowerbug",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move earthquake",
+              "visits": 5673,
+              "mean": 0.6247300423589249,
+              "dominated": false
+            },
+            {
+              "action": "move rockslide",
+              "visits": 4877,
+              "mean": 0.6213460989491246,
+              "dominated": false
+            },
+            {
+              "action": "move hiddenpowerbug",
+              "visits": 12793,
+              "mean": 0.6390843764197717,
+              "dominated": false
+            },
+            {
+              "action": "move swordsdance",
+              "visits": 2475,
+              "mean": 0.6027988512769792,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 4182,
+              "mean": 0.617757475682738,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 11,
+                "sides": [
+                  {
+                    "species": "shuckle",
+                    "hp": 70,
+                    "maxhp": 126,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "toxic",
+                      "encore",
+                      "rest",
+                      "sleeptalk"
+                    ]
+                  },
+                  {
+                    "species": "marowak",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "earthquake",
+                      "rockslide",
+                      "hiddenpowerbug",
+                      "swordsdance"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 28760,
+          "artifact_sha256": "7db11d0ee4f51a89362379a31a7c23761d5854d186812fc10e254012b4f52890"
+        },
+        "after": {
+          "best": "move hiddenpowerbug",
+          "iterations": 30000,
+          "profile": "open",
+          "c": 1.0,
+          "actions": [
+            {
+              "action": "move earthquake",
+              "visits": 5673,
+              "mean": 0.6247300423589249,
+              "dominated": false
+            },
+            {
+              "action": "move rockslide",
+              "visits": 4877,
+              "mean": 0.6213460989491246,
+              "dominated": false
+            },
+            {
+              "action": "move hiddenpowerbug",
+              "visits": 12793,
+              "mean": 0.6390843764197717,
+              "dominated": false
+            },
+            {
+              "action": "move swordsdance",
+              "visits": 2475,
+              "mean": 0.6027988512769792,
+              "dominated": false
+            },
+            {
+              "action": "switch 2",
+              "visits": 4182,
+              "mean": 0.617757475682738,
+              "dominated": false
+            }
+          ],
+          "root_states": [
+            {
+              "state": {
+                "turn": 11,
+                "sides": [
+                  {
+                    "species": "shuckle",
+                    "hp": 70,
+                    "maxhp": 126,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "toxic",
+                      "encore",
+                      "rest",
+                      "sleeptalk"
+                    ]
+                  },
+                  {
+                    "species": "marowak",
+                    "hp": 166,
+                    "maxhp": 166,
+                    "perish": null,
+                    "trapped": false,
+                    "moves": [
+                      "earthquake",
+                      "rockslide",
+                      "hiddenpowerbug",
+                      "swordsdance"
+                    ]
+                  }
+                ]
+              },
+              "n": 30000
+            }
+          ],
+          "leaf_replays": 28760,
+          "artifact_sha256": "5159a5793b18a991a7289807e764b563c7ad26589422ed39ffa2712621ebb4b6"
+        },
+        "actions_identical": true,
+        "events_identical": true
+      }
+    ]
+  }
+}

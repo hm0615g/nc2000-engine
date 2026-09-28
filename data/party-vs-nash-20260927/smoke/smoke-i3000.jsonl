@@ -1,0 +1,4 @@
+{"g":1,"score":1.0,"x_team":"sample-08","x_is_p1":false,"turns":10,"result":"p2_win","belief_fallback":true,"belief_cands":0}
+{"g":2,"score":1.0,"x_team":"sample-08","x_is_p1":true,"turns":10,"result":"p1_win","belief_fallback":true,"belief_cands":0}
+{"g":0,"score":0.0,"x_team":"sample-08","x_is_p1":true,"turns":11,"result":"p2_win","belief_fallback":true,"belief_cands":0}
+{"g":3,"score":0.0,"x_team":"sample-08","x_is_p1":false,"turns":63,"result":"p1_win","belief_fallback":true,"belief_cands":0}

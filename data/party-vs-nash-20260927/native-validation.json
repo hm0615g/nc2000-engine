@@ -1,0 +1,42 @@
+{
+  "ok": true,
+  "errors": 0,
+  "findings": [
+    {
+      "severity": "fix",
+      "code": "nature-canonical",
+      "mon": "snorlax",
+      "slot": 0
+    },
+    {
+      "severity": "fix",
+      "code": "nature-canonical",
+      "mon": "raikou",
+      "slot": 1
+    },
+    {
+      "severity": "fix",
+      "code": "nature-canonical",
+      "mon": "cloyster",
+      "slot": 2
+    },
+    {
+      "severity": "fix",
+      "code": "nature-canonical",
+      "mon": "skarmory",
+      "slot": 3
+    },
+    {
+      "severity": "fix",
+      "code": "nature-canonical",
+      "mon": "misdreavus",
+      "slot": 4
+    },
+    {
+      "severity": "fix",
+      "code": "nature-canonical",
+      "mon": "gengar",
+      "slot": 5
+    }
+  ]
+}

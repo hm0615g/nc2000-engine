@@ -421,7 +421,7 @@ impl BlindSearch {
                 &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
                 &mut |sim, rng, rollout| {
                     if rollout {
-                        crate::mcts::playout_value(sim, dex, &self.cfg.playout, self.turn_cap, rng, self.cfg.rollout_m16c)
+                        crate::mcts::playout_value(sim, dex, &self.cfg.playout, self.turn_cap, rng, self.cfg.rollout_rules())
                     } else {
                         match &self.cfg.playout {
                             crate::mcts::Playout::Uniform => crate::mcts::hp_eval(sim),

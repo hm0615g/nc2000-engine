@@ -198,6 +198,7 @@ impl Battle {
         // Total destructuring on purpose: adding a `Battle` field breaks
         // this fn until the field is placed (hashed or explicitly skipped).
         let Battle {
+            preview_level_caps,
             prng: _, // chance is resampled by search
             turn,
             request_state,
@@ -231,6 +232,9 @@ impl Battle {
             battle_mask: _,   // derived from hashed state
         } = self;
         (turn, request_state, mid_turn, started, ended, winner).hash(&mut h);
+        if *preview_level_caps != [Some(super::MAX_TOTAL_LEVEL); 2] {
+            preview_level_caps.hash(&mut h);
+        }
         field.hash(&mut h);
         for side in sides.iter() {
             side.hash_with_options(&mut h, hp_buckets, omit_damage_bookkeeping);
@@ -271,8 +275,7 @@ impl Battle {
     }
 
     /// All ordered picks of `picked_team_size` distinct display positions
-    /// whose level sum respects Max Total Level (mirrors `choose_team`;
-    /// certificate on `MAX_TOTAL_LEVEL` in choices.rs). Never empty for a
+    /// whose level sum respects the side's preview cap. Never empty for a
     /// validator-legal team — the validator guarantees a legal triple.
     fn legal_team_choices(&self, side_n: usize) -> Vec<SearchChoice> {
         let n = self.sides[side_n].party.len() as u8;
@@ -284,7 +287,9 @@ impl Battle {
                 .filter(|&&s| s != 0)
                 .map(|&s| s as usize - 1)
                 .collect();
-            if self.picked_total_level(side_n, &positions) <= super::choices::MAX_TOTAL_LEVEL {
+            if self.preview_level_caps[side_n]
+                .is_none_or(|cap| self.picked_total_level(side_n, &positions) <= cap)
+            {
                 out.push(SearchChoice::Team(slots));
             }
         };

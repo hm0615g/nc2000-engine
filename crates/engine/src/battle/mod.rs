@@ -443,6 +443,7 @@ impl Battle {
         let prng = Prng::from_seed_str(seed)
             .ok_or_else(|| EngineError::InvalidChoice(format!("bad seed: {seed}")))?;
         let mut battle = Battle {
+            preview_level_caps: [Some(MAX_TOTAL_LEVEL); 2],
             prng: crate::prng::BattleRng::seeded(prng),
             turn: 0,
             request_state: RequestState::None,

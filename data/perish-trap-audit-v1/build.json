@@ -1,0 +1,32 @@
+{
+  "baseline_revision": "dd7741595f82d6a56da2b76985b9748a1a77f8d8",
+  "baseline_binary_sha256": "66856338f3778d877deaa9bff0cc959e10716cf4a3f29990ba766f5237d3557d",
+  "final_audit_binary_sha256": "3131ee2f563ad1074c1ba3cb55543702847a5ddef832fc1a58cd6488a9aa7476",
+  "baseline_importer_sha256": "2045ab1b72122b1643fe059f5a1cdfccd02b3bef9a11cd073c195f07c2530879",
+  "sources": {
+    "crates/bot/src/import.rs": "cbfd38b9881e998c7ca99a6967c67f3342eafa5daa4e5e67ab036386830cca4f",
+    "crates/bot/src/mcts.rs": "3e7f9d3967a8e4c87d62da0a8e046868d5bdddbd3656b82fb4fe16bf0466d961",
+    "crates/bot/examples/perish_audit.rs": "d02ab625c5bc4f726e870444384af41b4d63b8c026247dee581cc502f1ea7323",
+    "crates/bot/tests/import.rs": "c402360c4674640b6eeef5edc03ae65342c6abe75de47663d972a31fa60fdfda",
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "data/meta-pool-v0/meta-pool.json": "6a9791ad02c1d1699069b4f169a4a0be732282a930cdbf464f3aa91ca63b0253",
+    "data/search-profiles.json": "2e19480f1fd457bb104a54c2fc6717a6e09efc672638b6579f96d7ea5bb2dfc6"
+  },
+  "inputs": {
+    "turn-27-offense.provenance.json": "0a305d433ffd8ce1610f6e5a9ebfdc4246d84bc57fc7d5be173db17781cc4c16",
+    "turn-30-offense.provenance.json": "ee7443cbbce24114b3c6534ed7cbfb610d6f0965ab9964d5fe90dd7fcea6541f",
+    "turn-28-defense.provenance.json": "03f78520511ee6fb695b884e576c80fe8f546944c25962922f76979e56a127e2",
+    "turn-26-defense.json": "d5d201c2491a3c92c5e4913bbe6c8dcdfea612f581b9407c08e25443416744a2",
+    "turn-27-offense.json": "d9743dd9fa29eef1583650e17b81341a4f857025a32a675bd204fb32150f5bc7",
+    "turn-30-offense.json": "5aa5ce58800fe8b72a793a1032655cd80470d31f55c325fa3f1bbd2642fc2589",
+    "reconstructed-defender-team.json": "d2c0f52423ae8925cc7b29e03fd5b6888cdfdb33e35d8a36e3d319531067851a",
+    "turn-28-defense.json": "349dc650a4b267d9525b43f2a5397b4a9234ad2e70af4656141563b7b71561a5",
+    "turn-26-defense.provenance.json": "03f78520511ee6fb695b884e576c80fe8f546944c25962922f76979e56a127e2"
+  },
+  "final_instrumentation_verification": {
+    "seed": 82001,
+    "profile": "blind",
+    "iterations": 27000,
+    "same_actions_and_events_as_recorded_candidate": true
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "teams": [
+    "hc75-1st-show",
+    "hc75-top8-tezan"
+  ],
+  "picks": [
+    [
+      6,
+      3,
+      5
+    ],
+    [
+      2,
+      4,
+      3
+    ]
+  ],
+  "reveal_picks": true,
+  "prefix": [
+    [
+      "move meanlook",
+      "move return"
+    ],
+    [
+      "move perishsong",
+      "move return"
+    ],
+    [
+      "move protect",
+      "move return"
+    ],
+    [
+      "move protect",
+      "move return"
+    ]
+  ],
+  "expected": {
+    "4": {
+      "turn": 8,
+      "sides": [
+        {
+          "active": "misdreavus",
+          "hp": 169,
+          "boosts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "trapped": false,
+          "perish": 1
+        },
+        {
+          "active": "miltank",
+          "hp": 220,
+          "boosts": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "trapped": true,
+          "perish": 1
+        }
+      ]
+    }
+  }
+}

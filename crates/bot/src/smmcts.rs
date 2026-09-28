@@ -68,7 +68,7 @@ use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::state::{Battle, PokeId};
 
 use crate::agent::Agent;
-use crate::mcts::{outcome_reward, playout_value, Playout};
+use crate::mcts::{outcome_reward, playout_value, Playout, RolloutRules};
 use crate::rng::SplitMix64;
 
 /// Selection rule for the root decision.
@@ -119,6 +119,13 @@ pub struct RmConfig {
     /// tail, owns the root values. Machinery retained for research: arena
     /// spec `skuctm16c` turns it on; `false` = shipped rollout.
     pub rollout_m16c: bool,
+    /// Rollout sides leave the field at Perish count 1 when they can
+    /// (`mcts::perish_escape`).
+    pub rollout_perish: bool,
+    /// Rollout sides also play the Perish trap and its counter
+    /// (`mcts::perish_combo`); implies `rollout_perish`'s escape. Shipped
+    /// ON; gates and measurements in `data/perish-rollout-v1/README.md`.
+    pub rollout_combo: bool,
     /// M17 cluster-2 probe: replace the uniform HP grid in the node key with
     /// a threshold-preserving class for the two ACTIVE mons. See `hp_class`.
     pub threshold_key: bool,
@@ -130,6 +137,16 @@ pub struct RmConfig {
     /// shipped; an arena arm flips one field to A/B a mask change, which is
     /// the only harness that can see one at all (see `root_dominated`).
     pub mask_rules: MaskRules,
+}
+
+impl RmConfig {
+    pub fn rollout_rules(&self) -> RolloutRules {
+        RolloutRules {
+            m16c: self.rollout_m16c,
+            perish_escape: self.rollout_perish,
+            perish_combo: self.rollout_combo,
+        }
+    }
 }
 
 impl Default for RmConfig {
@@ -146,6 +163,8 @@ impl Default for RmConfig {
             hp_buckets: 16,
             solve_sweeps: 2000,
             rollout_m16c: false,
+            rollout_perish: false,
+            rollout_combo: true,
             threshold_key: false,
             key_no_damage: false,
             mask_rules: MaskRules::default(),
@@ -371,7 +390,7 @@ pub(crate) fn run_iteration(
         cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root,
         root_joint, depth_out, &mut |sim, rng, rollout| {
             if rollout {
-                playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_m16c)
+                playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_rules())
             } else {
                 leaf_eval(cfg, sim, dex)
             }
@@ -628,6 +647,14 @@ pub(crate) fn dominated_reason(
         {
             return Some("inflicting sleep would forfeit under Sleep Clause");
         }
+    }
+    if b.active_id(1 - side)
+        .and_then(|id| {
+            dex.conds_id("perishsong").and_then(|cond| b.poke(id).volatile(cond))
+        })
+        .and_then(|v| v.duration) == Some(1)
+    {
+        return None;
     }
     noop_reason(b, dex, side, c, rules)
 }

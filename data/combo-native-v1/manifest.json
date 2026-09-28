@@ -1,0 +1,48 @@
+{
+  "base_commit": "b70a041df38d57ad089849c5bda5af95abda5d0a",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01) (Homebrew)",
+  "source_sha256": {
+    "crates/bot/examples/combo_native.rs": "aa8d86e7a33a64c9d19239a0edeaeef55b1739b10fba3c6e727de298e82642ff",
+    "Cargo.lock": "f18790002017f75dc8ef66950316f31e133967c3a9e9816597221d688d9c963e",
+    "data/search-profiles.json": "2e19480f1fd457bb104a54c2fc6717a6e09efc672638b6579f96d7ea5bb2dfc6",
+    "data/meta-pool-v0/meta-pool.json": "6a9791ad02c1d1699069b4f169a4a0be732282a930cdbf464f3aa91ca63b0253"
+  },
+  "product_policy_changed": false,
+  "result_files": {
+    "bond-extra-control.jsonl": 4,
+    "bond-extra-escape.jsonl": 4,
+    "bond-screen.jsonl": 10,
+    "bond-unboosted-escape.jsonl": 4,
+    "bond-unboosted-screen.jsonl": 4,
+    "confuse-extra-control.jsonl": 4,
+    "confuse-extra-escape.jsonl": 4,
+    "confuse-screen.jsonl": 10,
+    "confuse-unboosted-escape.jsonl": 4,
+    "confuse-unboosted-follow-screen.jsonl": 24,
+    "confuse-unboosted-screen.jsonl": 4,
+    "confuse-unboosted-trace.jsonl": 1,
+    "no-perish-control.jsonl": 4,
+    "no-perish-escape.jsonl": 4,
+    "rest-extra-control.jsonl": 4,
+    "rest-extra-escape.jsonl": 4,
+    "rest-phaze-blind.jsonl": 8,
+    "rest-phaze-escape.jsonl": 8,
+    "rest-phaze-extra-control.jsonl": 8,
+    "rest-phaze-extra-escape.jsonl": 8,
+    "rest-phaze-first-step-10k.jsonl": 2,
+    "rest-phaze-follow-10k.jsonl": 16,
+    "rest-phaze-follow-screen.jsonl": 16,
+    "rest-phaze-screen.jsonl": 16,
+    "rest-phaze-trace.jsonl": 1,
+    "rest-screen.jsonl": 10,
+    "rest-unboosted-escape.jsonl": 4,
+    "rest-unboosted-screen.jsonl": 4
+  },
+  "validation": [
+    "cargo check --workspace --all-targets",
+    "rustfmt --check --edition 2021 crates/bot/examples/combo_native.rs",
+    "native traced rollouts assert state and RNG equality; traced roots equal uninstrumented search",
+    "four no-song control roots have identical visits, means, masks, and best action",
+    "final trace replay matches saved events and root statistics"
+  ]
+}
