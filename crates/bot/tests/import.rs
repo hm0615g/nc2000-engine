@@ -34,6 +34,140 @@ use nc2000_engine::dex::{toid, Dex};
 use nc2000_engine::state::{Battle, RequestState, Status, BOOST_NAMES};
 use serde_json::Value;
 
+#[test]
+fn imported_trapping_preserves_both_sides_switch_legality() {
+    use nc2000_engine::battle::SearchChoice;
+    use nc2000_engine::validate::{canonicalize_team, Learnsets};
+    let dex = load_dex();
+    let pool = load_meta_pool(&repo_root().join("data/meta-pool-v0/meta-pool.json"));
+    let learnsets = Learnsets::from_json(
+        &std::fs::read_to_string(repo_root().join("data/learnsets-gen2.json")).unwrap(),
+    )
+    .unwrap();
+    for trap in ["Mean Look", "Spider Web", "Wrap", "Fire Spin"] {
+        let team = serde_json::json!([
+            {"species":"Smeargle","name":"Smeargle","level":50,"gender":"M",
+             "moves":[trap,"Protect","Perish Song","Baton Pass"]},
+            {"species":"Snorlax","name":"Snorlax","level":50,"gender":"M",
+             "moves":["Rest","Body Slam","Earthquake","Curse"]},
+            {"species":"Skarmory","name":"Skarmory","level":50,"gender":"M",
+             "moves":["Whirlwind","Rest","Drill Peck","Toxic"]},
+            {"species":"Starmie","level":50,"moves":["Surf"]},
+            {"species":"Tauros","level":50,"moves":["Body Slam"]},
+            {"species":"Machamp","level":50,"moves":["Cross Chop"]}
+        ]);
+        let canonical = canonicalize_team(&dex, &learnsets, &team.to_string());
+        assert_eq!(canonical["ok"], true, "{canonical}");
+        let sets: Vec<PokemonSet> = serde_json::from_value(canonical["team"].clone()).unwrap();
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &sets, &sets).unwrap();
+        b.choose(&dex, 0, "team 1,2,3").unwrap();
+        b.choose(&dex, 1, "team 2,1,3").unwrap();
+        let check = |b: &Battle, stage: &str| {
+            for observer in 0..2 {
+                if !b.needs_choice()[observer] {
+                    continue;
+                }
+                let mut agent =
+                    ProtocolAgent::new(&dex, observer, pool.clone(), RmConfig::default(), 7);
+                agent.set_own_team(sets.clone());
+                agent.pin_opponent(sets.clone());
+                let mut filter = SplitFilter::new(observer);
+                for line in &b.log {
+                    if filter.visible(line) {
+                        agent.push_line(&dex, line);
+                    }
+                }
+                let genders = sets
+                    .iter()
+                    .map(|s| (s.species.clone(), "M".into()))
+                    .collect();
+                let levels = sets.iter().map(|s| (s.species.clone(), 50)).collect();
+                let mut request: Value = serde_json::from_str(&build_request(
+                    &dex,
+                    &b.essence(&dex),
+                    observer,
+                    &genders,
+                    &levels,
+                    true,
+                ))
+                .unwrap();
+                if b.request_state == RequestState::Move {
+                    request["active"][0]["trapped"] =
+                        serde_json::json!(b.poke(b.active_id(observer).unwrap()).trapped);
+                }
+                assert!(agent.on_request(&dex, &request.to_string()).unwrap());
+                let mut imported = agent.battle().unwrap().clone();
+                let mut truth = b.clone();
+                for side in 0..2 {
+                    if truth.sides[side].request_state().is_none() {
+                        continue;
+                    }
+                    let switches = |b: &mut Battle| {
+                        let mut result: Vec<_> = b
+                            .legal_choices(&dex, side)
+                            .into_iter()
+                            .filter_map(|c| {
+                                let SearchChoice::Switch(pos) = c else {
+                                    return None;
+                                };
+                                let slot = b.sides[side].party[pos as usize - 1];
+                                Some(
+                                    dex.species
+                                        .key(b.sides[side].roster[slot as usize].species)
+                                        .to_owned(),
+                                )
+                            })
+                            .collect();
+                        result.sort();
+                        result
+                    };
+                    assert_eq!(
+                        switches(&mut imported),
+                        switches(&mut truth),
+                        "{trap}, {stage}, observer {observer}, actor {side}"
+                    );
+                }
+            }
+        };
+        check(&b, "before trapping");
+        for _ in 0..10 {
+            b.choose(&dex, 0, &format!("move {}", toid(trap))).unwrap();
+            b.choose(&dex, 1, "move curse").unwrap();
+            if b.poke(b.active_id(1).unwrap()).trapped {
+                break;
+            }
+        }
+        assert!(b.poke(b.active_id(1).unwrap()).trapped, "trap did not land");
+        check(&b, "trapped");
+        let mut knocked_out = b.clone();
+        let source = knocked_out.active_id(0).unwrap();
+        knocked_out.poke_mut(source).hp = 1;
+        knocked_out.choose(&dex, 0, "move perishsong").unwrap();
+        knocked_out.choose(&dex, 1, "move earthquake").unwrap();
+        assert!(knocked_out.poke(source).fainted);
+        check(&knocked_out, "forced replacement after source fainted");
+        knocked_out.choose(&dex, 0, "switch 2").unwrap();
+        assert!(!knocked_out.poke(knocked_out.active_id(1).unwrap()).trapped);
+        check(&knocked_out, "source replaced after fainting");
+        if matches!(trap, "Wrap" | "Fire Spin") {
+            let mut expired = b.clone();
+            for _ in 0..6 {
+                expired.choose(&dex, 0, "move protect").unwrap();
+                expired.choose(&dex, 1, "move curse").unwrap();
+                if !expired.poke(expired.active_id(1).unwrap()).trapped {
+                    break;
+                }
+            }
+            assert!(!expired.poke(expired.active_id(1).unwrap()).trapped);
+            check(&expired, "binding expired");
+        }
+        b.choose(&dex, 0, "switch 2").unwrap();
+        b.choose(&dex, 1, "move curse").unwrap();
+        assert!(!b.poke(b.active_id(1).unwrap()).trapped);
+        check(&b, "source switched out");
+    }
+}
+
 /// The announced HP bucket under HP Percentage Mod: ceil(100*hp/maxhp),
 /// not-quite-full 100 knocked down to 99 (mirrors `Battle::get_health`).
 fn px_of(hp: i64, maxhp: i64) -> i64 {

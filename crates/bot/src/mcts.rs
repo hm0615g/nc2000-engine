@@ -362,7 +362,7 @@ pub fn playout_value(
     }
 }
 
-pub(crate) fn playout_pick(
+pub fn playout_pick(
     sim: &Battle,
     dex: &Dex,
     playout: &Playout,

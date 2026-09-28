@@ -1,0 +1,14 @@
+{
+  "own_sets": [
+    "cand-full",
+    "cand-fill",
+    "cand-fill",
+    "cand-full",
+    "cand-full",
+    "cand-full"
+  ],
+  "own_selection_imputed": false,
+  "active_revealed_moves": 4,
+  "belief": "{\"count\":1,\"fallback\":false,\"candidates\":[\"hc75-top8-tezan\"]}",
+  "opponent_future_moves_injected": false
+}

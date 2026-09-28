@@ -38,7 +38,10 @@
 //! *inference* (never announced) is mechanics-based and calibrated against
 //! the conformance corpus by `tests/import.rs`.
 
-use nc2000_engine::battle::{EffectHandle, PokemonSet, SearchChoice};
+use nc2000_engine::battle::{
+    events::{ev, EvTarget},
+    EffectHandle, PokemonSet, SearchChoice,
+};
 use nc2000_engine::dex::{toid, Dex, MoveId, SpeciesId};
 use nc2000_engine::state::{
     Action, ActionKind, Battle, Gender, MoveSlot, PokeId, PokeName, RequestState, Status,
@@ -1593,6 +1596,14 @@ impl ProtocolTracker {
         }
         b.update_all_speeds(dex);
         b.battle_mask = b.recompute_battle_mask(dex);
+        if kind == RequestState::Move {
+            if let Some(active) = b.active_id(opp) {
+                b.run_event(
+                    dex, &ev::TrapPokemon, EvTarget::Poke(active), None,
+                    EffectHandle::None, None, false, false,
+                );
+            }
+        }
         Ok(b)
     }
 

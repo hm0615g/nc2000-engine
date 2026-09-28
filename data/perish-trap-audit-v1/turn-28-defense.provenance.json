@@ -1,0 +1,14 @@
+{
+  "own_sets": [
+    "cand-full",
+    "cand-full",
+    "cand-full",
+    "cand-full",
+    "cand-full",
+    "cand-full"
+  ],
+  "own_selection_imputed": false,
+  "active_revealed_moves": 3,
+  "belief": "{\"count\":0,\"fallback\":true,\"candidates\":[]}",
+  "opponent_future_moves_injected": false
+}
