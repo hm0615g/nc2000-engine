@@ -35,7 +35,8 @@ const base = process.env.NC2000_BASE ?? "/";
 function serveRepoData(): Plugin {
   // The app fetches `${BASE_URL}data/...`; accept both the based path and
   // a bare /data/ (robust when the dist is re-served under another base).
-  const prefixes = [...new Set([`${base}data/`, "/data/"])];
+  // The resolved base wins over NC2000_BASE when a caller overrides it.
+  let prefixes = [...new Set([`${base}data/`, "/data/"])];
   const handler: Connect.NextHandleFunction = (req, res, next) => {
     const url = (req.url ?? "").split("?")[0];
     const prefix = prefixes.find((p) => url.startsWith(p));
@@ -65,6 +66,9 @@ function serveRepoData(): Plugin {
   };
   return {
     name: "serve-repo-data",
+    configResolved(config) {
+      prefixes = [...new Set([`${config.base}data/`, "/data/"])];
+    },
     configureServer(server) {
       server.middlewares.use(handler);
     },
