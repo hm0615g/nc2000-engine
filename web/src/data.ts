@@ -34,6 +34,14 @@ export async function fetchDexJson(): Promise<unknown> {
   return res.json();
 }
 
+/** A hosted `nc2000-fork-v1` document, `data/forks/<name>.json`. */
+export async function fetchFork(name: string): Promise<string> {
+  if (!/^[A-Za-z0-9_-]+$/.test(name)) throw new Error(`invalid fork name: ${name}`);
+  const res = await fetch(dataUrl(`forks/${name}.json`));
+  if (!res.ok) throw new Error(`fork ${name}: ${res.status}`);
+  return res.text();
+}
+
 export async function fetchPool(): Promise<PoolData> {
   const res = await fetch(dataUrl("meta-pool-v0/meta-pool.json"));
   if (!res.ok) throw new Error(`meta pool fetch failed: ${res.status}`);

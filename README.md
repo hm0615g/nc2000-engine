@@ -54,6 +54,53 @@ and is omitted below two pairs. Small-sample, interim and extended-run intervals
 are descriptive, without automatic superiority claims. This measures this AI's
 performance against the selected distribution.
 
+## Counterfactual forks
+
+When a player claims the bot had a better action at a recorded decision,
+both kinds of measurement start from one `nc2000-fork-v1` document
+([`crates/bot/src/fork.rs`](crates/bot/src/fork.rs)): the bot's recorded
+information set, the player's true six sets and three picks, and the candidate
+first actions (arms). `fork_bundle` builds it from a battle log. It
+canonicalizes both teams and rejects any set that contradicts a move or item in
+the log. The recorded action is always the arm labelled `played`.
+
+```sh
+cargo build --release -p nc2000-bot --example fork_bundle --example fork_counterfactual
+target/release/examples/fork_bundle --log BATTLE.log --turn 11 --side 1 \
+  --own-team BOT-TEAM.json --opponent-team PLAYER-TEAM.json \
+  --arm 'claimed=move earthquake' --out data/forks/NAME.json
+target/release/examples/fork_counterfactual --fork data/forks/NAME.json \
+  --trials 256 --seed 1 > rows.jsonl
+python3 tools/summarize-counterfactual.py rows.jsonl
+```
+
+The forked battle substitutes the player's true sets for the bot's belief.
+HP announced only as a percentage and hidden durations are imputed per seed.
+The bot is the ladder `ProtocolAgent`, installed from its recorded information
+set and fed its own player stream. `blind` or `open` comes from the document,
+and iterations come from `data/search-profiles.json`.
+
+**Bot vs bot.** `fork_counterfactual` plays every arm with the same battle
+seed and agent seeds, so arms are paired. The opponent is the same ladder
+agent from the player's reconstructed information set when the player also
+acted that turn; otherwise it is full-information `skuct` (`--foe`). Scores
+are the bot's; a step cap is recorded as unknown.
+
+**Human vs bot.** Open `?fork=NAME` for a document in `data/forks/`, or
+`?fork` to load or paste one. The player keeps their original side. Each game
+draws the bot's first action from shuffled blocks of the arms. The arm is
+shown only after the game; the bot's first move is visible from the first
+turn's log. Quitting counts as a bot win. Results persist in that browser per
+document hash, and per-arm results stay hidden until the player reveals them.
+The JSONL export feeds the same summarizer; human games are unpaired, so it
+reports the difference, a normal interval and a two-sided Fisher exact test.
+
+Both measure the arms against these continuation policies, not optimal play.
+`fork_bundle` reaches only decisions at the start of a turn; a forced switch
+needs a hand-written document. A document in `data/forks/` publishes the
+player's full team with the next Pages deploy. [`data/forks/4296-t11.json`](data/forks/4296-t11.json)
+is the [battle 4296](data/report-4296/README.md) T11 decision.
+
 ## Layout
 
 Bot-search investigation: [Battle 4296 and deferred algorithm research](data/report-4296/README.md#deferred-algorithm-research) records the T11 diagnosis, rejected corrections, algorithm sources and the scoped feasibility estimate.
@@ -106,7 +153,8 @@ web/                       Vite+Preact browser demo (M9): worker-threaded bot wi
                            tables fetched from <base>data/* at runtime (never bundled — the background
                            bake extends the app in place; the Pages build copies data/ into dist/);
                            `?solver` (solver.tsx + position.ts + solver-worker.ts) is a fourth door
-                           and not a battle at all: a position is typed in and every option scored
+                           and not a battle at all: a position is typed in and every option scored; `?fork` (fork.tsx)
+                           replays a `nc2000-fork-v1` position as human-vs-bot games
 .github/workflows/pages.yml GH Pages build+deploy (M12): wasm build -> vite build (NC2000_BASE=
                            /nc2000-engine/) -> data copy -> actions/deploy-pages
 PORTING.md                 porting checklist (377 callbacks, generated)

@@ -154,3 +154,13 @@ export interface LogEntry {
   kind: "turn" | "major" | "minor" | "result";
   text: string;
 }
+
+/** `forkInfo` — a validated `nc2000-fork-v1` document (crates/bot/src/fork.rs). */
+export interface ForkInfo {
+  label: string;
+  info: "blind" | "open";
+  turn: number;
+  botSide: number;
+  /** The bot's candidate first actions; `input` is `applyChoice`-ready. */
+  arms: { input: string; label: string }[];
+}

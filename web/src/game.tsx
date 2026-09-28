@@ -115,7 +115,7 @@ function focusIsOrphaned(): boolean {
  * iterations accumulating until the human commits. Hidden from screen
  * readers entirely — the ticking counter must not reach the SR (the
  * polite announcer speaks the meaningful transitions instead). */
-function ThinkChip(props: { thinking: Thinking | null }) {
+export function ThinkChip(props: { thinking: Thinking | null }) {
   const t = props.thinking;
   if (!t) return null;
   const pondering = t.done >= t.budget;
@@ -783,7 +783,7 @@ export function Game(props: {
  * new lines are announced once, batched, by the off-screen announcer —
  * a VDOM-diffed live region here would double-announce on re-render.
  * Labelled + focusable so it stays reachable for browsing/scrolling. */
-function LogPane(props: { log: LogEntry[] }) {
+export function LogPane(props: { log: LogEntry[] }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -846,7 +846,7 @@ function switchAria(
   return bits.join(", ");
 }
 
-function ChoiceButtons(props: {
+export function ChoiceButtons(props: {
   choices: Choice[];
   onPick: (input: string) => void;
   /** Own battle party + static sets: item source for the switch buttons. */
@@ -940,7 +940,7 @@ function ChoiceButtons(props: {
   );
 }
 
-function ThinkingBar(props: { thinking: Thinking | null; waiting: boolean }) {
+export function ThinkingBar(props: { thinking: Thinking | null; waiting: boolean }) {
   const t = props.thinking;
   return (
     <div class="thinking-bar">

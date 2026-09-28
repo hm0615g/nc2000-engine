@@ -38,7 +38,13 @@
 // pair is resolved by public signature, no identification condition) or the
 // stepped search ponders (src "search").
 
-import init, { Dex, Battle, BlindSearcher } from "../../crates/wasm/pkg-web/nc2000_wasm";
+import init, {
+  Dex,
+  Battle,
+  BlindSearcher,
+  PlayerChannel,
+  ProtocolSearcher,
+} from "../../crates/wasm/pkg-web/nc2000_wasm";
 import { searchProfile } from "./search-profile";
 
 export type WorkerRequest =
@@ -57,6 +63,20 @@ export type WorkerRequest =
         seed: number;
         mode: "open" | "blind";
         priorJson?: string;
+      };
+    }
+  /** A forked battle (`?fork`): the mirror is `Battle.fromFork(fork, seed)`
+   * and the bot is the ladder's ProtocolSearcher installed at the fork's
+   * position, fed its own player stream from there on. */
+  | {
+      t: "fork";
+      fork: string;
+      seed: number;
+      searcher: {
+        poolJson: string;
+        side: number;
+        seed: number;
+        mode: "open" | "blind";
       };
     }
   | { t: "pair"; json: string }
@@ -103,6 +123,17 @@ const ready = init().then(() => {
 
 let battle: Battle | null = null;
 let searcher: BlindSearcher | null = null;
+let forked: {
+  channel: PlayerChannel;
+  searcher: ProtocolSearcher;
+  positioned: boolean;
+} | null = null;
+
+function dropForked() {
+  forked?.channel.free();
+  forked?.searcher.free();
+  forked = null;
+}
 let gen = 0; // bumped whenever the battle state moves on -> running searches abort
 let flushed = false; // human committed: stop pondering at the next slice
 let mode: "open" | "blind" = "open"; // information policy of the live battle
@@ -125,6 +156,7 @@ async function handle(m: WorkerRequest): Promise<void> {
       mode = m.searcher.mode;
       searcher?.free();
       searcher = null;
+      dropForked();
       battle?.free();
       battle = new Battle(dex, m.p1, m.p2, m.seed);
       // Keep the protocol log ON — the observer's trace-free reveal
@@ -157,6 +189,34 @@ async function handle(m: WorkerRequest): Promise<void> {
       }
       break;
     }
+    case "fork": {
+      gen += 1;
+      mode = m.searcher.mode;
+      searcher?.free();
+      searcher = null;
+      dropForked();
+      battle?.free();
+      battle = Battle.fromFork(dex, m.fork, m.seed >>> 0);
+      const doc = JSON.parse(m.fork) as {
+        position: unknown;
+        opponent_team: unknown;
+      };
+      const ps = new ProtocolSearcher(
+        dex,
+        m.searcher.side,
+        m.searcher.poolJson,
+        m.searcher.seed >>> 0,
+        searchProfile(mode).c,
+      );
+      if (mode === "open") ps.pinOpponent(JSON.stringify(doc.opponent_team));
+      ps.setPosition(JSON.stringify(doc.position));
+      forked = {
+        channel: new PlayerChannel(m.searcher.side),
+        searcher: ps,
+        positioned: true,
+      };
+      break;
+    }
     case "pair":
       try {
         searcher?.addPair(m.json);
@@ -175,7 +235,8 @@ async function handle(m: WorkerRequest): Promise<void> {
       flushed = true;
       break;
     case "search":
-      await runSearch(m);
+      if (forked) await runForkSearch(m);
+      else await runSearch(m);
       break;
   }
 }
@@ -256,6 +317,49 @@ async function runSearch(m: SearchMsg): Promise<void> {
     id: m.id,
     best: s.best() ?? null,
     policy: s.rootPolicy(),
+    ms: performance.now() - t0,
+    src: "search",
+  });
+}
+
+// The forked bot's decision: catch the searcher up on the player stream
+// since its last decision, then the same ponder loop. At the fork itself the
+// searcher is already installed from the position and no line has arrived.
+async function runForkSearch(m: SearchMsg): Promise<void> {
+  const myGen = gen;
+  flushed = false;
+  const f = forked!;
+  const frame = JSON.parse(f.channel.frame(battle!)) as {
+    lines: string[];
+    request: unknown;
+  };
+  const atFork = f.positioned && frame.lines.length === 0;
+  f.positioned = false;
+  if (!atFork) {
+    f.searcher.pushLines(JSON.stringify(frame.lines));
+    if (!f.searcher.onRequest(JSON.stringify(frame.request)))
+      throw new Error("fork: search requested on a wait request");
+  }
+  const t0 = performance.now();
+  const cap = m.budget * PONDER_CAP;
+  let done = 0;
+  for (;;) {
+    if (gen !== myGen) return;
+    const target = !m.ponder || flushed ? m.budget : cap;
+    if (done >= target) break;
+    const next = stepAdaptive(f.searcher, Math.min(slice, target - done));
+    if (next === done) break; // a forced choice: the searcher does not step
+    done = next;
+    post({ t: "progress", id: m.id, done, budget: m.budget });
+    await new Promise((r) => setTimeout(r, 0));
+  }
+  if (gen !== myGen) return;
+  const best = f.searcher.best();
+  post({
+    t: "result",
+    id: m.id,
+    best: best === undefined ? null : (battle!.resolveChoice(m.side, best) ?? null),
+    policy: f.searcher.rootPolicy(),
     ms: performance.now() - t0,
     src: "search",
   });

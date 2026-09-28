@@ -56,6 +56,8 @@ test("evaluator URL is isolated and blind", () => {
   expect(infoModeOf(readDoor("?evaluate"))).toBe("blind");
   expect(readDoor("?evaluate=false&nash")).toBe("nash");
   expect(readDoor("")).toBe("open");
+  expect(readDoor("?fork=4296-t11&evaluate")).toBe("fork");
+  expect(readDoor("?fork")).toBe("fork");
 });
 test("weights normalize without overflow and reject invalid distributions", () => {
   expect(

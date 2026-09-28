@@ -7,9 +7,10 @@ import init, {
   Battle,
   Validator,
   deriveBattleSeed,
+  forkInfo,
   probeBeliefPrior,
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
-import type { Choice, PriorReport, StateView } from "./types";
+import type { Choice, ForkInfo, PriorReport, StateView } from "./types";
 
 export { Battle };
 
@@ -70,4 +71,13 @@ export function takeNewLog(battle: Battle): string[] {
  * The interpreter is total, so a malformed file comes back as warnings. */
 export function probePrior(json: string): PriorReport {
   return JSON.parse(probeBeliefPrior(json)) as PriorReport;
+}
+
+/** Validates a `nc2000-fork-v1` document; throws with the reason. */
+export function readFork(json: string): ForkInfo {
+  return JSON.parse(forkInfo(getDex(), json)) as ForkInfo;
+}
+
+export function forkBattle(json: string, seed: number): Battle {
+  return Battle.fromFork(getDex(), json, seed >>> 0);
 }

@@ -36,6 +36,8 @@ use std::sync::Arc;
 
 use wasm_bindgen::prelude::*;
 
+use nc2000_bot::fork::{ForkSpec, Info};
+use nc2000_bot::player::PlayerChannel;
 use nc2000_bot::preview::{MetaPool, TableSet};
 use nc2000_bot::position::PositionSpec;
 use nc2000_bot::{
@@ -166,6 +168,15 @@ impl WasmBattle {
         Ok(WasmBattle { dex: dex.dex.clone(), battle, log_cursor: 0 })
     }
 
+    /// A `nc2000-fork-v1` document's battle, log ON and empty. Equal seeds
+    /// give identical battles, which is how a worker builds its mirror.
+    #[wasm_bindgen(js_name = fromFork)]
+    pub fn from_fork(dex: &WasmDex, fork_json: &str, seed: u32) -> Result<WasmBattle, JsError> {
+        let fork = ForkSpec::parse(fork_json).map_err(|e| JsError::new(&e))?;
+        let battle = fork.battle(&dex.dex, seed as u64).map_err(|e| JsError::new(&e))?;
+        Ok(WasmBattle { dex: dex.dex.clone(), battle, log_cursor: 0 })
+    }
+
     #[wasm_bindgen(js_name = setPreviewLevelCap)]
     pub fn set_preview_level_cap(&mut self, side: usize, cap: Option<u32>) -> Result<(), JsError> {
         if side > 1 || self.battle.turn != 0 {
@@ -194,6 +205,14 @@ impl WasmBattle {
         let arr: Vec<serde_json::Value> =
             choices.iter().map(|&c| choice_json(&self.battle, &self.dex, side, c)).collect();
         serde_json::to_string(&arr).unwrap()
+    }
+
+    /// The `legalChoices` input naming the same choice as `input`, which may
+    /// be in the protocol's form (`move hiddenpower`); `null` when illegal.
+    #[wasm_bindgen(js_name = resolveChoice)]
+    pub fn resolve_choice(&mut self, side: usize, input: &str) -> Option<String> {
+        let legal = self.battle.legal_choices(&self.dex, side);
+        nc2000_bot::fork::find_choice(&self.dex, &legal, input).map(|c| c.to_input(&self.dex))
     }
 
     /// Submit one side's choice as its PS-canonical string (`"move surf"` /
@@ -252,6 +271,35 @@ impl WasmBattle {
     #[wasm_bindgen(js_name = setLogEnabled)]
     pub fn set_log_enabled(&mut self, on: bool) {
         self.battle.set_log_enabled(on);
+    }
+}
+
+// ---------------------------------------------------------- PlayerChannel
+
+/// One side's player stream over a `Battle`, as a PS client receives it.
+#[wasm_bindgen(js_name = PlayerChannel)]
+pub struct WasmPlayerChannel {
+    channel: PlayerChannel,
+}
+
+#[wasm_bindgen(js_class = PlayerChannel)]
+impl WasmPlayerChannel {
+    #[wasm_bindgen(constructor)]
+    pub fn new(side: usize) -> Result<WasmPlayerChannel, JsError> {
+        if side > 1 {
+            return Err(JsError::new("side must be 0 or 1"));
+        }
+        Ok(WasmPlayerChannel { channel: PlayerChannel::new(side) })
+    }
+
+    /// JSON `{lines, request, legal_actions}`: the lines visible to this side
+    /// since the previous frame, and its current request.
+    pub fn frame(&mut self, battle: &mut WasmBattle) -> Result<String, JsError> {
+        let frame = self
+            .channel
+            .frame(&mut battle.battle, &battle.dex)
+            .map_err(|e| JsError::new(&e))?;
+        Ok(serde_json::to_string(&frame).unwrap())
     }
 }
 
@@ -1215,6 +1263,29 @@ fn state_view_json(battle: &Battle, dex: &Dex) -> serde_json::Value {
 }
 
 // ------------------------------------------------------------------ misc
+
+/// Validates a `nc2000-fork-v1` document and returns what a player needs:
+/// `{label, info, turn, botSide, arms: [{input, label}]}`. Arm inputs come
+/// back in the form `Battle.applyChoice` takes.
+#[wasm_bindgen(js_name = forkInfo)]
+pub fn fork_info(dex: &WasmDex, fork_json: &str) -> Result<String, JsError> {
+    let fork = ForkSpec::parse(fork_json).map_err(|e| JsError::new(&e))?;
+    let choices = fork.check(&dex.dex).map_err(|e| JsError::new(&e))?;
+    let arms: Vec<serde_json::Value> = fork
+        .arms
+        .iter()
+        .zip(&choices)
+        .map(|(arm, c)| serde_json::json!({"input": c.to_input(&dex.dex), "label": arm.label}))
+        .collect();
+    Ok(serde_json::json!({
+        "label": fork.label,
+        "info": match fork.info { Info::Blind => "blind", Info::Open => "open" },
+        "turn": fork.position.turn,
+        "botSide": fork.bot_side(),
+        "arms": arms,
+    })
+    .to_string())
+}
 
 /// Derive a PS-format battle seed from a small integer (convenience for
 /// demos/tests; any "a,b,c,d" 16-bit-limb string works directly).

@@ -57,7 +57,7 @@ try {
     });
   });
 
-  const tests = spawn("npx", ["playwright", "test"], {
+  const tests = spawn("npx", ["playwright", "test", ...process.argv.slice(2)], {
     stdio: "inherit",
     env: { ...process.env, NC2000_E2E_PORT: String(port) },
   });

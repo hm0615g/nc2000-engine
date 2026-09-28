@@ -1,10 +1,10 @@
 export type InfoMode = "open" | "blind";
-export type Door = "open" | "blind" | "nash" | "solver" | "evaluate";
+export type Door = "open" | "blind" | "nash" | "solver" | "evaluate" | "fork";
 
 export function readDoor(search?: string): Door {
   const query = search ?? (typeof location === "undefined" ? "" : location.search);
   const params = new URLSearchParams(query);
-  for (const door of ["evaluate", "solver", "nash", "blind"] as const) {
+  for (const door of ["fork", "evaluate", "solver", "nash", "blind"] as const) {
     if (isOpen(params.get(door))) return door;
   }
   return "open";
