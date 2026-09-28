@@ -629,6 +629,14 @@ pub(crate) fn dominated_reason(
             return Some("inflicting sleep would forfeit under Sleep Clause");
         }
     }
+    if b.active_id(1 - side)
+        .and_then(|id| {
+            dex.conds_id("perishsong").and_then(|cond| b.poke(id).volatile(cond))
+        })
+        .and_then(|v| v.duration) == Some(1)
+    {
+        return None;
+    }
     noop_reason(b, dex, side, c, rules)
 }
 
