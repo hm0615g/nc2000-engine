@@ -297,6 +297,29 @@ for (const [, ids] of [...clusters].sort((a, b) => b[1].length - a[1].length || 
 }
 for (const r of records) r.variantCluster = clusterId.get(r.id) || null;
 
+// ------------------------------------------------------------ lineage
+// Source-to-source derivations established by reading both versions; the
+// near-variant rule cannot see them when a translation changed too much.
+const LINEAGE = [
+	{
+		id: 'sample-16', derivedFrom: 'rental-cban-13',
+		original: { name: 'Party Box #20 「ポニョ」 by stoic', url: 'http://www.q9con.net/pokemon/PartyBox/index.php?partyNumber=20', retrieved: '2026-09-29', fingerprint: 'e0bda8a9ed767514640bccbd578c09558f13c4b7967e85635b15fbd86c000af2' },
+		evidence: 'same six species and roles; the thread note "Porygon2 had Bright Powder in the original team" matches the original, which cban-13 transcribes set for set',
+		changesInTranslation: ['Poliwrath 55 -> 50', 'Golem Quick Claw -> Soft Sand', 'Porygon2 Bright Powder -> PRZ Cure Berry', 'Exeggutor Sleep Powder -> Hidden Power Bug', 'Snorlax Body Slam -> Double-Edge'],
+	},
+	{
+		id: 'sample-07', derivedFrom: 'mjj-2013-mario',
+		original: { name: '魔人島 マリオパーティ１３ (itself a four-change arrangement of mario\'s 蟹杯2 winner)', url: 'https://majinjima.ma-jide.com/party/2013/mario.htm' },
+		evidence: 'same six species at the same levels; the page lists its own changes from the tournament version',
+		changesInTranslation: ['Electrode Light Screen -> Thunder Wave', 'Marowak Bonemerang -> Earthquake', 'Snorlax Belly Drum -> Curse', 'Cloyster PRZ Cure Berry -> Gold Berry'],
+	},
+];
+for (const l of LINEAGE) {
+	const r = records.find(x => x.id === l.id);
+	if (!r || !records.some(x => x.id === l.derivedFrom)) throw new Error(`lineage ${l.id} -> ${l.derivedFrom}: unknown id`);
+	r.lineage = { derivedFrom: l.derivedFrom, original: l.original, evidence: l.evidence, changesInTranslation: l.changesInTranslation };
+}
+
 // ------------------------------------------------------------ write
 const out = {
 	format: 'nc2000-team-inventory-v1',
@@ -323,6 +346,7 @@ const out = {
 		previewSignature: r.previewSignature, previewCollisions: r.previewCollisions,
 		variantCluster: r.variantCluster, nearVariants: r.nearVariants,
 		loadoutDuplicates: r.loadoutDuplicates, measuredAs: r.measuredAs,
+		lineage: r.lineage || null,
 		deviations: r.deviations,
 		sets: r.sets,
 	})),
