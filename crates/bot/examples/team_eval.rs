@@ -17,12 +17,17 @@
 //! the lexicographically smaller id). CELLS_FILE: one `row col` pair per
 //! line (directed: row is the team being evaluated).
 //!
-//! Agent specs: `open:ITERS[:C]` (the M12 product: sets public, picks
-//! hidden), `blind:ITERS[:C]` (public info + belief pool), `skuct:ITERS[:C]`
-//! (true state). Without `:C` the exploration constant is
-//! `RmConfig::default()`'s 1.0, which matches the product's open profile but
-//! NOT its blind profile (0.4, `data/search-profiles.json`): the shipped
-//! blind bot is `blind:27000:0.4`. Neither spec ponders.
+//! Agent specs: `open:ITERS:C` (sets public, picks hidden),
+//! `blind:ITERS:C` (public info + belief pool), `skuct:ITERS:C` (true
+//! state). The shipped bot is `blind:27000:0.4` (`data/search-profiles.json`);
+//! no spec ponders. A spec without `:C` means `RmConfig::default()`'s 1.0 and
+//! is refused unless `--allow-default-c` is given, which exists only to
+//! reproduce runs recorded before `:C` was written.
+//!
+//! Every record carries `cond`: the bot build fingerprint (engine + bot
+//! sources), each side's belief-pool file fingerprint, the turn cap, the
+//! seed base, and the fixed preview/ponder behavior. Resume refuses a
+//! directory holding a record written under any other condition.
 //!
 //! Pairing: game k of every cell uses the same battle seed and the same
 //! agent seeds, derived from (--seed-base, k, side) only; each k is played
@@ -61,7 +66,7 @@ struct Spec {
 }
 
 impl Spec {
-    fn parse(s: &str) -> Spec {
+    fn parse(s: &str, allow_default_c: bool) -> Spec {
         let mut parts = s.split(':');
         let kind = match parts.next().unwrap() {
             "open" => Kind::Open,
@@ -71,6 +76,10 @@ impl Spec {
         };
         let iters = parts.next().unwrap_or("300").parse().unwrap_or_else(|_| panic!("bad iterations in {s}"));
         let c = parts.next().map(|c| c.parse().unwrap_or_else(|_| panic!("bad c in {s}")));
+        assert!(
+            c.is_some() || allow_default_c,
+            "agent spec {s} has no exploration constant; write it as KIND:ITERS:C"
+        );
         Spec { kind, iters, c }
     }
 
@@ -200,6 +209,12 @@ fn read_lines(path: &str) -> Vec<String> {
         .collect()
 }
 
+fn file_fingerprint(path: &str) -> String {
+    let bytes = std::fs::read(path).unwrap_or_else(|e| panic!("read {path}: {e}"));
+    let hash = bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &b| (h ^ b as u64).wrapping_mul(0x0000_0100_0000_01b3));
+    format!("fnv1a64:{hash:016x}")
+}
+
 fn cell_file(out: &Path, row: &str, col: &str) -> PathBuf {
     out.join(format!("cell-{row}__{col}.jsonl"))
 }
@@ -236,8 +251,9 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let dex = load_dex();
     let teams = load_teams(&flags(&args, "--teams"));
-    let spec_row = Spec::parse(&flag(&args, "--agent").unwrap_or_else(|| "open:300".into()));
-    let spec_col = flag(&args, "--agent-col").map(|s| Spec::parse(&s)).unwrap_or(spec_row.clone());
+    let allow_default_c = args.iter().any(|a| a == "--allow-default-c");
+    let spec_row = Spec::parse(&flag(&args, "--agent").expect("--agent KIND:ITERS:C"), allow_default_c);
+    let spec_col = flag(&args, "--agent-col").map(|s| Spec::parse(&s, allow_default_c)).unwrap_or(spec_row.clone());
     let belief_pool: Option<Arc<MetaPool>> = flag(&args, "--belief-pool").map(|p| {
         Arc::new(
             serde_json::from_str(&std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p}: {e}")))
@@ -256,6 +272,17 @@ fn main() {
     let seed_base: u64 = flag(&args, "--seed-base").map(|s| s.parse().unwrap()).unwrap_or(1);
     let max_turns: u16 = flag(&args, "--max-turns").map(|s| s.parse().unwrap()).unwrap_or(500);
     let threads: usize = flag(&args, "--threads").map(|s| s.parse().unwrap()).unwrap_or(4);
+    let pool_row_fp = flag(&args, "--belief-pool").map(|p| file_fingerprint(&p));
+    let pool_col_fp = flag(&args, "--belief-pool-col").map(|p| file_fingerprint(&p)).or_else(|| pool_row_fp.clone());
+    let cond = json!({
+        "bot": nc2000_bot::m17e_artifact::solver_build_fingerprint(),
+        "belief_row": if spec_row.kind == Kind::Blind { pool_row_fp.clone() } else { None },
+        "belief_col": if spec_col.kind == Kind::Blind { pool_col_fp.clone() } else { None },
+        "max_turns": max_turns,
+        "seed_base": seed_base,
+        "preview": "live search, no baked tables",
+        "ponder": "none",
+    });
     let out = PathBuf::from(flag(&args, "--out").expect("--out DIR"));
     std::fs::create_dir_all(&out).unwrap();
     let dump_logs = flag(&args, "--dump-logs").map(PathBuf::from);
@@ -304,6 +331,14 @@ fn main() {
                 if v["agent"].as_str() != Some(&format!("{}|{}", spec_row.label(), spec_col.label())) {
                     panic!("{}: written under a different agent condition", cell_file(&out, a, b).display());
                 }
+                if v["cond"] != cond || v["forced"] != json!(forced.get(a)) {
+                    panic!(
+                        "{}: written under a different condition ({} vs {})",
+                        cell_file(&out, a, b).display(),
+                        v["cond"],
+                        cond
+                    );
+                }
                 done.insert((ci, v["k"].as_u64().unwrap() as usize, v["row_p1"].as_bool().unwrap()));
             }
         }
@@ -319,14 +354,15 @@ fn main() {
         }
     }
     eprintln!(
-        "team_eval: {} cells x {} seeds x 2 sides, {} to play ({} done), row {} col {}, {} threads",
+        "team_eval: {} cells x {} seeds x 2 sides, {} to play ({} done), row {} col {}, {} threads, cond {}",
         cells.len(),
         seeds,
         tasks.len(),
         done.len(),
         spec_row.label(),
         spec_col.label(),
-        threads
+        threads,
+        cond
     );
 
     let files: Mutex<HashMap<usize, std::fs::File>> = Mutex::new(HashMap::new());
@@ -397,6 +433,7 @@ fn main() {
                 let rec = json!({
                     "k": k, "row_p1": row_p1, "seed": bseed,
                     "agent": format!("{}|{}", spec_row.label(), spec_col.label()),
+                    "cond": cond, "forced": forced.get(row),
                     "score": if row_p1 { p1_score } else { 1.0 - p1_score },
                     "result": match res {
                         GameResult::Outcome(Outcome::P1Win) => "p1",
