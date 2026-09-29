@@ -40,6 +40,8 @@ Calibration against the intended human environment (the local spectator
 corpus, 570 human games, aggregate numbers only) and the battle checks are
 in `data/team-inventory-v1/measurements/` (`fallback-rule.json`,
 `prior-heldout.json`) and summarized in `docs/TEAM-POOL-REBUILD-PLAN.md`.
+The battle checks ran blind:1000 at c = 1.0 without pondering, not the
+shipped blind profile (27,000 iterations, c = 0.4, pondering).
 
 ## Consumers
 

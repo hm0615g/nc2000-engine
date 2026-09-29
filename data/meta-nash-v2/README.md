@@ -8,9 +8,13 @@ never as labels.
 
 ## Conditions
 
-The product's Nash-door information structure on both sides: blind search
-with the frozen opponent prior (`data/belief-pool-v2`), equal iterations,
-no pondering, live preview search, 500-turn cap. Harness:
+The Nash door's information structure on both sides — blind search with the
+frozen opponent prior (`data/belief-pool-v2`), equal iterations, live
+preview search, 500-turn cap — but **not the shipped blind search profile**:
+every run used exploration constant c = 1.0 (the harness default) where the
+product's blind profile is c = 0.4 at 27,000 iterations with pondering
+(`data/search-profiles.json`); budgets were 300 / 1000 / 3000 with no
+pondering. Re-measuring under `blind:ITERS:0.4` is open. Harness:
 `crates/bot/examples/team_eval.rs`; solver: `tools/nash-solve.py` (RM+,
 seed-index bootstrap); challenges: `tools/nash-challenge.py`.
 META-NASH v1's harness (`meta_nash.rs`) was not reused because it plays

@@ -282,8 +282,18 @@ Nash weights, prior allocation, replacement decisions, and remaining limitations
 
 All numbers are win shares for the team named first; intervals are 95%
 seed-index bootstraps. Raw per-game logs stay in `tmp/team-eval/`
-(gitignored); every figure below is reproducible from the committed
-aggregates and scripts.
+(gitignored, local to the machine that ran them); committed measurements
+hold per-cell totals and every result, and each run is reproducible game for
+game from its recorded agent spec and seed base
+(`crates/bot/examples/team_eval.rs` is deterministic per game).
+
+**Measurement conditions differ from the shipped bot.** Budgets were 300 /
+1000 / 3000 iterations with no pondering; the product plays 30,000 (open,
+c = 1.0) or 27,000 (blind, c = 0.4), and the web ponders
+(`data/search-profiles.json`, `web/src/bot-worker.ts`). Open-mode runs used
+the product's c = 1.0; **every blind run (prior tests, Nash) used c = 1.0,
+not the blind profile's 0.4**. The harness now takes `blind:ITERS:C`;
+re-measuring under `blind:ITERS:0.4` is the first open item below.
 
 ### 1. Inventory and import
 
@@ -322,9 +332,9 @@ aggregates and scripts.
   author, Snorlax Zap Cannon→Curse): +0.063 at open:1000 (CI excludes 0),
   no unique advantage (incl. the nine Miltank teams the author aimed Zap
   Cannon at), execution established from logs
-  (`condition3-log-reads.json`). Rechecked at the Nash-door condition
-  (blind:1000): +0.034 [+0.007, +0.056] — same direction, below the
-  materiality bar there.
+  (`condition3-log-reads.json`). Rechecked blind (blind:1000, c = 1.0):
+  +0.034 [+0.007, +0.056] — same direction, below the materiality bar
+  there.
 - **Withheld** (conditions 1–2 met, execution not established): Mario13 ←
   sample-07 (+0.073; Belly Drum games win 0.36 vs 0.64 without), 王パCH流
   アレンジ ← sample-11-orig (+0.074; Sandstorm set on entry regardless of
@@ -359,7 +369,8 @@ aggregates and scripts.
 ### 4. Nash ([meta-nash-v2](../data/meta-nash-v2/README.md))
 
 - Condition: blind vs blind on the frozen prior (the Nash door's
-  information structure). 79-team game at 300 (98,592 games) → 18
+  information structure, at c = 1.0 — see the conditions note above).
+  79-team game at 300 (98,592 games) → 18
   support-relevant teams at 1000 and 3000 (64 per pair) → two
   double-oracle rounds at 3000 (23 teams).
 - The equilibrium moves with budget: 300 anchors on sample-07; at 3000
@@ -400,11 +411,37 @@ aggregates and scripts.
   prints 「実際の探索量は300反復です」.
 - Not published: push/deploy is a separate owner action.
 
-### Open for the owner
+### Open items
+
+State: implemented on local `master`, not pushed (push = Pages deploy =
+owner approval). Owner decisions:
 
 1. sample-16 vs its original ポニョ (trust in Party Box; level allocation).
 2. Whether the start-screen lists should gain the new teams or drop
    weak/dominated ones.
-3. セミスター (weak) scores 0.589 against the Nash mixture on few games —
-   worth a longer challenge before any relabel.
-4. Nash weights at the product budget (~30k) are extrapolated from 3000.
+3. Publication.
+4. Product-spec divergence the owner raised on 2026-09-30: the ladder bot
+   and the web bot share the search core and `data/search-profiles.json`
+   but play differently — web `/` is open-sheet (30,000, c = 1.0), web
+   `?blind`/`?nash` and the ladder are blind (27,000, c = 0.4); only the web
+   ponders; the ladder rebuilds state from the Showdown protocol
+   (`WasmProtocolSearcher`, `tools/ps-client.js`) while the web mirrors the
+   engine battle (`WasmBlindSearcher`, `web/src/bot-worker.ts`). Whether to
+   converge them, and how many URL doors to keep (`/`, `?blind`, `?nash`,
+   `?solver`, `?evaluate`, `?fork`), is undecided.
+
+Measurement work, in priority order (all commands resume and are
+deterministic; inputs are in `data/team-inventory-v1/eval/`):
+
+1. **Re-measure the blind results under the shipped profile**
+   (`--agent blind:ITERS:0.4`): the prior held-out test
+   (`python3 tools/prior-heldout-setup.py`, arms as in
+   `measurements/prior-heldout.json`) and the Nash game (round robin of
+   `data/meta-nash-v2/solution-blind3000-do2.json` `ids` at 3000, then
+   `tools/nash-solve.py`, `tools/nash-challenge.py`). If the support or the
+   prior verdicts move, regenerate with `node tools/build-team-products.js`.
+2. A product-budget spot check of the Nash support (e.g. 30,000 iterations,
+   32 games per pair ≈ 1–1.5 h at 11 threads on this Mac).
+3. セミスター (weak) scores 0.589 against the Nash mixture on 72 games —
+   extend before any relabel; the two pending teams (sample-18,
+   rental-cban-12) stay out of the ordinary draw until resolved.

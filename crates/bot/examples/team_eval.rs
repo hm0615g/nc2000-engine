@@ -17,8 +17,12 @@
 //! the lexicographically smaller id). CELLS_FILE: one `row col` pair per
 //! line (directed: row is the team being evaluated).
 //!
-//! Agent specs: `open:ITERS` (the M12 product: sets public, picks hidden),
-//! `blind:ITERS` (public info + belief pool), `skuct:ITERS` (true state).
+//! Agent specs: `open:ITERS[:C]` (the M12 product: sets public, picks
+//! hidden), `blind:ITERS[:C]` (public info + belief pool), `skuct:ITERS[:C]`
+//! (true state). Without `:C` the exploration constant is
+//! `RmConfig::default()`'s 1.0, which matches the product's open profile but
+//! NOT its blind profile (0.4, `data/search-profiles.json`): the shipped
+//! blind bot is `blind:27000:0.4`. Neither spec ponders.
 //!
 //! Pairing: game k of every cell uses the same battle seed and the same
 //! agent seeds, derived from (--seed-base, k, side) only; each k is played
@@ -41,49 +45,66 @@ use nc2000_engine::dex::Dex;
 use nc2000_engine::state::Battle;
 use serde_json::{json, Value};
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Kind {
+    Open,
+    Blind,
+    Skuct,
+}
+
 #[derive(Clone, Debug)]
-enum Spec {
-    Open(u32),
-    Blind(u32),
-    Skuct(u32),
+struct Spec {
+    kind: Kind,
+    iters: u32,
+    /// UCB exploration constant; `None` = `RmConfig::default()` (1.0).
+    c: Option<f64>,
 }
 
 impl Spec {
     fn parse(s: &str) -> Spec {
-        let (kind, n) = s.split_once(':').unwrap_or((s, "300"));
-        let n: u32 = n.parse().unwrap_or_else(|_| panic!("bad iterations in {s}"));
-        match kind {
-            "open" => Spec::Open(n),
-            "blind" => Spec::Blind(n),
-            "skuct" => Spec::Skuct(n),
+        let mut parts = s.split(':');
+        let kind = match parts.next().unwrap() {
+            "open" => Kind::Open,
+            "blind" => Kind::Blind,
+            "skuct" => Kind::Skuct,
             _ => panic!("unknown agent spec {s}"),
-        }
+        };
+        let iters = parts.next().unwrap_or("300").parse().unwrap_or_else(|_| panic!("bad iterations in {s}"));
+        let c = parts.next().map(|c| c.parse().unwrap_or_else(|_| panic!("bad c in {s}")));
+        Spec { kind, iters, c }
     }
 
+    /// Stored in every game record; resume refuses a directory written
+    /// under another label. A spec without `:C` keeps its historical label.
     fn label(&self) -> String {
-        match self {
-            Spec::Open(n) => format!("open:{n}"),
-            Spec::Blind(n) => format!("blind:{n}"),
-            Spec::Skuct(n) => format!("skuct:{n}"),
+        let kind = match self.kind {
+            Kind::Open => "open",
+            Kind::Blind => "blind",
+            Kind::Skuct => "skuct",
+        };
+        match self.c {
+            Some(c) => format!("{kind}:{}:{c}", self.iters),
+            None => format!("{kind}:{}", self.iters),
         }
     }
 
     fn build(&self, seed: u64, pool: Option<&Arc<MetaPool>>) -> Box<dyn Agent> {
-        let cfg = |n: u32| RmConfig { iterations: n, rule: SelRule::Ucb, ..Default::default() };
-        match self {
-            Spec::Open(n) => Box::new(OpenAgent::new(cfg(*n), None, seed)),
-            Spec::Blind(n) => Box::new(BlindAgent::new(
-                cfg(*n),
+        let base = RmConfig { iterations: self.iters, rule: SelRule::Ucb, ..Default::default() };
+        let cfg = RmConfig { c: self.c.unwrap_or(base.c), ..base };
+        match self.kind {
+            Kind::Open => Box::new(OpenAgent::new(cfg, None, seed)),
+            Kind::Blind => Box::new(BlindAgent::new(
+                cfg,
                 pool.expect("blind agents need --belief-pool").clone(),
                 None,
                 seed,
             )),
-            Spec::Skuct(n) => Box::new(RmAgent::new(cfg(*n), seed)),
+            Kind::Skuct => Box::new(RmAgent::new(cfg, seed)),
         }
     }
 
     fn needs_log(&self) -> bool {
-        !matches!(self, Spec::Skuct(_))
+        self.kind != Kind::Skuct
     }
 }
 
