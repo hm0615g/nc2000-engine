@@ -9,24 +9,30 @@
 //   data/team-inventory-v1/reference.json  every record: eligibility, label,
 //                                          replacement links, memberships
 //
-//   node tools/build-team-products.js
+//   node tools/build-team-products.js [--classification F] [--solution F] [--out-root DIR]
 //
 // Inputs: data/team-inventory-v1/inventory.json, classification.json,
 // data/meta-nash-v2/solution.json. Labels are never decided here.
+// --out-root writes the same tree elsewhere (dry runs).
 'use strict';
 const fs = require('fs');
 const path = require('path');
 
 const REPO = path.join(__dirname, '..');
-const read = rel => JSON.parse(fs.readFileSync(path.join(REPO, rel), 'utf8'));
+const arg = name => {
+	const i = process.argv.indexOf(name);
+	return i > 0 ? process.argv[i + 1] : null;
+};
+const OUT = arg('--out-root') ? path.resolve(arg('--out-root')) : REPO;
+const read = rel => JSON.parse(fs.readFileSync(path.resolve(REPO, rel), 'utf8'));
 const write = (rel, obj) => {
-	fs.mkdirSync(path.dirname(path.join(REPO, rel)), { recursive: true });
-	fs.writeFileSync(path.join(REPO, rel), JSON.stringify(obj, null, 1) + '\n');
+	fs.mkdirSync(path.dirname(path.join(OUT, rel)), { recursive: true });
+	fs.writeFileSync(path.join(OUT, rel), JSON.stringify(obj, null, 1) + '\n');
 };
 
 const inv = read('data/team-inventory-v1/inventory.json');
-const cls = read('data/team-inventory-v1/classification.json');
-const sol = read('data/meta-nash-v2/solution.json');
+const cls = read(arg('--classification') || 'data/team-inventory-v1/classification.json');
+const sol = read(arg('--solution') || 'data/meta-nash-v2/solution.json');
 const byId = new Map(inv.teams.map(t => [t.id, t]));
 
 // Machine-generated teams are kept in the prior for identification, but a

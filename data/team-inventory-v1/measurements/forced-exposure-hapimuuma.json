@@ -1,0 +1,29 @@
+{
+ "what": "Forced selection of the \u30cf\u30d4\u30e0\u30a6\u30de core (Blissey + Misdreavus + ace) vs the bot's own selection; open:300, discovery seeds k0-7, human panel. Keys = forced lead.",
+ "scores": {
+  "mjj-2020-ukenta": {
+   "free_open300_k0-7": 0.4626024590163935,
+   "Blissey": 0.42921789617486344,
+   "Misdreavus": 0.4451844262295083,
+   "Tauros": 0.40163934426229514
+  },
+  "mjj-2022-ukekent": {
+   "free_open300_k0-7": 0.42426571038251376,
+   "Blissey": 0.43382855191256836,
+   "Misdreavus": 0.4100922131147542,
+   "Tauros": 0.388917349726776
+  },
+  "mjj-2023-ukethdr": {
+   "free_open300_k0-7": 0.5554132513661202,
+   "Blissey": 0.5219433060109291,
+   "Misdreavus": 0.5220286885245903,
+   "Zapdos": 0.5693306010928962
+  },
+  "mjj-2025-hapim": {
+   "free_open300_k0-7": 0.5670252732240438,
+   "Blissey": 0.5695013661202186,
+   "Misdreavus": 0.5444842896174864,
+   "Zapdos": 0.6186816939890711
+  }
+ }
+}

@@ -204,6 +204,7 @@ def main():
         'allocation': alloc_cfg,
         'labels': {x: {k: v for k, v in l.items()} for x, l in labels.items()},
     }
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     json.dump(out, open(a.out, 'w'), indent=1, default=float)
     if a.report:
         json.dump({'dominatedChecks': dom_checks, 'importantStrata': important}, open(a.report, 'w'), indent=1, default=float)
