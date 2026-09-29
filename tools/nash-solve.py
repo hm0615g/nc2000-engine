@@ -37,24 +37,32 @@ def load(dirs, agent):
     return games, labels
 
 
-def build(ids, games, uids=None):
+def tensors(ids, games):
+    """Per ordered pair and seed uid: score sum and game count, so a
+    bootstrap resample is two dot products."""
+    uids = sorted({u for g in games.values() for u, _ in g})
+    ui = {u: i for i, u in enumerate(uids)}
     n = len(ids)
-    A = np.full((n, n), 0.5)
-    N = np.zeros((n, n))
+    S = np.zeros((n, n, len(uids)))
+    C = np.zeros((n, n, len(uids)))
     for i, a in enumerate(ids):
         for j, b in enumerate(ids):
             if i == j:
                 continue
-            g = games.get((a, b), [])
-            if uids is not None:
-                cnt = collections.Counter(uids)
-                vals = [s for u, s in g for _ in range(cnt.get(u, 0))]
-            else:
-                vals = [s for _, s in g]
-            if vals:
-                A[i, j] = float(np.mean(vals))
-                N[i, j] = len(vals)
-    return A, N
+            for u, sc in games.get((a, b), []):
+                S[i, j, ui[u]] += sc
+                C[i, j, ui[u]] += 1
+    return uids, S, C
+
+
+def build(S, C, m=None):
+    if m is None:
+        m = np.ones(S.shape[2])
+    num = S @ m
+    den = C @ m
+    A = np.where(den > 0, num / np.maximum(den, 1e-12), 0.5)
+    np.fill_diagonal(A, 0.5)
+    return A, den
 
 
 def rm_plus(A, iters=20000):
@@ -100,7 +108,8 @@ def main():
     ids = [l.strip() for l in open(a.ids) if l.strip() and not l.startswith('#')]
     games, labels = load(a.cells, a.agent)
     print('agent labels seen:', dict(labels))
-    A, N = build(ids, games)
+    uid_list, S, C = tensors(ids, games)
+    A, N = build(S, C)
     missing = [(ids[i], ids[j]) for i in range(len(ids)) for j in range(len(ids)) if i != j and N[i, j] == 0]
     if missing:
         print(f'WARNING {len(missing)} ordered pairs have no games, e.g. {missing[:3]}')
@@ -111,13 +120,12 @@ def main():
     for tid, w in support:
         print(f'  {tid:34s} {w:.3f}')
     # bootstrap over the seed index (per run)
-    uid_list = sorted({u for g in games.values() for u, _ in g})
     rng = np.random.default_rng(1)
     freq = collections.Counter()
     wsum = collections.defaultdict(list)
     for _ in range(a.boot):
-        pick = [uid_list[i] for i in rng.integers(0, len(uid_list), len(uid_list))]
-        Ab, _ = build(ids, games, pick)
+        mult = np.bincount(rng.integers(0, len(uid_list), len(uid_list)), minlength=len(uid_list)).astype(float)
+        Ab, _ = build(S, C, mult)
         xb = rm_plus(Ab, max(2000, a.iters // 5))
         for i, tid in enumerate(ids):
             wsum[tid].append(float(xb[i]))
