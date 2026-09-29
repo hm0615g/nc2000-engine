@@ -80,8 +80,50 @@ const controls = [
 	}, 'confound: display order reversed (strength must not move)'),
 ];
 
+// Off-prior opponents for the prior-allocation tests: three sets from each
+// of two human-source teams (species-distinct, Item Clause respected), so
+// every set is a real human set while the six match no candidate's preview
+// signature — the belief must fall back on them.
+function mulberry(seed) {
+	return () => {
+		seed = (seed + 0x6d2b79f5) >>> 0;
+		let t = seed;
+		t = Math.imul(t ^ (t >>> 15), t | 1);
+		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	};
+}
+const human = inv.teams.filter(t => t.eligibility.status === 'eligible' && t.origin === 'human' && t.measuredAs === t.id);
+const previewSigs = new Set(inv.teams.map(t => t.previewSignature));
+const sigOf = sets => sets.map(s => `${toid(s.species)}:${s.level}:${s.item ? 1 : 0}`).sort().join(',');
+const offprior = [];
+const rnd = mulberry(20260929);
+for (let tries = 0; offprior.length < 16 && tries < 5000; tries++) {
+	const a = human[Math.floor(rnd() * human.length)], b = human[Math.floor(rnd() * human.length)];
+	if (a === b) continue;
+	const pick = (t, n, taken) => {
+		const out = [];
+		for (const s of [...t.sets].sort(() => rnd() - 0.5)) {
+			if (out.length === n) break;
+			if (taken.some(x => toid(x.species) === toid(s.species) || (x.item && x.item === s.item))) continue;
+			out.push(s);
+			taken.push(s);
+		}
+		return out;
+	};
+	const taken = [];
+	const sets = [...pick(a, 3, taken), ...pick(b, 3, taken)];
+	if (sets.length !== 6 || previewSigs.has(sigOf(sets))) continue;
+	const lv = sets.map(x => x.level).sort((x, y) => x - y);
+	if (lv[0] + lv[1] + lv[2] > 155) continue;
+	const c = JSON.parse(validator.canonicalizeTeam(JSON.stringify(sets)));
+	if (!c.ok || !JSON.parse(validator.validateTeam(JSON.stringify(c.team))).ok) continue;
+	offprior.push({ id: `offprior-${String(offprior.length + 1).padStart(2, '0')}`, role: 'offprior', from: [a.id, b.id], sets: c.team });
+}
+
 const teams = [
 	...inv.teams.filter(t => t.eligibility.status === 'eligible').map(t => ({ id: t.id, role: 'candidate', sets: t.sets })),
+	...offprior,
 	...heldout.map(id => ({ id, role: 'heldout', sets: byId.get(id).sets })),
 	...controls,
 ];
@@ -90,5 +132,6 @@ fs.writeFileSync(path.join(DIR, 'teams.json'), JSON.stringify({ teams }, null, 1
 fs.writeFileSync(path.join(DIR, 'measured.txt'), measured.join('\n') + '\n');
 fs.writeFileSync(path.join(DIR, 'heldout.txt'), heldout.join('\n') + '\n');
 fs.writeFileSync(path.join(DIR, 'controls.txt'), controls.map(c => c.id).join('\n') + '\n');
-console.log(`${teams.length} teams (${measured.length} measured candidates, ${heldout.length} held out, ${controls.length} controls)`);
+fs.writeFileSync(path.join(DIR, 'offprior.txt'), offprior.map(c => c.id).join('\n') + '\n');
+console.log(`${teams.length} teams (${measured.length} measured candidates, ${heldout.length} held out, ${controls.length} controls, ${offprior.length} off-prior)`);
 for (const c of controls) console.log(c.id, c.sets.map(s => `${s.species}[${s.moves.join('/')}]@${s.item || '-'}`).join(' '));

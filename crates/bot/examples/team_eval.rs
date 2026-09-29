@@ -8,6 +8,7 @@
 //!       (--round-robin IDS_FILE | --cells CELLS_FILE)
 //!       --agent open:300 [--agent-col SPEC]   row / column agent
 //!       [--belief-pool FILE]                  blind agents' candidate pool
+//!       [--belief-pool-col FILE]              the column agent's, when it differs
 //!       --seeds N --seed-base S --out DIR [--threads T] [--max-turns 500]
 //!       [--force-row-picks ROW_ID=SpeciesA,SpeciesB,SpeciesC]
 //!       [--dump-logs DIR]                     full protocol log per game
@@ -116,6 +117,33 @@ impl Agent for ForcedPicks {
     }
 }
 
+/// Remembers the team-preview answer (the selection, lead first), which the
+/// protocol log only reveals for mons that actually come out.
+struct RecordPicks {
+    inner: Box<dyn Agent>,
+    picks: Option<[u8; 3]>,
+}
+
+impl Agent for RecordPicks {
+    fn name(&self) -> String {
+        self.inner.name()
+    }
+
+    fn choose(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        let c = self.inner.choose(battle, dex, side, choices);
+        if let SearchChoice::Team(p) = c {
+            self.picks = Some(p);
+        }
+        c
+    }
+}
+
 fn flag(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
 }
@@ -195,6 +223,14 @@ fn main() {
                 .unwrap_or_else(|e| panic!("parse {p}: {e}")),
         )
     });
+    let belief_pool_col: Option<Arc<MetaPool>> = flag(&args, "--belief-pool-col")
+        .map(|p| {
+            Arc::new(
+                serde_json::from_str(&std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p}: {e}")))
+                    .unwrap_or_else(|e| panic!("parse {p}: {e}")),
+            )
+        })
+        .or_else(|| belief_pool.clone());
     let seeds: usize = flag(&args, "--seeds").map(|s| s.parse().unwrap()).unwrap_or(16);
     let seed_base: u64 = flag(&args, "--seed-base").map(|s| s.parse().unwrap()).unwrap_or(1);
     let max_turns: u16 = flag(&args, "--max-turns").map(|s| s.parse().unwrap()).unwrap_or(500);
@@ -294,8 +330,13 @@ fn main() {
                 battle.set_log_enabled(true);
                 let (spec1, spec2) = if row_p1 { (&spec_row, &spec_col) } else { (&spec_col, &spec_row) };
                 let _ = (spec1.needs_log(), spec2.needs_log());
-                let mut a1 = spec1.build(seed_p1, belief_pool.as_ref());
-                let mut a2 = spec2.build(seed_p2, belief_pool.as_ref());
+                let (pool1, pool2) = if row_p1 {
+                    (belief_pool.as_ref(), belief_pool_col.as_ref())
+                } else {
+                    (belief_pool_col.as_ref(), belief_pool.as_ref())
+                };
+                let mut a1 = spec1.build(seed_p1, pool1);
+                let mut a2 = spec2.build(seed_p2, pool2);
                 if let Some(sp) = forced.get(row) {
                     let sets = &teams[row];
                     let mut picks = [0u8; 3];
@@ -311,10 +352,19 @@ fn main() {
                         a2 = wrap(a2);
                     }
                 }
+                let mut r1 = RecordPicks { inner: a1, picks: None };
+                let mut r2 = RecordPicks { inner: a2, picks: None };
                 let res = {
-                    let mut pair: [&mut dyn Agent; 2] = [a1.as_mut(), a2.as_mut()];
+                    let mut pair: [&mut dyn Agent; 2] = [&mut r1, &mut r2];
                     nc2000_bot::play_game(&dex, &mut battle, &mut pair, max_turns).unwrap()
                 };
+                let selection = |r: &RecordPicks, sets: &[PokemonSet]| -> Vec<String> {
+                    r.picks
+                        .map(|p| p.iter().filter(|&&x| x > 0).map(|&x| sets[x as usize - 1].species.clone()).collect())
+                        .unwrap_or_default()
+                };
+                let (sel1, sel2) = (selection(&r1, t1), selection(&r2, t2));
+                let (row_sel, col_sel) = if row_p1 { (sel1, sel2) } else { (sel2, sel1) };
                 let p1_score = match res {
                     GameResult::Outcome(Outcome::P1Win) => 1.0,
                     GameResult::Outcome(Outcome::P2Win) => 0.0,
@@ -335,6 +385,7 @@ fn main() {
                     },
                     "turns": battle.turn,
                     "row_picks": row_picks, "col_picks": col_picks,
+                    "row_selected": row_sel, "col_selected": col_sel,
                     "row_moves": row_moves, "col_moves": col_moves,
                     "row_left": battle.sides[row_side].pokemon_left,
                     "col_left": battle.sides[col_side].pokemon_left,
