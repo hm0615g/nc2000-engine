@@ -1,0 +1,137 @@
+{
+ "what": "Fallback-rule choice for the opponent prior (step 3). Candidate pool = all 103 measured eligible teams (pre-classification).",
+ "corpusRecall": {
+  "source": "local spectator corpus, 570 human games (1140 team instances), split by file order into even/odd halves; aggregate numbers only",
+  "even": {
+   "v1": {
+    "teams": 570,
+    "previewMatch": 0.02280701754385965,
+    "identified": 0.021052631578947368,
+    "fallbackMoveRecall": 0.501699716713881,
+    "fallbackRevealedMoves": 3530,
+    "fallbackSources": {
+     "pool": 1368,
+     "learnset": 158
+    }
+   },
+   "fileorder": {
+    "teams": 570,
+    "previewMatch": 0.03333333333333333,
+    "identified": 0.028070175438596492,
+    "fallbackMoveRecall": 0.5072753209700428,
+    "fallbackRevealedMoves": 3505,
+    "fallbackSources": {
+     "pool": 1367,
+     "learnset": 149
+    }
+   },
+   "fileorder+wmode": {
+    "teams": 570,
+    "previewMatch": 0.03333333333333333,
+    "identified": 0.028070175438596492,
+    "fallbackMoveRecall": 0.5455064194008559,
+    "fallbackRevealedMoves": 3505,
+    "fallbackSources": {
+     "pool": 1367,
+     "learnset": 149
+    }
+   },
+   "clusterw": {
+    "teams": 570,
+    "previewMatch": 0.03333333333333333,
+    "identified": 0.028070175438596492,
+    "fallbackMoveRecall": 0.5072753209700428,
+    "fallbackRevealedMoves": 3505,
+    "fallbackSources": {
+     "pool": 1367,
+     "learnset": 149
+    }
+   },
+   "clusterw+wmode": {
+    "teams": 570,
+    "previewMatch": 0.03333333333333333,
+    "identified": 0.028070175438596492,
+    "fallbackMoveRecall": 0.5358059914407989,
+    "fallbackRevealedMoves": 3505,
+    "fallbackSources": {
+     "pool": 1367,
+     "learnset": 149
+    }
+   }
+  },
+  "odd": {
+   "v1": {
+    "teams": 570,
+    "previewMatch": 0.02982456140350877,
+    "identified": 0.017543859649122806,
+    "fallbackMoveRecall": 0.4983941605839416,
+    "fallbackRevealedMoves": 3425,
+    "fallbackSources": {
+     "pool": 1337,
+     "learnset": 164
+    }
+   },
+   "fileorder": {
+    "teams": 570,
+    "previewMatch": 0.04912280701754386,
+    "identified": 0.028070175438596492,
+    "fallbackMoveRecall": 0.5053066037735849,
+    "fallbackRevealedMoves": 3392,
+    "fallbackSources": {
+     "pool": 1333,
+     "learnset": 151
+    }
+   },
+   "fileorder+wmode": {
+    "teams": 570,
+    "previewMatch": 0.04912280701754386,
+    "identified": 0.028070175438596492,
+    "fallbackMoveRecall": 0.5430424528301887,
+    "fallbackRevealedMoves": 3392,
+    "fallbackSources": {
+     "pool": 1333,
+     "learnset": 151
+    }
+   },
+   "clusterw": {
+    "teams": 570,
+    "previewMatch": 0.04912280701754386,
+    "identified": 0.028070175438596492,
+    "fallbackMoveRecall": 0.5053066037735849,
+    "fallbackRevealedMoves": 3392,
+    "fallbackSources": {
+     "pool": 1333,
+     "learnset": 151
+    }
+   },
+   "clusterw+wmode": {
+    "teams": 570,
+    "previewMatch": 0.04912280701754386,
+    "identified": 0.028070175438596492,
+    "fallbackMoveRecall": 0.5336084905660378,
+    "fallbackRevealedMoves": 3392,
+    "fallbackSources": {
+     "pool": 1333,
+     "learnset": 151
+    }
+   }
+  }
+ },
+ "battleAB": {
+  "condition": "blind:1000 both sides; row = X with the arm prior, column = Y with the weighted prior; 4 X teams (sample-07, sample-13, mjj-2021-q10con, mjj-2023-ukethdr) x 20 off-prior opponents (16 chimeras + 4 held-out page teams) x 12 seeds x 2 sides; seed base 20261003",
+  "arms": {
+   "fileorder": "no weights: uniform collisions, first-in-file-order fallback (legacy rule)",
+   "wmode": "cluster weights (machine x0.25): weighted collisions, weighted-mode fallback"
+  },
+  "games": 1920,
+  "fileorderScore": 0.58,
+  "wmodeScore": 0.596,
+  "pairedDiff": 0.0161,
+  "ci95": [
+   -0.0177,
+   0.0479
+  ],
+  "identicalGames": 0.567
+ },
+ "decision": "weighted prior semantics (weighted collisions + weighted-mode fallback): recall +0.04 in both corpus halves, no measured strength cost"
+}
