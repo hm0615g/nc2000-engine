@@ -1,5 +1,5 @@
-// The list pool as something the user can replace — one file under
-// `?blind`.
+// The list pool as something the user can replace — one file in the setup
+// panel, an explicit override of the catalog.
 //
 // Two things move together, because they are both reads of this one
 // object: the bot's draw and both team lists on the start screen. The bot's
@@ -9,7 +9,7 @@
 //
 // The loader is generous going in and strict coming out.
 //
-// Generous, because a pool file is hand-made: `{teams:[…]}` (the bundled
+// Generous, because a pool file is hand-made: `{teams:[…]}` (the catalog
 // file's shape) or a bare array, ids optional, tier/rank/provenance
 // optional. The engine side asks for almost nothing — crates/bot/src/
 // preview.rs reads a pool as `{teams:[{id, sets}]}` and ignores the rest —
@@ -39,10 +39,8 @@ import { findingAnchor, findingText, type Finding } from "./findings";
 import { ui } from "./i18n";
 import type { MetaPool, PoolTeam } from "./types";
 
-/** The pool a session is actually playing with. `name` is the file it came
- * from, or null for the bundled pool — which is also the flag the rest of
- * the app tests to know that pool indices (baked pair tables, ranks) mean
- * what they historically meant. */
+/** The lists a session is actually playing with. `name` is the file it came
+ * from, or null for the shipped catalog. */
 export interface LoadedPool {
   name: string | null;
   pool: MetaPool;
@@ -61,7 +59,11 @@ export type PoolParse =
   | { ok: true; pool: MetaPool; poolJson: string; teams: number }
   | { ok: false; errors: string[] };
 
-const LS_KEY = "nc2000-team-pool";
+/** Records under the previous key were loaded when `/` still played the
+ * bundled open-sheet lists; they are removed rather than restored, so no
+ * file saved by an older build can stand in for the catalog unannounced. */
+const LS_KEY = "nc2000-team-pool-v2";
+const LS_RETIRED_KEYS = ["nc2000-team-pool"];
 
 /** Exactly six, always: the format picks 3 of 6 under a 155 total-level cap,
  * and both rules read the party as a fixed-size thing. */
@@ -198,7 +200,7 @@ export function parsePoolText(text: string): PoolParse {
 
   if (errors.length > 0) return { ok: false, errors: trim(errors) };
 
-  // Same shape as the bundled file, so a saved pool re-reads through this
+  // Same shape as the catalog, so a saved pool re-reads through this
   // very function on the next load.
   const pool: MetaPool = { meta: { teams: teams.length }, teams };
   const poolJson = JSON.stringify(pool);
@@ -219,6 +221,7 @@ export function parsePoolText(text: string): PoolParse {
 
 export function loadStoredPool(): StoredPool | null {
   try {
+    for (const k of LS_RETIRED_KEYS) localStorage.removeItem(k);
     const rawItem = localStorage.getItem(LS_KEY);
     if (!rawItem) return null;
     const p = JSON.parse(rawItem) as Partial<StoredPool>;

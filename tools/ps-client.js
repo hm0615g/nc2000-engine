@@ -21,11 +21,15 @@
 // Usage:
 //   node tools/ps-client.js --server ws://127.0.0.1:8123 --name BOTNAME \
 //     --team pool:0|pool:random|FILE.json [--challenge USER | --accept any|U1,U2] \
-//     [--games N] [--iters 30000] [--seed 1] [--mode blind|open] \
-//     [--opp-team-file FILE.json] [--random] [--timer] [--no-tables] \
+//     [--games N] [--iters 27000] [--seed 1] [--random] [--timer] \
 //     [--decision-log FILE.jsonl] [--belief-prior FILE.json] \
 //     [--password PW] [--loginserver URL] [--format gen2nintendocup2000noohkostadium2strict] \
 //     [--drop SPEC] [--quiet]
+//
+// The bot plays exactly as the web product does: blind (the opponent prior
+// data/belief-pool-v3 is its only picture of the opponent), the blind
+// search profile of data/search-profiles.json, live preview search. It does
+// not ponder; the browser does.
 //
 // --random turns the client into the second driver: choices are drawn
 // uniformly from the request-legal set (level-cap-aware at team preview)
@@ -76,34 +80,28 @@ if (args.help || args.h) {
                     bare guest /trn is refused or --password is given)
   --format ID       format id (default ${FORMAT})
   --team SPEC       pool:random | pool:ID | pool:IDX | FILE.json (required;
-                    pool = data/team-pool-v1, the bot's ordinary own-team
-                    pool; random draws by its drawWeight)
+                    pool = data/team-pool-v2, the catalog the web offers and
+                    draws from; random draws by its drawWeight)
   --challenge USER  challenge USER repeatedly until --games are done
   --accept WHO      accept challenges: 'any' or comma list of names
   --games N         number of complete battles to play (default 1)
-  --mode M          blind (default; belief = data/belief-pool-v2, the
-                    shipped opponent prior) | open (pin the
-                    opponent's true sets — needs --opp-team-file, only
-                    meaningful where sheets are genuinely open)
-  --opp-team-file F opponent sets JSON for --mode open
-  --iters N         search iterations per decision (default 27000 in blind
-                    mode, 30000 in open mode)
+  --iters N         search iterations per decision (default: the blind
+                    profile's 27000)
   --seed N          searcher / random-mode seed (default 1)
   --random          random driver mode (no searcher; uniform legal choice)
   --timer           turn the battle timer on in every game
-  --no-tables       skip loading baked preview tables
   --belief-prior F  M18 community belief prior (a table in the
                     data/belief-prior-v0.sample.json shape). Read once at
                     startup and handed to each game's searcher as JSON text;
-                    it governs ONLY the hidden-team fallback imputation, so
-                    it needs --mode blind. Without the flag the fallback
+                    it governs ONLY the hidden-team fallback imputation.
+                    Without the flag the fallback
                     imputation is exactly today's. A malformed table warns
                     and degrades rather than failing the run
   --drop SPEC       verification hook: socket kills at chosen decision
                     points (see header comment)
   --decision-log F  append private (mode 0600) JSONL for regret replay:
                     request, incremental visible protocol, exact own team,
-                    pinned opponent team in open mode, submitted action,
+                    submitted action,
                     diagnostic state, root policy/config
   --quiet           per-game lines only`);
 	process.exit(0);
@@ -125,9 +123,13 @@ const LOGINSERVER = String(args.loginserver || 'https://play.pokemonshowdown.com
 const CHALLENGE = args.challenge && args.challenge !== true ? String(args.challenge) : '';
 const ACCEPT = args.accept && args.accept !== true ? String(args.accept) : '';
 const GAMES = parseInt(args.games || '1', 10);
-const MODE = String(args.mode || 'blind');
-if (!['blind', 'open'].includes(MODE)) throw new Error('--mode must be blind or open');
-const PROFILE = require('../data/search-profiles.json')[MODE];
+for (const retired of ['mode', 'opp-team-file', 'no-tables']) {
+	if (args[retired] !== undefined) {
+		console.error(`--${retired} was retired with open-sheet play: the client is blind-only and never reads baked tables`);
+		process.exit(2);
+	}
+}
+const PROFILE = require('../data/search-profiles.json').blind;
 const ITERS = parseInt(args.iters || String(PROFILE.iterations), 10);
 const SEED = parseInt(args.seed || '1', 10);
 const RANDOM = !!args.random;
@@ -175,8 +177,8 @@ const wsUrl = (() => {
 
 // ------------------------------------------------------------------ teams
 // Own team and opponent belief are separate files (docs/TEAM-POOL-REBUILD-PLAN.md).
-const ownPool = JSON.parse(fs.readFileSync(path.join(REPO, 'data/team-pool-v1/team-pool.json'), 'utf8'));
-const poolJson = fs.readFileSync(path.join(REPO, 'data/belief-pool-v2/belief-pool.json'), 'utf8');
+const ownPool = JSON.parse(fs.readFileSync(path.join(REPO, 'data/team-pool-v2/team-pool.json'), 'utf8'));
+const poolJson = fs.readFileSync(path.join(REPO, 'data/belief-pool-v3/belief-pool.json'), 'utf8');
 
 let rngState = (SEED ^ 0x9e3779b9) >>> 0;
 const rng = () => { // mulberry32 (random-mode choices + pool:random picks)
@@ -217,38 +219,9 @@ function pickTeam() {
 // ------------------------------------------------------------------ wasm
 let wasm = null;
 let dex = null;
-let pairJsons = [];
 if (!RANDOM) {
 	wasm = require(path.join(REPO, 'crates/wasm/pkg-node/nc2000_wasm.js'));
 	dex = new wasm.Dex();
-	if (!args['no-tables']) {
-		const pairDir = path.join(REPO, 'data/preview-tables-v0');
-		if (fs.existsSync(pairDir)) {
-			for (const f of fs.readdirSync(pairDir).sort()) {
-				if (f.startsWith('pair-') && f.endsWith('.json')) {
-					try {
-						pairJsons.push(fs.readFileSync(path.join(pairDir, f), 'utf8'));
-					} catch { /* mid-write during a bake: treat as missing */ }
-				}
-			}
-		}
-	}
-}
-let oppTeamJson = '';
-let oppTeamSets = null;
-if (MODE === 'open') {
-	const f = args['opp-team-file'];
-	if (!f || f === true) {
-		console.error('--mode open needs --opp-team-file (the opponent\'s true sets)');
-		process.exit(2);
-	}
-	const raw = JSON.parse(fs.readFileSync(String(f), 'utf8'));
-	oppTeamSets = Array.isArray(raw) ? raw : raw.sets;
-	if (!Array.isArray(oppTeamSets) || !oppTeamSets.length) {
-		console.error('--opp-team-file must contain a non-empty sets array');
-		process.exit(2);
-	}
-	oppTeamJson = JSON.stringify(oppTeamSets);
 }
 
 // ------------------------------------------------------- M18 belief prior
@@ -278,11 +251,6 @@ if (BELIEF_PRIOR_FILE) {
 		console.error('--belief-prior has nothing to act on in --random mode (no searcher)');
 		process.exit(2);
 	}
-	if (MODE !== 'blind') {
-		console.error(`--belief-prior needs --mode blind: --mode ${MODE} pins the opponent's ` +
-			'true sets, and the prior must never reach the open-sheet path');
-		process.exit(2);
-	}
 	try {
 		priorText = fs.readFileSync(BELIEF_PRIOR_FILE, 'utf8');
 	} catch (e) {
@@ -292,7 +260,7 @@ if (BELIEF_PRIOR_FILE) {
 	// Probe once up front so a typo in the TABLE is visible before the first
 	// challenge instead of one line per game; each game's searcher gets its
 	// own install below (the prior lives on the searcher, one per battle).
-	const probe = new wasm.ProtocolSearcher(dex, 0, poolJson, 0);
+	const probe = new wasm.ProtocolSearcher(dex, 0, poolJson, 0, PROFILE.c);
 	reportPrior(probe.setBeliefPrior(priorText), m => console.log(`[${NAME}] ${m}`));
 	if (typeof probe.free === 'function') probe.free();
 }
@@ -569,15 +537,7 @@ class BattleDriver {
 			this.side = req.side && req.side.id === 'p2' ? 1 : 0;
 			this.searcher = new wasm.ProtocolSearcher(dex, this.side, poolJson, SEED * 1000 + this.battleIdx, PROFILE.c);
 			this.searcher.setOwnTeam(JSON.stringify(this.client.currentTeam.sets));
-			if (MODE === 'open') this.searcher.pinOpponent(oppTeamJson);
-			// after pinOpponent on purpose: if the two ever coexist the binding
-			// refuses out loud rather than contaminating the open-sheet belief
 			if (priorText) reportPrior(this.searcher.setBeliefPrior(priorText), m => this.log(m));
-			for (const pj of pairJsons) {
-				try {
-					this.searcher.addPair(pj);
-				} catch { /* stale table: fall back to live preview search */ }
-			}
 		}
 		if (this.lineBuffer.length) {
 			this.searcher.pushLines(JSON.stringify(this.lineBuffer));
@@ -660,7 +620,7 @@ class BattleDriver {
 			turn: this.turn,
 			server: safeServer(SERVER_RAW),
 			format: FORMATID,
-			mode: MODE,
+			mode: 'blind',
 			driver,
 			searchC: PROFILE.c,
 			iterations: driver === 'search' ? ITERS : 0,
@@ -668,7 +628,6 @@ class BattleDriver {
 			teamLabel: this.client.currentTeam.label.startsWith('pool:') ?
 				this.client.currentTeam.label : path.basename(this.client.currentTeam.label),
 			ownTeam: this.client.currentTeam.sets,
-			opponentTeam: MODE === 'open' ? oppTeamSets : null,
 			request: req,
 			protocolReset: this.protocolReset,
 			protocolDelta,
@@ -967,7 +926,7 @@ class PSClient {
 function summarize() {
 	console.log('----------------------------------------------------------');
 	console.log(
-		`${NAME} (${RANDOM ? 'random' : `${MODE}:${ITERS}`}, seed ${SEED}): ` +
+		`${NAME} (${RANDOM ? 'random' : `blind:${ITERS}:${PROFILE.c}`}, seed ${SEED}): ` +
 		`${stats.W}W ${stats.L}L ${stats.T}T over ${stats.games} games`
 	);
 	console.log(

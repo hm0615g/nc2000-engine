@@ -2,9 +2,7 @@
 #
 # Build = exactly the local sequence: tuned wasm build (crates/wasm/build.sh
 # -> pkg-web) -> vite build with the project-pages base -> battle data
-# (meta pool + baked pair tables) copied into dist/data/ (the app fetches
-# it at runtime, never bundles it — a redeploy after the full-pool bake
-# finishes ships the complete tables with no code change).
+# copied into dist/data/ (the app fetches it at runtime, never bundles it).
 #
 # Toolchain pins mirror the machine the parity gates were measured on:
 # Rust 1.94.0 + wasm-pack 0.13.1 (wasm-opt settings ride in from
@@ -70,27 +68,29 @@ jobs:
       - name: Bundle battle data
         run: |
           mkdir -p web/dist/data
-          cp -r data/meta-pool-v0 data/preview-tables-v0 web/dist/data/
+          # meta-pool-v0 is the belief `?fork` continues its hosted records
+          # with; no door reads baked pair tables any more.
+          cp -r data/meta-pool-v0 web/dist/data/
           cp data/gen2stadium2.json data/i18n-ja.json web/dist/data/
           # The belief-prior SAMPLE (never the live table: shipping one at
           # data/belief-prior-v0.json would turn the opt-in prior on by
-          # default — see crates/bot/src/prior.rs). The blind-mode panel's
+          # default — see crates/bot/src/prior.rs). The setup panel's
           # "load the sample table" button fetches it at runtime.
           cp data/belief-prior-v0.sample.json web/dist/data/
           # Team rebuild (docs/TEAM-POOL-REBUILD-PLAN.md): the three shipped
-          # files ONLY — the bot's own-team pool, the opponent prior, and
-          # the Nash mixture. Measurements and the reference inventory stay
-          # in the repo as audit trail, not payload.
-          mkdir -p web/dist/data/team-pool-v1 web/dist/data/belief-pool-v2 web/dist/data/meta-nash-v2
-          cp data/team-pool-v1/team-pool.json web/dist/data/team-pool-v1/
-          cp data/belief-pool-v2/belief-pool.json web/dist/data/belief-pool-v2/
-          cp data/meta-nash-v2/pool-artifact.json web/dist/data/meta-nash-v2/
+          # files ONLY — the catalog (human lists + bot draw), the opponent
+          # prior, and the Nash mixture. Measurements and the reference
+          # inventory stay in the repo as audit trail, not payload.
+          mkdir -p web/dist/data/team-pool-v2 web/dist/data/belief-pool-v3 web/dist/data/meta-nash-v3
+          cp data/team-pool-v2/team-pool.json web/dist/data/team-pool-v2/
+          cp data/belief-pool-v3/belief-pool.json web/dist/data/belief-pool-v3/
+          cp data/meta-nash-v3/pool-artifact.json web/dist/data/meta-nash-v3/
           # `?fork=NAME` documents; each one carries a player's full team.
           cp -r data/forks web/dist/data/
           test -s web/dist/data/gen2stadium2.json
-          test -s web/dist/data/team-pool-v1/team-pool.json
-          test -s web/dist/data/belief-pool-v2/belief-pool.json
-          test -s web/dist/data/meta-nash-v2/pool-artifact.json
+          test -s web/dist/data/team-pool-v2/team-pool.json
+          test -s web/dist/data/belief-pool-v3/belief-pool.json
+          test -s web/dist/data/meta-nash-v3/pool-artifact.json
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

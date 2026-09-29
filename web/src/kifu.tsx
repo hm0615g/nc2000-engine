@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Kifu, getDex, loadEngine, randomSeed32, readFork } from "./engine";
-import { fetchDexJson, fetchI18nJa, fetchPool } from "./data";
+import { fetchBeliefPool, fetchDexJson, fetchI18nJa } from "./data";
 import { loadJaNames, moveName, setLocale, speciesName, statusLongName } from "./i18n";
 import { loadSetDex } from "./set-info";
 import { extractKifu } from "./kifu-code";
@@ -55,7 +55,7 @@ export function KifuTool() {
     document.documentElement.lang = "ja";
     void (async () => {
       try {
-        const [, pool] = await Promise.all([loadEngine(), fetchPool(), loadJaNames(fetchI18nJa), loadSetDex(fetchDexJson)]);
+        const [, pool] = await Promise.all([loadEngine(), fetchBeliefPool(), loadJaNames(fetchI18nJa), loadSetDex(fetchDexJson)]);
         if (!alive.current) return;
         setPoolJson(pool.poolJson);
         setReady(true);

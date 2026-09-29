@@ -11,14 +11,12 @@ export interface UIStrings {
   settingUp: string;
   // title / start screen
   subtitle: string;
-  openSheetNote: string;
   startBattle: string;
   yourParty: string;
   oppParty: string;
   randomLabel: string;
   randomCard: (n: number) => string;
   chooseYours: string;
-  chooseOpp: string;
   poolSection: string;
   close: string;
   languageLabel: string;
@@ -40,8 +38,6 @@ export interface UIStrings {
   deleteConfirm: string;
   // team preview
   teamPreview: string;
-  foeTeam: (id: string) => string;
-  previewTapHint: string;
   yourTeamPick: string;
   lead: string;
   confirmPicks: string;
@@ -50,7 +46,6 @@ export interface UIStrings {
   overLevelCap: (cap: number) => string;
   overCapChip: (cap: number) => string;
   detailsFor: (species: string) => string;
-  previewFromTable: string;
   previewFromSearch: string;
   // open team sheets (UI-2)
   teamSheets: string;
@@ -87,46 +82,41 @@ export interface UIStrings {
   tie: string;
   rematch: string;
   newTeams: string;
-  // information mode (M18 blind experiment). "open" is the historical mode
-  // and stays the default; "blind" hides both sides' sets symmetrically —
-  // each side gets only the other's six species/levels/types plus the public
-  // battle log, and the opponent is drawn from the pool anew on each battle.
-  // Blind is reached only through `?blind` (info-mode.ts), so open mode
-  // prints none of this — no banner, no note, not the word "blind" anywhere.
+  // blind play hides both sides' sets symmetrically — each side gets only
+  // the other's six species/levels/types plus the public battle log, and
+  // the opponent is drawn anew on each battle.
   //
-  // blindBanner is the entire banner: one line, the only thing a blind player
-  // reads before pressing Start. It used to be a heading over a paragraph and
-  // is now neither, so it has to carry both halves of the deal on its own —
-  // sets hidden both ways, and a random opponent every battle. There is no
-  // second line left to lean on, and the start screen deliberately has no
-  // opponent row to say the second half instead.
-  //
-  // The *Blind keys are drop-in replacements for their open-mode neighbours
-  // (openSheetNote, foeTeam, previewTapHint, sheetNote) — same slot, blind copy.
+  // blindBanner is the entire banner: one line, the only thing a player
+  // reads before pressing Start, so it has to carry both halves of the deal
+  // on its own — sets hidden both ways, and a random opponent every battle.
+  // The start screen deliberately has no opponent row to say the second
+  // half instead. sheetNote is the post-game reveal's note.
   blindBanner: string;
   blindSheetNote: string;
   foeTeamBlind: string;
+  /** Post-game reveal heading: the id names the whole set list. */
+  foeTeam: (id: string) => string;
   previewTapHintBlind: string;
   sheetNoteBlind: string;
   revealFoeTeam: string;
-  // what the bot currently believes the hidden opponent is (blind only):
+  // what the bot currently believes the hidden opponent is:
   // how many pool teams still match what it has seen, or "off-pool" once no
   // pool team can explain the observations and it falls back to imputation.
   beliefChipPool: (n: number) => string;
   beliefChipOff: string;
   priorChip: (n: number, total: number) => string;
-  // the blind start screen's one setup entry: a single button under "Your
-  // party" opening a single modal that holds both panels — team pool on top,
-  // belief prior below. Two buttons and two modals shipped first and the
-  // owner cut them to one, so blind is Start / banner / your party / this and
-  // nothing else. settingsValue is what the button reads at rest: the state
-  // of both panels, so neither has to be opened to be checked.
+  // the start screen's one setup entry: a single button under "Your party"
+  // opening a single modal that holds both panels — team pool on top,
+  // belief prior below. The owner cut two buttons to one, so the screen is
+  // Start / banner / your party / this and nothing else. settingsValue is
+  // what the button reads at rest: the state of both panels, so neither has
+  // to be opened to be checked.
   settingsLabel: string;
   settingsTitle: string;
   settingsValue: (pool: string, prior: string) => string;
-  // META-NASH v1's conclusion mode (`?nash`, info-mode.ts): blind rules, but
-  // the opponent is drawn from the solved three-team mixture and nothing on
-  // the screen is configurable. nashBanner replaces blindBanner in the same
+  // the conclusion mode (`?nash`, info-mode.ts): blind rules, but the
+  // opponent is drawn from the solved mixture and nothing on the screen is
+  // configurable. nashBanner replaces blindBanner in the same
   // one-line slot; it has to say what blind's says (sets hidden both ways,
   // new opponent every battle) AND why the opponent row below it is now
   // worth opening. The mixture's weights are shown, deliberately: the claim
@@ -153,13 +143,10 @@ export interface UIStrings {
   priorNotApplied: string;
   priorWarnings: string;
   priorLoadFailed: (why: string) => string;
-  // swappable team pool: under blind mode one file replaces the bot's draw
-  // and the human team list, while the bot's picture of possible opponents
-  // stays the shipped prior — poolHelp has to say both halves, or the swap
-  // looks like it also rewires the belief. The panel lives inside the blind
-  // setup modal and is unreachable from open mode, which is pinned to the
-  // bundled pool; so poolHelp names blind outright (it is the only mode that
-  // can see this text) and says open ignores the file.
+  // swappable team pool: one file replaces the bot's draw and the human
+  // team list, while the bot's picture of possible opponents stays the
+  // shipped prior — poolHelp has to say both halves, or the swap looks like
+  // it also rewires the belief.
   poolLabel: string;
   poolBundled: (n: number) => string;
   poolLoaded: (name: string, n: number) => string;
@@ -324,18 +311,13 @@ const EN: UIStrings = {
   failedLoad: "Failed to load",
   settingUp: "Setting up battle…",
   subtitle: "Gen 2 · human vs bot",
-  openSheetNote:
-    "Open team sheet: the bot sees your sets, and you can read its sets " +
-    "in the team list — neither side sees which 3 the other picks until " +
-    "they're revealed in battle.",
   startBattle: "Start battle",
   yourParty: "Your party",
   oppParty: "Opponent's party",
   randomLabel: "Random",
-  randomCard: (n) => `Random from pool (${n} teams)`,
+  randomCard: (n) => `Random (${n} ${n === 1 ? "party" : "parties"})`,
   chooseYours: "Choose your team",
-  chooseOpp: "Choose the opponent's team",
-  poolSection: "Meta pool teams",
+  poolSection: "Built-in parties",
   close: "Close",
   languageLabel: "Language",
   customBadge: "custom",
@@ -359,9 +341,6 @@ const EN: UIStrings = {
   deleteTeam: "Delete",
   deleteConfirm: "Delete?",
   teamPreview: "Team preview",
-  foeTeam: (id) => `Foe team (${id})`,
-  previewTapHint:
-    "Open team sheet — tap a foe Pokémon for its full set; on your side the ▸ button opens it.",
   yourTeamPick: "Your team — pick 3, lead first",
   lead: "Lead",
   confirmPicks: "Confirm picks",
@@ -370,13 +349,10 @@ const EN: UIStrings = {
   overLevelCap: (cap) => `Over the total-level cap of ${cap}`,
   overCapChip: (cap) => `>${cap}`,
   detailsFor: (s) => `${s} — details`,
-  previewFromTable: "Opponent picks from the baked equilibrium table",
-  previewFromSearch: "Opponent picks by live search (matchup not baked yet)",
+  previewFromSearch: "Opponent picks by live search",
   teamSheets: "Team sheets",
   yourTeam: (id) => `Your team (${id})`,
-  sheetNote:
-    "Both full teams are open information. Which 3 the opponent picked " +
-    "stays hidden until each Pokémon appears in battle.",
+  sheetNote: "The game is over — both full teams are shown.",
   sheetItem: "Item",
   sheetNoItem: "No item",
   sheetGender: "Gender",
@@ -413,6 +389,7 @@ const EN: UIStrings = {
     "species, levels and types and nothing more — exactly what you get " +
     "from it.",
   foeTeamBlind: "Opponent's party",
+  foeTeam: (id) => `Opponent's party (${id})`,
   previewTapHintBlind:
     "Blind — only species, level and types are public on the foe side; on your side the ▸ button opens your own sets.",
   sheetNoteBlind:
@@ -423,8 +400,8 @@ const EN: UIStrings = {
     `bot's read: ${n} ${n === 1 ? "candidate" : "candidates"}`,
   beliefChipOff: "bot's read: off-pool",
   priorChip: (n, total) => `prior: ${n}/${total}`,
-  settingsLabel: "Blind setup",
-  settingsTitle: "Blind setup",
+  settingsLabel: "Setup",
+  settingsTitle: "Setup",
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
   nashBanner:
     "The solved mixture — neither side sees the other's sets; each battle " +
@@ -441,8 +418,8 @@ const EN: UIStrings = {
   priorNone: "None",
   priorHelp:
     "A distribution table the bot uses to fill in an opponent's unknown " +
-    "sets. It only bites in blind mode against a team the bot cannot " +
-    "identify — in practice, when you play a custom team.",
+    "sets. It only bites against a team the bot cannot identify — in " +
+    "practice, when you play a custom team.",
   priorPick: "Choose a table file…",
   priorSample: "Load the sample table",
   priorClear: "Clear",
@@ -454,27 +431,26 @@ const EN: UIStrings = {
   priorWarnings: "Warnings",
   priorLoadFailed: (why) => `Could not load that table — ${why}`,
   poolLabel: "Team pool",
-  poolBundled: (n) => `Bundled (${n} ${n === 1 ? "team" : "teams"})`,
+  poolBundled: (n) => `Built-in (${n} ${n === 1 ? "party" : "parties"})`,
   poolLoaded: (name, n) => `${name} (${n} ${n === 1 ? "team" : "teams"})`,
   poolHelp:
-    "In blind mode a pool file replaces the teams the opponent is drawn " +
-    "from and your own team list on this screen. The bot's picture of what " +
-    "you might bring stays the shipped set of known teams. Without ?blind " +
-    "the page always plays the bundled pool and ignores this file. " +
+    "A pool file replaces the parties the opponent is drawn from (uniformly) " +
+    "and your own list on this screen. The bot's picture of what you might " +
+    "bring stays the shipped set of known teams. " +
     "Same JSON as the " +
-    "bundled pool — {\"teams\": [{\"id\": …, \"sets\": […]}]} is the minimum, " +
+    "built-in list — {\"teams\": [{\"id\": …, \"sets\": […]}]} is the minimum, " +
     "a bare array of teams also reads, and id / tier / rank are filled in " +
     "when missing. Every team is exactly 6 Pokémon and is checked against " +
     "this format's rules; if a single team cannot play, the whole file is " +
     "refused.",
   poolPick: "Choose a pool file…",
-  poolReset: "Use the bundled pool",
+  poolReset: "Use the built-in parties",
   poolAccepted: (n) => `${n} ${n === 1 ? "team" : "teams"} accepted`,
   poolRejected: "Rejected — nothing was changed",
   poolMore: (n) => `…and ${n} more`,
   poolNotStored: (why) =>
     `Loaded for this session, but not saved — ${why}. After a reload you are ` +
-    `back on the bundled pool.`,
+    `back on the built-in parties.`,
   poolErrTooLarge: (bytes, limit) =>
     `Pool is ${fileSize(bytes)} — the limit is ${fileSize(limit)}.`,
   poolErrTooManyTeams: (n, limit) =>
@@ -612,18 +588,13 @@ const JA: UIStrings = {
   failedLoad: "読み込みに失敗しました",
   settingUp: "対戦を準備中…",
   subtitle: "第2世代 · 人間 vs ボット",
-  openSheetNote:
-    "オープンチームシート: ボットはあなたの構成(技・持ち物)を知って" +
-    "おり、あなたもチーム一覧でボットの構成を読めます。どちらの側も、" +
-    "相手がどの3体を選出したかは対戦中に明かされるまで見えません。",
   startBattle: "対戦開始",
   yourParty: "自分のパーティ",
   oppParty: "相手のパーティ",
   randomLabel: "ランダム",
-  randomCard: (n) => `プールからランダム(全${n}チーム)`,
+  randomCard: (n) => `ランダム(全${n}パーティ)`,
   chooseYours: "自分のチームを選ぶ",
-  chooseOpp: "相手のチームを選ぶ",
-  poolSection: "メタプールのチーム",
+  poolSection: "標準パーティ",
   close: "閉じる",
   languageLabel: "言語",
   customBadge: "カスタム",
@@ -646,9 +617,6 @@ const JA: UIStrings = {
   deleteTeam: "削除",
   deleteConfirm: "削除する?",
   teamPreview: "選出(見せ合い)",
-  foeTeam: (id) => `相手のチーム(${id})`,
-  previewTapHint:
-    "オープンチームシート — 相手のポケモンはタップで構成を確認、自分の側は ▸ ボタンで開けます。",
   yourTeamPick: "自分のチーム — 3体選ぶ(1体目が先発)",
   lead: "先発",
   confirmPicks: "選出を確定",
@@ -657,13 +625,10 @@ const JA: UIStrings = {
   overLevelCap: (cap) => `合計レベルが${cap}を超えるため選べません`,
   overCapChip: () => "超過",
   detailsFor: (s) => `${s}の詳細`,
-  previewFromTable: "相手の選出: 事前計算した均衡テーブル",
-  previewFromSearch: "相手の選出: ライブ探索(この組み合わせは未計算)",
+  previewFromSearch: "相手の選出: ライブ探索",
   teamSheets: "チームシート",
   yourTeam: (id) => `自分のチーム(${id})`,
-  sheetNote:
-    "両チームの構成は公開情報です。相手がどの3体を選出したかは、その" +
-    "ポケモンが場に出るまで分かりません。",
+  sheetNote: "対戦終了 — 両チームの構成をすべて表示しています。",
   sheetItem: "持ち物",
   sheetNoItem: "なし",
   sheetGender: "性別",
@@ -700,6 +665,7 @@ const JA: UIStrings = {
     "ブラインド: 互いの構成は非公開です。ボットに渡るのもあなたの6体の" +
     "種族・レベル・タイプだけで、条件は同じです。",
   foeTeamBlind: "相手のパーティ",
+  foeTeam: (id) => `相手のパーティ(${id})`,
   previewTapHintBlind:
     "ブラインド — 相手側は種族・レベル・タイプのみ公開です。自分の側は ▸ ボタンで構成を開けます。",
   sheetNoteBlind:
@@ -709,8 +675,8 @@ const JA: UIStrings = {
   beliefChipPool: (n) => `ボットの読み: 候補${n}`,
   beliefChipOff: "ボットの読み: プール外",
   priorChip: (n, total) => `事前分布: ${n}/${total}`,
-  settingsLabel: "ブラインド設定",
-  settingsTitle: "ブラインド設定",
+  settingsLabel: "設定",
+  settingsTitle: "設定",
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
   nashBanner:
     "結論の混合戦略 — 互いの構成(技・持ち物)は非公開。ボットは毎回、下の" +
@@ -727,9 +693,8 @@ const JA: UIStrings = {
   priorNone: "なし",
   priorHelp:
     "相手の構成が読めないときに、どの技・持ち物がどれくらい出やすいか" +
-    "を埋めるための分布表です。効くのはブラインドで、かつボットが相手" +
-    "チームを特定できないとき — つまりあなたがカスタムチームを使うとき" +
-    "だけです。",
+    "を埋めるための分布表です。効くのはボットが相手チームを特定できない" +
+    "とき — つまりあなたがカスタムチームを使うときだけです。",
   priorPick: "表ファイルを選ぶ…",
   priorSample: "サンプル表を読み込む",
   priorClear: "クリア",
@@ -741,26 +706,25 @@ const JA: UIStrings = {
   priorWarnings: "警告",
   priorLoadFailed: (why) => `表を読み込めませんでした — ${why}`,
   poolLabel: "チームプール",
-  poolBundled: (n) => `同梱(${n}チーム)`,
+  poolBundled: (n) => `標準(${n}パーティ)`,
   poolLoaded: (name, n) => `${name}(${n}チーム)`,
   poolHelp:
-    "ブラインドでは、相手チームの抽選元とこの画面の自分のチーム一覧が" +
+    "相手チームの抽選元(一様に抽選)とこの画面の自分のチーム一覧が" +
     "このファイルに置き換わります。あなたのチームを推測するためにボットが" +
-    "使う既知チームの一覧は、同梱のまま変わりません。?blind の付かない" +
-    "通常の画面は常に同梱プールで対戦し、このファイルを見ません。形式は" +
-    "同梱プールと同じ JSON " +
+    "使う既知チームの一覧は、標準のまま変わりません。形式は" +
+    "標準パーティと同じ JSON " +
     "で、{\"teams\": [{\"id\": …, \"sets\": […]}]} が最小。チームだけの配列" +
     "でも読めます(id・tier・rank は無ければこちらで補います)。各チーム" +
     "はちょうど6体で、この形式のルールに照らして検査し、対戦できない" +
     "チームが1つでもあればファイル全体を拒否します。",
   poolPick: "プールのファイルを選ぶ…",
-  poolReset: "同梱プールに戻す",
+  poolReset: "標準パーティに戻す",
   poolAccepted: (n) => `${n}チームを読み込みました`,
   poolRejected: "拒否しました — プールは元のままです",
   poolMore: (n) => `他${n}件`,
   poolNotStored: (why) =>
     `このセッションでは使えますが、保存できませんでした — ${why}。` +
-    `再読み込みすると同梱プールに戻ります。`,
+    `再読み込みすると標準パーティに戻ります。`,
   poolErrTooLarge: (bytes, limit) =>
     `プールが${fileSize(bytes)}あります — 上限は${fileSize(limit)}です。`,
   poolErrTooManyTeams: (n, limit) =>

@@ -1,57 +1,36 @@
-// Start screen (UI-1): a minimal centered column — Start battle / Your
-// party / Opponent's party. Both parties default to random-from-pool, so
-// one tap on Start begins a game; a party button opens a modal with the
-// full selection content (pool team list with rank/provenance/species,
-// the shared M14 custom-team import/pick for either side). Pinned choices
-// persist in localStorage by team id. The language selector is an
-// unobtrusive corner dropdown. (The device benchmark — a dev instrument
-// for the M9 think-time gate — was removed from the product UI in UI-2.)
+// Start screen: a minimal centered column — Start battle, a one-line
+// banner naming the rules in force, Your party, and the setup button. Your
+// party defaults to Random, so one tap on Start begins a game; the party
+// button opens a modal with the catalog (the built-in parties, the same ids
+// and exact sets the bot draws from) and the shared M14 custom-team
+// import/pick. A pinned choice persists in localStorage by team id. The
+// language selector is an unobtrusive corner dropdown.
 //
-// Open team sheet (M12): the bot's sets are readable in the party modal,
-// and the bot receives the human's exact sets — a single information
-// policy for pool and custom teams alike. Only picks stay hidden.
+// Every game is blind (info-mode.ts): neither side sees the other's sets,
+// and the opponent is drawn at start and redrawn on rematch — there is
+// nothing to choose, and the banner says so, so there is no opponent row.
+// Both Random draws come from app.tsx, which owns the rule: the catalog's
+// draw weights, or uniform over a pool file the user loaded.
 //
-// Information mode (M18): blind is entered only through `?blind`
-// (info-mode.ts), so this screen has no switch for it. In open mode the
-// screen is the M12 screen exactly — title, Start, Your party, Opponent's
-// party, and not one word about modes, pools or priors. That is the point:
-// a visitor who arrived without the link must not be able to tell from this
-// screen that the experiment exists, so every element below is gated on
-// blind rather than merely defaulted to something harmless.
+// Setup is a single modal, not two buttons: the team pool and the belief
+// prior are the same question asked twice — which teams the bot may be
+// facing, and what it assumes about a team it cannot identify. Inside, each
+// half keeps its own heading, controls and report box: someone who just
+// loaded a pool file must not read the prior's verdict as a verdict on
+// their file.
 //
-// Blind changes it in three places: a one-line banner names the policy in
-// force, the opponent row disappears entirely (the foe is drawn from the
-// pool at start and redrawn on rematch — there is nothing to choose, and
-// the banner already says so, so an inert row would only add furniture),
-// and one `Blind setup` button appears.
-//
-// Blind setup is a single modal, not two buttons: the team pool and the
-// belief prior are the same question asked twice — which teams the bot may
-// be facing, and what it assumes about a team it cannot identify. Neither
-// has any effect outside blind (app.tsx pins the bundled pool in open, and
-// a searcher that already knows the foe's sets refuses a prior outright),
-// so both belong behind the one blind-only door. Inside, each half keeps
-// its own heading, controls and report box: someone who just loaded a pool
-// file must not read the prior's verdict as a verdict on their file.
-//
-// Nash (`?nash`) is blind with the two halves swapped over. Blind setup is
-// gone — the mode ships exactly one configuration, so there is nothing to
-// press — and the opponent row comes BACK, because in nash there is finally
-// something true to say in it: the foe is drawn from a known three-team
-// mixture with known probabilities. The row is a readout that opens a
-// read-only panel, never a picker. Showing the mixture is not a leak and is
-// most of the point: an equilibrium is a strategy that survives the
-// opponent knowing it, so the demonstration is stronger with the
-// distribution on the screen than hidden behind it. What stays hidden is
-// what blind always hides — which of the three was drawn this battle, and
-// every set in it, until the game ends.
+// Nash (`?nash`) swaps the halves over. Setup is gone — the mode ships
+// exactly one configuration, so there is nothing to press — and an opponent
+// row comes back as a readout of the solved mixture that opens a read-only
+// panel, never a picker. Showing the mixture is not a leak and is most of
+// the point: an equilibrium is a strategy that survives the opponent knowing
+// it. What stays hidden is what blind always hides — which party was drawn
+// this battle, and every set in it, until the game ends.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { MetaPool, PoolTeam, PriorReport } from "./types";
 import type { SelectedTeam } from "./app";
-import { randomPoolTeam } from "./pool-pick";
 import type { NashMix, NashTeam } from "./nash-mix";
-import type { InfoMode } from "./info-mode";
 import {
   clearStoredPool,
   parsePoolText,
@@ -96,7 +75,7 @@ function TeamCard(props: {
   // usually carries neither (team-pool.ts defaults them to "" and {}). The
   // tier pill is a bordered box, so rendering it empty draws a stray blank
   // chip on every card; the provenance line just eats its margins. Both are
-  // dropped rather than rendered hollow — the bundled pool always fills
+  // dropped rather than rendered hollow — the catalog always fills
   // them, so this only shows on a swapped pool.
   const prov = provenanceLine(team);
   return (
@@ -350,7 +329,6 @@ type PartyChoice =
   | { kind: "custom"; id: string };
 interface Picks {
   human: PartyChoice;
-  bot: PartyChoice;
 }
 
 const PICKS_KEY = "nc2000-start-picks";
@@ -359,7 +337,7 @@ const RANDOM = { kind: "random" } as const;
 /** Load the pinned party choices; anything stale (pool id gone after a
  * pool update, custom deleted elsewhere) falls back to random. */
 function loadPicks(pool: MetaPool, customs: CustomTeam[]): Picks {
-  const picks: Picks = { human: RANDOM, bot: RANDOM };
+  const picks: Picks = { human: RANDOM };
   try {
     const raw = localStorage.getItem(PICKS_KEY);
     if (!raw) return picks;
@@ -370,13 +348,6 @@ function loadPicks(pool: MetaPool, customs: CustomTeam[]): Picks {
       (h?.kind === "custom" && customs.some((t) => t.id === h.id))
     ) {
       picks.human = h;
-    }
-    const b = p.bot;
-    if (
-      (b?.kind === "pool" && pool.teams.some((t) => t.id === b.id)) ||
-      (b?.kind === "custom" && customs.some((t) => t.id === b.id))
-    ) {
-      picks.bot = b;
     }
   } catch {
     /* storage unavailable / corrupt: defaults stand */
@@ -446,68 +417,16 @@ function CustomTeamSection(props: {
  * customs (import/delete) keeps it open. */
 function HumanPicker(props: {
   teams: PoolTeam[];
-  choice: PartyChoice;
-  onPick: (c: PartyChoice) => void;
-  customs: CustomTeam[];
-  onCustomsChange: (list: CustomTeam[], picked?: CustomTeam) => void;
-  mode: InfoMode;
-}) {
-  const { teams, choice, customs } = props;
-  return (
-    <>
-      {/* The note states what the choice costs in information: in open mode
-       * the bot reads the sets you pick here, in blind mode it does not. */}
-      <p class="modal-note">
-        {props.mode === "blind" ? ui().blindSheetNote : ui().openSheetNote}
-      </p>
-      <button
-        class={`team-card random-card ${choice.kind === "random" ? "selected" : ""}`}
-        aria-pressed={choice.kind === "random"}
-        onClick={() => props.onPick(RANDOM)}
-      >
-        {ui().randomCard(teams.length)}
-      </button>
-      <CustomTeamSection
-        choice={choice}
-        onPick={props.onPick}
-        customs={customs}
-        onCustomsChange={props.onCustomsChange}
-      />
-      <h3>{ui().poolSection}</h3>
-      <div class="team-list">
-        {teams.map((t, i) => (
-          <TeamCard
-            key={t.id}
-            team={t}
-            index={i}
-            selected={choice.kind === "pool" && choice.id === t.id}
-            onTap={() => props.onPick({ kind: "pool", id: t.id })}
-          />
-        ))}
-      </div>
-    </>
-  );
-}
-
-/** Opponent party picker: the same saved custom parties are available as
- * for the human side. Import/delete stays shared through localStorage. */
-function BotPicker(props: {
-  teams: PoolTeam[];
   drawCount: number;
   choice: PartyChoice;
   onPick: (c: PartyChoice) => void;
   customs: CustomTeam[];
   onCustomsChange: (list: CustomTeam[], picked?: CustomTeam) => void;
-  mode: InfoMode;
 }) {
-  const { teams, choice } = props;
+  const { teams, choice, customs } = props;
   return (
     <>
-      {/* Blind never opens this modal (the opponent button is not rendered),
-       * but the branch is kept so the note can never contradict the mode. */}
-      <p class="modal-note">
-        {props.mode === "blind" ? ui().blindSheetNote : ui().openSheetNote}
-      </p>
+      <p class="modal-note">{ui().blindSheetNote}</p>
       <button
         class={`team-card random-card ${choice.kind === "random" ? "selected" : ""}`}
         aria-pressed={choice.kind === "random"}
@@ -518,7 +437,7 @@ function BotPicker(props: {
       <CustomTeamSection
         choice={choice}
         onPick={props.onPick}
-        customs={props.customs}
+        customs={customs}
         onCustomsChange={props.onCustomsChange}
       />
       <h3>{ui().poolSection}</h3>
@@ -702,7 +621,7 @@ type PoolResult =
   | { ok: false; errors: string[] };
 
 /** Team-pool panel (the first half of the Blind setup modal): load a pool
- * file, or go back to the bundled pool.
+ * file, or go back to the catalog.
  *
  * Adoption is all-or-nothing — parsePoolText validates every team before
  * anything is installed, so a refused file leaves the running pool exactly
@@ -712,7 +631,7 @@ type PoolResult =
  * gets to play it this session and is told it will not survive a reload. */
 function PoolPanel(props: {
   loaded: LoadedPool;
-  bundled: LoadedPool;
+  catalog: LoadedPool;
   onPool: (p: LoadedPool) => void;
 }) {
   const [result, setResult] = useState<PoolResult | null>(null);
@@ -768,7 +687,7 @@ function PoolPanel(props: {
           disabled={props.loaded.name === null}
           onClick={() => {
             clearStoredPool();
-            props.onPool(props.bundled);
+            props.onPool(props.catalog);
             setResult(null);
           }}
         >
@@ -813,7 +732,7 @@ function PoolPanel(props: {
  * what keep that misreading off the screen. */
 function SetupPanel(props: {
   loaded: LoadedPool;
-  bundled: LoadedPool;
+  catalog: LoadedPool;
   onPool: (p: LoadedPool) => void;
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
@@ -824,7 +743,7 @@ function SetupPanel(props: {
         <h3>{ui().poolLabel}</h3>
         <PoolPanel
           loaded={props.loaded}
-          bundled={props.bundled}
+          catalog={props.catalog}
           onPool={props.onPool}
         />
       </section>
@@ -839,25 +758,25 @@ function SetupPanel(props: {
 // ---------------------------------------------------------- start screen
 
 export function StartScreen(props: {
-  /** The pool in play. */
+  /** The lists in play: the catalog, or a pool file the user loaded. */
   loadedPool: LoadedPool;
-  /** The bundled pool, held by app.tsx so the reset button has something to
+  /** The catalog, held by app.tsx so the reset button has something to
    * install without going back to the network. */
-  bundledPool: LoadedPool;
+  catalogPool: LoadedPool;
   onPool: (p: LoadedPool) => void;
   locale: Locale;
   onLocale: (l: Locale) => void;
-  mode: InfoMode;
-  /** `?nash`: blind rules, fixed opponent mixture, no setup. */
+  /** `?nash`: fixed opponent mixture, no setup. */
   nash: boolean;
   /** The mixture itself, for the read-only opponent panel. Non-null
    * whenever `nash` is (app.tsx fails the page otherwise). */
   nashMix: NashMix | null;
-  /** The opponent draw for blind and nash alike, owned by app.tsx so that
-   * pressing Start and taking a rematch roll by the same rule. */
+  /** The bot's draw, owned by app.tsx so that pressing Start and taking a
+   * rematch roll by the same rule. */
   drawOpponent: () => SelectedTeam;
-  /** How many teams the bot's "Random" draws from (the own-team pool, or a
-   * loaded pool file). */
+  /** The human's "Random", drawn by the same rule from the same lists. */
+  drawHuman: () => SelectedTeam;
+  /** How many teams the lists hold. */
   botDrawCount: number;
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
@@ -865,25 +784,22 @@ export function StartScreen(props: {
 }) {
   const pool = props.loadedPool.pool;
   const teams = pool.teams;
-  const blind = props.mode === "blind";
   const nash = props.nash;
   const [customs, setCustoms] = useState<CustomTeam[]>(loadCustomTeams);
   const [picks, setPicks] = useState<Picks>(() =>
     loadPicks(pool, loadCustomTeams()),
   );
-  // "settings" is unreachable in open mode: the only thing that sets it is
-  // the blind-only button below.
-  const [modal, setModal] = useState<
-    null | "human" | "bot" | "settings" | "mix"
-  >(null);
+  const [modal, setModal] = useState<null | "human" | "settings" | "mix">(
+    null,
+  );
 
-  // A pool swap invalidates the pinned picks: an id from the old pool is
-  // either absent from the new one — the button would name a team that no
+  // A pool swap invalidates the pinned pick: an id from the old lists is
+  // either absent from the new ones — the button would name a team that no
   // longer exists, and start() would quietly draw a random one instead — or
-  // it names a different team's slot. Re-running loadPicks is the same
+  // it names a different team. Re-running loadPicks is the same
   // reconciliation the first mount does, so a pin survives exactly when the
-  // new pool has that id. (Remounting the whole screen would do it too, but
-  // it would tear down the modal that is showing the load report.)
+  // new lists have that id. (Remounting the whole screen would do it too,
+  // but it would tear down the modal that is showing the load report.)
   // Identity, not name: two files can share a name and hold different
   // teams, and app.tsx only ever hands over a new object when the pool
   // actually changed.
@@ -900,80 +816,39 @@ export function StartScreen(props: {
     storePicks(next);
   }
 
-  const poolIdx = (id: string) => teams.findIndex((t) => t.id === id);
   const humanChoice = picks.human;
-  const botChoice = picks.bot;
   const pickedCustom =
     humanChoice.kind === "custom"
       ? customs.find((t) => t.id === humanChoice.id) ?? null
       : null;
-  const pickedBotCustom =
-    botChoice.kind === "custom"
-      ? customs.find((t) => t.id === botChoice.id) ?? null
-      : null;
 
   const humanValue =
-    picks.human.kind === "random"
+    humanChoice.kind === "random"
       ? ui().randomLabel
-      : picks.human.kind === "pool"
-        ? picks.human.id
+      : humanChoice.kind === "pool"
+        ? humanChoice.id
         : (pickedCustom?.name ?? ui().randomLabel);
-  const botValue =
-    botChoice.kind === "random"
-      ? ui().randomLabel
-      : botChoice.kind === "pool"
-        ? botChoice.id
-        : (pickedBotCustom?.name ?? ui().randomLabel);
 
-  function selectedTeam(choice: PartyChoice, side: "human" | "bot"): SelectedTeam {
-    if (choice.kind === "custom") {
-      const custom = customs.find((t) => t.id === choice.id);
-      if (custom)
-        return { id: custom.name, sets: custom.sets, poolIdx: null };
-    }
+  function humanTeam(): SelectedTeam {
+    if (humanChoice.kind === "custom" && pickedCustom)
+      return { id: pickedCustom.name, sets: pickedCustom.sets, poolIdx: null };
+    const pinned =
+      humanChoice.kind === "pool"
+        ? teams.find((t) => t.id === humanChoice.id)
+        : undefined;
     // Random is resolved here, at start: a fresh roll every game unless
-    // the user pinned a pool team. The human's roll is uniform over the
-    // lists; the bot's is app.tsx's `drawOpponent`, shared with the blind
-    // rematch so every bot draw follows exactly one rule.
-    const pinned = choice.kind === "pool" ? poolIdx(choice.id) : -1;
-    if (pinned < 0) return side === "bot" ? props.drawOpponent() : randomPoolTeam(pool);
-    return { id: teams[pinned].id, sets: teams[pinned].sets, poolIdx: pinned };
+    // the user pinned a team.
+    if (!pinned) return props.drawHuman();
+    return { id: pinned.id, sets: pinned.sets, poolIdx: null };
   }
 
-  function customsChanged(
-    side: "human" | "bot",
-    list: CustomTeam[],
-    picked?: CustomTeam,
-  ) {
+  function customsChanged(list: CustomTeam[], picked?: CustomTeam) {
     setCustoms(list);
     let human = picks.human;
-    let bot = picks.bot;
-    if (picked) {
-      const choice = { kind: "custom", id: picked.id } as const;
-      if (side === "human") human = choice;
-      else bot = choice;
-    }
-    // One saved team may be pinned on both sides. Deleting it invalidates
-    // both choices atomically; an in-progress Game already owns snapshots.
-    const humanCustomId = human.kind === "custom" ? human.id : null;
-    const botCustomId = bot.kind === "custom" ? bot.id : null;
-    if (humanCustomId && !list.some((t) => t.id === humanCustomId))
-      human = RANDOM;
-    if (botCustomId && !list.some((t) => t.id === botCustomId))
-      bot = RANDOM;
-    if (human !== picks.human || bot !== picks.bot) update({ human, bot });
-  }
-
-  function start() {
-    // Blind ignores the pinned opponent entirely: a foe you chose is a foe
-    // whose sets you know, which is precisely the information the mode
-    // withholds. The pin is kept in storage, unread, for the way back to
-    // open mode. Nash goes down the same branch and lands on the same
-    // `drawOpponent` — uniform-from-pool there, the solved mixture here.
-    props.onStart(
-      selectedTeam(picks.human, "human"),
-      blind ? props.drawOpponent() : selectedTeam(picks.bot, "bot"),
-    );
+    if (picked) human = { kind: "custom", id: picked.id };
+    const customId = human.kind === "custom" ? human.id : null;
+    if (customId && !list.some((t) => t.id === customId)) human = RANDOM;
+    if (human !== picks.human) update({ human });
   }
 
   return (
@@ -993,20 +868,19 @@ export function StartScreen(props: {
       <main class="start-col">
         <h1 class="start-title">NC2000</h1>
         <div class="start-subtitle">{ui().subtitle}</div>
-        <button class="primary start-main-btn" onClick={start}>
+        <button
+          class="primary start-main-btn"
+          onClick={() => props.onStart(humanTeam(), props.drawOpponent())}
+        >
           {ui().startBattle}
         </button>
-        {blind && (
-          // A readout, not a control: `?blind` is the only way in or out
-          // (info-mode.ts), so there is nothing here to press. One line,
-          // because it has exactly two things to say — sets are hidden both
-          // ways, and the opponent is redrawn each battle — and the second
-          // of them is why no opponent row follows. Open mode renders
-          // nothing at all in this slot: no note, no empty row.
-          <p class="mode-banner" data-testid="mode-banner">
-            {nash ? ui().nashBanner : ui().blindBanner}
-          </p>
-        )}
+        {/* A readout, not a control. One line, because it has exactly two
+            things to say — sets are hidden both ways, and the opponent is
+            redrawn each battle — and the second of them is why no opponent
+            picker follows. */}
+        <p class="mode-banner" data-testid="mode-banner">
+          {nash ? ui().nashBanner : ui().blindBanner}
+        </p>
         <button
           class="party-btn"
           data-party="human"
@@ -1015,27 +889,12 @@ export function StartScreen(props: {
           <span class="party-label">{ui().yourParty}</span>
           <span class="party-value">{humanValue}</span>
         </button>
-        {!blind && (
-          // Blind has no opponent row at all — not even an inert one. The
-          // foe is drawn at start and redrawn on every rematch, which the
-          // banner states; a greyed row saying the same thing again would
-          // be the only piece of furniture on the screen that does nothing.
-          <button
-            class="party-btn"
-            data-party="bot"
-            onClick={() => setModal("bot")}
-          >
-            <span class="party-label">{ui().oppParty}</span>
-            <span class="party-value">{botValue}</span>
-          </button>
-        )}
         {nash && props.nashMix && (
           // Nash's opponent row is a readout of the distribution, not a
           // picker: there is nothing to choose, but there IS something to
-          // read, which is exactly what blind's deleted row lacked. Its
-          // value line carries the whole distribution, so the panel is for
-          // seeing which six species each arm brings, not for learning the
-          // odds.
+          // read. Its value line carries the whole distribution, so the
+          // panel is for seeing which six species each arm brings, not for
+          // learning the odds.
           <button
             class="party-btn"
             data-party="nash"
@@ -1047,12 +906,11 @@ export function StartScreen(props: {
             </span>
           </button>
         )}
-        {blind && !nash && (
-          // The experiment's one door. Its value line reports both halves so
-          // the usual answer — bundled pool, no prior — is readable without
-          // opening anything; .party-value wraps rather than truncates, so
-          // a long file name pushes the prior onto a second line instead of
-          // hiding it.
+        {!nash && (
+          // Its value line reports both halves so the usual answer — the
+          // catalog, no prior — is readable without opening anything;
+          // .party-value wraps rather than truncates, so a long file name
+          // pushes the prior onto a second line instead of hiding it.
           <button
             class="party-btn"
             data-party="settings"
@@ -1075,36 +933,16 @@ export function StartScreen(props: {
         <Modal title={ui().chooseYours} onClose={() => setModal(null)}>
           <HumanPicker
             teams={teams}
+            drawCount={props.botDrawCount}
             choice={picks.human}
             onPick={(c) => {
-              update({ ...picks, human: c });
+              update({ human: c });
               setModal(null);
             }}
             customs={customs}
-            onCustomsChange={(list, picked) => {
-              // Fresh import is pinned to the side whose modal owns the
-              // panel; the modal stays open so applied fixes remain visible.
-              customsChanged("human", list, picked);
-            }}
-            mode={props.mode}
-          />
-        </Modal>
-      )}
-      {modal === "bot" && (
-        <Modal title={ui().chooseOpp} onClose={() => setModal(null)}>
-          <BotPicker
-            teams={teams}
-            drawCount={props.botDrawCount}
-            choice={picks.bot}
-            onPick={(c) => {
-              update({ ...picks, bot: c });
-              setModal(null);
-            }}
-            customs={customs}
-            onCustomsChange={(list, picked) =>
-              customsChanged("bot", list, picked)
-            }
-            mode={props.mode}
+            // A fresh import is pinned; the modal stays open so applied
+            // fixes remain visible.
+            onCustomsChange={customsChanged}
           />
         </Modal>
       )}
@@ -1117,7 +955,7 @@ export function StartScreen(props: {
         <Modal title={ui().settingsTitle} onClose={() => setModal(null)}>
           <SetupPanel
             loaded={props.loadedPool}
-            bundled={props.bundledPool}
+            catalog={props.catalogPool}
             onPool={props.onPool}
             prior={props.prior}
             onPrior={props.onPrior}

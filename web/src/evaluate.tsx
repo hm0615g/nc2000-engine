@@ -30,7 +30,7 @@ import {
   sha256,
   type OpponentDraft,
 } from "./evaluate-input";
-import { searchProfile } from "./search-profile";
+import { PRODUCT_ITERATIONS, searchProfile } from "./search-profile";
 import { TeamEditor, type EditorDex } from "./evaluate-team-editor";
 import "./evaluate.css";
 
@@ -115,6 +115,14 @@ function ResultTable({ run }: { run: EvaluationRun }) {
       </table>
     </div>
   );
+}
+
+/** A budget as the page shows it: the product's own budget is named as
+ * such, anything else is marked as a quick run. */
+function budgetLabel(n: number): string {
+  return n === PRODUCT_ITERATIONS
+    ? `${n.toLocaleString()}回(実際のボットと同じ)`
+    : `${n.toLocaleString()}回(簡易計測)`;
 }
 
 export function Evaluate() {
@@ -361,7 +369,7 @@ export function Evaluate() {
                 <option key={r.id} value={r.id}>
                   {r.createdAt.slice(0, 16).replace("T", " ")} UTC ·{" "}
                   {r.pairs.length * 2}戦 ·{" "}
-                  {r.config.iterations.toLocaleString()}回
+                  {budgetLabel(r.config.iterations)}
                 </option>
               ))}
             </select>
@@ -507,15 +515,13 @@ export function Evaluate() {
                 value={iterations}
                 onChange={(e) => setIterations(Number(e.currentTarget.value))}
               >
-                {[3000, 10000, 27000].map((n) => (
+                {[3000, 10000, PRODUCT_ITERATIONS].map((n) => (
                   <option key={n} value={n}>
-                    {n.toLocaleString()}回
+                    {budgetLabel(n)}
                   </option>
                 ))}
-                {![3000, 10000, 27000].includes(iterations) && (
-                  <option value={iterations}>
-                    {iterations.toLocaleString()}回
-                  </option>
+                {![3000, 10000, PRODUCT_ITERATIONS].includes(iterations) && (
+                  <option value={iterations}>{budgetLabel(iterations)}</option>
                 )}
               </select>
             </label>
@@ -525,11 +531,13 @@ export function Evaluate() {
           )}
           {Number.isFinite(testBudget) && (
             <p class="eval-warning">
-              テストビルド：実際の探索量は{budget}反復です。
+              テストビルド：実際に考える回数は{budget}回です。
             </p>
           )}
           <p class="eval-muted">
-            1手を決めるまでに試す回数です。両方に同じ回数を使い、先後を入れ替えて2戦ずつ対戦します。
+            1手を決めるまでに試す回数です。実際のボットは
+            {PRODUCT_ITERATIONS.toLocaleString()}
+            回で、それより少ない回数は結果を早く見るための簡易計測です。両方に同じ回数を使い、先後を入れ替えて2戦ずつ対戦します。
           </p>
         </section>
       </fieldset>
@@ -571,7 +579,7 @@ export function Evaluate() {
         {run && (
           <p>
             {run.pairs.length * 2} / {run.targetPairs * 2}戦完了 ·{" "}
-            {run.config.iterations.toLocaleString()}回
+            {budgetLabel(run.config.iterations)}
           </p>
         )}
         {run && (

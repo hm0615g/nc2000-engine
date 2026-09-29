@@ -78,13 +78,10 @@ export class BotWorker {
     this.worker.postMessage(m);
   }
 
-  /** Start a game. `searcher.mode` fixes the worker's information policy for
-   * the whole battle: "open" pins the opponent's true sets as the belief —
-   * only the opponent's picks (which 3 + lead) stay hidden to it — while
-   * "blind" leaves it with what the human also sees, and lets
-   * `searcher.priorJson` (raw table text, blind only) govern its fallback
-   * imputation. The prior verdict comes back on `onPriorReport`; the belief
-   * itself streams on `onBelief`. */
+  /** Start a blind game: the bot sees what the human also sees, and
+   * `searcher.priorJson` (raw table text) governs its fallback imputation.
+   * The prior verdict comes back on `onPriorReport`; the belief itself
+   * streams on `onBelief`. */
   async newBattle(
     p1: string,
     p2: string,
@@ -93,7 +90,6 @@ export class BotWorker {
       poolJson: string;
       side: number;
       seed: number;
-      mode: "open" | "blind";
       priorJson?: string;
     },
   ): Promise<void> {
@@ -116,12 +112,6 @@ export class BotWorker {
   ): Promise<void> {
     await this.ready;
     this.send({ t: "fork", fork, seed, searcher });
-  }
-
-  /** Feed one baked pair table for the table preview (call before the
-   * preview search; messages are ordered). */
-  addPair(json: string): void {
-    this.send({ t: "pair", json });
   }
 
   /** Keep the mirror battle in lockstep (same picks, same order). */

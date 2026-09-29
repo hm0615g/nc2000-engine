@@ -9,7 +9,7 @@ const route = `${process.env.NC2000_E2E_BASE ?? "/"}?evaluate`;
  * file the page fetches so the suite follows a re-solved mixture. */
 const nash = JSON.parse(
   readFileSync(
-    new URL("../../data/meta-nash-v2/pool-artifact.json", import.meta.url),
+    new URL("../../data/meta-nash-v3/pool-artifact.json", import.meta.url),
     "utf8",
   ),
 ) as { teams: { id: string; weight: number; sets: unknown[] }[] };
@@ -128,7 +128,7 @@ test("local wasm plays both sides, resumes in memory, separates changed configur
   const replayed = await page.evaluate(
     async ({ url, run, base }) => {
       const beliefJson = await (
-        await fetch(`${base}data/belief-pool-v1/belief-pool.json`)
+        await fetch(`${base}data/belief-pool-v3/belief-pool.json`)
       ).text();
       return new Promise((resolve, reject) => {
         const w = new Worker(url, { type: "module" });
@@ -449,7 +449,11 @@ test("opponent panel shows the mixture's parties and probabilities, with JSON as
   ).toHaveCount(0);
   await expect(
     page.getByLabel("考える回数", { exact: true }).locator("option"),
-  ).toHaveText(["3,000回", "10,000回", "27,000回"]);
+  ).toHaveText([
+    "3,000回(簡易計測)",
+    "10,000回(簡易計測)",
+    "27,000回(実際のボットと同じ)",
+  ]);
   await panel.getByText("技・持ち物を見る", { exact: true }).first().click();
   await expect(
     panel.locator(".eval-opponent-sets").first().locator("strong"),

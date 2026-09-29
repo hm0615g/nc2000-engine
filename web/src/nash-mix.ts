@@ -1,15 +1,15 @@
 // The Nash door's mixture, as the browser plays it: a fixed probability
 // distribution over the solved support, and the draw that samples it.
 //
-// `data/meta-nash-v2/pool-artifact.json` is the shipped end of the rebuild's
-// step 4 (docs/TEAM-POOL-REBUILD-PLAN.md). Its claim is about the MIXTURE,
+// `data/meta-nash-v3/pool-artifact.json` is the shipped end of the rebuild's
+// Nash step (docs/TEAM-POOL-REBUILD-PLAN.md). Its claim is about the MIXTURE,
 // not about any one team, so the draw is the product — a nash game samples
 // it once per battle, independently, and a rematch draws again. Playing the
 // top-weighted team every time would be a different strategy with a
 // different (worse) guarantee.
 //
 // The mixture governs which team the BOT brings. What the bot assumes about
-// the team it is FACING is the shipped opponent prior (belief-pool-v2),
+// the team it is FACING is the shipped opponent prior (belief-pool-v3),
 // which app.tsx hands every blind door alike; the two files are independent
 // by design. The artifact carries its own sets and those are what gets
 // played; pool indices stay null, so no baked table is read against them.

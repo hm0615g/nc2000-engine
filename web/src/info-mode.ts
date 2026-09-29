@@ -1,21 +1,17 @@
+/** The information policy a record was made under. Live play is always
+ * "blind"; "open" names the retired open-sheet mode and survives only so
+ * records made under it (forks, kifu) replay with their own semantics. */
 export type InfoMode = "open" | "blind";
-export type Door = "open" | "blind" | "nash" | "solver" | "evaluate" | "fork";
+/** `play` is `/`; `?blind` is kept as an alias of it. */
+export type Door = "play" | "nash" | "solver" | "evaluate" | "fork";
 
 export function readDoor(search?: string): Door {
   const query = search ?? (typeof location === "undefined" ? "" : location.search);
   const params = new URLSearchParams(query);
-  for (const door of ["fork", "evaluate", "solver", "nash", "blind"] as const) {
+  for (const door of ["fork", "evaluate", "solver", "nash"] as const) {
     if (isOpen(params.get(door))) return door;
   }
-  return "open";
-}
-
-export function infoModeOf(door: Door): InfoMode {
-  return door === "open" ? "open" : "blind";
-}
-
-export function readInfoMode(search?: string): InfoMode {
-  return infoModeOf(readDoor(search));
+  return "play";
 }
 
 function isOpen(v: string | null): boolean {
