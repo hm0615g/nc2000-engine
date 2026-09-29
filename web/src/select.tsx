@@ -831,7 +831,7 @@ export function StartScreen(props: {
 
   function humanTeam(): SelectedTeam {
     if (humanChoice.kind === "custom" && pickedCustom)
-      return { id: pickedCustom.name, sets: pickedCustom.sets, poolIdx: null };
+      return { id: pickedCustom.name, sets: pickedCustom.sets };
     const pinned =
       humanChoice.kind === "pool"
         ? teams.find((t) => t.id === humanChoice.id)
@@ -839,7 +839,7 @@ export function StartScreen(props: {
     // Random is resolved here, at start: a fresh roll every game unless
     // the user pinned a team.
     if (!pinned) return props.drawHuman();
-    return { id: pinned.id, sets: pinned.sets, poolIdx: null };
+    return { id: pinned.id, sets: pinned.sets };
   }
 
   function customsChanged(list: CustomTeam[], picked?: CustomTeam) {

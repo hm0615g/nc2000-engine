@@ -109,8 +109,7 @@ export function parseWeightedTeams(
 }
 
 /** One battle, one draw: a fresh 32-bit CSPRNG roll scaled into [0, 1). The
- * last team catches whatever float drift leaves over. Pool index null: the
- * sets come from this file, so no baked table may be indexed by them. */
+ * last team catches whatever float drift leaves over. */
 export function drawWeighted(teams: WeightedTeam[]): SelectedTeam {
   const r = randomSeed32() / 2 ** 32;
   let acc = 0;
@@ -122,7 +121,7 @@ export function drawWeighted(teams: WeightedTeam[]): SelectedTeam {
 }
 
 function selected(t: WeightedTeam): SelectedTeam {
-  return { id: t.id, sets: t.sets, poolIdx: null };
+  return { id: t.id, sets: t.sets };
 }
 
 function firstProblem(errors: Finding[]): string {

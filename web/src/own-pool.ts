@@ -6,8 +6,7 @@
 // human's and the bot's) draw it by its `drawWeight`.
 //
 // It is NOT the bot's picture of its opponent (the opponent prior,
-// belief-pool-v3). Draws carry a null pool index: no baked table is keyed
-// to this file.
+// belief-pool-v3).
 
 import type { SelectedTeam } from "./pool-pick";
 import type { LoadedPool } from "./team-pool";

@@ -12,7 +12,7 @@
 // the team it is FACING is the shipped opponent prior (belief-pool-v3),
 // which app.tsx hands every blind door alike; the two files are independent
 // by design. The artifact carries its own sets and those are what gets
-// played; pool indices stay null, so no baked table is read against them.
+// played.
 //
 // The loader is strict: a team that does not validate refuses the whole
 // artifact, and a refusal fails the page rather than degrading. `?nash`
