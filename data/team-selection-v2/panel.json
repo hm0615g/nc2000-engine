@@ -1,0 +1,941 @@
+{
+ "format": "nc2000-selection-panel-v2",
+ "generator": "tools/team-select.py panel",
+ "rule": "every eligible measured human-source record of data/team-inventory-v1; each variant cluster carries 1/(clusters), split equally among its members",
+ "clusters": 58,
+ "strataWeight": {
+  "boom": 0.517241,
+  "electric55": 0.189655,
+  "recovery": 0.62069,
+  "snorlax55": 0.224138,
+  "spikes": 0.201149,
+  "trap": 0.396552
+ },
+ "importantStrata": [
+  "boom",
+  "electric55",
+  "recovery",
+  "snorlax55",
+  "spikes",
+  "trap"
+ ],
+ "members": [
+  {
+   "id": "hc75-1st-show",
+   "family": "hc75-top8",
+   "cluster": "vc31",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery",
+    "trap"
+   ]
+  },
+  {
+   "id": "hc75-2nd-toriyama",
+   "family": "hc75-top8",
+   "cluster": "vc32",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "electric55",
+    "trap"
+   ]
+  },
+  {
+   "id": "hc75-3rd-bean",
+   "family": "hc75-top8",
+   "cluster": "vc06",
+   "weight": 0.005747126436781609,
+   "strata": [
+    "boom",
+    "electric55"
+   ]
+  },
+  {
+   "id": "hc75-top8-tezan",
+   "family": "hc75-top8",
+   "cluster": "vc33",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "trap"
+   ]
+  },
+  {
+   "id": "hc75-top8-tsuru",
+   "family": "hc75-top8",
+   "cluster": "vc34",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom"
+   ]
+  },
+  {
+   "id": "mjj-2009-chourou",
+   "family": "majinjima",
+   "cluster": "vc43",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "recovery"
+   ]
+  },
+  {
+   "id": "mjj-2010-garap-a",
+   "family": "majinjima",
+   "cluster": "vc44",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom"
+   ]
+  },
+  {
+   "id": "mjj-2010-garap-b",
+   "family": "majinjima",
+   "cluster": "vc45",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery"
+   ]
+  },
+  {
+   "id": "mjj-2010-semistar",
+   "family": "majinjima",
+   "cluster": "vc46",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery",
+    "trap"
+   ]
+  },
+  {
+   "id": "mjj-2011-frozenhell-2008",
+   "family": "majinjima",
+   "cluster": "vc47",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery",
+    "trap"
+   ]
+  },
+  {
+   "id": "mjj-2011-garatank",
+   "family": "majinjima",
+   "cluster": "vc48",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom"
+   ]
+  },
+  {
+   "id": "mjj-2012-goinkyo-2012",
+   "family": "majinjima",
+   "cluster": "vc49",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery"
+   ]
+  },
+  {
+   "id": "mjj-2012-goinkyo-2020",
+   "family": "majinjima",
+   "cluster": "vc50",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "recovery",
+    "trap"
+   ]
+  },
+  {
+   "id": "mjj-2012-ibmthdr",
+   "family": "majinjima",
+   "cluster": "vc51",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "electric55"
+   ]
+  },
+  {
+   "id": "mjj-2013-bakabi",
+   "family": "majinjima",
+   "cluster": "vc52",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery",
+    "snorlax55",
+    "trap"
+   ]
+  },
+  {
+   "id": "mjj-2013-mario",
+   "family": "majinjima",
+   "cluster": "vc02",
+   "weight": 0.005747126436781609,
+   "strata": [
+    "boom",
+    "electric55",
+    "spikes"
+   ]
+  },
+  {
+   "id": "mjj-2013-venom",
+   "family": "majinjima",
+   "cluster": "vc01",
+   "weight": 0.004310344827586207,
+   "strata": [
+    "recovery"
+   ]
+  },
+  {
+   "id": "mjj-2014-thdrcomb",
+   "family": "majinjima",
+   "cluster": "vc53",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "electric55",
+    "recovery",
+    "spikes"
+   ]
+  },
+  {
+   "id": "mjj-2015-ayagen",
+   "family": "majinjima",
+   "cluster": "vc54",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "recovery",
+    "trap"
+   ]
+  },
+  {
+   "id": "mjj-2019-dojo",
+   "family": "majinjima",
+   "cluster": "vc55",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery",
+    "spikes"
+   ]
+  },
+  {
+   "id": "mjj-2020-kb-2020",
+   "family": "majinjima",
+   "cluster": "vc19",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "recovery",
+    "snorlax55",
+    "trap"
+   ]
+  },
+  {
+   "id": "mjj-2020-kb-2022",
+   "family": "majinjima",
+   "cluster": "vc19",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "recovery",
+    "snorlax55",
+    "trap"
+   ]
+  },
+  {
+   "id": "mjj-2020-rraikou",
+   "family": "majinjima",
+   "cluster": "vc56",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "electric55"
+   ]
+  },
+  {
+   "id": "mjj-2020-ukenta",
+   "family": "majinjima",
+   "cluster": "vc57",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom"
+   ]
+  },
+  {
+   "id": "mjj-2021-crage",
+   "family": "majinjima",
+   "cluster": "vc58",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "snorlax55"
+   ]
+  },
+  {
+   "id": "mjj-2021-q10con",
+   "family": "majinjima",
+   "cluster": "vc59",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery",
+    "snorlax55"
+   ]
+  },
+  {
+   "id": "mjj-2022-ukekent",
+   "family": "majinjima",
+   "cluster": "vc60",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "recovery",
+    "spikes"
+   ]
+  },
+  {
+   "id": "mjj-2023-ukethdr",
+   "family": "majinjima",
+   "cluster": "vc61",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "electric55",
+    "spikes"
+   ]
+  },
+  {
+   "id": "mjj-2023-vakabi",
+   "family": "majinjima",
+   "cluster": "vc20",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery",
+    "snorlax55",
+    "trap"
+   ]
+  },
+  {
+   "id": "mjj-2024-kabiliz",
+   "family": "majinjima",
+   "cluster": "vc62",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "snorlax55"
+   ]
+  },
+  {
+   "id": "mjj-2025-hapim",
+   "family": "majinjima",
+   "cluster": "vc63",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "electric55",
+    "recovery",
+    "trap"
+   ]
+  },
+  {
+   "id": "rental-cban-11",
+   "family": "community-rentals",
+   "cluster": "vc04",
+   "weight": 0.005747126436781609,
+   "strata": [
+    "recovery",
+    "snorlax55",
+    "trap"
+   ]
+  },
+  {
+   "id": "rental-cban-12",
+   "family": "community-rentals",
+   "cluster": "vc64",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery",
+    "trap"
+   ]
+  },
+  {
+   "id": "rental-cban-13",
+   "family": "community-rentals",
+   "cluster": "vc65",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom"
+   ]
+  },
+  {
+   "id": "rental-cban-14",
+   "family": "community-rentals",
+   "cluster": "vc66",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "recovery"
+   ]
+  },
+  {
+   "id": "rental-cban-15",
+   "family": "community-rentals",
+   "cluster": "vc21",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "recovery",
+    "trap"
+   ]
+  },
+  {
+   "id": "rental-cban-17",
+   "family": "community-rentals",
+   "cluster": "vc22",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "trap"
+   ]
+  },
+  {
+   "id": "rental-cban-2",
+   "family": "community-rentals",
+   "cluster": "vc67",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "electric55"
+   ]
+  },
+  {
+   "id": "rental-cban-20",
+   "family": "community-rentals",
+   "cluster": "vc24",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "boom",
+    "trap"
+   ]
+  },
+  {
+   "id": "rental-cban-3",
+   "family": "community-rentals",
+   "cluster": "vc02",
+   "weight": 0.005747126436781609,
+   "strata": [
+    "boom",
+    "electric55",
+    "spikes"
+   ]
+  },
+  {
+   "id": "rental-cban-4",
+   "family": "community-rentals",
+   "cluster": "vc01",
+   "weight": 0.004310344827586207,
+   "strata": [
+    "recovery"
+   ]
+  },
+  {
+   "id": "rental-cban-6",
+   "family": "community-rentals",
+   "cluster": "vc06",
+   "weight": 0.005747126436781609,
+   "strata": [
+    "boom",
+    "electric55",
+    "spikes"
+   ]
+  },
+  {
+   "id": "rental-cban-8",
+   "family": "community-rentals",
+   "cluster": "vc26",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "boom"
+   ]
+  },
+  {
+   "id": "sample-01",
+   "family": "smogon-hub-samples",
+   "cluster": "vc68",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery",
+    "snorlax55"
+   ]
+  },
+  {
+   "id": "sample-02",
+   "family": "smogon-hub-samples",
+   "cluster": "vc69",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery"
+   ]
+  },
+  {
+   "id": "sample-03",
+   "family": "smogon-hub-samples",
+   "cluster": "vc70",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery"
+   ]
+  },
+  {
+   "id": "sample-04",
+   "family": "smogon-hub-samples",
+   "cluster": "vc71",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery",
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-05",
+   "family": "smogon-hub-samples",
+   "cluster": "vc72",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery",
+    "snorlax55",
+    "spikes"
+   ]
+  },
+  {
+   "id": "sample-06",
+   "family": "smogon-hub-samples",
+   "cluster": "vc25",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "electric55",
+    "recovery",
+    "snorlax55"
+   ]
+  },
+  {
+   "id": "sample-07",
+   "family": "smogon-hub-samples",
+   "cluster": "vc02",
+   "weight": 0.005747126436781609,
+   "strata": [
+    "boom",
+    "electric55",
+    "spikes"
+   ]
+  },
+  {
+   "id": "sample-08",
+   "family": "smogon-hub-samples",
+   "cluster": "vc06",
+   "weight": 0.005747126436781609,
+   "strata": [
+    "boom",
+    "electric55",
+    "spikes"
+   ]
+  },
+  {
+   "id": "sample-09",
+   "family": "smogon-hub-samples",
+   "cluster": "vc07",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "boom"
+   ]
+  },
+  {
+   "id": "sample-09-orig",
+   "family": "smogon-hub-samples",
+   "cluster": "vc07",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "boom"
+   ]
+  },
+  {
+   "id": "sample-10",
+   "family": "smogon-hub-samples",
+   "cluster": "vc26",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "boom"
+   ]
+  },
+  {
+   "id": "sample-11",
+   "family": "smogon-hub-samples",
+   "cluster": "vc01",
+   "weight": 0.004310344827586207,
+   "strata": [
+    "recovery"
+   ]
+  },
+  {
+   "id": "sample-11-orig",
+   "family": "smogon-hub-samples",
+   "cluster": "vc01",
+   "weight": 0.004310344827586207,
+   "strata": [
+    "recovery"
+   ]
+  },
+  {
+   "id": "sample-12",
+   "family": "smogon-hub-samples",
+   "cluster": "vc03",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery",
+    "snorlax55",
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-13",
+   "family": "smogon-hub-samples",
+   "cluster": "vc08",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "recovery",
+    "snorlax55",
+    "spikes",
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-14",
+   "family": "smogon-hub-samples",
+   "cluster": "vc04",
+   "weight": 0.005747126436781609,
+   "strata": [
+    "recovery",
+    "snorlax55",
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-14-orig",
+   "family": "smogon-hub-samples",
+   "cluster": "vc04",
+   "weight": 0.005747126436781609,
+   "strata": [
+    "recovery",
+    "snorlax55",
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-15",
+   "family": "smogon-hub-samples",
+   "cluster": "vc27",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "recovery",
+    "snorlax55",
+    "spikes",
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-15-orig",
+   "family": "smogon-hub-samples",
+   "cluster": "vc27",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "recovery",
+    "snorlax55",
+    "spikes",
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-16",
+   "family": "smogon-hub-samples",
+   "cluster": "vc28",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "boom"
+   ]
+  },
+  {
+   "id": "sample-16-orig",
+   "family": "smogon-hub-samples",
+   "cluster": "vc28",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "boom"
+   ]
+  },
+  {
+   "id": "sample-17",
+   "family": "smogon-hub-samples",
+   "cluster": "vc29",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "boom",
+    "recovery"
+   ]
+  },
+  {
+   "id": "sample-17-orig",
+   "family": "smogon-hub-samples",
+   "cluster": "vc29",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "boom",
+    "recovery"
+   ]
+  },
+  {
+   "id": "sample-18",
+   "family": "smogon-hub-samples",
+   "cluster": "vc21",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "recovery",
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-19",
+   "family": "smogon-hub-samples",
+   "cluster": "vc73",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery",
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-20",
+   "family": "smogon-hub-samples",
+   "cluster": "vc22",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-21",
+   "family": "smogon-hub-samples",
+   "cluster": "vc23",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "electric55",
+    "spikes",
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-22",
+   "family": "smogon-hub-samples",
+   "cluster": "vc05",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "recovery",
+    "spikes"
+   ]
+  },
+  {
+   "id": "sample-22-orig",
+   "family": "smogon-hub-samples",
+   "cluster": "vc05",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "recovery",
+    "spikes"
+   ]
+  },
+  {
+   "id": "sample-23",
+   "family": "smogon-hub-samples",
+   "cluster": "vc24",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "boom",
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-24",
+   "family": "smogon-hub-samples",
+   "cluster": "vc74",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom"
+   ]
+  },
+  {
+   "id": "sample-25",
+   "family": "smogon-hub-samples",
+   "cluster": "vc30",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "recovery",
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-25-orig",
+   "family": "smogon-hub-samples",
+   "cluster": "vc30",
+   "weight": 0.008620689655172414,
+   "strata": [
+    "recovery",
+    "trap"
+   ]
+  },
+  {
+   "id": "sample-26",
+   "family": "smogon-hub-samples",
+   "cluster": "vc75",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "boom",
+    "recovery",
+    "spikes"
+   ]
+  },
+  {
+   "id": "sample-27",
+   "family": "smogon-hub-samples",
+   "cluster": "vc76",
+   "weight": 0.017241379310344827,
+   "strata": [
+    "recovery"
+   ]
+  }
+ ],
+ "candidates": [
+  "ev-r1-pool-hc75-1st-show-0",
+  "ev-r1-pool-hc75-2nd-toriyama-0",
+  "ev-r1-pool-hc75-3rd-bean-0",
+  "ev-r1-pool-hc75-3rd-bean-1",
+  "ev-r1-pool-hc75-top8-tezan-0",
+  "ev-r1-pool-hc75-top8-tezan-1",
+  "ev-r1-rand-0-0",
+  "ev-r1-rand-0-1",
+  "ev-r1-rand-1-0",
+  "ev-r1-rand-1-1",
+  "ev-r1-rand-2-0",
+  "ev-r1-rand-3-0",
+  "ev-r1-rand-4-0",
+  "ev-r1-rand-5-0",
+  "ev-r1-rand-5-1",
+  "hc75-1st-show",
+  "hc75-2nd-toriyama",
+  "hc75-3rd-bean",
+  "hc75-top8-tezan",
+  "hc75-top8-tsuru",
+  "lineage-fine-s07",
+  "lineage-fine-s13",
+  "lineage-gb-nash-rand",
+  "lineage-gb-nash-s07",
+  "lineage-gb-nash-s13",
+  "lineage-gb-uni-rand",
+  "lineage-gb-uni-s07",
+  "lineage-gb-uni-s13",
+  "mjj-2009-chourou",
+  "mjj-2010-garap-a",
+  "mjj-2010-garap-b",
+  "mjj-2010-semistar",
+  "mjj-2011-frozenhell-2008",
+  "mjj-2011-garatank",
+  "mjj-2012-goinkyo-2012",
+  "mjj-2012-goinkyo-2020",
+  "mjj-2012-ibmthdr",
+  "mjj-2013-bakabi",
+  "mjj-2013-mario",
+  "mjj-2013-venom",
+  "mjj-2014-thdrcomb",
+  "mjj-2015-ayagen",
+  "mjj-2019-dojo",
+  "mjj-2020-kb-2020",
+  "mjj-2020-kb-2022",
+  "mjj-2020-rraikou",
+  "mjj-2020-ukenta",
+  "mjj-2021-crage",
+  "mjj-2021-q10con",
+  "mjj-2022-ukekent",
+  "mjj-2023-ukethdr",
+  "mjj-2023-vakabi",
+  "mjj-2024-kabiliz",
+  "mjj-2025-hapim",
+  "nb-sample-12-0",
+  "nb-sample-13-0",
+  "rental-cban-11",
+  "rental-cban-12",
+  "rental-cban-13",
+  "rental-cban-14",
+  "rental-cban-15",
+  "rental-cban-17",
+  "rental-cban-2",
+  "rental-cban-20",
+  "rental-cban-3",
+  "rental-cban-4",
+  "rental-cban-6",
+  "rental-cban-8",
+  "sample-01",
+  "sample-02",
+  "sample-03",
+  "sample-04",
+  "sample-05",
+  "sample-06",
+  "sample-07",
+  "sample-08",
+  "sample-09",
+  "sample-09-orig",
+  "sample-10",
+  "sample-11",
+  "sample-11-orig",
+  "sample-12",
+  "sample-13",
+  "sample-14",
+  "sample-14-orig",
+  "sample-15",
+  "sample-15-orig",
+  "sample-16",
+  "sample-16-orig",
+  "sample-17",
+  "sample-17-orig",
+  "sample-18",
+  "sample-19",
+  "sample-20",
+  "sample-21",
+  "sample-22",
+  "sample-22-orig",
+  "sample-23",
+  "sample-24",
+  "sample-25",
+  "sample-25-orig",
+  "sample-26",
+  "sample-27"
+ ],
+ "challenge": [
+  "mjj-2012-goinkyo-t2",
+  "mjj-2012-goinkyo-t3",
+  "mjj-2011-murai-t1",
+  "mjj-2011-frozenhell-t0",
+  "offprior-01",
+  "offprior-02",
+  "offprior-03",
+  "offprior-04",
+  "offprior-05",
+  "offprior-06",
+  "offprior-07",
+  "offprior-08",
+  "offprior-09",
+  "offprior-10",
+  "offprior-11",
+  "offprior-12",
+  "offprior-13",
+  "offprior-14",
+  "offprior-15",
+  "offprior-16"
+ ]
+}

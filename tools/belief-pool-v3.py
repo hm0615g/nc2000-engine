@@ -8,7 +8,9 @@
 
 `report` reads RUNDIR/<arm>/cell-*.jsonl (arm `v3` is the reference) and
 prints, per opponent group, each arm's score and its paired difference from
-v3 over identical (cell, k, side) games, with a seed-index bootstrap.
+v3 over identical (cell, k, side) games, with a bootstrap over seed indices
+(`--unit k`) or, when there are too few seeds for that, over cells
+(`--unit cell`).
 
 Membership and order come from the frozen belief-pool-v2 file plus the
 records restored because no blind c = 0.4 evidence reconfirms their old
@@ -125,7 +127,7 @@ def load_arm(d):
     return out
 
 
-def report(out_dir, runs, json_out):
+def report(out_dir, runs, json_out, unit='k'):
     import numpy as np
     groups = json.load(open(os.path.join(out_dir, 'groups.json')))
     arms_ = {a: load_arm(os.path.join(runs, a)) for a in sorted(os.listdir(runs))
@@ -147,7 +149,7 @@ def report(out_dir, runs, json_out):
                 d = np.array([arms_['v3'][k]['score'] - games[k]['score'] for k in keys])
                 byk = collections.defaultdict(list)
                 for k, v in zip(keys, d):
-                    byk[k[1]].append(v)
+                    byk[k[1] if unit == 'k' else k[0]].append(v)
                 ks = sorted(byk)
                 boots = [np.mean(np.concatenate([byk[x] for x in rng.choice(ks, len(ks))])) for _ in range(4000)]
                 same = np.mean([arms_['v3'][k]['score'] == games[k]['score'] and arms_['v3'][k]['turns'] == games[k]['turns']
@@ -168,7 +170,8 @@ def report(out_dir, runs, json_out):
             line.append(t)
         print(' | '.join(line))
     if json_out:
-        json.dump({'groups': groups, 'columnPrior': {a: sorted(c) for a, c in conds.items()}, 'results': res},
+        json.dump({'groups': groups, 'bootstrapUnit': unit,
+                   'columnPrior': {a: sorted(c) for a, c in conds.items()}, 'results': res},
                   open(json_out, 'w'), indent=1)
 
 
@@ -178,13 +181,14 @@ def main():
     ap.add_argument('--out')
     ap.add_argument('--runs')
     ap.add_argument('--json')
+    ap.add_argument('--unit', choices=['k', 'cell'], default='k')
     a = ap.parse_args()
     if a.cmd == 'build':
         build()
     elif a.cmd == 'arms':
         arms(a.out)
     else:
-        report(a.out, a.runs, a.json)
+        report(a.out, a.runs, a.json, a.unit)
 
 
 if __name__ == '__main__':
