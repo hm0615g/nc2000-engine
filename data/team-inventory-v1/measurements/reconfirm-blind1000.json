@@ -1,0 +1,93 @@
+{
+ "what": "Step-4 recheck of classification-sensitive teams under the Nash-door condition (blind:1000 both sides, frozen prior, human panel, seed base 20261011, 8 seeds). Labels stay those of PROTOCOL v1 (open mode); this is the consistency check the plan asks for.",
+ "results": {
+  "mjj-2020-kb-2020": {
+   "label": "dominated",
+   "openScore": 0.47865437158469953,
+   "blind1000": 0.47933743169398907,
+   "ci": [
+    0.4521836577868853,
+    0.5072575136612022
+   ]
+  },
+  "mjj-2020-kb-2022": {
+   "label": "strong",
+   "openScore": 0.5064036885245902,
+   "blind1000": 0.5138319672131147,
+   "ci": [
+    0.49248420423497274,
+    0.5358627903005465
+   ]
+  },
+  "sample-18": {
+   "label": "pending",
+   "openScore": 0.4368169398907104,
+   "blind1000": 0.43647540983606564,
+   "ci": [
+    0.40829704576502734,
+    0.46817580259562847
+   ]
+  },
+  "rental-cban-12": {
+   "label": "pending",
+   "openScore": 0.46016905737704916,
+   "blind1000": 0.44100068306010937,
+   "ci": [
+    0.42153133538251364,
+    0.46012850068306016
+   ]
+  },
+  "mjj-2012-goinkyo-2012": {
+   "label": "strong",
+   "openScore": 0.4701588114754099,
+   "blind1000": 0.44928278688524603,
+   "ci": [
+    0.4316897199453552,
+    0.46559511612021864
+   ]
+  },
+  "sample-02": {
+   "label": "strong",
+   "openScore": 0.4853995901639344,
+   "blind1000": 0.4711407103825137,
+   "ci": [
+    0.448928449453552,
+    0.48787568306010937
+   ]
+  },
+  "rental-cban-17": {
+   "label": "strong",
+   "openScore": 0.48736338797814216,
+   "blind1000": 0.4874487704918033,
+   "ci": [
+    0.4559340846994537,
+    0.519808743169399
+   ]
+  },
+  "sample-03": {
+   "label": "weak",
+   "openScore": 0.4315232240437159,
+   "blind1000": 0.4344262295081967,
+   "ci": [
+    0.41657914959016396,
+    0.45414959016393447
+   ]
+  },
+  "rental-cban-15": {
+   "label": "weak",
+   "openScore": 0.4291325136612022,
+   "blind1000": 0.3987363387978143,
+   "ci": [
+    0.36141777663934427,
+    0.4373420423497268
+   ]
+  },
+  "kb-2022 minus kb-2020": {
+   "diff": 0.034494535519125694,
+   "ci": [
+    0.006743084016393442,
+    0.056354593579234974
+   ]
+  }
+ }
+}
