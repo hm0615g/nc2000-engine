@@ -1,0 +1,371 @@
+//! Team-pool rebuild harness (docs/TEAM-POOL-REBUILD-PLAN.md): seed-paired
+//! team-vs-team cells under one declared agent condition, one JSONL per
+//! cell, resumable, with per-game selection and move-use records for the
+//! execution audit.
+//!
+//!   cargo run --release -p nc2000-bot --example team_eval -- \
+//!       --teams FILE [--teams FILE ...]        {teams:[{id, sets}]} files
+//!       (--round-robin IDS_FILE | --cells CELLS_FILE)
+//!       --agent open:300 [--agent-col SPEC]   row / column agent
+//!       [--belief-pool FILE]                  blind agents' candidate pool
+//!       --seeds N --seed-base S --out DIR [--threads T] [--max-turns 500]
+//!       [--force-row-picks ROW_ID=SpeciesA,SpeciesB,SpeciesC]
+//!       [--dump-logs DIR]                     full protocol log per game
+//!
+//! IDS_FILE: one team id per line (every unordered pair is a cell, row =
+//! the lexicographically smaller id). CELLS_FILE: one `row col` pair per
+//! line (directed: row is the team being evaluated).
+//!
+//! Agent specs: `open:ITERS` (the M12 product: sets public, picks hidden),
+//! `blind:ITERS` (public info + belief pool), `skuct:ITERS` (true state).
+//!
+//! Pairing: game k of every cell uses the same battle seed and the same
+//! agent seeds, derived from (--seed-base, k, side) only; each k is played
+//! twice with the row team on p1 and then p2. Tasks run k-major, so a
+//! partially finished run has every cell at nearly the same n.
+
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
+
+use conformance::load_dex;
+use nc2000_bot::preview::{MetaPool, MetaTeam};
+use nc2000_bot::smmcts::SelRule;
+use nc2000_bot::{Agent, BlindAgent, GameResult, OpenAgent, RmAgent, RmConfig, SplitMix64};
+use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
+use nc2000_engine::dex::Dex;
+use nc2000_engine::state::Battle;
+use serde_json::{json, Value};
+
+#[derive(Clone, Debug)]
+enum Spec {
+    Open(u32),
+    Blind(u32),
+    Skuct(u32),
+}
+
+impl Spec {
+    fn parse(s: &str) -> Spec {
+        let (kind, n) = s.split_once(':').unwrap_or((s, "300"));
+        let n: u32 = n.parse().unwrap_or_else(|_| panic!("bad iterations in {s}"));
+        match kind {
+            "open" => Spec::Open(n),
+            "blind" => Spec::Blind(n),
+            "skuct" => Spec::Skuct(n),
+            _ => panic!("unknown agent spec {s}"),
+        }
+    }
+
+    fn label(&self) -> String {
+        match self {
+            Spec::Open(n) => format!("open:{n}"),
+            Spec::Blind(n) => format!("blind:{n}"),
+            Spec::Skuct(n) => format!("skuct:{n}"),
+        }
+    }
+
+    fn build(&self, seed: u64, pool: Option<&Arc<MetaPool>>) -> Box<dyn Agent> {
+        let cfg = |n: u32| RmConfig { iterations: n, rule: SelRule::Ucb, ..Default::default() };
+        match self {
+            Spec::Open(n) => Box::new(OpenAgent::new(cfg(*n), None, seed)),
+            Spec::Blind(n) => Box::new(BlindAgent::new(
+                cfg(*n),
+                pool.expect("blind agents need --belief-pool").clone(),
+                None,
+                seed,
+            )),
+            Spec::Skuct(n) => Box::new(RmAgent::new(cfg(*n), seed)),
+        }
+    }
+
+    fn needs_log(&self) -> bool {
+        !matches!(self, Spec::Skuct(_))
+    }
+}
+
+/// Wraps an agent and forces its team-preview answer.
+struct ForcedPicks {
+    inner: Box<dyn Agent>,
+    picks: [u8; 3],
+}
+
+impl Agent for ForcedPicks {
+    fn name(&self) -> String {
+        format!("forced{:?}:{}", self.picks, self.inner.name())
+    }
+
+    fn choose(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
+        let forced = SearchChoice::Team(self.picks);
+        // Let the inner agent see the preview (it builds its per-game state
+        // there), then override the answer.
+        let own = self.inner.choose(battle, dex, side, choices);
+        if matches!(choices[0], SearchChoice::Team(_)) && choices.contains(&forced) {
+            forced
+        } else {
+            own
+        }
+    }
+}
+
+fn flag(args: &[String], name: &str) -> Option<String> {
+    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
+}
+
+fn flags(args: &[String], name: &str) -> Vec<String> {
+    args.iter()
+        .enumerate()
+        .filter(|(_, a)| *a == name)
+        .filter_map(|(i, _)| args.get(i + 1).cloned())
+        .collect()
+}
+
+fn load_teams(paths: &[String]) -> HashMap<String, Vec<PokemonSet>> {
+    let mut out = HashMap::new();
+    for p in paths {
+        let text = std::fs::read_to_string(p).unwrap_or_else(|e| panic!("read {p}: {e}"));
+        let pool: MetaPool = serde_json::from_str(&text).unwrap_or_else(|e| panic!("parse {p}: {e}"));
+        for MetaTeam { id, sets, .. } in pool.teams {
+            if out.insert(id.clone(), sets).is_some() {
+                panic!("team id {id} defined twice");
+            }
+        }
+    }
+    out
+}
+
+fn read_lines(path: &str) -> Vec<String> {
+    std::fs::read_to_string(path)
+        .unwrap_or_else(|e| panic!("read {path}: {e}"))
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .collect()
+}
+
+fn cell_file(out: &Path, row: &str, col: &str) -> PathBuf {
+    out.join(format!("cell-{row}__{col}.jsonl"))
+}
+
+/// Per-side facts recovered from the protocol log: the picked species in
+/// order of first appearance (lead first) and move uses per species.
+fn log_summary(battle: &Battle, side: usize) -> (Vec<String>, BTreeMap<String, BTreeMap<String, u32>>) {
+    let tag = if side == 0 { "p1a: " } else { "p2a: " };
+    let mut appeared: Vec<String> = Vec::new();
+    let mut moves: BTreeMap<String, BTreeMap<String, u32>> = BTreeMap::new();
+    for line in &battle.log {
+        let parts: Vec<&str> = line.split('|').collect();
+        if parts.len() < 4 {
+            continue;
+        }
+        match parts[1] {
+            "switch" | "drag" if parts[2].starts_with(tag) => {
+                let species = parts[3].split(',').next().unwrap_or("").to_string();
+                if !appeared.contains(&species) {
+                    appeared.push(species);
+                }
+            }
+            "move" if parts[2].starts_with(tag) => {
+                let who = parts[2][tag.len()..].to_string();
+                *moves.entry(who).or_default().entry(parts[3].to_string()).or_default() += 1;
+            }
+            _ => {}
+        }
+    }
+    (appeared, moves)
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let dex = load_dex();
+    let teams = load_teams(&flags(&args, "--teams"));
+    let spec_row = Spec::parse(&flag(&args, "--agent").unwrap_or_else(|| "open:300".into()));
+    let spec_col = flag(&args, "--agent-col").map(|s| Spec::parse(&s)).unwrap_or(spec_row.clone());
+    let belief_pool: Option<Arc<MetaPool>> = flag(&args, "--belief-pool").map(|p| {
+        Arc::new(
+            serde_json::from_str(&std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {p}: {e}")))
+                .unwrap_or_else(|e| panic!("parse {p}: {e}")),
+        )
+    });
+    let seeds: usize = flag(&args, "--seeds").map(|s| s.parse().unwrap()).unwrap_or(16);
+    let seed_base: u64 = flag(&args, "--seed-base").map(|s| s.parse().unwrap()).unwrap_or(1);
+    let max_turns: u16 = flag(&args, "--max-turns").map(|s| s.parse().unwrap()).unwrap_or(500);
+    let threads: usize = flag(&args, "--threads").map(|s| s.parse().unwrap()).unwrap_or(4);
+    let out = PathBuf::from(flag(&args, "--out").expect("--out DIR"));
+    std::fs::create_dir_all(&out).unwrap();
+    let dump_logs = flag(&args, "--dump-logs").map(PathBuf::from);
+    if let Some(d) = &dump_logs {
+        std::fs::create_dir_all(d).unwrap();
+    }
+    let forced: HashMap<String, Vec<String>> = flags(&args, "--force-row-picks")
+        .iter()
+        .map(|s| {
+            let (id, sp) = s.split_once('=').expect("--force-row-picks ID=A,B,C");
+            (id.to_string(), sp.split(',').map(str::to_string).collect())
+        })
+        .collect();
+
+    let mut cells: Vec<(String, String)> = Vec::new();
+    if let Some(p) = flag(&args, "--round-robin") {
+        let mut ids = read_lines(&p);
+        ids.sort();
+        ids.dedup();
+        for i in 0..ids.len() {
+            for j in i + 1..ids.len() {
+                cells.push((ids[i].clone(), ids[j].clone()));
+            }
+        }
+    }
+    if let Some(p) = flag(&args, "--cells") {
+        for l in read_lines(&p) {
+            let mut it = l.split_whitespace();
+            let (a, b) = (it.next().unwrap(), it.next().expect("cells line: ROW COL"));
+            cells.push((a.to_string(), b.to_string()));
+        }
+    }
+    assert!(!cells.is_empty(), "no cells (--round-robin or --cells)");
+    for (a, b) in &cells {
+        for id in [a, b] {
+            assert!(teams.contains_key(id), "unknown team id {id}");
+        }
+        assert_ne!(a, b, "a team cannot face itself in a cell");
+    }
+
+    // Resume: (cell, k, row_is_p1) already written.
+    let mut done: HashSet<(usize, usize, bool)> = HashSet::new();
+    for (ci, (a, b)) in cells.iter().enumerate() {
+        if let Ok(text) = std::fs::read_to_string(cell_file(&out, a, b)) {
+            for v in text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()) {
+                if v["agent"].as_str() != Some(&format!("{}|{}", spec_row.label(), spec_col.label())) {
+                    panic!("{}: written under a different agent condition", cell_file(&out, a, b).display());
+                }
+                done.insert((ci, v["k"].as_u64().unwrap() as usize, v["row_p1"].as_bool().unwrap()));
+            }
+        }
+    }
+    let mut tasks: Vec<(usize, usize, bool)> = Vec::new();
+    for k in 0..seeds {
+        for ci in 0..cells.len() {
+            for row_p1 in [true, false] {
+                if !done.contains(&(ci, k, row_p1)) {
+                    tasks.push((ci, k, row_p1));
+                }
+            }
+        }
+    }
+    eprintln!(
+        "team_eval: {} cells x {} seeds x 2 sides, {} to play ({} done), row {} col {}, {} threads",
+        cells.len(),
+        seeds,
+        tasks.len(),
+        done.len(),
+        spec_row.label(),
+        spec_col.label(),
+        threads
+    );
+
+    let files: Mutex<HashMap<usize, std::fs::File>> = Mutex::new(HashMap::new());
+    let cursor = AtomicUsize::new(0);
+    let finished = AtomicUsize::new(0);
+    let t0 = Instant::now();
+    std::thread::scope(|scope| {
+        for _ in 0..threads {
+            scope.spawn(|| loop {
+                let i = cursor.fetch_add(1, Ordering::Relaxed);
+                if i >= tasks.len() {
+                    break;
+                }
+                let (ci, k, row_p1) = tasks[i];
+                let (row, col) = &cells[ci];
+                let mut r = SplitMix64::new(seed_base ^ (k as u64 + 1).wrapping_mul(0xD1B5_4A32_D192_ED03));
+                let bseed = r.battle_seed();
+                let seed_p1 = r.next();
+                let seed_p2 = r.next();
+                let (t1, t2) = if row_p1 { (&teams[row], &teams[col]) } else { (&teams[col], &teams[row]) };
+                let mut battle = Battle::from_fixture(&dex, &bseed, t1, t2).unwrap();
+                battle.set_log_enabled(true);
+                let (spec1, spec2) = if row_p1 { (&spec_row, &spec_col) } else { (&spec_col, &spec_row) };
+                let _ = (spec1.needs_log(), spec2.needs_log());
+                let mut a1 = spec1.build(seed_p1, belief_pool.as_ref());
+                let mut a2 = spec2.build(seed_p2, belief_pool.as_ref());
+                if let Some(sp) = forced.get(row) {
+                    let sets = &teams[row];
+                    let mut picks = [0u8; 3];
+                    for (n, name) in sp.iter().enumerate() {
+                        let pos = sets.iter().position(|s| &s.species == name)
+                            .unwrap_or_else(|| panic!("{row} has no {name}"));
+                        picks[n] = pos as u8 + 1;
+                    }
+                    let wrap = |inner| Box::new(ForcedPicks { inner, picks }) as Box<dyn Agent>;
+                    if row_p1 {
+                        a1 = wrap(a1);
+                    } else {
+                        a2 = wrap(a2);
+                    }
+                }
+                let res = {
+                    let mut pair: [&mut dyn Agent; 2] = [a1.as_mut(), a2.as_mut()];
+                    nc2000_bot::play_game(&dex, &mut battle, &mut pair, max_turns).unwrap()
+                };
+                let p1_score = match res {
+                    GameResult::Outcome(Outcome::P1Win) => 1.0,
+                    GameResult::Outcome(Outcome::P2Win) => 0.0,
+                    _ => 0.5,
+                };
+                let (row_side, col_side) = if row_p1 { (0, 1) } else { (1, 0) };
+                let (row_picks, row_moves) = log_summary(&battle, row_side);
+                let (col_picks, col_moves) = log_summary(&battle, col_side);
+                let rec = json!({
+                    "k": k, "row_p1": row_p1, "seed": bseed,
+                    "agent": format!("{}|{}", spec_row.label(), spec_col.label()),
+                    "score": if row_p1 { p1_score } else { 1.0 - p1_score },
+                    "result": match res {
+                        GameResult::Outcome(Outcome::P1Win) => "p1",
+                        GameResult::Outcome(Outcome::P2Win) => "p2",
+                        GameResult::Outcome(Outcome::Tie) => "tie",
+                        GameResult::TurnCapped => "cap",
+                    },
+                    "turns": battle.turn,
+                    "row_picks": row_picks, "col_picks": col_picks,
+                    "row_moves": row_moves, "col_moves": col_moves,
+                    "row_left": battle.sides[row_side].pokemon_left,
+                    "col_left": battle.sides[col_side].pokemon_left,
+                });
+                if let Some(d) = &dump_logs {
+                    let name = format!("{row}__{col}-k{k}-{}.log", if row_p1 { "p1" } else { "p2" });
+                    std::fs::write(d.join(name), battle.log.join("\n")).unwrap();
+                }
+                {
+                    let mut f = files.lock().unwrap();
+                    let file = f.entry(ci).or_insert_with(|| {
+                        std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(cell_file(&out, row, col))
+                            .unwrap()
+                    });
+                    writeln!(file, "{rec}").unwrap();
+                }
+                let n = finished.fetch_add(1, Ordering::Relaxed) + 1;
+                if n % 500 == 0 || n == tasks.len() {
+                    let el = t0.elapsed().as_secs_f64();
+                    eprintln!(
+                        "  {n}/{} games, {:.0}s elapsed, {:.1} games/s, eta {:.0}s",
+                        tasks.len(),
+                        el,
+                        n as f64 / el,
+                        (tasks.len() - n) as f64 / (n as f64 / el)
+                    );
+                }
+            });
+        }
+    });
+}
