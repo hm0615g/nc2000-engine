@@ -23,6 +23,8 @@ import numpy as np
 def load(dirs, agent):
     games = collections.defaultdict(list)  # (a, b) -> [(k_uid, score_a)]
     labels = collections.Counter()
+    conds = set()
+    seeds = set()
     for d in dirs:
         for f in glob.glob(os.path.join(d, 'cell-*.jsonl')):
             row, col = os.path.basename(f)[5:-6].split('__')
@@ -31,10 +33,13 @@ def load(dirs, agent):
                 labels[r['agent']] += 1
                 if agent and r['agent'] != agent:
                     continue
+                c = dict(r.get('cond') or {})
+                seeds.add(c.pop('seed_base', None))
+                conds.add(json.dumps(c, sort_keys=True))
                 uid = (d, r['k'])
                 games[(row, col)].append((uid, r['score']))
                 games[(col, row)].append((uid, 1.0 - r['score']))
-    return games, labels
+    return games, labels, [json.loads(c) for c in sorted(conds)], sorted(s for s in seeds if s is not None)
 
 
 def tensors(ids, games):
@@ -106,7 +111,9 @@ def main():
     ap.add_argument('--out')
     a = ap.parse_args()
     ids = [l.strip() for l in open(a.ids) if l.strip() and not l.startswith('#')]
-    games, labels = load(a.cells, a.agent)
+    games, labels, conds, seed_bases = load(a.cells, a.agent)
+    if len(conds) > 1:
+        raise SystemExit(f'refusing to pool {len(conds)} conditions: {conds}')
     print('agent labels seen:', dict(labels))
     uid_list, S, C = tensors(ids, games)
     A, N = build(S, C)
@@ -139,7 +146,8 @@ def main():
             print(f"  {tid:34s} {boot[tid]['supportRate']:.2f} median w {boot[tid]['medianWeight']:.3f}")
     if a.out:
         json.dump({
-            'ids': ids, 'agent': a.agent, 'cells': a.cells,
+            'ids': ids, 'agent': a.agent, 'cond': conds[0] if conds else None, 'seedBases': seed_bases,
+            'cells': a.cells,
             'matrix': A.tolist(), 'games': N.tolist(),
             'weights': {ids[i]: float(x[i]) for i in range(len(ids))},
             'margin': m, 'bestResponse': ids[br],

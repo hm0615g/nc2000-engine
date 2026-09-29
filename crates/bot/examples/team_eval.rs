@@ -14,8 +14,9 @@
 //!       [--dump-logs DIR]                     full protocol log per game
 //!
 //! IDS_FILE: one team id per line (every unordered pair is a cell, row =
-//! the lexicographically smaller id). CELLS_FILE: one `row col` pair per
-//! line (directed: row is the team being evaluated).
+//! the lexicographically smaller id). CELLS_FILE: one `row col [K0 K1]`
+//! per line (directed: row is the team being evaluated); `K0 K1` plays that
+//! cell's seeds k in [K0, K1) instead of 0..--seeds.
 //!
 //! Agent specs: `open:ITERS:C` (sets public, picks hidden),
 //! `blind:ITERS:C` (public info + belief pool), `skuct:ITERS:C` (true
@@ -298,6 +299,7 @@ fn main() {
         .collect();
 
     let mut cells: Vec<(String, String)> = Vec::new();
+    let mut ranges: Vec<std::ops::Range<usize>> = Vec::new();
     if let Some(p) = flag(&args, "--round-robin") {
         let mut ids = read_lines(&p);
         ids.sort();
@@ -305,14 +307,20 @@ fn main() {
         for i in 0..ids.len() {
             for j in i + 1..ids.len() {
                 cells.push((ids[i].clone(), ids[j].clone()));
+                ranges.push(0..seeds);
             }
         }
     }
     if let Some(p) = flag(&args, "--cells") {
         for l in read_lines(&p) {
-            let mut it = l.split_whitespace();
-            let (a, b) = (it.next().unwrap(), it.next().expect("cells line: ROW COL"));
-            cells.push((a.to_string(), b.to_string()));
+            let f: Vec<&str> = l.split_whitespace().collect();
+            assert!(f.len() == 2 || f.len() == 4, "cells line: ROW COL [K0 K1]: {l}");
+            cells.push((f[0].to_string(), f[1].to_string()));
+            ranges.push(if f.len() == 4 {
+                f[2].parse().expect("K0")..f[3].parse().expect("K1")
+            } else {
+                0..seeds
+            });
         }
     }
     assert!(!cells.is_empty(), "no cells (--round-robin or --cells)");
@@ -344,8 +352,12 @@ fn main() {
         }
     }
     let mut tasks: Vec<(usize, usize, bool)> = Vec::new();
-    for k in 0..seeds {
+    let k_end = ranges.iter().map(|r| r.end).max().unwrap_or(0);
+    for k in 0..k_end {
         for ci in 0..cells.len() {
+            if !ranges[ci].contains(&k) {
+                continue;
+            }
             for row_p1 in [true, false] {
                 if !done.contains(&(ci, k, row_p1)) {
                     tasks.push((ci, k, row_p1));
