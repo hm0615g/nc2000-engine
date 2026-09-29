@@ -10,7 +10,7 @@
   "weak": 21,
   "pending": 2,
   "dominated": 1,
-  "nashSupport": 10
+  "nashSupport": 9
  },
  "teams": [
   {
@@ -239,7 +239,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0,
+   "nashWeight": 0.025,
    "variantCluster": "vc34",
    "species": [
     "Entei",
@@ -288,7 +288,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0.0948,
+   "nashWeight": 0,
    "variantCluster": "vc06",
    "species": [
     "Exeggutor",
@@ -484,7 +484,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0.1332,
+   "nashWeight": 0.2045,
    "variantCluster": "vc04",
    "species": [
     "Starmie",
@@ -533,7 +533,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0,
+   "nashWeight": 0.0441,
    "variantCluster": "vc04",
    "species": [
     "Starmie",
@@ -582,7 +582,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0.1108,
+   "nashWeight": 0,
    "variantCluster": "vc08",
    "species": [
     "Gengar",
@@ -876,7 +876,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0.0565,
+   "nashWeight": 0.0277,
    "variantCluster": "vc02",
    "species": [
     "Electrode",
@@ -974,7 +974,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0,
+   "nashWeight": 0.0411,
    "variantCluster": "vc03",
    "species": [
     "Gengar",
@@ -2962,7 +2962,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0.0726,
+   "nashWeight": 0,
    "variantCluster": "vc03",
    "species": [
     "Gengar",
@@ -3490,7 +3490,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0.1329,
+   "nashWeight": 0,
    "variantCluster": "vc67",
    "species": [
     "Zapdos",
@@ -3538,7 +3538,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0.0318,
+   "nashWeight": 0,
    "variantCluster": "vc02",
    "species": [
     "Tauros",
@@ -3778,7 +3778,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0.1067,
+   "nashWeight": 0.2079,
    "variantCluster": "vc26",
    "species": [
     "Tyranitar",
@@ -4018,7 +4018,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0.0641,
+   "nashWeight": 0,
    "variantCluster": "vc65",
    "species": [
     "Porygon2",
@@ -5456,7 +5456,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0,
+   "nashWeight": 0.154,
    "variantCluster": "vc56",
    "species": [
     "Raikou",
@@ -5564,7 +5564,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0,
+   "nashWeight": 0.1272,
    "variantCluster": "vc54",
    "species": [
     "Gengar",
@@ -5618,7 +5618,7 @@
    "execution": null,
    "ordinaryDraw": true,
    "opponentPrior": true,
-   "nashWeight": 0.1965,
+   "nashWeight": 0.1685,
    "variantCluster": "vc53",
    "species": [
     "Zapdos",

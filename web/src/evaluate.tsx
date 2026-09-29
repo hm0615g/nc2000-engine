@@ -42,12 +42,11 @@ function download(name: string, text: string, type = "application/json") {
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-const opponentLabel = (id: string) =>
-  ({
-    "sample-07": "基本の相手1",
-    "sample-08": "基本の相手2",
-    "sample-10": "基本の相手3",
-  })[id] ?? id;
+/** The shipped mixture's teams are shown as 基本の相手N in file order
+ * rather than by id; an uploaded distribution keeps its own ids. Filled
+ * once, when the default mixture loads. */
+const defaultLabels = new Map<string, string>();
+const opponentLabel = (id: string) => defaultLabels.get(id) ?? id;
 const percent = (v: number | null) =>
   v === null ? "—" : `${(v * 100).toFixed(1)}%`;
 function Findings({ team }: { team: EvaluationTeam }) {
@@ -165,6 +164,7 @@ export function Evaluate() {
           fetchDexJson(),
         ]);
         const draft = importDistribution(nash);
+        draft.forEach((d, i) => defaultLabels.set(d.id, `基本の相手${i + 1}`));
         const hash = await sha256(pool.poolJson);
         if (!alive.current) return;
         setEditorDex(dex as EditorDex);
