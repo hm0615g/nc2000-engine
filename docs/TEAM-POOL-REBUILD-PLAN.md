@@ -277,3 +277,134 @@ independent challenges within declared uncertainty and scope. Product consumers
 load the intended artifacts, stale preview data cannot be used, and relevant
 validation/integration checks pass. The final report states the four groups,
 Nash weights, prior allocation, replacement decisions, and remaining limitations.
+
+## Results (2026-09-29)
+
+All numbers are win shares for the team named first; intervals are 95%
+seed-index bootstraps. Raw per-game logs stay in `tmp/team-eval/`
+(gitignored); every figure below is reproducible from the committed
+aggregates and scripts.
+
+### 1. Inventory and import
+
+- `data/team-inventory-v1/` ([README](../data/team-inventory-v1/README.md)):
+  133 records, 115 eligible, 103 measured after collapsing 12 loadout
+  duplicates. 魔人島: the index held 30 serious entries (28 non-OHKO), which
+  gave 31 records (ガラプラス publishes two teams) plus 4 page tables no
+  serious entry designates (reference only). Each page's hidden
+  rental-utility field was decoded (exact dex numbers, DVs, stat exp, move
+  and item numbers) and cross-checked against the visible table; two
+  disagreements were resolved explicitly (`tools/import-majinjima.js`
+  `RESOLUTIONS`).
+- Ineligible: 2 OHKO-rule entries; 3 entries whose Donphan uses Encore
+  (only obtainable from a Japan-only Phanpy event, which the format
+  rejects); in the shipped prior v1, 6 rental entries that are
+  format-illegal or built for another rule (OHKO-allowed, Little Cup,
+  Metronome-only, Item Clause).
+- Bright Powder originals of the 8 edited Smogon samples were
+  reconstructed; two of them (09, 22) are independently confirmed by
+  rental transcriptions.
+- **sample-16's source**: it is a translation of Party Box #20 「ポニョ」
+  by stoic (rental-cban-13 transcribes the original) with five set
+  changes, including the two a player reported (Poliwrath 55→50, Golem
+  Quick Claw→Soft Sand). Recorded as `lineage` in the inventory.
+
+### 2. Classification ([PROTOCOL](../data/team-inventory-v1/PROTOCOL.md), frozen before any score was opened)
+
+- Metric calibration (open:300, 82-team human panel): ceiling sample-07
+  0.661, boom-deletion 0.501, floor 0.064, confound (order reversed) 0.637;
+  noise 0.023 → `VALID`; Berserk Gene deletion is below resolution.
+- Discovery: 195,168 games (open:300, 32 per pair). Confirmation: 68,768
+  games (open:1000) for the boundary band and every dominated comparison.
+- **Labels: 79 strong, 21 weak, 2 pending (sample-18, rental-cban-12),
+  1 dominated.**
+- **Dominated**: 魔人島 カビバン (2020) → replaced by カビバン'22 (same
+  author, Snorlax Zap Cannon→Curse): +0.063 at open:1000 (CI excludes 0),
+  no unique advantage (incl. the nine Miltank teams the author aimed Zap
+  Cannon at), execution established from logs
+  (`condition3-log-reads.json`). Rechecked at the Nash-door condition
+  (blind:1000): +0.034 [+0.007, +0.056] — same direction, below the
+  materiality bar there.
+- **Withheld** (conditions 1–2 met, execution not established): Mario13 ←
+  sample-07 (+0.073; Belly Drum games win 0.36 vs 0.64 without), 王パCH流
+  アレンジ ← sample-11-orig (+0.074; Sandstorm set on entry regardless of
+  matchup), HC7.5 3rd ← sample-08 (+0.051; Swagger+Substitute misplayed).
+- **sample-16 (owner decision)**: strong (0.545 at open:1000). Its original
+  ポニョ beats it by +0.070 [+0.032, +0.113], but the original is published
+  only by Party Box / the rental DB (outside the protocol's highly trusted
+  set) and allocates levels differently. If Party Box counts as highly
+  trusted and a changed level allocation is acceptable, sample-16 can be
+  re-tested as dominated.
+- Execution: the bot rarely fields trap/support ghosts (Misdreavus in the
+  ハピムウマ family 5–8% of games); forcing the Blissey+Misdreavus+ace core
+  did not lift the weaker family members
+  (`measurements/forced-exposure-hapimuuma.json`).
+
+### 3. Opponent prior ([belief-pool-v2](../data/belief-pool-v2/README.md), frozen)
+
+- Mechanism change (`crates/bot/src/belief.rs`): a pool whose teams carry
+  `weight` samples preview-consistent candidates by weight and falls back to
+  the weighted-mode loadout per species; unweighted pools are bit-identical
+  to before.
+- Allocation: cluster-normalized, machine-made teams ×0.25. Fallback rule
+  chosen on the human spectator corpus (revealed-move recall 0.546/0.543 vs
+  0.507/0.505 for file order on the two halves) and checked in battle
+  (+0.016 [−0.018, +0.048], `measurements/fallback-rule.json`).
+- Held-out test at blind:1000 (`measurements/prior-heldout.json`): vs a
+  strong-only prior, +0.100 against weak teams and +0.038 against
+  off-prior teams; against strong teams bit-identical (no strong team's
+  preview collides with a non-strong member), so the weak component costs
+  nothing there. At or above the shipped v1 prior in every group.
+
+### 4. Nash ([meta-nash-v2](../data/meta-nash-v2/README.md))
+
+- Condition: blind vs blind on the frozen prior (the Nash door's
+  information structure). 79-team game at 300 (98,592 games) → 18
+  support-relevant teams at 1000 and 3000 (64 per pair) → two
+  double-oracle rounds at 3000 (23 teams).
+- The equilibrium moves with budget: 300 anchors on sample-07; at 3000
+  魔人島 サンダー昆布 beats sample-07 0.78 and becomes a core member.
+  Shipped (3000, 23 teams): rental-cban-8 0.208, sample-14 0.204,
+  サンダー昆布 0.169, ソード＆シールド 0.154, 8番道路ジム 0.127,
+  sample-14-orig 0.044, sample-12 0.041, sample-07 0.028,
+  HC7.5 tsuru 0.025. The old shipped mixture (07/08/10) is exploitable by
+  0.109 in this game.
+- Challenge (`challenge-blind3000.json`): the 100 teams outside the game.
+  No eligible candidate's interval clears 0.5 at the achieved sample size
+  (4–160 games per support team); the highest are rental-cban-20 0.595
+  [0.467, 0.719], セミスター (labelled weak) 0.589 [0.486, 0.693],
+  ポリガラクラゲ 0.566. Off-prior chimeras 13, 07 and 16 (built from halves
+  of human teams) do clear it (0.60–0.63) — residual exploit surface
+  outside the candidate universe.
+- Scope: the equilibrium of a finite 23-team game at 3000 iterations. The
+  top of this metagame is flat and the weights are not stable across
+  budgets or double-oracle rounds; this is not claimed to be an
+  equilibrium of the whole game, and 30k-iteration behaviour is not
+  measured directly.
+
+### 5. Products and consumers
+
+| File | Consumers |
+|---|---|
+| `data/team-pool-v1/team-pool.json` (79, cluster-balanced draw) | web `/` "Random" bot pick, plain `?blind`, ladder `--team pool:random` |
+| `data/belief-pool-v2/belief-pool.json` (102) | every blind searcher: `?blind` (also with a user pool file), `?nash`, `?solver`, `?evaluate`, ladder blind mode |
+| `data/meta-nash-v2/pool-artifact.json` (9) | `?nash` draw, `?evaluate` default opponents |
+| `data/team-inventory-v1/reference.json` | reference only |
+
+- Start-screen lists are unchanged (bundled 32). Draws from the new pool
+  carry no pool index, so no baked pair table is ever read against them.
+- Checks: `cargo test -p conformance --test team_products` (memberships,
+  sets, weights, dominated links, legality and play-out); web e2e 44/45 —
+  the failure (`evaluate.spec.ts` "exposes no technical input by default")
+  predates this work: the 2026-09-27 test forbids 反復 while the test build
+  prints 「実際の探索量は300反復です」.
+- Not published: push/deploy is a separate owner action.
+
+### Open for the owner
+
+1. sample-16 vs its original ポニョ (trust in Party Box; level allocation).
+2. Whether the start-screen lists should gain the new teams or drop
+   weak/dominated ones.
+3. セミスター (weak) scores 0.589 against the Nash mixture on few games —
+   worth a longer challenge before any relabel.
+4. Nash weights at the product budget (~30k) are extrapolated from 3000.
