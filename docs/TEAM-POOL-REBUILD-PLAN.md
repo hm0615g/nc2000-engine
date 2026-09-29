@@ -305,7 +305,7 @@ Branch `blind-rebuild` (local, not pushed). Each item names its evidence.
   files; wasm node smoke/determinism/fork/kifu/solver pass. Rerun on the
   real artifacts before completion.
 
-### Step 2 — opponent prior (screen done, 27k confirmation running)
+### Step 2 — opponent prior (done: v3 frozen)
 
 `data/belief-pool-v3` = v2's 102 teams + カビバン 2020 restored (its
 dominated verdict was never reconfirmed under c = 0.4), same allocation rule,
@@ -324,5 +324,18 @@ with the arm's prior, column = blind with v3, blind:3000:0.4, seed base
 The weak component costs nothing against strong teams and gains against
 weak ones; machine factor and weighted fallback are unresolvable here (only
 off-prior games differ). Confirmation at blind:27000:0.4 (seed base
-20261102, 2 seeds): v3 and v1 on all cells, strong-only where it differs.
+20261102, 2 seeds; cell bootstrap because 2 seed blocks are too few to
+resample): v3 − v1 = +0.111 [+0.029, +0.197] against weak teams, +0.075
+[+0.009, +0.141] off-prior, +0.092 [+0.017, +0.175] against strong
+unique-preview teams; v3 − strong-only = +0.197 [+0.111, +0.284] against weak
+teams, +0.005 [−0.053, +0.059] off-prior. **v3 is frozen** (fingerprint
+`fnv1a64:ffa73c4245fe3774`); the machine factor stays the a-priori 0.25 (its
+sensitivity is null here, not calibrated).
+
+### Step 3 — selection protocol (frozen)
+
+`data/team-selection-v2/PROTOCOL.md` and `panel.json`, committed before any
+selection score was opened. The plan's "resampling at the shared seed block"
+is realized as stratified analytic variances over shared (opponent, k, side)
+games, because the product-budget stages have 1–4 seed blocks per cell.
 
