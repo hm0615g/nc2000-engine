@@ -1,0 +1,317 @@
+{
+ "what": "Opponent-prior held-out test under the blind product profile (plan step 2). Row X = blind bot whose belief is the arm prior; column = blind bot with v3. Arms differ only in X belief; games paired on (cell, k, side).",
+ "conditions": {
+  "agents": "blind:3000:0.4 vs blind:3000:0.4",
+  "seedBase": 20261101,
+  "seeds": 8,
+  "xTeams": [
+   "sample-07",
+   "sample-13",
+   "mjj-2021-q10con",
+   "mjj-2023-ukethdr"
+  ],
+  "arms": {
+   "v3": "data/belief-pool-v3/belief-pool.json (fnv1a64:ffa73c4245fe3774)",
+   "v1": "data/belief-pool-v1/belief-pool.json (unweighted, 87)",
+   "strongonly": "v3 rule over v1-strong teams only (diagnostic)",
+   "mf1": "v3 with machine factor 1",
+   "unweighted": "v3 without weights: uniform identification, file-order fallback"
+  },
+  "tool": "python3 tools/belief-pool-v3.py arms/report",
+  "bot": "fnv1a64:c31d5635eb296d9a:m17e-solver-build-v3"
+ },
+ "groups": {
+  "collide": [
+   "mjj-2020-kb-2022"
+  ],
+  "weak": [
+   "rental-cban-12",
+   "sample-18",
+   "sample-26",
+   "sample-03",
+   "mjj-2022-ukekent",
+   "mjj-2019-dojo",
+   "rental-cban-15",
+   "mjj-2010-semistar",
+   "mjj-2010-garap-b",
+   "mjj-2011-garatank",
+   "mjj-2011-frozenhell-2008",
+   "sample-27",
+   "mjj-2020-kb-2020"
+  ],
+  "offprior": [
+   "offprior-01",
+   "offprior-02",
+   "offprior-03",
+   "offprior-04",
+   "offprior-05",
+   "offprior-06",
+   "offprior-07",
+   "offprior-08",
+   "offprior-09",
+   "offprior-10",
+   "offprior-11",
+   "offprior-12",
+   "offprior-13",
+   "offprior-14",
+   "offprior-15",
+   "offprior-16",
+   "mjj-2012-goinkyo-t2",
+   "mjj-2012-goinkyo-t3",
+   "mjj-2011-murai-t1",
+   "mjj-2011-frozenhell-t0"
+  ],
+  "strongnull": [
+   "hc75-top8-tezan",
+   "mjj-2025-hapim",
+   "sample-21",
+   "rental-cban-13",
+   "mjj-2021-q10con",
+   "sample-06",
+   "sample-01",
+   "mjj-2023-ukethdr"
+  ]
+ },
+ "results": {
+  "collide": {
+   "opponents": 1,
+   "mf1": {
+    "games": 64,
+    "score": 0.6875,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "identicalGames": 1.0
+    }
+   },
+   "strongonly": {
+    "games": 64,
+    "score": 0.71875,
+    "caps": 0,
+    "v3_minus": {
+     "diff": -0.03125,
+     "ci95": [
+      -0.203125,
+      0.125
+     ],
+     "identicalGames": 0.0
+    }
+   },
+   "unweighted": {
+    "games": 64,
+    "score": 0.6875,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "identicalGames": 1.0
+    }
+   },
+   "v1": {
+    "games": 64,
+    "score": 0.640625,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.046875,
+     "ci95": [
+      -0.03125,
+      0.140625
+     ],
+     "identicalGames": 0.0
+    }
+   },
+   "v3": {
+    "games": 64,
+    "score": 0.6875,
+    "caps": 0
+   }
+  },
+  "weak": {
+   "opponents": 13,
+   "mf1": {
+    "games": 832,
+    "score": 0.6971153846153846,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "identicalGames": 1.0
+    }
+   },
+   "strongonly": {
+    "games": 832,
+    "score": 0.5552884615384616,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.14182692307692307,
+     "ci95": [
+      0.09254807692307693,
+      0.18389423076923078
+     ],
+     "identicalGames": 0.002403846153846154
+    }
+   },
+   "unweighted": {
+    "games": 832,
+    "score": 0.6971153846153846,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "identicalGames": 1.0
+    }
+   },
+   "v1": {
+    "games": 832,
+    "score": 0.6430288461538461,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.054086538461538464,
+     "ci95": [
+      0.025240384615384616,
+      0.08533653846153846
+     ],
+     "identicalGames": 0.46634615384615385
+    }
+   },
+   "v3": {
+    "games": 832,
+    "score": 0.6971153846153846,
+    "caps": 0
+   }
+  },
+  "offprior": {
+   "opponents": 20,
+   "mf1": {
+    "games": 1280,
+    "score": 0.5703125,
+    "caps": 0,
+    "v3_minus": {
+     "diff": -0.0125,
+     "ci95": [
+      -0.02890625,
+      0.00234375
+     ],
+     "identicalGames": 0.55390625
+    }
+   },
+   "strongonly": {
+    "games": 1280,
+    "score": 0.56875,
+    "caps": 0,
+    "v3_minus": {
+     "diff": -0.0109375,
+     "ci95": [
+      -0.04296875,
+      0.01875
+     ],
+     "identicalGames": 0.1578125
+    }
+   },
+   "unweighted": {
+    "games": 1280,
+    "score": 0.55,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.0078125,
+     "ci95": [
+      -0.02734375,
+      0.04140625
+     ],
+     "identicalGames": 0.00546875
+    }
+   },
+   "v1": {
+    "games": 1280,
+    "score": 0.55546875,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.00234375,
+     "ci95": [
+      -0.01796875,
+      0.025
+     ],
+     "identicalGames": 0.0046875
+    }
+   },
+   "v3": {
+    "games": 1280,
+    "score": 0.5578125,
+    "caps": 0
+   }
+  },
+  "strongnull": {
+   "opponents": 8,
+   "mf1": {
+    "games": 480,
+    "score": 0.5645833333333333,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "identicalGames": 1.0
+    }
+   },
+   "strongonly": {
+    "games": 480,
+    "score": 0.5645833333333333,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "identicalGames": 1.0
+    }
+   },
+   "unweighted": {
+    "games": 480,
+    "score": 0.5645833333333333,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "identicalGames": 1.0
+    }
+   },
+   "v1": {
+    "games": 480,
+    "score": 0.49583333333333335,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.06875,
+     "ci95": [
+      0.03125,
+      0.11041666666666666
+     ],
+     "identicalGames": 0.40208333333333335
+    }
+   },
+   "v3": {
+    "games": 480,
+    "score": 0.5645833333333333,
+    "caps": 0
+   }
+  }
+ }
+}

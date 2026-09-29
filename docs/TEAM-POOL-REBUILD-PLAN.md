@@ -1,7 +1,7 @@
 # Blind product and team-pool rebuild
 
-Status: **planned, not implemented or remeasured**. Owner direction updated
-2026-09-30. This is the authoritative plan and handoff; update it in place.
+Status: **in progress (2026-09-30)** — see [§Progress](#progress). Owner
+direction updated 2026-09-30. This is the authoritative plan and handoff; update it in place.
 The starting implementation is local `master` at `d3b7059`, 18 commits ahead
 of the locally recorded `origin/master` (`23168bb`); the working tree was clean.
 The previous rebuild is integrated locally but is not accepted as a measured
@@ -279,3 +279,50 @@ Completion requires:
   failure; rerun after changes instead of carrying forward a pass claim.
 - Clear local/validated/published status. Commit local milestones; do not publish
   without explicit authorization. The next AI starts at step 1, not deployment.
+
+## Progress
+
+Branch `blind-rebuild` (local, not pushed). Each item names its evidence.
+
+### Step 1 — product contract (done)
+
+- Live play is blind: `/` and its alias `?blind` are one door; no opponent
+  picker, no open-sheet surface, no baked pair tables on any door; worker,
+  ladder client (`tools/ps-client.js`, blind-only, `--mode`/`--no-tables`
+  retired) and evaluator use the one blind profile (c = 0.4, 27,000). The
+  `open` profile stays only to replay records made under it (forks, kifu).
+- Wasm `BlindSearcher`/`ProtocolSearcher` default c is the blind profile's
+  (was an implicit 1.0); `fromFork` defaults to its record's profile; the
+  true-state research `Searcher` keeps 1.0 and is not reachable from a
+  product door.
+- `team_eval` refuses a spec without `:C` and stamps every record with
+  `cond` (bot build fingerprint, both priors' fingerprints, turn cap, seed
+  base, preview/ponder); resume refuses any other condition.
+- Remaining difference, recorded rather than removed: the browser ponders
+  (up to 10× the budget while the human thinks); the ladder and all
+  fixed-work measurements do not.
+- Checks: web e2e 42/42 and the worker-profile check pass against stand-in
+  files; wasm node smoke/determinism/fork/kifu/solver pass. Rerun on the
+  real artifacts before completion.
+
+### Step 2 — opponent prior (screen done, 27k confirmation running)
+
+`data/belief-pool-v3` = v2's 102 teams + カビバン 2020 restored (its
+dominated verdict was never reconfirmed under c = 0.4), same allocation rule,
+generated without reading selection labels. Held-out test, row X = 4 teams
+with the arm's prior, column = blind with v3, blind:3000:0.4, seed base
+20261101, 8 seeds (`tools/belief-pool-v3.py`, report in
+`data/belief-pool-v3/measurements/`):
+
+| Opponent group | v3 | v3 − v1 | v3 − strong-only | v3 − machine ×1 | v3 − unweighted |
+|---|---|---|---|---|---|
+| weak/pending human (13) | 0.697 | +0.054 [+0.025, +0.085] | +0.142 [+0.093, +0.184] | 0 (identical) | 0 (identical) |
+| off-prior (20) | 0.558 | +0.002 [−0.018, +0.025] | −0.011 [−0.043, +0.019] | −0.013 [−0.029, +0.002] | +0.008 [−0.027, +0.041] |
+| strong, unique preview (8) | 0.565 | +0.069 [+0.031, +0.110] | 0 (identical) | 0 (identical) | 0 (identical) |
+| strong, colliding (1) | 0.688 | +0.047 [−0.031, +0.141] | −0.031 [−0.203, +0.125] | 0 | 0 |
+
+The weak component costs nothing against strong teams and gains against
+weak ones; machine factor and weighted fallback are unresolvable here (only
+off-prior games differ). Confirmation at blind:27000:0.4 (seed base
+20261102, 2 seeds): v3 and v1 on all cells, strong-only where it differs.
+
