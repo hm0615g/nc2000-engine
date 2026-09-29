@@ -593,18 +593,16 @@ Milestones:
   `a_dead_opponent_bench_stays_dead`). Live play was never affected: a real tracker sets both on the
   same switch line.
 
+- **Blind product and team-pool rebuild: OPEN (2026-09-30).** The previous rebuild is
+  integrated locally but unvalidated at product conditions and not deployed. The
+  owner now requires blind-only play at c = 0.4, remeasurement, and one stronger
+  selected pool shared by the human play-screen catalog and ordinary bot draws,
+  targeting 15–30 parties. The authoritative plan, evidence limits and next-AI
+  handoff are in [`docs/TEAM-POOL-REBUILD-PLAN.md`](docs/TEAM-POOL-REBUILD-PLAN.md).
+
 Parked (not scheduled, not dead-by-principle):
 
 - Preview-table baking in any form (owner-ruled meaningless 2026-07-21 — revisit only with a lookup that generalizes off-pool), and M11 certification tables.
-- **Team pool, opponent prior and Nash rebuild: DONE (2026-09-29, local, not deployed).** 魔人島's
-  serious teams joined the candidate universe (`data/team-inventory-v1`, one classified inventory
-  with provenance, eligibility and near-variant clusters). Under a protocol frozen before any score
-  was opened, 103 measured teams became 79 strong / 21 weak / 2 pending / 1 dominated. Three files
-  replace the old roles: the bot's own teams (`data/team-pool-v1`, strong only), the opponent prior
-  every blind searcher uses (`data/belief-pool-v2`, strong + weak with cluster weights, now honored
-  by `belief.rs`), and the Nash mixture (`data/meta-nash-v2`, solved blind-vs-blind on that prior at
-  3000 iterations). Start-screen lists are unchanged. Results, open owner decisions and limits:
-  [`docs/TEAM-POOL-REBUILD-PLAN.md`](docs/TEAM-POOL-REBUILD-PLAN.md) §Results.
 - **The Web open-sheet budget gate (M17b Web tier), parked 2026-07-25 by the owner on UX grounds.** 30k + ponder is the product's sweet spot: on the certified device (iPad, 12,987 it/s) 15k/30k/60k are 1.2/2.3/4.6 s per move, so of the gate's three outcomes lowering is unwanted, retaining is a no-op, and only a large 60k gain would justify doubling the wait — which lands precisely on the points ponder cannot hide (bot-only forced replacements, and moves the human commits fast). The gate also does not measure the shipped configuration: it fixes both budgets while the product ponders past its budget to a 10x cap, so at simultaneous decision points the real budget is already 30k–300k depending on human think time. Prior evidence says the effect is small anyway — the native tier's own doubling (10k→20k) scored 0.5238 [0.4918, 0.5557], ≈ +17 Elo point / +39 Elo at the 95% edge, and that was measured in a steeper part of the curve. Cost avoided: ≈ 2–10.5 h on a 16-vCPU worker depending on which branches fire. Reopen if a ladder postmortem attributes a loss to search depth at a non-pondered decision point, or if device/engine speed makes 60k fit inside 2–3 s.
 
 Non-goals: exploitation/opponent modeling, large NNs / GPU inference, minor-party *optimization* (custom parties are accepted since the 2026-07-17 decision, but priors/tables/evaluation still specialize on the meta pool), whole-game equilibrium solving, unpermissioned main-ladder botting. Longer-term verification ideas stay live: coverage-forcing corpora, expert scenario fixtures, predicted-vs-actual diffing during live play.
