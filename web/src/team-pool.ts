@@ -1,10 +1,11 @@
-// The meta pool as something the user can replace — one file, the whole
-// pool.
+// The list pool as something the user can replace — one file under
+// `?blind`.
 //
-// Everything downstream of "the pool" moves together, because they are all
-// reads of this one object: the bot's random draw, the candidate set its
-// blind-mode belief is built over, and both team lists on the start screen.
-// There is no way to swap one and not the others, and the UI copy says so.
+// Two things move together, because they are both reads of this one
+// object: the bot's draw and both team lists on the start screen. The bot's
+// blind belief is NOT one of them — it is the shipped opponent prior
+// (app.tsx), so a file of the user's favourite teams cannot quietly become
+// the bot's model of every opponent. The UI copy says both halves.
 //
 // The loader is generous going in and strict coming out.
 //

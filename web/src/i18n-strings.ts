@@ -153,13 +153,13 @@ export interface UIStrings {
   priorNotApplied: string;
   priorWarnings: string;
   priorLoadFailed: (why: string) => string;
-  // swappable team pool: one file replaces the pool everywhere blind mode
-  // reads it — the bot's draw, the belief's candidate set, the human team
-  // list — and poolHelp has to say all three, or the swap looks like it only
-  // changes the list the user happens to be looking at. The panel now lives
-  // inside the blind setup modal and is unreachable from open mode, which is
-  // pinned to the bundled pool; so poolHelp names blind outright (it is the
-  // only mode that can see this text) and says open ignores the file.
+  // swappable team pool: under blind mode one file replaces the bot's draw
+  // and the human team list, while the bot's picture of possible opponents
+  // stays the shipped prior — poolHelp has to say both halves, or the swap
+  // looks like it also rewires the belief. The panel lives inside the blind
+  // setup modal and is unreachable from open mode, which is pinned to the
+  // bundled pool; so poolHelp names blind outright (it is the only mode that
+  // can see this text) and says open ignores the file.
   poolLabel: string;
   poolBundled: (n: number) => string;
   poolLoaded: (name: string, n: number) => string;
@@ -457,10 +457,10 @@ const EN: UIStrings = {
   poolBundled: (n) => `Bundled (${n} ${n === 1 ? "team" : "teams"})`,
   poolLoaded: (name, n) => `${name} (${n} ${n === 1 ? "team" : "teams"})`,
   poolHelp:
-    "A pool file replaces the pool everywhere blind mode uses it: the teams " +
-    "the opponent is drawn from, the candidates the bot narrows that " +
-    "opponent down to, and your own team list on this screen. Without " +
-    "?blind the page always plays the bundled pool and ignores this file. " +
+    "In blind mode a pool file replaces the teams the opponent is drawn " +
+    "from and your own team list on this screen. The bot's picture of what " +
+    "you might bring stays the shipped set of known teams. Without ?blind " +
+    "the page always plays the bundled pool and ignores this file. " +
     "Same JSON as the " +
     "bundled pool — {\"teams\": [{\"id\": …, \"sets\": […]}]} is the minimum, " +
     "a bare array of teams also reads, and id / tier / rank are filled in " +
@@ -744,10 +744,11 @@ const JA: UIStrings = {
   poolBundled: (n) => `同梱(${n}チーム)`,
   poolLoaded: (name, n) => `${name}(${n}チーム)`,
   poolHelp:
-    "ブラインドでプールを使っている箇所はすべて、このファイルに置き換わり" +
-    "ます — 相手チームの抽選元、ボットが相手を絞り込む候補、そしてこの" +
-    "画面の自分のチーム一覧です。?blind の付かない通常の画面は常に同梱" +
-    "プールで対戦し、このファイルを見ません。形式は同梱プールと同じ JSON " +
+    "ブラインドでは、相手チームの抽選元とこの画面の自分のチーム一覧が" +
+    "このファイルに置き換わります。あなたのチームを推測するためにボットが" +
+    "使う既知チームの一覧は、同梱のまま変わりません。?blind の付かない" +
+    "通常の画面は常に同梱プールで対戦し、このファイルを見ません。形式は" +
+    "同梱プールと同じ JSON " +
     "で、{\"teams\": [{\"id\": …, \"sets\": […]}]} が最小。チームだけの配列" +
     "でも読めます(id・tier・rank は無ければこちらで補います)。各チーム" +
     "はちょうど6体で、この形式のルールに照らして検査し、対戦できない" +

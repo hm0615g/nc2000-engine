@@ -18,15 +18,17 @@
 // and, since the swap is now blind-only, so that open mode has the
 // untouched pool to play no matter what the user loaded (see `activePool`).
 //
-// `?nash` (META-NASH v1's conclusion) is blind play with one substitution
-// and one subtraction. The substitution: the opponent is drawn from the
-// solved three-team mixture instead of uniformly from the pool — the draw
-// rule lives in one place here, `drawOpponent`, because the start screen and
-// the rematch must roll identically or the mixed strategy is not the thing
-// being played. The subtraction: nothing is configurable, so nash pins the
-// bundled pool exactly as open mode does and never passes a belief prior.
-// What the bot ASSUMES about its opponent is untouched by all of this
-// (docs/META-NASH-V1.md §4) — only which team it brings.
+// Three team files, three questions (docs/TEAM-POOL-REBUILD-PLAN.md):
+// which team the bot brings (the ordinary own-team pool, team-pool-v1:
+// teams classified strong; or, on `?nash`, the solved mixture,
+// meta-nash-v2), what the bot assumes about the team it faces (the shipped
+// opponent prior, belief-pool-v2, on every blind door), and which teams a
+// human can pick from the lists (the bundled pool, meta-pool-v0, or the
+// user's pool file under `?blind`). None of them is read in another's place.
+// The bot's draw lives in one place, `drawOpponent`, because the start
+// screen and the rematch must roll identically. `?nash` has nothing
+// configurable: it pins the bundled lists as open mode does and never passes
+// a belief prior table.
 
 import { useEffect, useState } from "preact/hooks";
 import { loadEngine } from "./engine";
@@ -35,11 +37,13 @@ import {
   fetchDexJson,
   fetchI18nJa,
   fetchNashArtifact,
+  fetchOwnPool,
   fetchPool,
 } from "./data";
 import { loadSetDex } from "./set-info";
 import { randomPoolTeam, type SelectedTeam } from "./pool-pick";
 import { drawNashTeam, parseNashArtifact, type NashMix } from "./nash-mix";
+import { drawOwnTeam, parseOwnPool, type OwnPool } from "./own-pool";
 import { infoModeOf, readDoor, type Door, type InfoMode } from "./info-mode";
 import {
   clearStoredPool,
@@ -124,15 +128,13 @@ export function App() {
   // never null on a nash page that got past boot: a failure to load or
   // validate it fails the page (see the boot effect).
   const [nashMix, setNashMix] = useState<NashMix | null>(null);
-  // The nash door's belief candidate pool (EXP-PRIOR-EXPLOIT v1): the
-  // searcher's candidate set only. Own-team draw, screen lists and baked
-  // tables keep reading the bundled pool — this is the one documented
-  // exception to "everything downstream of the pool moves together", and
-  // it exists because identification is the prior's entire measured value
-  // while the pool's other roles must not inherit the study's exploiter
-  // teams (drawing them as the bot's own team would be a strength
-  // regression, Route A's non-regression FAIL).
-  const [nashBeliefJson, setNashBeliefJson] = useState<string | null>(null);
+  // The bot's ordinary own-team pool; null only on the solver door, which
+  // plays no game.
+  const [ownPool, setOwnPool] = useState<OwnPool | null>(null);
+  // The shipped opponent prior: the blind searcher's candidate set only, on
+  // every blind door and the solver. Loading a pool file under `?blind`
+  // changes the lists and the draw, never this.
+  const [beliefJson, setBeliefJson] = useState<string | null>(null);
   const [loc, setLoc] = useState<Locale>(locale());
   // A table the user once picked by hand; nothing here ever fetches one on
   // its own (crates/bot/src/prior.rs:491).
@@ -146,17 +148,18 @@ export function App() {
         // sheets without move meta).
         // The nash artifact rides along in the same wave — one door's
         // 11 KB, fetched only on that door, never on the product page.
-        const [, pd, , , nashText, beliefPd] = await Promise.all([
+        const [, pd, , , nashText, beliefPd, ownText] = await Promise.all([
           loadEngine(),
           fetchPool(),
           loadJaNames(fetchI18nJa),
           loadSetDex(fetchDexJson),
           NASH ? fetchNashArtifact() : Promise.resolve(""),
-          // The solver reasons with the same shipped belief pool the nash
-          // door hands its bot: identification is the whole of what the
-          // opponent panel's "moves shown" field buys, and the wider table
-          // is what it is bought against.
-          NASH || SOLVER ? fetchBeliefPool() : Promise.resolve(null),
+          // The solver reasons with the same shipped prior every blind bot
+          // uses: identification is the whole of what the opponent panel's
+          // "moves shown" field buys, and this table is what it is bought
+          // against.
+          MODE === "blind" || SOLVER ? fetchBeliefPool() : Promise.resolve(null),
+          SOLVER ? Promise.resolve("") : fetchOwnPool(),
         ]);
         const bundledPool: LoadedPool = {
           name: null,
@@ -173,8 +176,13 @@ export function App() {
           if (!parsed.ok) throw new Error(parsed.errors.join("; "));
           setNashMix(parsed.mix);
         }
-        if (NASH || SOLVER) {
-          setNashBeliefJson(beliefPd ? beliefPd.poolJson : null);
+        if (MODE === "blind" || SOLVER) {
+          setBeliefJson(beliefPd ? beliefPd.poolJson : null);
+        }
+        if (!SOLVER) {
+          const own = parseOwnPool(ownText);
+          if (!own.ok) throw new Error(own.errors.join("; "));
+          setOwnPool(own.pool);
         }
         // Only now: re-validating a stored pool runs the wasm validator,
         // which the engine load above is what makes available. Restored in
@@ -201,8 +209,9 @@ export function App() {
     status === "error" ||
     !loadedPool ||
     !bundled ||
-    (NASH && (!nashMix || !nashBeliefJson)) ||
-    (SOLVER && !nashBeliefJson)
+    (NASH && !nashMix) ||
+    ((MODE === "blind" || SOLVER) && !beliefJson) ||
+    (!SOLVER && !ownPool)
   ) {
     return (
       <div class="center-screen">
@@ -214,18 +223,17 @@ export function App() {
     );
   }
 
-  // The one pool everything below reads. A loaded file stays in state — it
-  // is the user's, and `?blind` will find it again — but only blind mode
-  // plays it: whoever opens `/` gets the bundled pool, every time. Keeping
-  // the file live in open mode while hiding the control that loaded it would
-  // leave a stored pool quietly rewriting the public team lists, with no sign
-  // of why and nothing on screen to undo it. This is the same line the belief
-  // prior already sits behind, where an open game refuses the table outright
-  // rather than half-using it.
+  // The list pool: the teams on the start screen, and under `?blind` with a
+  // loaded file also the bot's draw. A loaded file stays in state — it is
+  // the user's, and `?blind` will find it again — but only blind mode plays
+  // it: whoever opens `/` gets the bundled lists, every time. Keeping the
+  // file live in open mode while hiding the control that loaded it would
+  // leave a stored pool quietly rewriting the public team lists, with no
+  // sign of why and nothing on screen to undo it.
   // Nash sits on the bundled side of this line with open mode: the mode is
   // a fixed configuration or it is not the conclusion, so a pool file the
-  // user once loaded through `?blind` must not quietly redefine the bot's
-  // candidate set here. `?blind` still finds that file, untouched.
+  // user once loaded through `?blind` must not quietly redefine what the
+  // bot brings here. `?blind` still finds that file, untouched.
   const activePool = MODE === "blind" && !NASH && !SOLVER ? loadedPool : bundled;
 
   // The study board takes over the page. Nothing below it runs: there is no
@@ -235,7 +243,7 @@ export function App() {
     return (
       <Solver
         pool={bundled.pool}
-        poolJson={nashBeliefJson!}
+        poolJson={beliefJson!}
         locale={loc}
         onLocale={(l) => {
           setLocale(l);
@@ -245,12 +253,17 @@ export function App() {
     );
   }
 
-  /** The opponent draw, in one place because two callers must roll the same
-   * way: pressing Start, and every rematch. Nash samples the solved mixture;
-   * plain blind draws uniformly from the pool. (Open mode never comes here —
-   * its opponent is whatever the human picked on the screen.) */
+  /** The bot's team when nobody pinned one, in one place because every
+   * caller must roll the same way: Start (blind, and open with "Random"),
+   * and every blind rematch. Nash samples the solved mixture; a pool file
+   * the user loaded under `?blind` is drawn uniformly, because that file is
+   * what they chose to face; otherwise the ordinary own-team pool. */
   const drawOpponent = (): SelectedTeam =>
-    NASH && nashMix ? drawNashTeam(nashMix) : randomPoolTeam(activePool.pool);
+    NASH && nashMix
+      ? drawNashTeam(nashMix)
+      : activePool.name !== null
+        ? randomPoolTeam(activePool.pool)
+        : drawOwnTeam(ownPool!);
 
   if (!game) {
     return (
@@ -267,6 +280,9 @@ export function App() {
         nash={NASH}
         nashMix={nashMix}
         drawOpponent={drawOpponent}
+        botDrawCount={
+          activePool.name !== null ? activePool.pool.teams.length : ownPool!.teams.length
+        }
         prior={prior}
         onPrior={setPrior}
         onStart={(human, bot) => setGame({ human, bot, n: 1, mode: MODE })}
@@ -277,12 +293,10 @@ export function App() {
   return (
     <Game
       key={game.n}
-      // The searcher's candidate pool. On the nash door this is the
-      // belief-pool-v1 artifact (curated 32 + known strong candidates) —
-      // reaching ONLY the belief: nash is blind, and a blind game never
-      // fetches pair tables (game.tsx), so no baked artifact is ever read
-      // against these indices.
-      poolJson={NASH && nashBeliefJson ? nashBeliefJson : activePool.poolJson}
+      // The searcher's candidate pool. Blind: the shipped prior, reaching
+      // ONLY the belief (a blind game never fetches pair tables, game.tsx).
+      // Open: the list pool, which the pinned belief never consults.
+      poolJson={game.mode === "blind" && beliefJson ? beliefJson : activePool.poolJson}
       // Baked artifacts are indexed by the bundled pool's rank order, so a
       // swapped pool's indices name different teams entirely. Open mode is
       // never custom by construction, which is what gives the public build

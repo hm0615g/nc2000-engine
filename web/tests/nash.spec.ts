@@ -1,8 +1,8 @@
-// `?nash` — META-NASH v1's conclusion mode.
+// `?nash` — the Nash door.
 //
 // Nash is blind play with the opponent's team replaced by a draw from the
-// solved three-team mixture (data/meta-nash-v1/pool-artifact.json) and every
-// control removed. blind.spec.ts already owns the blind information
+// solved mixture (data/meta-nash-v2/pool-artifact.json) and every control
+// removed. blind.spec.ts already owns the blind information
 // contract — the foe's sets never reach the DOM, the reveal at the end —
 // and nash rides on exactly the same machinery (info-mode.ts maps the nash
 // door onto InfoMode "blind", so game.tsx cannot tell the two apart). What
@@ -14,16 +14,16 @@
 //   2. the mixture on screen is the artifact's, weights and all, read-only
 //      and set-free — it is a readout, and the one thing it must never
 //      become is a picker;
-//   3. the team actually drawn is one of the three arms, matched species
-//      and level for species and level against the file;
+//   3. the team actually drawn is one of the mixture's arms, matched
+//      species and level for species and level against the file;
 //   4. a belief prior sitting in localStorage from an earlier `?blind`
 //      visit does NOT reach a nash game. That is the mode's "one shipped
 //      configuration" promise, and it is the only one of the four that
 //      state left over from another door could silently break.
-//   5. the belief candidate pool is the belief-pool-v1 artifact
-//      (EXP-PRIOR-EXPLOIT v1): the nash door fetches it, the other doors
-//      never do, and it is load-bearing — a nash page that cannot get it
-//      fails closed instead of quietly playing under the plainer prior.
+//   5. the belief candidate pool is the shipped opponent prior
+//      (data/belief-pool-v2): every blind door fetches it, the open door
+//      never does, and it is load-bearing — a nash page that cannot get it
+//      fails closed instead of quietly playing under a plainer prior.
 //
 // (4) is the reason this suite plays a whole game against a hand-mixed
 // off-pool party: the prior only ever governs the fallback roster, so a
@@ -62,7 +62,7 @@ interface CustomRecord {
 
 const artifact = JSON.parse(
   readFileSync(
-    new URL("../../data/meta-nash-v1/pool-artifact.json", import.meta.url),
+    new URL("../../data/meta-nash-v2/pool-artifact.json", import.meta.url),
     "utf8",
   ),
 ) as { teams: NashTeamJson[] };
@@ -103,10 +103,17 @@ const mixedSets: SetJson[] = [
   ...[1, 2, 5].map((i) => pool.teams[29].sets[i]),
 ];
 
+const beliefPool = JSON.parse(
+  readFileSync(
+    new URL("../../data/belief-pool-v2/belief-pool.json", import.meta.url),
+    "utf8",
+  ),
+) as { teams: { id: string; sets: SetJson[] }[] };
+
 /** Must be empty, or the bot identifies the party by signature, the belief
  * never falls back, and a dead prior chip would "pass" for the wrong
  * reason. Asserted in the test that depends on it. */
-const mixTwins = pool.teams
+const mixTwins = [...pool.teams, ...beliefPool.teams]
   .filter((t) => sameSpeciesSet(t.sets, mixedSets))
   .map((t) => t.id);
 
@@ -244,8 +251,7 @@ test("the mixture panel is the artifact, read-only and set-free", async ({
   await expect(panel).toBeVisible();
   await expect(panel.locator(".team-card")).toHaveCount(artifact.teams.length);
 
-  // Weights are the file's, renormalized (the shipped three sum to 0.998),
-  // and shown to one decimal.
+  // Weights are the file's, renormalized, and shown to one decimal.
   const total = artifact.teams.reduce((a, t) => a + t.weight, 0);
   for (const t of artifact.teams) {
     const card = panel.locator(`[data-nash="${t.id}"]`);
@@ -319,37 +325,39 @@ test("the drawn opponent is one arm of the mixture, and no prior reaches the gam
   expect(errors).toEqual([]);
 });
 
-test("the nash belief pool is belief-pool-v1, exclusive to the door and load-bearing", async ({
+test("the belief pool is the shipped prior, fetched by blind doors only and load-bearing", async ({
   page,
 }) => {
-  // (a) the nash door fetches the artifact and boots on it.
+  // (a) the nash door fetches the prior and boots on it; so does ?blind.
   const errors = guardConsole(page);
   const beliefUrls: string[] = [];
   page.on("request", (r) => {
-    if (r.url().includes("belief-pool-v1/belief-pool.json"))
+    if (r.url().includes("belief-pool-v2/belief-pool.json"))
       beliefUrls.push(r.url());
   });
   const gotBelief = page.waitForResponse(
-    (r) => r.url().includes("belief-pool-v1/belief-pool.json") && r.ok(),
+    (r) => r.url().includes("belief-pool-v2/belief-pool.json") && r.ok(),
   );
   await page.goto("/?nash");
   await gotBelief;
   await expect(page.locator('[data-party="nash"]')).toBeVisible();
   expect(beliefUrls.length).toBeGreaterThan(0);
-  expect(errors).toEqual([]);
-
-  // (b) neither plain door asks for it: the swap is the nash door's alone.
   beliefUrls.length = 0;
   await page.goto("/?blind");
   await expect(page.locator('[data-party="settings"]')).toBeVisible();
+  expect(beliefUrls.length).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+
+  // (b) the open door never asks for it: its belief is the pinned sheet.
+  beliefUrls.length = 0;
   await page.goto("/");
   await expect(page.locator(".start-col").first()).toBeVisible();
   expect(beliefUrls).toEqual([]);
 
   // (c) load-bearing: a nash page that cannot get the file fails closed
-  // (the boot error box), never a quiet game under the plainer prior.
-  await page.route("**/belief-pool-v1/**", (r) => r.abort());
+  // (the boot error box), never a quiet game under a plainer prior.
+  await page.route("**/belief-pool-v2/**", (r) => r.abort());
   await page.goto("/?nash");
   await expect(page.locator(".error-box")).toBeVisible();
-  await page.unroute("**/belief-pool-v1/**");
+  await page.unroute("**/belief-pool-v2/**");
 });

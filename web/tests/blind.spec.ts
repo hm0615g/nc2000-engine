@@ -76,6 +76,22 @@ const pool = JSON.parse(
   ),
 ) as { teams: PoolTeamJson[] };
 
+/** The bot's ordinary own-team pool: what a plain blind game draws from. */
+const ownPool = JSON.parse(
+  readFileSync(
+    new URL("../../data/team-pool-v1/team-pool.json", import.meta.url),
+    "utf8",
+  ),
+) as { teams: PoolTeamJson[] };
+
+/** The shipped opponent prior every blind searcher identifies against. */
+const beliefPool = JSON.parse(
+  readFileSync(
+    new URL("../../data/belief-pool-v2/belief-pool.json", import.meta.url),
+    "utf8",
+  ),
+) as { teams: PoolTeamJson[] };
+
 // Three sets from each of the two pool teams the open-sheet suite already
 // uses for their short, decisive games. Every set stays a verbatim legal
 // pool set (learnsets/DVs inherited), species and items stay unique across
@@ -103,7 +119,7 @@ const customBlind: CustomRecord = {
  * empty, or the bot identifies the "custom" opponent by signature and both
  * the fallback and the prior go untested. Asserted in the tests that rely
  * on it so the failure names the cause instead of showing a dead chip. */
-const mixTwins = pool.teams
+const mixTwins = [...pool.teams, ...beliefPool.teams]
   .filter((t) => sameSpeciesSet(t.sets, mixedSets))
   .map((t) => t.id);
 
@@ -423,8 +439,8 @@ test("blind hides the foe's sets for the whole game, then reveals them at the en
     const heading = (await foeSheet.locator("h3").innerText()).trim();
     const id = /^Foe team \((.+)\)$/.exec(heading)?.[1];
     expect(id, `foe heading should name the pool team: ${heading}`).toBeTruthy();
-    const drawn = pool.teams.find((t) => t.id === id);
-    expect(drawn, `drawn opponent ${id} must be a pool team`).toBeTruthy();
+    const drawn = ownPool.teams.find((t) => t.id === id);
+    expect(drawn, `drawn opponent ${id} must be an own-pool team`).toBeTruthy();
     await expectExactSets(foeSheet, drawn!.sets);
     await page.locator("dialog.modal .modal-head button").click();
   });

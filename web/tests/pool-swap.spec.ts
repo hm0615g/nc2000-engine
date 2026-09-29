@@ -1,6 +1,8 @@
 // Swappable team pool (UI revision P2/P3, retargeted onto the Blind setup
-// modal): one file replaces the pool everywhere the pool is read — and
-// only under `?blind`.
+// modal): under `?blind` one file replaces the team lists and the bot's
+// draw — and NOT the bot's belief, which stays the shipped opponent prior
+// (docs/TEAM-POOL-REBUILD-PLAN.md: own-team draws independent of the
+// opponent belief, custom flow included).
 //
 // The thing under test is a replacement, not a list — so every case here
 // checks the swap through a second consumer as well as through the button
@@ -452,29 +454,28 @@ test("a swapped pool plays a full blind game", async ({ page }) => {
   await expect(page.locator('[data-party="settings"]')).toHaveCount(1);
   await expect(page.locator('[data-party="bot"]')).toHaveCount(0);
 
-  // Blind draws the opponent from the pool that was loaded, and the
-  // searcher is handed the same normalized JSON — a pool the wasm side
-  // could not read would fail here, at battle construction, not on screen.
+  // Blind draws the opponent from the pool that was loaded — a pool the
+  // wasm side could not read would fail here, at battle construction, not
+  // on screen.
   await page.getByRole("button", { name: "Start battle" }).click();
   await expect(page.locator(".preview-screen")).toBeVisible();
   await choosePreview(page);
 
-  // The belief chip is the only place the WORKER's pool becomes visible,
-  // and it is what makes this case more than a re-run of P3-1. Both fixture
-  // teams carry the level bump, so whichever one the human drew is a party
-  // no bundled team can explain:
-  //   worker holding the loaded pool  -> exactly one candidate survives the
-  //                                      preview filter, "1 candidate";
-  //   worker holding the bundled pool -> no candidate survives, the belief
-  //                                      falls back and reads "off-pool".
-  // The two worlds differ by one word, and only because of the bump — with
-  // a verbatim slice both of them would say "1 candidate".
+  // The belief chip is the only place the WORKER's candidate set becomes
+  // visible, and it is what makes this case more than a re-run of P3-1.
+  // Both fixture teams carry the level bump, so whichever one the human
+  // drew is a party only the loaded file can explain:
+  //   worker holding the shipped prior -> no candidate survives, the belief
+  //                                       falls back and reads "off-pool";
+  //   worker holding the loaded pool   -> "1 candidate" — the file leaking
+  //                                       into the belief, the defect.
+  // The two worlds differ by one word, and only because of the bump.
   await expect(page.locator(".move-btn").first()).toBeVisible({
     timeout: 90_000,
   });
   const chip = page.locator('[data-testid="belief-chip"]');
   await expect(chip).toBeVisible();
-  await expect(chip).toHaveText("bot's read: 1 candidate");
+  await expect(chip).toContainText("off-pool");
 
   await playToOutcome(page);
   await expect(page.locator(".end-banner")).toBeVisible();

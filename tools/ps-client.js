@@ -75,11 +75,14 @@ if (args.help || args.h) {
                     https://play.pokemonshowdown.com; only contacted when a
                     bare guest /trn is refused or --password is given)
   --format ID       format id (default ${FORMAT})
-  --team SPEC       pool:IDX | pool:random | FILE.json (required)
+  --team SPEC       pool:random | pool:ID | pool:IDX | FILE.json (required;
+                    pool = data/team-pool-v1, the bot's ordinary own-team
+                    pool; random draws by its drawWeight)
   --challenge USER  challenge USER repeatedly until --games are done
   --accept WHO      accept challenges: 'any' or comma list of names
   --games N         number of complete battles to play (default 1)
-  --mode M          blind (default; pool-prior belief) | open (pin the
+  --mode M          blind (default; belief = data/belief-pool-v2, the
+                    shipped opponent prior) | open (pin the
                     opponent's true sets — needs --opp-team-file, only
                     meaningful where sheets are genuinely open)
   --opp-team-file F opponent sets JSON for --mode open
@@ -171,8 +174,9 @@ const wsUrl = (() => {
 })();
 
 // ------------------------------------------------------------------ teams
-const pool = JSON.parse(fs.readFileSync(path.join(REPO, 'data/meta-pool-v0/meta-pool.json'), 'utf8'));
-const poolJson = JSON.stringify(pool);
+// Own team and opponent belief are separate files (docs/TEAM-POOL-REBUILD-PLAN.md).
+const ownPool = JSON.parse(fs.readFileSync(path.join(REPO, 'data/team-pool-v1/team-pool.json'), 'utf8'));
+const poolJson = fs.readFileSync(path.join(REPO, 'data/belief-pool-v2/belief-pool.json'), 'utf8');
 
 let rngState = (SEED ^ 0x9e3779b9) >>> 0;
 const rng = () => { // mulberry32 (random-mode choices + pool:random picks)
@@ -187,9 +191,22 @@ const rngInt = n => Math.floor(rng() * n);
 function pickTeam() {
 	if (TEAMSPEC.startsWith('pool:')) {
 		const which = TEAMSPEC.slice(5);
-		const idx = which === 'random' ? rngInt(pool.teams.length) : parseInt(which, 10);
-		if (!(idx >= 0 && idx < pool.teams.length)) throw new Error(`bad pool index ${which}`);
-		return { sets: pool.teams[idx].sets, label: `pool:${idx}` };
+		const teams = ownPool.teams;
+		let idx;
+		if (which === 'random') {
+			const total = teams.reduce((a, t) => a + t.drawWeight, 0);
+			let r = rng() * total;
+			idx = teams.length - 1;
+			for (let i = 0; i < teams.length; i++) {
+				if (r < teams[i].drawWeight) { idx = i; break; }
+				r -= teams[i].drawWeight;
+			}
+		} else {
+			idx = teams.findIndex(t => t.id === which);
+			if (idx < 0 && /^\d+$/.test(which)) idx = parseInt(which, 10);
+		}
+		if (!(idx >= 0 && idx < teams.length)) throw new Error(`bad pool team ${which}`);
+		return { sets: teams[idx].sets, label: `pool:${teams[idx].id}` };
 	}
 	const raw = JSON.parse(fs.readFileSync(TEAMSPEC, 'utf8'));
 	const sets = Array.isArray(raw) ? raw : raw.sets;

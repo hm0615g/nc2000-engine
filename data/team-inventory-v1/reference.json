@@ -1,0 +1,6559 @@
+{
+ "format": "nc2000-team-reference-v1",
+ "generator": "tools/build-team-products.js",
+ "protocol": "data/team-inventory-v1/PROTOCOL.md (v1)",
+ "counts": {
+  "records": 133,
+  "eligible": 115,
+  "measured": 103,
+  "strong": 79,
+  "weak": 21,
+  "pending": 2,
+  "dominated": 1,
+  "nashSupport": 10
+ },
+ "teams": [
+  {
+   "id": "hc75-1st-show",
+   "family": "hc75-top8",
+   "origin": "human",
+   "source": {
+    "kind": "tournament-report",
+    "name": "Historia Cup 7.5 (live NC2000 tournament, 27 players, 2022-05-03, hosted by Gold)",
+    "url": "https://gold.hatenadiary.jp/entry/2022/05/05/151859",
+    "authors": "show",
+    "version": "Historia Cup 7.5 1st"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "hc75-1st-show",
+   "evidence": {
+    "score": 0.5039702868852459,
+    "ci": [
+     0.48381894637978146,
+     0.5228825136612022
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc31",
+   "species": [
+    "Alakazam",
+    "Umbreon",
+    "Snorlax",
+    "Steelix",
+    "Suicune",
+    "Misdreavus"
+   ],
+   "levels": [
+    52,
+    52,
+    52,
+    51,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "hc75-2nd-toriyama",
+   "family": "hc75-top8",
+   "origin": "human",
+   "source": {
+    "kind": "tournament-report",
+    "name": "Historia Cup 7.5 (live NC2000 tournament, 27 players, 2022-05-03, hosted by Gold)",
+    "url": "https://gold.hatenadiary.jp/entry/2022/05/05/151859",
+    "authors": "toriyama",
+    "version": "Historia Cup 7.5 2nd"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "hc75-2nd-toriyama",
+   "evidence": {
+    "score": 0.5260843579234973,
+    "ci": [
+     0.5006339651639345,
+     0.5498665898224046
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc32",
+   "species": [
+    "Zapdos",
+    "Starmie",
+    "Snorlax",
+    "Exeggutor",
+    "Steelix",
+    "Misdreavus"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "hc75-3rd-bean",
+   "family": "hc75-top8",
+   "origin": "human",
+   "source": {
+    "kind": "tournament-report",
+    "name": "Historia Cup 7.5 (live NC2000 tournament, 27 players, 2022-05-03, hosted by Gold)",
+    "url": "https://gold.hatenadiary.jp/entry/2022/05/05/151859",
+    "authors": "bean",
+    "version": "Historia Cup 7.5 3rd"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "hc75-3rd-bean",
+   "evidence": {
+    "score": 0.5518271857923498,
+    "ci": [
+     0.5294121413934427,
+     0.5712090163934426
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc06",
+   "species": [
+    "Zapdos",
+    "Miltank",
+    "Snorlax",
+    "Exeggutor",
+    "Cloyster",
+    "Machamp"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "hc75-top8-tezan",
+   "family": "hc75-top8",
+   "origin": "human",
+   "source": {
+    "kind": "tournament-report",
+    "name": "Historia Cup 7.5 (live NC2000 tournament, 27 players, 2022-05-03, hosted by Gold)",
+    "url": "https://gold.hatenadiary.jp/entry/2022/05/05/151859",
+    "authors": "tezan",
+    "version": "Historia Cup 7.5 top8"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "hc75-top8-tezan",
+   "evidence": {
+    "score": 0.579106898907104,
+    "ci": [
+     0.5549820696721312,
+     0.6021644467213116
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc33",
+   "species": [
+    "Starmie",
+    "Miltank",
+    "Snorlax",
+    "Zapdos",
+    "Exeggutor",
+    "Misdreavus"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "hc75-top8-tsuru",
+   "family": "hc75-top8",
+   "origin": "human",
+   "source": {
+    "kind": "tournament-report",
+    "name": "Historia Cup 7.5 (live NC2000 tournament, 27 players, 2022-05-03, hosted by Gold)",
+    "url": "https://gold.hatenadiary.jp/entry/2022/05/05/151859",
+    "authors": "tsuru",
+    "version": "Historia Cup 7.5 top8"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "hc75-top8-tsuru",
+   "evidence": {
+    "score": 0.47105532786885257,
+    "ci": [
+     0.4533363217213115,
+     0.48967405225409844
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc34",
+   "species": [
+    "Entei",
+    "Machamp",
+    "Golem",
+    "Snorlax",
+    "Marowak",
+    "Exeggutor"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "sample-08",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Japanese Poké Cup community",
+    "version": "thread sample 08"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-08",
+   "evidence": {
+    "score": 0.597506830601093,
+    "ci": [
+     0.5824346823770491,
+     0.6122801400273222
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0.0948,
+   "variantCluster": "vc06",
+   "species": [
+    "Exeggutor",
+    "Machamp",
+    "Miltank",
+    "Cloyster",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    50,
+    55,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-15",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "thread sample 15"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-15",
+   "evidence": {
+    "score": 0.5259989754098361,
+    "ci": [
+     0.5004237107240438,
+     0.5514867230191258
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc27",
+   "species": [
+    "Machamp",
+    "Starmie",
+    "Cloyster",
+    "Skarmory",
+    "Misdreavus",
+    "Snorlax"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-15-orig",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "reconstructed-original",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "original of thread sample 15 per its note"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-15-orig",
+   "evidence": {
+    "score": 0.5006830601092896,
+    "ci": [
+     0.4772018015710383,
+     0.5244226007513662
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc27",
+   "species": [
+    "Machamp",
+    "Starmie",
+    "Cloyster",
+    "Skarmory",
+    "Misdreavus",
+    "Snorlax"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-04",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Chio, Friend of Mr. Golem 120, Stealth Croc",
+    "version": "thread sample 04"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-04",
+   "evidence": {
+    "score": 0.47096994535519127,
+    "ci": [
+     0.4538881062158471,
+     0.4878810194672132
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc71",
+   "species": [
+    "Machamp",
+    "Skarmory",
+    "Misdreavus",
+    "Snorlax",
+    "Venusaur",
+    "Raikou"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "sample-14",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "thread sample 14"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-14",
+   "evidence": {
+    "score": 0.5707394125683061,
+    "ci": [
+     0.5524195269808744,
+     0.588371968920765
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0.1332,
+   "variantCluster": "vc04",
+   "species": [
+    "Starmie",
+    "Houndoom",
+    "Misdreavus",
+    "Snorlax",
+    "Venusaur",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    55,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "sample-14-orig",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "reconstructed-original",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "original of thread sample 14 per its note"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-14-orig",
+   "evidence": {
+    "score": 0.5896516393442623,
+    "ci": [
+     0.5716786202185792,
+     0.6077964907786886
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc04",
+   "species": [
+    "Starmie",
+    "Houndoom",
+    "Misdreavus",
+    "Snorlax",
+    "Venusaur",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    55,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "sample-13",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Japanese Poké Cup community",
+    "version": "thread sample 13"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-13",
+   "evidence": {
+    "score": 0.6409665300546448,
+    "ci": [
+     0.6260235228825136,
+     0.6565915300546448
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0.1108,
+   "variantCluster": "vc08",
+   "species": [
+    "Gengar",
+    "Steelix",
+    "Starmie",
+    "Cloyster",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "sample-03",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Chio, Friend of Mr. Golem 120, MissingNo.",
+    "version": "thread sample 03"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "sample-03",
+   "evidence": {
+    "score": 0.4315232240437159,
+    "ci": [
+     0.41586663251366124,
+     0.4467234460382514
+    ],
+    "stage": "confirmation",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc70",
+   "species": [
+    "Gengar",
+    "Heracross",
+    "Skarmory",
+    "Snorlax",
+    "Raikou",
+    "Tyranitar"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-17",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "thread sample 17"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-17",
+   "evidence": {
+    "score": 0.49530396174863395,
+    "ci": [
+     0.47647711748633886,
+     0.5147722421448089
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc29",
+   "species": [
+    "Steelix",
+    "Exeggutor",
+    "Porygon2",
+    "Snorlax",
+    "Zapdos",
+    "Suicune"
+   ],
+   "levels": [
+    50,
+    50,
+    55,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "sample-17-orig",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "reconstructed-original",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "original of thread sample 17 per its note"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-17-orig",
+   "evidence": {
+    "score": 0.5164788251366121,
+    "ci": [
+     0.49910348360655743,
+     0.5330451673497268
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc29",
+   "species": [
+    "Steelix",
+    "Exeggutor",
+    "Porygon2",
+    "Snorlax",
+    "Zapdos",
+    "Suicune"
+   ],
+   "levels": [
+    50,
+    50,
+    55,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "sample-10",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Japanese Poké Cup community",
+    "version": "thread sample 10"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-10",
+   "evidence": {
+    "score": 0.5147711748633881,
+    "ci": [
+     0.4900091786202186,
+     0.541411586407104
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc26",
+   "species": [
+    "Golem",
+    "Exeggutor",
+    "Miltank",
+    "Snorlax",
+    "Venusaur",
+    "Tyranitar"
+   ],
+   "levels": [
+    50,
+    50,
+    55,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-23",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Japanese Poké Cup community",
+    "version": "thread sample 23"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-23",
+   "evidence": {
+    "score": 0.5604508196721312,
+    "ci": [
+     0.5403411031420766,
+     0.5803929730191256
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc24",
+   "species": [
+    "Ampharos",
+    "Starmie",
+    "Cloyster",
+    "Marowak",
+    "Misdreavus",
+    "Snorlax"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "sample-07",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Japanese Poké Cup community",
+    "version": "thread sample 07"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-07",
+   "evidence": {
+    "score": 0.6608179644808743,
+    "ci": [
+     0.6472848360655737,
+     0.6762305754781421
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0.0565,
+   "variantCluster": "vc02",
+   "species": [
+    "Electrode",
+    "Tauros",
+    "Cloyster",
+    "Marowak",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    55,
+    50,
+    55,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-06",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Kitty",
+    "version": "thread sample 06"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-06",
+   "evidence": {
+    "score": 0.5665983606557378,
+    "ci": [
+     0.542519424521858,
+     0.5905129354508196
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc25",
+   "species": [
+    "Umbreon",
+    "Skarmory",
+    "Marowak",
+    "Snorlax",
+    "Raikou",
+    "Suicune"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    55,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "sample-12",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Kitty",
+    "version": "thread sample 12"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-12",
+   "evidence": {
+    "score": 0.6717469262295083,
+    "ci": [
+     0.6527066256830603,
+     0.6881403688524591
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc03",
+   "species": [
+    "Gengar",
+    "Starmie",
+    "Cloyster",
+    "Umbreon",
+    "Marowak",
+    "Snorlax"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-18",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "thread sample 18"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "pending",
+   "measuredAs": "sample-18",
+   "evidence": {
+    "score": 0.4368169398907104,
+    "ci": [
+     0.41166076104280513,
+     0.4635127890807963
+    ],
+    "stage": "confirmation",
+    "note": "confirmation interval still touches 0.45 after 16 seeds"
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc21",
+   "species": [
+    "Victreebel",
+    "Starmie",
+    "Umbreon",
+    "Misdreavus",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    51,
+    51,
+    52,
+    51,
+    52,
+    52
+   ]
+  },
+  {
+   "id": "sample-20",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Japanese Poké Cup community",
+    "version": "thread sample 20"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-20",
+   "evidence": {
+    "score": 0.5067025273224044,
+    "ci": [
+     0.4905214737021859,
+     0.5233104935109291
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc22",
+   "species": [
+    "Gengar",
+    "Exeggutor",
+    "Starmie",
+    "Skarmory",
+    "Marowak",
+    "Snorlax"
+   ],
+   "levels": [
+    51,
+    51,
+    51,
+    51,
+    53,
+    51
+   ]
+  },
+  {
+   "id": "sample-05",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Chio, Friend of Mr. Golem 120",
+    "version": "thread sample 05"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-05",
+   "evidence": {
+    "score": 0.502903005464481,
+    "ci": [
+     0.48193946379781427,
+     0.5230575478142078
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc72",
+   "species": [
+    "Gengar",
+    "Steelix",
+    "Alakazam",
+    "Cloyster",
+    "Blissey",
+    "Snorlax"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-01",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003",
+    "version": "thread sample 01"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-01",
+   "evidence": {
+    "score": 0.5640795765027324,
+    "ci": [
+     0.53982987534153,
+     0.5860303534836067
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc68",
+   "species": [
+    "Exeggutor",
+    "Starmie",
+    "Rhydon",
+    "Snorlax",
+    "Zapdos",
+    "Suicune"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    55,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "sample-19",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Chio, Friend of Mr. Golem 120, Japanese Poké Cup community",
+    "version": "thread sample 19"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-19",
+   "evidence": {
+    "score": 0.48497267759562845,
+    "ci": [
+     0.4633709016393443,
+     0.5081113387978142
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc73",
+   "species": [
+    "Gengar",
+    "Exeggutor",
+    "Miltank",
+    "Starmie",
+    "Umbreon",
+    "Snorlax"
+   ],
+   "levels": [
+    52,
+    51,
+    52,
+    52,
+    52,
+    52
+   ]
+  },
+  {
+   "id": "sample-26",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Japanese Poké Cup community",
+    "version": "thread sample 26"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "sample-26",
+   "evidence": {
+    "score": 0.4331028005464482,
+    "ci": [
+     0.4180744108606558,
+     0.446339224726776
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc75",
+   "species": [
+    "Steelix",
+    "Starmie",
+    "Cloyster",
+    "Kangaskhan",
+    "Venusaur",
+    "Moltres"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    55,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "sample-02",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Chio, the Parrot 99",
+    "version": "thread sample 02"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-02",
+   "evidence": {
+    "score": 0.4853995901639344,
+    "ci": [
+     0.4611794171220401,
+     0.5113594319216759
+    ],
+    "stage": "confirmation",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc69",
+   "species": [
+    "Jynx",
+    "Starmie",
+    "Marowak",
+    "Porygon2",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    55,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "sample-11",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "thread sample 11"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-11",
+   "evidence": {
+    "score": 0.507599043715847,
+    "ci": [
+     0.4855703551912569,
+     0.5299735314207651
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc01",
+   "species": [
+    "Alakazam",
+    "Skarmory",
+    "Blissey",
+    "Venusaur",
+    "Suicune",
+    "Tyranitar"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-11-orig",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "reconstructed-original",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "original of thread sample 11 per its note"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-11-orig",
+   "evidence": {
+    "score": 0.5039275956284154,
+    "ci": [
+     0.48428961748633886,
+     0.5223723531420765
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc01",
+   "species": [
+    "Alakazam",
+    "Skarmory",
+    "Blissey",
+    "Venusaur",
+    "Suicune",
+    "Tyranitar"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-21",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Japanese Poké Cup community",
+    "version": "thread sample 21"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-21",
+   "evidence": {
+    "score": 0.5732581967213115,
+    "ci": [
+     0.5465740266393443,
+     0.5990874743852459
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc23",
+   "species": [
+    "Gengar",
+    "Forretress",
+    "Starmie",
+    "Cloyster",
+    "Marowak",
+    "Raikou"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-25",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "thread sample 25"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-25",
+   "evidence": {
+    "score": 0.5154542349726777,
+    "ci": [
+     0.4980767588797814,
+     0.5329160262978143
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc30",
+   "species": [
+    "Gengar",
+    "Heracross",
+    "Tauros",
+    "Starmie",
+    "Jolteon",
+    "Snorlax"
+   ],
+   "levels": [
+    50,
+    50,
+    55,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "sample-25-orig",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "reconstructed-original",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "original of thread sample 25 per its note"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-25-orig",
+   "evidence": {
+    "score": 0.4932547814207651,
+    "ci": [
+     0.47587623804644813,
+     0.5097773650956285
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc30",
+   "species": [
+    "Gengar",
+    "Heracross",
+    "Tauros",
+    "Starmie",
+    "Jolteon",
+    "Snorlax"
+   ],
+   "levels": [
+    50,
+    50,
+    55,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "sample-24",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Japanese Poké Cup community",
+    "version": "thread sample 24"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-24",
+   "evidence": {
+    "score": 0.5167349726775957,
+    "ci": [
+     0.49534345116120226,
+     0.53889493681694
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc74",
+   "species": [
+    "Gengar",
+    "Exeggutor",
+    "Electrode",
+    "Snorlax",
+    "Charizard",
+    "Moltres"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    55,
+    55
+   ]
+  },
+  {
+   "id": "sample-09",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "thread sample 09"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-09",
+   "evidence": {
+    "score": 0.5068732923497269,
+    "ci": [
+     0.4851413080601093,
+     0.5306117657103825
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc07",
+   "species": [
+    "Nidoking",
+    "Exeggutor",
+    "Electrode",
+    "Smeargle",
+    "Marowak",
+    "Snorlax"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "sample-09-orig",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "reconstructed-original",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "original of thread sample 09 per its note"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-09-orig",
+   "evidence": {
+    "score": 0.5189976092896176,
+    "ci": [
+     0.4980330003415301,
+     0.5399632855191258
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc07",
+   "species": [
+    "Nidoking",
+    "Exeggutor",
+    "Electrode",
+    "Smeargle",
+    "Marowak",
+    "Snorlax"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "sample-16",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "thread sample 16"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-16",
+   "evidence": {
+    "score": 0.5322318989071038,
+    "ci": [
+     0.502130293715847,
+     0.56131425034153
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc28",
+   "species": [
+    "Golem",
+    "Gengar",
+    "Poliwrath",
+    "Exeggutor",
+    "Porygon2",
+    "Snorlax"
+   ],
+   "levels": [
+    50,
+    55,
+    50,
+    50,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "sample-16-orig",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "reconstructed-original",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "original of thread sample 16 per its note"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-16-orig",
+   "evidence": {
+    "score": 0.5379525273224045,
+    "ci": [
+     0.5120794911202187,
+     0.5642119193989071
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc28",
+   "species": [
+    "Golem",
+    "Gengar",
+    "Poliwrath",
+    "Exeggutor",
+    "Porygon2",
+    "Snorlax"
+   ],
+   "levels": [
+    50,
+    55,
+    50,
+    50,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "sample-22",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "thread sample 22"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-22",
+   "evidence": {
+    "score": 0.4746840846994536,
+    "ci": [
+     0.45513042178961755,
+     0.492914318647541
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc05",
+   "species": [
+    "Forretress",
+    "Exeggutor",
+    "Kingdra",
+    "Houndoom",
+    "Snorlax",
+    "Dragonite"
+   ],
+   "levels": [
+    50,
+    50,
+    55,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-22-orig",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "reconstructed-original",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Beelzemon 2003, Japanese Poké Cup community",
+    "version": "original of thread sample 22 per its note"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-22-orig",
+   "evidence": {
+    "score": 0.47698941256830607,
+    "ci": [
+     0.4585457223360656,
+     0.49338392247267765
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc05",
+   "species": [
+    "Forretress",
+    "Exeggutor",
+    "Kingdra",
+    "Houndoom",
+    "Snorlax",
+    "Dragonite"
+   ],
+   "levels": [
+    50,
+    50,
+    55,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-27",
+   "family": "smogon-hub-samples",
+   "origin": "human",
+   "source": {
+    "kind": "expert-sample-thread",
+    "name": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "authors": "Chio, Friend of Mr. Golem 120, Japanese Poké Cup community",
+    "version": "thread sample 27"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "sample-27",
+   "evidence": {
+    "score": 0.3295338114754099,
+    "ci": [
+     0.3085286458333334,
+     0.351735399590164
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc76",
+   "species": [
+    "Clefable",
+    "Gengar",
+    "Machamp",
+    "Umbreon",
+    "Gligar",
+    "Blissey"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "ev-r1-pool-hc75-1st-show-0",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-pool-hc75-1st-show)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "ev-r1-pool-hc75-1st-show-0",
+   "evidence": {
+    "score": 0.3737819220430108,
+    "ci": [
+     0.35576066868279577,
+     0.38953503024193553
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc09",
+   "species": [
+    "Alakazam",
+    "Golem",
+    "Snorlax",
+    "Starmie",
+    "Zapdos",
+    "Gengar"
+   ],
+   "levels": [
+    52,
+    50,
+    55,
+    50,
+    52,
+    52
+   ]
+  },
+  {
+   "id": "ev-r1-pool-hc75-1st-show-1",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-pool-hc75-1st-show)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "ev-r1-pool-hc75-1st-show-0",
+   "evidence": {
+    "score": 0.3737819220430108,
+    "ci": [
+     0.35576066868279577,
+     0.38953503024193553
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": "vc09",
+   "species": [
+    "Alakazam",
+    "Golem",
+    "Snorlax",
+    "Starmie",
+    "Zapdos",
+    "Gengar"
+   ],
+   "levels": [
+    52,
+    50,
+    55,
+    50,
+    52,
+    52
+   ]
+  },
+  {
+   "id": "ev-r1-pool-hc75-2nd-toriyama-0",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-pool-hc75-2nd-toriyama)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "ev-r1-pool-hc75-2nd-toriyama-0",
+   "evidence": {
+    "score": 0.3987735215053764,
+    "ci": [
+     0.37215949820788535,
+     0.42366389448924735
+    ],
+    "stage": "confirmation",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc10",
+   "species": [
+    "Geodude",
+    "Starmie",
+    "Cloyster",
+    "Onix",
+    "Cleffa",
+    "Misdreavus"
+   ],
+   "levels": [
+    51,
+    55,
+    50,
+    50,
+    50,
+    51
+   ]
+  },
+  {
+   "id": "ev-r1-pool-hc75-2nd-toriyama-1",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-pool-hc75-2nd-toriyama)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "ev-r1-pool-hc75-2nd-toriyama-0",
+   "evidence": {
+    "score": 0.3987735215053764,
+    "ci": [
+     0.37215949820788535,
+     0.42366389448924735
+    ],
+    "stage": "confirmation",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": "vc10",
+   "species": [
+    "Geodude",
+    "Starmie",
+    "Cloyster",
+    "Onix",
+    "Cleffa",
+    "Misdreavus"
+   ],
+   "levels": [
+    51,
+    55,
+    50,
+    50,
+    50,
+    51
+   ]
+  },
+  {
+   "id": "ev-r1-pool-hc75-3rd-bean-0",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-pool-hc75-3rd-bean)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "ev-r1-pool-hc75-3rd-bean-0",
+   "evidence": {
+    "score": 0.5082955309139786,
+    "ci": [
+     0.49077988491263447,
+     0.5275752898185485
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc11",
+   "species": [
+    "Steelix",
+    "Miltank",
+    "Igglybuff",
+    "Exeggutor",
+    "Cloyster",
+    "Jolteon"
+   ],
+   "levels": [
+    50,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "ev-r1-pool-hc75-3rd-bean-1",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-pool-hc75-3rd-bean)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "ev-r1-pool-hc75-3rd-bean-1",
+   "evidence": {
+    "score": 0.4915154569892474,
+    "ci": [
+     0.4726551999327958,
+     0.5087848622311828
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc11",
+   "species": [
+    "Steelix",
+    "Miltank",
+    "Igglybuff",
+    "Exeggutor",
+    "Cloyster",
+    "Jolteon"
+   ],
+   "levels": [
+    50,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "ev-r1-pool-hc75-top8-tezan-0",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-pool-hc75-top8-tezan)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "ev-r1-pool-hc75-top8-tezan-0",
+   "evidence": {
+    "score": 0.5225974462365591,
+    "ci": [
+     0.5044092321908603,
+     0.5426327284946235
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc12",
+   "species": [
+    "Starmie",
+    "Phanpy",
+    "Snorlax",
+    "Gengar",
+    "Exeggutor",
+    "Dunsparce"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    51,
+    50,
+    51
+   ]
+  },
+  {
+   "id": "ev-r1-pool-hc75-top8-tezan-1",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-pool-hc75-top8-tezan)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "ev-r1-pool-hc75-top8-tezan-1",
+   "evidence": {
+    "score": 0.5094506048387096,
+    "ci": [
+     0.49638671875,
+     0.5230185231854838
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc12",
+   "species": [
+    "Starmie",
+    "Phanpy",
+    "Snorlax",
+    "Gengar",
+    "Exeggutor",
+    "Dunsparce"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    51,
+    50,
+    51
+   ]
+  },
+  {
+   "id": "ev-r1-rand-0-0",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-rand-0)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "ev-r1-rand-0-0",
+   "evidence": {
+    "score": 0.16882980510752693,
+    "ci": [
+     0.15477938088037635,
+     0.1829217069892473
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc13",
+   "species": [
+    "Ditto",
+    "Nidoking",
+    "Exeggutor",
+    "Koffing",
+    "Skarmory",
+    "Articuno"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "ev-r1-rand-0-1",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-rand-0)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "ev-r1-rand-0-1",
+   "evidence": {
+    "score": 0.23374495967741937,
+    "ci": [
+     0.22210916498655914,
+     0.24529884912634406
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc13",
+   "species": [
+    "Ditto",
+    "Nidoking",
+    "Exeggutor",
+    "Koffing",
+    "Skarmory",
+    "Ampharos"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "ev-r1-rand-1-0",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-rand-1)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "ev-r1-rand-1-0",
+   "evidence": {
+    "score": 0.3316532258064516,
+    "ci": [
+     0.31635794690860214,
+     0.34807837701612904
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc14",
+   "species": [
+    "Marowak",
+    "Hitmonlee",
+    "Snorlax",
+    "Golem",
+    "Shellder",
+    "Gengar"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "ev-r1-rand-1-1",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-rand-1)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "ev-r1-rand-1-1",
+   "evidence": {
+    "score": 0.33818464381720437,
+    "ci": [
+     0.32490969422043015,
+     0.3517310357862904
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc14",
+   "species": [
+    "Marowak",
+    "Hitmonlee",
+    "Snorlax",
+    "Golem",
+    "Shellder",
+    "Gengar"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "ev-r1-rand-2-0",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-rand-2)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "ev-r1-rand-2-0",
+   "evidence": {
+    "score": 0.564306115591398,
+    "ci": [
+     0.5466219338037634,
+     0.5817834341397851
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc15",
+   "species": [
+    "Hoothoot",
+    "Diglett",
+    "Jumpluff",
+    "Snorlax",
+    "Starmie",
+    "Raikou"
+   ],
+   "levels": [
+    50,
+    55,
+    50,
+    55,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "ev-r1-rand-2-1",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-rand-2)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "ev-r1-rand-2-0",
+   "evidence": {
+    "score": 0.564306115591398,
+    "ci": [
+     0.5466219338037634,
+     0.5817834341397851
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": "vc15",
+   "species": [
+    "Hoothoot",
+    "Diglett",
+    "Jumpluff",
+    "Snorlax",
+    "Starmie",
+    "Raikou"
+   ],
+   "levels": [
+    50,
+    55,
+    50,
+    55,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "ev-r1-rand-3-0",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-rand-3)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "ev-r1-rand-3-0",
+   "evidence": {
+    "score": 0.47584845430107536,
+    "ci": [
+     0.4657247563844086,
+     0.48777931787634415
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc16",
+   "species": [
+    "Gloom",
+    "Machamp",
+    "Zapdos",
+    "Miltank",
+    "Noctowl",
+    "Exeggutor"
+   ],
+   "levels": [
+    51,
+    51,
+    55,
+    50,
+    51,
+    50
+   ]
+  },
+  {
+   "id": "ev-r1-rand-3-1",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-rand-3)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "ev-r1-rand-3-0",
+   "evidence": {
+    "score": 0.47584845430107536,
+    "ci": [
+     0.4657247563844086,
+     0.48777931787634415
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": "vc16",
+   "species": [
+    "Gloom",
+    "Machamp",
+    "Zapdos",
+    "Miltank",
+    "Noctowl",
+    "Exeggutor"
+   ],
+   "levels": [
+    51,
+    51,
+    55,
+    50,
+    51,
+    50
+   ]
+  },
+  {
+   "id": "ev-r1-rand-4-0",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-rand-4)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "ev-r1-rand-4-0",
+   "evidence": {
+    "score": 0.3663894489247312,
+    "ci": [
+     0.3445459509408602,
+     0.3895770329301076
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc17",
+   "species": [
+    "Cloyster",
+    "Lanturn",
+    "Tentacool",
+    "Snorlax",
+    "Weezing",
+    "Sneasel"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    53,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "ev-r1-rand-4-1",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-rand-4)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "ev-r1-rand-4-0",
+   "evidence": {
+    "score": 0.3663894489247312,
+    "ci": [
+     0.3445459509408602,
+     0.3895770329301076
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": "vc17",
+   "species": [
+    "Cloyster",
+    "Lanturn",
+    "Tentacool",
+    "Snorlax",
+    "Weezing",
+    "Sneasel"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    53,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "ev-r1-rand-5-0",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-rand-5)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "ev-r1-rand-5-0",
+   "evidence": {
+    "score": 0.36806955645161293,
+    "ci": [
+     0.34715011760752684,
+     0.38676075268817206
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc18",
+   "species": [
+    "Mantine",
+    "Forretress",
+    "Articuno",
+    "Exeggutor",
+    "Nidoking",
+    "Snorlax"
+   ],
+   "levels": [
+    53,
+    50,
+    53,
+    50,
+    53,
+    55
+   ]
+  },
+  {
+   "id": "ev-r1-rand-5-1",
+   "family": "meta-nash-evolved",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (evolved:r1-rand-5)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "ev-r1-rand-5-1",
+   "evidence": {
+    "score": 0.3819304435483872,
+    "ci": [
+     0.36008589549731185,
+     0.402974840389785
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc18",
+   "species": [
+    "Mantine",
+    "Marowak",
+    "Articuno",
+    "Exeggutor",
+    "Nidoking",
+    "Snorlax"
+   ],
+   "levels": [
+    53,
+    50,
+    53,
+    50,
+    53,
+    55
+   ]
+  },
+  {
+   "id": "nb-sample-12-0",
+   "family": "meta-nash-neighborhood",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (neighborhood:sample-12)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "nb-sample-12-0",
+   "evidence": {
+    "score": 0.6346055327868854,
+    "ci": [
+     0.6161191512978142,
+     0.6520257001366121
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0.0726,
+   "variantCluster": "vc03",
+   "species": [
+    "Gengar",
+    "Starmie",
+    "Cloyster",
+    "Umbreon",
+    "Marowak",
+    "Snorlax"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "nb-sample-13-0",
+   "family": "meta-nash-neighborhood",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 candidates (neighborhood:sample-13)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "nb-sample-13-0",
+   "evidence": {
+    "score": 0.6353312841530054,
+    "ci": [
+     0.6220959272540983,
+     0.6489081711065574
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc08",
+   "species": [
+    "Gengar",
+    "Steelix",
+    "Starmie",
+    "Cloyster",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "lineage-gb-nash-rand",
+   "family": "meta-nash-lineage",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 lineage best (gb-nash-rand)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "lineage-gb-nash-rand",
+   "evidence": {
+    "score": 0.5048723118279571,
+    "ci": [
+     0.4708263074291301,
+     0.5382336469534051
+    ],
+    "stage": "confirmation",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc37",
+   "species": [
+    "Dugtrio",
+    "Miltank",
+    "Metapod",
+    "Mr. Mime",
+    "Cloyster",
+    "Electrode"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "lineage-gb-nash-s07",
+   "family": "meta-nash-lineage",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 lineage best (gb-nash-s07)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "lineage-gb-nash-s07",
+   "evidence": {
+    "score": 0.6252100134408602,
+    "ci": [
+     0.6089119203629034,
+     0.6424731182795699
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc38",
+   "species": [
+    "Steelix",
+    "Exeggutor",
+    "Phanpy",
+    "Marowak",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    54,
+    51,
+    55,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "lineage-gb-nash-s13",
+   "family": "meta-nash-lineage",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 lineage best (gb-nash-s13)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "lineage-gb-nash-s13",
+   "evidence": {
+    "score": 0.5666162634408602,
+    "ci": [
+     0.5453198504704301,
+     0.5891328545026882
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc39",
+   "species": [
+    "Oddish",
+    "Marowak",
+    "Starmie",
+    "Cloyster",
+    "Snorlax",
+    "Ditto"
+   ],
+   "levels": [
+    53,
+    50,
+    50,
+    51,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "lineage-gb-uni-rand",
+   "family": "meta-nash-lineage",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 lineage best (gb-uni-rand)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "lineage-gb-uni-rand",
+   "evidence": {
+    "score": 0.49147345430107536,
+    "ci": [
+     0.47047001008064526,
+     0.5124390961021507
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc40",
+   "species": [
+    "Zapdos",
+    "Suicune",
+    "Miltank",
+    "Togetic",
+    "Snorlax",
+    "Caterpie"
+   ],
+   "levels": [
+    55,
+    50,
+    55,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "lineage-gb-uni-s07",
+   "family": "meta-nash-lineage",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 lineage best (gb-uni-s07)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "lineage-gb-uni-s07",
+   "evidence": {
+    "score": 0.4031418010752688,
+    "ci": [
+     0.38265877016129046,
+     0.42415694604454696
+    ],
+    "stage": "confirmation",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc41",
+   "species": [
+    "Electrode",
+    "Tauros",
+    "Misdreavus",
+    "Gengar",
+    "Snorlax",
+    "Poliwag"
+   ],
+   "levels": [
+    50,
+    55,
+    50,
+    51,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "lineage-gb-uni-s13",
+   "family": "meta-nash-lineage",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 lineage best (gb-uni-s13)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "lineage-gb-uni-s13",
+   "evidence": {
+    "score": 0.6251260080645162,
+    "ci": [
+     0.6106350806451614,
+     0.6410051243279571
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc42",
+   "species": [
+    "Gengar",
+    "Steelix",
+    "Moltres",
+    "Cloyster",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "lineage-fine-s07",
+   "family": "meta-nash-lineage",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 lineage best (fine-s07)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "lineage-fine-s07",
+   "evidence": {
+    "score": 0.5300319220430109,
+    "ci": [
+     0.5146967405913979,
+     0.5454479586693549
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc35",
+   "species": [
+    "Electrode",
+    "Tauros",
+    "Cloyster",
+    "Marowak",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    55,
+    50,
+    55,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "lineage-fine-s13",
+   "family": "meta-nash-lineage",
+   "origin": "machine",
+   "source": {
+    "kind": "generated",
+    "name": "META-NASH v1",
+    "url": "docs/META-NASH-V1.md",
+    "version": "meta-nash-v1 lineage best (fine-s13)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "lineage-fine-s13",
+   "evidence": {
+    "score": 0.43397177419354843,
+    "ci": [
+     0.4179246471774194,
+     0.4485908098118281
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc36",
+   "species": [
+    "Gengar",
+    "Steelix",
+    "Starmie",
+    "Cloyster",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    55,
+    54
+   ]
+  },
+  {
+   "id": "rental-cban-1",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=1",
+    "version": "【オススメレンタル】キチカビ１"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-12",
+   "evidence": {
+    "score": 0.6717469262295083,
+    "ci": [
+     0.6527066256830603,
+     0.6881403688524591
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": "vc03",
+   "species": [
+    "Snorlax",
+    "Umbreon",
+    "Marowak",
+    "Cloyster",
+    "Gengar",
+    "Starmie"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-2",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=2",
+    "version": "【オススメレンタル】サンダーバンギWA"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "rental-cban-2",
+   "evidence": {
+    "score": 0.5123377732240438,
+    "ci": [
+     0.49009562841530063,
+     0.5365458504098362
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0.1329,
+   "variantCluster": "vc67",
+   "species": [
+    "Zapdos",
+    "Tyranitar",
+    "Snorlax",
+    "Cloyster",
+    "Exeggutor",
+    "Machamp"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-3",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=3",
+    "version": "【オススメレンタル】爆破速攻TA"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "rental-cban-3",
+   "evidence": {
+    "score": 0.6396857923497267,
+    "ci": [
+     0.619062713456284,
+     0.6603067366803279
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0.0318,
+   "variantCluster": "vc02",
+   "species": [
+    "Tauros",
+    "Marowak",
+    "Zapdos",
+    "Cloyster",
+    "Snorlax",
+    "Electrode"
+   ],
+   "levels": [
+    55,
+    55,
+    55,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-4",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=4",
+    "version": "【オススメレンタル】王パ"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "rental-cban-4",
+   "evidence": {
+    "score": 0.5099897540983608,
+    "ci": [
+     0.49786543715847004,
+     0.5233094262295083
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc01",
+   "species": [
+    "Tyranitar",
+    "Skarmory",
+    "Venusaur",
+    "Suicune",
+    "Blissey",
+    "Alakazam"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "rental-cban-5",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=5",
+    "version": "【オススメレンタル】キチカビ３"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-06",
+   "evidence": {
+    "score": 0.5665983606557378,
+    "ci": [
+     0.542519424521858,
+     0.5905129354508196
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": "vc25",
+   "species": [
+    "Snorlax",
+    "Raikou",
+    "Umbreon",
+    "Suicune",
+    "Skarmory",
+    "Marowak"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-6",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=6",
+    "version": "サンダータンク"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "rental-cban-6",
+   "evidence": {
+    "score": 0.53125,
+    "ci": [
+     0.5091359289617486,
+     0.554178406762295
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc06",
+   "species": [
+    "Zapdos",
+    "Miltank",
+    "Snorlax",
+    "Cloyster",
+    "Exeggutor",
+    "Machamp"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-7",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=7",
+    "version": "トキワジム"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-09-orig",
+   "evidence": {
+    "score": 0.5189976092896176,
+    "ci": [
+     0.4980330003415301,
+     0.5399632855191258
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": "vc07",
+   "species": [
+    "Marowak",
+    "Electrode",
+    "Exeggutor",
+    "Snorlax",
+    "Smeargle",
+    "Nidoking"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "rental-cban-8",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=8",
+    "version": "モーダルバンギ"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "rental-cban-8",
+   "evidence": {
+    "score": 0.5282189207650274,
+    "ci": [
+     0.5119087260928963,
+     0.5429089822404373
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0.1067,
+   "variantCluster": "vc26",
+   "species": [
+    "Tyranitar",
+    "Exeggutor",
+    "Venusaur",
+    "Golem",
+    "Snorlax",
+    "Miltank"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "rental-cban-9",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=9",
+    "version": "55カビゴン 〜地震カビ〜"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-13",
+   "evidence": {
+    "score": 0.6409665300546448,
+    "ci": [
+     0.6260235228825136,
+     0.6565915300546448
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": "vc08",
+   "species": [
+    "Snorlax",
+    "Cloyster",
+    "Zapdos",
+    "Starmie",
+    "Steelix",
+    "Gengar"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-10",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=10",
+    "version": "55カビゴン 〜セミフルカビ〜"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2023-vakabi",
+   "evidence": {
+    "score": 0.5242486338797815,
+    "ci": [
+     0.5011089053961749,
+     0.5468824709699455
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": "vc20",
+   "species": [
+    "Snorlax",
+    "Skarmory",
+    "Misdreavus",
+    "Starmie",
+    "Marowak",
+    "Miltank"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "rental-cban-11",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=11",
+    "version": "55カビゴン 〜爆パンカビ〜"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "rental-cban-11",
+   "evidence": {
+    "score": 0.5243767076502732,
+    "ci": [
+     0.5090441427595629,
+     0.542405225409836
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc04",
+   "species": [
+    "Snorlax",
+    "Houndoom",
+    "Venusaur",
+    "Starmie",
+    "Zapdos",
+    "Misdreavus"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-12",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=12",
+    "version": "カビガラポリ"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "pending",
+   "measuredAs": "rental-cban-12",
+   "evidence": {
+    "score": 0.46016905737704916,
+    "ci": [
+     0.43630629424366635,
+     0.48569010416666675
+    ],
+    "stage": "confirmation",
+    "note": "confirmation interval still touches 0.45 after 16 seeds"
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc64",
+   "species": [
+    "Snorlax",
+    "Heracross",
+    "Marowak",
+    "Gengar",
+    "Skarmory",
+    "Porygon2"
+   ],
+   "levels": [
+    51,
+    51,
+    53,
+    53,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "rental-cban-13",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=13",
+    "version": "ポニョ"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "rental-cban-13",
+   "evidence": {
+    "score": 0.5700563524590164,
+    "ci": [
+     0.5532765539617488,
+     0.5887988814890711
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0.0641,
+   "variantCluster": "vc65",
+   "species": [
+    "Porygon2",
+    "Poliwrath",
+    "Gengar",
+    "Exeggutor",
+    "Snorlax",
+    "Golem"
+   ],
+   "levels": [
+    55,
+    55,
+    55,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-14",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=14",
+    "version": "しゃわポリWA"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "rental-cban-14",
+   "evidence": {
+    "score": 0.5338114754098361,
+    "ci": [
+     0.5120357325819673,
+     0.557554217896175
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc66",
+   "species": [
+    "Vaporeon",
+    "Porygon2",
+    "Snorlax",
+    "Zapdos",
+    "Exeggutor",
+    "Steelix"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-15",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=15",
+    "version": "バランスダブルロック"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "rental-cban-15",
+   "evidence": {
+    "score": 0.4291325136612022,
+    "ci": [
+     0.4085503934248812,
+     0.44723531420765034
+    ],
+    "stage": "confirmation",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc21",
+   "species": [
+    "Umbreon",
+    "Misdreavus",
+    "Snorlax",
+    "Starmie",
+    "Zapdos",
+    "Victreebel"
+   ],
+   "levels": [
+    52,
+    51,
+    52,
+    51,
+    52,
+    51
+   ]
+  },
+  {
+   "id": "rental-cban-16",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=16",
+    "version": "タマムシジム"
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "format-illegal under gen2nintendocup2000noohkostadium2strict: umbreon:item-clause, umbreon:item-clause"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Exeggutor",
+    "Gengar",
+    "Snorlax",
+    "Umbreon",
+    "Starmie",
+    "Miltank"
+   ],
+   "levels": [
+    51,
+    52,
+    52,
+    52,
+    52,
+    52
+   ]
+  },
+  {
+   "id": "rental-cban-17",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=17",
+    "version": "あやみが＋太鼓ガラ"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "rental-cban-17",
+   "evidence": {
+    "score": 0.48736338797814216,
+    "ci": [
+     0.46355788934426245,
+     0.5111912080405934
+    ],
+    "stage": "confirmation",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc22",
+   "species": [
+    "Marowak",
+    "Snorlax",
+    "Skarmory",
+    "Starmie",
+    "Exeggutor",
+    "Gengar"
+   ],
+   "levels": [
+    53,
+    51,
+    51,
+    51,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "rental-cban-18",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=18",
+    "version": "ライコウ昆布"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-21",
+   "evidence": {
+    "score": 0.5732581967213115,
+    "ci": [
+     0.5465740266393443,
+     0.5990874743852459
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": "vc23",
+   "species": [
+    "Raikou",
+    "Cloyster",
+    "Forretress",
+    "Starmie",
+    "Gengar",
+    "Marowak"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-19",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=19",
+    "version": "ドラゴンエース"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "sample-22-orig",
+   "evidence": {
+    "score": 0.47698941256830607,
+    "ci": [
+     0.4585457223360656,
+     0.49338392247267765
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": "vc05",
+   "species": [
+    "Dragonite",
+    "Kingdra",
+    "Snorlax",
+    "Houndoom",
+    "Forretress",
+    "Exeggutor"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-20",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=20",
+    "version": "あかりちゃん司令塔エース"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "rental-cban-20",
+   "evidence": {
+    "score": 0.5705259562841531,
+    "ci": [
+     0.5539169228142078,
+     0.5860666410519126
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc24",
+   "species": [
+    "Ampharos",
+    "Starmie",
+    "Snorlax",
+    "Marowak",
+    "Cloyster",
+    "Misdreavus"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-23",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=23",
+    "version": "【一撃あり用】ケンタサンダーWA"
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "format-illegal under gen2nintendocup2000noohkostadium2strict: tauros:move-illegal:horndrill, machamp:move-illegal:fissure, tauros:move-illegal:horndrill, machamp:move-illegal:fissure",
+     "built for the OHKO-allowed rule"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Tauros",
+    "Zapdos",
+    "Snorlax",
+    "Cloyster",
+    "Steelix",
+    "Machamp"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-24",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=24",
+    "version": "【一撃あり用】カビライコウWA"
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "format-illegal under gen2nintendocup2000noohkostadium2strict: snorlax:move-illegal:fissure, snorlax:move-illegal:fissure",
+     "built for the OHKO-allowed rule"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Snorlax",
+    "Starmie",
+    "Skarmory",
+    "Misdreavus",
+    "Marowak",
+    "Raikou"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "rental-cban-25",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=25",
+    "version": "【一撃あり用】ハピエア構築"
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "format-illegal under gen2nintendocup2000noohkostadium2strict: dugtrio:move-illegal:fissure, tauros:move-illegal:horndrill, dugtrio:move-illegal:fissure, tauros:move-illegal:horndrill",
+     "built for the OHKO-allowed rule"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Dugtrio",
+    "Tauros",
+    "Misdreavus",
+    "Exeggutor",
+    "Skarmory",
+    "Blissey"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-26",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=26",
+    "version": "【リトルカップ専用】"
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "format-illegal under gen2nintendocup2000noohkostadium2strict: scyther:level-min, scyther:species-underleveled, elekid:level-min, elekid:species-underleveled, chansey:level-min, chansey:species-underleveled, cubone:level-min, cubone:species-underleveled, porygon:level-min, porygon:species-underleveled, voltorb:level-min, voltorb:species-underleveled, scyther:level-min, scyther:species-underleveled, elekid:level-min, elekid:species-underleveled, chansey:level-min, chansey:species-underleveled, cubone:level-min, cubone:species-underleveled, porygon:level-min, porygon:species-underleveled, voltorb:level-min, voltorb:species-underleveled",
+     "built for Little Cup"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Scyther",
+    "Elekid",
+    "Chansey",
+    "Cubone",
+    "Porygon",
+    "Voltorb"
+   ],
+   "levels": [
+    5,
+    5,
+    5,
+    5,
+    5,
+    5
+   ]
+  },
+  {
+   "id": "rental-cban-27",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=27",
+    "version": "【指振りルール専用】"
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "built for the Metronome-only rule"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Gengar",
+    "Snorlax",
+    "Machamp",
+    "Golem",
+    "Granbull",
+    "Alakazam"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-21",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=21",
+    "version": "エース追加型１（額縁理論）"
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "incomplete team (5 mons)",
+     "format-illegal under gen2nintendocup2000noohkostadium2strict: :team-size, :team-size"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Snorlax",
+    "Cloyster",
+    "Golem",
+    "Venusaur",
+    "Machamp"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-22",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=22",
+    "version": "エース追加型２（ハピムウマパ）"
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "incomplete team (5 mons)",
+     "format-illegal under gen2nintendocup2000noohkostadium2strict: :team-size, :team-size"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Blissey",
+    "Misdreavus",
+    "Marowak",
+    "Cloyster",
+    "Snorlax"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "rental-cban-28",
+   "family": "community-rentals",
+   "origin": "human",
+   "source": {
+    "kind": "rental-db",
+    "name": "psense rental-party DB (一撃無し2000)",
+    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=28",
+    "version": "参考ページ等 リンク集【解説読んでね】"
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "incomplete team (1 mons)",
+     "format-illegal under gen2nintendocup2000noohkostadium2strict: :team-size, :team-size",
+     "not a team (links page)"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Ditto"
+   ],
+   "levels": [
+    50
+   ]
+  },
+  {
+   "id": "mjj-2025-hapim",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2025/hapim.htm",
+    "version": "新生ハピムウマvol.1",
+    "indexName": "新生ハピムウマvol.1",
+    "indexSummary": "ガラサンダーWA",
+    "retrieved": "2026-09-29",
+    "fingerprint": "2e6c64f2a75beba555c790fb04c7e0a19c86864c0a75707b6521703a5c5fd9bd",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2025-hapim",
+   "evidence": {
+    "score": 0.5779969262295083,
+    "ci": [
+     0.5544729764344262,
+     0.6002870987021858
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc63",
+   "species": [
+    "Marowak",
+    "Blissey",
+    "Misdreavus",
+    "Snorlax",
+    "Cloyster",
+    "Zapdos"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "mjj-2024-kabiliz",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2024/kabiliz.htm",
+    "version": "速攻カビガラポリ",
+    "indexName": "速攻カビガラポリ",
+    "indexSummary": "太鼓カビリザWA",
+    "retrieved": "2026-09-29",
+    "fingerprint": "9e2e89c5814bbffd6b2f1b8251f999d20e0e7a78f058180c46c0b1a132ba29fa",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2024-kabiliz",
+   "evidence": {
+    "score": 0.47323258196721324,
+    "ci": [
+     0.4563994193989072,
+     0.4909953466530055
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc62",
+   "species": [
+    "Snorlax",
+    "Marowak",
+    "Porygon2",
+    "Cloyster",
+    "Electrode",
+    "Charizard"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "mjj-2023-1geki",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2023/1geki.htm",
+    "version": "闇討ち",
+    "indexName": "闇討ち",
+    "indexSummary": "(一撃)ダグケンタWAガチ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "e20fcdf87c535811764bec079df5a20d7d4e0db64c375508551e8462735d7261",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "format-illegal under gen2nintendocup2000noohkostadium2strict: dugtrio:move-illegal:fissure, tauros:move-illegal:horndrill, dugtrio:move-illegal:fissure, tauros:move-illegal:horndrill, exeggutor:dv-hp",
+     "source entry is marked (一撃) — OHKO-allowed rule"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Dugtrio",
+    "Tauros",
+    "Misdreavus",
+    "Exeggutor",
+    "Skarmory",
+    "Blissey"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2023-kabipte",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2023/kabipte.htm",
+    "version": "天才カビ",
+    "indexName": "天才カビ",
+    "indexSummary": "(一撃)セミフル地割れカビ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "014a3b763b5be99b797d1578f60714f5f240ca44f1f67d590a07963ea997aa37",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "format-illegal under gen2nintendocup2000noohkostadium2strict: snorlax:move-illegal:fissure, snorlax:move-illegal:fissure, aerodactyl:dv-hp",
+     "source entry is marked (一撃) — OHKO-allowed rule"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Snorlax",
+    "Starmie",
+    "Skarmory",
+    "Marowak",
+    "Heracross",
+    "Aerodactyl"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "mjj-2023-ukethdr",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2023/ukethdr.htm",
+    "version": "サンダーヱーヴ",
+    "indexName": "サンダーヱーヴ",
+    "indexSummary": "電磁波サンダーSA",
+    "retrieved": "2026-09-29",
+    "fingerprint": "4f238fff9f52735fc391ad8b3e09f8cea2e4435bcab87067f09221a45d990650",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2023-ukethdr",
+   "evidence": {
+    "score": 0.5620303961748635,
+    "ci": [
+     0.542986893784153,
+     0.5807302339480876
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc61",
+   "species": [
+    "Zapdos",
+    "Blissey",
+    "Misdreavus",
+    "Snorlax",
+    "Cloyster",
+    "Marowak"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2023-vakabi",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2023/vakabi.htm",
+    "version": "秀才カビ'23",
+    "indexName": "秀才カビ'23",
+    "indexSummary": "セミフルカビ＆タンクWA",
+    "retrieved": "2026-09-29",
+    "fingerprint": "cac41bde9d8649181c1936a80750da35540824847ff940d42de8df86410c5434",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2023-vakabi",
+   "evidence": {
+    "score": 0.5242486338797815,
+    "ci": [
+     0.5011089053961749,
+     0.5468824709699455
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc20",
+   "species": [
+    "Snorlax",
+    "Skarmory",
+    "Misdreavus",
+    "Starmie",
+    "Marowak",
+    "Miltank"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "mjj-2022-ukekent",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2022/ukekent.htm",
+    "version": "受けケンタ",
+    "indexName": "受けケンタ",
+    "indexSummary": "セミフルケンタSA",
+    "retrieved": "2026-09-29",
+    "fingerprint": "caa37ff2e73cb1a933f3e7b72336e492fa87fb80fbb065871ca9f14309297f19",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "mjj-2022-ukekent",
+   "evidence": {
+    "score": 0.43054132513661203,
+    "ci": [
+     0.4164094518442623,
+     0.4448023394808744
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc60",
+   "species": [
+    "Tauros",
+    "Blissey",
+    "Misdreavus",
+    "Snorlax",
+    "Cloyster",
+    "Venusaur"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2020-kb-2022",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2020/kb.htm#2022",
+    "version": "カビバン'22",
+    "indexName": "カビバン'22",
+    "indexSummary": "地震カビ＆バンギWA",
+    "retrieved": "2026-09-29",
+    "fingerprint": "70b834989d8f2e693a3a8fa1748d065186540229fd2389677e9eafddf70555c3",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2020-kb-2022",
+   "evidence": {
+    "score": 0.5064036885245902,
+    "ci": [
+     0.4863804217896176,
+     0.5291154371584701
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc19",
+   "species": [
+    "Snorlax",
+    "Skarmory",
+    "Misdreavus",
+    "Starmie",
+    "Heracross",
+    "Tyranitar"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "mjj-2021-crage",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2021/crage.htm",
+    "version": "ポリガラクラゲ",
+    "indexName": "ポリガラクラゲ",
+    "indexSummary": "ドククラゲAガチパ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "ae387d522b6f0146d8c1281bdac597b3236303a276eed25762db048a36cc34c5",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2021-crage",
+   "evidence": {
+    "score": 0.5028603142076503,
+    "ci": [
+     0.4830024760928962,
+     0.5210499914617487
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc58",
+   "species": [
+    "Tentacruel",
+    "Marowak",
+    "Porygon2",
+    "Misdreavus",
+    "Cloyster",
+    "Snorlax"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "mjj-2021-q10con",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2021/q10con.htm",
+    "version": "阡年の怨み",
+    "indexName": "阡年の怨み",
+    "indexSummary": "キュウコンAガチパ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "46da06490fd0792a443d7d410126da603d8c30049643cf32fccec0c0ec2cce10",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2021-q10con",
+   "evidence": {
+    "score": 0.5690744535519127,
+    "ci": [
+     0.5543032786885247,
+     0.5835051656420766
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc59",
+   "species": [
+    "Ninetales",
+    "Snorlax",
+    "Marowak",
+    "Porygon2",
+    "Misdreavus",
+    "Starmie"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2020-ukenta",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2020/ukenta.htm",
+    "version": "受けンタ",
+    "indexName": "受けンタ",
+    "indexSummary": "遺伝子ケンタSAガチ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "9db85ad077dc252aa32e74a160641c93564f68bd15b6a9dad89d0a2920b1135c",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2020-ukenta",
+   "evidence": {
+    "score": 0.5064036885245903,
+    "ci": [
+     0.4898980898711945,
+     0.5274953039617486
+    ],
+    "stage": "confirmation",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc57",
+   "species": [
+    "Tauros",
+    "Blissey",
+    "Misdreavus",
+    "Snorlax",
+    "Cloyster",
+    "Marowak"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2020-kb-2020",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2020/kb.htm#2020",
+    "version": "カビバン",
+    "indexName": "カビバン",
+    "indexSummary": "セミフルカビ＆バンギWA",
+    "retrieved": "2026-09-29",
+    "fingerprint": "70b834989d8f2e693a3a8fa1748d065186540229fd2389677e9eafddf70555c3",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "dominated",
+   "measuredAs": "mjj-2020-kb-2020",
+   "evidence": {
+    "score": 0.47865437158469953,
+    "ci": [
+     0.4584582052595629,
+     0.49944608094262294
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": {
+    "id": "mjj-2020-kb-2022",
+    "version": "魔人島 俺のパーティ軍団 — カビバン'22",
+    "delta": 0.06326844262295082,
+    "ci": [
+     0.015792776639344263,
+     0.10621798155737708
+    ],
+    "panel": "PROTOCOL.md v1 human panel",
+    "conditions": "open vs open, 1000 iterations, confirmation seeds 20261001"
+   },
+   "execution": {
+    "distinguishing": {
+     "Snorlax": {
+      "pickRate": 0.6875,
+      "moveUseRate": {
+       "Double-Edge": 0.8587181254307374,
+       "Earthquake": 0.554789800137836,
+       "Zap Cannon": 0.48518263266712613,
+       "Rest": 0.3955892487939352
+      }
+     }
+    },
+    "selectionFloorMet": true,
+    "logRead": {
+     "replacement": "mjj-2020-kb-2022",
+     "established": true,
+     "logs": [
+      "confirmation k0 vs hc75-2nd-toriyama (kb-2020 as p2)",
+      "confirmation k0 vs mjj-2010-garap-b (kb-2020 as p2)"
+     ],
+     "note": "Only difference: Snorlax Zap Cannon (2020) vs Curse (2022). Zap Cannon is aimed at sensible targets (a predicted Zapdos, paralysing Exeggutor; a super-effective shot at Lapras that missed). Used in 436 of 851 Snorlax games, which win 0.589 vs 0.398 when unused - no sign of misuse. Against the nine panel teams with Miltank (the author's stated reason for Zap Cannon) kb-2022 - kb-2020 = +0.026 [-0.040, +0.097]: no unique advantage."
+    }
+   },
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": "vc19",
+   "species": [
+    "Snorlax",
+    "Skarmory",
+    "Misdreavus",
+    "Starmie",
+    "Heracross",
+    "Tyranitar"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "mjj-2012-goinkyo-2020",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2012/goinkyo.htm#2020",
+    "version": "おぢいちゃんII'20",
+    "indexName": "おぢいちゃんII'20",
+    "indexSummary": "フーヘラWAガチ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "830ea3592d865a816e463ec6b617dcfd820526e3c369fa28b63154de2b93de4f",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2012-goinkyo-2020",
+   "evidence": {
+    "score": 0.5026041666666667,
+    "ci": [
+     0.4865938780737706,
+     0.5162269467213116
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc50",
+   "species": [
+    "Alakazam",
+    "Heracross",
+    "Snorlax",
+    "Misdreavus",
+    "Cloyster",
+    "Steelix"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2020-rraikou",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2020/rraikou.htm",
+    "version": "ソード＆シールド",
+    "indexName": "ソード＆シールド",
+    "indexSummary": "リフ奇跡ライコウA",
+    "retrieved": "2026-09-29",
+    "fingerprint": "e172c7171af68a06205bb9e6b255f64a1e9797c018f837c7fac387a241080d2d",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2020-rraikou",
+   "evidence": {
+    "score": 0.5323172814207651,
+    "ci": [
+     0.506827399248634,
+     0.5543523736338799
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc56",
+   "species": [
+    "Raikou",
+    "Cloyster",
+    "Snorlax",
+    "Marowak",
+    "Heracross",
+    "Machamp"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    55,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2019-dojo",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2019/dojo.htm",
+    "version": "藝術道場",
+    "indexName": "藝術道場",
+    "indexSummary": "司令塔ポリ２HAガチ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "0c5cd36bc2309771b0c340ea0565e2bdc6508775acbecd50812d58ffb01982ad",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "mjj-2019-dojo",
+   "evidence": {
+    "score": 0.42960211748633886,
+    "ci": [
+     0.4119268698770493,
+     0.446429943647541
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc55",
+   "species": [
+    "Porygon2",
+    "Marowak",
+    "Snorlax",
+    "Cloyster",
+    "Raikou",
+    "Hitmonlee"
+   ],
+   "levels": [
+    53,
+    51,
+    51,
+    51,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "mjj-2015-ayagen",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2015/ayagen.htm",
+    "version": "8番道路ジム",
+    "indexName": "8番道路ジム",
+    "indexSummary": "55怪しい光ゲンガー",
+    "retrieved": "2026-09-29",
+    "fingerprint": "d56797e760a739514d5131d302c1381de2538b6ea8360e9431b6fcf88885eb3b",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2015-ayagen",
+   "evidence": {
+    "score": 0.5493510928961749,
+    "ci": [
+     0.5288133965163935,
+     0.5686528773907104
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc54",
+   "species": [
+    "Gengar",
+    "Exeggutor",
+    "Snorlax",
+    "Suicune",
+    "Umbreon",
+    "Alakazam"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "mjj-2014-thdrcomb",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2014/thdrcomb.htm",
+    "version": "サンダー昆布シリーズ",
+    "indexName": "サンダー昆布シリーズ",
+    "indexSummary": "サンダーバンギWAガチ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "c14da50c0da90d23adcba514a61293e5a522d2ffee188fde8577235e5b6b6192",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2014-thdrcomb",
+   "evidence": {
+    "score": 0.5584016393442623,
+    "ci": [
+     0.5416645321038254,
+     0.5734727202868852
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0.1965,
+   "variantCluster": "vc53",
+   "species": [
+    "Zapdos",
+    "Tyranitar",
+    "Venusaur",
+    "Steelix",
+    "Cloyster",
+    "Snorlax"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2013-mario",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2013/mario.htm",
+    "version": "マリオパーティ１３",
+    "indexName": "マリオパーティ１３",
+    "indexSummary": "健太サンダーガラTA",
+    "retrieved": "2026-09-29",
+    "fingerprint": "464168e2621e68922768207260d38142ee655828e145d94452b7ccdd22550f54",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2013-mario",
+   "evidence": {
+    "score": 0.6130891393442623,
+    "ci": [
+     0.585202143101093,
+     0.6396431010928962
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc02",
+   "species": [
+    "Tauros",
+    "Electrode",
+    "Marowak",
+    "Cloyster",
+    "Zapdos",
+    "Snorlax"
+   ],
+   "levels": [
+    55,
+    50,
+    55,
+    50,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2013-bakabi",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2013/bakabi.htm",
+    "version": "秀才カビ",
+    "indexName": "秀才カビ",
+    "indexSummary": "セミフルカビ単A",
+    "retrieved": "2026-09-29",
+    "fingerprint": "4246bfea9fc3aa6cb1a32d42e37bab1cfae1fb05d0db927a00203329f71e21f9",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2013-bakabi",
+   "evidence": {
+    "score": 0.4976092896174864,
+    "ci": [
+     0.4790780823087432,
+     0.5164393357240438
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc52",
+   "species": [
+    "Snorlax",
+    "Skarmory",
+    "Misdreavus",
+    "Suicune",
+    "Umbreon",
+    "Exeggutor"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2013-venom",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2013/venom.htm",
+    "version": "王パCH流アレンジ",
+    "indexName": "王パCH流アレンジ",
+    "indexSummary": "バンギフーWAガチ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "234d09648ce7461eb90f747ce6ad971850e2745069a79da0c23560fbc17e8a7f",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2013-venom",
+   "evidence": {
+    "score": 0.4776297814207651,
+    "ci": [
+     0.4592725409836066,
+     0.4959080430327869
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc01",
+   "species": [
+    "Tyranitar",
+    "Venusaur",
+    "Skarmory",
+    "Suicune",
+    "Blissey",
+    "Alakazam"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "mjj-2012-ibmthdr",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2012/ibm_thdr.htm",
+    "version": "未完",
+    "indexName": "未完",
+    "indexSummary": "いばみがサンダーA",
+    "retrieved": "2026-09-29",
+    "fingerprint": "f73bc155ca3d86a100e88e0558a68d763a36cb64cfd7ac0fe06d3f438d72264e",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2012-ibmthdr",
+   "evidence": {
+    "score": 0.5146857923497269,
+    "ci": [
+     0.4804286202185792,
+     0.5517531876138432
+    ],
+    "stage": "confirmation",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc51",
+   "species": [
+    "Zapdos",
+    "Snorlax",
+    "Cloyster",
+    "Electrode",
+    "Marowak",
+    "Tauros"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "mjj-2012-raicomb",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2012/raicomb.htm",
+    "version": "ライコウの跡地",
+    "indexName": "ライコウの跡地",
+    "indexSummary": "ライコウシャワWA",
+    "retrieved": "2026-09-29",
+    "fingerprint": "7628d943da60c4fc9e580f5b18735b6db95e205011642bfdb6e40d049a16129a",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "format-illegal under gen2nintendocup2000noohkostadium2strict: donphan:move-illegal:encore, donphan:move-illegal:encore"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Raikou",
+    "Forretress",
+    "Cloyster",
+    "Snorlax",
+    "Donphan",
+    "Vaporeon"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "mjj-2012-goinkyo-2012",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2012/goinkyo.htm#2012",
+    "version": "おぢいちゃんII",
+    "indexName": "おぢいちゃんII",
+    "indexSummary": "フーヘラWAガチ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "830ea3592d865a816e463ec6b617dcfd820526e3c369fa28b63154de2b93de4f",
+    "encodedSource": false,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2012-goinkyo-2012",
+   "evidence": {
+    "score": 0.4701588114754099,
+    "ci": [
+     0.4508187234365514,
+     0.4886107960089774
+    ],
+    "stage": "confirmation",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc49",
+   "species": [
+    "Alakazam",
+    "Heracross",
+    "Snorlax",
+    "Rhydon",
+    "Cloyster",
+    "Charizard"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2011-gykraikou",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2011/gyk_raikou.htm",
+    "version": "ライコウファミリーズ",
+    "indexName": "ライコウファミリーズ",
+    "indexSummary": "ライコウ逆A",
+    "retrieved": "2026-09-29",
+    "fingerprint": "9fdb08dca57f73c36787240fb2510acf532525d8c05a7c312780d7558cdd0de5",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "format-illegal under gen2nintendocup2000noohkostadium2strict: donphan:move-illegal:encore, donphan:move-illegal:encore"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Raikou",
+    "Cloyster",
+    "Umbreon",
+    "Donphan",
+    "Hypno",
+    "Charizard"
+   ],
+   "levels": [
+    51,
+    52,
+    52,
+    52,
+    52,
+    52
+   ]
+  },
+  {
+   "id": "mjj-2011-garatank",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2011/garatank.htm",
+    "version": "牛骨",
+    "indexName": "牛骨",
+    "indexSummary": "ガラタンク同居パ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "327642c664449f90b6bcba8aa0568e1dd87628647c9f12d16c49d65006dae068",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "mjj-2011-garatank",
+   "evidence": {
+    "score": 0.4023650956284153,
+    "ci": [
+     0.3852875256147542,
+     0.4189730618169399
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc48",
+   "species": [
+    "Marowak",
+    "Starmie",
+    "Snorlax",
+    "Exeggutor",
+    "Miltank",
+    "Houndoom"
+   ],
+   "levels": [
+    53,
+    51,
+    51,
+    51,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "mjj-2011-murai-2011",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2011/murai.htm#2011",
+    "version": "夢雷 ～2011～",
+    "indexName": "夢雷 ～2011～",
+    "indexSummary": "寝言サンダーA",
+    "retrieved": "2026-09-29",
+    "fingerprint": "76738a9230c9445472c02e81991d8c5eb3d491796e88d1489bd2c6702aca83a5",
+    "encodedSource": false,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "format-illegal under gen2nintendocup2000noohkostadium2strict: donphan:move-illegal:encore, donphan:move-illegal:encore"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Zapdos",
+    "Marowak",
+    "Snorlax",
+    "Donphan",
+    "Gengar",
+    "Lapras"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2010-semistar",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2010/semistar.htm",
+    "version": "セミスター",
+    "indexName": "セミスター",
+    "indexSummary": "セミフル☆A",
+    "retrieved": "2026-09-29",
+    "fingerprint": "fc2cd6a94f20f65341979dde3fe2ecc5a730389df7787019cb8b629d244a8750",
+    "encodedSource": false,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "mjj-2010-semistar",
+   "evidence": {
+    "score": 0.4157274590163934,
+    "ci": [
+     0.39565723189890717,
+     0.43660455088797817
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc46",
+   "species": [
+    "Starmie",
+    "Skarmory",
+    "Misdreavus",
+    "Piloswine",
+    "Snorlax",
+    "Meganium"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2010-garap-a",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2010/garap.htm",
+    "version": "ガラプラス",
+    "indexName": "ガラプラス",
+    "indexSummary": "ラプラス入りガラパ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "4039504461867baeebdebdd4d9eef051d7247ea2e8956efd8a3e00a130300410",
+    "encodedSource": false,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2010-garap-a",
+   "evidence": {
+    "score": 0.5264685792349727,
+    "ci": [
+     0.4957028200624512,
+     0.5597677595628415
+    ],
+    "stage": "confirmation",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc44",
+   "species": [
+    "Marowak",
+    "Jolteon",
+    "Zapdos",
+    "Lapras",
+    "Snorlax",
+    "Exeggutor"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2010-garap-b",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2010/garap.htm",
+    "version": "ガラプラス",
+    "indexName": "ガラプラス",
+    "indexSummary": "ラプラス入りガラパ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "4039504461867baeebdebdd4d9eef051d7247ea2e8956efd8a3e00a130300410",
+    "encodedSource": false,
+    "primaryOfEntry": false
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "mjj-2010-garap-b",
+   "evidence": {
+    "score": 0.41231215846994534,
+    "ci": [
+     0.39429431352459016,
+     0.4306704661885246
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc45",
+   "species": [
+    "Marowak",
+    "Lapras",
+    "Jolteon",
+    "Snorlax",
+    "Charizard",
+    "Clefable"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2009-chourou",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2009/chourou.htm",
+    "version": "おぢいちゃん",
+    "indexName": "おぢいちゃん",
+    "indexSummary": "フーリキーWA",
+    "retrieved": "2026-09-29",
+    "fingerprint": "c4f505710a8393d7c34931069e4b6c77382413b088773aa0bb7c127fb7fb1fb2",
+    "encodedSource": false,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "strong",
+   "measuredAs": "mjj-2009-chourou",
+   "evidence": {
+    "score": 0.47852629781420775,
+    "ci": [
+     0.46208909665300546,
+     0.4924884733606558
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": true,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc43",
+   "species": [
+    "Alakazam",
+    "Machamp",
+    "Gengar",
+    "Exeggutor",
+    "Snorlax",
+    "Charizard"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2011-frozenhell-2008",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2011/frozen_hell.htm#2008",
+    "version": "凍て付いた地獄'08",
+    "indexName": "凍て付いた地獄'08",
+    "indexSummary": "ガン受け＋冷凍",
+    "retrieved": "2026-09-29",
+    "fingerprint": "ce51f3ebef1f7ccbf3d26f6db99f22a9e757d8865c460fefdaedbde0d314b8ff",
+    "encodedSource": false,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "label": "weak",
+   "measuredAs": "mjj-2011-frozenhell-2008",
+   "evidence": {
+    "score": 0.3930584016393443,
+    "ci": [
+     0.3758047301912569,
+     0.41056181693989074
+    ],
+    "stage": "discovery",
+    "note": null
+   },
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": true,
+   "nashWeight": 0,
+   "variantCluster": "vc47",
+   "species": [
+    "Snorlax",
+    "Skarmory",
+    "Misdreavus",
+    "Gengar",
+    "Starmie",
+    "Blissey"
+   ],
+   "levels": [
+    51,
+    51,
+    51,
+    52,
+    52,
+    51
+   ]
+  },
+  {
+   "id": "mjj-2012-goinkyo-t2",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2012/goinkyo.htm",
+    "version": "おぢいちゃんII",
+    "retrieved": "2026-09-29",
+    "encodedSource": false,
+    "unlisted": true
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "page variant no serious index entry designates — outside the source-defined intake subset (reference only)"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Alakazam",
+    "Heracross",
+    "Snorlax",
+    "Steelix",
+    "Cloyster",
+    "Charizard"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2012-goinkyo-t3",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2012/goinkyo.htm",
+    "version": "おぢいちゃんII",
+    "retrieved": "2026-09-29",
+    "encodedSource": false,
+    "unlisted": true
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "page variant no serious index entry designates — outside the source-defined intake subset (reference only)"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Alakazam",
+    "Heracross",
+    "Snorlax",
+    "Rhydon",
+    "Cloyster",
+    "Charizard"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2011-murai-t1",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2011/murai.htm",
+    "version": "夢雷 ～2010～",
+    "retrieved": "2026-09-29",
+    "encodedSource": false,
+    "unlisted": true
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "page variant no serious index entry designates — outside the source-defined intake subset (reference only)"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Zapdos",
+    "Raikou",
+    "Cloyster",
+    "Snorlax",
+    "Machamp",
+    "Gengar"
+   ],
+   "levels": [
+    54,
+    51,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "mjj-2011-frozenhell-t0",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2011/frozen_hell.htm",
+    "version": "凍て付いた地獄'11",
+    "retrieved": "2026-09-29",
+    "encodedSource": true,
+    "unlisted": true
+   },
+   "eligibility": {
+    "status": "ineligible",
+    "reasons": [
+     "page variant no serious index entry designates — outside the source-defined intake subset (reference only)"
+    ]
+   },
+   "label": null,
+   "measuredAs": null,
+   "evidence": null,
+   "replacement": null,
+   "execution": null,
+   "ordinaryDraw": false,
+   "opponentPrior": false,
+   "nashWeight": 0,
+   "variantCluster": null,
+   "species": [
+    "Houndoom",
+    "Gengar",
+    "Gligar",
+    "Skarmory",
+    "Blissey",
+    "Suicune"
+   ],
+   "levels": [
+    51,
+    52,
+    51,
+    52,
+    51,
+    52
+   ]
+  }
+ ]
+}

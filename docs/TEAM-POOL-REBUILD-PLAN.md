@@ -1,12 +1,11 @@
 # Team pool, opponent prior, and Nash rebuild
 
-Status: approved design, implementation not started. Owner-requested handoff,
-2026-09-29. Repository inspected at `23168bb`.
+Status: **implemented 2026-09-29 (local commits, not pushed or deployed)** —
+steps 1–5 done; results and open owner decisions in [§Results](#results-2026-09-29).
+Owner-requested handoff, 2026-09-29. Repository inspected at `23168bb`.
 
 This file is the authoritative plan for this rebuild. Update it in place as
 work proceeds; keep measurements in versioned data artifacts and link them here.
-The current session only researched sources and agreed on the policy. It did not
-import teams, classify candidates, run new matchups, or change shipped pools.
 
 ## Objective and agreed policy
 

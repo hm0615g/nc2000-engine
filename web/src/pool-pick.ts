@@ -1,10 +1,6 @@
-// One side's selected team, and the pool draw that produces one.
-//
-// The draw lives here (rather than inside the select screen) because two
-// callers need the same rule: the start screen resolving a "Random" pick,
-// and blind-mode rematch, which redraws the opponent every game so a lost
-// battle cannot be re-run against a now-known team. Both must roll exactly
-// the same way — one rule, one place.
+// One side's selected team, and the uniform list-pool draw that produces
+// one: the human's "Random", and the bot's draw when the user loaded a pool
+// file under `?blind` (app.tsx `drawOpponent` owns every bot draw).
 
 import { randomSeed32 } from "./engine";
 import type { MetaPool } from "./types";

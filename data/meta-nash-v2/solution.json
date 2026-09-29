@@ -1,0 +1,17 @@
+{
+ "source": "data/meta-nash-v2/solution-blind3000.json",
+ "engine_commit": "8736dca",
+ "conditions": "blind:3000 vs blind:3000, frozen belief-pool-v2, 18 support-relevant strong teams, 64 games per pair; challenged at 3000 by the other 105 teams (tmp challenge: no eligible candidate clear of 0.5)",
+ "weights": {
+  "mjj-2014-thdrcomb": 0.1965,
+  "nb-sample-12-0": 0.0726,
+  "rental-cban-13": 0.0641,
+  "rental-cban-2": 0.1329,
+  "rental-cban-3": 0.0318,
+  "rental-cban-8": 0.1067,
+  "sample-07": 0.0565,
+  "sample-08": 0.0948,
+  "sample-13": 0.1108,
+  "sample-14": 0.1332
+ }
+}

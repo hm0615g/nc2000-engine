@@ -49,31 +49,39 @@ export async function fetchPool(): Promise<PoolData> {
   return { pool: JSON.parse(poolJson) as MetaPool, poolJson };
 }
 
-/** META-NASH v1's shipped mixture (`?nash` only, so it is fetched only on
+/** The Nash door's shipped mixture (`?nash` only, so it is fetched only on
  * that door). Returned as text because nash-mix.ts is what decides what the
  * file means — and because a nash page with no mixture is not a mode, this
  * one throws: the caller lets it reach the boot error box rather than
  * quietly starting a plainer game under the mode's name. */
 export async function fetchNashArtifact(): Promise<string> {
-  const res = await fetch(dataUrl("meta-nash-v1/pool-artifact.json"));
+  const res = await fetch(dataUrl("meta-nash-v2/pool-artifact.json"));
   if (!res.ok) throw new Error(`nash artifact fetch failed: ${res.status}`);
   return res.text();
 }
 
-/** The `?nash` door's belief candidate pool (EXP-PRIOR-EXPLOIT v1, docs/
- * EXP-prior-exploit.md §6): the bundled curated 32 plus every known strong
- * candidate from the META-NASH study. Belief-only — the own-team draw, the
- * start-screen lists and the baked tables never read it. Fetched only on
- * the nash door, and strict like the mixture artifact: a nash page that
- * cannot load its fixed configuration fails rather than quietly playing
- * under a plainer prior. */
+/** The bot's ordinary own-team pool (own-pool.ts decides what it means).
+ * Every playing door draws from it, so a page that cannot load it fails
+ * rather than quietly drawing from some other list. */
+export async function fetchOwnPool(): Promise<string> {
+  const res = await fetch(dataUrl("team-pool-v1/team-pool.json"));
+  if (!res.ok) throw new Error(`own-team pool fetch failed: ${res.status}`);
+  return res.text();
+}
+
+/** The shipped opponent prior (data/belief-pool-v2): the candidate set, with
+ * weights, that every blind searcher narrows its opponent down to — plain
+ * blind, nash and the solver alike, whatever pool file the user loaded.
+ * Belief-only: the own-team draw, the start-screen lists and the baked
+ * tables never read it. Strict: a blind page that cannot load it fails
+ * rather than quietly playing under a plainer prior. */
 export async function fetchBeliefPool(): Promise<PoolData> {
-  const res = await fetch(dataUrl("belief-pool-v1/belief-pool.json"));
+  const res = await fetch(dataUrl("belief-pool-v2/belief-pool.json"));
   if (!res.ok) throw new Error(`belief pool fetch failed: ${res.status}`);
   const poolJson = await res.text();
   const pool = JSON.parse(poolJson) as MetaPool;
-  // Sanity, not validation: the curated 32 are the floor, so a truncated
-  // or wrong file cannot silently narrow the shipped belief.
+  // Sanity, not validation: a truncated or wrong file must not silently
+  // narrow the shipped belief below the bundled pool's size.
   if (!Array.isArray(pool.teams) || pool.teams.length < 32) {
     throw new Error(`belief pool: expected >=32 teams, got ${pool.teams?.length}`);
   }

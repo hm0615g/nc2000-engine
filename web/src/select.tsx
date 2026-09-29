@@ -493,6 +493,7 @@ function HumanPicker(props: {
  * for the human side. Import/delete stays shared through localStorage. */
 function BotPicker(props: {
   teams: PoolTeam[];
+  drawCount: number;
   choice: PartyChoice;
   onPick: (c: PartyChoice) => void;
   customs: CustomTeam[];
@@ -512,7 +513,7 @@ function BotPicker(props: {
         aria-pressed={choice.kind === "random"}
         onClick={() => props.onPick(RANDOM)}
       >
-        {ui().randomCard(teams.length)}
+        {ui().randomCard(props.drawCount)}
       </button>
       <CustomTeamSection
         choice={choice}
@@ -855,6 +856,9 @@ export function StartScreen(props: {
   /** The opponent draw for blind and nash alike, owned by app.tsx so that
    * pressing Start and taking a rematch roll by the same rule. */
   drawOpponent: () => SelectedTeam;
+  /** How many teams the bot's "Random" draws from (the own-team pool, or a
+   * loaded pool file). */
+  botDrawCount: number;
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
   onStart: (human: SelectedTeam, bot: SelectedTeam) => void;
@@ -921,17 +925,18 @@ export function StartScreen(props: {
         ? botChoice.id
         : (pickedBotCustom?.name ?? ui().randomLabel);
 
-  function selectedTeam(choice: PartyChoice): SelectedTeam {
+  function selectedTeam(choice: PartyChoice, side: "human" | "bot"): SelectedTeam {
     if (choice.kind === "custom") {
       const custom = customs.find((t) => t.id === choice.id);
       if (custom)
         return { id: custom.name, sets: custom.sets, poolIdx: null };
     }
     // Random is resolved here, at start: a fresh roll every game unless
-    // the user pinned a pool team. The roll is pool-pick.ts's, shared with
-    // the blind rematch redraw so both draw by exactly the same rule.
+    // the user pinned a pool team. The human's roll is uniform over the
+    // lists; the bot's is app.tsx's `drawOpponent`, shared with the blind
+    // rematch so every bot draw follows exactly one rule.
     const pinned = choice.kind === "pool" ? poolIdx(choice.id) : -1;
-    if (pinned < 0) return randomPoolTeam(pool);
+    if (pinned < 0) return side === "bot" ? props.drawOpponent() : randomPoolTeam(pool);
     return { id: teams[pinned].id, sets: teams[pinned].sets, poolIdx: pinned };
   }
 
@@ -966,8 +971,8 @@ export function StartScreen(props: {
     // open mode. Nash goes down the same branch and lands on the same
     // `drawOpponent` — uniform-from-pool there, the solved mixture here.
     props.onStart(
-      selectedTeam(picks.human),
-      blind ? props.drawOpponent() : selectedTeam(picks.bot),
+      selectedTeam(picks.human, "human"),
+      blind ? props.drawOpponent() : selectedTeam(picks.bot, "bot"),
     );
   }
 
@@ -1089,6 +1094,7 @@ export function StartScreen(props: {
         <Modal title={ui().chooseOpp} onClose={() => setModal(null)}>
           <BotPicker
             teams={teams}
+            drawCount={props.botDrawCount}
             choice={picks.bot}
             onPick={(c) => {
               update({ ...picks, bot: c });
