@@ -11,6 +11,7 @@
     python3 tools/team-select.py confirm --cells DIR --ids FILE --look N [--prev LOOK1.json] [--json OUT]
     python3 tools/team-select.py sample-pool --pool FILE --measured IDS --seed S --out PREFIX
     python3 tools/team-select.py sample-panel --ids FILE --seed S --out PREFIX
+    python3 tools/team-select.py sample-mix --ids FILE --solution SOL.json --blocks N --k0 K --seed S --out PREFIX
     python3 tools/team-select.py sampled --manifest PREFIX.json --cells DIR [--json OUT]
     python3 tools/team-select.py finalize --a A.json --b B.json --c C.json --out selection.json
 
@@ -381,6 +382,20 @@ def sample_panel(ids, seed, prefix, panel_w):
     write_blocks(prefix, blocks, {'what': 'shared panel schedule', 'schedule': sched, 'seed': seed})
 
 
+def sample_mix(ids, solution, blocks, k0, seed, prefix, floor=0.01):
+    """Each id plays `blocks` seed blocks, block j against an opponent drawn
+    from the solved mixture (support >= floor, renormalized); the draws and
+    seeds are shared by every id, so challengers are paired."""
+    w = {t: v for t, v in json.load(open(solution))['weights'].items() if v >= floor}
+    z = sum(w.values())
+    sup = sorted(w)
+    rng = random.Random(seed)
+    sched = [(weighted_choice(rng, sup, [w[t] / z for t in sup]), k0 + j) for j in range(blocks)]
+    rows = [(t, p, k) for t in read_ids(ids) for p, k in sched]
+    write_blocks(prefix, rows, {'what': 'mixture-sampled blocks', 'solution': solution,
+                                'support': {t: w[t] / z for t in sup}, 'schedule': sched, 'seed': seed})
+
+
 def sampled(manifest, G):
     """Mean block score per team over a sampled design (self blocks 0.5)."""
     m = json.load(open(manifest))
@@ -506,6 +521,9 @@ def main():
     ap.add_argument('--seed', type=int)
     ap.add_argument('--manifest')
     ap.add_argument('--prev')
+    ap.add_argument('--solution')
+    ap.add_argument('--blocks', type=int)
+    ap.add_argument('--k0', type=int, default=0)
     ap.add_argument('--a')
     ap.add_argument('--b')
     ap.add_argument('--c')
@@ -533,6 +551,8 @@ def main():
         return sample_pool(a.pool, a.measured, a.seed, a.out, weights)
     if a.cmd == 'sample-panel':
         return sample_panel(a.ids, a.seed, a.out, weights)
+    if a.cmd == 'sample-mix':
+        return sample_mix(a.ids, a.solution, a.blocks, a.k0, a.seed, a.out)
     if a.cmd == 'sampled':
         G = Games(a.cells)
         per, pooled = sampled(a.manifest, G)
