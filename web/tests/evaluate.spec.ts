@@ -465,7 +465,9 @@ test("saved opponent settings load back unchanged and edit the distribution", as
 }) => {
   await page.goto(route);
   const panel = page.getByRole("region", { name: "対戦相手の設定" });
-  await expect(panel.locator(".eval-opponent strong")).toHaveCount(3);
+  await expect(panel.locator(".eval-opponent strong")).toHaveCount(
+    nash.teams.length,
+  );
   const download = page.waitForEvent("download");
   await panel
     .getByRole("button", { name: "相手の設定をファイルに保存" })
@@ -476,11 +478,7 @@ test("saved opponent settings load back unchanged and edit the distribution", as
   const saved = JSON.parse(text) as {
     teams: { id: string; weight: number; sets: unknown[] }[];
   };
-  expect(saved.teams.map((t) => t.id)).toEqual([
-    "sample-07",
-    "sample-08",
-    "sample-10",
-  ]);
+  expect(saved.teams.map((t) => t.id)).toEqual(nash.teams.map((t) => t.id));
   expect(saved.teams.every((t) => t.sets.length === 6)).toBe(true);
 
   saved.teams[0].id = "edited";
@@ -492,8 +490,7 @@ test("saved opponent settings load back unchanged and edit the distribution", as
   });
   await expect(panel.locator(".eval-opponent strong")).toHaveText([
     "edited",
-    "基本の相手2",
-    "基本の相手3",
+    ...nash.teams.slice(1).map((_, i) => `基本の相手${i + 2}`),
   ]);
   await expect(panel.locator(".eval-opponent span").first()).toHaveText("0.0%");
 
@@ -502,9 +499,7 @@ test("saved opponent settings load back unchanged and edit the distribution", as
     mimeType: "application/json",
     buffer: Buffer.from(text),
   });
-  await expect(panel.locator(".eval-opponent span")).toHaveText([
-    "57.6%",
-    "22.2%",
-    "20.1%",
-  ]);
+  await expect(panel.locator(".eval-opponent span")).toHaveText(
+    nash.teams.map((t) => `${((t.weight / nashTotal) * 100).toFixed(1)}%`),
+  );
 });
