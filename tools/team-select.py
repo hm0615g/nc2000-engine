@@ -8,7 +8,7 @@
     python3 tools/team-select.py score --cells DIR... --ids FILE [--json OUT]
     python3 tools/team-select.py shortlist --cells DIR --out FILE [--json OUT]
     python3 tools/team-select.py disc --cells DIR --ids FILE --out FILE [--json OUT]
-    python3 tools/team-select.py confirm --cells DIR --ids FILE --look N [--json OUT]
+    python3 tools/team-select.py confirm --cells DIR --ids FILE --look N [--prev LOOK1.json] [--json OUT]
     python3 tools/team-select.py sample-pool --pool FILE --measured IDS --seed S --out PREFIX
     python3 tools/team-select.py sample-panel --ids FILE --seed S --out PREFIX
     python3 tools/team-select.py sampled --manifest PREFIX.json --cells DIR [--json OUT]
@@ -505,6 +505,7 @@ def main():
     ap.add_argument('--measured')
     ap.add_argument('--seed', type=int)
     ap.add_argument('--manifest')
+    ap.add_argument('--prev')
     ap.add_argument('--a')
     ap.add_argument('--b')
     ap.add_argument('--c')
@@ -584,12 +585,18 @@ def main():
         print(f'S_disc {len(S)} (entrants {len(pool)}, trimmed {len(log)}) -> {a.out}')
     elif a.cmd == 'confirm':
         z = Z_LOOK
+        prev = json.load(open(a.prev))['confirm']['decision'] if a.prev else {}
         dec = {}
         for t in ids:
             r = rows[t]
             lo, hi = r['score'] - z * r['se'], r['score'] + z * r['se']
-            dec[t] = 'pass' if lo > FLOOR else 'fail' if hi < FLOOR else 'straddle'
             r['lookBounds'] = [lo, hi]
+            if prev.get(t) in ('pass', 'fail'):
+                # Decided at an earlier look: final, whatever shared cells
+                # gained since for a straddling partner.
+                dec[t] = prev[t]
+                continue
+            dec[t] = 'pass' if lo > FLOOR else 'fail' if hi < FLOOR else 'straddle'
         passed = [t for t in ids if dec[t] == 'pass']
         log = []
         S = harm_trim(passed, rows, inv, log)
