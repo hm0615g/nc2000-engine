@@ -351,5 +351,13 @@ games, because the product-budget stages have 1–4 seed blocks per cell.
   ポニョ −0.075 [−0.161, +0.012], unresolved at this resolution.
 - **Stage B** (blind:27000:0.4, seed base 20261121, k = 0): all 103
   candidates and the four controls against the full panel, 5,265 cells /
-  10,530 games (panel pairs are shared), started 2026-09-30 09:24.
+  10,530 games (panel pairs are shared), 09:24–22:10
+  (`measurements/stage-b-blind27000.json`). 43 candidates scored ≥ 0.52;
+  the 36-entrant cap took the top 36 (sample-07 0.739 … 0.532) into
+  confirmation (commit b16f89f's message says 49; 43 is correct). No
+  discovery-stage harm trim fired. The four controls on one block: ceiling
+  0.739, deletions 0.63, floor 0.000 — WEAK at this sample size, reported
+  only.
+- **Stage C look 1** (seed base 20261131, k = 0, 1): the 36 entrants against
+  the full panel, 2,280 cells / 9,120 games, started 22:10.
 
