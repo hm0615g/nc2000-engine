@@ -45,7 +45,8 @@ violation has its own preview cap removed; normal parties retain the 155 cap.
 Runtime sleep/freeze rules still apply. Inputs must remain engine-representable:
 1–6 Pokémon, known species/items/moves, levels 1–100 and at most four moves each.
 The opponent panel shows party composition and draw probabilities; replacing its
-JSON file is the only way to edit the opponent settings. Canonicalization details
+JSON file is the only way to edit the opponent settings. The panel saves the
+current settings in that format as a starting point for edits. Canonicalization details
 are retained in exported results, while the screen shows rule warnings only.
 
 Scores are win=1, loss=0, tie/500-turn cap=0.5; caps and ties are counted separately.

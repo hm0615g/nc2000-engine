@@ -309,8 +309,11 @@
 .eval-opponent-roster small {
   white-space: nowrap;
 }
+.eval-opponent-help {
+  margin: 18px 0 8px;
+}
 .eval-opponents > .eval-file {
-  margin-top: 18px;
+  margin-top: 14px;
 }
 .eval-opponent-sets {
   font-size: 0.84rem;
