@@ -339,3 +339,17 @@ selection score was opened. The plan's "resampling at the shared seed block"
 is realized as stratified analytic variances over shared (opponent, k, side)
 games, because the product-budget stages have 1–4 seed blocks per cell.
 
+### Step 4 — selection (stage A done, stage B running)
+
+- **Stage A** (blind:3000:0.4, seed base 20261111; `data/team-selection-v2/
+  measurements/stage-a-blind3000.json`). Calibration **WEAK**: ceiling
+  sample-07 0.647 ± 0.028, floor 0.001, boom deletion 0.602, Berserk Gene
+  deletion 0.613, order confound 0.665; break 0.045 < 2 × noise 0.028. The
+  metric separates a broken team from a competent one but cannot resolve a
+  single self-KO deletion at this sample size, so under the frozen rule stage
+  A excludes nobody and only orders the stage B queue. Pilot: sample-16 −
+  ポニョ −0.075 [−0.161, +0.012], unresolved at this resolution.
+- **Stage B** (blind:27000:0.4, seed base 20261121, k = 0): all 103
+  candidates and the four controls against the full panel, 5,265 cells /
+  10,530 games (panel pairs are shared), started 2026-09-30 09:24.
+
