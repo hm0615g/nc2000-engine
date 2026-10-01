@@ -1,6 +1,11 @@
-# meta-nash-v2 — the Nash door's mixture, rebuilt
+# meta-nash-v2 — the Nash door's mixture, rebuilt (superseded)
 
-`pool-artifact.json` is generated (`node tools/build-team-products.js`) from
+**Historical, never deployed.** Superseded on 2026-10-02 by
+`data/meta-nash-v3`, which re-solves the game under the shipped blind profile
+(c = 0.4, 27,000 iterations) over the selected catalog. The numbers below
+describe what was measured then, at c = 1.0.
+
+`pool-artifact.json` was generated (`node tools/build-team-products.js`) from
 `solution.json`. It is what `?nash` draws the bot's team from, once per
 battle. Every support team is labelled strong in
 `data/team-inventory-v1/classification.json`; the weights are stored here,
@@ -27,7 +32,8 @@ true-state `skuct` on both sides and never consults a belief prior.
 | `solution-blind300.json` | the 79 strong teams, all pairs, 32 games each (98,592 games) |
 | `solution-blind1000.json` | 18 support-relevant teams, 64 games per pair |
 | `solution-blind3000.json` | the same 18 teams at 3000 iterations |
-| `solution-blind3000-do1.json` | 21 teams: the 18 plus the three closest challengers (one double-oracle round) — the shipped game |
+| `solution-blind3000-do1.json` | 21 teams: the 18 plus the three closest challengers (one double-oracle round) |
+| `solution-blind3000-do2.json` | 23 teams: a second double-oracle round (ソード＆シールド, HC7.5 2nd) — the game `solution.json` was taken from |
 | `challenge-blind3000.json` | every other measured team, the held-out page teams and the off-prior chimeras against the mixture |
 | `solution.json` | the shipped weights (support ≥ 0.01, renormalized) |
 

@@ -1,6 +1,11 @@
-# belief-pool-v2 — the shipped opponent prior
+# belief-pool-v2 — the opponent prior of the c = 1.0 rebuild (superseded)
 
-`belief-pool.json` is generated (`node tools/build-team-products.js`) from
+**Historical, never deployed.** Superseded on 2026-10-01 by
+`data/belief-pool-v3` (this membership plus カビバン 2020, validated under
+the shipped blind profile). No consumer reads this file; the "Consumers"
+section below describes the code as it was.
+
+`belief-pool.json` was generated (`node tools/build-team-products.js`) from
 `data/team-inventory-v1`. It is what every blind searcher assumes about the
 team it faces. It is never a list of teams the bot plays.
 

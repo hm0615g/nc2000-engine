@@ -405,14 +405,15 @@ const EN: UIStrings = {
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
   nashBanner:
     "The solved mixture — neither side sees the other's sets; each battle " +
-    "the bot draws one of three teams at the odds below. Build whatever you " +
-    "like: knowing the mixture is the point.",
+    "the bot draws one of the parties below at the odds shown. Build " +
+    "whatever you like: knowing the mixture is the point.",
   nashTitle: "The solved mixture",
   nashMixNote:
-    "META-NASH v1's shipped answer: against a best-response search given the " +
-    "same budget, no team and no blend beat this one. The bot samples it " +
-    "afresh every battle, so which of the three you are facing stays hidden " +
-    "until the game ends — the odds do not.",
+    "The equilibrium of the game among this bot's selected parties, solved " +
+    "blind against blind at the bot's own budget. Inside that game no party " +
+    "does better against it, and no outside party tested so far has been " +
+    "shown to beat it. The bot samples it afresh every battle, so which " +
+    "party you are facing stays hidden until the game ends — the odds do not.",
   nashSource: (file) => `Solution: ${file}`,
   priorLabel: "Belief prior",
   priorNone: "None",
@@ -680,14 +681,15 @@ const JA: UIStrings = {
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
   nashBanner:
     "結論の混合戦略 — 互いの構成(技・持ち物)は非公開。ボットは毎回、下の" +
-    "確率で3チームから1つを引きます。あなたの編成は自由 — 混合を知られても" +
+    "確率でパーティを1つ引きます。あなたの編成は自由 — 混合を知られても" +
     "崩れないことが結論の中身です。",
   nashTitle: "結論の混合戦略",
   nashMixNote:
-    "META-NASH v1 の出荷解です。同じ予算を与えた最適応答探索でも、単体の" +
-    "チームでも混合でも、これを上回るものは出ませんでした。ボットは毎回" +
-    "引き直すので、今どれと当たっているかは終局まで伏せられます — 確率は" +
-    "最初から公開です。",
+    "このボットの標準パーティ同士のゲームを、互いに構成非公開・実際の" +
+    "思考量で解いた均衡です。そのゲームの中にこれを上回るパーティはなく、" +
+    "外から試したパーティでもこれに勝ると示されたものはまだありません。" +
+    "ボットは毎回引き直すので、今どれと当たっているかは終局まで伏せられ" +
+    "ます — 確率は最初から公開です。",
   nashSource: (file) => `解: ${file}`,
   priorLabel: "相手構成の事前分布",
   priorNone: "なし",

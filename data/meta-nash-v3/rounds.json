@@ -1,0 +1,134 @@
+{
+ "rounds": [
+  {
+   "round": 0,
+   "R": [
+    "sample-07",
+    "nb-sample-12-0",
+    "rental-cban-3",
+    "sample-08",
+    "sample-10",
+    "sample-13",
+    "sample-17-orig",
+    "mjj-2014-thdrcomb",
+    "mjj-2013-mario",
+    "hc75-3rd-bean",
+    "rental-cban-8",
+    "sample-11",
+    "rental-cban-13",
+    "rental-cban-6",
+    "sample-12",
+    "sample-11-orig",
+    "mjj-2020-rraikou",
+    "nb-sample-13-0",
+    "rental-cban-2"
+   ],
+   "outside": {
+    "sample-06": {
+     "score": 0.4375,
+     "se": 0.11063265039459795,
+     "blocks": 16
+    },
+    "mjj-2010-garap-a": {
+     "score": 0.5,
+     "se": 0.11180339887498948,
+     "blocks": 16
+    },
+    "rental-cban-14": {
+     "score": 0.40625,
+     "se": 0.09375,
+     "blocks": 16
+    },
+    "sample-16-orig": {
+     "score": 0.53125,
+     "se": 0.09648780147424509,
+     "blocks": 16
+    },
+    "sample-02": {
+     "score": 0.5625,
+     "se": 0.08984941105353261,
+     "blocks": 16
+    }
+   },
+   "joined": [
+    "sample-16-orig",
+    "sample-02"
+   ]
+  },
+  {
+   "round": 1,
+   "R": [
+    "sample-07",
+    "nb-sample-12-0",
+    "rental-cban-3",
+    "sample-08",
+    "sample-10",
+    "sample-13",
+    "sample-17-orig",
+    "mjj-2014-thdrcomb",
+    "mjj-2013-mario",
+    "hc75-3rd-bean",
+    "rental-cban-8",
+    "sample-11",
+    "rental-cban-13",
+    "rental-cban-6",
+    "sample-12",
+    "sample-11-orig",
+    "mjj-2020-rraikou",
+    "nb-sample-13-0",
+    "rental-cban-2",
+    "sample-16-orig",
+    "sample-02"
+   ],
+   "outside": {
+    "sample-06": {
+     "score": 0.46875,
+     "se": 0.08500919067959652,
+     "blocks": 16
+    },
+    "mjj-2010-garap-a": {
+     "score": 0.46875,
+     "se": 0.08500919067959652,
+     "blocks": 16
+    },
+    "rental-cban-14": {
+     "score": 0.5625,
+     "se": 0.10077822185373188,
+     "blocks": 16
+    }
+   },
+   "joined": [
+    "rental-cban-14"
+   ]
+  },
+  {
+   "round": 2,
+   "R": [
+    "sample-07",
+    "nb-sample-12-0",
+    "rental-cban-3",
+    "sample-08",
+    "sample-10",
+    "sample-13",
+    "sample-17-orig",
+    "mjj-2014-thdrcomb",
+    "mjj-2013-mario",
+    "hc75-3rd-bean",
+    "rental-cban-8",
+    "sample-11",
+    "rental-cban-13",
+    "rental-cban-6",
+    "sample-12",
+    "sample-11-orig",
+    "mjj-2020-rraikou",
+    "nb-sample-13-0",
+    "rental-cban-2",
+    "sample-16-orig",
+    "sample-02",
+    "rental-cban-14"
+   ],
+   "joined": []
+  }
+ ],
+ "final": "tmp/team-eval-v2/sel/nash27-r2.json"
+}

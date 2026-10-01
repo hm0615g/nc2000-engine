@@ -1,6 +1,12 @@
-# team-pool-v1 — the bot's ordinary own-team pool
+# team-pool-v1 — the open-era own-team pool (superseded)
 
-`team-pool.json` is generated (`node tools/build-team-products.js`) from
+**Historical, never deployed.** Superseded on 2026-10-02 by the catalog
+`data/team-pool-v2` (24 parties selected under blind c = 0.4, shared by the
+human lists and the bot's draw). On the selection panel at blind:27000:0.4
+this pool's value is 0.498 against the catalog's 0.601. No consumer reads this
+file; the table below describes the code as it was.
+
+`team-pool.json` was generated (`node tools/build-team-products.js`) from
 `data/team-inventory-v1`: every measured team whose base label is
 **strong** under `data/team-inventory-v1/PROTOCOL.md`. Nash members are a
 subset of it; weak, pending and dominated teams never appear here.
