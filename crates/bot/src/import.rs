@@ -1779,7 +1779,7 @@ impl ProtocolTracker {
 
 /// party := `slots` (display order); positions canonical (party index for
 /// members, then bench parked in roster order — the M10 determinizer scheme).
-fn apply_party(b: &mut Battle, s: usize, slots: &[u8]) {
+pub(crate) fn apply_party(b: &mut Battle, s: usize, slots: &[u8]) {
     let side = &mut b.sides[s];
     side.party.clear();
     side.party.extend_from_slice(slots);

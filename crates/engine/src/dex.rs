@@ -738,6 +738,7 @@ fn handler_nums(obj: &BTreeMap<String, Value>) -> BTreeMap<String, i32> {
 }
 
 pub struct Dex {
+    pub replay_fingerprint: [u8; 16],
     pub species: Table<SpeciesId, SpeciesData>,
     pub moves: Table<MoveId, MoveData>,
     pub items: Table<ItemId, ItemData>,
@@ -1196,6 +1197,7 @@ impl Dex {
         };
 
         Ok(Dex {
+            replay_fingerprint: crate::replay::fingerprint(json),
             species,
             moves,
             items,

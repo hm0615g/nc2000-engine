@@ -24,6 +24,7 @@ import {
   type WorkerResponse,
 } from "./evaluate-core";
 import {
+  exportDistribution,
   importDistribution,
   readOpponents,
   readTeam,
@@ -470,6 +471,19 @@ export function Evaluate() {
                 {validation.opponentError}
               </p>
             )}
+            <p class="eval-muted eval-opponent-help">
+              今の設定をファイルに保存し、書き換えてから読み込むと相手を変更できます。
+            </p>
+            <button
+              onClick={() =>
+                download(
+                  "evaluate-opponents.json",
+                  exportDistribution(entries),
+                )
+              }
+            >
+              相手の設定をファイルに保存
+            </button>
             <label class="eval-file">
               相手の設定を読み込む（JSON）
               <input

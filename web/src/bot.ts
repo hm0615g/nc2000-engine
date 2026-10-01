@@ -101,6 +101,23 @@ export class BotWorker {
     this.send({ t: "battle", p1, p2, seed, searcher });
   }
 
+  /** Start a forked battle (`?fork`): the worker's mirror is
+   * `Battle.fromFork(fork, seed)` and the bot plays `searcher.side` from the
+   * fork's recorded information set under `searcher.mode`. */
+  async newFork(
+    fork: string,
+    seed: number,
+    searcher: {
+      poolJson: string;
+      side: number;
+      seed: number;
+      mode: "open" | "blind";
+    },
+  ): Promise<void> {
+    await this.ready;
+    this.send({ t: "fork", fork, seed, searcher });
+  }
+
   /** Feed one baked pair table for the table preview (call before the
    * preview search; messages are ordered). */
   addPair(json: string): void {

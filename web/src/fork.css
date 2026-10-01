@@ -1,0 +1,141 @@
+.fork {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 28px 16px 60px;
+}
+.fork-intro h1 {
+  font-size: clamp(1.3rem, 4vw, 1.8rem);
+  margin: 4px 0 12px;
+}
+.fork-intro p {
+  line-height: 1.65;
+}
+.fork-eyebrow {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  margin: 0;
+}
+.fork-muted {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+.fork-error {
+  color: var(--bad);
+  white-space: pre-wrap;
+}
+.fork-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+  margin: 18px 0;
+  min-width: 0;
+}
+.fork-panel h2 {
+  margin-top: 0;
+}
+.fork-panel textarea {
+  display: block;
+  width: 100%;
+  margin: 12px 0;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+}
+.fork-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0 0 16px;
+}
+.fork-facts dt {
+  color: var(--text-dim);
+}
+.fork-facts dd {
+  margin: 0;
+}
+.fork-arms {
+  margin: 0;
+  padding-left: 1.2em;
+}
+.fork-arm-label {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.fork-start {
+  width: 100%;
+}
+.fork-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+.fork-table-wrap {
+  overflow-x: auto;
+}
+.fork-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+.fork-table th,
+.fork-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.fork-table th {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.fork-games {
+  margin: 14px 0 0;
+  padding-left: 1.6em;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+.arena-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+.arena-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  min-width: 0;
+}
+.arena-settings input {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 44px;
+  padding: 6px 10px;
+  min-width: 0;
+}
+.arena-settings select {
+  min-width: 0;
+}
+.arena-progress {
+  margin: 14px 0 6px;
+}
+.arena-cli code {
+  word-break: break-all;
+}

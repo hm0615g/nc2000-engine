@@ -120,4 +120,13 @@ export function importDistribution(text: string): OpponentDraft[] {
   return drafts;
 }
 
+export function exportDistribution(drafts: OpponentDraft[]): string {
+  const teams = drafts.map((d) => ({
+    id: d.id,
+    weight: Number(d.weight),
+    sets: JSON.parse(d.text),
+  }));
+  return JSON.stringify({ teams }, null, 2);
+}
+
 export { sha256 } from "./evaluate-hash";

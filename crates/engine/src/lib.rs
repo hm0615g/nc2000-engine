@@ -11,5 +11,6 @@ pub mod dex;
 pub mod events;
 pub mod fxhash;
 pub mod prng;
+pub mod replay;
 pub mod state;
 pub mod validate;

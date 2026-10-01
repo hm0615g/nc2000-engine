@@ -110,15 +110,13 @@ pub struct RmConfig {
     pub hp_buckets: i64,
     /// Full-width RM+ sweeps over the estimated root matrix.
     pub solve_sweeps: u32,
-    /// M16c rollout upgrades, PARKED default-off (measured null 2026-07-21):
-    /// voluntary bad-matchup switching (`mcts::ROLLOUT_SWITCH_TRIGGER`) +
-    /// status-move pseudo-values (`mcts::status_pseudo_score`). Human-corpus
-    /// agreement did not move (39.3%→38.7% overall, switches 25.0%→23.8%)
-    /// and seed-paired self-play sat at parity (0.465±0.069 @300,
-    /// 0.510±0.098 @1000) — at product budgets the tree, not the rollout
-    /// tail, owns the root values. Machinery retained for research: arena
-    /// spec `skuctm16c` turns it on; `false` = shipped rollout.
-    pub rollout_m16c: bool,
+    /// Rollout greedy pick scores status/setup moves by
+    /// `mcts::status_pseudo_score` instead of 0. Parked research arm, off in
+    /// the shipped rollout; gate record in `data/m16c-rollout-v2/README.md`.
+    pub rollout_status: bool,
+    /// Rollout greedy pick switches out of a bad matchup
+    /// (`mcts::ROLLOUT_SWITCH_TRIGGER`). Parked like `rollout_status`.
+    pub rollout_switch: bool,
     /// Rollout sides leave the field at Perish count 1 when they can
     /// (`mcts::perish_escape`).
     pub rollout_perish: bool,
@@ -142,7 +140,8 @@ pub struct RmConfig {
 impl RmConfig {
     pub fn rollout_rules(&self) -> RolloutRules {
         RolloutRules {
-            m16c: self.rollout_m16c,
+            status: self.rollout_status,
+            switch: self.rollout_switch,
             perish_escape: self.rollout_perish,
             perish_combo: self.rollout_combo,
         }
@@ -162,7 +161,8 @@ impl Default for RmConfig {
             threshold: 0.5,
             hp_buckets: 16,
             solve_sweeps: 2000,
-            rollout_m16c: false,
+            rollout_status: false,
+            rollout_switch: false,
             rollout_perish: false,
             rollout_combo: true,
             threshold_key: false,

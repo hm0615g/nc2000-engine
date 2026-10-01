@@ -400,7 +400,8 @@ fn main() {
         eprintln!("key override: threshold_key = true");
     }
     if args.iter().any(|a| a == "--m16c") {
-        agent_cfg.rollout_m16c = true;
+        agent_cfg.rollout_status = true;
+        agent_cfg.rollout_switch = true;
         eprintln!("rollout override: m16c = true");
     }
 

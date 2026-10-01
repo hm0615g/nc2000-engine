@@ -1,0 +1,2072 @@
+{
+  "schema": "nc2000-fork-v1",
+  "label": "4296 T11",
+  "info": "blind",
+  "position": {
+    "schema": "nc2000-position-v1",
+    "side": 1,
+    "turn": 11,
+    "upkeep_this_turn": false,
+    "own_sets": [
+      {
+        "name": "Ampharos",
+        "species": "Ampharos",
+        "item": "Miracle Berry",
+        "ability": "No Ability",
+        "moves": [
+          "Thunderbolt",
+          "Dynamic Punch",
+          "Fire Punch",
+          "Thunder Wave"
+        ],
+        "level": 55,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 31,
+          "def": 31,
+          "hp": 31,
+          "spa": 31,
+          "spd": 31,
+          "spe": 31
+        },
+        "happiness": 255,
+        "gender": "M"
+      },
+      {
+        "name": "Starmie",
+        "species": "Starmie",
+        "item": "Leftovers",
+        "ability": "No Ability",
+        "moves": [
+          "Surf",
+          "Psychic",
+          "Thunder Wave",
+          "Recover"
+        ],
+        "level": 55,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 31,
+          "def": 31,
+          "hp": 31,
+          "spa": 31,
+          "spd": 31,
+          "spe": 31
+        },
+        "happiness": 255,
+        "gender": "N"
+      },
+      {
+        "name": "Cloyster",
+        "species": "Cloyster",
+        "item": "Gold Berry",
+        "ability": "No Ability",
+        "moves": [
+          "Ice Beam",
+          "Explosion",
+          "Reflect",
+          "Spikes"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 31,
+          "def": 31,
+          "hp": 31,
+          "spa": 31,
+          "spd": 31,
+          "spe": 31
+        },
+        "happiness": 255,
+        "gender": "M"
+      },
+      {
+        "name": "Marowak",
+        "species": "Marowak",
+        "item": "Thick Club",
+        "ability": "No Ability",
+        "moves": [
+          "Earthquake",
+          "Rock Slide",
+          "Hidden Power Bug",
+          "Swords Dance"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 26,
+          "def": 26,
+          "hp": 31,
+          "spa": 31,
+          "spd": 31,
+          "spe": 31
+        },
+        "happiness": 255,
+        "gender": "M"
+      },
+      {
+        "name": "Misdreavus",
+        "species": "Misdreavus",
+        "item": "Mint Berry",
+        "ability": "No Ability",
+        "moves": [
+          "Mean Look",
+          "Protect",
+          "Perish Song",
+          "Rest"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 31,
+          "def": 31,
+          "hp": 31,
+          "spa": 31,
+          "spd": 31,
+          "spe": 31
+        },
+        "happiness": 255,
+        "gender": "M"
+      },
+      {
+        "name": "Snorlax",
+        "species": "Snorlax",
+        "item": "Quick Claw",
+        "ability": "No Ability",
+        "moves": [
+          "Body Slam",
+          "Earthquake",
+          "Self-Destruct",
+          "Curse"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 255,
+          "def": 255,
+          "hp": 255,
+          "spa": 255,
+          "spd": 255,
+          "spe": 255
+        },
+        "ivs": {
+          "atk": 31,
+          "def": 31,
+          "hp": 31,
+          "spa": 31,
+          "spd": 31,
+          "spe": 31
+        },
+        "happiness": 255,
+        "gender": "M"
+      }
+    ],
+    "sides": [
+      {
+        "mons": [
+          {
+            "species": "starmie",
+            "level": 55,
+            "gender": "",
+            "name": "Starmie",
+            "item_flag": true,
+            "appeared": true,
+            "appear_count": 2,
+            "switch_in_turn": 5,
+            "active": false,
+            "fainted": false,
+            "hp_num": 100,
+            "hp_den": 100,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [
+              {
+                "move": "surf",
+                "n": 1
+              }
+            ],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [
+              "surf"
+            ],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "zapdos",
+            "level": 55,
+            "gender": "",
+            "name": "",
+            "item_flag": true,
+            "appeared": false,
+            "appear_count": 0,
+            "switch_in_turn": 0,
+            "active": false,
+            "fainted": false,
+            "hp_num": 48,
+            "hp_den": 48,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "shuckle",
+            "level": 50,
+            "gender": "F",
+            "name": "Shuckle",
+            "item_flag": true,
+            "appeared": true,
+            "appear_count": 2,
+            "switch_in_turn": 8,
+            "active": true,
+            "fainted": false,
+            "hp_num": 56,
+            "hp_den": 100,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [
+              {
+                "move": "toxic",
+                "n": 2
+              },
+              {
+                "move": "encore",
+                "n": 1
+              }
+            ],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": "toxic",
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [
+              "toxic",
+              "encore"
+            ],
+            "item_original": {
+              "known": true,
+              "item": "goldberry"
+            },
+            "item_current": {
+              "known": true,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "snorlax",
+            "level": 50,
+            "gender": "M",
+            "name": "",
+            "item_flag": true,
+            "appeared": false,
+            "appear_count": 0,
+            "switch_in_turn": 0,
+            "active": false,
+            "fainted": false,
+            "hp_num": 48,
+            "hp_den": 48,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "misdreavus",
+            "level": 50,
+            "gender": "F",
+            "name": "",
+            "item_flag": true,
+            "appeared": false,
+            "appear_count": 0,
+            "switch_in_turn": 0,
+            "active": false,
+            "fainted": false,
+            "hp_num": 48,
+            "hp_den": 48,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "blissey",
+            "level": 50,
+            "gender": "F",
+            "name": "Blissey",
+            "item_flag": true,
+            "appeared": true,
+            "appear_count": 1,
+            "switch_in_turn": 6,
+            "active": false,
+            "fainted": false,
+            "hp_num": 83,
+            "hp_den": 100,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [
+              {
+                "move": "present",
+                "n": 1
+              }
+            ],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [
+              "present"
+            ],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          }
+        ],
+        "active": 2,
+        "party": [],
+        "conditions": [],
+        "pending_bp": false,
+        "acted_this_turn": false,
+        "fainted_this_turn": null,
+        "fainted_last_turn": null,
+        "last_move": "toxic"
+      },
+      {
+        "mons": [
+          {
+            "species": "ampharos",
+            "level": 55,
+            "gender": "M",
+            "name": "Ampharos",
+            "item_flag": true,
+            "appeared": true,
+            "appear_count": 1,
+            "switch_in_turn": 5,
+            "active": false,
+            "fainted": false,
+            "hp_num": 100,
+            "hp_den": 100,
+            "hp_exact": 215,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [
+              {
+                "move": "thunderbolt",
+                "n": 1
+              }
+            ],
+            "pp": [],
+            "item_now": "miracleberry",
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "starmie",
+            "level": 55,
+            "gender": "",
+            "name": "",
+            "item_flag": true,
+            "appeared": false,
+            "appear_count": 0,
+            "switch_in_turn": 0,
+            "active": false,
+            "fainted": false,
+            "hp_num": 48,
+            "hp_den": 48,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "cloyster",
+            "level": 50,
+            "gender": "M",
+            "name": "",
+            "item_flag": true,
+            "appeared": false,
+            "appear_count": 0,
+            "switch_in_turn": 0,
+            "active": false,
+            "fainted": false,
+            "hp_num": 48,
+            "hp_den": 48,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "marowak",
+            "level": 50,
+            "gender": "M",
+            "name": "Marowak",
+            "item_flag": true,
+            "appeared": true,
+            "appear_count": 2,
+            "switch_in_turn": 9,
+            "active": true,
+            "fainted": false,
+            "hp_num": 100,
+            "hp_den": 100,
+            "hp_exact": 166,
+            "status": "tox",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": 0,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              2,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [
+              {
+                "move": "swordsdance",
+                "n": 1
+              }
+            ],
+            "pp": [
+              {
+                "move": "earthquake",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "move": "rockslide",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "move": "hiddenpower",
+                "pp": 24,
+                "maxpp": 24,
+                "disabled": false
+              },
+              {
+                "move": "swordsdance",
+                "pp": 47,
+                "maxpp": 48,
+                "disabled": false
+              }
+            ],
+            "item_now": "thickclub",
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": "swordsdance",
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "misdreavus",
+            "level": 50,
+            "gender": "M",
+            "name": "",
+            "item_flag": true,
+            "appeared": false,
+            "appear_count": 0,
+            "switch_in_turn": 0,
+            "active": false,
+            "fainted": false,
+            "hp_num": 48,
+            "hp_den": 48,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "snorlax",
+            "level": 50,
+            "gender": "M",
+            "name": "Snorlax",
+            "item_flag": true,
+            "appeared": true,
+            "appear_count": 2,
+            "switch_in_turn": 7,
+            "active": false,
+            "fainted": true,
+            "hp_num": 0,
+            "hp_den": 100,
+            "hp_exact": 0,
+            "status": "psn",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [
+              {
+                "move": "bodyslam",
+                "n": 4
+              },
+              {
+                "move": "earthquake",
+                "n": 1
+              }
+            ],
+            "pp": [],
+            "item_now": "quickclaw",
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          }
+        ],
+        "active": 3,
+        "party": [
+          3,
+          0,
+          5
+        ],
+        "conditions": [],
+        "pending_bp": false,
+        "acted_this_turn": false,
+        "fainted_this_turn": null,
+        "fainted_last_turn": null,
+        "last_move": "swordsdance"
+      }
+    ],
+    "weather": null,
+    "team_preview": false,
+    "force_switch": false,
+    "trapped": false
+  },
+  "opponent_team": [
+    {
+      "name": "Starmie",
+      "species": "Starmie",
+      "item": "Miracle Berry",
+      "ability": "No Ability",
+      "moves": [
+        "Surf",
+        "Psychic",
+        "Confuse Ray",
+        "Recover"
+      ],
+      "level": 55,
+      "evs": {
+        "atk": 1,
+        "def": 252,
+        "hp": 252,
+        "spa": 252,
+        "spd": 252,
+        "spe": 252
+      },
+      "ivs": {
+        "atk": 2,
+        "def": 31,
+        "hp": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "happiness": 255,
+      "gender": "N"
+    },
+    {
+      "name": "Zapdos",
+      "species": "Zapdos",
+      "item": "Magnet",
+      "ability": "No Ability",
+      "moves": [
+        "Thunder",
+        "Thunderbolt",
+        "Rest",
+        "Sleep Talk"
+      ],
+      "level": 55,
+      "evs": {
+        "atk": 1,
+        "def": 252,
+        "hp": 252,
+        "spa": 252,
+        "spd": 252,
+        "spe": 252
+      },
+      "ivs": {
+        "atk": 2,
+        "def": 31,
+        "hp": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "happiness": 255,
+      "gender": "N"
+    },
+    {
+      "name": "Shuckle",
+      "species": "Shuckle",
+      "item": "Gold Berry",
+      "ability": "No Ability",
+      "moves": [
+        "Toxic",
+        "Encore",
+        "Rest",
+        "Sleep Talk"
+      ],
+      "level": 50,
+      "evs": {
+        "atk": 1,
+        "def": 252,
+        "hp": 252,
+        "spa": 252,
+        "spd": 252,
+        "spe": 252
+      },
+      "ivs": {
+        "atk": 2,
+        "def": 31,
+        "hp": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "happiness": 255,
+      "gender": "F"
+    },
+    {
+      "name": "Snorlax",
+      "species": "Snorlax",
+      "item": "Mint Berry",
+      "ability": "No Ability",
+      "moves": [
+        "Body Slam",
+        "Curse",
+        "Rest",
+        "Self-Destruct"
+      ],
+      "level": 50,
+      "evs": {
+        "atk": 252,
+        "def": 252,
+        "hp": 252,
+        "spa": 252,
+        "spd": 252,
+        "spe": 252
+      },
+      "ivs": {
+        "atk": 31,
+        "def": 31,
+        "hp": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "happiness": 255,
+      "gender": "M"
+    },
+    {
+      "name": "Misdreavus",
+      "species": "Misdreavus",
+      "item": "Leftovers",
+      "ability": "No Ability",
+      "moves": [
+        "Toxic",
+        "Confuse Ray",
+        "Pain Split",
+        "Perish Song"
+      ],
+      "level": 50,
+      "evs": {
+        "atk": 1,
+        "def": 252,
+        "hp": 252,
+        "spa": 252,
+        "spd": 252,
+        "spe": 252
+      },
+      "ivs": {
+        "atk": 2,
+        "def": 31,
+        "hp": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "happiness": 255,
+      "gender": "F"
+    },
+    {
+      "name": "Blissey",
+      "species": "Blissey",
+      "item": "Quick Claw",
+      "ability": "No Ability",
+      "moves": [
+        "Ice Beam",
+        "Present",
+        "Heal Bell",
+        "Soft-Boiled"
+      ],
+      "level": 50,
+      "evs": {
+        "atk": 1,
+        "def": 252,
+        "hp": 252,
+        "spa": 252,
+        "spd": 252,
+        "spe": 252
+      },
+      "ivs": {
+        "atk": 2,
+        "def": 31,
+        "hp": 31,
+        "spa": 31,
+        "spd": 31,
+        "spe": 31
+      },
+      "happiness": 255,
+      "gender": "F"
+    }
+  ],
+  "opponent_picks": [],
+  "opponent_position": {
+    "schema": "nc2000-position-v1",
+    "side": 0,
+    "turn": 11,
+    "upkeep_this_turn": false,
+    "own_sets": [
+      {
+        "name": "Starmie",
+        "species": "Starmie",
+        "item": "Miracle Berry",
+        "ability": "No Ability",
+        "moves": [
+          "Surf",
+          "Psychic",
+          "Confuse Ray",
+          "Recover"
+        ],
+        "level": 55,
+        "evs": {
+          "atk": 1,
+          "def": 252,
+          "hp": 252,
+          "spa": 252,
+          "spd": 252,
+          "spe": 252
+        },
+        "ivs": {
+          "atk": 2,
+          "def": 31,
+          "hp": 31,
+          "spa": 31,
+          "spd": 31,
+          "spe": 31
+        },
+        "happiness": 255,
+        "gender": "N"
+      },
+      {
+        "name": "Zapdos",
+        "species": "Zapdos",
+        "item": "Magnet",
+        "ability": "No Ability",
+        "moves": [
+          "Thunder",
+          "Thunderbolt",
+          "Rest",
+          "Sleep Talk"
+        ],
+        "level": 55,
+        "evs": {
+          "atk": 1,
+          "def": 252,
+          "hp": 252,
+          "spa": 252,
+          "spd": 252,
+          "spe": 252
+        },
+        "ivs": {
+          "atk": 2,
+          "def": 31,
+          "hp": 31,
+          "spa": 31,
+          "spd": 31,
+          "spe": 31
+        },
+        "happiness": 255,
+        "gender": "N"
+      },
+      {
+        "name": "Shuckle",
+        "species": "Shuckle",
+        "item": "Gold Berry",
+        "ability": "No Ability",
+        "moves": [
+          "Toxic",
+          "Encore",
+          "Rest",
+          "Sleep Talk"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 1,
+          "def": 252,
+          "hp": 252,
+          "spa": 252,
+          "spd": 252,
+          "spe": 252
+        },
+        "ivs": {
+          "atk": 2,
+          "def": 31,
+          "hp": 31,
+          "spa": 31,
+          "spd": 31,
+          "spe": 31
+        },
+        "happiness": 255,
+        "gender": "F"
+      },
+      {
+        "name": "Snorlax",
+        "species": "Snorlax",
+        "item": "Mint Berry",
+        "ability": "No Ability",
+        "moves": [
+          "Body Slam",
+          "Curse",
+          "Rest",
+          "Self-Destruct"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 252,
+          "def": 252,
+          "hp": 252,
+          "spa": 252,
+          "spd": 252,
+          "spe": 252
+        },
+        "ivs": {
+          "atk": 31,
+          "def": 31,
+          "hp": 31,
+          "spa": 31,
+          "spd": 31,
+          "spe": 31
+        },
+        "happiness": 255,
+        "gender": "M"
+      },
+      {
+        "name": "Misdreavus",
+        "species": "Misdreavus",
+        "item": "Leftovers",
+        "ability": "No Ability",
+        "moves": [
+          "Toxic",
+          "Confuse Ray",
+          "Pain Split",
+          "Perish Song"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 1,
+          "def": 252,
+          "hp": 252,
+          "spa": 252,
+          "spd": 252,
+          "spe": 252
+        },
+        "ivs": {
+          "atk": 2,
+          "def": 31,
+          "hp": 31,
+          "spa": 31,
+          "spd": 31,
+          "spe": 31
+        },
+        "happiness": 255,
+        "gender": "F"
+      },
+      {
+        "name": "Blissey",
+        "species": "Blissey",
+        "item": "Quick Claw",
+        "ability": "No Ability",
+        "moves": [
+          "Ice Beam",
+          "Present",
+          "Heal Bell",
+          "Soft-Boiled"
+        ],
+        "level": 50,
+        "evs": {
+          "atk": 1,
+          "def": 252,
+          "hp": 252,
+          "spa": 252,
+          "spd": 252,
+          "spe": 252
+        },
+        "ivs": {
+          "atk": 2,
+          "def": 31,
+          "hp": 31,
+          "spa": 31,
+          "spd": 31,
+          "spe": 31
+        },
+        "happiness": 255,
+        "gender": "F"
+      }
+    ],
+    "sides": [
+      {
+        "mons": [
+          {
+            "species": "starmie",
+            "level": 55,
+            "gender": "",
+            "name": "Starmie",
+            "item_flag": true,
+            "appeared": true,
+            "appear_count": 2,
+            "switch_in_turn": 5,
+            "active": false,
+            "fainted": false,
+            "hp_num": 100,
+            "hp_den": 100,
+            "hp_exact": 182,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [
+              {
+                "move": "surf",
+                "n": 1
+              }
+            ],
+            "pp": [],
+            "item_now": "miracleberry",
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "zapdos",
+            "level": 55,
+            "gender": "",
+            "name": "",
+            "item_flag": true,
+            "appeared": false,
+            "appear_count": 0,
+            "switch_in_turn": 0,
+            "active": false,
+            "fainted": false,
+            "hp_num": 48,
+            "hp_den": 48,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "shuckle",
+            "level": 50,
+            "gender": "F",
+            "name": "Shuckle",
+            "item_flag": true,
+            "appeared": true,
+            "appear_count": 2,
+            "switch_in_turn": 8,
+            "active": true,
+            "fainted": false,
+            "hp_num": 56,
+            "hp_den": 100,
+            "hp_exact": 71,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [
+              {
+                "move": "toxic",
+                "n": 2
+              },
+              {
+                "move": "encore",
+                "n": 1
+              }
+            ],
+            "pp": [
+              {
+                "move": "toxic",
+                "pp": 14,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "move": "encore",
+                "pp": 7,
+                "maxpp": 8,
+                "disabled": false
+              },
+              {
+                "move": "rest",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              },
+              {
+                "move": "sleeptalk",
+                "pp": 16,
+                "maxpp": 16,
+                "disabled": false
+              }
+            ],
+            "item_now": "",
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": "toxic",
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "snorlax",
+            "level": 50,
+            "gender": "M",
+            "name": "",
+            "item_flag": true,
+            "appeared": false,
+            "appear_count": 0,
+            "switch_in_turn": 0,
+            "active": false,
+            "fainted": false,
+            "hp_num": 48,
+            "hp_den": 48,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "misdreavus",
+            "level": 50,
+            "gender": "F",
+            "name": "",
+            "item_flag": true,
+            "appeared": false,
+            "appear_count": 0,
+            "switch_in_turn": 0,
+            "active": false,
+            "fainted": false,
+            "hp_num": 48,
+            "hp_den": 48,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "blissey",
+            "level": 50,
+            "gender": "F",
+            "name": "Blissey",
+            "item_flag": true,
+            "appeared": true,
+            "appear_count": 1,
+            "switch_in_turn": 6,
+            "active": false,
+            "fainted": false,
+            "hp_num": 83,
+            "hp_den": 100,
+            "hp_exact": 300,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [
+              {
+                "move": "present",
+                "n": 1
+              }
+            ],
+            "pp": [],
+            "item_now": "quickclaw",
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          }
+        ],
+        "active": 2,
+        "party": [
+          2,
+          0,
+          5
+        ],
+        "conditions": [],
+        "pending_bp": false,
+        "acted_this_turn": false,
+        "fainted_this_turn": null,
+        "fainted_last_turn": null,
+        "last_move": "toxic"
+      },
+      {
+        "mons": [
+          {
+            "species": "ampharos",
+            "level": 55,
+            "gender": "M",
+            "name": "Ampharos",
+            "item_flag": true,
+            "appeared": true,
+            "appear_count": 1,
+            "switch_in_turn": 5,
+            "active": false,
+            "fainted": false,
+            "hp_num": 100,
+            "hp_den": 100,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [
+              {
+                "move": "thunderbolt",
+                "n": 1
+              }
+            ],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [
+              "thunderbolt"
+            ],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "starmie",
+            "level": 55,
+            "gender": "",
+            "name": "",
+            "item_flag": true,
+            "appeared": false,
+            "appear_count": 0,
+            "switch_in_turn": 0,
+            "active": false,
+            "fainted": false,
+            "hp_num": 48,
+            "hp_den": 48,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "cloyster",
+            "level": 50,
+            "gender": "M",
+            "name": "",
+            "item_flag": true,
+            "appeared": false,
+            "appear_count": 0,
+            "switch_in_turn": 0,
+            "active": false,
+            "fainted": false,
+            "hp_num": 48,
+            "hp_den": 48,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "marowak",
+            "level": 50,
+            "gender": "M",
+            "name": "Marowak",
+            "item_flag": true,
+            "appeared": true,
+            "appear_count": 2,
+            "switch_in_turn": 9,
+            "active": true,
+            "fainted": false,
+            "hp_num": 100,
+            "hp_den": 100,
+            "hp_exact": null,
+            "status": "tox",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": 0,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              2,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [
+              {
+                "move": "swordsdance",
+                "n": 1
+              }
+            ],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": "swordsdance",
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [
+              "swordsdance"
+            ],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "misdreavus",
+            "level": 50,
+            "gender": "M",
+            "name": "",
+            "item_flag": true,
+            "appeared": false,
+            "appear_count": 0,
+            "switch_in_turn": 0,
+            "active": false,
+            "fainted": false,
+            "hp_num": 48,
+            "hp_den": 48,
+            "hp_exact": null,
+            "status": "",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          },
+          {
+            "species": "snorlax",
+            "level": 50,
+            "gender": "M",
+            "name": "Snorlax",
+            "item_flag": true,
+            "appeared": true,
+            "appear_count": 2,
+            "switch_in_turn": 7,
+            "active": false,
+            "fainted": true,
+            "hp_num": 0,
+            "hp_den": 100,
+            "hp_exact": null,
+            "status": "psn",
+            "rest": false,
+            "slept": 0,
+            "tox_counter": null,
+            "comp_brn": false,
+            "comp_par": false,
+            "boosts": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "volatiles": [],
+            "uses": [
+              {
+                "move": "bodyslam",
+                "n": 4
+              },
+              {
+                "move": "earthquake",
+                "n": 1
+              }
+            ],
+            "pp": [],
+            "item_now": null,
+            "locked": null,
+            "charging": null,
+            "must_recharge": false,
+            "transformed_into": null,
+            "mimic_overlay": null,
+            "last_move": null,
+            "stall_streak": 0,
+            "last_protect_turn": 0,
+            "protected_this_turn": false,
+            "revealed_moves": [
+              "bodyslam",
+              "earthquake"
+            ],
+            "item_original": {
+              "known": false,
+              "item": null
+            },
+            "item_current": {
+              "known": false,
+              "item": null
+            },
+            "item_gained": false
+          }
+        ],
+        "active": 3,
+        "party": [],
+        "conditions": [],
+        "pending_bp": false,
+        "acted_this_turn": false,
+        "fainted_this_turn": null,
+        "fainted_last_turn": null,
+        "last_move": "swordsdance"
+      }
+    ],
+    "weather": null,
+    "team_preview": false,
+    "force_switch": false,
+    "trapped": false
+  },
+  "arms": [
+    {
+      "input": "switch 2",
+      "label": "played"
+    },
+    {
+      "input": "move earthquake",
+      "label": "claimed"
+    }
+  ]
+}

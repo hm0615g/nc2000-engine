@@ -45,7 +45,8 @@ violation has its own preview cap removed; normal parties retain the 155 cap.
 Runtime sleep/freeze rules still apply. Inputs must remain engine-representable:
 1–6 Pokémon, known species/items/moves, levels 1–100 and at most four moves each.
 The opponent panel shows party composition and draw probabilities; replacing its
-JSON file is the only way to edit the opponent settings. Canonicalization details
+JSON file is the only way to edit the opponent settings. The panel saves the
+current settings in that format as a starting point for edits. Canonicalization details
 are retained in exported results, while the screen shows rule warnings only.
 
 Scores are win=1, loss=0, tie/500-turn cap=0.5; caps and ties are counted separately.
@@ -53,6 +54,68 @@ The 95% interval uses independent two-game means with the normal approximation
 and is omitted below two pairs. Small-sample, interim and extended-run intervals
 are descriptive, without automatic superiority claims. This measures this AI's
 performance against the selected distribution.
+
+## Counterfactual forks
+
+The bot battle screen can copy a compact `NC2-…` replay. Paste it into `?fork`,
+select a recorded scene and a legal alternative, then play or compare bots.
+These forks reconstruct the exact battle, including hidden durations and
+mid-turn actions, from the initial teams, seed and committed choices.
+See [compact replay API and compatibility](docs/replay.md) for integration into
+another UI; no backend or LLM is needed.
+
+The advanced workflow below also accepts manually assembled positions.
+When a player claims the bot had a better action at a recorded decision,
+both kinds of measurement start from one `nc2000-fork-v1` document
+([`crates/bot/src/fork.rs`](crates/bot/src/fork.rs)): the bot's recorded
+information set, the player's true six sets and three picks, and the candidate
+first actions (arms). `fork_bundle` builds it from a battle log. It
+canonicalizes both teams and rejects any set that contradicts a move or item in
+the log. The recorded action is always the arm labelled `played`.
+
+```sh
+cargo build --release -p nc2000-bot --example fork_bundle --example fork_counterfactual
+target/release/examples/fork_bundle --log BATTLE.log --turn 11 --side 1 \
+  --own-team BOT-TEAM.json --opponent-team PLAYER-TEAM.json \
+  --arm 'claimed=move earthquake' --out data/forks/NAME.json
+target/release/examples/fork_counterfactual --fork data/forks/NAME.json \
+  --trials 256 --seed 1 > rows.jsonl
+python3 tools/summarize-counterfactual.py rows.jsonl
+```
+
+Without an exact replay, the forked battle substitutes the player's true sets for the bot's belief.
+HP announced only as a percentage and hidden durations are imputed per seed.
+The bot is the ladder `ProtocolAgent`, installed from its recorded information
+set and fed its own player stream. `blind` or `open` comes from the document,
+and iterations come from `data/search-profiles.json`.
+
+**Bot vs bot.** `fork_counterfactual` plays every arm with the same battle
+seed and agent seeds, so arms are paired. The opponent is the same ladder
+agent from the player's reconstructed information set when the player also
+acted that turn; otherwise it is full-information `skuct` (`--foe`). Scores
+are the bot's; a step cap is recorded as unknown.
+
+The `?fork&advanced` page runs the same trials in a pool of workers through the wasm
+`ForkArena`, which wraps the same `fork::Arena`. Equal seeds and settings give
+the native rows; `NC2000_NATIVE_PARITY=1 node crates/wasm/tests-node/fork.js`
+checks this against the release binary. The page defaults to 3,000 iterations
+and prints the equivalent CLI command. Its results stay in memory until
+exported.
+
+**Human vs bot.** Open `?fork=NAME` for a document in `data/forks/`, or
+`?fork&advanced` to load or paste one. The player keeps their original side. Each game
+draws the bot's first action from shuffled blocks of the arms. The arm is
+shown only after the game; the bot's first move is visible from the first
+turn's log. Quitting counts as a bot win. Results persist in that browser per
+document hash, and per-arm results stay hidden until the player reveals them.
+The JSONL export feeds the same summarizer; human games are unpaired, so it
+reports the difference, a normal interval and a two-sided Fisher exact test.
+
+Both measure the arms against these continuation policies, not optimal play.
+`fork_bundle` reaches only decisions at the start of a turn; a forced switch
+needs a hand-written document. A document in `data/forks/` publishes the
+player's full team with the next Pages deploy. [`data/forks/4296-t11.json`](data/forks/4296-t11.json)
+is the [battle 4296](data/report-4296/README.md) T11 decision.
 
 ## Layout
 
@@ -106,7 +169,9 @@ web/                       Vite+Preact browser demo (M9): worker-threaded bot wi
                            tables fetched from <base>data/* at runtime (never bundled — the background
                            bake extends the app in place; the Pages build copies data/ into dist/);
                            `?solver` (solver.tsx + position.ts + solver-worker.ts) is a fourth door
-                           and not a battle at all: a position is typed in and every option scored
+                           and not a battle at all: a position is typed in and every option scored; `?fork` (fork.tsx)
+                           replays a `nc2000-fork-v1` position as human-vs-bot games and
+                           bot-vs-bot trials (fork-arena.tsx + fork-arena-worker.ts)
 .github/workflows/pages.yml GH Pages build+deploy (M12): wasm build -> vite build (NC2000_BASE=
                            /nc2000-engine/) -> data copy -> actions/deploy-pages
 PORTING.md                 porting checklist (377 callbacks, generated)
@@ -180,6 +245,7 @@ cargo run --release -p nc2000-bot --example solve_position -- POSITION.json --it
 # wasm (M9): tuned build (fat LTO + wasm-opt -O3; native profile untouched), parity, throughput
 crates/wasm/build.sh nodejs && node crates/wasm/tests-node/parity.js
 node crates/wasm/tests-node/solver.js    # solver report shape; NC2000_NATIVE_PARITY=1 adds the twin
+node crates/wasm/tests-node/kifu.js      # compact replay, exact scenes and replay-backed forks
 node crates/wasm/tests-node/bench.js     # wasm iters/s; native twin: -p nc2000-wasm --example native_bench
 # browser demo (pkg-web via crates/wasm/build.sh): dev server, or typecheck+build+serve the dist
 cd web && npm run dev                    # 0.0.0.0:8000 (auto-bumps port if busy)
@@ -470,6 +536,7 @@ Milestones:
       - **Two measurement rules now bind every number on this list.** (i) The corpus harness ran at **3,000 iterations while the shipped Web game runs 30,000 plus ponder**; at 30k the flat-root share halves (29.0% → 14.3%) and seed instability halves (29.5% → 15.5%), so a 3k figure describes a bot roughly twice as noisy as the product. (ii) **A single-seed agreement difference under ~0.05 is unreadable**: seed 1 alone scores 0.395 where either of two seeds scores 0.471. Every cluster cell below a few hundred rows, and every A/B in the low single-digit pp range (the Spikes arm's +0.4pp, M16c's −0.6pp), sits inside that floor.
       - **Cluster 1, voluntary switching: CLOSED, not a defect.** Human switch rate 18.2% vs the bot's mean root switch mass 19.5%; switch mass separates human-switch from human-attack positions at AUC 0.739; and the whole move/switch agreement gap lives in the low-confidence region (+0.004 at top-1 0.70–0.90, growing to +0.209 below 0.25). A root with ~4 moves and ~2 switches makes the argmax of a flat policy a move two thirds of the time, which is most of what `kind=switch` 24.9% was measuring. Where the human had a real choice of entry, the bot's favourite switch is the human's 60.1% against a 50.0% baseline. Full derivation in `docs/SWITCHING-QUESTION-HANDOFF.md`. **Do not optimise switch top-1.**
       - **Cluster 2, status-move valuation: PROMOTED — the one remaining target with both size and a mechanism.** Class rates are close (humans play Status 36.4% of decisions, the bot's top-1 is Status 32.1%), so this is not "the bot never plays status". The 7,188 human-Status decisions split 3,868 same-class / 1,340 Physical / 1,207 Special / 773 switch: the bot substitutes **immediate damage for a multi-turn plan**. The pairs name the plan every time — `curse`→`doubleedge`/`earthquake`/`bodyslam`/`rest` (327 rows), `meanlook`→`perishsong` (65) and `confuseray`→`perishsong` (52) (the trap combo played in the wrong order, which throws it away), `sleeppowder`→`psychic`/`leechseed` (112), `doubleteam`→`batonpass`/`rollout` (92), `defensecurl`→`rollout` (43), `substitute`→`psychic` (42), `toxic`→`drillpeck` (38).
+        **Rollout lever for cluster 2: measured null (2026-09-28, [`data/m16c-rollout-v2`](data/m16c-rollout-v2/README.md)).** The parked M16c rollout arm, which gives the rollout a setup/status policy and a bad-matchup switch, was re-measured against the shipped agent on the full pool with CRN seeds. Both halves together: 0.505 ± 0.019 over 2,400 games at 3k and 10k. Status pseudo-scores alone: 0.493 ± 0.023 over 1,600 games. Switching alone: 0.466 ± 0.032 over 800 games. 42–46% of pairs changed outcome in every run, so exposure is not the limit, unlike Perish. A rollout setup policy does not buy strength. Cluster 2 remains an agreement gap, not a demonstrated strength gap.
       - **Clusters 3–5: DEMOTED pending re-derivation at 30k.** Their cells (219+160, 120+48, 52/47/38) are at or inside the noise floor above, and clusters 3 and 5 are subsets of cluster 2's pattern anyway (`curse` and `perishsong` are its two largest entries). Re-derive before spending work on them.
       - **L3 imputation** — `belief.rs` merges revealed moves first, prior filler after, and the shipped Web game is pinned open-sheet (only which three were picked is hidden), so the remaining exposure is blind mode: the corpus harness and `tools/ps-client.js`.
 

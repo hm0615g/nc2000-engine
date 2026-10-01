@@ -208,7 +208,7 @@ impl MctsAgent {
             return cs[self.rng.below(cs.len())];
         }
         // M5/M6 historical agents keep the no-switch rollout bit-identical.
-        greedy_pick(sim, dex, side, cs, &mut self.rng, false)
+        greedy_pick(sim, dex, side, cs, &mut self.rng, RolloutRules::default())
     }
 
     fn leaf_eval(&self, sim: &Battle, dex: &Dex) -> f64 {
@@ -332,9 +332,12 @@ fn status_pseudo_score(
 /// `RmConfig::default().rollout_rules()`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RolloutRules {
-    /// The parked M16c upgrades: bad-matchup voluntary switching and
-    /// status-move pseudo-values (`RmConfig::rollout_m16c`).
-    pub m16c: bool,
+    /// Parked M16c upgrade: status-move pseudo-values
+    /// (`RmConfig::rollout_status`).
+    pub status: bool,
+    /// Parked M16c upgrade: bad-matchup voluntary switching
+    /// (`RmConfig::rollout_switch`).
+    pub switch: bool,
     /// A side whose active faints to Perish Song at the end of this turn
     /// switches out whenever a switch is legal ([`perish_escape`]).
     pub perish_escape: bool,
@@ -389,7 +392,7 @@ pub fn playout_pick(
 ) -> SearchChoice {
     // The Perish rules override only after the ordinary pick has drawn its
     // rng, so a rollout in which they never fire keeps its exact stream.
-    let pick = ordinary_pick(sim, dex, playout, side, cs, rng, rules.m16c);
+    let pick = ordinary_pick(sim, dex, playout, side, cs, rng, rules);
     if rules.perish_escape || rules.perish_combo {
         if let Some(escape) = perish_escape(sim, dex, side, cs) {
             return escape;
@@ -410,7 +413,7 @@ fn ordinary_pick(
     side: usize,
     cs: &[SearchChoice],
     rng: &mut SplitMix64,
-    m16c: bool,
+    rules: RolloutRules,
 ) -> SearchChoice {
     let eps = match playout {
         Playout::Uniform => return cs[rng.below(cs.len())],
@@ -422,7 +425,7 @@ fn ordinary_pick(
     if rng.next_f64() < eps {
         return cs[rng.below(cs.len())];
     }
-    greedy_pick(sim, dex, side, cs, rng, m16c)
+    greedy_pick(sim, dex, side, cs, rng, rules)
 }
 
 /// The switch a side makes when its active faints to Perish Song at the end
@@ -547,7 +550,7 @@ fn greedy_pick(
     side: usize,
     cs: &[SearchChoice],
     rng: &mut SplitMix64,
-    m16c: bool,
+    rules: RolloutRules,
 ) -> SearchChoice {
     let att = sim.active_id(side);
     let def = sim.active_id(1 - side);
@@ -580,7 +583,7 @@ fn greedy_pick(
                 }
                 // Rollout policy always couples evasion (the accurate estimate).
                 let mut score = eval::expected_hit_fraction(sim, dex, att, def, id, true);
-                if score <= 0.0 && m16c {
+                if score <= 0.0 && rules.status {
                     score = status_pseudo_score(sim, dex, side, att, def, id);
                 }
                 if best.map_or(true, |(_, b)| score > b) {
@@ -592,7 +595,7 @@ fn greedy_pick(
         // the bench mon with the strongest offense vs the foe active, and
         // only when that clearly beats staying. Draws no rng, so rollouts
         // where the trigger never fires keep their exact streams.
-        if m16c {
+        if rules.switch {
             if let Some((_, stay)) = best {
                 if stay < ROLLOUT_SWITCH_TRIGGER {
                     let mut sw: Option<(SearchChoice, f64)> = None;

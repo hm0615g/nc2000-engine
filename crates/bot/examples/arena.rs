@@ -47,6 +47,10 @@
 //!                                    `RmConfig::rollout_perish` / `rollout_combo`;
 //!                                    the shipped combo is the default, `-perish_combo`
 //!                                    = no Perish rules, `perish_escape` = escape only)
+//!   open|blind[...][:m16c|:m16c_status|:m16c_switch]
+//!                                    also turns on the parked M16c rollout upgrades,
+//!                                    both halves or one (`RmConfig::rollout_status` /
+//!                                    `rollout_switch`, default off)
 //!   open[:ITERS[:C[:BUCKETS]]]       M14 open-team-sheet agent (the M12 product
 //!                                    policy): the blind machinery with the opponent's
 //!                                    TRUE sets pinned as a singleton belief — only
@@ -101,8 +105,8 @@ enum AgentSpec {
     /// mask; two blind agents in one process differing only in
     /// `RmConfig::mask_rules` is the only CRN-paired A/B there is
     /// (`smmcts::SkuctSearch::root_dominated`).
-    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout },
-    Open { iterations: u32, c: f64, buckets: i64, perish: PerishRollout },
+    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c },
+    Open { iterations: u32, c: f64, buckets: i64, perish: PerishRollout, m16c: M16c },
     Exploit(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
     Counter { inner: Box<AgentSpec>, target: PreviewMode },
@@ -159,6 +163,7 @@ fn apply_mask_token(m: &mut MaskRules, tok: &str) -> Result<(), String> {
 fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String> {
     let mut nums: Vec<&str> = Vec::new();
     let mut perish = PerishRollout::shipped();
+    let mut m16c = M16c::default();
     for part in &parts[1..] {
         if part.is_empty() {
             return Err("empty field in a blind spec".into());
@@ -167,7 +172,7 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
             nums.push(part);
         } else {
             for tok in part.split(',').filter(|t| !t.is_empty()) {
-                if !apply_rollout_token(&mut perish, tok) {
+                if !apply_rollout_token(&mut perish, &mut m16c, tok) {
                     apply_mask_token(&mut mask, tok)?;
                 }
             }
@@ -182,6 +187,7 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
         buckets: opt_num(&nums, 2, "buckets")?.unwrap_or(16),
         mask,
         perish,
+        m16c,
     })
 }
 
@@ -218,29 +224,55 @@ impl PerishRollout {
     }
 }
 
-/// `perish_escape` / `perish_combo` / their `-` forms; false when `tok`
-/// names something else.
-fn apply_rollout_token(perish: &mut PerishRollout, tok: &str) -> bool {
-    *perish = match tok {
-        "perish_escape" => PerishRollout::Escape,
-        "perish_combo" => PerishRollout::Combo,
-        "-perish_escape" | "-perish_combo" => PerishRollout::Off,
-        _ => return false,
+/// The parked M16c rollout upgrades an open/blind spec turns on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct M16c {
+    status: bool,
+    switch: bool,
+}
+
+impl M16c {
+    fn label(self) -> &'static str {
+        match (self.status, self.switch) {
+            (false, false) => "",
+            (true, true) => ":m16c",
+            (true, false) => ":m16c_status",
+            (false, true) => ":m16c_switch",
+        }
+    }
+}
+
+/// `perish_escape` / `perish_combo` / `m16c[_status|_switch]` / their `-`
+/// forms; false when `tok` names something else.
+fn apply_rollout_token(perish: &mut PerishRollout, m16c: &mut M16c, tok: &str) -> bool {
+    let (on, name) = match tok.strip_prefix('-') {
+        Some(rest) => (false, rest),
+        None => (true, tok),
     };
+    match name {
+        "m16c" => (m16c.status, m16c.switch) = (on, on),
+        "m16c_status" => m16c.status = on,
+        "m16c_switch" => m16c.switch = on,
+        "perish_escape" | "perish_combo" if !on => *perish = PerishRollout::Off,
+        "perish_escape" => *perish = PerishRollout::Escape,
+        "perish_combo" => *perish = PerishRollout::Combo,
+        _ => return false,
+    }
     true
 }
 
-/// `open`'s fields, split like [`parse_blind`]'s; the only named token is
-/// the rollout rule.
+/// `open`'s fields, split like [`parse_blind`]'s; the only named tokens are
+/// the rollout rules.
 fn parse_open(parts: &[&str]) -> Result<AgentSpec, String> {
     let mut nums: Vec<&str> = Vec::new();
     let mut perish = PerishRollout::shipped();
+    let mut m16c = M16c::default();
     for part in &parts[1..] {
         if part.starts_with(|c: char| c.is_ascii_digit()) {
             nums.push(part);
         } else {
             for tok in part.split(',').filter(|t| !t.is_empty()) {
-                if !apply_rollout_token(&mut perish, tok) {
+                if !apply_rollout_token(&mut perish, &mut m16c, tok) {
                     return Err(format!("unknown open-spec token `{tok}`"));
                 }
             }
@@ -251,6 +283,7 @@ fn parse_open(parts: &[&str]) -> Result<AgentSpec, String> {
         c: opt_num(&nums, 1, "c")?.unwrap_or(1.0),
         buckets: opt_num(&nums, 2, "buckets")?.unwrap_or(16),
         perish,
+        m16c,
     })
 }
 
@@ -439,12 +472,13 @@ impl AgentSpec {
                     rule: SelRule::Ucb,
                     c: *c,
                     hp_buckets: *buckets,
-                    rollout_m16c: true,
+                    rollout_status: true,
+                    rollout_switch: true,
                     ..Default::default()
                 },
                 seed,
             )),
-            AgentSpec::Blind { iterations, c, buckets, mask, perish } => Box::new(BlindAgent::new(
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c } => Box::new(BlindAgent::new(
                 RmConfig {
                     iterations: *iterations,
                     rule: SelRule::Ucb,
@@ -453,13 +487,15 @@ impl AgentSpec {
                     mask_rules: *mask,
                     rollout_perish: *perish == PerishRollout::Escape,
                     rollout_combo: *perish == PerishRollout::Combo,
+                    rollout_status: m16c.status,
+                    rollout_switch: m16c.switch,
                     ..Default::default()
                 },
                 pool.expect("blind agents need the meta pool").clone(),
                 tables.cloned(),
                 seed,
             )),
-            AgentSpec::Open { iterations, c, buckets, perish } => Box::new(OpenAgent::new(
+            AgentSpec::Open { iterations, c, buckets, perish, m16c } => Box::new(OpenAgent::new(
                 RmConfig {
                     iterations: *iterations,
                     rule: SelRule::Ucb,
@@ -467,6 +503,8 @@ impl AgentSpec {
                     hp_buckets: *buckets,
                     rollout_perish: *perish == PerishRollout::Escape,
                     rollout_combo: *perish == PerishRollout::Combo,
+                    rollout_status: m16c.status,
+                    rollout_switch: m16c.switch,
                     ..Default::default()
                 },
                 tables.cloned(),
@@ -516,8 +554,8 @@ impl AgentSpec {
             AgentSpec::SkUctAbs { iterations, c, buckets } => {
                 format!("skuctabs:{iterations}:{c}:{buckets}")
             }
-            AgentSpec::Blind { iterations, c, buckets, mask, perish } => {
-                let rollout = perish.label();
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c } => {
+                let rollout = format!("{}{}", perish.label(), m16c.label());
                 // The one pre-existing named ablation keeps its own label, so
                 // every artifact written before 2026-08-20 still compares.
                 if *mask == legacy_mask() {
@@ -533,8 +571,8 @@ impl AgentSpec {
                     if diff.is_empty() { String::new() } else { format!(":{}", diff.join(",")) };
                 format!("blind:{iterations}:{c}:{buckets}{suffix}{rollout}")
             }
-            AgentSpec::Open { iterations, c, buckets, perish } => {
-                let rollout = perish.label();
+            AgentSpec::Open { iterations, c, buckets, perish, m16c } => {
+                let rollout = format!("{}{}", perish.label(), m16c.label());
                 format!("open:{iterations}:{c}:{buckets}{rollout}")
             }
             AgentSpec::Exploit(inner) => format!("exploit:{}", inner.label()),
