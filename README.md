@@ -31,8 +31,8 @@ c = 0.4) and keeps pondering while the human thinks. Its picture of the party
 it faces is the frozen opponent prior `data/belief-pool-v3`.
 
 The built-in parties a human can pick and the parties the bot draws are one
-catalog, `data/team-pool-v2` (same ids, exact sets); both Random buttons draw
-it by its `drawWeight` (equal mass per variant cluster). A custom party can be
+catalog, `data/team-pool-v2` (24 parties, same ids, exact sets); both Random
+buttons draw it by its `drawWeight` (equal mass per variant cluster). A custom party can be
 imported for the human side, and a pool file loaded in the setup panel
 replaces the lists and the bot's draw (uniformly) without touching the prior.
 `?nash` draws the bot's party from the solved mixture `data/meta-nash-v3`
@@ -615,12 +615,19 @@ Milestones:
   `a_dead_opponent_bench_stays_dead`). Live play was never affected: a real tracker sets both on the
   same switch line.
 
-- **Blind product and team-pool rebuild: OPEN (2026-09-30).** The previous rebuild is
-  integrated locally but unvalidated at product conditions and not deployed. The
-  owner now requires blind-only play at c = 0.4, remeasurement, and one stronger
-  selected pool shared by the human play-screen catalog and ordinary bot draws,
-  targeting 15–30 parties. The authoritative plan, evidence limits and next-AI
-  handoff are in [`docs/TEAM-POOL-REBUILD-PLAN.md`](docs/TEAM-POOL-REBUILD-PLAN.md).
+- **Blind product and team-pool rebuild: DONE locally (2026-10-02), not
+  deployed.** Live play is blind at c = 0.4 on every door and the ladder; the
+  open sheet is retired. Under a protocol frozen before any score, 103
+  candidates were measured at blind:27000:0.4 against a fixed 78-team
+  human-source panel: **24 selected** (fresh-seed lower bound above 0.50, no
+  member clearly harmful), 11 pending, 68 not selected. The 24 are one catalog
+  for the human lists and the bot's draws (`data/team-pool-v2`); on the same
+  panel their value is 0.601 against 0.498 for the previous 79-team pool and
+  0.515 for the old bundled 32. Prior `data/belief-pool-v3` (frozen on
+  product-budget evidence), Nash `data/meta-nash-v3` (sample-08, sample-07,
+  ソード＆シールド, sample-13, sample-10). Evidence, limits and open owner
+  decisions: [`docs/TEAM-POOL-REBUILD-PLAN.md`](docs/TEAM-POOL-REBUILD-PLAN.md)
+  §Progress.
 
 Parked (not scheduled, not dead-by-principle):
 

@@ -1,6 +1,7 @@
 # Blind product and team-pool rebuild
 
-Status: **in progress (2026-09-30)** — see [§Progress](#progress). Owner
+Status: **implemented and validated locally (2026-10-02), not pushed or
+deployed** — see [§Progress](#progress). Owner
 direction updated 2026-09-30. This is the authoritative plan and handoff; update it in place.
 The starting implementation is local `master` at `d3b7059`, 18 commits ahead
 of the locally recorded `origin/master` (`23168bb`); the working tree was clean.
@@ -339,7 +340,7 @@ selection score was opened. The plan's "resampling at the shared seed block"
 is realized as stratified analytic variances over shared (opponent, k, side)
 games, because the product-budget stages have 1–4 seed blocks per cell.
 
-### Step 4 — selection (stage A done, stage B running)
+### Step 4 — selection (done)
 
 - **Stage A** (blind:3000:0.4, seed base 20261111; `data/team-selection-v2/
   measurements/stage-a-blind3000.json`). Calibration **WEAK**: ceiling
@@ -374,12 +375,75 @@ games, because the product-budget stages have 1–4 seed blocks per cell.
   and Baton Pass teams are bot-limited — their trap member is brought in
   0–7% of games (two replayed logs read); pending is not a verdict on those
   designs.
+- **Reversal audit**: moot — WEAK calibration sent every candidate to stage B.
+- **Pondering sensitivity** (`measurements/ponder-sensitivity.json`,
+  `ponder-extension.json`): 40 candidates at 2× the budget against the panel
+  at 27k on one shared 32-block schedule; rank agreement with the
+  product-budget scores 0.62. Three boundary flags (garap-a's upper bound
+  0.469; lineage-fine-s07 and sample-22-orig lower bounds 0.501) were
+  resolved under amendment v2.1 (written before more data): on 64 fresh
+  blocks none stands (0.539 ± 0.098, 0.570 ± 0.084, 0.523 ± 0.091). The
+  check can only see gross reversals (±0.11 per candidate); it is a 2×
+  bounded-work scenario, not every human think time.
 
-### Step 5 — Nash (running)
+### Step 5 — Nash (done)
 
-blind:3000:0.4 game over the 24 (16 blocks per pair): point support
-sample-07 0.40, rental-cban-6 0.37, サンダー昆布 0.11, rental-cban-2 0.07,
-sample-11 0.04; support spreads across seed bootstraps, so 19 parties are
-support-relevant (`data/meta-nash-v3/solution-blind3000.json`). Their 27k
-round robin, best-response rounds and challenges follow the pondering check.
+`data/meta-nash-v3`. blind:3000:0.4 over the 24 (16 blocks per pair): point
+support sample-07 0.40, rental-cban-6 0.37, サンダー昆布 0.11, rental-cban-2
+0.07, sample-11 0.04; bootstrap support spreads, so 19 parties are
+support-relevant. Their 27k round robin (16 blocks, seed base 20261161) and
+two best-response rounds (sample-16-orig, sample-02, then rental-cban-14
+joined; none took weight) give the shipped mixture **sample-08 0.412,
+sample-07 0.314, ソード＆シールド 0.127, sample-13 0.127, sample-10 0.020**
+(margin 0 in its 22-party game; bootstrap support flat, so exact weights are
+not stable). Challenges against it — 79 non-selected candidates, 4 held-out
+page teams, 16 off-prior chimeras — at 3000 then the top 10 at 27k: no 27k
+interval clears 0.5; offprior-03 and offprior-16 (point estimates 0.547 /
+0.531) came back 0.500 ± 0.085 and 0.516 ± 0.090 on 64 fresh blocks —
+unresolved near parity, outside the candidate universe. offprior-12's 0.781
+at 3000 fell to 0.453 at 27k. No excluded specialist exposed a gap, so the
+selection policy was not revised.
+
+### Step 6 — products (done)
+
+`node tools/build-team-products-v2.js` writes the catalog
+(`data/team-pool-v2`, 24 parties in 16 clusters), the Nash artifact and
+`data/team-selection-v2/reference.json` from the versioned selection and
+solution, refusing any input measured on another prior; the prior is frozen
+and only checked. `cargo test -p conformance --test team_products_v2` checks
+memberships, sets, draw weights, the shared prior fingerprint and legality.
+Superseded files (team-pool-v1, belief-pool-v2, meta-nash-v2) stay as
+history and say so.
+
+### Step 7 — validation and handoff
+
+- Checks on the real artifacts: web e2e **45/45**, worker-profile (c = 0.4,
+  and a c = 1.0 search does not reproduce the policy), wasm node
+  smoke/determinism/fork/kifu/solver, wasm crate tests, conformance
+  `team_products_v2` and the historical `team_products`, all bot examples
+  build.
+- **Not run here**: the ladder client end to end — this Mac has no local
+  Showdown build (`tools/ps.js` needs `~/pokemon-showdown/dist`); it is
+  syntax-checked and its `ProtocolSearcher` path is covered by the wasm node
+  tests.
+- Raw games: `tmp/team-eval-v2/` on this machine (gitignored), each
+  reproducible from its record's `cond`; two stage C games were replayed
+  bit-identically.
+
+### Limits and open owner decisions
+
+- **Publication**: branch `blind-rebuild` (local). Push = Pages deploy, which
+  needs explicit owner approval.
+- **sample-16** is pending (0.531 [0.485, 0.577] at 27k), so it is not in
+  the catalog; its Bright Powder original and its source ポニョ are.
+- **11 pending** parties (several bot-limited trap / Baton Pass designs)
+  stay in the prior; a later bot that pilots them could re-measure them.
+- The four lowest admitted parties have small positive deletion point
+  estimates (≤ +0.003 of pool value); the preregistered simultaneous test
+  does not call them harmful. Unconstrained average maximization would prune
+  further — the plan's stated tension — and was not done.
+- The machine factor 0.25 remains an a-priori choice (null sensitivity here).
+- The Nash top is flat and budget-dependent (3000 and 27k supports differ);
+  it is the equilibrium of a finite game over the catalog, not of the format.
+- Browser pondering is covered only by the coarse 2× check above.
 
