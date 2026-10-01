@@ -198,3 +198,17 @@ reported with its resolution (it cannot see small reversals).
 ## Reserved seed bases
 
 20261181 (stage C escape, above), 20261191 (unallocated).
+
+## Amendment v2.1 (2026-10-01, after the pondering check flagged candidates)
+
+The pondering check flagged three material reversals (`mjj-2010-garap-a`
+upper bound below 0.50; `lineage-fine-s07` and `sample-22-orig` lower bounds
+above 0.50 by 0.001). v2 required resolution but did not say how; this
+amendment adds data only and changes no admission. Each flagged candidate
+plays 64 fresh blocks on a new shared panel schedule (seed base **20261191**,
+the reserved base) under the same 2× condition; the reversal **stands** only
+if those fresh blocks alone meet the same definition. Catalog membership
+stays decided by stage C (product budget, no pondering, the ladder's
+condition). A standing reversal is reported as a browser-fit conflict: the
+catalog is then not claimed to fit browser play as well as the ladder for
+that party.
