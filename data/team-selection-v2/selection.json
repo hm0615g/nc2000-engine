@@ -1,0 +1,958 @@
+{
+ "format": "nc2000-team-selection-v2",
+ "generator": "tools/team-select.py finalize",
+ "protocol": "data/team-selection-v2/PROTOCOL.md",
+ "panel": "data/team-selection-v2/panel.json",
+ "condition": {
+  "agent": "blind:27000:0.4|blind:27000:0.4",
+  "cond": {
+   "belief_col": "fnv1a64:ffa73c4245fe3774",
+   "belief_row": "fnv1a64:ffa73c4245fe3774",
+   "bot": "fnv1a64:c31d5635eb296d9a:m17e-solver-build-v3",
+   "max_turns": 500,
+   "ponder": "none",
+   "preview": "live search, no baked tables",
+   "seed_base": 20261131
+  }
+ },
+ "prior": {
+  "path": "data/belief-pool-v3/belief-pool.json",
+  "fingerprint": "fnv1a64:ffa73c4245fe3774"
+ },
+ "drawRule": "each variant cluster among the selected parties carries equal mass, split equally among its members",
+ "size": 24,
+ "sizeTarget": [
+  15,
+  30
+ ],
+ "V": [
+  0.60123510835728,
+  0.005606198460134454
+ ],
+ "deletion": {
+  "sample-07": [
+   -0.000505118534482759,
+   0.0006646270950734908
+  ],
+  "nb-sample-12-0": [
+   0.0008306393678161085,
+   0.0011461945515294154
+  ],
+  "rental-cban-3": [
+   -0.0003816451149425276,
+   0.0006593498665682131
+  ],
+  "sample-08": [
+   -0.0005200850095785437,
+   0.0006880994739224185
+  ],
+  "sample-10": [
+   0.0016949533045977037,
+   0.0011772980340485854
+  ],
+  "sample-13": [
+   0.0018689385775861982,
+   0.0010545847853558003
+  ],
+  "sample-17-orig": [
+   -0.002374555994572157,
+   0.0017326428022031725
+  ],
+  "mjj-2014-thdrcomb": [
+   -0.00024332994093232666,
+   0.0016587898003683937
+  ],
+  "mjj-2013-mario": [
+   0.0008867636494252935,
+   0.0006511750574676395
+  ],
+  "hc75-3rd-bean": [
+   0.0006473000478927201,
+   0.0007054801483729399
+  ],
+  "rental-cban-8": [
+   -0.0016949533045977037,
+   0.0011772980340485854
+  ],
+  "sample-11": [
+   -0.00024694683908047313,
+   0.00121715190692607
+  ],
+  "rental-cban-13": [
+   -0.0005306862627713984,
+   0.0016961716556629439
+  ],
+  "sample-06": [
+   0.0005708463042784064,
+   0.0017057887206435504
+  ],
+  "rental-cban-6": [
+   -0.00012721503831417125,
+   0.000693325834371324
+  ],
+  "sample-12": [
+   -0.0008306393678161085,
+   0.0011461945515294154
+  ],
+  "mjj-2010-garap-a": [
+   0.0010018807870370513,
+   0.0017105769776525567
+  ],
+  "sample-11-orig": [
+   0.00024694683908047313,
+   0.00121715190692607
+  ],
+  "rental-cban-14": [
+   0.0028457505188378175,
+   0.0012886706792413598
+  ],
+  "sample-16-orig": [
+   0.001432915269795659,
+   0.0017133255562645706
+  ],
+  "mjj-2020-rraikou": [
+   0.001097666227650075,
+   0.0017311730580185016
+  ],
+  "sample-02": [
+   0.0018160570322477692,
+   0.001327389259831457
+  ],
+  "nb-sample-13-0": [
+   -0.0018689385775861982,
+   0.0010545847853558003
+  ],
+  "rental-cban-2": [
+   0.0030253482199872313,
+   0.0013298485229741458
+  ]
+ },
+ "S": [
+  "sample-07",
+  "nb-sample-12-0",
+  "rental-cban-3",
+  "sample-08",
+  "sample-10",
+  "sample-13",
+  "sample-17-orig",
+  "mjj-2014-thdrcomb",
+  "mjj-2013-mario",
+  "hc75-3rd-bean",
+  "rental-cban-8",
+  "sample-11",
+  "rental-cban-13",
+  "sample-06",
+  "rental-cban-6",
+  "sample-12",
+  "mjj-2010-garap-a",
+  "sample-11-orig",
+  "rental-cban-14",
+  "sample-16-orig",
+  "mjj-2020-rraikou",
+  "sample-02",
+  "nb-sample-13-0",
+  "rental-cban-2"
+ ],
+ "labels": {
+  "ev-r1-pool-hc75-1st-show-0": {
+   "stage": "B",
+   "score": 0.34554597701149414,
+   "se": 0.03833293730913958,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.346 below the 0.52 entrant bar"
+  },
+  "ev-r1-pool-hc75-2nd-toriyama-0": {
+   "stage": "B",
+   "score": 0.15804597701149423,
+   "se": 0.028386752593356407,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.158 below the 0.52 entrant bar"
+  },
+  "ev-r1-pool-hc75-3rd-bean-0": {
+   "stage": "B",
+   "score": 0.40229885057471254,
+   "se": 0.03894630325240853,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.402 below the 0.52 entrant bar"
+  },
+  "ev-r1-pool-hc75-3rd-bean-1": {
+   "stage": "B",
+   "score": 0.43534482758620685,
+   "se": 0.042440750025434563,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.435 below the 0.52 entrant bar"
+  },
+  "ev-r1-pool-hc75-top8-tezan-0": {
+   "stage": "B",
+   "score": 0.23491379310344832,
+   "se": 0.03301833503508745,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.235 below the 0.52 entrant bar"
+  },
+  "ev-r1-pool-hc75-top8-tezan-1": {
+   "stage": "B",
+   "score": 0.3448275862068966,
+   "se": 0.03078975618030865,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.345 below the 0.52 entrant bar"
+  },
+  "ev-r1-rand-0-0": {
+   "stage": "B",
+   "score": 0.11206896551724137,
+   "se": 0.027539195131925768,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.112 below the 0.52 entrant bar"
+  },
+  "ev-r1-rand-0-1": {
+   "stage": "B",
+   "score": 0.1443965517241379,
+   "se": 0.0315501115675523,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.144 below the 0.52 entrant bar"
+  },
+  "ev-r1-rand-1-0": {
+   "stage": "B",
+   "score": 0.27873563218390807,
+   "se": 0.03442399391490721,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.279 below the 0.52 entrant bar"
+  },
+  "ev-r1-rand-1-1": {
+   "stage": "C",
+   "score": 0.3789511494252874,
+   "se": 0.027032517520874138,
+   "games": 312,
+   "label": "not-selected",
+   "reason": "stage C: upper bound below the 0.50 floor"
+  },
+  "ev-r1-rand-2-0": {
+   "stage": "B",
+   "score": 0.4303160919540228,
+   "se": 0.03894630325240853,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.430 below the 0.52 entrant bar"
+  },
+  "ev-r1-rand-3-0": {
+   "stage": "B",
+   "score": 0.22988505747126445,
+   "se": 0.0337284880000783,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.230 below the 0.52 entrant bar"
+  },
+  "ev-r1-rand-4-0": {
+   "stage": "B",
+   "score": 0.3534482758620689,
+   "se": 0.037075776110314124,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.353 below the 0.52 entrant bar"
+  },
+  "ev-r1-rand-5-0": {
+   "stage": "B",
+   "score": 0.2859195402298849,
+   "se": 0.037075776110314124,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.286 below the 0.52 entrant bar"
+  },
+  "ev-r1-rand-5-1": {
+   "stage": "B",
+   "score": 0.30890804597701144,
+   "se": 0.03577446387603669,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.309 below the 0.52 entrant bar"
+  },
+  "hc75-1st-show": {
+   "stage": "B",
+   "score": 0.4051724137931033,
+   "se": 0.040580554814278955,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.405 below the 0.52 entrant bar"
+  },
+  "hc75-2nd-toriyama": {
+   "stage": "C",
+   "score": 0.4885057471264372,
+   "se": 0.018941042659782546,
+   "games": 616,
+   "label": "pending",
+   "reason": "stage C: floor undecided after the last look"
+  },
+  "hc75-3rd-bean": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.5783045977011497,
+   "se": 0.02802814220141486,
+   "games": 364
+  },
+  "hc75-top8-tezan": {
+   "stage": "B",
+   "score": 0.47054597701149425,
+   "se": 0.03880243207735102,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.471 below the 0.52 entrant bar"
+  },
+  "hc75-top8-tsuru": {
+   "stage": "B",
+   "score": 0.5280172413793102,
+   "se": 0.03757029330698124,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: beyond the 36-entrant cap"
+  },
+  "lineage-fine-s07": {
+   "stage": "C",
+   "score": 0.5132902298850576,
+   "se": 0.019721502379855683,
+   "games": 624,
+   "label": "pending",
+   "reason": "stage C: floor undecided after the last look"
+  },
+  "lineage-fine-s13": {
+   "stage": "B",
+   "score": 0.3448275862068966,
+   "se": 0.03577446387603669,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.345 below the 0.52 entrant bar"
+  },
+  "lineage-gb-nash-rand": {
+   "stage": "B",
+   "score": 0.29454022988505746,
+   "se": 0.037075776110314124,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.295 below the 0.52 entrant bar"
+  },
+  "lineage-gb-nash-s07": {
+   "stage": "B",
+   "score": 0.49209770114942525,
+   "se": 0.03833293730913958,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.492 below the 0.52 entrant bar"
+  },
+  "lineage-gb-nash-s13": {
+   "stage": "B",
+   "score": 0.40158045977011503,
+   "se": 0.03955015791764567,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.402 below the 0.52 entrant bar"
+  },
+  "lineage-gb-uni-rand": {
+   "stage": "B",
+   "score": 0.40229885057471276,
+   "se": 0.041878596065762295,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.402 below the 0.52 entrant bar"
+  },
+  "lineage-gb-uni-s07": {
+   "stage": "B",
+   "score": 0.3139367816091953,
+   "se": 0.03442399391490721,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.314 below the 0.52 entrant bar"
+  },
+  "lineage-gb-uni-s13": {
+   "stage": "B",
+   "score": 0.5021551724137929,
+   "se": 0.041878596065762295,
+   "games": 156,
+   "label": "not-selected",
+   "reason": "stage B: score 0.502 below the 0.52 entrant bar"
+  },
+  "mjj-2009-chourou": {
+   "stage": "B",
+   "score": 0.34410919540229873,
+   "se": 0.035642309763192104,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.344 below the 0.52 entrant bar"
+  },
+  "mjj-2010-garap-a": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.5862068965517242,
+   "se": 0.026767509047509734,
+   "games": 364
+  },
+  "mjj-2010-garap-b": {
+   "stage": "C",
+   "score": 0.4718031609195404,
+   "se": 0.01971268641194776,
+   "games": 616,
+   "label": "pending",
+   "reason": "stage C: floor undecided after the last look"
+  },
+  "mjj-2010-semistar": {
+   "stage": "B",
+   "score": 0.49353448275862055,
+   "se": 0.036296351651753635,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.494 below the 0.52 entrant bar"
+  },
+  "mjj-2011-frozenhell-2008": {
+   "stage": "B",
+   "score": 0.30890804597701144,
+   "se": 0.03497603961689944,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.309 below the 0.52 entrant bar"
+  },
+  "mjj-2011-garatank": {
+   "stage": "B",
+   "score": 0.5158045977011494,
+   "se": 0.031433562595111916,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.516 below the 0.52 entrant bar"
+  },
+  "mjj-2012-goinkyo-2012": {
+   "stage": "B",
+   "score": 0.5323275862068962,
+   "se": 0.03999663149644328,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: beyond the 36-entrant cap"
+  },
+  "mjj-2012-goinkyo-2020": {
+   "stage": "B",
+   "score": 0.5294540229885057,
+   "se": 0.04601402404440301,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: beyond the 36-entrant cap"
+  },
+  "mjj-2012-ibmthdr": {
+   "stage": "C",
+   "score": 0.540948275862069,
+   "se": 0.02066975949259464,
+   "games": 616,
+   "label": "pending",
+   "reason": "stage C: floor undecided after the last look"
+  },
+  "mjj-2013-bakabi": {
+   "stage": "B",
+   "score": 0.4216954022988506,
+   "se": 0.04338243790863762,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.422 below the 0.52 entrant bar"
+  },
+  "mjj-2013-mario": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.6436781609195404,
+   "se": 0.02523411892475686,
+   "games": 364
+  },
+  "mjj-2013-venom": {
+   "stage": "B",
+   "score": 0.5057471264367815,
+   "se": 0.03917375567736259,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.506 below the 0.52 entrant bar"
+  },
+  "mjj-2014-thdrcomb": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.6048850574712649,
+   "se": 0.025915838493796677,
+   "games": 364
+  },
+  "mjj-2015-ayagen": {
+   "stage": "C",
+   "score": 0.491020114942529,
+   "se": 0.020639250605865776,
+   "games": 616,
+   "label": "pending",
+   "reason": "stage C: floor undecided after the last look"
+  },
+  "mjj-2019-dojo": {
+   "stage": "B",
+   "score": 0.38793103448275856,
+   "se": 0.038191331963483795,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.388 below the 0.52 entrant bar"
+  },
+  "mjj-2020-kb-2020": {
+   "stage": "B",
+   "score": 0.464080459770115,
+   "se": 0.03314844540318909,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.464 below the 0.52 entrant bar"
+  },
+  "mjj-2020-kb-2022": {
+   "stage": "B",
+   "score": 0.5258620689655173,
+   "se": 0.04147157202089343,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: beyond the 36-entrant cap"
+  },
+  "mjj-2020-rraikou": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.5847701149425288,
+   "se": 0.027105857545295903,
+   "games": 364
+  },
+  "mjj-2020-ukenta": {
+   "stage": "B",
+   "score": 0.4432471264367814,
+   "se": 0.041156194272637975,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.443 below the 0.52 entrant bar"
+  },
+  "mjj-2021-crage": {
+   "stage": "B",
+   "score": 0.39439655172413784,
+   "se": 0.03880243207735102,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.394 below the 0.52 entrant bar"
+  },
+  "mjj-2021-q10con": {
+   "stage": "B",
+   "score": 0.35488505747126436,
+   "se": 0.03497603961689944,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.355 below the 0.52 entrant bar"
+  },
+  "mjj-2022-ukekent": {
+   "stage": "B",
+   "score": 0.4267241379310344,
+   "se": 0.03999663149644328,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.427 below the 0.52 entrant bar"
+  },
+  "mjj-2023-ukethdr": {
+   "stage": "C",
+   "score": 0.49640804597701155,
+   "se": 0.01978713437309875,
+   "games": 616,
+   "label": "pending",
+   "reason": "stage C: floor undecided after the last look"
+  },
+  "mjj-2023-vakabi": {
+   "stage": "B",
+   "score": 0.4410919540229884,
+   "se": 0.03497603961689944,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.441 below the 0.52 entrant bar"
+  },
+  "mjj-2024-kabiliz": {
+   "stage": "B",
+   "score": 0.4504310344827587,
+   "se": 0.03497603961689944,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.450 below the 0.52 entrant bar"
+  },
+  "mjj-2025-hapim": {
+   "stage": "B",
+   "score": 0.5165229885057471,
+   "se": 0.03693881483210011,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.517 below the 0.52 entrant bar"
+  },
+  "nb-sample-12-0": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.617816091954023,
+   "se": 0.026516159950461356,
+   "games": 312
+  },
+  "nb-sample-13-0": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.6364942528735632,
+   "se": 0.0271054799140914,
+   "games": 312
+  },
+  "rental-cban-11": {
+   "stage": "B",
+   "score": 0.5143678160919537,
+   "se": 0.03791126722371517,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.514 below the 0.52 entrant bar"
+  },
+  "rental-cban-12": {
+   "stage": "B",
+   "score": 0.41522988505747116,
+   "se": 0.03940405604870974,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.415 below the 0.52 entrant bar"
+  },
+  "rental-cban-13": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.6091954022988509,
+   "se": 0.026530740187990443,
+   "games": 364
+  },
+  "rental-cban-14": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.5585488505747127,
+   "se": 0.019776516108651214,
+   "games": 616
+  },
+  "rental-cban-15": {
+   "stage": "B",
+   "score": 0.3311781609195401,
+   "se": 0.04030312357624032,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.331 below the 0.52 entrant bar"
+  },
+  "rental-cban-17": {
+   "stage": "B",
+   "score": 0.5129310344827586,
+   "se": 0.03909977306992006,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.513 below the 0.52 entrant bar"
+  },
+  "rental-cban-2": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.5558548850574715,
+   "se": 0.020465507846501214,
+   "games": 616
+  },
+  "rental-cban-20": {
+   "stage": "B",
+   "score": 0.4992816091954023,
+   "se": 0.04425793799523746,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.499 below the 0.52 entrant bar"
+  },
+  "rental-cban-3": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.6842672413793107,
+   "se": 0.025878021332644836,
+   "games": 364
+  },
+  "rental-cban-4": {
+   "stage": "B",
+   "score": 0.526580459770115,
+   "se": 0.04268861055914406,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: beyond the 36-entrant cap"
+  },
+  "rental-cban-6": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.6030890804597703,
+   "se": 0.0270803999948985,
+   "games": 364
+  },
+  "rental-cban-8": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.6605603448275866,
+   "se": 0.026410661945049537,
+   "games": 364
+  },
+  "sample-01": {
+   "stage": "B",
+   "score": 0.5280172413793102,
+   "se": 0.04228397004719352,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: beyond the 36-entrant cap"
+  },
+  "sample-02": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.5739942528735634,
+   "se": 0.02042441240775122,
+   "games": 616
+  },
+  "sample-03": {
+   "stage": "B",
+   "score": 0.444683908045977,
+   "se": 0.038191331963483795,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.445 below the 0.52 entrant bar"
+  },
+  "sample-04": {
+   "stage": "C",
+   "score": 0.5001795977011496,
+   "se": 0.02104239904822494,
+   "games": 616,
+   "label": "pending",
+   "reason": "stage C: floor undecided after the last look"
+  },
+  "sample-05": {
+   "stage": "B",
+   "score": 0.47341954022988497,
+   "se": 0.036296351651753635,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.473 below the 0.52 entrant bar"
+  },
+  "sample-06": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.5926724137931039,
+   "se": 0.026688819482695258,
+   "games": 364
+  },
+  "sample-07": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.6882183908045981,
+   "se": 0.026289462411107363,
+   "games": 364
+  },
+  "sample-08": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.6156609195402302,
+   "se": 0.026667747497412533,
+   "games": 364
+  },
+  "sample-09": {
+   "stage": "B",
+   "score": 0.5129310344827586,
+   "se": 0.04030312357624032,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.513 below the 0.52 entrant bar"
+  },
+  "sample-09-orig": {
+   "stage": "B",
+   "score": 0.49568965517241376,
+   "se": 0.03722187502390988,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.496 below the 0.52 entrant bar"
+  },
+  "sample-10": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.6063218390804601,
+   "se": 0.026865820896863884,
+   "games": 364
+  },
+  "sample-11": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.5987787356321844,
+   "se": 0.02765778591305129,
+   "games": 364
+  },
+  "sample-11-orig": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.5908764367816093,
+   "se": 0.027423724277902156,
+   "games": 364
+  },
+  "sample-12": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.6443965517241385,
+   "se": 0.02534137916997028,
+   "games": 364
+  },
+  "sample-13": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.5766882183908049,
+   "se": 0.020103074535971394,
+   "games": 616
+  },
+  "sample-14": {
+   "stage": "C",
+   "score": 0.5001795977011497,
+   "se": 0.019848535930847858,
+   "games": 616,
+   "label": "pending",
+   "reason": "stage C: floor undecided after the last look"
+  },
+  "sample-14-orig": {
+   "stage": "B",
+   "score": 0.5172413793103445,
+   "se": 0.03976167250957552,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.517 below the 0.52 entrant bar"
+  },
+  "sample-15": {
+   "stage": "B",
+   "score": 0.5150862068965516,
+   "se": 0.039706007254072674,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.515 below the 0.52 entrant bar"
+  },
+  "sample-15-orig": {
+   "stage": "C",
+   "score": 0.5147270114942532,
+   "se": 0.0195934760796765,
+   "games": 616,
+   "label": "pending",
+   "reason": "stage C: floor undecided after the last look"
+  },
+  "sample-16": {
+   "stage": "C",
+   "score": 0.5310704022988504,
+   "se": 0.020383075576398315,
+   "games": 616,
+   "label": "pending",
+   "reason": "stage C: floor undecided after the last look"
+  },
+  "sample-16-orig": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.5797413793103451,
+   "se": 0.026812673820291535,
+   "games": 364
+  },
+  "sample-17": {
+   "stage": "B",
+   "score": 0.5308908045977011,
+   "se": 0.04204362072687577,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: beyond the 36-entrant cap"
+  },
+  "sample-17-orig": {
+   "label": "selected",
+   "stage": "C",
+   "score": 0.6368534482758623,
+   "se": 0.027129994614954762,
+   "games": 364
+  },
+  "sample-18": {
+   "stage": "B",
+   "score": 0.3584770114942528,
+   "se": 0.036574488682062804,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.358 below the 0.52 entrant bar"
+  },
+  "sample-19": {
+   "stage": "B",
+   "score": 0.31681034482758624,
+   "se": 0.031433562595111916,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.317 below the 0.52 entrant bar"
+  },
+  "sample-20": {
+   "stage": "B",
+   "score": 0.4698275862068965,
+   "se": 0.042607989881788655,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.470 below the 0.52 entrant bar"
+  },
+  "sample-21": {
+   "stage": "B",
+   "score": 0.47988505747126436,
+   "se": 0.038191331963483795,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.480 below the 0.52 entrant bar"
+  },
+  "sample-22": {
+   "stage": "B",
+   "score": 0.5114942528735631,
+   "se": 0.03848399012807819,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.511 below the 0.52 entrant bar"
+  },
+  "sample-22-orig": {
+   "stage": "C",
+   "score": 0.5111350574712648,
+   "se": 0.019374547687872258,
+   "games": 616,
+   "label": "pending",
+   "reason": "stage C: floor undecided after the last look"
+  },
+  "sample-23": {
+   "stage": "B",
+   "score": 0.5057471264367815,
+   "se": 0.0352440591656507,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.506 below the 0.52 entrant bar"
+  },
+  "sample-24": {
+   "stage": "B",
+   "score": 0.41020114942528735,
+   "se": 0.04228397004719352,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.410 below the 0.52 entrant bar"
+  },
+  "sample-25": {
+   "stage": "B",
+   "score": 0.5186781609195403,
+   "se": 0.04030312357624032,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.519 below the 0.52 entrant bar"
+  },
+  "sample-25-orig": {
+   "stage": "B",
+   "score": 0.4964080459770115,
+   "se": 0.03848399012807819,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.496 below the 0.52 entrant bar"
+  },
+  "sample-26": {
+   "stage": "B",
+   "score": 0.42241379310344823,
+   "se": 0.03940405604870974,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.422 below the 0.52 entrant bar"
+  },
+  "sample-27": {
+   "stage": "B",
+   "score": 0.3096264367816091,
+   "se": 0.03693881483210011,
+   "games": 154,
+   "label": "not-selected",
+   "reason": "stage B: score 0.310 below the 0.52 entrant bar"
+  }
+ }
+}
