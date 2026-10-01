@@ -434,8 +434,9 @@ history and say so.
 
 - **Publication**: branch `blind-rebuild` (local). Push = Pages deploy, which
   needs explicit owner approval.
-- **sample-16** is pending (0.531 [0.485, 0.577] at 27k), so it is not in
-  the catalog; its Bright Powder original and its source ポニョ are.
+- **sample-16** is pending (0.531 ± 0.020 SE at 27k; lower look bound 0.485
+  at z = 2.241), so it is not in the catalog; its Bright Powder original and
+  its source ポニョ are.
 - **11 pending** parties (several bot-limited trap / Baton Pass designs)
   stay in the prior; a later bot that pilots them could re-measure them.
 - The four lowest admitted parties have small positive deletion point
