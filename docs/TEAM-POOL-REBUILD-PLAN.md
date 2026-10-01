@@ -358,6 +358,28 @@ games, because the product-budget stages have 1–4 seed blocks per cell.
   discovery-stage harm trim fired. The four controls on one block: ceiling
   0.739, deletions 0.63, floor 0.000 — WEAK at this sample size, reported
   only.
-- **Stage C look 1** (seed base 20261131, k = 0, 1): the 36 entrants against
-  the full panel, 2,280 cells / 9,120 games, started 22:10.
+- **Stage C** (seed base 20261131; `measurements/stage-c-blind27000.json`):
+  look 1 (k = 0, 1) passed 20, failed 1, left 15 undecided; look 2 (k = 2, 3
+  for the undecided) passed 4 more. **24 selected, 11 pending, 1 failed**
+  (`selection.json`, a reason per label). The simultaneous harm test removed
+  nobody (largest deletion effect +0.0030 ± 0.0026, rental-cban-2, against a
+  Bonferroni z of 3.08); 24 is inside 15–30, so no padding and no escape
+  block. sample-16 is pending at 0.531 (lower bound 0.485); its Bright
+  Powder original (0.580) and its source ポニョ (0.609) are selected.
+- **Pool value on the fixed panel** (blind:27000:0.4): selected 24 = 0.601 ±
+  0.006 (confirmation scores); local 79-team pool 0.498 ± 0.005 and old
+  bundled 32 0.515 ± 0.007 (discovery scores of fixed memberships):
+  +0.103 ± 0.014 and +0.086 ± 0.017.
+- **Execution audit** (`measurements/execution-audit.json`): the pending trap
+  and Baton Pass teams are bot-limited — their trap member is brought in
+  0–7% of games (two replayed logs read); pending is not a verdict on those
+  designs.
+
+### Step 5 — Nash (running)
+
+blind:3000:0.4 game over the 24 (16 blocks per pair): point support
+sample-07 0.40, rental-cban-6 0.37, サンダー昆布 0.11, rental-cban-2 0.07,
+sample-11 0.04; support spreads across seed bootstraps, so 19 parties are
+support-relevant (`data/meta-nash-v3/solution-blind3000.json`). Their 27k
+round robin, best-response rounds and challenges follow the pondering check.
 
