@@ -21,6 +21,27 @@ in `crates/conformance/tests/berry_confusion.rs`.
 
 **Status:** engine bit-exact vs PS (M1–M4), search bots through imperfect-info play (M5–M10), wasm + browser demo shipped (M9), published (M12), Japanese localization (M13). Current phase: **bot strengthening with fail-closed evaluation (M17 — see Roadmap (M17+))**. Playable demo: **https://puniu3.github.io/nc2000-engine/** Licensing: MIT, third-party attribution in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 
+## Play
+
+The demo's play door (`/`, with `?blind` kept as an alias) is **blind**:
+each side sees the other's six species, levels and types, and nothing else
+until the game ends, when the opponent's full sets are shown. The bot searches
+with the one live profile in `data/search-profiles.json` (27,000 iterations,
+c = 0.4) and keeps pondering while the human thinks. Its picture of the party
+it faces is the frozen opponent prior `data/belief-pool-v3`.
+
+The built-in parties a human can pick and the parties the bot draws are one
+catalog, `data/team-pool-v2` (24 parties, same ids, exact sets); both Random
+buttons draw it by its `drawWeight` (equal mass per variant cluster). A custom party can be
+imported for the human side. The setup panel chooses where the bot's party
+comes from — the built-in parties (by `drawWeight`) or the solved mixture
+`data/meta-nash-v3` — and a pool file loaded there replaces the lists and the
+bot's draw (uniformly) without touching the prior. `?nash` is the mixture
+draw with nothing configurable. The start screen links to `?evaluate`. How the catalog was selected: `data/team-selection-v2` and
+[`docs/TEAM-POOL-REBUILD-PLAN.md`](docs/TEAM-POOL-REBUILD-PLAN.md). The ladder
+client (`tools/ps-client.js`) plays the same way from the same files, without
+pondering.
+
 ## Party evaluator
 
 Open `?evaluate` on the browser demo to measure a custom party against a weighted
@@ -29,10 +50,12 @@ items and moves; hiragana searches also find katakana names. Individual values,
 training and happiness are under the optional details. The text import panel
 also accepts Showdown exports, team JSON arrays and `{ "sets": [...] }` objects; opponent
 entries use `{ "teams": [{ "id": "name", "weight": 1, "sets": [...] }] }`.
-The shipped Nash mixture is the default. Both sides use blind search with the
-bundled belief pool; changing the opponent distribution only changes team draws.
+The shipped Nash mixture (`data/meta-nash-v3`) is the default. Both sides use
+blind search at c = 0.4 with the shipped opponent prior (`data/belief-pool-v3`);
+changing the opponent distribution only changes team draws.
 
-The default is 32 games at 3,000 iterations per decision. Each sampled matchup
+The default is 32 games at 27,000 iterations per decision, the live bot's
+budget; 3,000 and 10,000 are offered and labelled as quick runs. Each sampled matchup
 plays twice with P1/P2 reversed. Results stay in memory only and can be resumed
 or extended while the page remains open. Reloading or closing the tab resets
 results. The evaluator does not save to browser storage or load previous results.
@@ -132,11 +155,14 @@ tools/            Node scripts run against the reference PS build (needs PS_ROOT
 data/gen2stadium2.json     reference data (functions replaced by callback-name lists; meta.psCommit records origin)
 data/learnsets-gen2.json   per-species format-legal move sets + level floors + HP DV spreads (M14a; flat
                            acceptance sets — cross-move compatibility deliberately not encoded)
-data/meta-pool-v0/         curated meta team pool (M8): 34 tournament/expert teams, provenance in its README
-data/preview-tables-v0/    baked team-preview equilibria per matchup (M8), format in its README
-data/meta-nash-v1/         META-NASH v1 artifacts: pairwise cells, BR lineages, gate results, and
-                           `pool-artifact.json` = the shipped team mixture (the app's `?nash`
-                           door fetches this one file; the rest is audit trail)
+data/team-inventory-v1/    every team the rebuilds considered: provenance, eligibility, variant clusters
+data/team-selection-v2/    the blind c = 0.4 selection: frozen protocol and panel, labels, measurements
+data/team-pool-v2/         the catalog: human built-in parties = the bot's ordinary draw (drawWeight)
+data/belief-pool-v3/       the frozen opponent prior every searcher identifies against
+data/meta-nash-v3/         the solved mixture `?nash` draws from, and its challenge evidence
+data/meta-pool-v0/         the retired bundled pool (M8): `?fork` continues hosted records with it
+data/preview-tables-v0/    baked team-preview equilibria (M8); no door reads them any more
+data/meta-nash-v1/         META-NASH v1 artifacts (historical; the first shipped mixture)
 fixtures/prng-vectors.json PRNG vectors
 fixtures/corpus-v1/        60 battles (30 puredata + 30 full; 2,268 turns / 2,585 snapshots)
 crates/engine/             the engine (prng / dex / state / choice / battle; battle/search.rs = M3 search
@@ -160,14 +186,11 @@ crates/wasm/               nc2000-wasm JS bridge (M9): Dex / Battle / Searcher (
                            ProtocolSearcher.setPosition/report (the solver's entry point),
                            JSON-string API, embedded dex; build.sh = tuned wasm-pack build;
                            tests-node/ = parity + bench twins vs native
-web/                       Vite+Preact browser demo (M9): worker-threaded bot with ponder, baked-table
-                           preview, device benchmark; information policy fixed to OPEN TEAM SHEET and
-                           strength fixed at max (M12 — no settings): the bot gets the human's true sets
-                           as a pinned singleton belief, only picks stay hidden; custom parties (M14):
-                           PS-export paste import (ps-import.ts) -> wasm canonicalize/validate ->
-                           localStorage, played under the same open-sheet policy; meta pool + pair
-                           tables fetched from <base>data/* at runtime (never bundled — the background
-                           bake extends the app in place; the Pages build copies data/ into dist/);
+web/                       Vite+Preact browser demo (M9): worker-threaded bot with ponder; blind play
+                           only (see Play above; the M12 open team sheet was retired 2026-09-30);
+                           custom parties (M14): PS-export paste import (ps-import.ts) -> wasm
+                           canonicalize/validate -> localStorage; team files fetched from
+                           <base>data/* at runtime (never bundled; the Pages build copies them);
                            `?solver` (solver.tsx + position.ts + solver-worker.ts) is a fourth door
                            and not a battle at all: a position is typed in and every option scored; `?fork` (fork.tsx)
                            replays a `nc2000-fork-v1` position as human-vs-bot games and
@@ -538,7 +561,7 @@ Milestones:
       - **Cluster 2, status-move valuation: PROMOTED — the one remaining target with both size and a mechanism.** Class rates are close (humans play Status 36.4% of decisions, the bot's top-1 is Status 32.1%), so this is not "the bot never plays status". The 7,188 human-Status decisions split 3,868 same-class / 1,340 Physical / 1,207 Special / 773 switch: the bot substitutes **immediate damage for a multi-turn plan**. The pairs name the plan every time — `curse`→`doubleedge`/`earthquake`/`bodyslam`/`rest` (327 rows), `meanlook`→`perishsong` (65) and `confuseray`→`perishsong` (52) (the trap combo played in the wrong order, which throws it away), `sleeppowder`→`psychic`/`leechseed` (112), `doubleteam`→`batonpass`/`rollout` (92), `defensecurl`→`rollout` (43), `substitute`→`psychic` (42), `toxic`→`drillpeck` (38).
         **Rollout lever for cluster 2: measured null (2026-09-28, [`data/m16c-rollout-v2`](data/m16c-rollout-v2/README.md)).** The parked M16c rollout arm, which gives the rollout a setup/status policy and a bad-matchup switch, was re-measured against the shipped agent on the full pool with CRN seeds. Both halves together: 0.505 ± 0.019 over 2,400 games at 3k and 10k. Status pseudo-scores alone: 0.493 ± 0.023 over 1,600 games. Switching alone: 0.466 ± 0.032 over 800 games. 42–46% of pairs changed outcome in every run, so exposure is not the limit, unlike Perish. A rollout setup policy does not buy strength. Cluster 2 remains an agreement gap, not a demonstrated strength gap.
       - **Clusters 3–5: DEMOTED pending re-derivation at 30k.** Their cells (219+160, 120+48, 52/47/38) are at or inside the noise floor above, and clusters 3 and 5 are subsets of cluster 2's pattern anyway (`curse` and `perishsong` are its two largest entries). Re-derive before spending work on them.
-      - **L3 imputation** — `belief.rs` merges revealed moves first, prior filler after, and the shipped Web game is pinned open-sheet (only which three were picked is hidden), so the remaining exposure is blind mode: the corpus harness and `tools/ps-client.js`.
+      - **L3 imputation** — `belief.rs` merges revealed moves first, prior filler after, and the Web game was pinned open-sheet until 2026-09-30 (only which three were picked was hidden); since then every Web game is blind, so this exposure covers all live play: the corpus harness and `tools/ps-client.js`.
 
 - **META-NASH v1 — the shipping team mixture: DONE (2026-08-12, OR gate PASS on Route B).** Owner-reopened metagame research, run under a pre-registered OR gate and merged from the `claude/ai-metapool-design-94shyi` branch. 52-team pairwise matrix (1,326 pairs x 64 games, `skuct:300`, seed-paired) solved with RM+, best responses supplied by 13 `TeamGen` hill-climb lineages. **Route B (strength) passed**: against same-budget adversarial exploiters the Nash pool is exploited to 0.398 +/- 0.031 (300 iters) and 0.303 +/- 0.040 (1,000 iters) where the curated-34 uniform pool concedes 0.588 / 0.621 — CIs disjoint at every budget through 30k, and the gap widens with budget. **Route A (diversity) failed**: evolution rediscovers the meta's species core but produced 20 teams < the 24-team bar, and the AI-only pool regressed (0.453 +/- 0.025). Shipped artifact `data/meta-nash-v1/pool-artifact.json` = `ship-3000`: sample-07 0.575 / sample-08 0.222 / sample-10 0.201, a mixture closing a real 07>08>10 cycle that no BR lineage, set-level neighborhood sweep, or full-candidate column could break. Exact equilibrium weights are **not** claimed budget-invariant; the exploitability separation is. Method and pre-registrations: [`docs/META-NASH-V1.md`](docs/META-NASH-V1.md); the signature-information experiment it degenerated from is [`docs/EXP-signature-info-value.md`](docs/EXP-signature-info-value.md) (deception pays, hiding does not). **Wired to the app behind `?nash`** (info-mode.ts's third door, alongside `/` and `?blind`): blind information rules, the opponent drawn afresh from the mixture every battle (start and rematch alike), the human free to bring anything, and no controls at all — the pool swap and the belief prior are `?blind`'s, and a nash page inherits neither. The distribution is shown on the start screen on purpose: an equilibrium is a strategy that survives the opponent knowing it, so the demonstration is stronger with the odds on the table. What stays hidden is what blind always hides — which arm was drawn, and every set in it, until the game ends. Scope is unchanged from the study: **bot self-team choice only; the opponent belief still reads the curated 32-team pool**. Contract in `web/tests/nash.spec.ts`.
 
@@ -592,6 +615,20 @@ Milestones:
   search answered about a team the opponent did not have (regression:
   `a_dead_opponent_bench_stays_dead`). Live play was never affected: a real tracker sets both on the
   same switch line.
+
+- **Blind product and team-pool rebuild: DONE locally (2026-10-02), not
+  deployed.** Live play is blind at c = 0.4 on every door and the ladder; the
+  open sheet is retired. Under a protocol frozen before any score, 103
+  candidates were measured at blind:27000:0.4 against a fixed 78-team
+  human-source panel: **24 selected** (fresh-seed lower bound above 0.50, no
+  member clearly harmful), 11 pending, 68 not selected. The 24 are one catalog
+  for the human lists and the bot's draws (`data/team-pool-v2`); on the same
+  panel their value is 0.601 against 0.498 for the previous 79-team pool and
+  0.515 for the old bundled 32. Prior `data/belief-pool-v3` (frozen on
+  product-budget evidence), Nash `data/meta-nash-v3` (sample-08, sample-07,
+  ソード＆シールド, sample-13, sample-10). Evidence, limits and open owner
+  decisions: [`docs/TEAM-POOL-REBUILD-PLAN.md`](docs/TEAM-POOL-REBUILD-PLAN.md)
+  §Progress.
 
 Parked (not scheduled, not dead-by-principle):
 

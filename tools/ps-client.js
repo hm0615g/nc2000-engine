@@ -22,7 +22,7 @@
 //   node tools/ps-client.js --server ws://127.0.0.1:8123 --name BOTNAME \
 //     --team pool:0|pool:random|FILE.json [--challenge USER | --accept any|U1,U2] \
 //     [--games N] [--iters 30000] [--seed 1] [--mode blind|open] \
-//     [--opp-team-file FILE.json] [--random] [--timer] [--no-tables] \
+//     [--opp-team-file FILE.json] [--random] [--timer] \
 //     [--decision-log FILE.jsonl] [--belief-prior FILE.json|auto] \
 //     [--password PW] [--loginserver URL] [--format gen2nintendocup2000noohkostadium2strict] \
 //     [--lobby lobby] [--pool FILE.json | --team-dir DIR] \
@@ -77,10 +77,12 @@ if (args.help || args.h) {
                     https://play.pokemonshowdown.com; only contacted when a
                     bare guest /trn is refused or --password is given)
   --format ID       format id (default ${FORMAT})
-  --team SPEC       pool:IDX | pool:random | FILE.json (required)
-  --pool FILE       opponent/team pool JSON (default data/meta-pool-v0/meta-pool.json)
-  --team-dir DIR    rebuild the pool from the latest Showdown .txt teams in DIR
-                    before each new battle; useful for teams-nc2000/
+  --team SPEC       pool:random | pool:ID | pool:IDX | FILE.json (required;
+                    pool:random uses drawWeight when available)
+  --pool FILE       own-team pool JSON override
+                    (default data/team-pool-v2/team-pool.json)
+  --team-dir DIR    rebuild the own-team pool from Showdown .txt teams in DIR
+                    before each new battle; takes priority over --pool
   --no-validate-pool
                     skip TeamValidator when building --team-dir pool
   --challenge USER  challenge USER repeatedly until --games are done
@@ -103,13 +105,13 @@ if (args.help || args.h) {
   --timer           turn the battle timer on in every game
   --lobby ROOM      join ROOM after login so the bot is visible (default lobby)
   --no-lobby        do not join a lobby room
-  --no-tables       skip loading baked preview tables
   --belief-prior F  M18 community belief prior (a table in the
                     data/belief-prior-v0.sample.json shape), or 'auto' to
-                    generate one at startup from --team-dir/--pool. Read once
-                    at startup and handed to each game's searcher as JSON text;
-                    it governs ONLY the hidden-team fallback imputation, so
-                    it needs --mode blind. Without the flag the fallback
+                    generate one at startup from the selected own-team pool.
+                    Read once and handed to each game's searcher as JSON text;
+                    it governs ONLY hidden-team fallback imputation and needs
+                    --mode blind. The normal opponent belief pool remains
+                    data/belief-pool-v3/belief-pool.json. Without the flag the fallback
                     imputation is exactly today's. A malformed table warns
                     and degrades rather than failing the run
   --unknown-log F   JSONL log for opponent observations outside the pool
@@ -159,7 +161,15 @@ const QUIET = !!args.quiet;
 const LOBBY_ROOM = args['no-lobby'] ? '' : String(args.lobby || 'lobby');
 const VALIDATE_POOL = !args['no-validate-pool'];
 const TEAM_DIR = args['team-dir'] && args['team-dir'] !== true ? resolveUserPath(String(args['team-dir'])) : '';
-const POOL_FILE = args.pool && args.pool !== true ? resolveUserPath(String(args.pool)) : path.join(REPO, 'data/meta-pool-v0/meta-pool.json');
+const POOL_FILE = args.pool && args.pool !== true ?
+	resolveUserPath(String(args.pool)) :
+	path.join(REPO, 'data/team-pool-v2/team-pool.json');
+
+const DEFAULT_BELIEF_POOL_FILE =
+	path.join(REPO, 'data/belief-pool-v3/belief-pool.json');
+
+const DEFAULT_BELIEF_POOL_JSON =
+	fs.readFileSync(DEFAULT_BELIEF_POOL_FILE, 'utf8');
 const UNKNOWN_LOG = args['no-unknown-log'] ? '' : resolveUserPath(String(args['unknown-log'] && args['unknown-log'] !== true ? args['unknown-log'] : path.join(REPO, 'logs/opponent-observations.jsonl')));
 const UNKNOWN_LOG_ALL = !!args['unknown-log-all'];
 const DECISION_LOG = args['decision-log'] && args['decision-log'] !== true ?
@@ -364,11 +374,58 @@ function pickTeam() {
 	const snapshot = loadPoolSnapshot();
 	if (TEAMSPEC.startsWith('pool:')) {
 		const which = TEAMSPEC.slice(5);
-		const idx = which === 'random' ? crypto.randomInt(snapshot.pool.teams.length) : parseInt(which, 10);
-		if (!(idx >= 0 && idx < snapshot.pool.teams.length)) throw new Error(`bad pool index ${which}`);
+		const teams = snapshot.pool.teams;
+		let idx;
+
+		if (which === 'random') {
+			const weighted = teams.every(team => {
+				const weight = Number(team.drawWeight);
+				return Number.isFinite(weight) && weight >= 0;
+			});
+
+			const total = weighted ?
+				teams.reduce(
+					(sum, team) => sum + Number(team.drawWeight),
+					0
+				) :
+				0;
+
+			if (weighted && total > 0) {
+				let r = rng() * total;
+				idx = teams.length - 1;
+
+				for (let i = 0; i < teams.length; i++) {
+					const weight = Number(teams[i].drawWeight);
+
+					if (r < weight) {
+						idx = i;
+						break;
+					}
+
+					r -= weight;
+				}
+			} else {
+				idx = crypto.randomInt(teams.length);
+			}
+		} else {
+			idx = teams.findIndex(
+				team => String(team.id || '') === which
+			);
+
+			if (idx < 0 && /^\d+$/.test(which)) {
+				idx = parseInt(which, 10);
+			}
+		}
+
+		if (!(idx >= 0 && idx < teams.length)) {
+			throw new Error(`bad pool team ${which}`);
+		}
+
+		const team = teams[idx];
+
 		return {
-			sets: snapshot.pool.teams[idx].sets,
-			label: `${snapshot.label}:pool:${idx}`,
+			sets: team.sets,
+			label: `${snapshot.label}:pool:${team.id || idx}`,
 			pool: snapshot.pool,
 			poolJson: snapshot.poolJson,
 			poolLabel: snapshot.label,
@@ -383,22 +440,9 @@ function pickTeam() {
 // ------------------------------------------------------------------ wasm
 let wasm = null;
 let dex = null;
-let pairJsons = [];
 if (!RANDOM) {
 	wasm = require(path.join(REPO, 'crates/wasm/pkg-node/nc2000_wasm.js'));
 	dex = new wasm.Dex();
-	if (!args['no-tables']) {
-		const pairDir = path.join(REPO, 'data/preview-tables-v0');
-		if (fs.existsSync(pairDir)) {
-			for (const f of fs.readdirSync(pairDir).sort()) {
-				if (f.startsWith('pair-') && f.endsWith('.json')) {
-					try {
-						pairJsons.push(fs.readFileSync(path.join(pairDir, f), 'utf8'));
-					} catch { /* mid-write during a bake: treat as missing */ }
-				}
-			}
-		}
-	}
 }
 let oppTeamJson = '';
 let oppTeamSets = null;
@@ -485,7 +529,13 @@ if (BELIEF_PRIOR_ARG) {
 	// Probe once up front so a typo in the TABLE is visible before the first
 	// challenge instead of one line per game; each game's searcher gets its
 	// own install below (the prior lives on the searcher, one per battle).
-	const probe = new wasm.ProtocolSearcher(dex, 0, probeSnapshot.poolJson, 0);
+	const probe = new wasm.ProtocolSearcher(
+		dex,
+		0,
+		DEFAULT_BELIEF_POOL_JSON,
+		0,
+		PROFILE.c
+	);
 	reportPrior(probe.setBeliefPrior(priorText), m => console.log(`[${NAME}] ${m}`));
 	console.log(`[${NAME}] belief prior source: ${priorSource}`);
 	if (typeof probe.free === 'function') probe.free();
@@ -1045,19 +1095,18 @@ class BattleDriver {
 
 		if (!this.searcher) {
 			this.side = req.side && req.side.id === 'p2' ? 1 : 0;
-			const activePoolJson = this.client.currentTeam && this.client.currentTeam.poolJson ?
-				this.client.currentTeam.poolJson : loadPoolSnapshot().poolJson;
-			this.searcher = new wasm.ProtocolSearcher(dex, this.side, activePoolJson, SEED * 1000 + this.battleIdx, PROFILE.c);
+			this.searcher = new wasm.ProtocolSearcher(
+				dex,
+				this.side,
+				DEFAULT_BELIEF_POOL_JSON,
+				SEED * 1000 + this.battleIdx,
+				PROFILE.c
+			);
 			this.searcher.setOwnTeam(JSON.stringify(this.client.currentTeam.sets));
 			if (MODE === 'open') this.searcher.pinOpponent(this.opponentTeamJson);
 			// after pinOpponent on purpose: if the two ever coexist the binding
 			// refuses out loud rather than contaminating the open-sheet belief
 			if (priorText) reportPrior(this.searcher.setBeliefPrior(priorText), m => this.log(m));
-			for (const pj of pairJsons) {
-				try {
-					this.searcher.addPair(pj);
-				} catch { /* stale table: fall back to live preview search */ }
-			}
 		}
 		if (this.lineBuffer.length) {
 			this.searcher.pushLines(JSON.stringify(this.lineBuffer));

@@ -17,7 +17,7 @@ import {
   takeNewLog,
   type Battle,
 } from "./engine";
-import { fetchFork, fetchI18nJa, fetchPool } from "./data";
+import { fetchFork, fetchI18nJa, fetchRecordPool } from "./data";
 import { loadJaNames, moveName, setLocale, speciesName, toId } from "./i18n";
 import { BotWorker } from "./bot";
 import { Narrator } from "./narrate";
@@ -144,7 +144,7 @@ export function Fork() {
       try {
         const [, pool] = await Promise.all([
           loadEngine(),
-          fetchPool(),
+          fetchRecordPool(),
           loadJaNames(fetchI18nJa),
         ]);
         setPoolJson(pool.poolJson);

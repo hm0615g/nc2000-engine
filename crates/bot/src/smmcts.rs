@@ -4,7 +4,7 @@
 //! Three pieces, each earning its place by measurement (all numbers: 60
 //! games vs maxdamage, seed 11):
 //!
-//! 1. **State-keyed tree.** Nodes are keyed by `Battle::state_key_bucketed`
+//! 1. **State-keyed tree.** Nodes are keyed by `Battle::search_key`
 //!    in a per-decision transposition table, so chance outcomes that differ
 //!    in anything discrete (KOs, status procs, request kinds, volatile
 //!    durations) get their own nodes instead of aliasing into one
@@ -105,7 +105,7 @@ pub struct RmConfig {
     /// renormalized before sampling. Sheds solver dust without flattening
     /// genuine mixing.
     pub threshold: f64,
-    /// HP buckets for the node key (`Battle::state_key_bucketed`); 0 = exact
+    /// HP buckets for the node key (`Battle::search_key`); 0 = exact
     /// keys (measured weaker — see the module doc).
     pub hp_buckets: i64,
     /// Full-width RM+ sweeps over the estimated root matrix.
@@ -299,13 +299,13 @@ pub fn key_for_test(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
 /// descent step. The battle is restored before returning.
 pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
     if cfg.hp_buckets <= 0 {
-        return b.state_key();
+        return b.search_key(None, false);
     }
     if !cfg.threshold_key {
         return if cfg.key_no_damage {
-            b.state_key_bucketed_no_damage(cfg.hp_buckets)
+            b.search_key(Some(cfg.hp_buckets), true)
         } else {
-            b.state_key_bucketed(cfg.hp_buckets)
+            b.search_key(Some(cfg.hp_buckets), false)
         };
     }
     // Both classes are read before either mon is edited: Flail/Reversal make
@@ -322,9 +322,9 @@ pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
         }
     }
     let key = if cfg.key_no_damage {
-        b.state_key_bucketed_no_damage(cfg.hp_buckets)
+        b.search_key(Some(cfg.hp_buckets), true)
     } else {
-        b.state_key_bucketed(cfg.hp_buckets)
+        b.search_key(Some(cfg.hp_buckets), false)
     };
     for entry in saved.into_iter().flatten() {
         let (id, hp) = entry;
@@ -524,6 +524,7 @@ pub struct SkuctSearch {
     cfg: RmConfig,
     rng: SplitMix64,
     root: Battle,
+    scratch: Option<Box<Battle>>,
     turn_cap: u16,
     nodes: Vec<Node>,
     table: FxHashMap<u64, usize>,
@@ -1185,14 +1186,21 @@ impl SkuctSearch {
                 })
                 .collect::<Vec<bool>>()
         });
-        SkuctSearch { cfg, rng, root, turn_cap, nodes, table, done: 0, depth_sum: 0, root_dominated }
+        SkuctSearch { cfg, rng, root, scratch: None, turn_cap, nodes, table, done: 0, depth_sum: 0, root_dominated }
     }
 
-    /// One UCB iteration (clone root, fresh chance seed, select/expand/
+    /// One UCB iteration (reset root, fresh chance seed, select/expand/
     /// rollout/backprop). Returns the side-0 reward and the root joint's
     /// action indices — `RmAgent`'s late-tree stage-game seeding needs both.
     pub fn step_one(&mut self, dex: &Dex) -> (f64, [usize; 2]) {
-        let mut sim = self.root.clone();
+        let mut sim = match self.scratch.take() {
+            Some(mut sim) => {
+                sim.as_mut().clone_from(&self.root);
+                sim
+            }
+            None => Box::new(self.root.clone()),
+        };
+        std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
         sim.reseed(self.rng.next());
         let mut joint = [0usize; 2];
         let mut depth = 0u32;
@@ -1209,6 +1217,8 @@ impl SkuctSearch {
             &mut joint,
             &mut depth,
         );
+        std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
+        self.scratch = Some(sim);
         self.depth_sum += depth as u64;
         self.done += 1;
         (r, joint)
@@ -1217,7 +1227,14 @@ impl SkuctSearch {
     /// One probe iteration with the root joint forced (`RmAgent`'s matrix
     /// estimation phase).
     fn step_forced(&mut self, dex: &Dex, force: [usize; 2]) -> f64 {
-        let mut sim = self.root.clone();
+        let mut sim = match self.scratch.take() {
+            Some(mut sim) => {
+                sim.as_mut().clone_from(&self.root);
+                sim
+            }
+            None => Box::new(self.root.clone()),
+        };
+        std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
         sim.reseed(self.rng.next());
         let mut joint = [0usize; 2];
         let mut depth = 0u32;
@@ -1234,6 +1251,8 @@ impl SkuctSearch {
             &mut joint,
             &mut depth,
         );
+        std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
+        self.scratch = Some(sim);
         self.depth_sum += depth as u64;
         self.done += 1;
         r

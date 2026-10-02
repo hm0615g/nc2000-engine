@@ -31,7 +31,7 @@ import {
   sha256,
   type OpponentDraft,
 } from "./evaluate-input";
-import { searchProfile } from "./search-profile";
+import { PRODUCT_ITERATIONS, searchProfile } from "./search-profile";
 import { TeamEditor, type EditorDex } from "./evaluate-team-editor";
 import "./evaluate.css";
 
@@ -43,12 +43,11 @@ function download(name: string, text: string, type = "application/json") {
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-const opponentLabel = (id: string) =>
-  ({
-    "sample-07": "基本の相手1",
-    "sample-08": "基本の相手2",
-    "sample-10": "基本の相手3",
-  })[id] ?? id;
+/** The shipped mixture's teams are shown as 基本の相手N in file order
+ * rather than by id; an uploaded distribution keeps its own ids. Filled
+ * once, when the default mixture loads. */
+const defaultLabels = new Map<string, string>();
+const opponentLabel = (id: string) => defaultLabels.get(id) ?? id;
 const percent = (v: number | null) =>
   v === null ? "—" : `${(v * 100).toFixed(1)}%`;
 function Findings({ team }: { team: EvaluationTeam }) {
@@ -119,12 +118,20 @@ function ResultTable({ run }: { run: EvaluationRun }) {
   );
 }
 
+/** A budget as the page shows it: the product's own budget is named as
+ * such, anything else is marked as a quick run. */
+function budgetLabel(n: number): string {
+  return n === PRODUCT_ITERATIONS
+    ? `${n.toLocaleString()}回(実際のボットと同じ)`
+    : `${n.toLocaleString()}回(簡易計測)`;
+}
+
 export function Evaluate() {
   const [ready, setReady] = useState(false);
   const [editorDex, setEditorDex] = useState<EditorDex | null>(null);
   const [entries, setEntries] = useState<OpponentDraft[]>([]);
   const [party, setParty] = useState("");
-  const [iterations, setIterations] = useState(3000);
+  const [iterations, setIterations] = useState(PRODUCT_ITERATIONS);
   const [games, setGames] = useState("32");
   const [belief, setBelief] = useState({ json: "", hash: "" });
   const [error, setError] = useState("");
@@ -166,6 +173,7 @@ export function Evaluate() {
           fetchDexJson(),
         ]);
         const draft = importDistribution(nash);
+        draft.forEach((d, i) => defaultLabels.set(d.id, `基本の相手${i + 1}`));
         const hash = await sha256(pool.poolJson);
         if (!alive.current) return;
         setEditorDex(dex as EditorDex);
@@ -362,7 +370,7 @@ export function Evaluate() {
                 <option key={r.id} value={r.id}>
                   {r.createdAt.slice(0, 16).replace("T", " ")} UTC ·{" "}
                   {r.pairs.length * 2}戦 ·{" "}
-                  {r.config.iterations.toLocaleString()}回
+                  {budgetLabel(r.config.iterations)}
                 </option>
               ))}
             </select>
@@ -521,15 +529,13 @@ export function Evaluate() {
                 value={iterations}
                 onChange={(e) => setIterations(Number(e.currentTarget.value))}
               >
-                {[3000, 10000, 27000].map((n) => (
+                {[3000, 10000, PRODUCT_ITERATIONS].map((n) => (
                   <option key={n} value={n}>
-                    {n.toLocaleString()}回
+                    {budgetLabel(n)}
                   </option>
                 ))}
-                {![3000, 10000, 27000].includes(iterations) && (
-                  <option value={iterations}>
-                    {iterations.toLocaleString()}回
-                  </option>
+                {![3000, 10000, PRODUCT_ITERATIONS].includes(iterations) && (
+                  <option value={iterations}>{budgetLabel(iterations)}</option>
                 )}
               </select>
             </label>
@@ -539,11 +545,13 @@ export function Evaluate() {
           )}
           {Number.isFinite(testBudget) && (
             <p class="eval-warning">
-              テストビルド：実際の探索量は{budget}反復です。
+              テストビルド：実際に考える回数は{budget}回です。
             </p>
           )}
           <p class="eval-muted">
-            1手を決めるまでに試す回数です。両方に同じ回数を使い、先後を入れ替えて2戦ずつ対戦します。
+            1手を決めるまでに試す回数です。実際のボットは
+            {PRODUCT_ITERATIONS.toLocaleString()}
+            回で、それより少ない回数は結果を早く見るための簡易計測です。両方に同じ回数を使い、先後を入れ替えて2戦ずつ対戦します。
           </p>
         </section>
       </fieldset>
@@ -585,7 +593,7 @@ export function Evaluate() {
         {run && (
           <p>
             {run.pairs.length * 2} / {run.targetPairs * 2}戦完了 ·{" "}
-            {run.config.iterations.toLocaleString()}回
+            {budgetLabel(run.config.iterations)}
           </p>
         )}
         {run && (

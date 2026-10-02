@@ -4,28 +4,19 @@
 // side must make (forced single choices auto-apply), then commit both picks
 // in side order to the main battle AND the mirror.
 //
-// Information policy: fixed for the whole game by `props.mode`, captured
-// when the game started (toggling the preference mid-battle cannot change
-// a running game's information structure).
+// Information policy: blind, the only live mode — symmetric ignorance:
+// each side gets the other's six species / levels / types plus the public
+// battle log, nothing else. This screen is where that holds or leaks, so
+// every foe-set surface is cut here in one place: the preview foe sheets
+// and their hint, the foe team heading (a catalog id identifies the set
+// list by itself), the foe active card's item chip, and the team-sheets
+// modal. The cut is lifted the moment the game is decided — the post-game
+// reveal is the reward for having played blind. The bot's own uncertainty
+// is surfaced as the belief chip: it is information ABOUT the bot, not
+// about the foe.
 //
-// - "open" (M12, the default): OPEN TEAM SHEET — both sides' sets are
-//   public (the bot's belief is pinned to the human's true sets in the
-//   worker), only selection (which 3 of 6 + lead, until revealed) is
-//   hidden: the worker's searcher determinizes the unseen picks per
-//   iteration.
-// - "blind" (M18): symmetric ignorance — each side gets the other's six
-//   species / levels / types plus the public battle log, nothing else.
-//   This screen is where that holds or leaks, so every foe-set surface is
-//   cut here in one place: the preview foe sheets and their hint, the foe
-//   team heading (the pool id identifies the set list by itself), the foe
-//   active card's item chip, and the team-sheets modal. The cut is lifted
-//   the moment the game is decided — the post-game reveal is the reward
-//   for having played blind. The bot's own uncertainty is surfaced as the
-//   belief chip: it is information ABOUT the bot, not about the foe.
-//
-// Bot preview comes from the M8 baked table whenever the matchup is baked
-// (the worker reports "table"), else the live search at the preview root
-// ("search").
+// Bot preview is always the live search at the preview root: the baked pair
+// tables are keyed to the retired bundled pool's indices and are never read.
 
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
@@ -38,7 +29,6 @@ import {
   stateView,
   takeNewLog,
 } from "./engine";
-import { fetchPairJson } from "./data";
 import { BotWorker } from "./bot";
 import { Narrator } from "./narrate";
 import type {
@@ -52,7 +42,6 @@ import type {
   SwitchChoice,
   TeamChoice,
 } from "./types";
-import type { InfoMode } from "./info-mode";
 import {
   ActiveCard,
   FieldStrip,
@@ -136,8 +125,8 @@ export function ThinkChip(props: { thinking: Thinking | null }) {
   );
 }
 
-/** Blind: the foe's held item is set information, and stateView reports the
- * TRUE current item for both sides (the open sheet made that free). The foe
+/** The foe's held item is set information, and stateView reports the TRUE
+ * current item for both sides. The foe
  * card shows this unknown marker instead — masking to null would render the
  * "—" chip, which asserts "holds nothing": a different, false claim rather
  * than no claim. Item reveals still arrive through the battle log
@@ -146,22 +135,16 @@ export function ThinkChip(props: { thinking: Thinking | null }) {
 const UNKNOWN_ITEM = "?";
 
 export function Game(props: {
+  /** The opponent prior the bot's belief narrows down (belief-pool-v3). */
   poolJson: string;
-  /** Whether `poolJson` is a pool the user loaded rather than the bundled
-   * one. Only the baked-artifact lookups care: pool indices are the bundled
-   * pool's rank order and mean nothing outside it. */
-  poolIsCustom: boolean;
   humanTeam: SelectedTeam;
   botTeam: SelectedTeam;
-  /** Information policy, frozen at game start by the caller. */
-  mode: InfoMode;
-  /** Raw belief-prior table text; blind only, and only when the player
-   * loaded one by hand (never fetched automatically). */
+  /** Raw belief-prior table text, only when the player loaded one by hand
+   * (never fetched automatically). */
   priorJson?: string;
   onRematch: () => void;
   onNewTeams: () => void;
 }) {
-  const blind = props.mode === "blind";
   const [phase, setPhase] = useState<"init" | "preview" | "battle" | "end">(
     "init",
   );
@@ -176,8 +159,8 @@ export function Game(props: {
   );
   const [sheetOpen, setSheetOpen] = useState(false); // battle: team-sheets modal
   const [kifuOpen, setKifuOpen] = useState(false);
-  // Blind only: the searcher's own read of the hidden opponent, refreshed
-  // by the worker after every observe(). About the bot, not about the foe.
+  // The searcher's own read of the hidden opponent, refreshed by the
+  // worker after every observe(). About the bot, not about the foe.
   const [belief, setBelief] = useState<{
     info: BeliefInfo;
     prior: PriorInfo;
@@ -193,7 +176,6 @@ export function Game(props: {
   // the foe picked from engine internals.
   const revealedFoeRef = useRef<Set<string>>(new Set());
   const narrator = useMemo(() => new Narrator(HUMAN), []);
-  const pairPromiseRef = useRef<Promise<string | null> | null>(null);
   // UI-4 focus targets (tabindex=-1 headings).
   const previewHeadRef = useRef<HTMLHeadingElement>(null);
   const battleHeadRef = useRef<HTMLHeadingElement>(null);
@@ -249,31 +231,8 @@ export function Game(props: {
       initialSeed,
     );
     battleRef.current = battle;
-    // Baked pair tables exist only between pool teams. If either side is
-    // custom, preview falls back to the same pinned live search.
-    //
-    // A swapped pool skips the fetch too, and this one is a correctness
-    // stop rather than a policy one: the baked pairs are indexed by the
-    // BUNDLED pool's rank order, so team 7 of a loaded file and team 7 of
-    // the bundled pool share an index and nothing else. Fetching would
-    // either 404 or, worse, answer with an equilibrium for two teams that
-    // are not on the field.
-    //
-    // Blind skips the fetch outright. Not for cost — the request URL names
-    // BOTH pool indices, and the player knows their own, so a pool-vs-pool
-    // blind game would put the foe's index in the network log. The table
-    // could only pay off where the belief identifies the player anyway,
-    // which blind play does not lean on.
-    pairPromiseRef.current =
-      blind ||
-      props.poolIsCustom ||
-      humanTeam.poolIdx === null ||
-      botTeam.poolIdx === null
-        ? Promise.resolve(null)
-        : fetchPairJson(humanTeam.poolIdx, botTeam.poolIdx);
-    // Blind reporting channels, wired before the battle message so the
-    // first observe()'s report cannot be missed. Both are inert in open
-    // mode (the worker only posts them for a blind searcher).
+    // Belief reporting channels, wired before the battle message so the
+    // first observe()'s report cannot be missed.
     bot.onBelief = (info, prior) => {
       if (aliveRef.current) setBelief({ info, prior });
     };
@@ -290,7 +249,6 @@ export function Game(props: {
           poolJson: props.poolJson,
           side: BOT,
           seed: randomSeed32(),
-          mode: props.mode,
           priorJson: props.priorJson,
         },
       )
@@ -379,25 +337,15 @@ export function Game(props: {
       return;
     }
     if (legal[0].kind === "team") {
-      void decideBotPreview(req, legal);
+      void searchBot(req, legal);
       return;
     }
     void searchBot(req, legal);
   }
 
-  /** Bot team preview: feed the baked pair table (when it exists) to the
-   * worker, which answers from the M8 equilibrium ("table") or falls back
-   * to the live preview search ("search" — matchup not baked yet). */
-  async function decideBotPreview(req: Request, legal: Choice[]) {
-    const pairJson = await pairPromiseRef.current;
-    if (!aliveRef.current || req !== reqRef.current) return;
-    if (pairJson) botRef.current!.addPair(pairJson);
-    await searchBot(req, legal);
-  }
-
   async function searchBot(req: Request, legal: Choice[]) {
     const bot = botRef.current!;
-    const budget = searchProfile(props.mode).iterations;
+    const budget = searchProfile("blind").iterations;
     // Ponder iff the human still owes a pick at launch: the search then
     // keeps running past its budget (bonus strength) until the human
     // commits (humanPick -> flush) or the ponder cap.
@@ -547,21 +495,19 @@ export function Game(props: {
           {ui().teamPreview}
         </h1>
         <p class="sheet-hint">
-          {blind ? ui().previewTapHintBlind : ui().previewTapHint}
+          {ui().previewTapHintBlind}
         </p>
         <div class="preview-cols">
           <section>
-            {/* Blind: the pool id would identify the entire set list, so
-                the heading is generic and the rows are detail-less — the
-                six species / levels / types are the whole public payload,
-                the mirror image of what the bot gets from the human. */}
-            <h2 class="sub-h">
-              {blind ? ui().foeTeamBlind : ui().foeTeam(botTeam.id)}
-            </h2>
+            {/* The catalog id would identify the entire set list, so the
+                heading is generic and the rows are detail-less — the six
+                species / levels / types are the whole public payload, the
+                mirror image of what the bot gets from the human. */}
+            <h2 class="sub-h">{ui().foeTeamBlind}</h2>
             <ul class="sheet-list">
               {botTeam.sets.map((s, i) => (
                 <li key={i}>
-                  <MonSheet mon={sheetMon(s)} hideDetail={blind} />
+                  <MonSheet mon={sheetMon(s)} hideDetail />
                 </li>
               ))}
             </ul>
@@ -642,8 +588,6 @@ export function Game(props: {
           <span class="bot-preview-note">
             {thinking ? (
               <ThinkChip thinking={thinking} />
-            ) : botPreviewSrc === "table" ? (
-              ui().previewFromTable
             ) : botPreviewSrc === "search" ? (
               ui().previewFromSearch
             ) : (
@@ -669,7 +613,7 @@ export function Game(props: {
       <header class="battle-header">
         <span class="turn-label">{ui().turnLabel(view.turn)}</span>
         {humanChoices && <ThinkChip thinking={thinking} />}
-        {blind && belief && (
+        {belief && (
           // What the bot currently believes it is facing: how many pool
           // teams still explain everything it has seen, or "off-pool" once
           // none does (a custom team) and imputation takes over — plus,
@@ -709,7 +653,7 @@ export function Game(props: {
             foeSets={botTeam.sets}
             view={view}
             revealedFoe={revealedFoeRef.current}
-            blind={blind && phase !== "end"}
+            blind={phase !== "end"}
           />
         </Modal>
       )}
@@ -720,16 +664,14 @@ export function Game(props: {
       <div class="arena">
         {activeFoe && (
           <ActiveCard
-            // Blind: both item channels are cut here — the set's starting
-            // item (initialItem) and the live one the state view carries
-            // (masked to UNKNOWN_ITEM on a copy of the view; the real
-            // battle state is untouched).
-            poke={blind ? { ...activeFoe, item: UNKNOWN_ITEM } : activeFoe}
+            // Both item channels are cut here — the set's starting item
+            // (initialItem) and the live one the state view carries (masked
+            // to UNKNOWN_ITEM on a copy of the view; the real battle state
+            // is untouched).
+            poke={{ ...activeFoe, item: UNKNOWN_ITEM }}
             mine={false}
             extra={ui().nLeft(foe.pokemonLeft)}
-            initialItem={
-              blind ? null : initialItem(botTeam.sets, activeFoe.species)
-            }
+            initialItem={null}
           />
         )}
         <FieldStrip
@@ -749,7 +691,7 @@ export function Game(props: {
 
       <LogPane log={log} />
 
-      {(kifuOpen || phase === "end") && battleRef.current && <KifuExport battle={battleRef.current} mode={props.mode} state={view} />}
+      {(kifuOpen || phase === "end") && battleRef.current && <KifuExport battle={battleRef.current} mode="blind" state={view} />}
 
       <section class="choice-panel" aria-label={ui().srYourAction}>
         {phase !== "end" && (
@@ -763,10 +705,10 @@ export function Game(props: {
             onRematch={props.onRematch}
             onNewTeams={props.onNewTeams}
             headingRef={endHeadRef}
-            // Blind's payoff: the sets you played against, on demand, the
+            // The payoff: the sets you played against, on demand, the
             // moment the game is over (the modal itself is un-blinded by
             // the phase check above).
-            onReveal={blind ? () => setSheetOpen(true) : undefined}
+            onReveal={() => setSheetOpen(true)}
           />
         ) : humanChoices ? (
           <ChoiceButtons
@@ -980,9 +922,8 @@ function EndBanner(props: {
   onRematch: () => void;
   onNewTeams: () => void;
   headingRef: { current: HTMLHeadingElement | null };
-  /** Blind only: open the (now un-blinded) team sheets. Absent in open
-   * mode, where the sets were readable all along. */
-  onReveal?: () => void;
+  /** Open the (now un-blinded) team sheets. */
+  onReveal: () => void;
 }) {
   const text =
     props.outcome === "p1"
@@ -1003,15 +944,13 @@ function EndBanner(props: {
         <button class="primary" onClick={props.onRematch}>
           {ui().rematch}
         </button>
-        {props.onReveal && (
-          <button
-            class="ghost"
-            data-testid="reveal-foe"
-            onClick={props.onReveal}
-          >
-            {ui().revealFoeTeam}
-          </button>
-        )}
+        <button
+          class="ghost"
+          data-testid="reveal-foe"
+          onClick={props.onReveal}
+        >
+          {ui().revealFoeTeam}
+        </button>
         <button class="ghost" onClick={props.onNewTeams}>
           {ui().newTeams}
         </button>

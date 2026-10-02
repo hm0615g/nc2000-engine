@@ -78,8 +78,13 @@ test("a normal bot game copies only code and its link imports the same record", 
   for (let i = 0; i < 3; i++) await page.locator('.pick-head[aria-pressed="false"][aria-disabled="false"]').first().click();
   await page.getByRole("button", { name: /Confirm picks|選出を確定/ }).click();
   await expect(page.locator(".battle-screen")).toBeVisible();
-  await page.locator(".move-btn, .switch-btn").first().click();
-  await expect(page.locator(".turn-label")).not.toHaveText(/(?:ターン|Turn) 1$/);
+  // A lead knocked out on turn 1 owes a forced switch inside that same turn,
+  // so keep answering until the turn number moves.
+  await expect(async () => {
+    const choice = page.locator(".move-btn, .switch-btn").first();
+    if (await choice.isVisible()) await choice.click();
+    await expect(page.locator(".turn-label")).not.toHaveText(/(?:ターン|Turn) 1$/, { timeout: 2000 });
+  }).toPass({ timeout: 60_000 });
   await page.getByRole("button", { name: "棋譜", exact: true }).click();
   await page.getByRole("button", { name: "棋譜をコピー", exact: true }).click();
   const copied = await page.evaluate(() => navigator.clipboard.readText());

@@ -1,48 +1,28 @@
-// Blind information mode + belief prior (M18 experiment) — contract B4,
-// revised for the URL-gated entry and the one Blind setup modal.
+// Blind play — the only live information policy — and the belief prior.
 //
-// Blind is no longer something the start screen offers. `?blind` is the
-// only door (info-mode.ts), nothing about the mode is persisted, and open
-// mode says nothing about modes at all — so every case here enters with
-// page.goto("/?blind"), and the first one is about the door itself: that
-// it opens, that `blind=0` closes it, and that the screen behind it is the
-// shipped M12 screen with no trace of the experiment on it. That last part
-// is the regression test the simplification pass asked for, so it names
-// every element the experiment has ever added to this screen and asserts
-// each one absent, dead testids included.
-//
-// The blind screen is five things and nothing else: title/subtitle, Start
-// battle, a one-line banner, your party, and the Blind setup button. There
-// is no opponent row at all — the banner's "a random opponent each battle"
-// is the whole of what the deleted static row said — and no separate pool
-// or prior button: both panels are sections of the single
-// `[data-party="settings"]` modal.
-//
-// The six required cases run as four browser sessions: cases 2-4 are one
-// full game (they are three assertions about the SAME battle — preview,
-// outcome, post-game reveal — so replaying the game three times would buy
-// nothing but minutes), marked off with test.step so the report still maps
-// 1:1 onto the contract.
+// `/` and its alias `?blind` are the same door (info-mode.ts): the start
+// screen is title/subtitle, Start battle, a one-line banner, your party,
+// and the setup button — no opponent row (the banner's "a random opponent
+// each battle" is the whole of what such a row could say), and no open-sheet
+// surface anywhere. Built-in parties are the catalog (data/team-pool-v2), the
+// same ids and exact sets the bot draws from.
 //
 // What this suite mostly has to prove is a NEGATIVE — the opponent's sets
 // never reach the DOM while the battle is live — plus the one positive that
 // depends on the same machinery: the belief prior actually reaching the
 // bot's imputation. Both hang on the human side being a party the bot
-// CANNOT identify from its six public species: against a pool party the
-// belief pins the exact team by signature (contract "決定済み 2" accepts
-// this), never falls back, and the prior — which governs the fallback
-// roster only — stays dead. Hence the hand-mixed custom party below.
+// CANNOT identify from its six public species: against a known party the
+// belief pins the exact team by signature, never falls back, and the prior
+// — which governs the fallback roster only — stays dead. Hence the
+// hand-mixed custom party below.
 //
-// Written against the contract's testids/attributes rather than against a
-// running app: the UI implementing them lands in parallel with this file.
-// Selectors depended on (integration must check them):
-// [data-testid="mode-banner"] (blind only), [data-party="human"|"bot"|
+// Selectors depended on: [data-testid="mode-banner"], [data-party="human"|
 // "settings"] with their .party-value, [data-testid="pool-file"|prior-file
 // |prior-sample|prior-report|prior-clear|belief-chip|reveal-foe], plus the
-// shipped .start-col/.party-btn and .preview-cols/.team-sheets/.mon-sheet/
-// .set-detail structure. Depended on by their ABSENCE, which is just as
-// load-bearing here: [data-party="bot-random"|"pool"|"prior"] and
-// [data-testid="mode-row"] must exist nowhere, in either mode.
+// .start-col/.party-btn and .preview-cols/.team-sheets/.mon-sheet/
+// .set-detail structure. Depended on by their ABSENCE: [data-party="bot"|
+// "bot-random"|"pool"|"prior"] and [data-testid="mode-row"] must exist
+// nowhere.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
@@ -69,12 +49,32 @@ interface CustomRecord {
   savedAt: number;
 }
 
+/** The retired bundled 32: only a source of legal sets for the mixed
+ * custom party below. */
 const pool = JSON.parse(
   readFileSync(
     new URL("../../data/meta-pool-v0/meta-pool.json", import.meta.url),
     "utf8",
   ),
 ) as { teams: PoolTeamJson[] };
+
+/** The catalog: the built-in lists and what the bot draws from. */
+const catalog = JSON.parse(
+  readFileSync(
+    new URL("../../data/team-pool-v2/team-pool.json", import.meta.url),
+    "utf8",
+  ),
+) as { teams: PoolTeamJson[] };
+
+/** The shipped opponent prior every searcher identifies against. */
+const beliefPool = JSON.parse(
+  readFileSync(
+    new URL("../../data/belief-pool-v3/belief-pool.json", import.meta.url),
+    "utf8",
+  ),
+) as { teams: PoolTeamJson[] };
+
+const catalogLine = `Built-in (${catalog.teams.length} parties)`;
 
 // Three sets from each of the two pool teams the open-sheet suite already
 // uses for their short, decisive games. Every set stays a verbatim legal
@@ -99,11 +99,11 @@ const customBlind: CustomRecord = {
   savedAt: 1,
 };
 
-/** Pool teams whose six species are exactly the mixed party's — must be
+/** Known teams whose six species are exactly the mixed party's — must be
  * empty, or the bot identifies the "custom" opponent by signature and both
  * the fallback and the prior go untested. Asserted in the tests that rely
  * on it so the failure names the cause instead of showing a dead chip. */
-const mixTwins = pool.teams
+const mixTwins = [...catalog.teams, ...beliefPool.teams]
   .filter((t) => sameSpeciesSet(t.sets, mixedSets))
   .map((t) => t.id);
 
@@ -116,23 +116,16 @@ function toId(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/** Start-screen pin for the opponent side. Blind ignores it (it always
- * draws from the pool), but seeding it keeps the record shape honest and
- * makes the same seed reusable if the URL drops `?blind`. */
-const RANDOM_PICK = { kind: "random" } as const;
-
 interface SeedOpts {
   customs?: CustomRecord[];
   picks?: unknown;
 }
 
-/** Same one-shot seeding idiom as custom-bot.spec.ts: the init script runs
- * on every navigation, so a sessionStorage flag keeps a reload — or a
- * second goto with a different query string — from undoing what the test
- * itself changed through the UI. The mode is NOT seeded: it lives in the
- * URL now, and this suite asserts that nothing writes it down. The team
- * pool is cleared because every foe id here is looked up in the bundled
- * pool file read above. */
+/** One-shot seeding: the init script runs on every navigation, so a
+ * sessionStorage flag keeps a reload — or a second goto with a different
+ * query string — from undoing what the test itself changed through the UI.
+ * The team pool is cleared because every foe id here is looked up in the
+ * catalog file read above. */
 async function seedStorage(page: Page, opts: SeedOpts = {}) {
   await page.addInitScript(
     ({ records, initialPicks }) => {
@@ -141,7 +134,7 @@ async function seedStorage(page: Page, opts: SeedOpts = {}) {
       localStorage.setItem("nc2000-locale", "en");
       localStorage.setItem("nc2000-custom-teams", JSON.stringify(records));
       localStorage.removeItem("nc2000-belief-prior");
-      localStorage.removeItem("nc2000-team-pool");
+      localStorage.removeItem("nc2000-team-pool-v2");
       if (initialPicks === undefined)
         localStorage.removeItem("nc2000-start-picks");
       else
@@ -157,21 +150,17 @@ async function seedStorage(page: Page, opts: SeedOpts = {}) {
   );
 }
 
-/** A pool-vs-pool game asks for its baked pair table, and `data/
- * preview-tables-v0/` ships README-only — fetchPairJson answers that 404
- * with null by design (the live search takes over), but Chromium still
- * logs the failed load, and the message text names no URL. This suite is
- * the first to run pool-vs-pool at all, which is why the open-sheet suite
- * never needed the exemption: it is scoped by the failing resource's URL,
- * so a real console error still fails the test. */
-const EXPECTED_404 = "/preview-tables-v0/pair-";
-
+/** Console errors, plus any request for a baked pair table: no door may
+ * read one any more. */
 function guardConsole(page: Page): string[] {
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() !== "error") return;
-    if (m.location().url.includes(EXPECTED_404)) return;
     errors.push(m.text());
+  });
+  page.on("request", (r) => {
+    if (r.url().includes("/preview-tables-v0/"))
+      errors.push(`pair-table request: ${r.url()}`);
   });
   page.on("pageerror", (e) => errors.push(String(e)));
   return errors;
@@ -268,90 +257,85 @@ async function playToOutcome(page: Page) {
 // its own storage in a fresh context, so an early failure must not hide
 // the other cases' verdicts. The harness is single-worker anyway.
 
-// --------------------------------------------------------- contract B4-1
-/** Everything the experiment has ever put on the start screen, by the
- * selector it put there. `/` must have none of them: not the mode toggle
- * the feature started as, not the banner, not the static opponent row, and
- * not the pool / prior buttons the one setup modal replaced. Two of these
- * are dead testids from earlier rounds and are listed on purpose — a dead
- * control that survived a delete is exactly the thing that still looks
- * like working UI. */
-const EXPERIMENT_SELECTORS = [
+// ----------------------------------------------------------- the door
+/** Everything any earlier revision put on the start screen that the blind
+ * product must not have: the mode toggle, the open-mode opponent picker,
+ * and the separate pool / prior buttons the one setup modal replaced. */
+const RETIRED_SELECTORS = [
   '[data-testid="mode-row"]',
-  '[data-testid="mode-banner"]',
+  '[data-party="bot"]',
   '[data-party="bot-random"]',
-  '[data-party="settings"]',
   '[data-party="pool"]',
   '[data-party="prior"]',
 ];
 
-async function expectShippedOpenScreen(page: Page) {
+async function expectBlindScreen(page: Page) {
   await expect(page.locator(".start-screen")).toBeVisible();
-  for (const sel of EXPERIMENT_SELECTORS)
-    await expect(page.locator(sel), `open mode must not render ${sel}`)
+  for (const sel of RETIRED_SELECTORS)
+    await expect(page.locator(sel), `the play door must not render ${sel}`)
       .toHaveCount(0);
-  await expect(page.locator('[data-party="bot"]')).toHaveCount(1);
-  // Nothing unnamed either: the M12 screen is Start battle plus exactly two
-  // party rows, so a control this file has never heard of cannot slip in
-  // under a testid it does not check.
-  await expect(page.locator(".start-col .party-btn")).toHaveCount(2);
-  // ...and no copy points at the door. Hiding the experiment from the
-  // public build is the entire purpose of the revision, so "there is a
-  // mode, add ?blind to get it" must not be discoverable here. Nothing
-  // else on this screen can say "blind": both parties read "Random", and
-  // no pool team id contains it.
-  await expect(page.locator(".start-col")).not.toContainText(/blind/i);
-}
-
-test("blind is URL-gated, and the open screen keeps no trace of the experiment", async ({
-  page,
-}) => {
-  const errors = guardConsole(page);
-  // No saved parties here: the start screen's text is asserted below, and a
-  // custom team named "Blind Custom" would be part of it.
-  await seedStorage(page);
-
-  await page.goto("/");
-  await expectShippedOpenScreen(page);
-
-  await page.goto("/?blind");
   const banner = page.locator('[data-testid="mode-banner"]');
   await expect(banner).toBeVisible();
   // One line, carrying both facts the screen says nowhere else: the sets
   // are hidden in both directions, and the opponent is redrawn every
-  // battle. The second of those had a row of its own until this pass, and
-  // the row is gone — so if the banner ever stops saying it, nothing does.
+  // battle.
   await expect(banner).toContainText(/blind/i);
   await expect(banner).toContainText(/random/i);
-  // The opponent is neither choosable nor listed: blind draws from the pool
-  // at start and redraws on rematch.
-  await expect(page.locator('[data-party="bot"]')).toHaveCount(0);
-  await expect(page.locator('[data-party="bot-random"]')).toHaveCount(0);
-  // One button for both of the experiment's settings, and its value line is
-  // their resting state — the bundled pool, no prior. Asserting that the
-  // line names no file is how "no prior" is checked without pinning the
-  // wording of the empty case: a loaded prior IS a file name, which is what
-  // B4-5 reads off this very element.
-  const setup = page.locator('[data-party="settings"] .party-value');
-  await expect(setup).toContainText(`Bundled (${pool.teams.length} teams)`);
-  await expect(setup).not.toContainText(".json");
-  await expect(page.locator('[data-party="pool"]')).toHaveCount(0);
-  await expect(page.locator('[data-party="prior"]')).toHaveCount(0);
-  // Two rows here as well: your party, and the setup button.
+  // Two rows: your party, and the setup button, whose value line is the
+  // resting state — the catalog, no prior (a loaded prior IS a file name).
   await expect(page.locator(".start-col .party-btn")).toHaveCount(2);
+  const setup = page.locator('[data-party="settings"] .party-value');
+  await expect(setup).toContainText(catalogLine);
+  await expect(setup).not.toContainText(".json");
+}
 
-  // A reload keeps blind — but only because the query string is still
-  // there. Nothing was written down: a stored preference would outlive the
-  // link that set it and strand a later visitor in the experiment.
-  await page.reload();
-  await expect(page.locator('[data-testid="mode-banner"]')).toBeVisible();
-  await expect(page.locator('[data-party="bot"]')).toHaveCount(0);
+test("/ and ?blind are the same blind door, and nothing about it is stored", async ({
+  page,
+}) => {
+  const errors = guardConsole(page);
+  await seedStorage(page);
+  for (const url of ["/", "/?blind", "/?blind=0"]) {
+    await page.goto(url);
+    await expectBlindScreen(page);
+  }
+  // The built-in list is the catalog, in its order, and Random draws from
+  // exactly that many parties.
+  await page.locator('[data-party="human"]').click();
+  await expect(page.locator(".random-card")).toContainText(
+    `Random (${catalog.teams.length} parties)`,
+  );
+  const ids = await page
+    .locator("dialog.modal .team-card[data-team] .team-id")
+    .allInnerTexts();
+  expect(ids).toEqual(catalog.teams.map((t) => t.id));
+  await page.locator("dialog.modal .modal-head button").click();
+  expect(
+    await page.evaluate(() =>
+      Object.keys(localStorage).filter((k) => /mode|info/i.test(k)),
+    ),
+  ).toEqual([]);
+  expect(errors).toEqual([]);
+});
 
-  // `blind=0` reads as absent, so a link that has been passed around can
-  // be defused by editing one character — and what it lands on is the same
-  // untouched open screen, not a half-dressed one.
-  await page.goto("/?blind=0");
-  await expectShippedOpenScreen(page);
+test("a pool file saved by the open-sheet build is dropped, not restored", async ({
+  page,
+}) => {
+  const errors = guardConsole(page);
+  const stale = {
+    name: "old-pool.json",
+    json: JSON.stringify({ teams: [pool.teams[0], pool.teams[1]] }),
+  };
+  await page.addInitScript((record) => {
+    if (sessionStorage.getItem("nc2000-e2e-seeded") === "1") return;
+    sessionStorage.setItem("nc2000-e2e-seeded", "1");
+    localStorage.setItem("nc2000-locale", "en");
+    localStorage.setItem("nc2000-team-pool", JSON.stringify(record));
+  }, stale);
+  await page.goto("/");
+  await expectBlindScreen(page);
+  expect(
+    await page.evaluate(() => localStorage.getItem("nc2000-team-pool")),
+  ).toBeNull();
   expect(errors).toEqual([]);
 });
 
@@ -363,9 +347,9 @@ test("blind hides the foe's sets for the whole game, then reveals them at the en
   expect(mixTwins, "the mixed party must not be a pool signature").toEqual([]);
   await seedStorage(page, {
     customs: [customBlind],
-    picks: { human: { kind: "custom", id: customBlind.id }, bot: RANDOM_PICK },
+    picks: { human: { kind: "custom", id: customBlind.id } },
   });
-  await page.goto("/?blind");
+  await page.goto("/");
   await expect(page.locator('[data-party="human"] .party-value')).toHaveText(
     customBlind.name,
   );
@@ -376,7 +360,7 @@ test("blind hides the foe's sets for the whole game, then reveals them at the en
   const previewMine = page.locator(".preview-cols > section").nth(1);
 
   await test.step("B4-2: preview shows the foe's species only", async () => {
-    // No team id either — blind names the section generically so the pool
+    // No team id either — the section is named generically so the catalog
     // entry cannot be looked up by hand.
     await expect(previewFoe.getByRole("heading")).toHaveText(
       "Opponent's party",
@@ -418,13 +402,13 @@ test("blind hides the foe's sets for the whole game, then reveals them at the en
     await expect(reveal).toHaveText("Show opponent's sets");
     await reveal.click();
     const foeSheet = page.locator(".team-sheets > section").nth(1);
-    // Decided: the section names the pool team, so the reveal can be
+    // Decided: the section names the catalog party, so the reveal can be
     // checked against the real entry rather than against itself.
     const heading = (await foeSheet.locator("h3").innerText()).trim();
-    const id = /^Foe team \((.+)\)$/.exec(heading)?.[1];
-    expect(id, `foe heading should name the pool team: ${heading}`).toBeTruthy();
-    const drawn = pool.teams.find((t) => t.id === id);
-    expect(drawn, `drawn opponent ${id} must be a pool team`).toBeTruthy();
+    const id = /^Opponent's party \((.+)\)$/.exec(heading)?.[1];
+    expect(id, `foe heading should name the party: ${heading}`).toBeTruthy();
+    const drawn = catalog.teams.find((t) => t.id === id);
+    expect(drawn, `drawn opponent ${id} must be a catalog party`).toBeTruthy();
     await expectExactSets(foeSheet, drawn!.sets);
     await page.locator("dialog.modal .modal-head button").click();
   });
@@ -448,17 +432,17 @@ test("the sample belief prior loads, applies, and governs the bot's read", async
   expect(mixTwins, "the mixed party must not be a pool signature").toEqual([]);
   await seedStorage(page, {
     customs: [customBlind],
-    picks: { human: { kind: "custom", id: customBlind.id }, bot: RANDOM_PICK },
+    picks: { human: { kind: "custom", id: customBlind.id } },
   });
-  await page.goto("/?blind");
+  await page.goto("/");
 
   const setup = page.locator('[data-party="settings"] .party-value');
   // The line at rest, captured rather than spelled out: the clear at the
   // end has to put it back exactly, and comparing against a copy of the
   // wording would only test that this file and i18n-strings.ts agree.
   const atRest = ((await setup.textContent()) ?? "").replace(/\s+/g, " ").trim();
-  expect(atRest, "the setup line starts on the bundled pool").toContain(
-    `Bundled (${pool.teams.length} teams)`,
+  expect(atRest, "the setup line starts on the catalog").toContain(
+    catalogLine,
   );
 
   const report = page.locator('[data-testid="prior-report"]');
@@ -482,7 +466,7 @@ test("the sample belief prior loads, applies, and governs the bot's read", async
   // The button's value line reports both halves; the prior half is now the
   // file, and the pool half is exactly where it was.
   await expect(setup).toContainText("belief-prior-v0.sample.json");
-  await expect(setup).toContainText(`Bundled (${pool.teams.length} teams)`);
+  await expect(setup).toContainText(catalogLine);
 
   await page.getByRole("button", { name: "Start battle" }).click();
   await expect(page.locator(".preview-screen")).toBeVisible();
@@ -525,40 +509,22 @@ test("the sample belief prior loads, applies, and governs the bot's read", async
   expect(errors).toEqual([]);
 });
 
-// --------------------------------------------------------- contract B4-6
-test("open mode keeps the shipped open-team-sheet behavior", async ({
-  page,
-}) => {
+// --------------------------------------------------- pinned catalog party
+test("a pinned built-in party plays its exact catalog sets", async ({ page }) => {
   const errors = guardConsole(page);
-  await seedStorage(page, {
-    picks: {
-      human: { kind: "pool", id: pool.teams[29].id },
-      bot: { kind: "pool", id: pool.teams[4].id },
-    },
-  });
+  const pinned = catalog.teams[catalog.teams.length - 1];
+  await seedStorage(page, { picks: { human: { kind: "pool", id: pinned.id } } });
   await page.goto("/");
-
-  // Nothing blind is even offered: the experiment must not change the
-  // default screen by merely existing. B4-1 proves that on an empty
-  // profile; here it holds with both sides pinned to pool teams, which is
-  // the state a returning player arrives in.
-  for (const sel of EXPERIMENT_SELECTORS)
-    await expect(page.locator(sel), `open mode must not render ${sel}`)
-      .toHaveCount(0);
-  await expect(page.locator('[data-party="bot"] .party-value')).toHaveText(
-    pool.teams[4].id,
+  await expect(page.locator('[data-party="human"] .party-value')).toHaveText(
+    pinned.id,
   );
-
   await page.getByRole("button", { name: "Start battle" }).click();
   await expect(page.locator(".preview-screen")).toBeVisible();
-  const previewFoe = page.locator(".preview-cols > section").first();
-  await expect(previewFoe.getByRole("heading")).toHaveText(
-    `Foe team (${pool.teams[4].id})`,
-  );
-  await expect(page.locator(".sheet-hint")).not.toContainText("Blind");
-  // Open sheet: the foe's sets are readable, exactly as shipped.
-  await expect(previewFoe.locator("[aria-expanded]")).toHaveCount(6);
-  await expectExactSets(previewFoe, pool.teams[4].sets);
+  const previewMine = page.locator(".preview-cols > section").nth(1);
+  const species = await previewMine
+    .locator("[data-mon]")
+    .evaluateAll((els) => els.map((e) => e.getAttribute("data-mon")));
+  expect(species).toEqual(pinned.sets.map((s) => toId(s.species)));
   await page.locator(".preview-actions .quit-btn").click();
   await expect(page.locator(".start-screen")).toBeVisible();
   expect(errors).toEqual([]);

@@ -1,8 +1,5 @@
-// Runtime data fetching. The meta pool and the baked preview tables are
-// served read-only from the repo data/ dir (see vite.config.ts) — pair
-// files are still being baked in the background, so a missing or
-// half-written file is an expected condition, answered with null (the
-// caller falls back to live Searcher preview).
+// Runtime data fetching, served read-only from the repo data/ dir (see
+// vite.config.ts).
 
 import type { MetaPool } from "./types";
 
@@ -42,62 +39,55 @@ export async function fetchFork(name: string): Promise<string> {
   return res.text();
 }
 
-export async function fetchPool(): Promise<PoolData> {
+/** The retired bundled 32 (meta-pool-v0): the belief the `?fork` arena
+ * continues its hosted research records with, as they were recorded. Not a
+ * list any live door offers. */
+export async function fetchRecordPool(): Promise<PoolData> {
   const res = await fetch(dataUrl("meta-pool-v0/meta-pool.json"));
   if (!res.ok) throw new Error(`meta pool fetch failed: ${res.status}`);
   const poolJson = await res.text();
   return { pool: JSON.parse(poolJson) as MetaPool, poolJson };
 }
 
-/** META-NASH v1's shipped mixture (`?nash` only, so it is fetched only on
- * that door). Returned as text because nash-mix.ts is what decides what the
- * file means — and because a nash page with no mixture is not a mode, this
- * one throws: the caller lets it reach the boot error box rather than
- * quietly starting a plainer game under the mode's name. */
+/** The shipped mixture: the `?nash` draw and the play door's Nash draw
+ * choice. Returned as text because nash-mix.ts is what decides what the file
+ * means — and because a draw that names the mixture cannot quietly become a
+ * plainer one, this throws: the caller lets it reach the boot error box. */
 export async function fetchNashArtifact(): Promise<string> {
-  const res = await fetch(dataUrl("meta-nash-v1/pool-artifact.json"));
+  const res = await fetch(dataUrl("meta-nash-v3/pool-artifact.json"));
   if (!res.ok) throw new Error(`nash artifact fetch failed: ${res.status}`);
   return res.text();
 }
 
-/** The `?nash` door's belief candidate pool (EXP-PRIOR-EXPLOIT v1, docs/
- * EXP-prior-exploit.md §6): the bundled curated 32 plus every known strong
- * candidate from the META-NASH study. Belief-only — the own-team draw, the
- * start-screen lists and the baked tables never read it. Fetched only on
- * the nash door, and strict like the mixture artifact: a nash page that
- * cannot load its fixed configuration fails rather than quietly playing
- * under a plainer prior. */
-export async function fetchBeliefPool(): Promise<PoolData> {
-  const res = await fetch(dataUrl("belief-pool-v1/belief-pool.json"));
-  if (!res.ok) throw new Error(`belief pool fetch failed: ${res.status}`);
-  const poolJson = await res.text();
-  const pool = JSON.parse(poolJson) as MetaPool;
-  // Sanity, not validation: the curated 32 are the floor, so a truncated
-  // or wrong file cannot silently narrow the shipped belief.
-  if (!Array.isArray(pool.teams) || pool.teams.length < 32) {
-    throw new Error(`belief pool: expected >=32 teams, got ${pool.teams?.length}`);
-  }
-  return { pool, poolJson };
+/** The shipped catalog (own-pool.ts decides what it means): the built-in
+ * parties on the start screen and the bot's ordinary draw. A page that
+ * cannot load it fails rather than quietly drawing from some other list. */
+export async function fetchCatalog(): Promise<string> {
+  const res = await fetch(dataUrl("team-pool-v2/team-pool.json"));
+  if (!res.ok) throw new Error(`team catalog fetch failed: ${res.status}`);
+  return res.text();
 }
 
-/** Pair table for pool indices (i, j); canonical file is lo-hi. Returns the
- * raw JSON text, or null when the pair is not baked yet (404) or the file
- * is mid-write (parse failure). */
-export async function fetchPairJson(
-  i: number,
-  j: number,
-): Promise<string | null> {
-  const lo = Math.min(i, j);
-  const hi = Math.max(i, j);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const url = dataUrl(`preview-tables-v0/pair-${pad(lo)}-${pad(hi)}.json`);
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const text = await res.text();
-    JSON.parse(text); // reject half-written files
-    return text;
-  } catch {
-    return null;
+/** The shipped opponent prior (data/belief-pool-v3): the candidate set, with
+ * weights, that every searcher narrows its opponent down to — play, nash,
+ * the solver, the evaluator and kifu continuations alike, whatever pool file
+ * the user loaded. Belief-only: the catalog and every draw never read it.
+ * Strict: a page that cannot load it fails rather than quietly playing
+ * under a plainer prior. */
+export async function fetchBeliefPool(): Promise<PoolData> {
+  const res = await fetch(dataUrl("belief-pool-v3/belief-pool.json"));
+  if (!res.ok) throw new Error(`belief pool fetch failed: ${res.status}`);
+  const poolJson = await res.text();
+  const pool = JSON.parse(poolJson) as MetaPool & { version?: number };
+  // Sanity, not validation: a stale or wrong file must not stand in for the
+  // frozen prior, whose every team carries a weight.
+  const teams = Array.isArray(pool.teams) ? pool.teams : [];
+  if (
+    pool.version !== 3 ||
+    teams.length === 0 ||
+    teams.some((t) => typeof (t as { weight?: unknown }).weight !== "number")
+  ) {
+    throw new Error("belief pool: not the weighted v3 prior");
   }
+  return { pool, poolJson };
 }

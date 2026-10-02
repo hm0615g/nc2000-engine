@@ -25,7 +25,7 @@ fn main() {
     let mut c = profile.c;
     let mut seed = 1u64;
     let mut plies = 6usize;
-    let mut pool_path = repo_root().join("data/belief-pool-v1/belief-pool.json");
+    let mut pool_path = repo_root().join("data/belief-pool-v3/belief-pool.json");
     let mut as_json = false;
     let mut i = 0;
     while i < args.len() {

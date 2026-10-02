@@ -1,24 +1,18 @@
-// Swappable team pool (UI revision P2/P3, retargeted onto the Blind setup
-// modal): one file replaces the pool everywhere the pool is read — and
-// only under `?blind`.
+// Swappable team pool: in the setup modal one file replaces the team lists
+// and the bot's draw — and NOT the bot's belief, which stays the shipped
+// opponent prior (docs/TEAM-POOL-REBUILD-PLAN.md: own-team draws independent
+// of the opponent belief, custom flow included). A loaded file is an
+// explicit override of the catalog, shown on the setup button, and `?nash`
+// never plays it.
 //
 // The thing under test is a replacement, not a list — so every case here
 // checks the swap through a second consumer as well as through the button
 // that performed it: the start screen's team list (what the user picks
-// from), the baked-pair-table decision inside game.tsx (what the engine
-// side indexes by pool rank), and a full blind game whose belief chip
-// reports the candidate set the WORKER was handed. A test that only read
-// the setup button's caption would pass on a swap that changed nothing but
-// a label.
+// from) and a full game whose belief chip reports the candidate set the
+// WORKER was handed. A test that only read the setup button's caption would
+// pass on a swap that changed nothing but a label.
 //
-// The pool panel is now the first half of the one `[data-party="settings"]`
-// modal, and that button exists only in blind mode — so every case enters
-// at /?blind. Open mode plays the bundled pool whatever is stored, which is
-// the last case in this file: a hidden control that still lets a saved file
-// rewrite the public team lists is exactly the trap the simplification pass
-// was closing, and it would be invisible from the open screen.
-//
-// THE FIXTURE IS CUT FROM THE SERVED POOL, IN THE PAGE, AND THEN EDITED.
+// THE FIXTURE IS CUT FROM THE SERVED CATALOG, IN THE PAGE, AND THEN EDITED.
 // A pool file written out in this repo would encode this suite's idea of
 // the format and would keep passing after the app's idea of it moved;
 // slicing the file the app itself fetches means the fixture cannot drift,
@@ -33,36 +27,30 @@
 // parser refuses it — only the format's own "a party is exactly 6" rule
 // does. Malformed JSON would prove nothing about the loader.
 //
-// Written against the contract's testids rather than against a running
-// app (the UI lands in parallel). Selectors depended on (integration must
-// check them): [data-party="settings"] with a .party-value, and inside the
-// setup modal [data-testid="pool-file"] (an <input type=file>),
-// [data-testid="pool-report"], [data-testid="pool-reset"]; plus the shipped
+// Selectors depended on: [data-party="settings"] with a .party-value, and
+// inside the setup modal [data-testid="pool-file"] (an <input type=file>),
+// [data-testid="pool-report"], [data-testid="pool-reset"]; plus the
 // [data-party="human"] picker, .team-card[data-team] > .team-id /
 // .species-chip, [data-testid="belief-chip"], [data-testid="mode-banner"],
-// and dialog.modal .modal-head button. Asserted ABSENT in open mode:
-// [data-party="settings"], [data-testid="mode-banner"].
+// and dialog.modal .modal-head button.
 
 import { expect, test, type Page } from "@playwright/test";
 import { Buffer } from "node:buffer";
 
-/** Two teams out of the bundled pool, by index. Not the first two: these
- * are the pair the other e2e suites play their full games with, chosen
- * there for being attack-heavy and decisive, and the blind game at the
- * bottom of this file has to finish inside the suite budget. Which two
- * they are is otherwise irrelevant — the pool file is cut from whatever
- * the app serves. */
-const FIXTURE_TEAMS = [4, 29];
+/** How many catalog parties the fixture slices: the first ones carrying a
+ * level-50 mon to bump. Which they are is otherwise irrelevant — the pool
+ * file is cut from whatever the app serves. */
+const FIXTURE_SIZE = 2;
 const FIXTURE_NAME = "two-team-pool.json";
 
 /**
- * The edit that makes each fixture team something the bundled pool does not
+ * The edit that makes each fixture team something the prior does not
  * contain: one mon per team moves from level 50 to level 51.
  *
  * Without it this suite could not tell a real swap from half of one. A
- * verbatim slice IS a bundled team, so every assertion below would read the
- * same if the worker were still handed `bundled.poolJson` — the human would
- * be playing a team the bundled pool explains perfectly well.
+ * verbatim slice IS a catalog party, so every assertion below would read the
+ * same if the worker were handed the loaded file — the human would be
+ * playing a team the prior explains perfectly well.
  *
  * Level, and not the held item: the belief's preview filter matches a
  * candidate on (species, level, gender) and on item PRESENCE only
@@ -90,9 +78,9 @@ interface FixtureSet {
 }
 
 interface Fixture {
-  /** Team count of the bundled pool, read at runtime — the "unchanged"
+  /** Party count of the catalog, read at runtime — the "unchanged"
    * baseline for the rejection case and the reset case. */
-  bundled: number;
+  catalog: number;
   /** Ids of the sliced teams, in file order. */
   ids: string[];
   /** "Golem L51" per team, in file order: what the bump actually did, for
@@ -102,8 +90,8 @@ interface Fixture {
 }
 
 /**
- * Build a pool file out of the pool the app is serving right now, then bump
- * one level per team (see BUMP_TO) so the result is a pool of its own.
+ * Build a pool file out of the catalog the app is serving right now, then
+ * bump one level per team (see BUMP_TO) so the result is a pool of its own.
  * `drop` cuts one Pokémon out of the team at that index, producing a file
  * that is well-formed everywhere except where the format has an opinion.
  *
@@ -116,19 +104,28 @@ async function poolFixture(
   opts: { drop?: number } = {},
 ): Promise<Fixture> {
   return page.evaluate(
-    async ({ indexes, drop, from, to }) => {
-      const res = await fetch("/data/meta-pool-v0/meta-pool.json");
-      if (!res.ok) throw new Error(`pool fetch failed: ${res.status}`);
-      const bundled = (await res.json()) as {
-        teams: { id: string; sets: FixtureSet[] }[];
+    async ({ size, drop, from, to }) => {
+      const get = async (url: string) => {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`${url}: ${res.status}`);
+        return (await res.json()) as {
+          teams: { id: string; sets: FixtureSet[] }[];
+        };
       };
+      const catalog = await get("/data/team-pool-v2/team-pool.json");
+      const prior = await get("/data/belief-pool-v3/belief-pool.json");
       // Only id + sets: the minimum the contract accepts, and the shape the
       // Rust side actually reads (crates/bot/src/preview.rs). Deep copies —
       // the bump below must not reach the signatures it is checked against.
-      const teams = indexes.map((i) => ({
-        id: bundled.teams[i].id,
-        sets: JSON.parse(JSON.stringify(bundled.teams[i].sets)) as FixtureSet[],
-      }));
+      const teams = catalog.teams
+        .filter((t) => t.sets.some((s) => (s.level ?? 55) === from))
+        .slice(0, size)
+        .map((t) => ({
+          id: t.id,
+          sets: JSON.parse(JSON.stringify(t.sets)) as FixtureSet[],
+        }));
+      if (teams.length < size)
+        throw new Error(`catalog has fewer than ${size} parties with a level-${from} mon`);
 
       const bumped = teams.map((t) => {
         const at = t.sets.findIndex((s) => (s.level ?? 55) === from);
@@ -138,12 +135,11 @@ async function poolFixture(
         return `${t.sets[at].species} L${to}`;
       });
 
-      // What the bump has to achieve, checked rather than assumed: no
-      // bundled team may still answer to a fixture team's public preview.
-      // If one did, a worker left holding the bundled pool would find a
-      // candidate for the human's party and the belief chip would read the
-      // same in both worlds — which is the confusion this fixture exists to
-      // remove.
+      // What the bump has to achieve, checked rather than assumed: no prior
+      // team may still answer to a fixture team's public preview. If one
+      // did, the worker would find a candidate for the human's party and the
+      // belief chip would read the same in both worlds — which is the
+      // confusion this fixture exists to remove.
       const signature = (sets: FixtureSet[]) =>
         sets
           .map(
@@ -154,22 +150,22 @@ async function poolFixture(
           )
           .sort()
           .join(",");
-      const bundledSigs = new Set(bundled.teams.map((t) => signature(t.sets)));
+      const priorSigs = new Set(prior.teams.map((t) => signature(t.sets)));
       for (const t of teams)
-        if (bundledSigs.has(signature(t.sets)))
+        if (priorSigs.has(signature(t.sets)))
           throw new Error(
-            `fixture team ${t.id} still shares a bundled team's species/level signature`,
+            `fixture team ${t.id} still shares a prior team's species/level signature`,
           );
 
       if (drop !== undefined) teams[drop].sets = teams[drop].sets.slice(0, 5);
       return {
-        bundled: bundled.teams.length,
+        catalog: catalog.teams.length,
         ids: teams.map((t) => t.id),
         bumped,
         json: JSON.stringify({ teams }),
       };
     },
-    { indexes: FIXTURE_TEAMS, drop: opts.drop, from: BUMP_FROM, to: BUMP_TO },
+    { size: FIXTURE_SIZE, drop: opts.drop, from: BUMP_FROM, to: BUMP_TO },
   );
 }
 
@@ -182,41 +178,29 @@ async function seedStorage(page: Page) {
     if (sessionStorage.getItem("nc2000-e2e-seeded") === "1") return;
     sessionStorage.setItem("nc2000-e2e-seeded", "1");
     localStorage.setItem("nc2000-locale", "en");
-    localStorage.removeItem("nc2000-team-pool");
+    localStorage.removeItem("nc2000-team-pool-v2");
     localStorage.removeItem("nc2000-start-picks");
     localStorage.removeItem("nc2000-custom-teams");
     localStorage.removeItem("nc2000-belief-prior");
   });
 }
 
+/** Console errors, plus any request for a baked pair table: no door may
+ * read one. */
 function guardConsole(page: Page): string[] {
   const errors: string[] = [];
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
   });
   page.on("pageerror", (e) => errors.push(String(e)));
+  page.on("request", (r) => {
+    if (r.url().includes("/preview-tables-v0/"))
+      errors.push(`pair-table request: ${r.url()}`);
+  });
   return errors;
 }
 
-/** Requests for a baked pair table. A swapped pool must never produce one:
- * the baked files are indexed by the BUNDLED pool's rank, so pair-04-29
- * would describe two entirely different teams. (Nothing is baked today —
- * `data/preview-tables-v0/` is README-only — so a request would also 404
- * into the console error list below. Both facts are asserted, because the
- * bake could come back.) Two guards suppress the fetch here, not one:
- * game.tsx skips it for a custom pool AND for blind, and since the pool
- * control is blind-only there is no longer any way to reach a custom pool
- * in open mode — so this tracker no longer isolates the poolIsCustom guard,
- * it only holds the outcome that guard exists for. */
-function trackPairRequests(page: Page): string[] {
-  const seen: string[] = [];
-  page.on("request", (r) => {
-    if (r.url().includes("/preview-tables-v0/pair-")) seen.push(r.url());
-  });
-  return seen;
-}
-
-/** The Blind setup button's value line: `<pool> · <prior>`. Everything in
+/** The setup button's value line: `<pool> · <prior>`. Everything in
  * this file reads the pool half of it, so the assertions are containment,
  * not equality — the prior half is B4-5's business. */
 function setupValue(page: Page) {
@@ -320,19 +304,18 @@ async function playToOutcome(page: Page) {
 // One session, because case 2 is "it is still there after a reload" — it
 // has nothing to be still there unless case 1 ran in the same browser
 // context first.
-test("a pool file replaces the pool, survives a reload, and gives way to the bundled one", async ({
+test("a pool file replaces the lists, survives a reload, and gives way to the catalog", async ({
   page,
 }) => {
   const errors = guardConsole(page);
-  const pairRequests = trackPairRequests(page);
   await seedStorage(page);
-  await page.goto("/?blind");
+  await page.goto("/");
   await expect(page.locator(".start-screen")).toBeVisible();
 
   const fx = await poolFixture(page);
   const value = setupValue(page);
-  const bundledLabel = `Bundled (${fx.bundled} teams)`;
-  await expect(value).toContainText(bundledLabel);
+  const catalogLabel = `Built-in (${fx.catalog} parties)`;
+  await expect(value).toContainText(catalogLabel);
 
   await test.step("P3-1: the file becomes the pool", async () => {
     await loadPool(page, FIXTURE_NAME, fx.json);
@@ -350,22 +333,10 @@ test("a pool file replaces the pool, survives a reload, and gives way to the bun
     await closeModal(page);
     await expectPickerPool(page, fx);
     const stored = await page.evaluate(() =>
-      localStorage.getItem("nc2000-team-pool"),
+      localStorage.getItem("nc2000-team-pool-v2"),
     );
     expect(stored, "an accepted pool is persisted").not.toBeNull();
     expect((JSON.parse(stored!) as { name: string }).name).toBe(FIXTURE_NAME);
-  });
-
-  await test.step("P3-1: a swapped pool never asks for a baked pair", async () => {
-    // Both sides are drawn from the loaded pool, so both carry a poolIdx
-    // and the historical condition (pool vs pool) is satisfied; the baked
-    // files are indexed by bundled rank, and pair-04-29 under this pool
-    // names two teams that are not these.
-    await page.getByRole("button", { name: "Start battle" }).click();
-    await expect(page.locator(".preview-screen")).toBeVisible();
-    expect(pairRequests).toEqual([]);
-    await page.locator(".preview-actions .quit-btn").click();
-    await expect(page.locator(".start-screen")).toBeVisible();
   });
 
   await test.step("P3-2: the pool is still there after a reload", async () => {
@@ -375,19 +346,19 @@ test("a pool file replaces the pool, survives a reload, and gives way to the bun
     await expectPickerPool(page, fx);
   });
 
-  await test.step("P3-3: the bundled pool comes back", async () => {
+  await test.step("P3-3: the catalog comes back", async () => {
     await page.locator('[data-party="settings"]').click();
     await page.locator('[data-testid="pool-reset"]').click();
-    await expect(value).toContainText(bundledLabel);
+    await expect(value).toContainText(catalogLabel);
     await expect(value).not.toContainText(FIXTURE_NAME);
     await closeModal(page);
     await page.locator('[data-party="human"]').click();
     await expect(page.locator("dialog.modal [data-team]")).toHaveCount(
-      fx.bundled,
+      fx.catalog,
     );
     await closeModal(page);
     expect(
-      await page.evaluate(() => localStorage.getItem("nc2000-team-pool")),
+      await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v2")),
     ).toBeNull();
   });
 
@@ -398,7 +369,7 @@ test("a pool file replaces the pool, survives a reload, and gives way to the bun
 test("a file with an unplayable team changes nothing", async ({ page }) => {
   const errors = guardConsole(page);
   await seedStorage(page);
-  await page.goto("/?blind");
+  await page.goto("/");
   await expect(page.locator(".start-screen")).toBeVisible();
 
   // Team 0 of the file is five Pokémon; team 1 is a legal (bumped) team.
@@ -406,8 +377,8 @@ test("a file with an unplayable team changes nothing", async ({ page }) => {
   // adopted, and the good team does NOT become a one-team pool.
   const fx = await poolFixture(page, { drop: 0 });
   const value = setupValue(page);
-  const bundledLabel = `Bundled (${fx.bundled} teams)`;
-  await expect(value).toContainText(bundledLabel);
+  const catalogLabel = `Built-in (${fx.catalog} parties)`;
+  await expect(value).toContainText(catalogLabel);
 
   await loadPool(page, "five-mons.json", fx.json);
   const report = page.locator('[data-testid="pool-report"]');
@@ -417,15 +388,15 @@ test("a file with an unplayable team changes nothing", async ({ page }) => {
   await expect(report).toContainText(`Team ${fx.ids[0]}: 5 Pokémon`);
   await expect(report).not.toContainText("accepted");
 
-  await expect(value).toContainText(bundledLabel);
+  await expect(value).toContainText(catalogLabel);
   await closeModal(page);
   await page.locator('[data-party="human"]').click();
   await expect(page.locator("dialog.modal [data-team]")).toHaveCount(
-    fx.bundled,
+    fx.catalog,
   );
   await closeModal(page);
   expect(
-    await page.evaluate(() => localStorage.getItem("nc2000-team-pool")),
+    await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v2")),
   ).toBeNull();
   expect(errors).toEqual([]);
 });
@@ -433,9 +404,8 @@ test("a file with an unplayable team changes nothing", async ({ page }) => {
 // --------------------------------------------------------- contract P3-5
 test("a swapped pool plays a full blind game", async ({ page }) => {
   const errors = guardConsole(page);
-  const pairRequests = trackPairRequests(page);
   await seedStorage(page);
-  await page.goto("/?blind");
+  await page.goto("/");
   await expect(page.locator(".start-screen")).toBeVisible();
 
   const fx = await poolFixture(page);
@@ -444,55 +414,47 @@ test("a swapped pool plays a full blind game", async ({ page }) => {
   await closeModal(page);
   // Adopting a pool does NOT remount the start screen: app.tsx hands
   // StartScreen a new LoadedPool object and select.tsx re-runs loadPicks in
-  // an effect, precisely so the modal holding the load report survives. The
-  // mode is not state at all — app.tsx reads `?blind` once at module load —
-  // so what this checks is the narrower thing that could still go wrong: a
-  // pool swap that dropped the blind-only chrome from the re-render.
+  // an effect, precisely so the modal holding the load report survives.
   await expect(page.locator('[data-testid="mode-banner"]')).toBeVisible();
   await expect(page.locator('[data-party="settings"]')).toHaveCount(1);
   await expect(page.locator('[data-party="bot"]')).toHaveCount(0);
 
-  // Blind draws the opponent from the pool that was loaded, and the
-  // searcher is handed the same normalized JSON — a pool the wasm side
-  // could not read would fail here, at battle construction, not on screen.
+  // The opponent is drawn from the pool that was loaded — a pool the wasm
+  // side could not read would fail here, at battle construction, not on
+  // screen.
   await page.getByRole("button", { name: "Start battle" }).click();
   await expect(page.locator(".preview-screen")).toBeVisible();
   await choosePreview(page);
 
-  // The belief chip is the only place the WORKER's pool becomes visible,
-  // and it is what makes this case more than a re-run of P3-1. Both fixture
-  // teams carry the level bump, so whichever one the human drew is a party
-  // no bundled team can explain:
-  //   worker holding the loaded pool  -> exactly one candidate survives the
-  //                                      preview filter, "1 candidate";
-  //   worker holding the bundled pool -> no candidate survives, the belief
-  //                                      falls back and reads "off-pool".
-  // The two worlds differ by one word, and only because of the bump — with
-  // a verbatim slice both of them would say "1 candidate".
+  // The belief chip is the only place the WORKER's candidate set becomes
+  // visible, and it is what makes this case more than a re-run of P3-1.
+  // Both fixture teams carry the level bump, so whichever one the human
+  // drew is a party only the loaded file can explain:
+  //   worker holding the shipped prior -> no candidate survives, the belief
+  //                                       falls back and reads "off-pool";
+  //   worker holding the loaded pool   -> "1 candidate" — the file leaking
+  //                                       into the belief, the defect.
+  // The two worlds differ by one word, and only because of the bump.
   await expect(page.locator(".move-btn").first()).toBeVisible({
     timeout: 90_000,
   });
   const chip = page.locator('[data-testid="belief-chip"]');
   await expect(chip).toBeVisible();
-  await expect(chip).toHaveText("bot's read: 1 candidate");
+  await expect(chip).toContainText("off-pool");
 
   await playToOutcome(page);
   await expect(page.locator(".end-banner")).toBeVisible();
 
-  // Blind alone would skip the pair fetch; so would the custom pool. Both
-  // skips are in force here, and the console guard below is unexempted
-  // precisely because neither can be missing.
-  expect(pairRequests).toEqual([]);
   expect(errors).toEqual([]);
 });
 
-// ------------------------------------- open mode is pinned to the bundled pool
-test("a pool loaded in blind never reaches the open screen", async ({
+// ------------------------------------------ nash plays the catalog lists
+test("a loaded pool never reaches ?nash, and survives for the play door", async ({
   page,
 }) => {
   const errors = guardConsole(page);
   await seedStorage(page);
-  await page.goto("/?blind");
+  await page.goto("/");
   await expect(page.locator(".start-screen")).toBeVisible();
 
   const fx = await poolFixture(page);
@@ -501,29 +463,22 @@ test("a pool loaded in blind never reaches the open screen", async ({
   await closeModal(page);
   await expectPickerPool(page, fx);
 
-  // The same browser, one query string later. A stored pool that kept
-  // rewriting the public team lists would be the worst version of this
-  // feature: the visitor sees two unfamiliar teams, and the control that
-  // did it — and the reset button that would undo it — are not on the
-  // screen. So open plays the bundled pool, and says nothing about pools.
-  await page.goto("/");
+  // The mode ships one configuration: its lists are the catalog whatever
+  // the play door was handed, and it has no setup button to say otherwise.
+  await page.goto("/?nash");
   await expect(page.locator(".start-screen")).toBeVisible();
   await expect(page.locator('[data-party="settings"]')).toHaveCount(0);
-  await expect(page.locator('[data-testid="mode-banner"]')).toHaveCount(0);
-  await expect(page.locator('[data-party="bot"]')).toHaveCount(1);
   await page.locator('[data-party="human"]').click();
   await expect(page.locator("dialog.modal [data-team]")).toHaveCount(
-    fx.bundled,
+    fx.catalog,
   );
   await closeModal(page);
-  // Not played, not deleted: the record is the user's, and open mode is a
-  // policy about what it plays, not a cleanup pass. The trip back proves
-  // it survived — and that this is the same file, not a re-derived label.
+  // Not played, not deleted: the record is the user's.
   expect(
-    await page.evaluate(() => localStorage.getItem("nc2000-team-pool")),
+    await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v2")),
   ).not.toBeNull();
 
-  await page.goto("/?blind");
+  await page.goto("/");
   await expect(setupValue(page)).toContainText(`${FIXTURE_NAME} (2 teams)`);
   await expectPickerPool(page, fx);
   expect(errors).toEqual([]);

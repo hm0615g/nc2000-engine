@@ -1,0 +1,519 @@
+{
+ "condition": [
+  "blind:3000:0.4|blind:3000:0.4",
+  {
+   "belief_col": "fnv1a64:ffa73c4245fe3774",
+   "belief_row": "fnv1a64:ffa73c4245fe3774",
+   "bot": "fnv1a64:c31d5635eb296d9a:m17e-solver-build-v3",
+   "max_turns": 500,
+   "ponder": "none",
+   "preview": "live search, no baked tables",
+   "seed_base": 20261171
+  },
+  null
+ ],
+ "manifest": "tmp/team-eval-v2/sel/chal3000.json",
+ "pooled": {
+  "score": 0.34438131313131315,
+  "se": 0.00874798678336431,
+  "blocks": 1584
+ },
+ "teams": {
+  "ev-r1-pool-hc75-1st-show-0": {
+   "score": 0.21875,
+   "se": 0.07864410870073697,
+   "blocks": 16
+  },
+  "ev-r1-pool-hc75-2nd-toriyama-0": {
+   "score": 0.28125,
+   "se": 0.09092980351164665,
+   "blocks": 16
+  },
+  "ev-r1-pool-hc75-3rd-bean-0": {
+   "score": 0.375,
+   "se": 0.09682458365518543,
+   "blocks": 16
+  },
+  "ev-r1-pool-hc75-3rd-bean-1": {
+   "score": 0.4375,
+   "se": 0.08984941105353261,
+   "blocks": 16
+  },
+  "ev-r1-pool-hc75-top8-tezan-0": {
+   "score": 0.28125,
+   "se": 0.09092980351164665,
+   "blocks": 16
+  },
+  "ev-r1-pool-hc75-top8-tezan-1": {
+   "score": 0.1875,
+   "se": 0.07739239842086129,
+   "blocks": 16
+  },
+  "ev-r1-rand-0-0": {
+   "score": 0.0,
+   "se": 0.0,
+   "blocks": 16
+  },
+  "ev-r1-rand-0-1": {
+   "score": 0.21875,
+   "se": 0.07864410870073697,
+   "blocks": 16
+  },
+  "ev-r1-rand-1-0": {
+   "score": 0.15625,
+   "se": 0.07525996611745185,
+   "blocks": 16
+  },
+  "ev-r1-rand-1-1": {
+   "score": 0.15625,
+   "se": 0.05983919423477113,
+   "blocks": 16
+  },
+  "ev-r1-rand-2-0": {
+   "score": 0.4375,
+   "se": 0.10077822185373188,
+   "blocks": 16
+  },
+  "ev-r1-rand-3-0": {
+   "score": 0.15625,
+   "se": 0.05983919423477113,
+   "blocks": 16
+  },
+  "ev-r1-rand-4-0": {
+   "score": 0.1875,
+   "se": 0.0625,
+   "blocks": 16
+  },
+  "ev-r1-rand-5-0": {
+   "score": 0.4375,
+   "se": 0.10077822185373188,
+   "blocks": 16
+  },
+  "ev-r1-rand-5-1": {
+   "score": 0.09375,
+   "se": 0.05038911092686594,
+   "blocks": 16
+  },
+  "hc75-1st-show": {
+   "score": 0.1875,
+   "se": 0.0625,
+   "blocks": 16
+  },
+  "hc75-2nd-toriyama": {
+   "score": 0.5625,
+   "se": 0.08984941105353261,
+   "blocks": 16
+  },
+  "hc75-top8-tezan": {
+   "score": 0.1875,
+   "se": 0.0625,
+   "blocks": 16
+  },
+  "hc75-top8-tsuru": {
+   "score": 0.40625,
+   "se": 0.09375,
+   "blocks": 16
+  },
+  "lineage-fine-s07": {
+   "score": 0.46875,
+   "se": 0.09648780147424509,
+   "blocks": 16
+  },
+  "lineage-fine-s13": {
+   "score": 0.3125,
+   "se": 0.11063265039459795,
+   "blocks": 16
+  },
+  "lineage-gb-nash-rand": {
+   "score": 0.21875,
+   "se": 0.09092980351164665,
+   "blocks": 16
+  },
+  "lineage-gb-nash-s07": {
+   "score": 0.34375,
+   "se": 0.09915003361908994,
+   "blocks": 16
+  },
+  "lineage-gb-nash-s13": {
+   "score": 0.15625,
+   "se": 0.05983919423477113,
+   "blocks": 16
+  },
+  "lineage-gb-uni-rand": {
+   "score": 0.3125,
+   "se": 0.07739239842086129,
+   "blocks": 16
+  },
+  "lineage-gb-uni-s07": {
+   "score": 0.28125,
+   "se": 0.09092980351164665,
+   "blocks": 16
+  },
+  "lineage-gb-uni-s13": {
+   "score": 0.46875,
+   "se": 0.08500919067959652,
+   "blocks": 16
+  },
+  "mjj-2009-chourou": {
+   "score": 0.25,
+   "se": 0.07905694150420949,
+   "blocks": 16
+  },
+  "mjj-2010-garap-b": {
+   "score": 0.375,
+   "se": 0.08539125638299665,
+   "blocks": 16
+  },
+  "mjj-2010-semistar": {
+   "score": 0.1875,
+   "se": 0.0625,
+   "blocks": 16
+  },
+  "mjj-2011-frozenhell-2008": {
+   "score": 0.21875,
+   "se": 0.07864410870073697,
+   "blocks": 16
+  },
+  "mjj-2011-garatank": {
+   "score": 0.3125,
+   "se": 0.07739239842086129,
+   "blocks": 16
+  },
+  "mjj-2012-goinkyo-2012": {
+   "score": 0.53125,
+   "se": 0.08500919067959652,
+   "blocks": 16
+  },
+  "mjj-2012-goinkyo-2020": {
+   "score": 0.40625,
+   "se": 0.06798820363366967,
+   "blocks": 16
+  },
+  "mjj-2012-ibmthdr": {
+   "score": 0.5,
+   "se": 0.09128709291752768,
+   "blocks": 16
+  },
+  "mjj-2013-bakabi": {
+   "score": 0.28125,
+   "se": 0.09092980351164665,
+   "blocks": 16
+  },
+  "mjj-2013-venom": {
+   "score": 0.28125,
+   "se": 0.0640434422872475,
+   "blocks": 16
+  },
+  "mjj-2015-ayagen": {
+   "score": 0.34375,
+   "se": 0.09915003361908994,
+   "blocks": 16
+  },
+  "mjj-2019-dojo": {
+   "score": 0.28125,
+   "se": 0.09092980351164665,
+   "blocks": 16
+  },
+  "mjj-2020-kb-2020": {
+   "score": 0.40625,
+   "se": 0.08188851669597311,
+   "blocks": 16
+  },
+  "mjj-2020-kb-2022": {
+   "score": 0.375,
+   "se": 0.07216878364870322,
+   "blocks": 16
+  },
+  "mjj-2020-ukenta": {
+   "score": 0.375,
+   "se": 0.07216878364870322,
+   "blocks": 16
+  },
+  "mjj-2021-crage": {
+   "score": 0.25,
+   "se": 0.06454972243679027,
+   "blocks": 16
+  },
+  "mjj-2021-q10con": {
+   "score": 0.40625,
+   "se": 0.08188851669597311,
+   "blocks": 16
+  },
+  "mjj-2022-ukekent": {
+   "score": 0.28125,
+   "se": 0.07864410870073697,
+   "blocks": 16
+  },
+  "mjj-2023-ukethdr": {
+   "score": 0.5,
+   "se": 0.09128709291752768,
+   "blocks": 16
+  },
+  "mjj-2023-vakabi": {
+   "score": 0.28125,
+   "se": 0.0640434422872475,
+   "blocks": 16
+  },
+  "mjj-2024-kabiliz": {
+   "score": 0.25,
+   "se": 0.10206207261596575,
+   "blocks": 16
+  },
+  "mjj-2025-hapim": {
+   "score": 0.21875,
+   "se": 0.0640434422872475,
+   "blocks": 16
+  },
+  "rental-cban-11": {
+   "score": 0.4375,
+   "se": 0.07739239842086129,
+   "blocks": 16
+  },
+  "rental-cban-12": {
+   "score": 0.25,
+   "se": 0.06454972243679027,
+   "blocks": 16
+  },
+  "rental-cban-15": {
+   "score": 0.09375,
+   "se": 0.06798820363366967,
+   "blocks": 16
+  },
+  "rental-cban-17": {
+   "score": 0.34375,
+   "se": 0.07525996611745185,
+   "blocks": 16
+  },
+  "rental-cban-20": {
+   "score": 0.4375,
+   "se": 0.08984941105353261,
+   "blocks": 16
+  },
+  "rental-cban-4": {
+   "score": 0.5625,
+   "se": 0.08984941105353261,
+   "blocks": 16
+  },
+  "sample-01": {
+   "score": 0.4375,
+   "se": 0.07739239842086129,
+   "blocks": 16
+  },
+  "sample-03": {
+   "score": 0.28125,
+   "se": 0.09092980351164665,
+   "blocks": 16
+  },
+  "sample-04": {
+   "score": 0.28125,
+   "se": 0.09092980351164665,
+   "blocks": 16
+  },
+  "sample-05": {
+   "score": 0.4375,
+   "se": 0.0625,
+   "blocks": 16
+  },
+  "sample-09": {
+   "score": 0.25,
+   "se": 0.09128709291752768,
+   "blocks": 16
+  },
+  "sample-09-orig": {
+   "score": 0.21875,
+   "se": 0.07864410870073697,
+   "blocks": 16
+  },
+  "sample-14": {
+   "score": 0.59375,
+   "se": 0.09375,
+   "blocks": 16
+  },
+  "sample-14-orig": {
+   "score": 0.5625,
+   "se": 0.10077822185373188,
+   "blocks": 16
+  },
+  "sample-15": {
+   "score": 0.125,
+   "se": 0.07216878364870322,
+   "blocks": 16
+  },
+  "sample-15-orig": {
+   "score": 0.125,
+   "se": 0.05590169943749474,
+   "blocks": 16
+  },
+  "sample-16": {
+   "score": 0.5,
+   "se": 0.07905694150420949,
+   "blocks": 16
+  },
+  "sample-17": {
+   "score": 0.46875,
+   "se": 0.09648780147424509,
+   "blocks": 16
+  },
+  "sample-18": {
+   "score": 0.34375,
+   "se": 0.08801929239282337,
+   "blocks": 16
+  },
+  "sample-19": {
+   "score": 0.3125,
+   "se": 0.10077822185373188,
+   "blocks": 16
+  },
+  "sample-20": {
+   "score": 0.3125,
+   "se": 0.07739239842086129,
+   "blocks": 16
+  },
+  "sample-21": {
+   "score": 0.34375,
+   "se": 0.05983919423477113,
+   "blocks": 16
+  },
+  "sample-22": {
+   "score": 0.21875,
+   "se": 0.0640434422872475,
+   "blocks": 16
+  },
+  "sample-22-orig": {
+   "score": 0.375,
+   "se": 0.08539125638299665,
+   "blocks": 16
+  },
+  "sample-23": {
+   "score": 0.5,
+   "se": 0.07905694150420949,
+   "blocks": 16
+  },
+  "sample-24": {
+   "score": 0.375,
+   "se": 0.09682458365518543,
+   "blocks": 16
+  },
+  "sample-25": {
+   "score": 0.46875,
+   "se": 0.08500919067959652,
+   "blocks": 16
+  },
+  "sample-25-orig": {
+   "score": 0.4375,
+   "se": 0.08984941105353261,
+   "blocks": 16
+  },
+  "sample-26": {
+   "score": 0.3125,
+   "se": 0.08984941105353261,
+   "blocks": 16
+  },
+  "sample-27": {
+   "score": 0.1875,
+   "se": 0.08984941105353261,
+   "blocks": 16
+  },
+  "mjj-2012-goinkyo-t2": {
+   "score": 0.46875,
+   "se": 0.07171631032524377,
+   "blocks": 16
+  },
+  "mjj-2012-goinkyo-t3": {
+   "score": 0.3125,
+   "se": 0.07739239842086129,
+   "blocks": 16
+  },
+  "mjj-2011-murai-t1": {
+   "score": 0.4375,
+   "se": 0.07739239842086129,
+   "blocks": 16
+  },
+  "mjj-2011-frozenhell-t0": {
+   "score": 0.4375,
+   "se": 0.10077822185373188,
+   "blocks": 16
+  },
+  "offprior-01": {
+   "score": 0.09375,
+   "se": 0.05038911092686594,
+   "blocks": 16
+  },
+  "offprior-02": {
+   "score": 0.28125,
+   "se": 0.09092980351164665,
+   "blocks": 16
+  },
+  "offprior-03": {
+   "score": 0.59375,
+   "se": 0.06798820363366967,
+   "blocks": 16
+  },
+  "offprior-04": {
+   "score": 0.46875,
+   "se": 0.09648780147424509,
+   "blocks": 16
+  },
+  "offprior-05": {
+   "score": 0.34375,
+   "se": 0.07525996611745185,
+   "blocks": 16
+  },
+  "offprior-06": {
+   "score": 0.4375,
+   "se": 0.07739239842086129,
+   "blocks": 16
+  },
+  "offprior-07": {
+   "score": 0.40625,
+   "se": 0.08188851669597311,
+   "blocks": 16
+  },
+  "offprior-08": {
+   "score": 0.21875,
+   "se": 0.07864410870073697,
+   "blocks": 16
+  },
+  "offprior-09": {
+   "score": 0.34375,
+   "se": 0.08801929239282337,
+   "blocks": 16
+  },
+  "offprior-10": {
+   "score": 0.375,
+   "se": 0.1070436048222094,
+   "blocks": 16
+  },
+  "offprior-11": {
+   "score": 0.40625,
+   "se": 0.08188851669597311,
+   "blocks": 16
+  },
+  "offprior-12": {
+   "score": 0.78125,
+   "se": 0.0640434422872475,
+   "blocks": 16
+  },
+  "offprior-13": {
+   "score": 0.5,
+   "se": 0.07905694150420949,
+   "blocks": 16
+  },
+  "offprior-14": {
+   "score": 0.53125,
+   "se": 0.10673907047874581,
+   "blocks": 16
+  },
+  "offprior-15": {
+   "score": 0.59375,
+   "se": 0.10427078130201832,
+   "blocks": 16
+  },
+  "offprior-16": {
+   "score": 0.625,
+   "se": 0.08539125638299665,
+   "blocks": 16
+  }
+ },
+ "what": "Every non-selected candidate, the 4 held-out page teams and the 16 off-prior chimeras against the final mixture at blind:3000:0.4: 16 mixture-sampled seed blocks each (seed base 20261171), score = mean block score. A screen only; the decisive condition is 27k."
+}

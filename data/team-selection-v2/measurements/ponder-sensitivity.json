@@ -1,0 +1,258 @@
+{
+ "what": "Pondering sensitivity (PROTOCOL.md): candidate bot at blind:54000:0.4 against the panel at blind:27000:0.4 on one shared 32-block schedule drawn by panel weight (seed base 20261151); score = mean block score, self blocks 0.5.",
+ "candidates": "final S (24), pending (11), and the 5 best stage B candidates outside both",
+ "report": {
+  "condition": [
+   "blind:54000:0.4|blind:27000:0.4",
+   {
+    "belief_col": "fnv1a64:ffa73c4245fe3774",
+    "belief_row": "fnv1a64:ffa73c4245fe3774",
+    "bot": "fnv1a64:c31d5635eb296d9a:m17e-solver-build-v3",
+    "max_turns": 500,
+    "ponder": "none",
+    "preview": "live search, no baked tables",
+    "seed_base": 20261151
+   },
+   null
+  ],
+  "manifest": "tmp/team-eval-v2/sel/ponder-sched.json",
+  "pooled": {
+   "score": 0.5919921875,
+   "se": 0.010129524850717416,
+   "blocks": 1280
+  },
+  "teams": {
+   "sample-07": {
+    "score": 0.828125,
+    "se": 0.05317241716887285,
+    "blocks": 32
+   },
+   "nb-sample-12-0": {
+    "score": 0.59375,
+    "se": 0.05696233546204301,
+    "blocks": 32
+   },
+   "rental-cban-3": {
+    "score": 0.640625,
+    "se": 0.05136432468948123,
+    "blocks": 32
+   },
+   "sample-08": {
+    "score": 0.546875,
+    "se": 0.06868352724869756,
+    "blocks": 32
+   },
+   "sample-10": {
+    "score": 0.671875,
+    "se": 0.0658741430439455,
+    "blocks": 32
+   },
+   "sample-13": {
+    "score": 0.59375,
+    "se": 0.07253162547157195,
+    "blocks": 32
+   },
+   "sample-17-orig": {
+    "score": 0.75,
+    "se": 0.05499266813300748,
+    "blocks": 32
+   },
+   "mjj-2014-thdrcomb": {
+    "score": 0.625,
+    "se": 0.059398870413936426,
+    "blocks": 32
+   },
+   "mjj-2013-mario": {
+    "score": 0.640625,
+    "se": 0.06038508397721645,
+    "blocks": 32
+   },
+   "hc75-3rd-bean": {
+    "score": 0.625,
+    "se": 0.06735198826004057,
+    "blocks": 32
+   },
+   "rental-cban-8": {
+    "score": 0.65625,
+    "se": 0.06122695418975893,
+    "blocks": 32
+   },
+   "sample-11": {
+    "score": 0.609375,
+    "se": 0.07004597784381894,
+    "blocks": 32
+   },
+   "rental-cban-13": {
+    "score": 0.515625,
+    "se": 0.06539417932443321,
+    "blocks": 32
+   },
+   "sample-06": {
+    "score": 0.640625,
+    "se": 0.06038508397721645,
+    "blocks": 32
+   },
+   "rental-cban-6": {
+    "score": 0.609375,
+    "se": 0.0663506349180794,
+    "blocks": 32
+   },
+   "sample-12": {
+    "score": 0.59375,
+    "se": 0.06122695418975893,
+    "blocks": 32
+   },
+   "mjj-2010-garap-a": {
+    "score": 0.359375,
+    "se": 0.05605645465841527,
+    "blocks": 32
+   },
+   "sample-11-orig": {
+    "score": 0.59375,
+    "se": 0.06521328221627366,
+    "blocks": 32
+   },
+   "rental-cban-14": {
+    "score": 0.625,
+    "se": 0.06350006350009525,
+    "blocks": 32
+   },
+   "sample-16-orig": {
+    "score": 0.65625,
+    "se": 0.06122695418975893,
+    "blocks": 32
+   },
+   "mjj-2020-rraikou": {
+    "score": 0.71875,
+    "se": 0.05913310232283252,
+    "blocks": 32
+   },
+   "sample-02": {
+    "score": 0.5,
+    "se": 0.06350006350009525,
+    "blocks": 32
+   },
+   "nb-sample-13-0": {
+    "score": 0.671875,
+    "se": 0.0695947913269284,
+    "blocks": 32
+   },
+   "rental-cban-2": {
+    "score": 0.609375,
+    "se": 0.06243696417962472,
+    "blocks": 32
+   },
+   "hc75-2nd-toriyama": {
+    "score": 0.5625,
+    "se": 0.07360942041745436,
+    "blocks": 32
+   },
+   "lineage-fine-s07": {
+    "score": 0.625,
+    "se": 0.06350006350009525,
+    "blocks": 32
+   },
+   "mjj-2010-garap-b": {
+    "score": 0.53125,
+    "se": 0.06325153000827012,
+    "blocks": 32
+   },
+   "mjj-2012-ibmthdr": {
+    "score": 0.578125,
+    "se": 0.06776000922968098,
+    "blocks": 32
+   },
+   "mjj-2015-ayagen": {
+    "score": 0.515625,
+    "se": 0.05716934644883651,
+    "blocks": 32
+   },
+   "mjj-2023-ukethdr": {
+    "score": 0.5390625,
+    "se": 0.059514770759098654,
+    "blocks": 32
+   },
+   "sample-04": {
+    "score": 0.5,
+    "se": 0.06350006350009525,
+    "blocks": 32
+   },
+   "sample-14": {
+    "score": 0.5625,
+    "se": 0.05832853282858641,
+    "blocks": 32
+   },
+   "sample-15-orig": {
+    "score": 0.609375,
+    "se": 0.06243696417962472,
+    "blocks": 32
+   },
+   "sample-16": {
+    "score": 0.578125,
+    "se": 0.06393267234162776,
+    "blocks": 32
+   },
+   "sample-22-orig": {
+    "score": 0.59375,
+    "se": 0.04729316171669314,
+    "blocks": 32
+   },
+   "ev-r1-rand-1-1": {
+    "score": 0.421875,
+    "se": 0.07138242857224016,
+    "blocks": 32
+   },
+   "mjj-2012-goinkyo-2012": {
+    "score": 0.5625,
+    "se": 0.06640995601613146,
+    "blocks": 32
+   },
+   "sample-17": {
+    "score": 0.5625,
+    "se": 0.06640995601613146,
+    "blocks": 32
+   },
+   "mjj-2012-goinkyo-2020": {
+    "score": 0.53125,
+    "se": 0.07077302144543589,
+    "blocks": 32
+   },
+   "hc75-top8-tsuru": {
+    "score": 0.53125,
+    "se": 0.07424858801742054,
+    "blocks": 32
+   }
+  }
+ },
+ "spearmanWithStageScores": 0.621,
+ "materialReversals": [
+  {
+   "id": "mjj-2010-garap-a",
+   "kind": "selected, upper bound below 0.50",
+   "score": 0.359375,
+   "ci": [
+    0.24950636776850355,
+    0.46924363223149645
+   ]
+  },
+  {
+   "id": "lineage-fine-s07",
+   "kind": "not selected, lower bound above 0.50",
+   "score": 0.625,
+   "ci": [
+    0.5005421625238069,
+    0.7494578374761931
+   ]
+  },
+  {
+   "id": "sample-22-orig",
+   "kind": "not selected, lower bound above 0.50",
+   "score": 0.59375,
+   "ci": [
+    0.5010571063202529,
+    0.6864428936797471
+   ]
+  }
+ ],
+ "resolution": "amendment v2.1: fresh 64-block check, see ponder-extension.json"
+}

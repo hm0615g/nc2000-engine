@@ -671,8 +671,8 @@ fn main() {
             "blind" => YSpec::Blind {
                 pool: Arc::new(MetaPool {
                     teams: vec![
-                        MetaTeam { id: format!("{}-a", pair.id), sets: pair.a.clone() },
-                        MetaTeam { id: format!("{}-b", pair.id), sets: pair.b.clone() },
+                        MetaTeam { id: format!("{}-a", pair.id), sets: pair.a.clone(), weight: None },
+                        MetaTeam { id: format!("{}-b", pair.id), sets: pair.b.clone(), weight: None },
                     ],
                 }),
             },

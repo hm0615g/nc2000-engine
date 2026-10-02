@@ -1,38 +1,37 @@
-// `?nash` — META-NASH v1's conclusion mode.
+// `?nash` — the Nash door.
 //
 // Nash is blind play with the opponent's team replaced by a draw from the
-// solved three-team mixture (data/meta-nash-v1/pool-artifact.json) and every
-// control removed. blind.spec.ts already owns the blind information
-// contract — the foe's sets never reach the DOM, the reveal at the end —
-// and nash rides on exactly the same machinery (info-mode.ts maps the nash
-// door onto InfoMode "blind", so game.tsx cannot tell the two apart). What
-// is left for this suite is the difference, which is four claims:
+// solved mixture (data/meta-nash-v3/pool-artifact.json) and every control
+// removed. blind.spec.ts already owns the blind information contract — the
+// foe's sets never reach the DOM, the reveal at the end — and nash rides on
+// exactly the same machinery (game.tsx cannot tell the two apart). What is
+// left for this suite is the difference:
 //
-//   1. the door: `?nash` opens it, `?nash=0` shuts it, and `?blind` is not
-//      it — the blind screen keeps its setup button and grows no mixture
-//      row, so the two experiments cannot be confused for one another;
+//   1. the door: `?nash` opens it, `?nash=0` shuts it, and the play door is
+//      not it — that screen keeps its setup button and grows no mixture
+//      row, so the two cannot be confused for one another;
 //   2. the mixture on screen is the artifact's, weights and all, read-only
 //      and set-free — it is a readout, and the one thing it must never
 //      become is a picker;
-//   3. the team actually drawn is one of the three arms, matched species
-//      and level for species and level against the file;
-//   4. a belief prior sitting in localStorage from an earlier `?blind`
+//   3. the team actually drawn is one of the mixture's arms, matched
+//      species and level for species and level against the file;
+//   4. a belief prior sitting in localStorage from an earlier play-door
 //      visit does NOT reach a nash game. That is the mode's "one shipped
 //      configuration" promise, and it is the only one of the four that
 //      state left over from another door could silently break.
-//   5. the belief candidate pool is the belief-pool-v1 artifact
-//      (EXP-PRIOR-EXPLOIT v1): the nash door fetches it, the other doors
-//      never do, and it is load-bearing — a nash page that cannot get it
-//      fails closed instead of quietly playing under the plainer prior.
+//   5. the belief candidate pool is the shipped opponent prior
+//      (data/belief-pool-v3): every door fetches it, and it is load-bearing
+//      — a page that cannot get it fails closed instead of quietly playing
+//      under a plainer prior.
 //
 // (4) is the reason this suite plays a whole game against a hand-mixed
 // off-pool party: the prior only ever governs the fallback roster, so a
 // pool opponent would leave the chip dead for reasons that have nothing to
-// do with nash. blind.spec.ts proves the same seed DOES light the chip
-// under `?blind`; the contrast is the assertion.
+// do with nash. blind.spec.ts proves the same seed DOES light the chip on
+// the play door; the contrast is the assertion.
 //
 // Selectors depended on: [data-testid="mode-banner"|"nash-mix"|
-// "belief-chip"], [data-party="human"|"bot"|"nash"|"settings"], and the
+// "belief-chip"], [data-party="human"|"nash"|"settings"], and the
 // shipped .start-col/.party-btn/.team-card/.species-chip structure.
 
 import { expect, test, type Page } from "@playwright/test";
@@ -62,7 +61,7 @@ interface CustomRecord {
 
 const artifact = JSON.parse(
   readFileSync(
-    new URL("../../data/meta-nash-v1/pool-artifact.json", import.meta.url),
+    new URL("../../data/meta-nash-v3/pool-artifact.json", import.meta.url),
     "utf8",
   ),
 ) as { teams: NashTeamJson[] };
@@ -103,10 +102,17 @@ const mixedSets: SetJson[] = [
   ...[1, 2, 5].map((i) => pool.teams[29].sets[i]),
 ];
 
+const beliefPool = JSON.parse(
+  readFileSync(
+    new URL("../../data/belief-pool-v3/belief-pool.json", import.meta.url),
+    "utf8",
+  ),
+) as { teams: { id: string; sets: SetJson[] }[] };
+
 /** Must be empty, or the bot identifies the party by signature, the belief
  * never falls back, and a dead prior chip would "pass" for the wrong
  * reason. Asserted in the test that depends on it. */
-const mixTwins = pool.teams
+const mixTwins = [...artifact.teams, ...beliefPool.teams]
   .filter((t) => sameSpeciesSet(t.sets, mixedSets))
   .map((t) => t.id);
 
@@ -137,18 +143,13 @@ async function seedStorage(
       if (sessionStorage.getItem("nc2000-e2e-seeded") === "1") return;
       sessionStorage.setItem("nc2000-e2e-seeded", "1");
       localStorage.setItem("nc2000-locale", "en");
-      localStorage.removeItem("nc2000-team-pool");
+      localStorage.removeItem("nc2000-team-pool-v2");
+      localStorage.removeItem("nc2000-bot-draw");
       if (record) {
         localStorage.setItem("nc2000-custom-teams", JSON.stringify([record]));
-        // Pin it on the human side. The opponent half of the record is
-        // ignored by every blind-family door, nash included — the foe is
-        // drawn, never picked.
         localStorage.setItem(
           "nc2000-start-picks",
-          JSON.stringify({
-            human: { kind: "custom", id: record.id },
-            bot: { kind: "random" },
-          }),
+          JSON.stringify({ human: { kind: "custom", id: record.id } }),
         );
       } else {
         localStorage.removeItem("nc2000-custom-teams");
@@ -217,17 +218,14 @@ test("the nash door opens only on ?nash, and carries no controls", async ({
   const row = page.locator('[data-party="nash"] .party-value');
   for (const t of artifact.teams) await expect(row).toContainText(t.id);
 
-  // `?nash=0` is the shipped open screen — banner gone, opponent row back,
-  // and not a word about either experiment.
-  await page.goto("/?nash=0");
-  await expect(page.locator('[data-testid="mode-banner"]')).toHaveCount(0);
-  await expect(page.locator('[data-party="nash"]')).toHaveCount(0);
-  await expect(page.locator('[data-party="bot"]')).toHaveCount(1);
-
-  // And `?blind` is still itself: setup button, no mixture row.
-  await page.goto("/?blind");
-  await expect(page.locator('[data-party="settings"]')).toHaveCount(1);
-  await expect(page.locator('[data-party="nash"]')).toHaveCount(0);
+  // `?nash=0` and `?blind` are the play door: setup button, no mixture row,
+  // no opponent picker.
+  for (const url of ["/?nash=0", "/?blind", "/"]) {
+    await page.goto(url);
+    await expect(page.locator('[data-party="settings"]')).toHaveCount(1);
+    await expect(page.locator('[data-party="nash"]')).toHaveCount(0);
+    await expect(page.locator('[data-party="bot"]')).toHaveCount(0);
+  }
 
   expect(errors).toEqual([]);
 });
@@ -244,8 +242,7 @@ test("the mixture panel is the artifact, read-only and set-free", async ({
   await expect(panel).toBeVisible();
   await expect(panel.locator(".team-card")).toHaveCount(artifact.teams.length);
 
-  // Weights are the file's, renormalized (the shipped three sum to 0.998),
-  // and shown to one decimal.
+  // Weights are the file's, renormalized, and shown to one decimal.
   const total = artifact.teams.reduce((a, t) => a + t.weight, 0);
   for (const t of artifact.teams) {
     const card = panel.locator(`[data-nash="${t.id}"]`);
@@ -275,7 +272,7 @@ test("the drawn opponent is one arm of the mixture, and no prior reaches the gam
   page,
 }) => {
   const errors = guardConsole(page);
-  // A prior IS in storage, left there by an earlier `?blind` visit.
+  // A prior IS in storage, left there by an earlier play-door visit.
   expect(mixTwins).toEqual([]);
   await seedStorage(page, { withPrior: true, withCustom: true });
   await page.goto("/?nash");
@@ -319,37 +316,88 @@ test("the drawn opponent is one arm of the mixture, and no prior reaches the gam
   expect(errors).toEqual([]);
 });
 
-test("the nash belief pool is belief-pool-v1, exclusive to the door and load-bearing", async ({
+test("the belief pool is the shipped prior, fetched by every door and load-bearing", async ({
   page,
 }) => {
-  // (a) the nash door fetches the artifact and boots on it.
+  // (a) the nash door and the play door fetch the prior and boot on it.
   const errors = guardConsole(page);
   const beliefUrls: string[] = [];
   page.on("request", (r) => {
-    if (r.url().includes("belief-pool-v1/belief-pool.json"))
+    if (r.url().includes("belief-pool-v3/belief-pool.json"))
       beliefUrls.push(r.url());
   });
   const gotBelief = page.waitForResponse(
-    (r) => r.url().includes("belief-pool-v1/belief-pool.json") && r.ok(),
+    (r) => r.url().includes("belief-pool-v3/belief-pool.json") && r.ok(),
   );
   await page.goto("/?nash");
   await gotBelief;
   await expect(page.locator('[data-party="nash"]')).toBeVisible();
   expect(beliefUrls.length).toBeGreaterThan(0);
+  beliefUrls.length = 0;
+  await page.goto("/");
+  await expect(page.locator('[data-party="settings"]')).toBeVisible();
+  expect(beliefUrls.length).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 
-  // (b) neither plain door asks for it: the swap is the nash door's alone.
-  beliefUrls.length = 0;
-  await page.goto("/?blind");
-  await expect(page.locator('[data-party="settings"]')).toBeVisible();
-  await page.goto("/");
-  await expect(page.locator(".start-col").first()).toBeVisible();
-  expect(beliefUrls).toEqual([]);
+  // (b) load-bearing: a page that cannot get the file fails closed (the
+  // boot error box), never a quiet game under a plainer prior.
+  for (const url of ["/?nash", "/"]) {
+    await page.route("**/belief-pool-v3/**", (r) => r.abort());
+    await page.goto(url);
+    await expect(page.locator(".error-box")).toBeVisible();
+    await page.unroute("**/belief-pool-v3/**");
+  }
+});
 
-  // (c) load-bearing: a nash page that cannot get the file fails closed
-  // (the boot error box), never a quiet game under the plainer prior.
-  await page.route("**/belief-pool-v1/**", (r) => r.abort());
-  await page.goto("/?nash");
-  await expect(page.locator(".error-box")).toBeVisible();
-  await page.unroute("**/belief-pool-v1/**");
+test("the play door's Nash draw choice draws a mixture arm and persists", async ({
+  page,
+}) => {
+  const errors = guardConsole(page);
+  await seedStorage(page);
+  await page.goto("/");
+  await page.locator('[data-party="settings"]').click();
+  await expect(page.locator('[data-draw="catalog"]')).toHaveAttribute("aria-pressed", "true");
+  await page.locator('[data-draw="nash"]').click();
+  await expect(page.locator('[data-draw="nash"]')).toHaveAttribute("aria-pressed", "true");
+  // The mixture is shown where it is chosen, weights and all.
+  await expect(page.locator('[data-testid="nash-mix"] .team-card')).toHaveCount(
+    artifact.teams.length,
+  );
+  await page.locator("dialog.modal .modal-head button").click();
+  const setup = page.locator('[data-party="settings"] .party-value');
+  await expect(setup).toContainText(`Solved mixture (${artifact.teams.length}`);
+  await page.reload();
+  await expect(setup).toContainText(`Solved mixture (${artifact.teams.length}`);
+
+  await page.getByRole("button", { name: "Start battle" }).click();
+  const foe = page.locator(".preview-cols > section").first();
+  await expect(foe.locator("[data-mon]")).toHaveCount(6);
+  const shown = (
+    await foe.locator("[data-mon]").evaluateAll((els) =>
+      els.map((e) => {
+        const level = /L(\d+)/.exec(e.querySelector(".mon-level")?.textContent ?? "");
+        return `${e.getAttribute("data-mon") ?? ""}:${level ? level[1] : "?"}`;
+      }),
+    )
+  ).sort();
+  const arms = artifact.teams.map((t) => roster(t.sets).join(","));
+  expect(arms).toContain(shown.join(","));
+  await page.locator(".preview-actions .quit-btn").click();
+
+  // Back to the built-in parties: the choice is stored, and clears.
+  await page.locator('[data-party="settings"]').click();
+  await page.locator('[data-draw="catalog"]').click();
+  await page.locator("dialog.modal .modal-head button").click();
+  await expect(setup).not.toContainText("Solved mixture");
+  expect(await page.evaluate(() => localStorage.getItem("nc2000-bot-draw"))).toBeNull();
+  expect(errors).toEqual([]);
+});
+
+test("the start screen links to the party evaluator", async ({ page }) => {
+  await seedStorage(page);
+  await page.goto("/");
+  const link = page.locator(".start-link");
+  await expect(link).toHaveAttribute("href", /\?evaluate$/);
+  await link.click();
+  await expect(page.getByLabel("考える回数", { exact: true })).toHaveValue("27000");
 });

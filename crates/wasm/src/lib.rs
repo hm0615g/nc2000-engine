@@ -321,12 +321,27 @@ impl WasmPlayerChannel {
 
 // --------------------------------------------------------------- Searcher
 
-/// Default per-decision searcher settings = the gate-measured `skuct`
-/// configuration (`RmConfig` defaults with rule = Ucb).
-fn skuct_config(c: Option<f64>, hp_buckets: Option<i32>) -> RmConfig {
+const SEARCH_PROFILES: &str = include_str!("../../../data/search-profiles.json");
+
+/// Exploration constant of a named profile in `data/search-profiles.json`:
+/// `blind` is the live product; `open` is retired and only replays records
+/// made under it.
+fn profile_c(name: &str) -> f64 {
+    let profiles: serde_json::Value =
+        serde_json::from_str(SEARCH_PROFILES).expect("data/search-profiles.json parses");
+    profiles[name]["c"].as_f64().expect("search profile carries c")
+}
+
+/// Exploration constant of the true-state research `Searcher` when the
+/// caller gives none; no product door constructs that searcher.
+const RESEARCH_SKUCT_C: f64 = 1.0;
+
+/// Per-decision searcher settings = the gate-measured `skuct` configuration
+/// (`RmConfig` defaults with rule = Ucb) at exploration constant `c`.
+fn skuct_config(c: f64, hp_buckets: Option<i32>) -> RmConfig {
     RmConfig {
         rule: nc2000_bot::smmcts::SelRule::Ucb,
-        c: c.unwrap_or(1.0),
+        c,
         hp_buckets: hp_buckets.map(|b| b as i64).unwrap_or(16),
         ..RmConfig::default()
     }
@@ -345,8 +360,9 @@ impl WasmSearcher {
     /// `side`. The searcher stays valid (and keeps improving under `step`)
     /// until the battle advances — then create a fresh one. `seed` drives
     /// the searcher's own RNG (chance resampling + tie-breaking);
-    /// `c` (UCB exploration, default 1.0) and `hpBuckets` (state-key HP
-    /// abstraction, default 16) are the gate-measured skuct defaults.
+    /// `c` (UCB exploration, default 1.0 — this true-state searcher is a
+    /// research tool, not the product) and `hpBuckets` (state-key HP
+    /// abstraction, default 16).
     #[wasm_bindgen(constructor)]
     pub fn new(
         battle: &WasmBattle,
@@ -355,7 +371,7 @@ impl WasmSearcher {
         c: Option<f64>,
         hp_buckets: Option<i32>,
     ) -> WasmSearcher {
-        let cfg = skuct_config(c, hp_buckets);
+        let cfg = skuct_config(c.unwrap_or(RESEARCH_SKUCT_C), hp_buckets);
         let search = SkuctSearch::new(&battle.battle, &battle.dex, cfg, seed as u64);
         WasmSearcher { dex: battle.dex.clone(), search, side }
     }
@@ -474,7 +490,7 @@ impl WasmBlindSearcher {
         let belief = Belief::new(&battle.dex, &pool, &observer);
         Ok(WasmBlindSearcher {
             dex: battle.dex.clone(),
-            cfg: skuct_config(c, hp_buckets),
+            cfg: skuct_config(c.unwrap_or_else(|| profile_c("blind")), hp_buckets),
             side,
             tables,
             observer,
@@ -771,9 +787,10 @@ fn belief_prior_report(prior: &BeliefPrior, applied: bool, refusals: &[String]) 
 
 #[wasm_bindgen(js_class = ProtocolSearcher)]
 impl WasmProtocolSearcher {
-    /// `side`: 0 = p1. `pool_json` = `meta-pool.json` contents (belief
-    /// prior for genuinely-hidden opponents). `seed` drives determinization
-    /// sampling / tie-breaking.
+    /// `side`: 0 = p1. `pool_json` = the opponent prior's contents
+    /// (`data/belief-pool-v3/belief-pool.json` in the product). `seed` drives
+    /// determinization sampling / tie-breaking. `c` defaults to the blind
+    /// profile's.
     #[wasm_bindgen(constructor)]
     pub fn new(
         dex: &WasmDex,
@@ -784,15 +801,19 @@ impl WasmProtocolSearcher {
         hp_buckets: Option<i32>,
     ) -> Result<WasmProtocolSearcher, JsError> {
         let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
-        let cfg = skuct_config(c, hp_buckets);
+        let cfg = skuct_config(c.unwrap_or_else(|| profile_c("blind")), hp_buckets);
         let agent = ProtocolAgent::new(&dex.dex, side, pool, cfg, seed as u64);
         Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, pinned: false })
     }
 
+    /// `c` defaults to the profile of the information policy the fork was
+    /// recorded under.
     #[wasm_bindgen(js_name = fromFork)]
     pub fn from_fork(dex: &WasmDex, fork_json: &str, pool_json: &str, seed: u32, c: Option<f64>) -> Result<WasmProtocolSearcher, JsError> {
         let fork = ForkSpec::parse(fork_json).map_err(|e| JsError::new(&e))?;
         let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
+        let recorded = if fork.info == nc2000_bot::fork::Info::Open { "open" } else { "blind" };
+        let c = c.unwrap_or_else(|| profile_c(recorded));
         let agent = fork.bot_agent(&dex.dex, pool, skuct_config(c, None), seed as u64).map_err(|e| JsError::new(&e))?;
         Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, pinned: fork.info == nc2000_bot::fork::Info::Open })
     }

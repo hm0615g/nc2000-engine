@@ -97,7 +97,7 @@ const SIDE_CONDS = ["spikes", "reflect", "lightscreen", "safeguard", "mist"];
 const WEATHERS = ["", "raindance", "sunnyday", "sandstorm", "hail"];
 
 export function Solver(props: {
-  /** The bundled meta pool — the team lists the pickers offer. */
+  /** The catalog — the team lists the pickers offer. */
   pool: MetaPool;
   /** The belief candidate pool the searcher reasons with. */
   poolJson: string;

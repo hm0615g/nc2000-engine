@@ -13,11 +13,16 @@
 //! collision (two teams sharing the species+level multiset) keeps both
 //! candidates alive. In-battle filter: revealed moves ⊆ candidate set's
 //! moves; a known original item must equal the candidate set's item.
-//! Weights are uniform over the consistent candidates.
+//! Weights are uniform over the consistent candidates, unless the pool is a
+//! **weighted prior** (any team carries `weight`): then a consistent
+//! candidate is sampled in proportion to its weight (a team without one
+//! counts 1).
 //!
 //! **Fallback** (no pool team consistent — a human custom team): a per-mon
 //! imputation roster is synthesized instead — nearest pool set by species
-//! (first in pedigree order), then the community-rental prior when the
+//! (first in pedigree order; in a weighted prior, the loadout — item plus
+//! move set — with the largest total weight among the pool teams carrying
+//! the species, ties to the earliest), then the community-rental prior when the
 //! species is absent from the pool, merged with the revealed knowledge
 //! (revealed moves first, prior filler after, observed level/gender,
 //! revealed item). A species absent from both sources receives a
@@ -77,7 +82,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
 use nc2000_engine::battle::{tr, PokemonSet};
-use nc2000_engine::dex::{toid, Dex, MoveId};
+use nc2000_engine::dex::{toid, Dex, MoveId, SpeciesId};
 use nc2000_engine::state::{
     ActionKind, Battle, EffId, EffectState, MoveSlot, MoveSlots, PokeId, Pokemon,
 };
@@ -181,6 +186,8 @@ fn format_learnsets() -> &'static Learnsets {
 /// opponent's roster slots (`None` = preview-inconsistent).
 struct Candidate {
     id: String,
+    /// `Some` only for a positive finite weight from a weighted prior.
+    weight: Option<f64>,
     sets: Vec<PokemonSet>,
     /// Constructed reference mons, index = opponent roster slot.
     refs: Option<Vec<Pokemon>>,
@@ -334,7 +341,12 @@ impl Belief {
             .iter()
             .map(|t| {
                 let refs = build_refs(dex, &t.sets, obs.mons());
-                Candidate { id: t.id.clone(), sets: t.sets.clone(), refs }
+                Candidate {
+                    id: t.id.clone(),
+                    weight: t.weight.filter(|w| w.is_finite() && *w > 0.0),
+                    sets: t.sets.clone(),
+                    refs,
+                }
             })
             .collect();
         let mut b = Belief {
@@ -402,6 +414,7 @@ impl Belief {
         Ok(Belief {
             cands: vec![Candidate {
                 id: id.to_string(),
+                weight: None,
                 sets: sets.to_vec(),
                 refs: Some(refs),
             }],
@@ -429,6 +442,7 @@ impl Belief {
         Belief {
             cands: vec![Candidate {
                 id: "opponent".to_string(),
+                weight: None,
                 sets: Vec::new(),
                 refs: Some(refs),
             }],
@@ -625,13 +639,64 @@ impl Belief {
         }
     }
 
-    /// Uniformly sample a consistent candidate (`None` = fallback roster).
+    /// Sample a consistent candidate (`None` = fallback roster): uniform,
+    /// or weight-proportional when the survivors' weights differ. Equal
+    /// weights take the uniform draw, so an unweighted pool consumes the rng
+    /// exactly as before weights existed.
     pub fn sample(&self, rng: &mut SplitMix64) -> Option<usize> {
-        if self.alive.is_empty() {
-            None
-        } else {
-            Some(self.alive[rng.below(self.alive.len())])
+        let weight = |i: usize| self.cands[i].weight.unwrap_or(1.0);
+        let first = *self.alive.first()?;
+        if self.alive.iter().all(|&i| weight(i) == weight(first)) {
+            return Some(self.alive[rng.below(self.alive.len())]);
         }
+        let total: f64 = self.alive.iter().map(|&i| weight(i)).sum();
+        let mut r = rng.next_f64() * total;
+        for &i in &self.alive {
+            if r < weight(i) {
+                return Some(i);
+            }
+            r -= weight(i);
+        }
+        self.alive.last().copied()
+    }
+
+    fn is_weighted_prior(&self) -> bool {
+        self.cands.iter().any(|c| c.weight.is_some())
+    }
+
+    /// The pool's set for `species`: first in file order, or in a weighted
+    /// prior the weighted-mode loadout (see the module doc).
+    fn pool_set_for(&self, dex: &Dex, species: SpeciesId) -> Option<&PokemonSet> {
+        let carriers = self.cands.iter().filter_map(|c| {
+            c.sets
+                .iter()
+                .find(|s| dex.species.id(&toid(&s.species)) == Some(species))
+                .map(|s| (c, s))
+        });
+        if !self.is_weighted_prior() {
+            return carriers.map(|(_, s)| s).next();
+        }
+        let loadout = |s: &PokemonSet| {
+            let mut moves: Vec<String> = s.moves.iter().map(|m| toid(m)).collect();
+            moves.sort();
+            (toid(&s.item), moves)
+        };
+        let mut tally: Vec<((String, Vec<String>), f64, &PokemonSet)> = Vec::new();
+        for (c, s) in carriers {
+            let key = loadout(s);
+            let w = c.weight.unwrap_or(1.0);
+            match tally.iter_mut().find(|(k, _, _)| *k == key) {
+                Some(entry) => entry.1 += w,
+                None => tally.push((key, w, s)),
+            }
+        }
+        let mut best: Option<(f64, &PokemonSet)> = None;
+        for (_, w, s) in &tally {
+            if best.is_none_or(|(bw, _)| *w > bw) {
+                best = Some((*w, *s));
+            }
+        }
+        best.map(|(_, s)| s)
     }
 
     /// Clone the true battle and overwrite all hidden opponent state with a
@@ -658,6 +723,20 @@ impl Belief {
         pick: Option<usize>,
         rng: &mut SplitMix64,
     ) -> Battle {
+        let mut out = battle.clone();
+        self.determinize_in_place(dex, &mut out, obs, pick, rng);
+        out
+    }
+
+    /// The input must be reset to the observed battle before imputation.
+    pub(crate) fn determinize_in_place(
+        &self,
+        dex: &Dex,
+        out: &mut Battle,
+        obs: &Observer,
+        pick: Option<usize>,
+        rng: &mut SplitMix64,
+    ) {
         // M18: with a prior installed, the fallback roster's *unrevealed*
         // slots are resampled per determinization instead of being the one
         // fixed nearest-set filler. `None` on every other path — including
@@ -675,9 +754,8 @@ impl Belief {
                 .as_deref()
                 .expect("determinize_with: fallback roster not built (call sync first)"),
         };
-        audit_battle_hidden(battle);
+        audit_battle_hidden(out);
 
-        let mut out = battle.clone();
         out.set_log_enabled(false);
         // chance is hidden: the search resamples it anyway, but the artifact
         // must not carry the true RNG stream
@@ -767,10 +845,9 @@ impl Belief {
         }
 
         // ---- pending opponent Move in the queue: chosen but unannounced
-        self.scrub_pending_move(dex, &mut out, opp, rng);
+        self.scrub_pending_move(dex, out, opp, rng);
 
         out.battle_mask = out.recompute_battle_mask(dex);
-        out
     }
 
     /// A not-yet-executed opponent `Move` action (mid-turn Baton Pass
@@ -1034,12 +1111,7 @@ impl Belief {
     }
 
     fn fallback_set(&self, dex: &Dex, mo: &MonObs) -> PokemonSet {
-        // nearest pool set by species (first in pedigree order)
-        let pool_set: Option<&PokemonSet> = self.cands.iter().find_map(|c| {
-            c.sets
-                .iter()
-                .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
-        });
+        let pool_set = self.pool_set_for(dex, mo.species);
         // A separate prior, not a pool candidate: it can fill hidden fields
         // without pretending an exact rental-team identity survived the
         // preview filter. Pool pedigree remains first, preserving existing
@@ -1463,7 +1535,7 @@ mod fallback_tests {
             cands: pool
                 .teams
                 .into_iter()
-                .map(|t| Candidate { id: t.id, sets: t.sets, refs: None })
+                .map(|t| Candidate { id: t.id, weight: None, sets: t.sets, refs: None })
                 .collect(),
             alive: Vec::new(),
             fallback: None,
@@ -1654,6 +1726,60 @@ mod fallback_tests {
             belief.fallback_source(&dex, &mon(&dex, "bulbasaur", 50, &[])),
             FallbackSource::Learnset
         );
+    }
+
+    #[test]
+    fn a_weighted_prior_falls_back_to_the_heaviest_loadout() {
+        let dex = test_dex();
+        let mut belief = test_belief();
+        let carriers: Vec<usize> = (0..belief.cands.len())
+            .filter(|&i| belief.cands[i].sets.iter().any(|s| toid(&s.species) == "snorlax"))
+            .collect();
+        let set_of = |b: &Belief, i: usize| {
+            b.cands[i].sets.iter().find(|s| toid(&s.species) == "snorlax").unwrap().clone()
+        };
+        let first = set_of(&belief, carriers[0]);
+        let other = carriers
+            .iter()
+            .copied()
+            .find(|&i| set_of(&belief, i).moves != first.moves)
+            .expect("the test pool carries two Snorlax loadouts");
+        let other_set = set_of(&belief, other);
+        let level = first.level;
+
+        // Unweighted: first in file order, as shipped.
+        let plain = belief.fallback_set(&dex, &mon(&dex, "snorlax", level, &[]));
+        assert_eq!(plain.moves, first.moves);
+
+        // Weighted: the other loadout outweighs every copy of the first.
+        for c in belief.cands.iter_mut() {
+            c.weight = Some(1.0);
+        }
+        belief.cands[other].weight = Some(1000.0);
+        let heavy = belief.fallback_set(&dex, &mon(&dex, "snorlax", other_set.level, &[]));
+        let mut want: Vec<String> = other_set.moves.iter().map(|m| toid(m)).collect();
+        let mut got: Vec<String> = heavy.moves.iter().map(|m| toid(m)).collect();
+        want.sort();
+        got.sort();
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn candidate_sampling_follows_weights_and_equal_weights_draw_as_before() {
+        let mut belief = test_belief();
+        belief.alive = vec![0, 1];
+        let draws = |b: &Belief| {
+            let mut rng = SplitMix64::new(7);
+            (0..4000).map(|_| b.sample(&mut rng).unwrap()).collect::<Vec<_>>()
+        };
+        let unweighted = draws(&belief);
+        belief.cands[0].weight = Some(2.5);
+        belief.cands[1].weight = Some(2.5);
+        assert_eq!(draws(&belief), unweighted, "equal weights must keep the uniform draw");
+        belief.cands[0].weight = Some(3.0);
+        belief.cands[1].weight = Some(1.0);
+        let share = draws(&belief).iter().filter(|&&i| i == 0).count() as f64 / 4000.0;
+        assert!((share - 0.75).abs() < 0.03, "weighted share {share}");
     }
 
     #[test]

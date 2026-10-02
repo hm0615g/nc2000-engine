@@ -1,0 +1,26 @@
+{
+ "mjj-2020-kb-2020": {
+  "replacement": "mjj-2020-kb-2022",
+  "established": true,
+  "logs": ["confirmation k0 vs hc75-2nd-toriyama (kb-2020 as p2)", "confirmation k0 vs mjj-2010-garap-b (kb-2020 as p2)"],
+  "note": "Only difference: Snorlax Zap Cannon (2020) vs Curse (2022). Zap Cannon is aimed at sensible targets (a predicted Zapdos, paralysing Exeggutor; a super-effective shot at Lapras that missed). Used in 436 of 851 Snorlax games, which win 0.589 vs 0.398 when unused - no sign of misuse. Against the nine panel teams with Miltank (the author's stated reason for Zap Cannon) kb-2022 - kb-2020 = +0.026 [-0.040, +0.097]: no unique advantage."
+ },
+ "mjj-2013-mario": {
+  "replacement": "sample-07",
+  "established": false,
+  "logs": ["confirmation k0 vs hc75-2nd-toriyama (Mario as p1)", "confirmation k0 vs hc75-top8-tsuru (Mario as p1)"],
+  "note": "The distinguishing gimmicks are Belly Drum Snorlax and dual-screen Electrode. Games where the bot used Belly Drum win 0.362 vs 0.640 when Snorlax played without it; in the toriyama log Electrode Thunderbolts into Exeggutor, sets Light Screen only at low HP and dies without exploding. The inferiority is plausibly the bot's execution of the gimmicks, so the verdict is withheld."
+ },
+ "mjj-2013-venom": {
+  "replacement": "sample-11-orig",
+  "established": false,
+  "logs": ["confirmation k0 vs mjj-2009-chourou (both sides)", "confirmation k0 vs hc75-1st-show (venom as p2)"],
+  "note": "The distinguishing plan is Sandstorm Tyranitar (plus Reflect Blissey). In all three logs Tyranitar sets Sandstorm on entry regardless of matchup (into a Machamp switch, into an Earthquake-using Snorlax, before being slept). Whether the chip plan is piloted competently cannot be established; verdict withheld."
+ },
+ "hc75-3rd-bean": {
+  "replacement": "sample-08",
+  "established": false,
+  "logs": ["confirmation k0 vs hc75-1st-show (bean as p1)", "confirmation k0 vs mjj-2011-frozenhell-2008 (bean as p2)"],
+  "note": "The distinguishing element is Substitute on a Swagger Zapdos (plus Double Team Miltank, Sleep Powder Exeggutor). In the show log Zapdos Swaggers a +2 Curse Snorlax and is KOd through repeated Substitutes; games with Zapdos Substitute win 0.522 vs 0.615 without. Execution of the Swagger+Substitute gimmick is not established; verdict withheld."
+ }
+}

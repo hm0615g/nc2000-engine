@@ -1,0 +1,65 @@
+{
+ "condition": [
+  "blind:54000:0.4|blind:27000:0.4",
+  {
+   "belief_col": "fnv1a64:ffa73c4245fe3774",
+   "belief_row": "fnv1a64:ffa73c4245fe3774",
+   "bot": "fnv1a64:c31d5635eb296d9a:m17e-solver-build-v3",
+   "max_turns": 500,
+   "ponder": "none",
+   "preview": "live search, no baked tables",
+   "seed_base": 20261191
+  },
+  null
+ ],
+ "manifest": "tmp/team-eval-v2/sel/ponder2-sched.json",
+ "pooled": {
+  "score": 0.5442708333333334,
+  "se": 0.026817495459798803,
+  "blocks": 192
+ },
+ "teams": {
+  "mjj-2010-garap-a": {
+   "score": 0.5390625,
+   "se": 0.050179103203559665,
+   "blocks": 64
+  },
+  "lineage-fine-s07": {
+   "score": 0.5703125,
+   "se": 0.042937736823819524,
+   "blocks": 64
+  },
+  "sample-22-orig": {
+   "score": 0.5234375,
+   "se": 0.046491069904371685,
+   "blocks": 64
+  }
+ },
+ "what": "Amendment v2.1: the three pondering flags replayed on 64 fresh blocks of a new shared panel schedule (seed base 20261191), candidate at blind:54000:0.4, panel at blind:27000:0.4.",
+ "verdicts": {
+  "mjj-2010-garap-a": {
+   "score": 0.5390625,
+   "ci95": [
+    0.4407132649445046,
+    0.6374117350554954
+   ],
+   "stands": false
+  },
+  "lineage-fine-s07": {
+   "score": 0.5703125,
+   "ci95": [
+    0.4861560822476545,
+    0.6544689177523455
+   ],
+   "stands": false
+  },
+  "sample-22-orig": {
+   "score": 0.5234375,
+   "ci95": [
+    0.4323166773846975,
+    0.6145583226153025
+   ],
+   "stands": false
+  }
+ }
+}

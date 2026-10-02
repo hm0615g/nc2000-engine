@@ -1,0 +1,2516 @@
+{
+"what": "Challenge of the shipped blind:3000 mixture (solution-blind3000-do2) by the 100 teams outside its game: every other measured team, the 4 held-out page teams and 16 off-prior chimeras. Seed base 20261015; per support team 4 games (16-160 where earlier rounds extended); score = support-weighted mean, 95% seed bootstrap. Earlier rounds (screens of the 18- and 21-team mixtures) drove the two double-oracle additions.",
+"support": {
+"mjj-2014-thdrcomb": 0.168523933098828,
+"rental-cban-8": 0.20792071397656395,
+"sample-07": 0.027726622629545533,
+"sample-12": 0.04105978640789771,
+"sample-14": 0.20448526815408663,
+"hc75-top8-tsuru": 0.02502046903181913,
+"mjj-2015-ayagen": 0.12717987130821432,
+"sample-14-orig": 0.04409976279184674,
+"mjj-2020-rraikou": 0.15398357260119802
+},
+"results": {
+"ev-r1-pool-hc75-top8-tezan-1": {
+"score": 0.4202441447892902,
+"ci95": [
+0.33177766052462954,
+0.5071468497394621
+],
+"games": 72,
+"perSupport": {
+"sample-13": 0.0,
+"rental-cban-3": 0.25,
+"sample-08": 0.5,
+"sample-14-orig": 0.0,
+"rental-cban-2": 0.5,
+"sample-12": 0.0,
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.25,
+"mjj-2020-rraikou": 0.5,
+"sample-14": 0.5,
+"mjj-2015-ayagen": 0.75,
+"rental-cban-8": 0.25,
+"sample-07": 0.0,
+"hc75-top8-tsuru": 0.375,
+"mjj-2014-thdrcomb": 0.5
+}
+},
+"mjj-2021-crage": {
+"score": 0.5663384101366907,
+"ci95": [
+0.4953086620565339,
+0.6137107063839212
+],
+"games": 72,
+"perSupport": {
+"sample-13": 0.5,
+"sample-08": 0.5,
+"sample-12": 0.75,
+"mjj-2014-thdrcomb": 0.5,
+"mjj-2020-rraikou": 0.5,
+"sample-14": 0.5,
+"rental-cban-8": 0.75,
+"mjj-2015-ayagen": 0.5,
+"sample-07": 0.25,
+"rental-cban-2": 0.75,
+"sample-14-orig": 0.75,
+"hc75-top8-tsuru": 0.5,
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.5,
+"rental-cban-3": 0.0
+}
+},
+"sample-15": {
+"score": 0.3607912828432115,
+"ci95": [
+0.28754189167671995,
+0.4999999999999999
+],
+"games": 72,
+"perSupport": {
+"hc75-top8-tsuru": 0.4375,
+"rental-cban-3": 0.25,
+"rental-cban-13": 0.75,
+"nb-sample-12-0": 0.25,
+"mjj-2020-rraikou": 0.5,
+"rental-cban-2": 0.5,
+"sample-07": 0.75,
+"sample-14-orig": 0.25,
+"sample-14": 0.25,
+"rental-cban-8": 0.0,
+"sample-12": 0.25,
+"mjj-2015-ayagen": 0.75,
+"mjj-2014-thdrcomb": 0.5,
+"sample-08": 0.25,
+"sample-13": 0.25
+}
+},
+"mjj-2013-venom": {
+"score": 0.45824998485034896,
+"ci95": [
+0.20054662923973338,
+0.7175171197754534
+],
+"games": 72,
+"perSupport": {
+"hc75-top8-tsuru": 0.5,
+"rental-cban-8": 0.75,
+"sample-07": 0.0,
+"sample-14-orig": 0.75,
+"rental-cban-13": 0.5,
+"nb-sample-12-0": 0.25,
+"rental-cban-3": 0.5,
+"sample-08": 0.25,
+"mjj-2014-thdrcomb": 0.25,
+"sample-13": 0.75,
+"mjj-2015-ayagen": 0.5,
+"sample-14": 0.5,
+"rental-cban-2": 0.5,
+"mjj-2020-rraikou": 0.25,
+"sample-12": 0.25
+}
+},
+"sample-21": {
+"score": 0.41264489796697834,
+"ci95": [
+0.40490421566241885,
+0.5015637793144886
+],
+"games": 72,
+"perSupport": {
+"sample-14-orig": 0.5,
+"sample-07": 0.25,
+"mjj-2014-thdrcomb": 0.25,
+"hc75-top8-tsuru": 0.5625,
+"rental-cban-13": 0.75,
+"nb-sample-12-0": 0.25,
+"rental-cban-8": 0.5,
+"mjj-2020-rraikou": 0.5,
+"sample-13": 0.5,
+"sample-08": 0.5,
+"rental-cban-2": 0.5,
+"sample-14": 0.25,
+"rental-cban-3": 0.25,
+"mjj-2015-ayagen": 0.75,
+"sample-12": 0.0
+}
+},
+"mjj-2023-ukethdr": {
+"score": 0.5412778614769432,
+"ci95": [
+0.2741835055630615,
+0.8083722173908252
+],
+"games": 72,
+"perSupport": {
+"sample-12": 0.25,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-3": 0.75,
+"sample-14": 0.5,
+"mjj-2020-rraikou": 1.0,
+"sample-14-orig": 1.0,
+"sample-08": 0.5,
+"mjj-2014-thdrcomb": 0.25,
+"nb-sample-12-0": 0.5,
+"sample-13": 0.0,
+"rental-cban-13": 0.0,
+"rental-cban-2": 1.0,
+"rental-cban-8": 0.5,
+"hc75-top8-tsuru": 0.5625,
+"sample-07": 0.25
+}
+},
+"mjj-2010-garap-a": {
+"score": 0.5338583858342465,
+"ci95": [
+0.43724692977688473,
+0.607242718119753
+],
+"games": 132,
+"perSupport": {
+"rental-cban-2": 0.25,
+"mjj-2020-rraikou": 0.75,
+"hc75-top8-tsuru": 0.5625,
+"mjj-2014-thdrcomb": 0.1875,
+"rental-cban-3": 0.1875,
+"sample-07": 0.4375,
+"sample-14": 0.625,
+"sample-12": 0.5,
+"sample-14-orig": 0.75,
+"nb-sample-12-0": 0.25,
+"rental-cban-8": 0.25,
+"rental-cban-13": 0.0,
+"sample-08": 0.5,
+"mjj-2015-ayagen": 1.0,
+"sample-13": 0.4375
+}
+},
+"offprior-07": {
+"score": 0.6145578768454566,
+"ci95": [
+0.5229473973390057,
+0.6851028647145538
+],
+"games": 132,
+"perSupport": {
+"sample-13": 0.5,
+"mjj-2014-thdrcomb": 0.5,
+"rental-cban-8": 0.25,
+"sample-08": 0.75,
+"sample-12": 0.75,
+"hc75-top8-tsuru": 0.5625,
+"sample-14": 0.75,
+"rental-cban-3": 0.5,
+"sample-14-orig": 0.5,
+"sample-07": 0.3125,
+"mjj-2015-ayagen": 0.75,
+"rental-cban-2": 0.25,
+"mjj-2020-rraikou": 1.0,
+"rental-cban-13": 0.0,
+"nb-sample-12-0": 0.25
+}
+},
+"offprior-08": {
+"score": 0.37329014336105953,
+"ci95": [
+0.19608940061625468,
+0.5489271067913757
+],
+"games": 72,
+"perSupport": {
+"nb-sample-12-0": 0.0,
+"rental-cban-13": 0.5,
+"rental-cban-8": 0.25,
+"sample-13": 0.75,
+"hc75-top8-tsuru": 0.5625,
+"sample-08": 0.5,
+"sample-14": 0.5,
+"sample-14-orig": 0.5,
+"sample-12": 0.0,
+"mjj-2015-ayagen": 0.75,
+"sample-07": 0.25,
+"rental-cban-3": 0.0,
+"mjj-2014-thdrcomb": 0.25,
+"rental-cban-2": 1.0,
+"mjj-2020-rraikou": 0.25
+}
+},
+"offprior-06": {
+"score": 0.31098718586015145,
+"ci95": [
+0.2943753418873326,
+0.5093826758869321
+],
+"games": 72,
+"perSupport": {
+"sample-14-orig": 0.5,
+"hc75-top8-tsuru": 0.75,
+"sample-12": 0.0,
+"sample-14": 0.5,
+"sample-13": 0.5,
+"mjj-2020-rraikou": 0.25,
+"sample-08": 0.75,
+"rental-cban-8": 0.25,
+"rental-cban-13": 0.25,
+"mjj-2014-thdrcomb": 0.0,
+"nb-sample-12-0": 0.25,
+"rental-cban-2": 0.25,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-3": 0.25,
+"sample-07": 0.5
+}
+},
+"mjj-2011-murai-t1": {
+"score": 0.20194132193892064,
+"ci95": [
+0.16311953690068304,
+0.5031275586289773
+],
+"games": 72,
+"perSupport": {
+"mjj-2015-ayagen": 0.0,
+"rental-cban-8": 0.5,
+"sample-13": 0.0,
+"sample-08": 0.25,
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.25,
+"sample-14-orig": 0.5,
+"sample-12": 0.0,
+"sample-14": 0.25,
+"rental-cban-3": 0.25,
+"mjj-2014-thdrcomb": 0.0,
+"sample-07": 0.5,
+"hc75-top8-tsuru": 0.4375,
+"rental-cban-2": 0.5,
+"mjj-2020-rraikou": 0.0
+}
+},
+"sample-03": {
+"score": 0.31915223663640746,
+"ci95": [
+0.3049630334336966,
+0.4921811034275565
+],
+"games": 72,
+"perSupport": {
+"rental-cban-13": 0.5,
+"sample-14": 0.25,
+"nb-sample-12-0": 0.0,
+"sample-12": 0.0,
+"rental-cban-2": 0.5,
+"sample-14-orig": 0.0,
+"rental-cban-3": 0.25,
+"mjj-2015-ayagen": 0.5,
+"sample-08": 0.25,
+"sample-13": 0.5,
+"mjj-2020-rraikou": 0.75,
+"mjj-2014-thdrcomb": 0.5,
+"hc75-top8-tsuru": 0.1875,
+"sample-07": 0.0,
+"rental-cban-8": 0.0
+}
+},
+"sample-11-orig": {
+"score": 0.3876285715018708,
+"ci95": [
+0.3084542417166817,
+0.5078188965724434
+],
+"games": 72,
+"perSupport": {
+"rental-cban-13": 0.5,
+"nb-sample-12-0": 0.25,
+"sample-12": 0.0,
+"sample-14": 0.5,
+"mjj-2020-rraikou": 0.25,
+"rental-cban-3": 0.5,
+"sample-13": 0.0,
+"mjj-2014-thdrcomb": 0.75,
+"hc75-top8-tsuru": 0.75,
+"sample-08": 0.25,
+"sample-14-orig": 0.25,
+"rental-cban-2": 0.5,
+"rental-cban-8": 0.25,
+"sample-07": 0.25,
+"mjj-2015-ayagen": 0.25
+}
+},
+"ev-r1-rand-1-0": {
+"score": 0.42361662487064694,
+"ci95": [
+0.33675062379624676,
+0.5104826259450471
+],
+"games": 72,
+"perSupport": {
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.0,
+"mjj-2015-ayagen": 0.25,
+"rental-cban-2": 0.5,
+"sample-07": 0.0,
+"sample-14-orig": 0.75,
+"mjj-2014-thdrcomb": 0.0,
+"rental-cban-3": 0.0,
+"sample-14": 0.75,
+"hc75-top8-tsuru": 0.4375,
+"sample-12": 0.0,
+"mjj-2020-rraikou": 0.25,
+"rental-cban-8": 0.75,
+"sample-13": 0.25,
+"sample-08": 0.25
+}
+},
+"mjj-2012-goinkyo-t2": {
+"score": 0.3541393900711515,
+"ci95": [
+0.27018334822426265,
+0.4984362206855112
+],
+"games": 72,
+"perSupport": {
+"sample-14": 0.5,
+"rental-cban-2": 0.25,
+"sample-12": 0.5,
+"rental-cban-3": 0.5,
+"mjj-2020-rraikou": 0.25,
+"sample-08": 0.5,
+"hc75-top8-tsuru": 0.5,
+"sample-13": 0.0,
+"mjj-2014-thdrcomb": 0.25,
+"sample-14-orig": 0.5,
+"rental-cban-8": 0.0,
+"nb-sample-12-0": 0.25,
+"mjj-2015-ayagen": 0.75,
+"sample-07": 0.75,
+"rental-cban-13": 0.5
+}
+},
+"mjj-2010-garap-b": {
+"score": 0.32810261212759156,
+"ci95": [
+0.22155667394304318,
+0.49222019791041866
+],
+"games": 72,
+"perSupport": {
+"sample-14-orig": 0.75,
+"rental-cban-8": 0.25,
+"sample-13": 0.25,
+"sample-08": 0.75,
+"sample-14": 0.5,
+"rental-cban-13": 0.0,
+"nb-sample-12-0": 0.0,
+"sample-12": 0.0,
+"mjj-2020-rraikou": 0.5,
+"hc75-top8-tsuru": 0.3125,
+"sample-07": 0.5,
+"rental-cban-3": 0.75,
+"mjj-2015-ayagen": 0.0,
+"rental-cban-2": 0.25,
+"mjj-2014-thdrcomb": 0.25
+}
+},
+"sample-09": {
+"score": 0.34890045930647395,
+"ci95": [
+0.2156529079508083,
+0.4999999999999999
+],
+"games": 72,
+"perSupport": {
+"mjj-2020-rraikou": 0.5,
+"mjj-2014-thdrcomb": 0.25,
+"sample-13": 0.25,
+"rental-cban-2": 0.5,
+"nb-sample-12-0": 0.5,
+"sample-08": 0.25,
+"rental-cban-13": 0.0,
+"sample-14": 0.0,
+"sample-14-orig": 0.5,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-3": 0.5,
+"sample-12": 0.75,
+"sample-07": 0.0,
+"hc75-top8-tsuru": 0.375,
+"rental-cban-8": 0.5
+}
+},
+"sample-16-orig": {
+"score": 0.43118861305057027,
+"ci95": [
+0.29878729044703345,
+0.5651537149685958
+],
+"games": 72,
+"perSupport": {
+"rental-cban-3": 0.5,
+"sample-07": 0.25,
+"nb-sample-12-0": 0.5,
+"rental-cban-13": 0.5,
+"mjj-2015-ayagen": 1.0,
+"rental-cban-2": 0.5,
+"sample-14-orig": 0.5,
+"mjj-2014-thdrcomb": 0.25,
+"rental-cban-8": 0.25,
+"sample-13": 1.0,
+"mjj-2020-rraikou": 0.25,
+"sample-08": 0.25,
+"sample-14": 0.5,
+"hc75-top8-tsuru": 0.375,
+"sample-12": 0.75
+}
+},
+"offprior-12": {
+"score": 0.6342376163279961,
+"ci95": [
+0.4968724413710226,
+0.6655250526596195
+],
+"games": 72,
+"perSupport": {
+"sample-12": 0.5,
+"mjj-2020-rraikou": 0.75,
+"rental-cban-3": 0.25,
+"sample-14": 0.5,
+"sample-14-orig": 0.5,
+"mjj-2015-ayagen": 0.25,
+"nb-sample-12-0": 0.5,
+"sample-08": 0.5,
+"rental-cban-2": 0.0,
+"rental-cban-13": 0.25,
+"sample-13": 0.5,
+"hc75-top8-tsuru": 0.3125,
+"rental-cban-8": 1.0,
+"mjj-2014-thdrcomb": 0.75,
+"sample-07": 0.0
+}
+},
+"lineage-fine-s13": {
+"score": 0.19911043429482483,
+"ci95": [
+0.18228857125507616,
+0.5062551172579547
+],
+"games": 72,
+"perSupport": {
+"mjj-2015-ayagen": 0.0,
+"mjj-2020-rraikou": 0.75,
+"sample-13": 0.75,
+"sample-08": 0.25,
+"sample-14-orig": 0.5,
+"rental-cban-2": 0.25,
+"rental-cban-13": 0.0,
+"nb-sample-12-0": 0.5,
+"sample-12": 0.0,
+"sample-14": 0.0,
+"rental-cban-3": 0.0,
+"mjj-2014-thdrcomb": 0.25,
+"sample-07": 0.25,
+"hc75-top8-tsuru": 0.5,
+"rental-cban-8": 0.0
+}
+},
+"offprior-11": {
+"score": 0.4385219562466143,
+"ci95": [
+0.4180895244076414,
+0.5015637793144886
+],
+"games": 72,
+"perSupport": {
+"mjj-2015-ayagen": 0.5,
+"sample-07": 0.5,
+"mjj-2014-thdrcomb": 0.5,
+"mjj-2020-rraikou": 0.75,
+"rental-cban-8": 0.25,
+"sample-13": 0.5,
+"sample-08": 0.25,
+"sample-14-orig": 0.5,
+"rental-cban-2": 0.25,
+"hc75-top8-tsuru": 0.625,
+"sample-12": 0.5,
+"rental-cban-3": 0.5,
+"rental-cban-13": 0.0,
+"sample-14": 0.25,
+"nb-sample-12-0": 0.25
+}
+},
+"sample-25-orig": {
+"score": 0.47988075322025325,
+"ci95": [
+0.3540096550369838,
+0.6064889934515838
+],
+"games": 192,
+"perSupport": {
+"sample-14-orig": 0.25,
+"rental-cban-3": 0.375,
+"sample-13": 0.375,
+"sample-08": 0.4375,
+"hc75-top8-tsuru": 0.625,
+"rental-cban-2": 0.625,
+"mjj-2014-thdrcomb": 0.4375,
+"sample-14": 0.5625,
+"mjj-2020-rraikou": 0.5,
+"rental-cban-13": 0.375,
+"nb-sample-12-0": 0.125,
+"sample-12": 0.5,
+"mjj-2015-ayagen": 0.25,
+"sample-07": 0.1875,
+"rental-cban-8": 0.625
+}
+},
+"sample-27": {
+"score": 0.2160131217369789,
+"ci95": [
+0.20986706406226774,
+0.4953086620565339
+],
+"games": 72,
+"perSupport": {
+"sample-13": 0.0,
+"rental-cban-3": 0.5,
+"sample-08": 0.25,
+"nb-sample-12-0": 0.0,
+"rental-cban-13": 0.25,
+"hc75-top8-tsuru": 0.1875,
+"rental-cban-2": 0.5,
+"sample-12": 0.25,
+"mjj-2020-rraikou": 0.0,
+"sample-14": 0.5,
+"sample-14-orig": 0.25,
+"mjj-2015-ayagen": 0.25,
+"mjj-2014-thdrcomb": 0.25,
+"rental-cban-8": 0.0,
+"sample-07": 0.5
+}
+},
+"mjj-2020-kb-2020": {
+"score": 0.12938326125045532,
+"ci95": [
+0.026373545830682334,
+0.5062551172579547
+],
+"games": 72,
+"perSupport": {
+"nb-sample-12-0": 0.75,
+"rental-cban-13": 0.0,
+"rental-cban-2": 0.25,
+"mjj-2014-thdrcomb": 0.0,
+"mjj-2020-rraikou": 0.25,
+"sample-07": 0.5,
+"mjj-2015-ayagen": 0.0,
+"rental-cban-3": 0.0,
+"sample-14-orig": 0.0,
+"sample-08": 0.0,
+"sample-13": 0.5,
+"sample-12": 0.25,
+"rental-cban-8": 0.0,
+"sample-14": 0.25,
+"hc75-top8-tsuru": 0.625
+}
+},
+"sample-19": {
+"score": 0.23010488511055108,
+"ci95": [
+0.15254324014698722,
+0.5015637793144886
+],
+"games": 72,
+"perSupport": {
+"sample-13": 0.75,
+"sample-08": 0.0,
+"sample-14-orig": 0.0,
+"rental-cban-13": 0.0,
+"nb-sample-12-0": 0.0,
+"sample-12": 0.0,
+"rental-cban-8": 0.25,
+"hc75-top8-tsuru": 0.4375,
+"mjj-2020-rraikou": 0.0,
+"sample-14": 0.25,
+"sample-07": 0.0,
+"rental-cban-2": 0.25,
+"mjj-2015-ayagen": 0.25,
+"rental-cban-3": 0.0,
+"mjj-2014-thdrcomb": 0.5
+}
+},
+"offprior-01": {
+"score": 0.36338817440105375,
+"ci95": [
+0.22963309154995803,
+0.4999999999999999
+],
+"games": 72,
+"perSupport": {
+"hc75-top8-tsuru": 0.375,
+"sample-07": 0.0,
+"mjj-2020-rraikou": 0.75,
+"rental-cban-2": 0.0,
+"rental-cban-3": 0.0,
+"nb-sample-12-0": 0.25,
+"rental-cban-13": 1.0,
+"sample-13": 0.0,
+"sample-08": 0.25,
+"mjj-2015-ayagen": 0.0,
+"mjj-2014-thdrcomb": 0.0,
+"sample-14": 0.5,
+"sample-14-orig": 0.5,
+"sample-12": 0.25,
+"rental-cban-8": 0.5
+}
+},
+"ev-r1-pool-hc75-3rd-bean-0": {
+"score": 0.5166862443008085,
+"ci95": [
+0.3978590382099386,
+0.6503136561739007
+],
+"games": 192,
+"perSupport": {
+"sample-07": 0.5625,
+"mjj-2020-rraikou": 0.25,
+"rental-cban-8": 0.6875,
+"hc75-top8-tsuru": 0.6875,
+"mjj-2014-thdrcomb": 0.5625,
+"sample-13": 0.3125,
+"sample-08": 0.5625,
+"nb-sample-12-0": 0.5,
+"rental-cban-3": 0.5625,
+"rental-cban-13": 0.125,
+"sample-14": 0.5,
+"sample-14-orig": 0.25,
+"rental-cban-2": 0.4375,
+"sample-12": 0.75,
+"mjj-2015-ayagen": 0.5
+}
+},
+"offprior-02": {
+"score": 0.4900980892154567,
+"ci95": [
+0.4399490876060915,
+0.5402470908248219
+],
+"games": 72,
+"perSupport": {
+"sample-14": 0.5,
+"rental-cban-8": 0.75,
+"sample-12": 0.5,
+"rental-cban-13": 0.0,
+"hc75-top8-tsuru": 0.4375,
+"nb-sample-12-0": 0.0,
+"sample-14-orig": 0.25,
+"mjj-2014-thdrcomb": 0.25,
+"sample-08": 0.25,
+"sample-13": 0.5,
+"mjj-2020-rraikou": 0.75,
+"rental-cban-3": 0.0,
+"mjj-2015-ayagen": 0.25,
+"sample-07": 0.0,
+"rental-cban-2": 0.75
+}
+},
+"lineage-gb-uni-rand": {
+"score": 0.18515432186795638,
+"ci95": [
+0.12982716208690565,
+0.4968724413710226
+],
+"games": 72,
+"perSupport": {
+"sample-14": 0.0,
+"rental-cban-8": 0.0,
+"sample-12": 0.5,
+"sample-08": 0.5,
+"mjj-2015-ayagen": 0.5,
+"sample-13": 0.25,
+"rental-cban-3": 0.25,
+"sample-14-orig": 0.25,
+"mjj-2014-thdrcomb": 0.25,
+"rental-cban-13": 0.0,
+"nb-sample-12-0": 0.0,
+"rental-cban-2": 1.0,
+"hc75-top8-tsuru": 0.375,
+"sample-07": 0.0,
+"mjj-2020-rraikou": 0.25
+}
+},
+"mjj-2013-bakabi": {
+"score": 0.3237697495665197,
+"ci95": [
+0.2882741682261278,
+0.4984362206855112
+],
+"games": 72,
+"perSupport": {
+"rental-cban-3": 0.25,
+"sample-12": 0.25,
+"sample-14": 0.0,
+"sample-13": 0.25,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-2": 0.25,
+"sample-08": 0.75,
+"rental-cban-8": 0.5,
+"mjj-2014-thdrcomb": 0.0,
+"nb-sample-12-0": 0.75,
+"rental-cban-13": 0.75,
+"mjj-2020-rraikou": 0.75,
+"sample-14-orig": 0.25,
+"sample-07": 0.25,
+"hc75-top8-tsuru": 0.5
+}
+},
+"rental-cban-4": {
+"score": 0.4486026083587105,
+"ci95": [
+0.39554865069843326,
+0.5313110038176793
+],
+"games": 132,
+"perSupport": {
+"sample-12": 0.0,
+"sample-14": 0.25,
+"sample-14-orig": 0.5,
+"rental-cban-8": 0.5,
+"mjj-2014-thdrcomb": 0.8125,
+"rental-cban-13": 0.5,
+"sample-08": 0.25,
+"nb-sample-12-0": 0.0,
+"sample-13": 0.25,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-3": 0.6875,
+"mjj-2020-rraikou": 0.25,
+"hc75-top8-tsuru": 0.8125,
+"rental-cban-2": 0.25,
+"sample-07": 0.4375
+}
+},
+"rental-cban-11": {
+"score": 0.552093144265802,
+"ci95": [
+0.4430102386245668,
+0.5877419845248801
+],
+"games": 132,
+"perSupport": {
+"rental-cban-3": 0.625,
+"sample-12": 0.5,
+"mjj-2015-ayagen": 0.75,
+"sample-14-orig": 0.75,
+"sample-14": 0.5,
+"sample-13": 0.5,
+"rental-cban-13": 0.5,
+"nb-sample-12-0": 0.25,
+"rental-cban-2": 0.25,
+"sample-08": 0.75,
+"rental-cban-8": 0.5,
+"hc75-top8-tsuru": 0.3125,
+"mjj-2020-rraikou": 0.75,
+"sample-07": 0.375,
+"mjj-2014-thdrcomb": 0.375
+}
+},
+"offprior-10": {
+"score": 0.3449860158330284,
+"ci95": [
+0.2894751600308601,
+0.4953086620565339
+],
+"games": 72,
+"perSupport": {
+"sample-14-orig": 0.0,
+"rental-cban-8": 0.5,
+"mjj-2014-thdrcomb": 0.75,
+"rental-cban-13": 0.75,
+"sample-07": 0.25,
+"nb-sample-12-0": 0.75,
+"mjj-2015-ayagen": 0.0,
+"sample-12": 0.25,
+"rental-cban-3": 0.0,
+"sample-14": 0.25,
+"hc75-top8-tsuru": 0.3125,
+"sample-13": 0.0,
+"sample-08": 0.25,
+"mjj-2020-rraikou": 0.25,
+"rental-cban-2": 0.5
+}
+},
+"mjj-2024-kabiliz": {
+"score": 0.5065558259078513,
+"ci95": [
+0.4310170629404161,
+0.5820945888752863
+],
+"games": 72,
+"perSupport": {
+"sample-08": 0.0,
+"sample-13": 0.25,
+"rental-cban-8": 0.5,
+"sample-12": 0.75,
+"mjj-2014-thdrcomb": 0.5,
+"sample-14": 0.25,
+"hc75-top8-tsuru": 0.3125,
+"rental-cban-3": 0.5,
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.25,
+"sample-07": 0.0,
+"sample-14-orig": 0.25,
+"rental-cban-2": 0.5,
+"mjj-2015-ayagen": 0.5,
+"mjj-2020-rraikou": 1.0
+}
+},
+"sample-22": {
+"score": 0.29518747305800536,
+"ci95": [
+0.27859726965370674,
+0.4999999999999999
+],
+"games": 72,
+"perSupport": {
+"sample-14": 0.25,
+"rental-cban-3": 0.5,
+"sample-12": 0.5,
+"rental-cban-2": 0.0,
+"sample-08": 0.0,
+"hc75-top8-tsuru": 0.375,
+"sample-13": 0.25,
+"rental-cban-8": 0.25,
+"sample-14-orig": 0.25,
+"nb-sample-12-0": 0.25,
+"sample-07": 0.25,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-13": 0.0,
+"mjj-2014-thdrcomb": 0.25,
+"mjj-2020-rraikou": 0.25
+}
+},
+"hc75-top8-tezan": {
+"score": 0.1261775680648939,
+"ci95": [
+0.09189493430798532,
+0.5015637793144886
+],
+"games": 72,
+"perSupport": {
+"sample-14-orig": 0.5,
+"mjj-2014-thdrcomb": 0.0,
+"rental-cban-8": 0.0,
+"sample-07": 0.0,
+"rental-cban-13": 0.0,
+"nb-sample-12-0": 0.25,
+"hc75-top8-tsuru": 0.4375,
+"sample-14": 0.25,
+"rental-cban-3": 0.75,
+"sample-12": 0.25,
+"mjj-2015-ayagen": 0.25,
+"sample-08": 0.5,
+"mjj-2020-rraikou": 0.0,
+"sample-13": 0.0,
+"rental-cban-2": 0.25
+}
+},
+"sample-15-orig": {
+"score": 0.32358003139530755,
+"ci95": [
+0.25369740348162684,
+0.5078188965724434
+],
+"games": 72,
+"perSupport": {
+"sample-08": 0.0,
+"hc75-top8-tsuru": 0.75,
+"sample-13": 0.25,
+"rental-cban-8": 0.25,
+"sample-12": 0.25,
+"sample-14": 0.0,
+"mjj-2020-rraikou": 0.75,
+"mjj-2014-thdrcomb": 0.5,
+"rental-cban-13": 0.5,
+"nb-sample-12-0": 0.5,
+"sample-07": 0.0,
+"mjj-2015-ayagen": 0.25,
+"rental-cban-3": 0.25,
+"rental-cban-2": 0.5,
+"sample-14-orig": 0.25
+}
+},
+"mjj-2011-garatank": {
+"score": 0.4695708940037202,
+"ci95": [
+0.445858365933676,
+0.4953086620565339
+],
+"games": 72,
+"perSupport": {
+"sample-14": 0.75,
+"mjj-2020-rraikou": 1.0,
+"sample-12": 0.25,
+"rental-cban-2": 0.75,
+"mjj-2014-thdrcomb": 0.5,
+"sample-08": 0.0,
+"mjj-2015-ayagen": 0.0,
+"sample-13": 0.0,
+"rental-cban-3": 0.5,
+"sample-14-orig": 0.25,
+"hc75-top8-tsuru": 0.1875,
+"nb-sample-12-0": 0.25,
+"sample-07": 0.0,
+"rental-cban-13": 1.0,
+"rental-cban-8": 0.25
+}
+},
+"ev-r1-rand-0-0": {
+"score": 0.11334303287521415,
+"ci95": [
+0.10865169493174806,
+0.4953086620565339
+],
+"games": 72,
+"perSupport": {
+"mjj-2014-thdrcomb": 0.0,
+"sample-13": 0.25,
+"rental-cban-3": 0.0,
+"sample-08": 0.0,
+"mjj-2015-ayagen": 0.0,
+"rental-cban-2": 0.0,
+"mjj-2020-rraikou": 0.0,
+"sample-12": 0.0,
+"sample-14": 0.0,
+"rental-cban-8": 0.5,
+"sample-07": 0.0,
+"nb-sample-12-0": 0.0,
+"rental-cban-13": 0.0,
+"sample-14-orig": 0.0,
+"hc75-top8-tsuru": 0.375
+}
+},
+"hc75-1st-show": {
+"score": 0.36107709186953085,
+"ci95": [
+0.2784433260569568,
+0.4999999999999999
+],
+"games": 72,
+"perSupport": {
+"rental-cban-8": 0.5,
+"hc75-top8-tsuru": 0.375,
+"mjj-2014-thdrcomb": 0.5,
+"sample-07": 0.0,
+"nb-sample-12-0": 0.25,
+"rental-cban-3": 0.0,
+"rental-cban-13": 0.25,
+"sample-12": 0.25,
+"mjj-2015-ayagen": 0.5,
+"sample-14": 0.25,
+"sample-13": 0.0,
+"sample-08": 0.25,
+"rental-cban-2": 0.25,
+"mjj-2020-rraikou": 0.25,
+"sample-14-orig": 0.0
+}
+},
+"sample-05": {
+"score": 0.33002436859529055,
+"ci95": [
+0.09677220106532355,
+0.5632765361252576
+],
+"games": 72,
+"perSupport": {
+"mjj-2015-ayagen": 0.25,
+"mjj-2014-thdrcomb": 0.25,
+"sample-14-orig": 0.5,
+"rental-cban-8": 0.25,
+"nb-sample-12-0": 0.5,
+"rental-cban-13": 0.0,
+"mjj-2020-rraikou": 0.25,
+"sample-07": 0.5,
+"sample-12": 0.25,
+"rental-cban-3": 0.25,
+"sample-14": 0.5,
+"hc75-top8-tsuru": 0.6875,
+"rental-cban-2": 0.5,
+"sample-08": 0.75,
+"sample-13": 0.25
+}
+},
+"rental-cban-6": {
+"score": 0.35337897768758697,
+"ci95": [
+0.2775384155403324,
+0.504691337943466
+],
+"games": 72,
+"perSupport": {
+"rental-cban-3": 0.5,
+"sample-14-orig": 0.75,
+"mjj-2020-rraikou": 0.25,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-2": 0.25,
+"nb-sample-12-0": 0.5,
+"rental-cban-13": 0.25,
+"sample-07": 0.25,
+"rental-cban-8": 0.5,
+"sample-12": 0.0,
+"hc75-top8-tsuru": 0.5625,
+"sample-14": 0.25,
+"sample-13": 0.25,
+"sample-08": 0.75,
+"mjj-2014-thdrcomb": 0.25
+}
+},
+"ev-r1-rand-1-1": {
+"score": 0.40030385557458215,
+"ci95": [
+0.33362306516726936,
+0.4984362206855112
+],
+"games": 72,
+"perSupport": {
+"mjj-2020-rraikou": 0.25,
+"sample-07": 0.0,
+"mjj-2014-thdrcomb": 0.0,
+"rental-cban-3": 0.25,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-2": 0.25,
+"rental-cban-13": 0.5,
+"nb-sample-12-0": 0.0,
+"sample-13": 0.5,
+"rental-cban-8": 0.5,
+"sample-08": 0.25,
+"sample-14": 0.75,
+"hc75-top8-tsuru": 0.3125,
+"sample-14-orig": 0.75,
+"sample-12": 0.0
+}
+},
+"lineage-gb-nash-s13": {
+"score": 0.3587585598877267,
+"ci95": [
+0.3099359967053138,
+0.4968724413710226
+],
+"games": 72,
+"perSupport": {
+"rental-cban-2": 0.5,
+"sample-07": 0.0,
+"rental-cban-3": 0.0,
+"mjj-2015-ayagen": 0.25,
+"sample-13": 0.25,
+"rental-cban-13": 0.5,
+"nb-sample-12-0": 0.5,
+"sample-08": 0.75,
+"mjj-2014-thdrcomb": 0.25,
+"mjj-2020-rraikou": 0.25,
+"hc75-top8-tsuru": 0.3125,
+"rental-cban-8": 0.5,
+"sample-12": 0.25,
+"sample-14-orig": 0.5,
+"sample-14": 0.5
+}
+},
+"ev-r1-rand-4-0": {
+"score": 0.15052096188825434,
+"ci95": [
+0.06984505291206194,
+0.4968724413710226
+],
+"games": 72,
+"perSupport": {
+"sample-07": 0.0,
+"rental-cban-3": 0.0,
+"mjj-2015-ayagen": 0.25,
+"rental-cban-2": 0.5,
+"mjj-2014-thdrcomb": 0.0,
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.25,
+"sample-13": 0.25,
+"rental-cban-8": 0.0,
+"sample-08": 0.0,
+"mjj-2020-rraikou": 0.25,
+"sample-14": 0.25,
+"hc75-top8-tsuru": 0.3125,
+"sample-14-orig": 0.25,
+"sample-12": 0.25
+}
+},
+"ev-r1-pool-hc75-2nd-toriyama-0": {
+"score": 0.13504867155769068,
+"ci95": [
+0.10948319769682893,
+0.4953086620565339
+],
+"games": 72,
+"perSupport": {
+"mjj-2015-ayagen": 0.0,
+"rental-cban-8": 0.25,
+"sample-14-orig": 0.25,
+"nb-sample-12-0": 0.5,
+"rental-cban-13": 0.0,
+"mjj-2020-rraikou": 0.0,
+"sample-07": 0.0,
+"sample-12": 0.5,
+"rental-cban-3": 0.25,
+"sample-14": 0.0,
+"hc75-top8-tsuru": 0.375,
+"rental-cban-2": 0.25,
+"sample-08": 0.0,
+"sample-13": 0.25,
+"mjj-2014-thdrcomb": 0.25
+}
+},
+"mjj-2019-dojo": {
+"score": 0.41946697285023693,
+"ci95": [
+0.35601069061312446,
+0.5235255325260235
+],
+"games": 132,
+"perSupport": {
+"sample-08": 0.5,
+"mjj-2014-thdrcomb": 0.5625,
+"sample-13": 0.4375,
+"rental-cban-8": 0.25,
+"hc75-top8-tsuru": 0.375,
+"sample-12": 0.25,
+"sample-14": 0.625,
+"sample-14-orig": 0.25,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-3": 0.125,
+"sample-07": 0.4375,
+"mjj-2020-rraikou": 0.25,
+"rental-cban-2": 0.5,
+"rental-cban-13": 0.5,
+"nb-sample-12-0": 0.25
+}
+},
+"lineage-gb-uni-s07": {
+"score": 0.25845166538519826,
+"ci95": [
+0.2370134242730088,
+0.4953086620565339
+],
+"games": 72,
+"perSupport": {
+"sample-07": 0.0,
+"rental-cban-3": 0.25,
+"mjj-2020-rraikou": 0.25,
+"rental-cban-2": 0.75,
+"mjj-2015-ayagen": 0.25,
+"rental-cban-8": 0.25,
+"sample-14-orig": 1.0,
+"sample-13": 0.25,
+"sample-08": 0.75,
+"hc75-top8-tsuru": 0.3125,
+"sample-14": 0.0,
+"mjj-2014-thdrcomb": 0.5,
+"nb-sample-12-0": 0.0,
+"rental-cban-13": 0.25,
+"sample-12": 0.0
+}
+},
+"mjj-2020-kb-2022": {
+"score": 0.3952312201019407,
+"ci95": [
+0.20873552483730207,
+0.5817269153665793
+],
+"games": 72,
+"perSupport": {
+"sample-13": 0.5,
+"mjj-2015-ayagen": 0.25,
+"sample-08": 0.0,
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.5,
+"sample-14-orig": 0.0,
+"sample-12": 0.5,
+"rental-cban-8": 0.25,
+"sample-14": 0.5,
+"sample-07": 0.5,
+"hc75-top8-tsuru": 0.6875,
+"rental-cban-2": 0.0,
+"mjj-2014-thdrcomb": 0.25,
+"rental-cban-3": 0.25,
+"mjj-2020-rraikou": 0.75
+}
+},
+"lineage-fine-s07": {
+"score": 0.4227596283138746,
+"ci95": [
+0.30248883080662037,
+0.5430304258211289
+],
+"games": 72,
+"perSupport": {
+"sample-08": 0.5,
+"sample-14-orig": 0.5,
+"sample-13": 0.5,
+"hc75-top8-tsuru": 0.625,
+"rental-cban-8": 0.25,
+"mjj-2020-rraikou": 0.5,
+"sample-12": 0.75,
+"mjj-2014-thdrcomb": 0.5,
+"nb-sample-12-0": 1.0,
+"sample-14": 0.0,
+"rental-cban-13": 0.75,
+"mjj-2015-ayagen": 1.0,
+"rental-cban-3": 0.5,
+"sample-07": 0.5,
+"rental-cban-2": 0.25
+}
+},
+"rental-cban-15": {
+"score": 0.3313441811347525,
+"ci95": [
+0.2994343533395058,
+0.5015637793144886
+],
+"games": 72,
+"perSupport": {
+"sample-14": 0.5,
+"rental-cban-2": 0.25,
+"rental-cban-13": 0.0,
+"nb-sample-12-0": 0.0,
+"sample-12": 0.25,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-3": 0.0,
+"sample-08": 0.75,
+"sample-14-orig": 0.5,
+"sample-13": 0.0,
+"hc75-top8-tsuru": 0.5625,
+"rental-cban-8": 0.0,
+"sample-07": 0.0,
+"mjj-2020-rraikou": 0.5,
+"mjj-2014-thdrcomb": 0.25
+}
+},
+"sample-06": {
+"score": 0.5288292745142754,
+"ci95": [
+0.35285162467305486,
+0.6484442584995682
+],
+"games": 132,
+"perSupport": {
+"sample-13": 0.375,
+"mjj-2020-rraikou": 0.75,
+"sample-08": 0.0,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-2": 0.25,
+"sample-12": 0.5,
+"rental-cban-3": 0.3125,
+"sample-14": 0.3125,
+"hc75-top8-tsuru": 0.6875,
+"sample-14-orig": 0.5,
+"mjj-2014-thdrcomb": 0.375,
+"sample-07": 0.25,
+"rental-cban-13": 0.0,
+"nb-sample-12-0": 0.25,
+"rental-cban-8": 0.75
+}
+},
+"ev-r1-rand-2-0": {
+"score": 0.3226419346725983,
+"ci95": [
+0.12159680088324085,
+0.5236870684619556
+],
+"games": 72,
+"perSupport": {
+"mjj-2020-rraikou": 0.0,
+"rental-cban-2": 0.75,
+"sample-14-orig": 0.5,
+"hc75-top8-tsuru": 0.25,
+"rental-cban-3": 0.75,
+"rental-cban-13": 0.25,
+"sample-07": 0.5,
+"nb-sample-12-0": 0.0,
+"sample-12": 0.5,
+"mjj-2015-ayagen": 0.5,
+"sample-14": 0.5,
+"sample-08": 0.75,
+"mjj-2014-thdrcomb": 0.25,
+"rental-cban-8": 0.25,
+"sample-13": 0.25
+}
+},
+"offprior-13": {
+"score": 0.6271353999196,
+"ci95": [
+0.5195630146210659,
+0.6919197511581997
+],
+"games": 192,
+"perSupport": {
+"sample-08": 0.4375,
+"sample-13": 0.6875,
+"rental-cban-2": 0.625,
+"rental-cban-3": 0.625,
+"mjj-2015-ayagen": 1.0,
+"sample-12": 0.5,
+"sample-14": 0.5625,
+"mjj-2020-rraikou": 0.5,
+"sample-07": 0.4375,
+"sample-14-orig": 1.0,
+"rental-cban-8": 0.5,
+"nb-sample-12-0": 0.75,
+"rental-cban-13": 0.375,
+"hc75-top8-tsuru": 0.875,
+"mjj-2014-thdrcomb": 0.625
+}
+},
+"rental-cban-14": {
+"score": 0.454932686514322,
+"ci95": [
+0.4143163918274553,
+0.5031275586289773
+],
+"games": 72,
+"perSupport": {
+"rental-cban-3": 0.5,
+"sample-08": 0.75,
+"sample-13": 0.0,
+"mjj-2015-ayagen": 0.25,
+"sample-14": 0.75,
+"mjj-2020-rraikou": 0.25,
+"rental-cban-2": 0.5,
+"sample-12": 0.0,
+"rental-cban-8": 0.5,
+"rental-cban-13": 0.5,
+"mjj-2014-thdrcomb": 0.5,
+"nb-sample-12-0": 0.25,
+"sample-07": 0.25,
+"sample-14-orig": 0.5,
+"hc75-top8-tsuru": 0.5625
+}
+},
+"ev-r1-pool-hc75-top8-tezan-0": {
+"score": 0.42384145186325733,
+"ci95": [
+0.40122794070981294,
+0.4874897654840904
+],
+"games": 72,
+"perSupport": {
+"mjj-2015-ayagen": 0.75,
+"rental-cban-2": 0.5,
+"sample-12": 0.5,
+"sample-14": 0.25,
+"rental-cban-3": 0.25,
+"sample-13": 0.25,
+"sample-08": 0.25,
+"sample-14-orig": 0.25,
+"hc75-top8-tsuru": 0.0625,
+"mjj-2014-thdrcomb": 0.75,
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.75,
+"rental-cban-8": 0.5,
+"mjj-2020-rraikou": 0.0,
+"sample-07": 0.5
+}
+},
+"sample-24": {
+"score": 0.2028934825055128,
+"ci95": [
+0.03304012771985842,
+0.5125102345159095
+],
+"games": 72,
+"perSupport": {
+"hc75-top8-tsuru": 0.6875,
+"mjj-2020-rraikou": 0.25,
+"mjj-2014-thdrcomb": 0.25,
+"rental-cban-8": 0.25,
+"sample-07": 0.0,
+"sample-12": 0.25,
+"sample-14": 0.0,
+"rental-cban-13": 0.5,
+"nb-sample-12-0": 0.5,
+"mjj-2015-ayagen": 0.25,
+"rental-cban-2": 0.25,
+"sample-14-orig": 0.25,
+"sample-08": 0.75,
+"sample-13": 0.5,
+"rental-cban-3": 0.5
+}
+},
+"mjj-2009-chourou": {
+"score": 0.39036042810266014,
+"ci95": [
+0.20388352348694486,
+0.5752735534038866
+],
+"games": 72,
+"perSupport": {
+"rental-cban-3": 0.0,
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.0,
+"hc75-top8-tsuru": 0.375,
+"sample-14-orig": 0.5,
+"rental-cban-2": 0.75,
+"sample-07": 0.5,
+"rental-cban-8": 0.5,
+"sample-12": 0.0,
+"mjj-2015-ayagen": 0.5,
+"sample-14": 0.25,
+"mjj-2020-rraikou": 0.0,
+"sample-08": 0.5,
+"sample-13": 0.0,
+"mjj-2014-thdrcomb": 0.75
+}
+},
+"ev-r1-pool-hc75-1st-show-0": {
+"score": 0.3184681355529606,
+"ci95": [
+0.207766770379814,
+0.4953086620565339
+],
+"games": 72,
+"perSupport": {
+"mjj-2020-rraikou": 0.25,
+"nb-sample-12-0": 0.0,
+"rental-cban-13": 0.25,
+"rental-cban-2": 0.5,
+"sample-07": 0.25,
+"hc75-top8-tsuru": 0.1875,
+"sample-14-orig": 0.25,
+"rental-cban-3": 0.5,
+"sample-12": 0.0,
+"mjj-2014-thdrcomb": 0.0,
+"sample-14": 0.75,
+"sample-13": 0.5,
+"sample-08": 0.0,
+"mjj-2015-ayagen": 0.0,
+"rental-cban-8": 0.5
+}
+},
+"offprior-03": {
+"score": 0.5617128356342005,
+"ci95": [
+0.4258405702283369,
+0.6933184043755828
+],
+"games": 192,
+"perSupport": {
+"mjj-2014-thdrcomb": 0.75,
+"sample-08": 0.5625,
+"sample-13": 0.4375,
+"sample-14": 0.5625,
+"hc75-top8-tsuru": 0.3125,
+"rental-cban-8": 0.5625,
+"sample-12": 0.5,
+"rental-cban-2": 0.6875,
+"sample-07": 0.6875,
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.4375,
+"mjj-2020-rraikou": 0.25,
+"sample-14-orig": 0.5,
+"rental-cban-3": 0.625,
+"mjj-2015-ayagen": 0.75
+}
+},
+"mjj-2012-goinkyo-2020": {
+"score": 0.5372420131151878,
+"ci95": [
+0.4241519548800301,
+0.6503320713503455
+],
+"games": 72,
+"perSupport": {
+"rental-cban-8": 0.75,
+"sample-07": 0.0,
+"mjj-2015-ayagen": 0.75,
+"rental-cban-3": 0.5,
+"sample-12": 0.5,
+"sample-14": 0.5,
+"mjj-2014-thdrcomb": 0.25,
+"sample-14-orig": 0.75,
+"hc75-top8-tsuru": 0.4375,
+"sample-13": 0.25,
+"nb-sample-12-0": 1.0,
+"rental-cban-2": 0.25,
+"sample-08": 0.75,
+"rental-cban-13": 0.25,
+"mjj-2020-rraikou": 0.5
+}
+},
+"ev-r1-rand-5-1": {
+"score": 0.4124565312248587,
+"ci95": [
+0.2687472506411751,
+0.5530382531795648
+],
+"games": 72,
+"perSupport": {
+"sample-13": 0.0,
+"sample-08": 0.25,
+"rental-cban-3": 0.25,
+"rental-cban-2": 0.25,
+"sample-12": 0.5,
+"mjj-2015-ayagen": 0.5,
+"sample-14": 1.0,
+"mjj-2020-rraikou": 0.5,
+"rental-cban-8": 0.0,
+"mjj-2014-thdrcomb": 0.0,
+"sample-07": 0.5,
+"nb-sample-12-0": 0.5,
+"rental-cban-13": 0.0,
+"sample-14-orig": 0.5,
+"hc75-top8-tsuru": 0.4375
+}
+},
+"offprior-09": {
+"score": 0.48254828201186195,
+"ci95": [
+0.290386374142086,
+0.6606934998309022
+],
+"games": 192,
+"perSupport": {
+"sample-14": 0.5625,
+"sample-12": 0.0,
+"rental-cban-8": 0.5,
+"hc75-top8-tsuru": 0.4375,
+"mjj-2020-rraikou": 0.25,
+"sample-13": 0.5,
+"sample-08": 0.375,
+"nb-sample-12-0": 0.1875,
+"rental-cban-13": 0.625,
+"rental-cban-2": 0.3125,
+"sample-07": 0.4375,
+"mjj-2014-thdrcomb": 0.625,
+"rental-cban-3": 0.4375,
+"mjj-2015-ayagen": 0.5,
+"sample-14-orig": 0.75
+}
+},
+"sample-17-orig": {
+"score": 0.4042486908607551,
+"ci95": [
+0.3318059326480891,
+0.4902424152218419
+],
+"games": 192,
+"perSupport": {
+"mjj-2015-ayagen": 0.25,
+"sample-08": 0.5,
+"mjj-2014-thdrcomb": 0.375,
+"sample-13": 0.6875,
+"sample-14-orig": 0.25,
+"sample-14": 0.5,
+"nb-sample-12-0": 0.5,
+"rental-cban-13": 0.8125,
+"mjj-2020-rraikou": 0.25,
+"sample-12": 0.75,
+"rental-cban-8": 0.5,
+"sample-07": 0.3125,
+"hc75-top8-tsuru": 0.5625,
+"rental-cban-2": 0.625,
+"rental-cban-3": 0.4375
+}
+},
+"sample-01": {
+"score": 0.41200776143553075,
+"ci95": [
+0.3823184693883033,
+0.5031275586289773
+],
+"games": 72,
+"perSupport": {
+"mjj-2014-thdrcomb": 0.5,
+"mjj-2015-ayagen": 0.5,
+"nb-sample-12-0": 0.5,
+"rental-cban-13": 0.25,
+"sample-07": 0.0,
+"rental-cban-8": 0.0,
+"sample-14-orig": 0.25,
+"mjj-2020-rraikou": 0.5,
+"sample-14": 0.75,
+"hc75-top8-tsuru": 0.5,
+"rental-cban-2": 0.5,
+"sample-12": 0.25,
+"rental-cban-3": 0.25,
+"sample-13": 0.5,
+"sample-08": 0.75
+}
+},
+"rental-cban-20": {
+"score": 0.5954648465755707,
+"ci95": [
+0.46739779540462945,
+0.7194952110039813
+],
+"games": 192,
+"perSupport": {
+"mjj-2015-ayagen": 0.75,
+"sample-14": 0.5,
+"sample-12": 0.5,
+"mjj-2014-thdrcomb": 0.6875,
+"rental-cban-8": 0.5,
+"sample-13": 0.4375,
+"sample-08": 0.4375,
+"sample-14-orig": 0.5,
+"hc75-top8-tsuru": 0.3125,
+"rental-cban-2": 0.5625,
+"mjj-2020-rraikou": 0.75,
+"sample-07": 0.4375,
+"rental-cban-13": 0.5625,
+"nb-sample-12-0": 0.1875,
+"rental-cban-3": 0.1875
+}
+},
+"offprior-16": {
+"score": 0.604340066407909,
+"ci95": [
+0.5093826758869321,
+0.6158669931445526
+],
+"games": 72,
+"perSupport": {
+"nb-sample-12-0": 0.25,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-2": 0.5,
+"rental-cban-13": 0.5,
+"sample-14": 0.5,
+"mjj-2020-rraikou": 0.75,
+"sample-12": 0.5,
+"rental-cban-3": 0.5,
+"sample-13": 0.25,
+"sample-08": 0.75,
+"sample-14-orig": 0.5,
+"mjj-2014-thdrcomb": 0.25,
+"hc75-top8-tsuru": 0.9375,
+"sample-07": 0.25,
+"rental-cban-8": 1.0
+}
+},
+"sample-26": {
+"score": 0.15478846988545983,
+"ci95": [
+0.09364464243634617,
+0.5062551172579547
+],
+"games": 72,
+"perSupport": {
+"rental-cban-2": 0.25,
+"sample-12": 0.0,
+"sample-14": 0.0,
+"hc75-top8-tsuru": 0.5625,
+"rental-cban-3": 0.0,
+"sample-13": 0.0,
+"sample-08": 0.25,
+"nb-sample-12-0": 0.0,
+"rental-cban-13": 0.75,
+"rental-cban-8": 0.0,
+"mjj-2020-rraikou": 0.25,
+"mjj-2014-thdrcomb": 0.5,
+"sample-07": 0.25,
+"sample-14-orig": 0.25,
+"mjj-2015-ayagen": 0.0
+}
+},
+"mjj-2023-vakabi": {
+"score": 0.39699364448529756,
+"ci95": [
+0.2849926660004004,
+0.5105584022846835
+],
+"games": 72,
+"perSupport": {
+"rental-cban-3": 1.0,
+"sample-08": 0.25,
+"sample-13": 0.5,
+"rental-cban-2": 0.25,
+"sample-14": 0.75,
+"sample-12": 0.25,
+"mjj-2015-ayagen": 0.25,
+"sample-14-orig": 0.25,
+"rental-cban-8": 0.25,
+"sample-07": 0.25,
+"mjj-2020-rraikou": 0.5,
+"hc75-top8-tsuru": 0.5,
+"mjj-2014-thdrcomb": 0.25,
+"nb-sample-12-0": 0.5,
+"rental-cban-13": 0.25
+}
+},
+"sample-17": {
+"score": 0.4525492634139431,
+"ci95": [
+0.3283003616912554,
+0.5806901297921501
+],
+"games": 192,
+"perSupport": {
+"sample-14": 0.4375,
+"nb-sample-12-0": 0.5625,
+"rental-cban-8": 0.5,
+"rental-cban-13": 0.625,
+"sample-12": 0.75,
+"mjj-2014-thdrcomb": 0.4375,
+"hc75-top8-tsuru": 0.5,
+"sample-14-orig": 0.75,
+"sample-13": 0.5,
+"sample-08": 0.375,
+"rental-cban-3": 0.25,
+"sample-07": 0.25,
+"mjj-2020-rraikou": 0.25,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-2": 0.5
+}
+},
+"mjj-2021-q10con": {
+"score": 0.31317292003960034,
+"ci95": [
+0.2156776781340878,
+0.45339821067358066
+],
+"games": 132,
+"perSupport": {
+"sample-14": 0.5,
+"nb-sample-12-0": 0.5,
+"rental-cban-13": 0.0,
+"hc75-top8-tsuru": 0.75,
+"sample-12": 0.0,
+"rental-cban-8": 0.0,
+"sample-13": 0.5625,
+"sample-08": 0.75,
+"sample-14-orig": 0.5,
+"mjj-2020-rraikou": 0.5,
+"mjj-2015-ayagen": 0.25,
+"rental-cban-2": 0.75,
+"sample-07": 0.3125,
+"rental-cban-3": 0.3125,
+"mjj-2014-thdrcomb": 0.3125
+}
+},
+"lineage-gb-uni-s13": {
+"score": 0.26641179290929456,
+"ci95": [
+0.22342801340073762,
+0.5015637793144886
+],
+"games": 72,
+"perSupport": {
+"sample-07": 0.5,
+"mjj-2014-thdrcomb": 0.25,
+"rental-cban-8": 0.0,
+"hc75-top8-tsuru": 0.5,
+"mjj-2020-rraikou": 0.0,
+"rental-cban-2": 0.0,
+"sample-08": 0.5,
+"sample-13": 1.0,
+"sample-14-orig": 0.75,
+"sample-14": 0.5,
+"rental-cban-3": 0.0,
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.25,
+"sample-12": 0.75,
+"mjj-2015-ayagen": 0.25
+}
+},
+"mjj-2020-ukenta": {
+"score": 0.413435316642764,
+"ci95": [
+0.178455589132457,
+0.6506597718751637
+],
+"games": 132,
+"perSupport": {
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.25,
+"sample-12": 0.25,
+"rental-cban-3": 0.5625,
+"mjj-2020-rraikou": 0.25,
+"sample-14": 0.4375,
+"sample-13": 0.4375,
+"mjj-2015-ayagen": 0.5,
+"mjj-2014-thdrcomb": 0.4375,
+"sample-08": 0.5,
+"rental-cban-2": 0.5,
+"sample-14-orig": 0.25,
+"rental-cban-8": 0.5,
+"sample-07": 0.375,
+"hc75-top8-tsuru": 0.5
+}
+},
+"ev-r1-rand-0-1": {
+"score": 0.22406786548324625,
+"ci95": [
+0.16896012836012786,
+0.4937448827420452
+],
+"games": 72,
+"perSupport": {
+"rental-cban-2": 0.0,
+"sample-12": 0.0,
+"nb-sample-12-0": 0.0,
+"rental-cban-13": 0.25,
+"sample-14": 0.5,
+"mjj-2015-ayagen": 0.5,
+"sample-13": 0.0,
+"rental-cban-3": 0.25,
+"sample-14-orig": 0.0,
+"sample-08": 0.0,
+"mjj-2014-thdrcomb": 0.0,
+"hc75-top8-tsuru": 0.25,
+"rental-cban-8": 0.25,
+"sample-07": 0.0,
+"mjj-2020-rraikou": 0.0
+}
+},
+"mjj-2011-frozenhell-t0": {
+"score": 0.36520879810713874,
+"ci95": [
+0.29512035484359755,
+0.48493419228172874
+],
+"games": 192,
+"perSupport": {
+"rental-cban-13": 0.4375,
+"nb-sample-12-0": 0.25,
+"sample-08": 0.5625,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-3": 0.3125,
+"sample-13": 0.125,
+"sample-14": 0.375,
+"rental-cban-2": 0.75,
+"mjj-2014-thdrcomb": 0.5625,
+"sample-12": 0.0,
+"sample-14-orig": 0.0,
+"hc75-top8-tsuru": 0.25,
+"sample-07": 0.25,
+"rental-cban-8": 0.5625,
+"mjj-2020-rraikou": 0.0
+}
+},
+"mjj-2022-ukekent": {
+"score": 0.38911739094533426,
+"ci95": [
+0.24762821503754417,
+0.5306065668531242
+],
+"games": 72,
+"perSupport": {
+"sample-14": 0.5,
+"sample-12": 0.0,
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.25,
+"mjj-2020-rraikou": 0.75,
+"rental-cban-8": 0.0,
+"sample-14-orig": 0.25,
+"mjj-2015-ayagen": 0.5,
+"sample-13": 0.0,
+"sample-08": 0.5,
+"mjj-2014-thdrcomb": 0.5,
+"rental-cban-3": 0.25,
+"sample-07": 0.0,
+"rental-cban-2": 0.75,
+"hc75-top8-tsuru": 0.5
+}
+},
+"sample-18": {
+"score": 0.27560648602379,
+"ci95": [
+0.16452941569009655,
+0.5062551172579547
+],
+"games": 72,
+"perSupport": {
+"hc75-top8-tsuru": 0.6875,
+"sample-12": 0.25,
+"sample-14": 0.25,
+"rental-cban-8": 0.25,
+"sample-13": 0.25,
+"sample-08": 0.5,
+"mjj-2014-thdrcomb": 0.5,
+"mjj-2015-ayagen": 0.25,
+"rental-cban-3": 0.0,
+"sample-14-orig": 0.5,
+"mjj-2020-rraikou": 0.0,
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.0,
+"rental-cban-2": 0.5,
+"sample-07": 0.25
+}
+},
+"mjj-2012-goinkyo-t3": {
+"score": 0.6301106688469856,
+"ci95": [
+0.504691337943466,
+0.7056494318144207
+],
+"games": 72,
+"perSupport": {
+"hc75-top8-tsuru": 0.75,
+"rental-cban-3": 0.0,
+"sample-14-orig": 0.75,
+"sample-08": 0.5,
+"sample-13": 0.5,
+"nb-sample-12-0": 0.5,
+"rental-cban-2": 0.5,
+"rental-cban-13": 0.75,
+"sample-14": 0.25,
+"sample-12": 0.75,
+"rental-cban-8": 1.0,
+"sample-07": 0.0,
+"mjj-2015-ayagen": 1.0,
+"mjj-2020-rraikou": 0.5,
+"mjj-2014-thdrcomb": 0.5
+}
+},
+"ev-r1-rand-5-0": {
+"score": 0.11803368736998453,
+"ci95": [
+0.11355236849344823,
+0.4937448827420452
+],
+"games": 72,
+"perSupport": {
+"sample-12": 0.0,
+"rental-cban-2": 0.25,
+"nb-sample-12-0": 0.5,
+"mjj-2015-ayagen": 0.0,
+"rental-cban-13": 0.0,
+"sample-14": 0.0,
+"mjj-2020-rraikou": 0.0,
+"sample-13": 0.0,
+"rental-cban-3": 0.25,
+"sample-14-orig": 0.0,
+"sample-08": 1.0,
+"hc75-top8-tsuru": 0.125,
+"rental-cban-8": 0.25,
+"sample-07": 0.75,
+"mjj-2014-thdrcomb": 0.25
+}
+},
+"sample-02": {
+"score": 0.38963623011697246,
+"ci95": [
+0.3790901956023892,
+0.4953086620565339
+],
+"games": 72,
+"perSupport": {
+"mjj-2015-ayagen": 0.75,
+"sample-08": 0.5,
+"mjj-2020-rraikou": 0.0,
+"rental-cban-3": 0.25,
+"sample-13": 0.5,
+"sample-14": 0.5,
+"sample-12": 0.5,
+"rental-cban-2": 0.0,
+"rental-cban-13": 0.5,
+"sample-07": 0.25,
+"nb-sample-12-0": 0.25,
+"mjj-2014-thdrcomb": 0.5,
+"hc75-top8-tsuru": 0.25,
+"rental-cban-8": 0.25,
+"sample-14-orig": 0.5
+}
+},
+"mjj-2012-goinkyo-2012": {
+"score": 0.41508353134564746,
+"ci95": [
+0.40514441845614857,
+0.5062551172579547
+],
+"games": 72,
+"perSupport": {
+"rental-cban-8": 0.5,
+"sample-08": 0.75,
+"sample-13": 0.25,
+"mjj-2015-ayagen": 0.5,
+"sample-14": 0.25,
+"sample-12": 0.0,
+"rental-cban-3": 0.25,
+"mjj-2020-rraikou": 0.5,
+"sample-07": 0.25,
+"sample-14-orig": 0.25,
+"rental-cban-13": 0.5,
+"rental-cban-2": 0.5,
+"nb-sample-12-0": 0.0,
+"mjj-2014-thdrcomb": 0.5,
+"hc75-top8-tsuru": 0.6875
+}
+},
+"offprior-15": {
+"score": 0.5102282793658278,
+"ci95": [
+0.46278675392383195,
+0.5576698048078237
+],
+"games": 72,
+"perSupport": {
+"sample-07": 0.75,
+"mjj-2014-thdrcomb": 0.25,
+"mjj-2015-ayagen": 1.0,
+"rental-cban-8": 0.5,
+"mjj-2020-rraikou": 0.5,
+"hc75-top8-tsuru": 0.625,
+"rental-cban-13": 0.75,
+"sample-08": 0.75,
+"nb-sample-12-0": 0.5,
+"rental-cban-3": 0.25,
+"sample-13": 0.5,
+"sample-14-orig": 0.25,
+"sample-14": 0.5,
+"sample-12": 0.25,
+"rental-cban-2": 0.5
+}
+},
+"hc75-3rd-bean": {
+"score": 0.5368860516598921,
+"ci95": [
+0.4243836151764939,
+0.6366125257252758
+],
+"games": 192,
+"perSupport": {
+"rental-cban-3": 0.4375,
+"rental-cban-2": 0.6875,
+"mjj-2014-thdrcomb": 0.5,
+"mjj-2015-ayagen": 1.0,
+"sample-07": 0.5625,
+"mjj-2020-rraikou": 0.25,
+"sample-14": 0.5625,
+"rental-cban-8": 0.5625,
+"rental-cban-13": 0.4375,
+"nb-sample-12-0": 0.4375,
+"sample-12": 0.5,
+"sample-08": 0.4375,
+"hc75-top8-tsuru": 0.3125,
+"sample-14-orig": 0.25,
+"sample-13": 0.3125
+}
+},
+"mjj-2025-hapim": {
+"score": 0.3417258692285213,
+"ci95": [
+0.3185544108257159,
+0.5015637793144886
+],
+"games": 72,
+"perSupport": {
+"sample-14": 0.25,
+"rental-cban-3": 0.5,
+"sample-12": 0.5,
+"mjj-2015-ayagen": 0.25,
+"mjj-2014-thdrcomb": 0.5,
+"sample-13": 0.5,
+"rental-cban-2": 0.25,
+"sample-08": 0.5,
+"rental-cban-13": 0.5,
+"mjj-2020-rraikou": 0.25,
+"nb-sample-12-0": 0.0,
+"rental-cban-8": 0.25,
+"sample-07": 0.25,
+"hc75-top8-tsuru": 0.5,
+"sample-14-orig": 1.0
+}
+},
+"mjj-2012-ibmthdr": {
+"score": 0.4580469505269506,
+"ci95": [
+0.4285911677734493,
+0.4953086620565339
+],
+"games": 72,
+"perSupport": {
+"sample-12": 0.25,
+"sample-14-orig": 0.75,
+"sample-14": 0.75,
+"rental-cban-13": 0.25,
+"sample-13": 0.0,
+"nb-sample-12-0": 0.0,
+"sample-08": 0.25,
+"rental-cban-8": 0.25,
+"mjj-2015-ayagen": 0.25,
+"mjj-2014-thdrcomb": 0.5,
+"mjj-2020-rraikou": 0.5,
+"rental-cban-2": 0.75,
+"hc75-top8-tsuru": 0.375,
+"sample-07": 0.25,
+"rental-cban-3": 0.5
+}
+},
+"ev-r1-pool-hc75-3rd-bean-1": {
+"score": 0.4888805230214739,
+"ci95": [
+0.33573120958333824,
+0.6420298364596094
+],
+"games": 72,
+"perSupport": {
+"nb-sample-12-0": 0.5,
+"rental-cban-13": 0.25,
+"mjj-2014-thdrcomb": 0.25,
+"hc75-top8-tsuru": 0.75,
+"sample-07": 0.75,
+"sample-14-orig": 0.5,
+"rental-cban-8": 0.75,
+"mjj-2015-ayagen": 0.25,
+"sample-14": 0.25,
+"mjj-2020-rraikou": 0.75,
+"rental-cban-2": 0.25,
+"sample-12": 0.75,
+"rental-cban-3": 0.25,
+"sample-13": 0.25,
+"sample-08": 0.5
+}
+},
+"lineage-gb-nash-rand": {
+"score": 0.2976685499703019,
+"ci95": [
+0.20059042036224756,
+0.5031275586289773
+],
+"games": 72,
+"perSupport": {
+"sample-07": 0.0,
+"sample-14-orig": 0.25,
+"rental-cban-8": 0.5,
+"nb-sample-12-0": 0.5,
+"rental-cban-13": 0.25,
+"mjj-2020-rraikou": 0.5,
+"hc75-top8-tsuru": 0.5,
+"sample-13": 0.5,
+"sample-08": 0.25,
+"rental-cban-2": 0.25,
+"mjj-2014-thdrcomb": 0.0,
+"mjj-2015-ayagen": 0.25,
+"rental-cban-3": 0.5,
+"sample-12": 0.25,
+"sample-14": 0.25
+}
+},
+"offprior-05": {
+"score": 0.30903199372385476,
+"ci95": [
+0.2514988596629536,
+0.5015637793144886
+],
+"games": 72,
+"perSupport": {
+"hc75-top8-tsuru": 0.4375,
+"mjj-2020-rraikou": 0.0,
+"rental-cban-3": 0.25,
+"sample-07": 0.25,
+"rental-cban-2": 0.5,
+"sample-08": 0.25,
+"mjj-2015-ayagen": 0.25,
+"sample-13": 0.5,
+"rental-cban-8": 0.5,
+"sample-14-orig": 0.25,
+"sample-12": 0.0,
+"nb-sample-12-0": 0.0,
+"mjj-2014-thdrcomb": 0.25,
+"rental-cban-13": 0.5,
+"sample-14": 0.5
+}
+},
+"ev-r1-rand-3-0": {
+"score": 0.2045724511923141,
+"ci95": [
+0.11100318588880345,
+0.4984362206855112
+],
+"games": 72,
+"perSupport": {
+"sample-08": 0.5,
+"rental-cban-3": 0.25,
+"sample-13": 0.5,
+"sample-14": 0.25,
+"hc75-top8-tsuru": 0.25,
+"sample-12": 0.25,
+"rental-cban-2": 0.25,
+"sample-07": 0.0,
+"rental-cban-8": 0.25,
+"mjj-2014-thdrcomb": 0.25,
+"sample-14-orig": 0.25,
+"nb-sample-12-0": 0.25,
+"rental-cban-13": 0.0,
+"mjj-2015-ayagen": 0.25,
+"mjj-2020-rraikou": 0.0
+}
+},
+"mjj-2010-semistar": {
+"score": 0.5893281018879547,
+"ci95": [
+0.48603862358285543,
+0.6926175801930541
+],
+"games": 72,
+"perSupport": {
+"rental-cban-3": 0.5,
+"sample-13": 0.0,
+"sample-08": 0.25,
+"mjj-2020-rraikou": 0.5,
+"sample-14": 0.5,
+"hc75-top8-tsuru": 0.5625,
+"sample-12": 0.5,
+"rental-cban-2": 0.0,
+"sample-07": 0.25,
+"sample-14-orig": 0.25,
+"mjj-2014-thdrcomb": 0.75,
+"rental-cban-8": 0.5,
+"mjj-2015-ayagen": 1.0,
+"nb-sample-12-0": 0.5,
+"rental-cban-13": 0.0
+}
+},
+"sample-20": {
+"score": 0.2035984003643822,
+"ci95": [
+0.17674940830354197,
+0.5062551172579547
+],
+"games": 72,
+"perSupport": {
+"hc75-top8-tsuru": 0.75,
+"mjj-2020-rraikou": 0.25,
+"rental-cban-8": 0.0,
+"mjj-2014-thdrcomb": 0.25,
+"sample-07": 0.0,
+"mjj-2015-ayagen": 0.25,
+"sample-14-orig": 0.25,
+"sample-14": 0.25,
+"rental-cban-3": 0.25,
+"sample-12": 0.25,
+"rental-cban-2": 0.25,
+"sample-13": 0.5,
+"rental-cban-13": 0.5,
+"nb-sample-12-0": 0.25,
+"sample-08": 0.0
+}
+},
+"offprior-04": {
+"score": 0.4334603333180936,
+"ci95": [
+0.33573805289435377,
+0.5358286819184674
+],
+"games": 192,
+"perSupport": {
+"sample-14-orig": 1.0,
+"rental-cban-2": 0.6875,
+"nb-sample-12-0": 0.5625,
+"rental-cban-13": 0.4375,
+"hc75-top8-tsuru": 0.75,
+"sample-07": 0.5,
+"rental-cban-3": 0.4375,
+"sample-12": 0.0,
+"mjj-2020-rraikou": 0.0,
+"sample-14": 0.4375,
+"mjj-2014-thdrcomb": 0.4375,
+"sample-08": 0.5,
+"sample-13": 0.375,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-8": 0.625
+}
+},
+"rental-cban-17": {
+"score": 0.2626627505821661,
+"ci95": [
+0.23009455221823896,
+0.5016028737973508
+],
+"games": 72,
+"perSupport": {
+"mjj-2020-rraikou": 0.0,
+"nb-sample-12-0": 0.0,
+"mjj-2014-thdrcomb": 0.0,
+"rental-cban-13": 0.75,
+"sample-07": 0.75,
+"sample-14-orig": 0.75,
+"mjj-2015-ayagen": 0.25,
+"rental-cban-8": 0.25,
+"sample-14": 0.5,
+"rental-cban-2": 0.75,
+"sample-12": 0.25,
+"hc75-top8-tsuru": 0.5,
+"sample-13": 0.5,
+"sample-08": 0.0,
+"rental-cban-3": 0.5
+}
+},
+"rental-cban-12": {
+"score": 0.29399101631226704,
+"ci95": [
+0.2123893972113885,
+0.504691337943466
+],
+"games": 72,
+"perSupport": {
+"mjj-2015-ayagen": 0.25,
+"sample-07": 0.25,
+"mjj-2014-thdrcomb": 0.25,
+"rental-cban-8": 0.25,
+"sample-08": 0.25,
+"hc75-top8-tsuru": 0.5,
+"sample-13": 0.25,
+"sample-14-orig": 0.0,
+"rental-cban-2": 0.0,
+"mjj-2020-rraikou": 0.5,
+"sample-12": 0.5,
+"sample-14": 0.25,
+"nb-sample-12-0": 0.0,
+"rental-cban-13": 0.0,
+"rental-cban-3": 0.5
+}
+},
+"sample-22-orig": {
+"score": 0.3614900655485591,
+"ci95": [
+0.26243234706801316,
+0.5015637793144886
+],
+"games": 72,
+"perSupport": {
+"rental-cban-3": 0.25,
+"mjj-2015-ayagen": 0.25,
+"sample-14-orig": 0.0,
+"nb-sample-12-0": 1.0,
+"rental-cban-13": 0.75,
+"sample-07": 0.75,
+"mjj-2014-thdrcomb": 0.25,
+"rental-cban-2": 0.5,
+"hc75-top8-tsuru": 0.4375,
+"sample-12": 0.25,
+"rental-cban-8": 0.75,
+"sample-14": 0.25,
+"sample-13": 0.5,
+"sample-08": 0.25,
+"mjj-2020-rraikou": 0.25
+}
+},
+"mjj-2011-frozenhell-2008": {
+"score": 0.12233767492618532,
+"ci95": [
+0.03612389522632163,
+0.5078188965724434
+],
+"games": 72,
+"perSupport": {
+"rental-cban-8": 0.25,
+"mjj-2014-thdrcomb": 0.25,
+"sample-07": 0.0,
+"hc75-top8-tsuru": 0.6875,
+"sample-14": 0.0,
+"rental-cban-3": 0.0,
+"sample-14-orig": 0.25,
+"sample-12": 0.0,
+"nb-sample-12-0": 0.0,
+"rental-cban-13": 0.75,
+"mjj-2015-ayagen": 0.0,
+"mjj-2020-rraikou": 0.0,
+"sample-13": 0.0,
+"rental-cban-2": 0.75,
+"sample-08": 0.0
+}
+},
+"sample-16": {
+"score": 0.2925797745998722,
+"ci95": [
+0.18077939251012587,
+0.4937448827420452
+],
+"games": 72,
+"perSupport": {
+"sample-13": 0.0,
+"hc75-top8-tsuru": 0.25,
+"sample-08": 0.0,
+"mjj-2014-thdrcomb": 0.25,
+"sample-14": 0.25,
+"mjj-2020-rraikou": 0.25,
+"rental-cban-8": 0.25,
+"sample-12": 0.75,
+"sample-07": 0.25,
+"mjj-2015-ayagen": 0.25,
+"rental-cban-2": 0.5,
+"nb-sample-12-0": 1.0,
+"rental-cban-13": 0.5,
+"sample-14-orig": 0.75,
+"rental-cban-3": 0.25
+}
+},
+"sample-25": {
+"score": 0.48040147087728613,
+"ci95": [
+0.3393823643625472,
+0.6163881002492799
+],
+"games": 192,
+"perSupport": {
+"rental-cban-13": 0.3125,
+"rental-cban-8": 0.5625,
+"sample-07": 0.25,
+"nb-sample-12-0": 0.375,
+"sample-14-orig": 0.75,
+"mjj-2014-thdrcomb": 0.3125,
+"hc75-top8-tsuru": 0.625,
+"sample-08": 0.3125,
+"sample-13": 0.4375,
+"mjj-2020-rraikou": 0.25,
+"rental-cban-3": 0.5625,
+"sample-12": 0.0,
+"mjj-2015-ayagen": 1.0,
+"rental-cban-2": 0.625,
+"sample-14": 0.4375
+}
+},
+"sample-04": {
+"score": 0.48693136109842206,
+"ci95": [
+0.39079914503269264,
+0.5573434355567823
+],
+"games": 192,
+"perSupport": {
+"sample-07": 0.5,
+"rental-cban-8": 0.4375,
+"mjj-2014-thdrcomb": 0.375,
+"mjj-2015-ayagen": 0.75,
+"sample-08": 0.3125,
+"sample-14-orig": 1.0,
+"sample-13": 0.375,
+"rental-cban-2": 0.75,
+"mjj-2020-rraikou": 0.25,
+"rental-cban-3": 0.25,
+"hc75-top8-tsuru": 0.625,
+"sample-12": 0.25,
+"nb-sample-12-0": 0.1875,
+"sample-14": 0.5625,
+"rental-cban-13": 0.5
+}
+},
+"offprior-14": {
+"score": 0.5898780187415498,
+"ci95": [
+0.42950755760578496,
+0.7518122591918031
+],
+"games": 72,
+"perSupport": {
+"rental-cban-13": 0.25,
+"nb-sample-12-0": 0.5,
+"mjj-2014-thdrcomb": 0.5,
+"sample-07": 0.25,
+"sample-14-orig": 0.75,
+"mjj-2015-ayagen": 0.5,
+"rental-cban-8": 0.75,
+"sample-14": 0.5,
+"sample-12": 0.5,
+"rental-cban-2": 0.25,
+"hc75-top8-tsuru": 0.3125,
+"sample-08": 0.5,
+"rental-cban-3": 0.5,
+"sample-13": 0.25,
+"mjj-2020-rraikou": 0.75
+}
+}
+}
+}

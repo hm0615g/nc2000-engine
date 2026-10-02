@@ -106,6 +106,11 @@ pub struct MetaPool {
 pub struct MetaTeam {
     pub id: String,
     pub sets: Vec<PokemonSet>,
+    /// Opponent-prior allocation (`Belief`): a pool in which any team
+    /// carries a weight is a weighted prior — see the belief module doc.
+    /// Absent everywhere = the legacy uniform, file-order semantics.
+    #[serde(default)]
+    pub weight: Option<f64>,
 }
 
 pub fn load_meta_pool(path: &Path) -> MetaPool {

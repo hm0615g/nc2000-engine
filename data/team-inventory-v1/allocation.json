@@ -1,0 +1,10 @@
+{
+ "rule": "cluster-normalized: weight = 1 / (members of the team's variant cluster in the prior)",
+ "machineFactor": 0.25,
+ "fallback": "weighted-mode loadout per species (crates/bot/src/belief.rs, weighted prior)",
+ "evidence": {
+  "fallbackRule": "measurements/fallback-rule.json",
+  "machineFactor": "spectator corpus, 23 human teams whose preview matches >=2 prior candidates: share of belief mass on candidates consistent with the revealed moves 0.710 / 0.704 / 0.696 at machine factor 0 / 0.25 / 1 - too few collisions to calibrate; 0.25 is the a-priori choice (humans bring published teams)",
+  "clusterNormalization": "the plan's rule that near copies must not buy weight by count; count-weighting predicted revealed moves marginally better on the corpus (0.546/0.543 vs 0.536/0.534 recall) and is reported as a sensitivity, not adopted"
+ }
+}

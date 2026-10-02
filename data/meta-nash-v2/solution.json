@@ -1,0 +1,16 @@
+{
+ "source": "data/meta-nash-v2/solution-blind3000-do2.json",
+ "engine_commit": "8736dca",
+ "conditions": "blind:3000 vs blind:3000 on the frozen belief-pool-v2; 23-team game (18 support-relevant strong teams + two double-oracle rounds), 64 games per pair; challenged at 3000 by the 100 other measured, held-out and off-prior teams (challenge-blind3000.json)",
+ "weights": {
+  "rental-cban-8": 0.2079,
+  "sample-14": 0.2045,
+  "mjj-2014-thdrcomb": 0.1685,
+  "mjj-2020-rraikou": 0.154,
+  "mjj-2015-ayagen": 0.1272,
+  "sample-14-orig": 0.0441,
+  "sample-12": 0.0411,
+  "sample-07": 0.0277,
+  "hc75-top8-tsuru": 0.025
+ }
+}

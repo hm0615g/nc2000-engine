@@ -1,0 +1,149 @@
+{
+ "what": "Opponent-prior held-out test (plan step 3). Row X = blind bot whose belief is the arm prior; column Y = blind bot with the frozen new prior. Arms differ only in X belief.",
+ "conditions": {
+  "agents": "blind:1000 vs blind:1000",
+  "seedBase": 20261005,
+  "seeds": 8,
+  "xTeams": [
+   "sample-07",
+   "sample-13",
+   "mjj-2021-q10con",
+   "mjj-2023-ukethdr"
+  ],
+  "arms": {
+   "new": "data/belief-pool-v2/belief-pool.json (frozen: strong+weak+pending, cluster weights, machine x0.25, weighted-mode fallback), sha256 39b731a4...",
+   "strongonly": "the same rule over strong teams only (diagnostic comparator)",
+   "v1": "data/belief-pool-v1/belief-pool.json (shipped before the rebuild; unweighted)"
+  },
+  "groups": {
+   "collide": "strong human teams whose preview collides with a non-strong prior member - none exist",
+   "weak": "weak/pending human teams",
+   "offprior": "16 chimeras + 4 held-out page teams",
+   "strongnull": "strong human teams with unique previews"
+  }
+ },
+ "results": {
+  "collide": {
+   "opponents": 0
+  },
+  "weak": {
+   "opponents": 12,
+   "games": 768,
+   "new": 0.6731770833333334,
+   "strongonly": 0.5729166666666666,
+   "v1": 0.6471354166666666,
+   "new_minus_strongonly": {
+    "diff": 0.10026041666666667,
+    "ci95": [
+     0.05859375,
+     0.14453125
+    ],
+    "identicalGames": 0.0013020833333333333
+   },
+   "new_minus_v1": {
+    "diff": 0.026041666666666668,
+    "ci95": [
+     0.0,
+     0.0546875
+    ],
+    "identicalGames": 0.5013020833333334
+   }
+  },
+  "offprior": {
+   "opponents": 20,
+   "games": 1280,
+   "new": 0.61640625,
+   "strongonly": 0.578125,
+   "v1": 0.58203125,
+   "new_minus_strongonly": {
+    "diff": 0.03828125,
+    "ci95": [
+     0.00625,
+     0.06875
+    ],
+    "identicalGames": 0.00546875
+   },
+   "new_minus_v1": {
+    "diff": 0.034375,
+    "ci95": [
+     0.00078125,
+     0.07421875
+    ],
+    "identicalGames": 0.0
+   }
+  },
+  "strongnull": {
+   "opponents": 8,
+   "games": 512,
+   "new": 0.619140625,
+   "strongonly": 0.619140625,
+   "v1": 0.58203125,
+   "new_minus_strongonly": {
+    "diff": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "identicalGames": 1.0
+   },
+   "new_minus_v1": {
+    "diff": 0.037109375,
+    "ci95": [
+     -0.005859375,
+     0.08203125
+    ],
+    "identicalGames": 0.5
+   }
+  }
+ },
+ "groups": {
+  "collide": [],
+  "weak": [
+   "rental-cban-12",
+   "sample-18",
+   "mjj-2010-garap-b",
+   "mjj-2010-semistar",
+   "mjj-2011-frozenhell-2008",
+   "mjj-2011-garatank",
+   "mjj-2019-dojo",
+   "mjj-2022-ukekent",
+   "rental-cban-15",
+   "sample-03",
+   "sample-26",
+   "sample-27"
+  ],
+  "offprior": [
+   "offprior-01",
+   "offprior-02",
+   "offprior-03",
+   "offprior-04",
+   "offprior-05",
+   "offprior-06",
+   "offprior-07",
+   "offprior-08",
+   "offprior-09",
+   "offprior-10",
+   "offprior-11",
+   "offprior-12",
+   "offprior-13",
+   "offprior-14",
+   "offprior-15",
+   "offprior-16",
+   "mjj-2012-goinkyo-t2",
+   "mjj-2012-goinkyo-t3",
+   "mjj-2011-murai-t1",
+   "mjj-2011-frozenhell-t0"
+  ],
+  "strongnull": [
+   "hc75-1st-show",
+   "hc75-2nd-toriyama",
+   "hc75-top8-tezan",
+   "hc75-top8-tsuru",
+   "mjj-2009-chourou",
+   "mjj-2010-garap-a",
+   "mjj-2012-goinkyo-2012",
+   "mjj-2012-goinkyo-2020"
+  ]
+ },
+ "reading": "The weak component costs nothing against strong teams (no collisions; 512/512 games bit-identical with the strong-only arm) and gains +0.100 against weak teams and +0.038 against off-prior teams. The new prior is at or above the shipped v1 on every group."
+}

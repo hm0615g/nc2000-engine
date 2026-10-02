@@ -13,13 +13,14 @@
 //   3. the round trip that matters: describe a board, press analyze, and get
 //      every legal option scored — shares summing to 1, sorted by playouts;
 //   4. the opponent's HIDDEN information stays hidden. Loading their roster
-//      from a pool team copies six species and levels; their sets must not
+//      from a catalog party copies six species and levels; their sets must not
 //      reach the DOM, and no move of theirs may be named as known unless the
 //      user typed it into "moves shown". This is the blind contract, and on
 //      this screen it is the whole product claim;
 //   5. the belief actually uses what it is given: a roster copied from a
-//      pool team is identified, which is the difference between the solver
-//      reasoning about that team and reasoning about any team at all.
+//      catalog party whose preview no other prior team shares is identified,
+//      which is the difference between the solver reasoning about that team
+//      and reasoning about any team at all.
 //
 // Selectors depended on: [data-testid="solver-own"|"solver-foe"|
 // "solver-solve"|"solver-problems"|"solver-results"|"solver-actions"|
@@ -33,18 +34,38 @@ interface PoolTeamJson {
   id: string;
   species: string[];
   levels: number[];
-  sets: { species: string; moves: string[]; item?: string }[];
+  sets: { species: string; moves: string[]; item?: string; level?: number; gender?: string }[];
 }
 
 const pool = JSON.parse(
   readFileSync(
-    new URL("../../data/meta-pool-v0/meta-pool.json", import.meta.url),
+    new URL("../../data/team-pool-v2/team-pool.json", import.meta.url),
     "utf8",
   ),
 ) as { teams: PoolTeamJson[] };
 
-const MINE = 0;
-const THEIRS = 1;
+const prior = JSON.parse(
+  readFileSync(
+    new URL("../../data/belief-pool-v3/belief-pool.json", import.meta.url),
+    "utf8",
+  ),
+) as { teams: PoolTeamJson[] };
+
+/** What the belief filters on at preview: species, level, gender and item
+ * presence. */
+function previewSig(t: PoolTeamJson): string {
+  return t.sets
+    .map((s) => `${s.species}:${s.level ?? 55}:${s.gender ?? ""}:${s.item ? 1 : 0}`)
+    .sort()
+    .join(",");
+}
+
+/** The foe is the first catalog party no other prior team can be mistaken
+ * for at preview, so "identified" has only one right answer. */
+const THEIRS = pool.teams.findIndex(
+  (t) => prior.teams.filter((u) => previewSig(u) === previewSig(t)).length === 1,
+);
+const MINE = THEIRS === 0 ? 1 : 0;
 
 /** Load both rosters from pool teams and send one Pokémon out on each side —
  * the shortest complete position the screen accepts. */

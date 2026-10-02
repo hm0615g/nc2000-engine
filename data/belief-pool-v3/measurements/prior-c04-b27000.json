@@ -1,0 +1,199 @@
+{
+ "what": "Opponent-prior held-out confirmation at the product budget (plan step 2). Row X = blind bot whose belief is the arm prior; column = blind bot with v3; arms differ only in X belief; games paired on (cell, k, side). Intervals: 95% percentile bootstrap over cells (2 seed blocks are too few to resample).",
+ "conditions": {
+  "agents": "blind:27000:0.4 vs blind:27000:0.4",
+  "seedBase": 20261102,
+  "seeds": 2,
+  "xTeams": [
+   "sample-07",
+   "sample-13",
+   "mjj-2021-q10con",
+   "mjj-2023-ukethdr"
+  ],
+  "arms": {
+   "v3": "data/belief-pool-v3/belief-pool.json (fnv1a64:ffa73c4245fe3774), all 166 cells",
+   "v1": "data/belief-pool-v1/belief-pool.json, all 166 cells",
+   "strongonly": "v3 rule over v1-strong teams only, on the 136 cells where it can differ (weak, off-prior, colliding)"
+  },
+  "tool": "python3 tools/belief-pool-v3.py report --unit cell",
+  "bot": "fnv1a64:c31d5635eb296d9a:m17e-solver-build-v3"
+ },
+ "groups": {
+  "collide": [
+   "mjj-2020-kb-2022"
+  ],
+  "weak": [
+   "rental-cban-12",
+   "sample-18",
+   "sample-26",
+   "sample-03",
+   "mjj-2022-ukekent",
+   "mjj-2019-dojo",
+   "rental-cban-15",
+   "mjj-2010-semistar",
+   "mjj-2010-garap-b",
+   "mjj-2011-garatank",
+   "mjj-2011-frozenhell-2008",
+   "sample-27",
+   "mjj-2020-kb-2020"
+  ],
+  "offprior": [
+   "offprior-01",
+   "offprior-02",
+   "offprior-03",
+   "offprior-04",
+   "offprior-05",
+   "offprior-06",
+   "offprior-07",
+   "offprior-08",
+   "offprior-09",
+   "offprior-10",
+   "offprior-11",
+   "offprior-12",
+   "offprior-13",
+   "offprior-14",
+   "offprior-15",
+   "offprior-16",
+   "mjj-2012-goinkyo-t2",
+   "mjj-2012-goinkyo-t3",
+   "mjj-2011-murai-t1",
+   "mjj-2011-frozenhell-t0"
+  ],
+  "strongnull": [
+   "hc75-top8-tezan",
+   "mjj-2025-hapim",
+   "sample-21",
+   "rental-cban-13",
+   "mjj-2021-q10con",
+   "sample-06",
+   "sample-01",
+   "mjj-2023-ukethdr"
+  ]
+ },
+ "results": {
+  "collide": {
+   "opponents": 1,
+   "strongonly": {
+    "games": 16,
+    "score": 0.75,
+    "caps": 0,
+    "v3_minus": {
+     "diff": -0.0625,
+     "ci95": [
+      -0.375,
+      0.25
+     ],
+     "identicalGames": 0.1875
+    }
+   },
+   "v1": {
+    "games": 16,
+    "score": 0.4375,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.25,
+     "ci95": [
+      -0.125,
+      0.625
+     ],
+     "identicalGames": 0.0
+    }
+   },
+   "v3": {
+    "games": 16,
+    "score": 0.6875,
+    "caps": 0
+   }
+  },
+  "weak": {
+   "opponents": 13,
+   "strongonly": {
+    "games": 208,
+    "score": 0.4951923076923077,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.1971153846153846,
+     "ci95": [
+      0.11057692307692307,
+      0.28365384615384615
+     ],
+     "identicalGames": 0.019230769230769232
+    }
+   },
+   "v1": {
+    "games": 208,
+    "score": 0.5817307692307693,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.11057692307692307,
+     "ci95": [
+      0.028846153846153848,
+      0.1971153846153846
+     ],
+     "identicalGames": 0.46634615384615385
+    }
+   },
+   "v3": {
+    "games": 208,
+    "score": 0.6923076923076923,
+    "caps": 0
+   }
+  },
+  "offprior": {
+   "opponents": 20,
+   "strongonly": {
+    "games": 320,
+    "score": 0.5671875,
+    "caps": 1,
+    "v3_minus": {
+     "diff": 0.0046875,
+     "ci95": [
+      -0.053125,
+      0.059375
+     ],
+     "identicalGames": 0.203125
+    }
+   },
+   "v1": {
+    "games": 320,
+    "score": 0.496875,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.075,
+     "ci95": [
+      0.009375,
+      0.140625
+     ],
+     "identicalGames": 0.00625
+    }
+   },
+   "v3": {
+    "games": 320,
+    "score": 0.571875,
+    "caps": 0
+   }
+  },
+  "strongnull": {
+   "opponents": 8,
+   "v1": {
+    "games": 120,
+    "score": 0.475,
+    "caps": 0,
+    "v3_minus": {
+     "diff": 0.09166666666666666,
+     "ci95": [
+      0.016666666666666666,
+      0.175
+     ],
+     "identicalGames": 0.4166666666666667
+    }
+   },
+   "v3": {
+    "games": 120,
+    "score": 0.5666666666666667,
+    "caps": 0
+   }
+  }
+ },
+ "reading": "v3 >= v1 on every group (weak +0.111 [+0.029,+0.197], off-prior +0.075 [+0.009,+0.141], strong unique-preview +0.092 [+0.017,+0.175]); v3 - strong-only +0.197 [+0.111,+0.284] against weak teams and +0.005 [-0.053,+0.059] off-prior. Prior v3 frozen."
+}

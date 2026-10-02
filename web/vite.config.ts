@@ -8,9 +8,8 @@
 //    asset (wasm-bindgen's `new URL('..._bg.wasm', import.meta.url)` is
 //    bundler-visible).
 //
-// 2. Battle data (meta pool + baked preview tables) is NEVER bundled: a
-//    background bake keeps writing pair files into data/preview-tables-v0/,
-//    so the app fetches <base>data/* read-only at runtime. The same
+// 2. Battle data (team files, prior, dex tables) is NEVER bundled: the app
+//    fetches <base>data/* read-only at runtime. The same
 //    middleware is installed in the dev server AND the preview (built dist)
 //    server; the GH Pages build instead copies data/ into dist/data/
 //    (.github/workflows/pages.yml), and any other production server must

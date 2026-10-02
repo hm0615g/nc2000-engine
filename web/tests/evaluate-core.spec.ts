@@ -10,7 +10,7 @@ import {
   type EvaluationRun,
   type PairResult,
 } from "../src/evaluate-core";
-import { readDoor, infoModeOf } from "../src/info-mode";
+import { readDoor } from "../src/info-mode";
 
 const pair = (
   index: number,
@@ -53,9 +53,10 @@ const run: EvaluationRun = {
 
 test("evaluator URL is isolated and blind", () => {
   expect(readDoor("?evaluate&nash&solver")).toBe("evaluate");
-  expect(infoModeOf(readDoor("?evaluate"))).toBe("blind");
   expect(readDoor("?evaluate=false&nash")).toBe("nash");
-  expect(readDoor("")).toBe("open");
+  expect(readDoor("")).toBe("play");
+  expect(readDoor("?blind")).toBe("play");
+  expect(readDoor("?blind=0")).toBe("play");
   expect(readDoor("?fork=4296-t11&evaluate")).toBe("fork");
   expect(readDoor("?fork")).toBe("fork");
 });
