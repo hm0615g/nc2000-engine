@@ -131,7 +131,7 @@ export function Evaluate() {
   const [editorDex, setEditorDex] = useState<EditorDex | null>(null);
   const [entries, setEntries] = useState<OpponentDraft[]>([]);
   const [party, setParty] = useState("");
-  const [iterations, setIterations] = useState(3000);
+  const [iterations, setIterations] = useState(PRODUCT_ITERATIONS);
   const [games, setGames] = useState("32");
   const [belief, setBelief] = useState({ json: "", hash: "" });
   const [error, setError] = useState("");

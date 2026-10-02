@@ -144,6 +144,7 @@ async function seedStorage(
       sessionStorage.setItem("nc2000-e2e-seeded", "1");
       localStorage.setItem("nc2000-locale", "en");
       localStorage.removeItem("nc2000-team-pool-v2");
+      localStorage.removeItem("nc2000-bot-draw");
       if (record) {
         localStorage.setItem("nc2000-custom-teams", JSON.stringify([record]));
         localStorage.setItem(
@@ -347,3 +348,57 @@ test("the belief pool is the shipped prior, fetched by every door and load-beari
     await page.unroute("**/belief-pool-v3/**");
   }
 });
+
+test("the play door's Nash draw choice draws a mixture arm and persists", async ({
+  page,
+}) => {
+  const errors = guardConsole(page);
+  await seedStorage(page);
+  await page.goto("/");
+  await page.locator('[data-party="settings"]').click();
+  await expect(page.locator('[data-draw="catalog"]')).toHaveAttribute("aria-pressed", "true");
+  await page.locator('[data-draw="nash"]').click();
+  await expect(page.locator('[data-draw="nash"]')).toHaveAttribute("aria-pressed", "true");
+  // The mixture is shown where it is chosen, weights and all.
+  await expect(page.locator('[data-testid="nash-mix"] .team-card')).toHaveCount(
+    artifact.teams.length,
+  );
+  await page.locator("dialog.modal .modal-head button").click();
+  const setup = page.locator('[data-party="settings"] .party-value');
+  await expect(setup).toContainText(`Solved mixture (${artifact.teams.length}`);
+  await page.reload();
+  await expect(setup).toContainText(`Solved mixture (${artifact.teams.length}`);
+
+  await page.getByRole("button", { name: "Start battle" }).click();
+  const foe = page.locator(".preview-cols > section").first();
+  await expect(foe.locator("[data-mon]")).toHaveCount(6);
+  const shown = (
+    await foe.locator("[data-mon]").evaluateAll((els) =>
+      els.map((e) => {
+        const level = /L(\d+)/.exec(e.querySelector(".mon-level")?.textContent ?? "");
+        return `${e.getAttribute("data-mon") ?? ""}:${level ? level[1] : "?"}`;
+      }),
+    )
+  ).sort();
+  const arms = artifact.teams.map((t) => roster(t.sets).join(","));
+  expect(arms).toContain(shown.join(","));
+  await page.locator(".preview-actions .quit-btn").click();
+
+  // Back to the built-in parties: the choice is stored, and clears.
+  await page.locator('[data-party="settings"]').click();
+  await page.locator('[data-draw="catalog"]').click();
+  await page.locator("dialog.modal .modal-head button").click();
+  await expect(setup).not.toContainText("Solved mixture");
+  expect(await page.evaluate(() => localStorage.getItem("nc2000-bot-draw"))).toBeNull();
+  expect(errors).toEqual([]);
+});
+
+test("the start screen links to the party evaluator", async ({ page }) => {
+  await seedStorage(page);
+  await page.goto("/");
+  const link = page.locator(".start-link");
+  await expect(link).toHaveAttribute("href", /\?evaluate$/);
+  await link.click();
+  await expect(page.getByLabel("考える回数", { exact: true })).toHaveValue("27000");
+});
+

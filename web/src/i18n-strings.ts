@@ -149,6 +149,12 @@ export interface UIStrings {
   // it also rewires the belief.
   poolLabel: string;
   poolBundled: (n: number) => string;
+  // where the bot's party comes from when no pool file is loaded
+  drawSourceLabel: string;
+  drawCatalog: (n: number) => string;
+  drawNash: (n: number) => string;
+  // the start screen's link to the party evaluator (`?evaluate`)
+  evaluateLink: string;
   poolLoaded: (name: string, n: number) => string;
   poolHelp: string;
   poolPick: string;
@@ -433,6 +439,10 @@ const EN: UIStrings = {
   priorLoadFailed: (why) => `Could not load that table — ${why}`,
   poolLabel: "Team pool",
   poolBundled: (n) => `Built-in (${n} ${n === 1 ? "party" : "parties"})`,
+  drawSourceLabel: "Where the opponent comes from",
+  drawCatalog: (n) => `Built-in (${n} ${n === 1 ? "party" : "parties"})`,
+  drawNash: (n) => `Solved mixture (${n} ${n === 1 ? "party" : "parties"})`,
+  evaluateLink: "Measure a party's strength",
   poolLoaded: (name, n) => `${name} (${n} ${n === 1 ? "team" : "teams"})`,
   poolHelp:
     "A pool file replaces the parties the opponent is drawn from (uniformly) " +
@@ -709,6 +719,10 @@ const JA: UIStrings = {
   priorLoadFailed: (why) => `表を読み込めませんでした — ${why}`,
   poolLabel: "チームプール",
   poolBundled: (n) => `標準(${n}パーティ)`,
+  drawSourceLabel: "相手パーティの抽選元",
+  drawCatalog: (n) => `標準(${n}パーティ)`,
+  drawNash: (n) => `結論の混合戦略(${n}パーティ)`,
+  evaluateLink: "パーティの強さを測る",
   poolLoaded: (name, n) => `${name}(${n}チーム)`,
   poolHelp:
     "相手チームの抽選元(一様に抽選)とこの画面の自分のチーム一覧が" +

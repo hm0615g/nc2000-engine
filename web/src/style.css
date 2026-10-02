@@ -2007,3 +2007,33 @@ td.solver-cell {
   min-width: 6em;
   color: var(--text);
 }
+
+/* The setup panel's draw choice: two options, one pressed — a segmented
+ * pair, not a list of team cards. */
+.draw-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.draw-choice-btn {
+  flex: 1 1 160px;
+  min-height: 44px;
+}
+.draw-choice-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--text);
+  font-weight: 600;
+}
+.draw-choice + .nash-mix {
+  margin-bottom: 12px;
+}
+
+/* A quiet text link under the start column: another tool, not a step of
+ * starting a battle. */
+.start-link {
+  align-self: center;
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}

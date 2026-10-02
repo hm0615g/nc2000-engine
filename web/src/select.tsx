@@ -14,7 +14,10 @@
 //
 // Setup is a single modal, not two buttons: the team pool and the belief
 // prior are the same question asked twice — which teams the bot may be
-// facing, and what it assumes about a team it cannot identify. Inside, each
+// facing, and what it assumes about a team it cannot identify. The pool half
+// also says where the bot's party comes from: the built-in parties by their
+// draw weights, or the solved Nash mixture; a loaded pool file overrides
+// both. Inside, each
 // half keeps its own heading, controls and report box: someone who just
 // loaded a pool file must not read the prior's verdict as a verdict on
 // their file.
@@ -31,6 +34,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { MetaPool, PoolTeam, PriorReport } from "./types";
 import type { SelectedTeam } from "./app";
 import type { NashMix, NashTeam } from "./nash-mix";
+import type { DrawSource } from "./draw-source";
 import {
   clearStoredPool,
   parsePoolText,
@@ -633,8 +637,23 @@ function PoolPanel(props: {
   loaded: LoadedPool;
   catalog: LoadedPool;
   onPool: (p: LoadedPool) => void;
+  drawSource: DrawSource;
+  onDrawSource: (s: DrawSource) => void;
+  nashMix: NashMix;
 }) {
   const [result, setResult] = useState<PoolResult | null>(null);
+  const fileLoaded = props.loaded.name !== null;
+
+  /** Picking a draw source is picking the built-in lists again: a loaded
+   * file would otherwise keep overriding the choice just made. */
+  function chooseDraw(source: DrawSource) {
+    if (fileLoaded) {
+      clearStoredPool();
+      props.onPool(props.catalog);
+      setResult(null);
+    }
+    props.onDrawSource(source);
+  }
 
   function adopt(name: string, text: string) {
     const parsed = parsePoolText(text);
@@ -652,6 +671,24 @@ function PoolPanel(props: {
 
   return (
     <div class="pool-panel">
+      <div class="draw-choice" role="group" aria-label={ui().drawSourceLabel}>
+        {(["catalog", "nash"] as const).map((source) => (
+          <button
+            key={source}
+            class="draw-choice-btn"
+            data-draw={source}
+            aria-pressed={!fileLoaded && props.drawSource === source}
+            onClick={() => chooseDraw(source)}
+          >
+            {source === "catalog"
+              ? ui().drawCatalog(props.catalog.pool.teams.length)
+              : ui().drawNash(props.nashMix.teams.length)}
+          </button>
+        ))}
+      </div>
+      {!fileLoaded && props.drawSource === "nash" && (
+        <NashMixPanel mix={props.nashMix} />
+      )}
       <p class="modal-note">{ui().poolHelp}</p>
       <div class="pool-actions">
         {/* Same construction as the prior panel's picker: a real <label>
@@ -734,6 +771,9 @@ function SetupPanel(props: {
   loaded: LoadedPool;
   catalog: LoadedPool;
   onPool: (p: LoadedPool) => void;
+  drawSource: DrawSource;
+  onDrawSource: (s: DrawSource) => void;
+  nashMix: NashMix;
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
 }) {
@@ -745,6 +785,9 @@ function SetupPanel(props: {
           loaded={props.loaded}
           catalog={props.catalog}
           onPool={props.onPool}
+          drawSource={props.drawSource}
+          onDrawSource={props.onDrawSource}
+          nashMix={props.nashMix}
         />
       </section>
       <section class="setup-section">
@@ -768,9 +811,12 @@ export function StartScreen(props: {
   onLocale: (l: Locale) => void;
   /** `?nash`: fixed opponent mixture, no setup. */
   nash: boolean;
-  /** The mixture itself, for the read-only opponent panel. Non-null
-   * whenever `nash` is (app.tsx fails the page otherwise). */
-  nashMix: NashMix | null;
+  /** The solved mixture: `?nash`'s read-only opponent panel, and the setup
+   * panel's Nash draw choice. */
+  nashMix: NashMix;
+  /** Where the bot's party comes from when no pool file is loaded. */
+  drawSource: DrawSource;
+  onDrawSource: (s: DrawSource) => void;
   /** The bot's draw, owned by app.tsx so that pressing Start and taking a
    * rematch roll by the same rule. */
   drawOpponent: () => SelectedTeam;
@@ -889,7 +935,7 @@ export function StartScreen(props: {
           <span class="party-label">{ui().yourParty}</span>
           <span class="party-value">{humanValue}</span>
         </button>
-        {nash && props.nashMix && (
+        {nash && (
           // Nash's opponent row is a readout of the distribution, not a
           // picker: there is nothing to choose, but there IS something to
           // read. Its value line carries the whole distribution, so the
@@ -919,14 +965,19 @@ export function StartScreen(props: {
             <span class="party-label">{ui().settingsLabel}</span>
             <span class="party-value">
               {ui().settingsValue(
-                props.loadedPool.name === null
-                  ? ui().poolBundled(teams.length)
-                  : ui().poolLoaded(props.loadedPool.name, teams.length),
+                props.loadedPool.name !== null
+                  ? ui().poolLoaded(props.loadedPool.name, teams.length)
+                  : props.drawSource === "nash"
+                    ? ui().drawNash(props.nashMix.teams.length)
+                    : ui().poolBundled(teams.length),
                 props.prior ? props.prior.name : ui().priorNone,
               )}
             </span>
           </button>
         )}
+        <a class="start-link" href={`${import.meta.env.BASE_URL}?evaluate`}>
+          {ui().evaluateLink}
+        </a>
       </main>
 
       {modal === "human" && (
@@ -946,7 +997,7 @@ export function StartScreen(props: {
           />
         </Modal>
       )}
-      {modal === "mix" && props.nashMix && (
+      {modal === "mix" && (
         <Modal title={ui().nashTitle} onClose={() => setModal(null)}>
           <NashMixPanel mix={props.nashMix} />
         </Modal>
@@ -957,6 +1008,9 @@ export function StartScreen(props: {
             loaded={props.loadedPool}
             catalog={props.catalogPool}
             onPool={props.onPool}
+            drawSource={props.drawSource}
+            onDrawSource={props.onDrawSource}
+            nashMix={props.nashMix}
             prior={props.prior}
             onPrior={props.onPrior}
           />

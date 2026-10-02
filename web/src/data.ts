@@ -49,11 +49,10 @@ export async function fetchRecordPool(): Promise<PoolData> {
   return { pool: JSON.parse(poolJson) as MetaPool, poolJson };
 }
 
-/** The Nash door's shipped mixture (`?nash` only, so it is fetched only on
- * that door). Returned as text because nash-mix.ts is what decides what the
- * file means — and because a nash page with no mixture is not a mode, this
- * one throws: the caller lets it reach the boot error box rather than
- * quietly starting a plainer game under the mode's name. */
+/** The shipped mixture: the `?nash` draw and the play door's Nash draw
+ * choice. Returned as text because nash-mix.ts is what decides what the file
+ * means — and because a draw that names the mixture cannot quietly become a
+ * plainer one, this throws: the caller lets it reach the boot error box. */
 export async function fetchNashArtifact(): Promise<string> {
   const res = await fetch(dataUrl("meta-nash-v3/pool-artifact.json"));
   if (!res.ok) throw new Error(`nash artifact fetch failed: ${res.status}`);

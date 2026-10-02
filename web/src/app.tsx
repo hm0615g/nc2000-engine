@@ -11,8 +11,8 @@
 //   the party the bot brings — both Random draws use its draw weights;
 // - the opponent prior (belief-pool-v3): what the bot assumes about the
 //   party it faces, on every door;
-// - on `?nash`, the solved mixture (meta-nash-v3): the bot's draw instead of
-//   the catalog.
+// - the solved mixture (meta-nash-v3): the bot's draw on `?nash`, and on the
+//   play door when the setup panel's draw choice says so (draw-source.ts).
 // None of them is read in another's place. A pool file the user loads in
 // the setup panel is an explicit override of the lists and the bot's draw
 // (drawn uniformly, because that file is what they chose to face); it never
@@ -35,6 +35,11 @@ import { randomPoolTeam, type SelectedTeam } from "./pool-pick";
 import { drawNashTeam, parseNashArtifact, type NashMix } from "./nash-mix";
 import { drawCatalogTeam, parseCatalog, type Catalog } from "./own-pool";
 import { readDoor, type Door } from "./info-mode";
+import {
+  loadDrawSource,
+  storeDrawSource,
+  type DrawSource,
+} from "./draw-source";
 import {
   clearStoredPool,
   loadStoredPool,
@@ -97,9 +102,11 @@ export function App() {
   // The lists in play: the catalog, or a pool file the user loaded.
   const [loadedPool, setLoadedPool] = useState<LoadedPool | null>(null);
   const [game, setGame] = useState<GameSpec | null>(null);
-  // The solved mixture, on the `?nash` door only. Never null on a nash page
-  // that got past boot: a failure to load or validate it fails the page.
+  // The solved mixture: the `?nash` draw, and a draw choice on the play door.
+  // Never null once boot succeeded — a mixture that cannot load or validate
+  // fails the page.
   const [nashMix, setNashMix] = useState<NashMix | null>(null);
+  const [drawSource, setDrawSource] = useState<DrawSource>(loadDrawSource);
   // The shipped opponent prior: the blind searcher's candidate set only.
   const [beliefJson, setBeliefJson] = useState<string | null>(null);
   const [loc, setLoc] = useState<Locale>(locale());
@@ -118,7 +125,7 @@ export function App() {
           fetchCatalog(),
           loadJaNames(fetchI18nJa),
           loadSetDex(fetchDexJson),
-          NASH ? fetchNashArtifact() : Promise.resolve(""),
+          fetchNashArtifact(),
           fetchBeliefPool(),
         ]);
         // Parsed after the engine is up, because validating a team file is
@@ -127,11 +134,9 @@ export function App() {
         const parsed = parseCatalog(catalogText);
         if (!parsed.ok) throw new Error(parsed.errors.join("; "));
         setCatalog(parsed.catalog);
-        if (NASH) {
-          const mix = parseNashArtifact(nashText);
-          if (!mix.ok) throw new Error(mix.errors.join("; "));
-          setNashMix(mix.mix);
-        }
+        const mix = parseNashArtifact(nashText);
+        if (!mix.ok) throw new Error(mix.errors.join("; "));
+        setNashMix(mix.mix);
         setBeliefJson(beliefPd.poolJson);
         setLoadedPool(restoreStoredPool() ?? parsed.catalog.pool);
         setStatus("ready");
@@ -153,7 +158,7 @@ export function App() {
     status === "error" ||
     !loadedPool ||
     !catalog ||
-    (NASH && !nashMix) ||
+    !nashMix ||
     !beliefJson
   ) {
     return (
@@ -188,11 +193,13 @@ export function App() {
   /** The bot's party when nobody pinned one, in one place because the start
    * screen and every rematch must roll the same way. */
   const drawOpponent = (): SelectedTeam =>
-    NASH && nashMix
+    NASH
       ? drawNashTeam(nashMix)
       : custom
         ? randomPoolTeam(activePool.pool)
-        : drawCatalogTeam(catalog);
+        : drawSource === "nash"
+          ? drawNashTeam(nashMix)
+          : drawCatalogTeam(catalog);
   /** The human's "Random": the catalog's draw weights, or uniform over a
    * loaded file — the same rule as the bot's draw from the same lists. */
   const drawHuman = (): SelectedTeam =>
@@ -211,6 +218,11 @@ export function App() {
         }}
         nash={NASH}
         nashMix={nashMix}
+        drawSource={drawSource}
+        onDrawSource={(s) => {
+          storeDrawSource(s);
+          setDrawSource(s);
+        }}
         drawOpponent={drawOpponent}
         drawHuman={drawHuman}
         botDrawCount={activePool.pool.teams.length}

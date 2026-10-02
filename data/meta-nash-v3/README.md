@@ -2,7 +2,8 @@
 
 `pool-artifact.json` is generated (`node tools/build-team-products-v2.js`)
 from `solution.json`; it is what `?nash` draws the bot's party from, once per
-battle, and the evaluator's default opponents. Every support party is
+battle, the play door's draw when the setup panel's "solved mixture" choice
+is on, and the evaluator's default opponents. Every support party is
 `selected` in `data/team-selection-v2/selection.json`; weights live here,
 never as labels.
 

@@ -33,10 +33,11 @@ it faces is the frozen opponent prior `data/belief-pool-v3`.
 The built-in parties a human can pick and the parties the bot draws are one
 catalog, `data/team-pool-v2` (24 parties, same ids, exact sets); both Random
 buttons draw it by its `drawWeight` (equal mass per variant cluster). A custom party can be
-imported for the human side, and a pool file loaded in the setup panel
-replaces the lists and the bot's draw (uniformly) without touching the prior.
-`?nash` draws the bot's party from the solved mixture `data/meta-nash-v3`
-instead. How the catalog was selected: `data/team-selection-v2` and
+imported for the human side. The setup panel chooses where the bot's party
+comes from — the built-in parties (by `drawWeight`) or the solved mixture
+`data/meta-nash-v3` — and a pool file loaded there replaces the lists and the
+bot's draw (uniformly) without touching the prior. `?nash` is the mixture
+draw with nothing configurable. The start screen links to `?evaluate`. How the catalog was selected: `data/team-selection-v2` and
 [`docs/TEAM-POOL-REBUILD-PLAN.md`](docs/TEAM-POOL-REBUILD-PLAN.md). The ladder
 client (`tools/ps-client.js`) plays the same way from the same files, without
 pondering.
@@ -53,8 +54,8 @@ The shipped Nash mixture (`data/meta-nash-v3`) is the default. Both sides use
 blind search at c = 0.4 with the shipped opponent prior (`data/belief-pool-v3`);
 changing the opponent distribution only changes team draws.
 
-The default is 32 games at 3,000 iterations per decision, labelled a quick
-run; 27,000 is labelled as the live bot's budget. Each sampled matchup
+The default is 32 games at 27,000 iterations per decision, the live bot's
+budget; 3,000 and 10,000 are offered and labelled as quick runs. Each sampled matchup
 plays twice with P1/P2 reversed. Results stay in memory only and can be resumed
 or extended while the page remains open. Reloading or closing the tab resets
 results. The evaluator does not save to browser storage or load previous results.
