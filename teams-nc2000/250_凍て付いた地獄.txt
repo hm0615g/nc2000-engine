@@ -1,0 +1,51 @@
+Houndoom (F) @ Scope Lens
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Crunch
+- Rest
+- Sleep Talk
+
+Gengar (M) @ PRZCureBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Ice Punch
+- Rest
+- Explosion
+
+Gligar (M) @ Mint Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 14 HP / 24 Atk / 26 Def
+- Earthquake
+- Hidden Power [Flying]
+- Curse
+- Rest
+
+Skarmory (M) @ MiracleBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Drill Peck
+- Curse
+- Whirlwind
+- Rest
+
+Blissey (F) @ Leftovers
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Seismic Toss
+- Ice Beam
+- Reflect
+- Soft-Boiled
+
+Suicune @ BrightPowder
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Ice Beam
+- Rest
+- Sleep Talk

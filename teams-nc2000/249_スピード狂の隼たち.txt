@@ -1,0 +1,50 @@
+Crobat (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Screech
+- Confuse Ray
+- Substitute
+
+Aerodactyl (M) @ Berserk Gene
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 HP / 26 Atk / 24 Def
+- Hidden Power [Rock]
+- Wing Attack
+- Earthquake
+- Curse
+
+Jolteon (M) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 Atk / 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Charm
+- Rest
+
+Dugtrio (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Earthquake
+- Rock Slide
+- Thief
+- Screech
+
+Alakazam (M) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 10 Atk
+- Psychic
+- Encore
+- Light Screen
+- Recover
+
+Electrode @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunder
+- Reflect
+- Light Screen
+- Explosion

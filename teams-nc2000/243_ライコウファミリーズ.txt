@@ -1,0 +1,49 @@
+Raikou @ Mint Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 Atk / 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Roar
+- Rest
+
+Cloyster (M) @ Gold Berry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Surf
+- Spikes
+- Toxic
+- Explosion
+
+Umbreon (F) @ PRZCureBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Mean Look
+- Baton Pass
+- Charm
+- Moonlight
+
+Donphan (M) @ Leftovers
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Earthquake
+- Toxic
+- Encore
+- Protect
+
+Hypno (M) @ Scope Lens
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Psychic
+- Shadow Ball
+- Rest
+- Sleep Talk
+
+Charizard (M) @ MiracleBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Fire Blast
+- Earthquake
+- Rock Slide
+- Belly Drum

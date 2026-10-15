@@ -1,0 +1,50 @@
+Marowak (M) @ Thick Club
+Level: 53
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 14 HP / 24 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Flying]
+- Swords Dance
+
+Starmie @ Leftovers
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Thunder Wave
+- Confuse Ray
+- Substitute
+
+Snorlax (M) @ Mint Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Fire Blast
+- Rest
+- Self-Destruct
+
+Exeggutor (M) @ MiracleBerry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Psychic
+- Sleep Powder
+- Stun Spore
+- Explosion
+
+Miltank (F) @ BrightPowder
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Rollout
+- Defense Curl
+- Double Team
+- Milk Drink
+
+Houndoom (F) @ Gold Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Pursuit
+- Thief
+- Sunny Day

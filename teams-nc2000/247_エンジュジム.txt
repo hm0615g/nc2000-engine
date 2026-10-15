@@ -1,0 +1,51 @@
+Gengar (M) @ Gold Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Ice Punch
+- Destiny Bond
+- Explosion
+
+Misdreavus (F) @ Leftovers
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Mean Look
+- Perish Song
+- Pain Split
+- Protect
+
+Umbreon (F) @ MiracleBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Mean Look
+- Baton Pass
+- Charm
+- Moonlight
+
+Snorlax (M) @ Mint Berry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Counter
+- Curse
+- Rest
+
+Suicune @ BrightPowder
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Ice Beam
+- Rest
+- Sleep Talk
+
+Alakazam (M) @ PRZCureBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 10 Atk
+- Psychic
+- Fire Punch
+- Encore
+- Recover

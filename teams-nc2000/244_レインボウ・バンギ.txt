@@ -1,0 +1,51 @@
+Tyranitar (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Rock Slide
+- Crunch
+- Earthquake
+- Fire Blast
+
+Venusaur (M) @ PRZCureBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 6 Atk
+- Razor Leaf
+- Sleep Powder
+- Safeguard
+- Synthesis
+
+Exeggutor (M) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Psychic
+- Leech Seed
+- Stun Spore
+- Synthesis
+
+Snorlax (M) @ BrightPowder
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Body Slam
+- Dynamic Punch
+- Rest
+- Sleep Talk
+
+Moltres @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Sunny Day
+- Reflect
+- Rest
+
+Blissey (F) @ NeverMeltIce
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Ice Beam
+- Thunder Wave
+- Light Screen
+- Soft-Boiled

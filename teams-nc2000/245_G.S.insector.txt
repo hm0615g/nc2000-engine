@@ -1,0 +1,52 @@
+Ariados (M) @ MiracleBerry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Spider Web
+- Agility
+- Baton Pass
+- Rest
+
+Ledian (F) @ Gold Berry
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Reflect
+- Light Screen
+- Agility
+- Baton Pass
+
+Snorlax (M) @ Mint Berry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Fire Blast
+- Curse
+- Rest
+
+Marowak (M) @ Thick Club
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Bug]
+- Swords Dance
+
+Gengar (M) @ Leftovers
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 18 Atk
+- Thunderbolt
+- Ice Punch
+- Perish Song
+- Protect
+
+Suicune @ BrightPowder
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Surf
+- Ice Beam
+- Rest
+- Sleep Talk
