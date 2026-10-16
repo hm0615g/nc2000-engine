@@ -35,7 +35,26 @@ try {
     }finally{s.free();b.free();}
    }
   }finally{dex.free();}
-  return {matchups,uniqueKeys:keys.size,allLegal:true};
+  // The approved optimization must retain the worker's zero-search table
+  // path, including the six sets whose public gender changed.
+  const {BotWorker}=await import('/src/bot.ts');
+  const inventory=await(await fetch('/data/team-inventory-v1/inventory.json')).json();
+  const original=new Map(inventory.teams.map(t=>[t.id,t.sets]));
+  const optimized=catalog.teams.find(t=>JSON.stringify(t.sets)!==JSON.stringify(original.get(t.id)));
+  const unchanged=catalog.teams.find(t=>JSON.stringify(t.sets)===JSON.stringify(original.get(t.id)));
+  const female=catalog.teams.find(t=>t.sets.some((p,i)=>p.gender!==original.get(t.id)[i].gender));
+  if(!optimized||!unchanged||!female)throw Error('optimized catalog fixtures missing');
+  const worker=[];
+  for(const [own,foe] of [[optimized,unchanged],[unchanged,female]]){
+   const bot=new BotWorker();
+   try{
+    await bot.newBattle(JSON.stringify(foe.sets),JSON.stringify(own.sets),'1,2,3,4',{poolJson,side:1,seed:7});
+    const r=await bot.search(1,32,99,true);
+    if(r.src!=='table'||r.policy.iterations!==0||!r.best)throw Error('optimized catalog fell back to search');
+    worker.push({own:own.id,foe:foe.id,source:r.src,iterations:r.policy.iterations});
+   }finally{bot.terminate();}
+  }
+  return {matchups,uniqueKeys:keys.size,allLegal:true,worker};
  },wasmPath);
  assert.equal(result.matchups,576);assert.equal(result.uniqueKeys,504);
  fs.writeFileSync('../findings/fixed-budget-release-v1/compiled-coverage.json',JSON.stringify(result,null,2)+'\n');console.log(result);
