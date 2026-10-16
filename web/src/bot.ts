@@ -91,6 +91,7 @@ export class BotWorker {
       side: number;
       seed: number;
       priorJson?: string;
+      compiledPreview?: boolean;
     },
   ): Promise<void> {
     await this.ready;
@@ -120,9 +121,8 @@ export class BotWorker {
   }
 
   /** Search the mirror battle's current decision point for `side`.
-   * `ponder: true` (simultaneous point) keeps thinking past the budget —
-   * bonus iterations while the human deliberates — until `flush()` or the
-   * ponder cap; `false` (bot-only point) stops exactly at budget.
+   * Live searches stop at exactly budget, even when launched while the
+   * human is choosing. `ponder` is retained for caller compatibility.
    * A later apply/newBattle/cancelAll supersedes the search: its promise
    * then never settles (callers holding a stale promise are per-game and
    * torn down with the game). */
@@ -140,8 +140,8 @@ export class BotWorker {
     });
   }
 
-  /** The human committed: a pondering search returns its best at the next
-   * slice boundary (a search still inside its budget finishes it first). */
+  /** Human committed. Fixed-iteration searches ignore this notification;
+   * fixed-budget searches finish independently of this signal. */
   flush(): void {
     this.send({ t: "flush" });
   }
