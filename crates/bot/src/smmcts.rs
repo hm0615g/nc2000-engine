@@ -566,6 +566,10 @@ pub(crate) fn certain_noop(
 /// turn one rule OFF for an A/B, never to ship a rule half-on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MaskRules {
+    pub destiny_bond_wait: bool,
+    pub residual_damage_wait: bool,
+    pub own_recovery_wait: bool,
+    pub priority_heal: bool,
     /// Sleep Talk / Snore selected by an AWAKE, strictly faster user
     /// (`moveexec.rs:521`). `false` = the pre-2026-08-19 mask.
     pub sleep_talk_awake: bool,
@@ -601,6 +605,10 @@ pub struct MaskRules {
 impl Default for MaskRules {
     fn default() -> Self {
         MaskRules {
+            destiny_bond_wait: true,
+            residual_damage_wait: true,
+            own_recovery_wait: true,
+            priority_heal: true,
             sleep_talk_awake: true,
             immunity_ignores_switch_read: false,
             immunity_all_switchins: false,
@@ -649,6 +657,13 @@ pub(crate) fn dominated_reason(
             return Some("inflicting sleep would forfeit under Sleep Clause");
         }
     }
+    if rules.destiny_bond_wait
+        && b.active_id(1 - side).is_some_and(|id| {
+            dex.conds_id("destinybond").is_some_and(|cond| b.poke(id).has_volatile(cond))
+        })
+    {
+        return None;
+    }
     if b.active_id(1 - side)
         .and_then(|id| {
             dex.conds_id("perishsong").and_then(|cond| b.poke(id).volatile(cond))
@@ -657,7 +672,37 @@ pub(crate) fn dominated_reason(
     {
         return None;
     }
+    if rules.residual_damage_wait && foe_has_residual_damage(b, dex, side) {
+        return None;
+    }
+    if rules.own_recovery_wait
+        && b.active_id(side).is_some_and(|id| {
+            let me = b.poke(id);
+            !me.fainted && me.hp > 0 && me.hp < me.maxhp
+                && me.item.is_some() && me.item == dex.items.id("leftovers")
+        })
+    {
+        return None;
+    }
     noop_reason(b, dex, side, c, rules)
+}
+
+fn foe_has_residual_damage(b: &Battle, dex: &Dex, side: usize) -> bool {
+    use nc2000_engine::state::Status;
+    let Some(id) = b.active_id(1 - side) else { return false };
+    let foe = b.poke(id);
+    if foe.fainted || foe.hp == 0 {
+        return false;
+    }
+    // A failing move can avoid retaliation while public residual effects advance.
+    matches!(foe.status, Status::Psn | Status::Tox | Status::Brn)
+        || ["curse", "leechseed", "partiallytrapped"].iter().any(|key| {
+            dex.conds_id(key).is_some_and(|cond| foe.has_volatile(cond))
+        })
+        || (foe.status == Status::Slp
+            && dex.conds_id("nightmare").is_some_and(|cond| foe.has_volatile(cond)))
+        || (dex.conds_id("sandstorm").is_some_and(|cond| b.field.weather == Some(cond))
+            && !foe.types.iter().any(|t| dex.status_key_immune("sandstorm", t)))
 }
 
 /// Whether the foe can leave before the move lands. **Switches resolve before
@@ -702,6 +747,24 @@ fn faster_than_foe(b: &Battle, dex: &Dex, side: usize) -> bool {
         return false;
     }
     b.get_pokemon_action_speed(dex, me) > b.get_pokemon_action_speed(dex, foe)
+}
+
+fn foe_may_preempt_heal(b: &Battle, dex: &Dex, side: usize, priority: i8) -> bool {
+    let Some(id) = b.active_id(1 - side) else { return true };
+    let foe = b.poke(id);
+    // Copied move slots are public overlays; their identities and PP are not needed.
+    if foe.transformed || foe.move_slots.iter().any(|slot| !slot.shared) {
+        return true;
+    }
+    let Some(learnset) = crate::belief::format_learnsets().species(dex.species.key(foe.species)) else {
+        return true;
+    };
+    learnset.moves.iter().any(|key| {
+        dex.moves.id(key).is_some_and(|id| {
+            let ms = dex.move_static(id);
+            ms.priority > priority && ms.category != nc2000_engine::dex::Category::Status
+        })
+    })
 }
 
 /// Is `def` immune to a move of `move_type`? Mirrors
@@ -819,13 +882,11 @@ fn noop_reason(
         me.hp >= me.maxhp
     };
     if ms.heal.is_some() || key == "rest" {
-        // Only when the user is also strictly faster. Measured on the corpus
-        // (`noop_census`): the unconditional rule was wrong on 34 of 206
-        // firings, every one of them a slower healer that the foe damaged
-        // first — so by the time the heal resolved it was not at full HP and
-        // the move worked. A faster healer resolves before anything can touch
-        // it (bar a priority attack, which this format barely carries).
-        verdict!(full_hp && faster_than_foe(b, dex, side), "healing at full HP, and faster");
+        verdict!(
+            full_hp && faster_than_foe(b, dex, side)
+                && (!rules.priority_heal || !foe_may_preempt_heal(b, dex, side, ms.priority)),
+            "healing at full HP, and faster"
+        );
     }
     if let Some(sc) = ms.side_condition.as_deref() {
         let on_foe = ms.target == "foeSide";

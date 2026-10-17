@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import type { EvaluationRun } from "../src/evaluate-core";
 
-test.use({ actionTimeout: 10000 });
+test.use({ locale: "ja-JP", actionTimeout: 10000 });
 
 const route = `${process.env.NC2000_E2E_BASE ?? "/"}?evaluate`;
 /** The default opponents are the shipped Nash mixture, read from the same
@@ -423,7 +423,7 @@ test("editing an imported party preserves custom stats and exposes no technical 
   const visibleText = await page.locator("main").innerText();
   expect(visibleText).not.toMatch(/WASM|belief|反復|BLIND|正規化/);
   await expect(page.getByLabel("考える回数", { exact: true })).toHaveValue(
-    "27000",
+    "81000",
   );
 });
 
@@ -452,7 +452,7 @@ test("opponent panel shows the mixture's parties and probabilities, with JSON as
   ).toHaveText([
     "3,000回(簡易計測)",
     "10,000回(簡易計測)",
-    "27,000回(実際のボットと同じ)",
+    "81,000回(「強い」の対戦中と同じ回数)",
   ]);
   await panel.getByText("技・持ち物を見る", { exact: true }).first().click();
   await expect(
