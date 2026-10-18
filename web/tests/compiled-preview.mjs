@@ -7,16 +7,17 @@ import { createServer } from 'vite';
 import { chromium } from '@playwright/test';
 const root='../findings/fixed-budget-release-v1';
 const rows=fs.readdirSync(root+'/canary').filter(n=>n.endsWith('.json')).sort().map(n=>JSON.parse(fs.readFileSync(root+'/canary/'+n,'utf8')));
-const artifact={format:'nc2000-compiled-preview-v1',c:0.4,build:rows[0].build,priorSha256:crypto.createHash('sha256').update(fs.readFileSync('../data/belief-pool-v3/belief-pool.json')).digest('hex'),dexSha256:crypto.createHash('sha256').update(fs.readFileSync('../data/gen2stadium2.json')).digest('hex'),policies:{...JSON.parse(fs.readFileSync('../data/compiled-preview-v1.json','utf8')).policies,...Object.fromEntries(rows.map(r=>[r.key,r.samples.map(s=>s.choice)]))}};
+const productionArtifact=JSON.parse(fs.readFileSync('../data/compiled-preview-v1.json','utf8'));
+const artifact={format:'nc2000-compiled-preview-v1',c:0.4,build:productionArtifact.build,priorSha256:crypto.createHash('sha256').update(fs.readFileSync('../data/belief-pool-v3/belief-pool.json')).digest('hex'),dexSha256:crypto.createHash('sha256').update(fs.readFileSync('../data/gen2stadium2.json')).digest('hex'),policies:{...productionArtifact.policies,...Object.fromEntries(rows.map(r=>[r.key,r.samples.map(s=>s.choice)]))}};
 const server=http();let vite,browser;
 try{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  vite=await createServer({plugins:[{name:'compiled-preview-fixture',enforce:'pre',load(id){if(id.endsWith('/data/compiled-preview-v1.json?raw'))return `export default ${JSON.stringify(JSON.stringify(artifact))}`;}}],server:{middlewareMode:true,hmr:{server}}});server.on('request',vite.middlewares);
  browser=await chromium.launch();const page=await browser.newPage();await page.goto(`http://127.0.0.1:${server.address().port}/`,{waitUntil:"networkidle"});
- const results=await page.evaluate(async rows=>{
+ const results=await page.evaluate(async ({rows,currentBuild})=>{
   const {BotWorker}=await import('/src/bot.ts');const {compiledPreviewPick,compiledPreviewMatches}=await import('/src/compiled-preview.ts');
   if(compiledPreviewPick('stale',rows[0].key,0,.4)!==undefined)throw Error('stale build used');
-  if(compiledPreviewPick(rows[0].build,rows[0].key,0,1)!==undefined)throw Error('wrong coefficient used');
+  if(compiledPreviewPick(currentBuild,rows[0].key,0,1)!==undefined)throw Error('wrong coefficient used');
   const poolJson=await(await fetch('/data/belief-pool-v3/belief-pool.json')).text();const results=[];
   if(await compiledPreviewMatches(poolJson,'stale embedded dex'))throw Error('stale binary data accepted');
   const run=async(row,scenario,seed=7)=>{
@@ -36,6 +37,6 @@ try{
   };
   for(const row of rows)for(const scenario of ['early','background','hidden-change','own-change','prior-change','item-presence','public-gender'])results.push(await run(row,scenario));
   return results;
- },rows);
+ },{rows,currentBuild:artifact.build});
  assert.equal(results.length,14);fs.writeFileSync(root+'/compiled-worker-check.json',JSON.stringify(results,null,2)+'\n');console.log(results);
 }finally{await browser?.close();await vite?.close();server.close();}
