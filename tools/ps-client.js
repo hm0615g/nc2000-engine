@@ -21,7 +21,7 @@
 // Usage:
 //   node tools/ps-client.js --server ws://127.0.0.1:8123 --name BOTNAME \
 //     --team pool:0|pool:random|FILE.json [--challenge USER | --accept any|U1,U2] \
-//     [--games N] [--iters 30000] [--seed 1] [--mode blind|open] \
+//     [--games N] [--iters 30000 | --web-policy strong|standard] [--seed 1] [--mode blind|open] \
 //     [--opp-team-file FILE.json] [--random] [--timer] \
 //     [--decision-log FILE.jsonl] [--belief-prior FILE.json|auto] \
 //     [--password PW] [--loginserver URL] [--format gen2nintendocup2000noohkostadium2strict] \
@@ -98,8 +98,15 @@ if (args.help || args.h) {
                     shared secret for server-fed dynamic open (environment;
                     at least 32 characters; required when --mode open has no
                     --opp-team-file)
-  --iters N         search iterations per decision (default 27000 in blind
-                    mode, 30000 in open mode)
+  --iters N         legacy/manual search iterations per decision (default
+                    27000 in blind mode, 30000 in open mode)
+  --web-policy P    use the browser product search policy in blind mode:
+                    strong (default browser strength) or standard.
+                    Battle budgets and team-preview policy come from
+                    data/live-search.json. Known compatible previews use
+                    data/compiled-preview-v1.json; all other previews run the
+                    browser's fixed unknown-preview budget. Cannot be combined
+                    with --iters
   --seed N          searcher / random-mode seed (default 1)
   --random          random driver mode (no searcher; uniform legal choice)
   --timer           turn the battle timer on in every game
@@ -153,7 +160,33 @@ const DYNAMIC_OPEN_FORMAT_ID = 'gen2nintendocup2000noohkostadium2strict';
 const BOT_AUTH_TOKEN = String(process.env.NC2000_DYNAMIC_OPEN_TOKEN || '').trim();
 if (!['blind', 'open'].includes(MODE)) throw new Error('--mode must be blind or open');
 const PROFILE = require('../data/search-profiles.json')[MODE];
-const ITERS = parseInt(args.iters || String(PROFILE.iterations), 10);
+const LIVE_SEARCH = require('../data/live-search.json');
+const WEB_POLICY = args['web-policy'] === true
+    ? String(LIVE_SEARCH.defaultStrength)
+    : args['web-policy'] ? String(args['web-policy']) : '';
+if (WEB_POLICY && MODE !== 'blind') {
+    throw new Error('--web-policy is only available with --mode blind');
+}
+if (WEB_POLICY && args.iters !== undefined) {
+    throw new Error('--web-policy and --iters cannot be combined');
+}
+if (WEB_POLICY && !Object.prototype.hasOwnProperty.call(LIVE_SEARCH.battle, WEB_POLICY)) {
+    throw new Error(
+        `--web-policy must be one of: ${Object.keys(LIVE_SEARCH.battle).join(', ')}`
+    );
+}
+const ITERS = WEB_POLICY
+    ? Number(LIVE_SEARCH.battle[WEB_POLICY])
+    : parseInt(args.iters || String(PROFILE.iterations), 10);
+const PREVIEW_ITERS = WEB_POLICY
+    ? Number(LIVE_SEARCH.unknownPreview)
+    : ITERS * 5;
+if (!Number.isSafeInteger(ITERS) || ITERS <= 0) {
+    throw new Error('search iteration count must be a positive integer');
+}
+if (!Number.isSafeInteger(PREVIEW_ITERS) || PREVIEW_ITERS <= 0) {
+    throw new Error('preview iteration count must be a positive integer');
+}
 const SEED = parseInt(args.seed || '1', 10);
 const RANDOM = !!args.random;
 const TIMER = !!args.timer;
@@ -444,6 +477,155 @@ if (!RANDOM) {
 	wasm = require(path.join(REPO, 'crates/wasm/pkg-node/nc2000_wasm.js'));
 	dex = new wasm.Dex();
 }
+
+const sha256Text = text =>
+	crypto.createHash('sha256').update(text).digest('hex');
+
+let compiledPreviewArtifact = null;
+let compiledPreviewPublicRosters = null;
+let compiledPreviewCompatible = false;
+let compiledPreviewCompatibilityReason = '';
+
+if (!RANDOM && WEB_POLICY) {
+	try {
+		compiledPreviewArtifact = JSON.parse(
+			fs.readFileSync(
+				path.join(REPO, 'data/compiled-preview-v1.json'),
+				'utf8'
+			)
+		);
+
+		if (compiledPreviewArtifact.format !== 'nc2000-compiled-preview-v1') {
+			throw new Error('unexpected compiled-preview format');
+		}
+		if (compiledPreviewArtifact.c !== PROFILE.c) {
+			throw new Error(
+				`compiled-preview c=${compiledPreviewArtifact.c}, search c=${PROFILE.c}`
+			);
+		}
+		if (compiledPreviewArtifact.iterations !== PREVIEW_ITERS) {
+			throw new Error(
+				`compiled-preview iterations=${compiledPreviewArtifact.iterations}, ` +
+				`web preview budget=${PREVIEW_ITERS}`
+			);
+		}
+		if (compiledPreviewArtifact.priorSha256 !== sha256Text(DEFAULT_BELIEF_POOL_JSON)) {
+			throw new Error('compiled-preview belief pool does not match');
+		}
+		if (compiledPreviewArtifact.dexSha256 !== sha256Text(wasm.embeddedDexJson())) {
+			throw new Error('compiled-preview embedded dex does not match');
+		}
+
+		compiledPreviewPublicRosters = new Map();
+
+		for (const key of Object.keys(compiledPreviewArtifact.policies || {})) {
+			const [own] = JSON.parse(key);
+			const roster = JSON.stringify(
+				own.map(p => [p[0], p[1]])
+			);
+			const facts = JSON.stringify(
+				own.map(p => [p[0], p[1], p[2], p[8] !== null])
+			);
+
+			if (
+				compiledPreviewPublicRosters.has(roster) &&
+				compiledPreviewPublicRosters.get(roster) !== facts
+			) {
+				compiledPreviewPublicRosters.set(roster, null);
+			} else if (!compiledPreviewPublicRosters.has(roster)) {
+				compiledPreviewPublicRosters.set(roster, facts);
+			}
+		}
+
+		compiledPreviewCompatible = true;
+	} catch (e) {
+		compiledPreviewCompatibilityReason = e && e.message ?
+			e.message : String(e);
+	}
+}
+
+function compiledPreviewPick(searcher, seed) {
+	if (
+		!WEB_POLICY ||
+		!compiledPreviewCompatible ||
+		BELIEF_PRIOR_ARG ||
+		!searcher
+	) {
+		return null;
+	}
+
+	let info;
+	try {
+		const text = searcher.previewCacheInfo();
+		if (!text) return null;
+		info = JSON.parse(text);
+	} catch {
+		return null;
+	}
+
+	if (
+		info.format !== 'nc2000-preview-cache-info-v1' ||
+		info.build !== compiledPreviewArtifact.build ||
+		typeof info.teamKey !== 'string' ||
+		!Array.isArray(info.opponentPublic)
+	) {
+		return null;
+	}
+
+	let foe;
+	try {
+		[, foe] = JSON.parse(info.teamKey);
+	} catch {
+		return null;
+	}
+
+	const expectedPublic = compiledPreviewPublicRosters.get(
+		JSON.stringify(foe)
+	);
+	const observedPublic = JSON.stringify(
+		info.opponentPublic.map(p => p.slice(0, 4))
+	);
+
+	if (expectedPublic !== observedPublic) return null;
+
+	const choices = compiledPreviewArtifact.policies[info.teamKey];
+	if (!Array.isArray(choices) || !choices.length) return null;
+
+	const choice = choices[(seed >>> 0) % choices.length];
+
+	// Same safety property as the browser worker: never submit a compiled
+	// choice unless it exists in this searcher's actual ordered action space.
+	try {
+		const policy = JSON.parse(searcher.rootPolicy());
+		const legal = Array.isArray(policy.actions) ?
+			policy.actions.map(a => a.input) : [];
+		if (!legal.includes(choice)) return null;
+	} catch {
+		return null;
+	}
+
+	return choice;
+}
+
+if (WEB_POLICY) {
+	console.log(
+		`[${NAME}] web policy ${WEB_POLICY}: battle=${ITERS}, ` +
+		`unknown-preview=${PREVIEW_ITERS}, c=${PROFILE.c}`
+	);
+	if (compiledPreviewCompatible) {
+		console.log(
+			`[${NAME}] compiled preview ready: ` +
+			`${Object.keys(compiledPreviewArtifact.policies).length} policies, ` +
+			`${compiledPreviewArtifact.iterations} source iterations`
+		);
+	} else {
+		console.log(
+			`[${NAME}] compiled preview unavailable; live preview search will be used: ` +
+			compiledPreviewCompatibilityReason
+		);
+	}
+}
+
 let oppTeamJson = '';
 let oppTeamSets = null;
 let DYNAMIC_OPEN = false;
@@ -1152,12 +1334,25 @@ class BattleDriver {
 		if (this.maybeDrop(req, 'pre')) return;
 
 		const t0 = Date.now();
-		let choice = this.searcher.bakedPreview();
+		const searchSeed = SEED * 1000 + this.battleIdx;
+		let choice = null;
+		let searchSource = 'live-search';
+		let searchIterations = 0;
+
+		if (WEB_POLICY && req.teamPreview) {
+			choice = compiledPreviewPick(this.searcher, searchSeed);
+			if (choice) searchSource = 'compiled-preview';
+		} else if (!WEB_POLICY) {
+			choice = this.searcher.bakedPreview();
+			if (choice) searchSource = 'baked-preview';
+		}
+
 		if (!choice) {
-			const searchIters = req.teamPreview ? ITERS * 5 : ITERS;
-			this.searcher.step(searchIters);
+			const searchIters = req.teamPreview ? PREVIEW_ITERS : ITERS;
+			searchIterations = this.searcher.step(searchIters);
 			choice = this.searcher.best();
 		}
+
 		const think = Date.now() - t0;
 		stats.maxThinkMs = Math.max(stats.maxThinkMs, think);
 		stats.thinkMsSum += think;
@@ -1170,11 +1365,19 @@ class BattleDriver {
 		try { state = JSON.parse(this.searcher.stateView()); } catch { /* diagnostic only */ }
 		let beliefInfo = null;
 		try { beliefInfo = JSON.parse(this.searcher.beliefInfo()); } catch { /* diagnostic only */ }
-		this.recordDecision(req, choice, policy, state, beliefInfo, 'search');
+		this.recordDecision(
+			req,
+			choice,
+			policy,
+			state,
+			beliefInfo,
+			'search',
+			{ source: searchSource, iterations: searchIterations }
+		);
 		this.maybeDrop(req, 'post');
 	}
 
-	recordDecision(req, choice, rootPolicy, stateView, beliefInfo, driver) {
+	recordDecision(req, choice, rootPolicy, stateView, beliefInfo, driver, searchMeta = null) {
 		if (!DECISION_LOG) return;
 		const rqidKey = String(req.rqid ?? `decision-${this.decisions}`);
 		if (this.loggedRqids.has(rqidKey)) return;
@@ -1195,7 +1398,13 @@ class BattleDriver {
 			mode: MODE,
 			driver,
 			searchC: PROFILE.c,
-			iterations: driver === 'search' ? ITERS : 0,
+			iterations: driver === 'search' ?
+				(searchMeta ? searchMeta.iterations : ITERS) : 0,
+			searchSource: driver === 'search' && searchMeta ?
+				searchMeta.source : null,
+			webPolicy: WEB_POLICY || null,
+			battleIterations: WEB_POLICY ? ITERS : null,
+			previewIterations: WEB_POLICY ? PREVIEW_ITERS : null,
 			seed: SEED * 1000 + this.battleIdx,
 			teamLabel: this.client.currentTeam.label.startsWith('pool:') ?
 				this.client.currentTeam.label : path.basename(this.client.currentTeam.label),
@@ -1554,7 +1763,9 @@ function reachedGameLimit() {
 function summarize() {
 	console.log('----------------------------------------------------------');
 	console.log(
-		`${NAME} (${RANDOM ? 'random' : `${MODE}:${ITERS}`}, seed ${SEED}): ` +
+		`${NAME} (${RANDOM ? 'random' : WEB_POLICY ?
+			`${MODE}:web-${WEB_POLICY}:battle=${ITERS}:preview=${PREVIEW_ITERS}` :
+			`${MODE}:${ITERS}`}, seed ${SEED}): ` +
 		`${stats.W}W ${stats.L}L ${stats.T}T over ${stats.games} games`
 	);
 	console.log(
