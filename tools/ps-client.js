@@ -213,6 +213,18 @@ const BELIEF_PRIOR_FILE = BELIEF_PRIOR_ARG && !BELIEF_PRIOR_AUTO ? resolveUserPa
 const DEBOUNCE_MS = 100; // network analogue of the M15a stream-quiescence wait
 const RECONNECT_MS = 500;
 
+// Abandoned-battle guard.
+//
+// This is deliberately NOT Pokemon Showdown's battle timer. After this bot
+// submits a choice (or receives a wait request while only the opponent owes
+// an action), the server has 300 seconds to advance to a genuinely new
+// request. Otherwise the bot forfeits the battle itself.
+//
+// This keeps bot search time completely outside the deadline and avoids
+// imposing Showdown's cumulative chess-clock-style timer on the human.
+const OPPONENT_WAIT_FORFEIT_MS = 300_000;
+const OPPONENT_WAIT_RETRY_MS = 5_000;
+
 if (DECISION_LOG) {
 	fs.mkdirSync(path.dirname(DECISION_LOG), { recursive: true });
 	if (!fs.existsSync(DECISION_LOG)) fs.closeSync(fs.openSync(DECISION_LOG, 'a', 0o600));
@@ -626,6 +638,33 @@ if (WEB_POLICY) {
 	}
 }
 
+// Match the browser worker's adaptive search slicing: keep individual
+// WASM step() calls near 125 ms and yield a macrotask between slices so
+// websocket traffic, reconnects and request cancellation can interleave.
+const SEARCH_SLICE_TARGET_MS = 125;
+let searchSlice = 250;
+
+function stepAdaptive(searcher, n) {
+	const t0 = performance.now();
+	const done = searcher.step(n);
+	const dt = performance.now() - t0;
+
+	if (n >= searchSlice) {
+		const factor = Math.max(
+			0.5,
+			Math.min(2, SEARCH_SLICE_TARGET_MS / Math.max(dt, 1))
+		);
+		searchSlice = Math.round(
+			Math.max(50, Math.min(4000, searchSlice * factor))
+		);
+	}
+
+	return done;
+}
+
+const yieldSearchTurn = () =>
+	new Promise(resolve => setTimeout(resolve, 0));
+
 let oppTeamJson = '';
 let oppTeamSets = null;
 let DYNAMIC_OPEN = false;
@@ -896,6 +935,10 @@ class BattleDriver {
 		this.sawPreviewLine = false;
 		this.actTimer = null;
 		this.retries = 0;
+		this.searchGeneration = 0;
+		this.searching = false;
+		this.opponentWaitTimer = null;
+		this.opponentWait = null;
 		this.ended = false;
 		this.turn = 0;
 		this.decisions = 0;
@@ -925,6 +968,7 @@ class BattleDriver {
 	}
 
 	freeSearcher() {
+		this.cancelSearch();
 		if (this.searcher) {
 			try {
 				const m = JSON.parse(this.searcher.metrics());
@@ -939,6 +983,7 @@ class BattleDriver {
 	// a replayed |init|battle after /join: rebuild from scratch (stats kept)
 	resetForRejoin() {
 		this.freeSearcher();
+		this.clearOpponentWait();
 		this.lineBuffer = [];
 		this.visibleLines = [];
 		this.loggedLineCount = 0;
@@ -962,6 +1007,172 @@ class BattleDriver {
 		this.selfSide = side;
 		this.oppSide = side === 'p1' ? 'p2' : 'p1';
 		this.opponentName = this.players[this.oppSide] || this.opponentName;
+	}
+
+	clearOpponentWait(reason = '') {
+		if (this.opponentWaitTimer) {
+			clearTimeout(this.opponentWaitTimer);
+			this.opponentWaitTimer = null;
+		}
+
+		if (reason && this.opponentWait) {
+			this.log(`opponent-wait guard cleared: ${reason}`);
+		}
+
+		this.opponentWait = null;
+	}
+
+	startOpponentWait(rqid, requestText, why = 'our choice was submitted') {
+		// If --timer was explicitly requested, preserve its legacy semantics
+		// instead of layering this separate abandonment policy on top.
+		if (TIMER || this.ended) return;
+
+		this.clearOpponentWait();
+
+		const rqidKey =
+			rqid === undefined || rqid === null ? null : String(rqid);
+
+		this.opponentWait = {
+			rqidKey,
+			requestText: String(requestText || ''),
+			startedAt: Date.now(),
+			why,
+		};
+
+		this.opponentWaitTimer = setTimeout(
+			() => this.onOpponentWaitTimeout(),
+			OPPONENT_WAIT_FORFEIT_MS
+		);
+	}
+
+	onOpponentWaitTimeout() {
+		this.opponentWaitTimer = null;
+
+		const wait = this.opponentWait;
+		if (!wait || this.ended) return;
+
+		// Never attempt to forfeit through a dead socket. The socket-close path
+		// normally clears this guard first, but keep this check as a race-safe
+		// fallback. Retry until reconnect/rejoin either proves progress or leaves
+		// the same request outstanding.
+		if (
+			!this.client.loggedIn ||
+			!this.client.ws ||
+			this.client.ws.readyState !== WebSocket.OPEN
+		) {
+			this.log(
+				'opponent-wait deadline reached while socket is unavailable; ' +
+				'retrying after reconnect'
+			);
+			this.opponentWaitTimer = setTimeout(
+				() => this.onOpponentWaitTimeout(),
+				OPPONENT_WAIT_RETRY_MS
+			);
+			return;
+		}
+
+		const waited = Math.floor((Date.now() - wait.startedAt) / 1000);
+
+		// One-shot: once the command is sent, wait for the normal |win|/|tie|
+		// battle protocol to finalize the driver. Do not repeatedly forfeit.
+		this.opponentWait = null;
+
+		this.log(
+			`no battle progress for ${waited}s after ${wait.why}; forfeiting`
+		);
+		this.client.send(`${this.room}|/forfeit`);
+	}
+
+	noteRequestProgress(nextRequestText) {
+		const wait = this.opponentWait;
+		if (!wait) return;
+
+		const text = String(nextRequestText || '');
+		if (!text || text === 'null') return;
+
+		let nextRqidKey = null;
+
+		try {
+			const next = JSON.parse(text);
+			if (next.rqid !== undefined && next.rqid !== null) {
+				nextRqidKey = String(next.rqid);
+			}
+		} catch {
+			// Invalid JSON is handled by the normal request path. It is NOT
+			// accepted as proof that the opponent acted.
+			return;
+		}
+
+		let advanced = false;
+
+		if (wait.rqidKey !== null && nextRqidKey !== null) {
+			// Primary criterion: a different request id means the server has
+			// advanced past the request for which our previous choice was sent.
+			advanced = nextRqidKey !== wait.rqidKey;
+		} else {
+			// Defensive fallback for a protocol variant with no rqid: require the
+			// complete request JSON to have changed. A byte-identical replay does
+			// not count as opponent activity.
+			advanced = text !== wait.requestText;
+		}
+
+		if (!advanced) return;
+
+		this.clearOpponentWait(
+			wait.rqidKey !== null && nextRqidKey !== null ?
+				`request advanced ${wait.rqidKey} -> ${nextRqidKey}` :
+				'request state advanced'
+		);
+	}
+
+	cancelSearch(reason = '') {
+		this.searchGeneration++;
+
+		if (this.searching && reason) {
+			this.log(`cancelling search: ${reason}`);
+		}
+	}
+
+	async runSearchChunks(target, generation) {
+		if (!this.searcher) return null;
+
+		let done = this.searcher.iterations();
+
+		for (;;) {
+			if (
+				this.ended ||
+				generation !== this.searchGeneration ||
+				!this.searcher
+			) {
+				return null;
+			}
+
+			if (done >= target) break;
+
+			const next = stepAdaptive(
+				this.searcher,
+				Math.min(searchSlice, target - done)
+			);
+
+			// Forced/baked decisions can legitimately refuse to advance.
+			if (next === done) break;
+
+			done = next;
+
+			// Let websocket messages, disconnects, reconnects, new requests,
+			// timers and other Node tasks run before the next WASM slice.
+			await yieldSearchTurn();
+		}
+
+		if (
+			this.ended ||
+			generation !== this.searchGeneration ||
+			!this.searcher
+		) {
+			return null;
+		}
+
+		return done;
 	}
 
 	getPoolIndex() {
@@ -1163,6 +1374,8 @@ class BattleDriver {
 		if (cmd === 'request') {
 			const j = line.slice('|request|'.length);
 			if (j && j !== 'null') {
+				this.noteRequestProgress(j);
+				this.cancelSearch();
 				this.pendingReq = j;
 				this.lastReq = j;
 				this.errRecoveries = 0;
@@ -1195,6 +1408,8 @@ class BattleDriver {
 	}
 
 	onError(line) {
+		this.clearOpponentWait('our choice was rejected');
+
 		// every |error| in a battle room is a choice rejection — target 0.
 		stats.rejections.push(`${this.room} d${this.decisions}: ${line}`);
 		this.log(`REJECTED: ${line}`);
@@ -1213,6 +1428,11 @@ class BattleDriver {
 					rqid = JSON.parse(this.lastReq).rqid;
 				} catch { /* leave undefined */ }
 				this.client.send(`${this.room}|/choose default${rqid !== undefined ? `|${rqid}` : ''}`);
+				this.startOpponentWait(
+					rqid,
+					this.lastReq,
+					'our fallback default choice'
+				);
 				return;
 			}
 			this.pendingReq = this.lastReq;
@@ -1220,10 +1440,25 @@ class BattleDriver {
 		}
 	}
 
-	scheduleAct() {
-		if (this.ended || !this.pendingReq) return;
+	queueAct() {
 		if (this.actTimer) clearTimeout(this.actTimer);
-		this.actTimer = setTimeout(() => this.act(), DEBOUNCE_MS);
+
+		this.actTimer = setTimeout(() => {
+			this.actTimer = null;
+
+			void this.act().catch(error => {
+				// Preserve the old fail-fast behaviour for unexpected bugs while
+				// still allowing act() itself to be async.
+				setImmediate(() => {
+					throw error;
+				});
+			});
+		}, DEBOUNCE_MS);
+	}
+
+	scheduleAct() {
+		if (this.ended || !this.pendingReq || this.searching) return;
+		this.queueAct();
 	}
 
 	holdForMoreLines(why) {
@@ -1234,12 +1469,11 @@ class BattleDriver {
 			this.pendingReq = null;
 			return;
 		}
-		if (this.actTimer) clearTimeout(this.actTimer);
-		this.actTimer = setTimeout(() => this.act(), DEBOUNCE_MS);
+		if (!this.searching) this.queueAct();
 	}
 
-	act() {
-		if (this.ended || !this.pendingReq) return;
+	async act() {
+		if (this.ended || !this.pendingReq || this.searching) return;
 		const reqStr = this.pendingReq;
 		let req;
 		try {
@@ -1259,13 +1493,32 @@ class BattleDriver {
 
 		if (RANDOM) {
 			this.pendingReq = null;
-			if (req.wait) return;
-			if (this.sentchoice) return; // rejoin replay: already answered
+			if (req.wait) {
+				this.startOpponentWait(
+					rqid,
+					reqStr,
+					'an opponent-only wait request'
+				);
+				return;
+			}
+			if (this.sentchoice) {
+				this.startOpponentWait(
+					rqid,
+					reqStr,
+					'our already-submitted choice after rejoin'
+				);
+				return;
+			}
 			this.decisions++;
 			stats.decisions++;
 			if (this.maybeDrop(req, 'pre')) return;
 			const choice = randomChoice(req);
 			this.client.send(`${this.room}|/choose ${choice}${rqid !== undefined ? `|${rqid}` : ''}`);
+			this.startOpponentWait(
+				rqid,
+				reqStr,
+				'our random choice'
+			);
 			this.recordDecision(req, choice, null, null, null, 'random');
 			this.maybeDrop(req, 'post');
 			return;
@@ -1322,10 +1575,26 @@ class BattleDriver {
 			}
 			this.preDropView = null;
 		}
-		if (!owes) return;
+		if (!owes) {
+			if (req.wait) {
+				this.startOpponentWait(
+					rqid,
+					reqStr,
+					'an opponent-only wait request'
+				);
+			}
+			return;
+		}
+
 		if (this.sentchoice) {
-			// rejoin replay of a request we had already answered: the server
-			// kept our choice (|sentchoice|); a re-send would be refused
+			// Rejoin replay of a request we had already answered: the server
+			// kept our choice (|sentchoice|); a re-send would be refused.
+			// Reconstruct the local abandonment guard for that unresolved choice.
+			this.startOpponentWait(
+				rqid,
+				reqStr,
+					'our already-submitted choice after rejoin'
+			);
 			this.log(`already answered rqid ${rqid} (sentchoice=${this.sentchoice}); not re-sending`);
 			return;
 		}
@@ -1349,7 +1618,26 @@ class BattleDriver {
 
 		if (!choice) {
 			const searchIters = req.teamPreview ? PREVIEW_ITERS : ITERS;
-			searchIterations = this.searcher.step(searchIters);
+			const generation = this.searchGeneration;
+
+			this.searching = true;
+
+			try {
+				searchIterations = await this.runSearchChunks(
+					searchIters,
+					generation
+				);
+			} finally {
+				this.searching = false;
+			}
+
+			// A new request, battle end, reconnect rebuild or socket closure
+			// superseded this search. Never submit a stale choice.
+			if (searchIterations === null) {
+				if (this.pendingReq && !this.ended) this.scheduleAct();
+				return;
+			}
+
 			choice = this.searcher.best();
 		}
 
@@ -1359,6 +1647,11 @@ class BattleDriver {
 		stats.thinkN++;
 		if (!choice) throw new Error('searcher returned no choice');
 		this.client.send(`${this.room}|/choose ${choice}${rqid !== undefined ? `|${rqid}` : ''}`);
+		this.startOpponentWait(
+			rqid,
+			reqStr,
+			'our searched choice'
+		);
 		let policy = null;
 		try { policy = JSON.parse(this.searcher.rootPolicy()); } catch { /* diagnostic only */ }
 		let state = null;
@@ -1446,6 +1739,7 @@ class BattleDriver {
 
 	finalize() {
 		if (this.ended) return;
+		this.clearOpponentWait();
 		this.ended = true;
 		if (this.actTimer) clearTimeout(this.actTimer);
 		stats.games++;
@@ -1493,6 +1787,12 @@ class PSClient {
 			if (this.dynamicOpenAuthTimer) clearTimeout(this.dynamicOpenAuthTimer);
 			this.dynamicOpenAuthTimer = null;
 			if (this.shuttingDown) return;
+
+			for (const driver of this.drivers.values()) {
+				driver.cancelSearch('socket closed');
+				driver.clearOpponentWait('socket closed');
+			}
+
 			this.log(`socket closed; reconnecting in ${RECONNECT_MS}ms`);
 			stats.reconnects++;
 			setTimeout(() => this.connect(), RECONNECT_MS);
