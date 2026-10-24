@@ -17,6 +17,15 @@ pub type FxHasher = WordHasher<false>;
 /// Fixed-width polynomial state hash; persistent fingerprints use `FxHasher`.
 pub type SearchHasher = WordHasher<true>;
 
+impl WordHasher<true> {
+    /// Append an already hashed sequence without changing its word stream:
+    /// folding n words maps state s to s*K^n + fold(words, 0).
+    #[inline]
+    pub(crate) fn append_segment(&mut self, multiplier: u64, offset: u64) {
+        self.0 = self.0.wrapping_mul(multiplier).wrapping_add(offset);
+    }
+}
+
 impl<const POLYNOMIAL: bool> WordHasher<POLYNOMIAL> {
     const K: u64 = 0x51_7c_c1_b7_27_22_0a_95;
 

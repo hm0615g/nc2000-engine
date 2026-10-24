@@ -29,6 +29,10 @@ fn main() {
     let fingerprint = match source {
         [117, 211, 24, 4, 76, 93, 238, 6, 250, 127, 46, 79, 153, 197, 157, 214] =>
             [41, 101, 229, 191, 83, 13, 34, 22, 119, 166, 40, 224, 139, 210, 186, 231],
+        // Portable hash memoization changes no transition or hash output.
+        // See findings/portable-search-v1 and the frozen replay regression.
+        [117, 219, 60, 27, 38, 55, 83, 167, 45, 68, 51, 32, 80, 113, 123, 17] =>
+            [41, 101, 229, 191, 83, 13, 34, 22, 119, 166, 40, 224, 139, 210, 186, 231],
         _ => source,
     };
     let output = format!(
