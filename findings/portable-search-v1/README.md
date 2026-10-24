@@ -35,6 +35,21 @@ opportunities are exhausted. `screens/` preserves the trials and patches.
 
 ## Final measurements
 
+The release decision uses the actual deployment-toolchain artifacts: the
+old public bundle versus the candidate GitHub Actions build, both Rust 1.94.0
+and wasm-pack 0.13.1. In Chromium, 27,000-iteration search time fell **7.7%**
+(median paired reduction; individual runs 7.5–8.3%). The paired corpus median
+was 26.331 -> 24.310 seconds across 35 decisions; p95 was 817.8 -> 763.9 ms.
+That is approximately 8.3% more iterations in the same search time, without
+changing the shipped budgets. Every root policy, choice, battle state, RNG
+and log matched. See `production-chromium-27000/`, `ci-candidate.json` and
+`deployed-baseline.json`. These binaries were measured on the local host,
+not timed on a GitHub runner. The candidate CI build passed all checks and
+intentionally skipped deployment until this comparison completed.
+
+The following development measurements used Rust 1.98.1 and remain separate
+from the production-toolchain result above.
+
 | Runtime | Iterations | Decisions | Time reduction |
 |---|---:|---:|---:|
 | Native | 27,000 | 49 | 16.3% |
@@ -78,11 +93,17 @@ Chromium, with a minimal CommonJS byte-loading shim. The candidate Node and web 
 are identical. The real browser worker
 and UI are tested separately. Timings include the search call, excluding
 fixture generation, startup and compilation. They are local measurements,
-not promises for every browser, server or CPU. The WASM payload grows by
+not promises for every browser, server or CPU. The local-toolchain WASM payload grows by
 32,064 bytes (6,734 bytes with gzip), recorded in `binary-size.json`. The browser and native probes
 use different corpora; do not divide their times to claim native/WASM gain.
 
 ## Behavior and artifact provenance
+
+The real web worker, evaluator worker, all 11 Node WASM suites and 19
+Playwright tests passed. Browser checks verified all 576 catalog pairs (504
+unique policies) and the exact 27,000/81,000/729,000 production budgets.
+`local-validation.json` binds the commands and logs. Handoff HTML, Markdown,
+navigation and the bundled ZIP were checked against the authoritative source.
 
 All 335 native tests passed, including the frozen compact replay and full
 conformance suites. `hash-audit.json` records byte-identical outputs for 60
