@@ -16,7 +16,9 @@ import {
   moveName,
 } from "./i18n";
 import {
-  appendPair,
+  appendGame,
+  completedCount,
+  completedGames,
   resultsCsv,
   sameConfig,
   summarize,
@@ -33,7 +35,9 @@ import {
   sha256,
   type OpponentDraft,
 } from "./evaluate-input";
-import { PRODUCT_ITERATIONS, searchProfile } from "./search-profile";
+import { DEFAULT_STRENGTH, PRODUCT_ITERATIONS, PREVIEW_ITERATIONS, liveBudget, searchProfile } from "./search-profile";
+import { logsHtml, outcomeLabel } from "./evaluate-export";
+import { kifuUrl } from "./kifu-code";
 import { TeamEditor, type EditorDex } from "./evaluate-team-editor";
 import "./evaluate.css";
 
@@ -125,6 +129,36 @@ function budgetLabel(n: number): string {
   return n === PRODUCT_ITERATIONS
     ? toolText("productBudget", n.toLocaleString())
     : toolText("quickBudget", n.toLocaleString());
+}
+
+function GameLogs({ run }: { run: EvaluationRun }) {
+  const records = useMemo(() => completedGames(run), [run]);
+  return <section class="eval-panel" aria-labelledby="eval-logs-title">
+    <h2 id="eval-logs-title">{toolText("evaluationLogs")}</h2>
+    <p class="eval-muted">{toolText("evaluationLogsHelp")}</p>
+    <button disabled={!records.length} onClick={() => download(
+      `evaluation-${run.id}-logs.html`, logsHtml(run, records, opponentLabel), "text/html;charset=utf-8",
+    )}>{toolText("saveAllLogs")}</button>
+    {records.length > 0 && <div class="eval-table-wrap eval-games">
+      <table aria-label={toolText("gameLogs")}>
+        <thead><tr>{[toolText("games"), toolText("opponents"), toolText("yourSide"), toolText("gameResult"), toolText("turnsLabel"), toolText("aggregation"), toolText("logLabel")].map(t => <th key={t}>{t}</th>)}</tr></thead>
+        <tbody>{records.map(record => {
+          const { game } = record;
+          const number = record.index * 2 + game.playerSide + 1;
+          return <tr key={number}>
+            <th>{toolText("gameNumber", number)}</th><td>{opponentLabel(record.opponent)}</td>
+            <td>P{game.playerSide + 1}</td><td>{outcomeLabel(game.outcome)}</td><td>{game.turns}</td>
+            <td>{record.index < run.pairs.length ? toolText("countedGame") : toolText("pendingGame")}</td>
+            <td><button aria-label={toolText("saveGameLog", number)} onClick={() => download(
+              `evaluation-${run.id}-game-${number}.html`, logsHtml(run, [record], opponentLabel), "text/html;charset=utf-8",
+            )}>{toolText("saveLog")}</button>{" "}
+              <a href={kifuUrl(game.kifu)} target="_blank" rel="noopener">{toolText("tryAnotherMove")}<span class="sr-only">{toolText("gameNumber", number)}{toolText("newTab")}</span></a>
+            </td>
+          </tr>;
+        })}</tbody>
+      </table>
+    </div>}
+  </section>;
 }
 
 export function Evaluate() {
@@ -229,6 +263,7 @@ export function Evaluate() {
           player: validation.player,
           opponents: validation.opponents,
           iterations: budget,
+          previewIterations: liveBudget(DEFAULT_STRENGTH, true),
           c: searchProfile("blind").c,
           turnLimit: 500,
         }
@@ -269,6 +304,7 @@ export function Evaluate() {
       });
       worker.current = w;
       w.onerror = (event) => {
+        if (worker.current !== w) return;
         setError(() => toolText("battleStartError", event.message));
         stop(() => toolText("evaluationError"));
       };
@@ -277,11 +313,11 @@ export function Evaluate() {
         const msg = event.data;
         if (msg.type === "progress")
           setProgress(
-            () => toolText("evaluationProgress", msg.pair * 2 + msg.game, next.targetPairs * 2, msg.turn === 0 ? toolText("selectingPokemon") : toolText("thinkingTurn", msg.turn)),
+            () => toolText("evaluationProgress", msg.pair * 2 + msg.game, next.targetPairs * 2, msg.turn === 0 ? toolText("selectingPokemon") : toolText("thinkingTurn", msg.turn), msg.iterations.toLocaleString(), msg.budget.toLocaleString()),
           );
-        if (msg.type === "pair") {
+        if (msg.type === "game") {
           try {
-            const updated = appendPair(currentRun.current!, msg.pair);
+            const updated = appendGame(currentRun.current!, msg.record);
             retain(updated);
             w.postMessage({ type: "ack" });
           } catch (e) {
@@ -304,7 +340,7 @@ export function Evaluate() {
   function newRun() {
     if (!config || !validCount || running) return;
     launch({
-      version: 1,
+      version: 2,
       id:
         crypto.randomUUID?.() ??
         `${Date.now().toString(36)}-${randomSeed32().toString(16)}-${randomSeed32().toString(16)}`,
@@ -319,7 +355,7 @@ export function Evaluate() {
     if (!run || !compatible || running || (add && !validCount)) return;
     launch({
       ...run,
-      targetPairs: add ? run.pairs.length + count / 2 : run.targetPairs,
+      targetPairs: add ? run.pairs.length + (run.pending ? 1 : 0) + count / 2 : run.targetPairs,
     });
   }
   async function importFile(
@@ -364,7 +400,7 @@ export function Evaluate() {
               }}
             >
               {history.map((r) => (
-                <option key={r.id} value={r.id}>{toolText("runSummary", r.createdAt.slice(0, 16).replace("T", " "), r.pairs.length * 2, budgetLabel(r.config.iterations))}</option>
+                <option key={r.id} value={r.id}>{toolText("runSummary", r.createdAt.slice(0, 16).replace("T", " "), completedCount(r), budgetLabel(r.config.iterations))}</option>
               ))}
             </select>
           </label>
@@ -529,7 +565,7 @@ export function Evaluate() {
           {Number.isFinite(testBudget) && (
             <p class="eval-warning">{toolText("testBudget", budget)}</p>
           )}
-          <p class="eval-muted">{toolText("budgetHelp", PRODUCT_ITERATIONS.toLocaleString())}</p>
+          <p class="eval-muted">{toolText("budgetHelp", PRODUCT_ITERATIONS.toLocaleString(), PREVIEW_ITERATIONS.toLocaleString())}</p>
         </section>
       </fieldset>
       <section class="eval-panel">
@@ -562,13 +598,13 @@ export function Evaluate() {
           <p class="eval-warning">{toolText("configurationChanged")}</p>
         )}
         {run && (
-          <p>{toolText("completedGames", run.pairs.length * 2, run.targetPairs * 2, budgetLabel(run.config.iterations))}</p>
+          <p>{toolText("completedGames", completedCount(run), run.targetPairs * 2, budgetLabel(run.config.iterations), run.config.previewIterations.toLocaleString())}</p>
         )}
         {run && (
           <progress
             aria-label={toolText("completedGamesLabel")}
-            max={run.targetPairs}
-            value={run.pairs.length}
+            max={run.targetPairs * 2}
+            value={completedCount(run)}
           />
         )}
         <p class="eval-progress" role="status">
@@ -577,6 +613,7 @@ export function Evaluate() {
         {run ? (
           <>
             <ResultTable run={run} />
+            {run.pending && <p class="eval-muted">{toolText("pendingPairHelp")}</p>}
             <div class="eval-actions">
               <button
                 onClick={() =>
@@ -596,6 +633,7 @@ export function Evaluate() {
                 }
               >{toolText("saveCsv")}</button>
             </div>
+            <GameLogs run={run} />
             <details>
               <summary>{toolText("resultConditions")}</summary>
               <p>{toolText("startedAt", run.createdAt.slice(0, 16).replace("T", " "))}</p>

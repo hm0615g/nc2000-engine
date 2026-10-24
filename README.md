@@ -168,15 +168,33 @@ The shipped Nash mixture (`data/meta-nash-v3`) is the default. Both sides use
 blind search at c = 0.4 with the shipped opponent prior (`data/belief-pool-v3`);
 changing the opponent distribution only changes team draws.
 
-The default is 32 games at 81,000 iterations per decision, matching Strong's
-battle budget (the evaluator also searches selection rather than using the
-product's compiled previews); 3,000 and 10,000 are offered and labelled as quick runs. Each sampled matchup
+The default is 32 games at 81,000 iterations per battle decision, matching
+Strong's battle budget. Both sides search every team selection for 729,000
+iterations, with no compiled preview lookup or cache. These budgets follow
+`data/live-search.json`. Quick runs reduce only the battle budget to 3,000 or
+10,000; selection keeps the same budget. Each sampled matchup
 plays twice with P1/P2 reversed. Results stay in memory only and can be resumed
 or extended while the page remains open. Reloading or closing the tab resets
 results. The evaluator does not save to browser storage or load previous results.
 Files are saved only through the explicit export buttons. Results
-export as JSON (inputs, seeds, build/data fingerprints and individual outcomes)
-or CSV (aggregate and individual results). Computation stops when the page closes.
+export as version 2 JSON (inputs, separate search budgets, seeds, build/data
+fingerprints, individual outcomes, raw logs, selection choices/counts and `NC2-…`
+replay codes) or CSV (aggregate and individual results). Individual or combined
+HTML logs include narration in the selected language from the user's party's perspective, raw
+protocol lines and replay codes. HTML stays readable offline and after engine
+updates; replay codes require a compatible engine. The game list also opens each
+code in the existing fork viewer.
+
+Each completed game is retained before its partner starts. A half-completed pair
+is downloadable immediately, but only complete pairs enter the statistics. Stop
+and resume retain finished games and rerun only the unfinished game with the
+original seeds. CSV's `included_in_summary` distinguishes the pending first game.
+In-progress games are not exported. Computation stops when the page closes.
+
+After building WASM, `cd web && npm run test:evaluate-worker` checks live
+selection parity, half-pair resume, full production budgets, 500-turn caps and
+replay/log consistency in a real browser. The evaluator and localization
+Playwright suites cover individual/bulk downloads and storage-free operation.
 
 Format violations are warnings for both parties. A party with a total-level
 violation has its own preview cap removed; normal parties retain the 155 cap.

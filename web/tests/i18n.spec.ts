@@ -110,7 +110,7 @@ test("switching during evaluation preserves results, resume, and exported identi
   const run = JSON.parse(readFileSync((await (await download).path())!, "utf8"));
   expect(run.config.player.sets[0].species).toBe("Mewtwo");
   expect(run.config.opponents[0].id).toBe("fish");
-  expect(run.version).toBe(1);
+  expect(run.version).toBe(2);
   await page.getByRole("button", { name: "Resume", exact: true }).click();
   await expect(page.locator(".eval-progress")).toContainText("All requested games have finished", { timeout: 120_000 });
   expect(await page.locator("main").innerText()).not.toMatch(/[ぁ-んァ-ヶ一-龠]/);
