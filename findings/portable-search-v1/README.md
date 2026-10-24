@@ -40,8 +40,8 @@ old public bundle versus the candidate GitHub Actions build, both Rust 1.94.0
 and wasm-pack 0.13.1. In Chromium, 27,000-iteration search time fell **7.7%**
 (median paired reduction; individual runs 7.5–8.3%). The paired corpus median
 was 26.331 -> 24.310 seconds across 35 decisions; p95 was 817.8 -> 763.9 ms.
-That is approximately 8.3% more iterations in the same search time, without
-changing the shipped budgets. Every root policy, choice, battle state, RNG
+That is approximately 8.3% higher throughput at this fixed workload; the
+shipped budgets are unchanged. Every root policy, choice, battle state, RNG
 and log matched. See `production-chromium-27000/`, `ci-candidate.json` and
 `deployed-baseline.json`. These binaries were measured on the local host,
 not timed on a GitHub runner. The candidate CI build passed all checks and
@@ -145,3 +145,14 @@ runtime discovery, the existing Rust protocol adapter, request lifecycle,
 cache identity, native/WASM parity gates, concurrency measurement, and later
 server-specific CPU/PGO experiments. The downstream deployment hardware has
 not been verified here.
+
+## Published verification
+
+Deployment [40086597749](https://github.com/puniu3/nc2000-engine/actions/runs/40086597749)
+published commit `4dd9d748f81472c30739afcef0bcfec6dc528456` successfully.
+All 16 checked public assets matched the pre-deployment CI artifact exactly,
+including the WASM, workers, data and handoff HTML/Markdown. The public ZIP's
+inner WASM and handoff also matched. A fresh browser on the public URL used
+the compiled preview (zero search iterations), completed the standard
+27,000-iteration battle search, and reported no page errors. See
+`public-deployment.json`. This final receipt changes documentation only.
