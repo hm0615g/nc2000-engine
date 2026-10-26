@@ -203,17 +203,17 @@ impl Battle {
         })
     }
 
-    fn state_hash_into<H: std::hash::Hasher>(
+    fn state_hash_into<H: crate::fxhash::StateHasher>(
         &self,
-        mut h: H,
+        h: &mut H,
         hp_buckets: Option<i64>,
         omit_damage_bookkeeping: bool,
     ) {
-        self.state_hash_with_sides(&mut h, hp_buckets, omit_damage_bookkeeping,
+        self.state_hash_with_sides(h, hp_buckets, omit_damage_bookkeeping,
             |side, h| side.hash_with_options(h, hp_buckets, omit_damage_bookkeeping));
     }
 
-    fn state_hash_with_sides<H: std::hash::Hasher>(
+    fn state_hash_with_sides<H: crate::fxhash::StateHasher>(
         &self,
         mut h: &mut H,
         hp_buckets: Option<i64>,

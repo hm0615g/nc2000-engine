@@ -522,6 +522,12 @@ pub struct MoveSlots {
 }
 
 impl MoveSlots {
+    #[inline(always)]
+    pub(crate) fn hash_state<H: crate::fxhash::StateHasher>(&self, h: &mut H) {
+        use std::hash::Hash;
+        h.hash_batch::<32>(|b| self.hash(b), |h| self.hash(h));
+    }
+
     pub fn len(&self) -> usize {
         self.n as usize
     }
@@ -783,14 +789,15 @@ impl Pokemon {
     /// abstraction); `None` hashes them exactly. Destructuring is total on
     /// purpose: adding a `Pokemon` field breaks this fn until it is placed.
     pub fn hash_with<H: std::hash::Hasher>(&self, h: &mut H, hp_buckets: Option<i64>) {
-        self.hash_with_options(h, hp_buckets, false);
+        let mut p = crate::fxhash::PlainHasher(h);
+        self.hash_with_options(&mut p, hp_buckets, false);
     }
 
     /// Solver-key variant. `omit_damage_bookkeeping` may only be enabled
     /// after proving that no reachable move can observe `attacked_by`
     /// (currently Counter/Mirror Coat). The other omitted fields are written
     /// by the engine but never read by future battle behavior.
-    pub(crate) fn hash_with_options<H: std::hash::Hasher>(
+    pub(crate) fn hash_with_options<H: crate::fxhash::StateHasher>(
         &self,
         h: &mut H,
         hp_buckets: Option<i64>,
@@ -800,7 +807,7 @@ impl Pokemon {
             |prefix, h| std::hash::Hash::hash(prefix, h));
     }
 
-    pub(crate) fn hash_with_prefix<H: std::hash::Hasher>(
+    pub(crate) fn hash_with_prefix<H: crate::fxhash::StateHasher>(
         &self,
         h: &mut H,
         hp_buckets: Option<i64>,
@@ -901,45 +908,72 @@ impl Pokemon {
             (None, true) => hp.hash(h),
             (Some(b), true) => ((*hp as i64) * b / (*maxhp).max(1) as i64).hash(h),
         }
-        (status, status_state, boosts, move_slots).hash(h);
+        status.hash(h);
+        status_state.hash(h);
+        boosts.hash(h);
+        move_slots.hash_state(h);
         (item, last_item, item_state, types).hash(h);
-        (volatiles, handler_mask).hash(h);
-        (transformed, fainted, faint_queued).hash(h);
-        (
-            is_active,
-            is_started,
-            position,
-            active_turns,
-            active_move_actions,
-        )
-            .hash(h);
-        (
-            newly_switched,
-            being_called_back,
-            dragged_in,
-            previously_switched_in,
-        )
-            .hash(h);
-        (switch_flag, force_switch_flag, skip_before_switch_out).hash(h);
-        (trapped, maybe_trapped).hash(h);
-        (
-            last_move,
-            last_move_encore,
-            last_move_used,
-            last_move_target_loc,
-        )
-            .hash(h);
-        (move_this_turn, move_this_turn_result, move_last_turn_result).hash(h);
-        (
-            stats_raised_this_turn,
-            stats_lowered_this_turn,
-            used_item_this_turn,
-        )
-            .hash(h);
-        if !omit_damage_bookkeeping {
-            times_attacked.hash(h);
+        volatiles.hash(h);
+        macro_rules! tail_fields {
+            ($h:expr) => {{
+                handler_mask.hash($h);
+                (transformed, fainted, faint_queued).hash($h);
+                (
+                    is_active,
+                    is_started,
+                    position,
+                    active_turns,
+                    active_move_actions,
+                )
+                    .hash($h);
+                (
+                    newly_switched,
+                    being_called_back,
+                    dragged_in,
+                    previously_switched_in,
+                )
+                    .hash($h);
+                (switch_flag, force_switch_flag, skip_before_switch_out).hash($h);
+                (trapped, maybe_trapped).hash($h);
+                (
+                    last_move,
+                    last_move_encore,
+                    last_move_used,
+                    last_move_target_loc,
+                )
+                    .hash($h);
+                (move_this_turn, move_this_turn_result, move_last_turn_result).hash($h);
+                (
+                    stats_raised_this_turn,
+                    stats_lowered_this_turn,
+                    used_item_this_turn,
+                )
+                    .hash($h);
+                if !omit_damage_bookkeeping {
+                    times_attacked.hash($h);
+                }
+                speed.hash($h);
+            }};
         }
-        speed.hash(h);
+        if !*transformed
+            && !*faint_queued
+            && !*being_called_back
+            && dragged_in.is_none()
+            && matches!(switch_flag, SwitchFlag::No)
+            && !*force_switch_flag
+            && !*skip_before_switch_out
+            && !*trapped
+            && !*maybe_trapped
+            && last_move.is_none()
+            && last_move_encore.is_none()
+            && last_move_used.is_none()
+            && last_move_target_loc.is_none()
+            && move_this_turn.is_none()
+        {
+            h.hash_batch::<40>(|b| tail_fields!(b), |h| tail_fields!(h));
+            return;
+        }
+        tail_fields!(h);
     }
 
     pub fn volatile(&self, id: CondId) -> Option<&EffectState> {
@@ -1068,10 +1102,11 @@ impl std::hash::Hash for Side {
 impl Side {
     /// See `Pokemon::hash_with`. Total destructuring on purpose.
     pub fn hash_with<H: std::hash::Hasher>(&self, h: &mut H, hp_buckets: Option<i64>) {
-        self.hash_with_options(h, hp_buckets, false);
+        let mut p = crate::fxhash::PlainHasher(h);
+        self.hash_with_options(&mut p, hp_buckets, false);
     }
 
-    pub(crate) fn hash_with_options<H: std::hash::Hasher>(
+    pub(crate) fn hash_with_options<H: crate::fxhash::StateHasher>(
         &self,
         h: &mut H,
         hp_buckets: Option<i64>,
@@ -1080,7 +1115,7 @@ impl Side {
         self.hash_with_pokemon(h, |p, h| p.hash_with_options(h, hp_buckets, omit_damage_bookkeeping));
     }
 
-    pub(crate) fn hash_with_pokemon<H: std::hash::Hasher>(
+    pub(crate) fn hash_with_pokemon<H: crate::fxhash::StateHasher>(
         &self,
         h: &mut H,
         mut hash_pokemon: impl FnMut(&Pokemon, &mut H),
