@@ -260,6 +260,11 @@ fn sample_mixed(p: &[f64], rng: &mut SplitMix64) -> usize {
 
 // --------------------------------------------------- stepped search (M10c)
 
+struct CachedDetRoot {
+    sim: Battle,
+    root: usize,
+}
+
 /// Persistent, incrementally steppable blind search over ONE decision point
 /// — `BlindAgent`'s search loop in the form the wasm bridge's ponder loop
 /// needs, mirroring `SkuctSearch`: create it at the current (true) battle
@@ -277,6 +282,8 @@ pub struct BlindSearch {
     /// Search resets omit the observer's protocol log.
     base: Battle,
     scratch: Option<Box<Battle>>,
+    det_cache: FxHashMap<(Option<usize>, [u8; 6], bool), CachedDetRoot>,
+    det_cache_obs_rev: u64,
     turn_cap: u16,
     side: usize,
     /// The public own-side choice list — the information-set root.
@@ -352,6 +359,8 @@ impl BlindSearch {
             rng,
             base,
             scratch: None,
+            det_cache: FxHashMap::default(),
+            det_cache_obs_rev: u64::MAX,
             turn_cap,
             side,
             my_n: vec![0; my_acts.len()],
@@ -376,15 +385,129 @@ impl BlindSearch {
         self.step_one_impl(dex, belief, obs, None, None)
     }
 
-    fn step_one_impl(
+    fn resolve_root(&mut self, dex: &Dex, sim: &mut Battle) -> usize {
+        let key = key_of(&self.cfg, dex, sim);
+        match self.table.get(&key) {
+            Some(&i) => i,
+            None => {
+                let node = Node::at(sim, dex);
+                debug_assert_eq!(
+                    node.acts[self.side], self.my_acts,
+                    "determinization changed the observer's own root actions"
+                );
+                self.nodes.push(node);
+                self.table.insert(key, self.nodes.len() - 1);
+                self.nodes.len() - 1
+            }
+        }
+    }
+
+    /// Predict the RNG draws and resulting opponent party of `Belief::determinize_in_place`
+    /// when no pick distribution or extra per-mon RNG draws occur.
+    #[inline]
+    fn predict_determinization_draws(
+        &self,
+        rng_probe: &mut SplitMix64,
+    ) -> (u64, bool, [u8; 6], usize) {
+        let seed = rng_probe.next();
+        let mut prng = nc2000_engine::prng::Prng::new(seed);
+        let qc = prng.random_chance(60, 256);
+        let post_qc_seed = prng.seed();
+
+        let opp = 1 - self.side;
+        let opp_side = &self.base.sides[opp];
+        let roster_len = opp_side.roster.len();
+        let party_len = opp_side.party.len();
+        let mut party_key = [0xFFu8; 6];
+        for (i, &s) in opp_side.party.iter().enumerate() {
+            party_key[i] = s;
+        }
+        if party_len < roster_len {
+            let mut appeared = [false; 6];
+            for (i, p) in opp_side.roster.iter().enumerate() {
+                appeared[i] = p.previously_switched_in > 0 || p.is_active;
+            }
+            let mut hidden_positions = [0usize; 6];
+            let mut hidden_len = 0usize;
+            for pos in 0..party_len {
+                if !appeared[party_key[pos] as usize] {
+                    hidden_positions[hidden_len] = pos;
+                    hidden_len += 1;
+                }
+            }
+            let mut pool = [0u8; 6];
+            let mut pool_len = 0usize;
+            for s in 0..roster_len {
+                if !appeared[s] {
+                    pool[pool_len] = s as u8;
+                    pool_len += 1;
+                }
+            }
+            for &pos in &hidden_positions[..hidden_len] {
+                let idx = rng_probe.below(pool_len);
+                let new_slot = pool[idx];
+                pool_len -= 1;
+                pool[idx] = pool[pool_len];
+                party_key[pos] = new_slot;
+            }
+        }
+        (post_qc_seed, qc, party_key, party_len)
+    }
+
+    fn determinize_and_resolve_root(
         &mut self,
         dex: &Dex,
         belief: &Belief,
         obs: &Observer,
-        leaf: Option<&mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64>,
-        trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
-    ) -> f64 {
-        let pick = belief.sample(&mut self.rng);
+        pick: Option<usize>,
+    ) -> (Box<Battle>, usize) {
+        let obs_rev = obs.revision();
+        if self.det_cache_obs_rev != obs_rev {
+            self.det_cache.clear();
+            self.det_cache_obs_rev = obs_rev;
+        }
+        if self.base.queue.is_empty() {
+            let mut rng_probe = self.rng.clone();
+            let (post_qc_seed, qc, party_key, party_len) =
+                self.predict_determinization_draws(&mut rng_probe);
+            let cache_key = (pick, party_key, qc);
+            if let Some(cached) = self.det_cache.get(&cache_key) {
+                self.rng = rng_probe;
+                let mut sim = match self.scratch.take() {
+                    Some(mut sim) => {
+                        sim.as_mut().clone_from(&cached.sim);
+                        sim
+                    }
+                    None => Box::new(cached.sim.clone()),
+                };
+                sim.reseed(post_qc_seed);
+                std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                return (sim, cached.root);
+            }
+
+            let mut sim = match self.scratch.take() {
+                Some(mut sim) => {
+                    sim.as_mut().clone_from(&self.base);
+                    sim
+                }
+                None => Box::new(self.base.clone()),
+            };
+            belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
+            let opp = 1 - self.side;
+            let can_cache = self.rng.0 == rng_probe.0
+                && sim.sides[opp].party.as_slice() == &party_key[..party_len];
+            std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+            let root = self.resolve_root(dex, &mut sim);
+            if can_cache {
+                std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                let cached_sim = (*sim).clone();
+                std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                self.det_cache
+                    .insert(cache_key, CachedDetRoot { sim: cached_sim, root });
+            }
+            return (sim, root);
+        }
+
         let mut sim = match self.scratch.take() {
             Some(mut sim) => {
                 sim.as_mut().clone_from(&self.base);
@@ -394,20 +517,20 @@ impl BlindSearch {
         };
         belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
-        let key = key_of(&self.cfg, dex, &mut sim);
-        let root = match self.table.get(&key) {
-            Some(&i) => i,
-            None => {
-                let node = Node::at(&mut sim, dex);
-                debug_assert_eq!(
-                    node.acts[self.side], self.my_acts,
-                    "determinization changed the observer's own root actions"
-                );
-                self.nodes.push(node);
-                self.table.insert(key, self.nodes.len() - 1);
-                self.nodes.len() - 1
-            }
-        };
+        let root = self.resolve_root(dex, &mut sim);
+        (sim, root)
+    }
+
+    fn step_one_impl(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        leaf: Option<&mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64>,
+        trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
+    ) -> f64 {
+        let pick = belief.sample(&mut self.rng);
+        let (mut sim, root) = self.determinize_and_resolve_root(dex, belief, obs, pick);
         let my_pick = select_global(
             &self.cfg,
             &mut self.rng,
@@ -484,29 +607,7 @@ impl BlindSearch {
             "forced root action is masked"
         );
         let pick = belief.sample(&mut self.rng);
-        let mut sim = match self.scratch.take() {
-            Some(mut sim) => {
-                sim.as_mut().clone_from(&self.base);
-                sim
-            }
-            None => Box::new(self.base.clone()),
-        };
-        belief.determinize_in_place(dex, &mut sim, obs, pick, &mut self.rng);
-        std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
-        let key = key_of(&self.cfg, dex, &mut sim);
-        let root = match self.table.get(&key) {
-            Some(&i) => i,
-            None => {
-                let node = Node::at(&mut sim, dex);
-                debug_assert_eq!(
-                    node.acts[self.side], self.my_acts,
-                    "determinization changed the observer's own root actions"
-                );
-                self.nodes.push(node);
-                self.table.insert(key, self.nodes.len() - 1);
-                self.nodes.len() - 1
-            }
-        };
+        let (mut sim, root) = self.determinize_and_resolve_root(dex, belief, obs, pick);
         self.my_n[my_pick] += 1;
         let mut force = [None, None];
         force[self.side] = Some(my_pick);
@@ -1184,4 +1285,48 @@ fn argmax_visits(visits: &[u32], dominated: Option<&[bool]>) -> usize {
     best.unwrap_or_else(|| {
         (0..visits.len()).max_by_key(|&i| visits[i]).unwrap_or(0)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn determinization_cache_is_bit_identical() {
+        let dex = conformance::load_dex();
+        let pool_json = include_str!("../../../data/team-pool-v2/team-pool.json");
+        let pool: MetaPool = serde_json::from_str(pool_json).unwrap();
+        let t0 = &pool.teams[0].sets;
+        let t1 = &pool.teams[1].sets;
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", t0, t1).unwrap();
+        let c0 = b.legal_choices(&dex, 0)[0];
+        let c1 = b.legal_choices(&dex, 1)[0];
+        b.apply_choices(&dex, [Some(c0), Some(c1)]).unwrap();
+
+        let mut obs = Observer::new(&b, 0);
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        obs.observe(&b, &dex);
+        belief.sync(&dex, &obs);
+
+        let cfg = RmConfig {
+            iterations: 600,
+            c: 0.4,
+            hp_buckets: 3,
+            ..RmConfig::default()
+        };
+        let mut s_cached = BlindSearch::new(&b, &dex, cfg.clone(), 0, 123456);
+        let mut s_uncached = BlindSearch::new(&b, &dex, cfg, 0, 123456);
+
+        for _ in 0..600 {
+            let r1 = s_cached.step_one(&dex, &belief, &obs);
+            s_uncached.det_cache.clear();
+            let r2 = s_uncached.step_one(&dex, &belief, &obs);
+            assert_eq!(r1.to_bits(), r2.to_bits());
+            assert_eq!(s_cached.rng.0, s_uncached.rng.0);
+        }
+        assert!(s_cached.det_cache.len() > 1);
+        assert_eq!(s_cached.visits(), s_uncached.visits());
+        assert_eq!(s_cached.means(), s_uncached.means());
+        assert_eq!(s_cached.best(), s_uncached.best());
+    }
 }
