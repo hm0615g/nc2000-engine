@@ -897,9 +897,25 @@ fn select_global(
 ) -> usize {
     let k = n.len();
     let ok = |a: usize| mask.map_or(true, |m| m[a]);
-    let untried: Vec<usize> = (0..k).filter(|&a| n[a] == 0 && ok(a)).collect();
-    let pick = if !untried.is_empty() {
-        untried[rng.below(untried.len())]
+    let mut n_untried = 0usize;
+    for a in 0..k {
+        if n[a] == 0 && ok(a) {
+            n_untried += 1;
+        }
+    }
+    let pick = if n_untried > 0 {
+        let mut target = rng.below(n_untried);
+        let mut chosen = 0;
+        for a in 0..k {
+            if n[a] == 0 && ok(a) {
+                if target == 0 {
+                    chosen = a;
+                    break;
+                }
+                target -= 1;
+            }
+        }
+        chosen
     } else {
         let total: u32 = n.iter().sum();
         let ln_total = (total as f64).ln();
