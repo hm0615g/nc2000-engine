@@ -108,7 +108,14 @@ if (args.help || args.h) {
                     browser's fixed unknown-preview budget. Cannot be combined
                     with --iters
   --seed N          searcher / random-mode seed (default 1)
+  --search-runtime R
+                    search implementation for non-random play:
+                    wasm (default, existing behavior) | native
+  --native-worker F native worker executable when --search-runtime native
+                    (default target/release/examples/native_protocol_worker)
   --random          random driver mode (no searcher; uniform legal choice)
+  --random-choice-delay-ms N
+                    test hook: delay each random choice before sending it
   --timer           turn the battle timer on in every game
   --lobby ROOM      join ROOM after login so the bot is visible (default lobby)
   --no-lobby        do not join a lobby room
@@ -189,6 +196,21 @@ if (!Number.isSafeInteger(PREVIEW_ITERS) || PREVIEW_ITERS <= 0) {
 }
 const SEED = parseInt(args.seed || '1', 10);
 const RANDOM = !!args.random;
+const RANDOM_CHOICE_DELAY_MS = Math.max(
+	0,
+	parseInt(args['random-choice-delay-ms'] || '0', 10) || 0
+);
+const SEARCH_RUNTIME = String(args['search-runtime'] || 'wasm');
+
+if (!['wasm', 'native'].includes(SEARCH_RUNTIME)) {
+	throw new Error('--search-runtime must be wasm or native');
+}
+
+const NATIVE_WORKER_BIN =
+	args['native-worker'] && args['native-worker'] !== true ?
+		resolveUserPath(String(args['native-worker'])) :
+		path.join(REPO, 'target/release/examples/native_protocol_worker');
+
 const TIMER = !!args.timer;
 const QUIET = !!args.quiet;
 const LOBBY_ROOM = args['no-lobby'] ? '' : String(args.lobby || 'lobby');
@@ -482,16 +504,39 @@ function pickTeam() {
 	return { sets, label: TEAMSPEC, pool: snapshot.pool, poolJson: snapshot.poolJson, poolLabel: snapshot.label };
 }
 
-// ------------------------------------------------------------------ wasm
+// --------------------------------------------------------- search runtime
 let wasm = null;
 let dex = null;
-if (!RANDOM) {
-	wasm = require(path.join(REPO, 'crates/wasm/pkg-node/nc2000_wasm.js'));
+let nativeWorker = null;
+let NativeProtocolSession = null;
+
+if (!RANDOM && SEARCH_RUNTIME === 'wasm') {
+	wasm = require(
+		path.join(REPO, 'crates/wasm/pkg-node/nc2000_wasm.js')
+	);
 	dex = new wasm.Dex();
+} else if (!RANDOM && SEARCH_RUNTIME === 'native') {
+	const nativeRuntime =
+		require('./native-protocol-runtime');
+
+	NativeProtocolSession =
+		nativeRuntime.NativeProtocolSession;
+
+	nativeWorker =
+		new nativeRuntime.NativeProtocolWorker({
+			repo: REPO,
+			binary: NATIVE_WORKER_BIN,
+		});
 }
 
 const sha256Text = text =>
 	crypto.createHash('sha256').update(text).digest('hex');
+
+const DEFAULT_DEX_JSON =
+	fs.readFileSync(
+		path.join(REPO, 'data/gen2stadium2.json'),
+		'utf8'
+	);
 
 let compiledPreviewArtifact = null;
 let compiledPreviewPublicRosters = null;
@@ -524,8 +569,8 @@ if (!RANDOM && WEB_POLICY) {
 		if (compiledPreviewArtifact.priorSha256 !== sha256Text(DEFAULT_BELIEF_POOL_JSON)) {
 			throw new Error('compiled-preview belief pool does not match');
 		}
-		if (compiledPreviewArtifact.dexSha256 !== sha256Text(wasm.embeddedDexJson())) {
-			throw new Error('compiled-preview embedded dex does not match');
+		if (compiledPreviewArtifact.dexSha256 !== sha256Text(DEFAULT_DEX_JSON)) {
+			throw new Error('compiled-preview dex does not match');
 		}
 
 		compiledPreviewPublicRosters = new Map();
@@ -644,9 +689,9 @@ if (WEB_POLICY) {
 const SEARCH_SLICE_TARGET_MS = 125;
 let searchSlice = 250;
 
-function stepAdaptive(searcher, n) {
+async function stepAdaptive(searcher, n) {
 	const t0 = performance.now();
-	const done = searcher.step(n);
+	const done = await searcher.step(n);
 	const dt = performance.now() - t0;
 
 	if (n >= searchSlice) {
@@ -750,16 +795,26 @@ if (BELIEF_PRIOR_ARG) {
 	// Probe once up front so a typo in the TABLE is visible before the first
 	// challenge instead of one line per game; each game's searcher gets its
 	// own install below (the prior lives on the searcher, one per battle).
-	const probe = new wasm.ProtocolSearcher(
-		dex,
-		0,
-		DEFAULT_BELIEF_POOL_JSON,
-		0,
-		PROFILE.c
-	);
-	reportPrior(probe.setBeliefPrior(priorText), m => console.log(`[${NAME}] ${m}`));
+	if (SEARCH_RUNTIME === 'wasm') {
+		const probe = new wasm.ProtocolSearcher(
+			dex,
+			0,
+			DEFAULT_BELIEF_POOL_JSON,
+			0,
+			PROFILE.c
+		);
+
+		reportPrior(
+			probe.setBeliefPrior(priorText),
+			m => console.log(`[${NAME}] ${m}`)
+		);
+
+		if (typeof probe.free === 'function') {
+			probe.free();
+		}
+	}
+
 	console.log(`[${NAME}] belief prior source: ${priorSource}`);
-	if (typeof probe.free === 'function') probe.free();
 }
 
 // ------------------------------------------------------------- drop specs
@@ -768,7 +823,7 @@ const dropSpecs = String(args.drop && args.drop !== true ? args.drop : '')
 	.split(',')
 	.filter(Boolean)
 	.map(tok => {
-		const m = /^(preview|fs|move(\d+)):(pre|post)$/.exec(tok.trim());
+		const m = /^(preview|fs|move(\d+)):(pre|post|search)$/.exec(tok.trim());
 		if (!m) {
 			console.error(`bad --drop token: ${tok}`);
 			process.exit(2);
@@ -1133,10 +1188,11 @@ class BattleDriver {
 		}
 	}
 
-	async runSearchChunks(target, generation) {
+	async runSearchChunks(target, generation, req) {
 		if (!this.searcher) return null;
 
 		let done = this.searcher.iterations();
+		let checkedSearchDrop = false;
 
 		for (;;) {
 			if (
@@ -1149,7 +1205,7 @@ class BattleDriver {
 
 			if (done >= target) break;
 
-			const next = stepAdaptive(
+			const next = await stepAdaptive(
 				this.searcher,
 				Math.min(searchSlice, target - done)
 			);
@@ -1159,8 +1215,20 @@ class BattleDriver {
 
 			done = next;
 
+			if (!checkedSearchDrop) {
+				checkedSearchDrop = true;
+
+				if (this.maybeDrop(req, 'search')) {
+					// Give the real websocket close handler a chance to run.
+					// It calls cancelSearch(), changing searchGeneration.
+					await yieldSearchTurn();
+
+					return null;
+				}
+			}
+
 			// Let websocket messages, disconnects, reconnects, new requests,
-			// timers and other Node tasks run before the next WASM slice.
+			// timers and other Node tasks run before the next search slice.
 			await yieldSearchTurn();
 		}
 
@@ -1513,6 +1581,17 @@ class BattleDriver {
 			stats.decisions++;
 			if (this.maybeDrop(req, 'pre')) return;
 			const choice = randomChoice(req);
+
+			if (RANDOM_CHOICE_DELAY_MS > 0) {
+				await new Promise(
+					resolve =>
+						setTimeout(
+							resolve,
+							RANDOM_CHOICE_DELAY_MS
+						)
+				);
+			}
+
 			this.client.send(`${this.room}|/choose ${choice}${rqid !== undefined ? `|${rqid}` : ''}`);
 			this.startOpponentWait(
 				rqid,
@@ -1529,27 +1608,82 @@ class BattleDriver {
 		}
 
 		if (!this.searcher) {
-			this.side = req.side && req.side.id === 'p2' ? 1 : 0;
-			this.searcher = new wasm.ProtocolSearcher(
-				dex,
-				this.side,
-				DEFAULT_BELIEF_POOL_JSON,
-				SEED * 1000 + this.battleIdx,
-				PROFILE.c
-			);
-			this.searcher.setOwnTeam(JSON.stringify(this.client.currentTeam.sets));
-			if (MODE === 'open') this.searcher.pinOpponent(this.opponentTeamJson);
-			// after pinOpponent on purpose: if the two ever coexist the binding
-			// refuses out loud rather than contaminating the open-sheet belief
-			if (priorText) reportPrior(this.searcher.setBeliefPrior(priorText), m => this.log(m));
+			this.side =
+				req.side && req.side.id === 'p2' ? 1 : 0;
+
+			if (SEARCH_RUNTIME === 'native') {
+				this.searcher =
+					new NativeProtocolSession(
+						nativeWorker,
+						{
+							battle: this.room,
+							side: this.side,
+							seed:
+								(SEED * 1000 + this.battleIdx) >>> 0,
+							c: PROFILE.c,
+							mode: MODE,
+							ownTeam:
+								this.client.currentTeam.sets,
+							opponentTeam:
+								MODE === 'open' ?
+									this.opponentTeamSets :
+									null,
+							beliefPrior: priorText || '',
+						}
+					);
+
+				const init =
+					await this.searcher.init();
+
+				if (priorText && init && init.priorReport) {
+					reportPrior(
+						JSON.stringify(init.priorReport),
+						m => this.log(m)
+					);
+				}
+			} else {
+				this.searcher =
+					new wasm.ProtocolSearcher(
+						dex,
+						this.side,
+						DEFAULT_BELIEF_POOL_JSON,
+						SEED * 1000 + this.battleIdx,
+						PROFILE.c
+					);
+
+				this.searcher.setOwnTeam(
+					JSON.stringify(
+						this.client.currentTeam.sets
+					)
+				);
+
+				if (MODE === 'open') {
+					this.searcher.pinOpponent(
+						this.opponentTeamJson
+					);
+				}
+
+				if (priorText) {
+					reportPrior(
+						this.searcher.setBeliefPrior(priorText),
+						m => this.log(m)
+					);
+				}
+			}
 		}
+
 		if (this.lineBuffer.length) {
-			this.searcher.pushLines(JSON.stringify(this.lineBuffer));
+			await this.searcher.pushLines(
+				JSON.stringify(this.lineBuffer)
+			);
 			this.lineBuffer = [];
 		}
+
 		let owes;
+
 		try {
-			owes = this.searcher.onRequest(reqStr);
+			owes =
+				await this.searcher.onRequest(reqStr);
 		} catch (e) {
 			// synthesis needs lines that haven't arrived yet — keep waiting
 			return this.holdForMoreLines(`onRequest: ${e.message || e}`);
@@ -1625,7 +1759,8 @@ class BattleDriver {
 			try {
 				searchIterations = await this.runSearchChunks(
 					searchIters,
-					generation
+					generation,
+					req
 				);
 			} finally {
 				this.searching = false;
@@ -1638,7 +1773,7 @@ class BattleDriver {
 				return;
 			}
 
-			choice = this.searcher.best();
+			choice = await this.searcher.best();
 		}
 
 		const think = Date.now() - t0;
@@ -1696,6 +1831,8 @@ class BattleDriver {
 			searchSource: driver === 'search' && searchMeta ?
 				searchMeta.source : null,
 			webPolicy: WEB_POLICY || null,
+			searchRuntime:
+				RANDOM ? null : SEARCH_RUNTIME,
 			battleIterations: WEB_POLICY ? ITERS : null,
 			previewIterations: WEB_POLICY ? PREVIEW_ITERS : null,
 			seed: SEED * 1000 + this.battleIdx,
@@ -1728,12 +1865,24 @@ class BattleDriver {
 		this.log(`CHAOS: dropping socket (${d.phase}:${d.when}, decision ${this.decisions}, rqid ${req.rqid})`);
 		stats.drops++;
 		if (when === 'pre') {
-			// leave the request unanswered; the rejoin replay re-poses it
+			// Leave the request unanswered; the rejoin replay re-poses it.
 			this.pendingReq = null;
 			this.client.chaosDrop();
 			return true;
 		}
-		setTimeout(() => this.client.chaosDrop(), 30); // let the choice flush
+
+		if (when === 'search') {
+			// No choice has been submitted yet. Abort this generation after
+			// the first completed chunk and rebuild from the replay.
+			this.client.chaosDrop();
+			return true;
+		}
+
+		setTimeout(
+			() => this.client.chaosDrop(),
+			30
+		); // let the submitted choice flush
+
 		return false;
 	}
 
@@ -2037,17 +2186,39 @@ class PSClient {
 		if (reachedGameLimit()) this.shutdown();
 	}
 
-	shutdown() {
+	async shutdown() {
 		if (this.shuttingDown) return;
 		this.shuttingDown = true;
 		clearInterval(this.tick);
-		if (this.dynamicOpenAuthTimer) clearTimeout(this.dynamicOpenAuthTimer);
+
+		if (this.dynamicOpenAuthTimer) {
+			clearTimeout(this.dynamicOpenAuthTimer);
+		}
+
 		this.dynamicOpenAuthTimer = null;
 		summarize();
+
 		try {
 			this.ws.close();
-		} catch { /* already closed */ }
-		const bad = stats.rejections.length + stats.desyncs + stats.proofsBad.length;
+		} catch {
+		}
+
+		if (nativeWorker) {
+			try {
+				await nativeWorker.shutdown();
+			} catch (e) {
+				console.error(
+					`[${NAME}] native worker shutdown failed: ` +
+					`${e.message || e}`
+				);
+			}
+		}
+
+		const bad =
+			stats.rejections.length +
+			stats.desyncs +
+			stats.proofsBad.length;
+
 		process.exit(bad > 0 ? 1 : 0);
 	}
 }
@@ -2064,8 +2235,8 @@ function summarize() {
 	console.log('----------------------------------------------------------');
 	console.log(
 		`${NAME} (${RANDOM ? 'random' : WEB_POLICY ?
-			`${MODE}:web-${WEB_POLICY}:battle=${ITERS}:preview=${PREVIEW_ITERS}` :
-			`${MODE}:${ITERS}`}, seed ${SEED}): ` +
+			`${MODE}:${SEARCH_RUNTIME}:web-${WEB_POLICY}:battle=${ITERS}:preview=${PREVIEW_ITERS}` :
+			`${MODE}:${SEARCH_RUNTIME}:${ITERS}`}, seed ${SEED}): ` +
 		`${stats.W}W ${stats.L}L ${stats.T}T over ${stats.games} games`
 	);
 	console.log(
@@ -2092,9 +2263,73 @@ function summarize() {
 }
 
 process.on('SIGINT', () => {
+	if (nativeWorker) {
+		nativeWorker.kill();
+	}
+
 	summarize();
 	process.exit(130);
 });
 
+async function initializeSearchRuntime() {
+	if (RANDOM) return;
+
+	if (!nativeWorker) {
+		console.log(`[${NAME}] search runtime wasm`);
+		return;
+	}
+
+	const hello =
+		await nativeWorker.hello();
+
+	if (
+		hello.protocol !== 'nc2000-native-protocol-v1' ||
+		hello.version !== 1
+	) {
+		throw new Error(
+			`unsupported native worker protocol: ` +
+			`${hello.protocol || 'unknown'} ` +
+			`v${hello.version ?? 'unknown'}`
+		);
+	}
+
+	console.log(
+		`[${NAME}] search runtime native: ` +
+		NATIVE_WORKER_BIN
+	);
+
+	console.log(
+		`[${NAME}] native search build: ` +
+		hello.build
+	);
+
+	if (priorText) {
+		const probe =
+			await nativeWorker.rpc({
+				cmd: 'probe-prior',
+				prior: priorText,
+			});
+
+		reportPrior(
+			JSON.stringify(probe.priorReport),
+			m => console.log(`[${NAME}] ${m}`)
+		);
+	}
+}
+
 const client = new PSClient();
-client.connect();
+
+void initializeSearchRuntime()
+	.then(() => client.connect())
+	.catch(error => {
+		if (nativeWorker) {
+			nativeWorker.kill();
+		}
+
+		console.error(
+			`[${NAME}] search runtime initialization failed: ` +
+			`${error.message || error}`
+		);
+
+		process.exit(2);
+	});
