@@ -17,14 +17,13 @@
 //! chance/simultaneous analogue of a null-window search. Default for
 //! corpus violation mining; width mode remains for numeric anchors.
 
-use std::collections::{HashMap, HashSet};
-
-use nc2000_engine::battle::enumerate::{enumerate_step, run_scripted};
+use nc2000_engine::battle::enumerate::{enumerate_step, run_scripted_clone_into};
 use nc2000_engine::battle::{Outcome, SearchChoice};
 use nc2000_engine::dex::Dex;
+use nc2000_engine::fxhash::{FxHashMap, FxHashSet};
 use nc2000_engine::state::Battle;
 
-use crate::exact::solve_matrix_full;
+use crate::exact::{solve_matrix_full, solve_matrix_into};
 use crate::stall::{
     classify_one_sided_heal, classify_two_sided_heal, MonotoneRank, OneSidedHeal, ResourceRank,
     TwoSidedHeal,
@@ -179,8 +178,18 @@ enum NodeKey {
     NoDamageBookkeeping(u128),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct NodeId(u32);
+
+impl NodeId {
+    #[inline]
+    fn idx(self) -> usize {
+        self.0 as usize
+    }
+}
+
 struct Cell {
-    resolved: Vec<(f64, NodeKey)>,
+    resolved: Vec<(f64, NodeId)>,
     /// Exact contribution from terminal/closed successors already folded
     /// out of the live graph.
     fixed_lo: f64,
@@ -203,6 +212,8 @@ struct StageWitness {
 }
 
 struct Node {
+    key: NodeKey,
+    folded_out: bool,
     /// Expansion source; dropped once the node is resolved or fully
     /// expanded (bounds then update purely from children).
     battle: Option<Battle>,
@@ -226,11 +237,14 @@ struct Node {
 pub struct BoundSolver<'d> {
     dex: &'d Dex,
     pub cfg: BoundConfig,
-    nodes: HashMap<NodeKey, Node>,
-    closed: HashMap<NodeKey, Bounds>,
-    roots: HashSet<NodeKey>,
+    nodes: Vec<Node>,
+    live_nodes: usize,
+    node_index: FxHashMap<NodeKey, NodeId>,
+    closed: FxHashMap<NodeKey, Bounds>,
+    roots: FxHashSet<NodeId>,
     active_stall: Option<OneSidedHeal>,
     active_two_sided: Option<TwoSidedHeal>,
+    scratch_leaf: Option<Battle>,
     pub stats: BoundStats,
 }
 
@@ -241,17 +255,20 @@ impl<'d> BoundSolver<'d> {
         BoundSolver {
             dex,
             cfg,
-            nodes: HashMap::new(),
-            closed: HashMap::new(),
-            roots: HashSet::new(),
+            nodes: Vec::new(),
+            live_nodes: 0,
+            node_index: FxHashMap::default(),
+            closed: FxHashMap::default(),
+            roots: FxHashSet::default(),
             active_stall: None,
             active_two_sided: None,
+            scratch_leaf: None,
             stats: BoundStats::default(),
         }
     }
 
     pub fn node_count(&self) -> usize {
-        self.nodes.len()
+        self.live_nodes
     }
 
     pub fn closed_count(&self) -> usize {
@@ -293,10 +310,10 @@ impl<'d> BoundSolver<'d> {
         let work_limit = start_runs + self.cfg.work_budget;
         let mut idle = 0usize;
         loop {
-            if self.cfg.fold_closed_nodes && self.nodes.len() >= self.cfg.node_budget {
+            if self.cfg.fold_closed_nodes && self.live_nodes >= self.cfg.node_budget {
                 self.fold_closed_graph();
             }
-            let n = &self.nodes[&root];
+            let n = &self.nodes[root.idx()];
             let bounds = Bounds { lo: n.lo, hi: n.hi };
             let stop = if bounds.width() <= self.cfg.eps {
                 Some(Stop::WidthMet)
@@ -315,7 +332,7 @@ impl<'d> BoundSolver<'d> {
             };
             let stop = stop.or(if self.stats.runs >= work_limit {
                 Some(Stop::WorkExhausted)
-            } else if self.nodes.len() >= self.cfg.node_budget {
+            } else if self.live_nodes >= self.cfg.node_budget {
                 Some(Stop::NodeBudget)
             } else {
                 None
@@ -331,7 +348,7 @@ impl<'d> BoundSolver<'d> {
                 idle = 0;
                 if self.cfg.fold_closed_nodes
                     && (self.stats.trials % 4096 == 0
-                        || self.nodes.len().saturating_mul(4)
+                        || self.live_nodes.saturating_mul(4)
                             >= self.cfg.node_budget.saturating_mul(3))
                 {
                     self.fold_closed_graph();
@@ -341,7 +358,7 @@ impl<'d> BoundSolver<'d> {
                 if idle > 256 {
                     // frontier unreachable under the current policy —
                     // report honestly rather than spinning
-                    let n = &self.nodes[&root];
+                    let n = &self.nodes[root.idx()];
                     return SolveReport {
                         bounds: Bounds { lo: n.lo, hi: n.hi },
                         stop: Stop::WorkExhausted,
@@ -355,9 +372,12 @@ impl<'d> BoundSolver<'d> {
     /// Current certified interval of a state, if it is in the graph.
     pub fn peek(&self, b: &Battle) -> Option<Bounds> {
         let key = self.node_key(b);
-        self.nodes
+        self.node_index
             .get(&key)
-            .map(|n| Bounds { lo: n.lo, hi: n.hi })
+            .map(|&id| {
+                let n = &self.nodes[id.idx()];
+                Bounds { lo: n.lo, hi: n.hi }
+            })
             .or_else(|| self.closed.get(&key).copied())
     }
 
@@ -369,7 +389,7 @@ impl<'d> BoundSolver<'d> {
         }
     }
 
-    fn intern(&mut self, b: Battle) -> NodeKey {
+    fn intern(&mut self, b: Battle) -> NodeId {
         let key = self.node_key(&b);
         let stall_rank = self
             .active_stall
@@ -381,14 +401,15 @@ impl<'d> BoundSolver<'d> {
                 (class.clone(), rank, handoff)
             })
         });
-        if let Some(node) = self.nodes.get_mut(&key) {
+        if let Some(&id) = self.node_index.get(&key) {
+            let node = &mut self.nodes[id.idx()];
             if stall_rank.is_some() {
                 node.stall_rank = stall_rank;
             }
             if resource_rank.is_some() {
                 node.resource_rank = resource_rank;
             }
-            return key;
+            return id;
         }
         let node = match b.outcome() {
             Some(o) => {
@@ -398,6 +419,8 @@ impl<'d> BoundSolver<'d> {
                     Outcome::P2Win => 0.0,
                 };
                 Node {
+                    key,
+                    folded_out: false,
                     battle: None,
                     acts0: vec![],
                     acts1: vec![],
@@ -414,6 +437,8 @@ impl<'d> BoundSolver<'d> {
                 }
             }
             None => Node {
+                key,
+                folded_out: false,
                 battle: Some(b),
                 acts0: vec![],
                 acts1: vec![],
@@ -444,17 +469,20 @@ impl<'d> BoundSolver<'d> {
                     .map_or(rank.pp_total, |old| old.min(rank.pp_total)),
             );
         }
-        self.nodes.insert(key, node);
-        self.stats.peak_nodes = self.stats.peak_nodes.max(self.nodes.len());
-        key
+        let id = NodeId(self.nodes.len() as u32);
+        self.nodes.push(node);
+        self.node_index.insert(key, id);
+        self.live_nodes += 1;
+        self.stats.peak_nodes = self.stats.peak_nodes.max(self.live_nodes);
+        id
     }
 
-    fn init_cells(&mut self, key: NodeKey) {
-        let node = self.nodes.get_mut(&key).unwrap();
+    fn init_cells(&mut self, key: NodeId) {
+        let node = &mut self.nodes[key.idx()];
         if !node.cells.is_empty() || node.battle.is_none() {
             return;
         }
-        let mut probe = node.battle.as_ref().unwrap().clone();
+        let mut probe = node.battle.take().unwrap();
         let needs = probe.needs_choice();
         let mut acts = |side: usize| -> Vec<Option<SearchChoice>> {
             if needs[side] {
@@ -468,7 +496,8 @@ impl<'d> BoundSolver<'d> {
             }
         };
         let (a0, a1) = (acts(0), acts(1));
-        let node = self.nodes.get_mut(&key).unwrap();
+        let node = &mut self.nodes[key.idx()];
+        node.battle = Some(probe);
         let n_cells = a0.len().max(1) * a1.len().max(1);
         node.cells = (0..n_cells)
             .map(|_| Cell {
@@ -493,35 +522,43 @@ impl<'d> BoundSolver<'d> {
 
     /// One trial: descend by LP-support × uncertainty, expand one pending
     /// chance script at the frontier, back up along the path.
-    fn trial(&mut self, root: NodeKey) -> bool {
+    fn trial(&mut self, root: NodeId) -> bool {
         self.stats.trials += 1;
         let mut did_work = false;
-        let mut path: Vec<NodeKey> = Vec::new();
+        let mut path_buf = [NodeId(0); 32];
+        let mut path_len = 0usize;
+        let mut path_vec: Vec<NodeId> = Vec::new();
+        let use_stack = self.cfg.trial_depth <= 32;
         let mut cur = root;
         for _ in 0..self.cfg.trial_depth {
-            let n = &self.nodes[&cur];
+            let n = &self.nodes[cur.idx()];
             if n.hi - n.lo <= 1e-12 {
                 break; // resolved (incl. terminals)
             }
             if n.cells.is_empty() {
                 self.init_cells(cur);
             }
-            path.push(cur);
+            if use_stack {
+                path_buf[path_len] = cur;
+                path_len += 1;
+            } else {
+                path_vec.push(cur);
+            }
             let ci = self.select_cell(cur);
             if self.try_eager(cur, ci) {
                 did_work = true;
                 break;
             }
-            let cell = &self.nodes[&cur].cells[ci];
+            let cell = &self.nodes[cur.idx()].cells[ci];
             // Expand pending mass while it dominates the cell's remaining
             // uncertainty; otherwise descend into the widest child term.
             let closure_mode = (self.active_stall.is_some() || self.active_two_sided.is_some())
-                && self.nodes.len().saturating_mul(4) >= self.cfg.node_budget.saturating_mul(3);
+                && self.live_nodes.saturating_mul(4) >= self.cfg.node_budget.saturating_mul(3);
             let best_child = if closure_mode {
                 if let Some(class) = self.active_stall.as_ref() {
-                    let mut best: Option<(i64, f64, NodeKey)> = None;
+                    let mut best: Option<(i64, f64, NodeId)> = None;
                     for &(mass, child) in &cell.resolved {
-                        let node = &self.nodes[&child];
+                        let node = &self.nodes[child.idx()];
                         let Some((child_class, rank)) = node.stall_rank.as_ref() else {
                             continue;
                         };
@@ -539,9 +576,9 @@ impl<'d> BoundSolver<'d> {
                     best.map(|(_, width_mass, child)| (width_mass, child))
                 } else {
                     let class = self.active_two_sided.as_ref().unwrap();
-                    let mut best: Option<((u8, i64, i64, i64), f64, NodeKey)> = None;
+                    let mut best: Option<((u8, i64, i64, i64), f64, NodeId)> = None;
                     for &(mass, child) in &cell.resolved {
-                        let node = &self.nodes[&child];
+                        let node = &self.nodes[child.idx()];
                         let Some((child_class, rank, handoff)) = node.resource_rank.as_ref() else {
                             continue;
                         };
@@ -571,7 +608,7 @@ impl<'d> BoundSolver<'d> {
                 cell.resolved
                     .iter()
                     .map(|&(m, k)| {
-                        let c = &self.nodes[&k];
+                        let c = &self.nodes[k.idx()];
                         (m * (c.hi - c.lo), k)
                     })
                     .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
@@ -596,7 +633,12 @@ impl<'d> BoundSolver<'d> {
                 None => break,
             }
         }
-        for &k in path.iter().rev() {
+        let path_slice = if use_stack {
+            &path_buf[..path_len]
+        } else {
+            &path_vec[..]
+        };
+        for &k in path_slice.iter().rev() {
             if !self.backup(k) {
                 break; // bounds unchanged ⇒ ancestors can't change either
             }
@@ -609,26 +651,39 @@ impl<'d> BoundSolver<'d> {
     /// column. For the upper bound, cross every tied pure best-response row
     /// with the upper column strategy. Every 32nd visit is a round-robin fair
     /// pick, so zero-support cells cannot remain starved forever.
-    fn select_cell(&mut self, key: NodeKey) -> usize {
+    fn select_cell(&mut self, key: NodeId) -> usize {
         const FAIR_PERIOD: usize = 32;
         const EPS: f64 = 1e-12;
 
         let support_br = self.cfg.support_br_scheduling;
         let (selected, pick_kind) = {
-            let node = self.nodes.get_mut(&key).unwrap();
+            let node = &mut self.nodes[key.idx()];
             let (n0, n1) = (node.acts0.len(), node.acts1.len());
             node.select_count += 1;
-            let mut active_cells = Vec::new();
+            let mut active_buf = [0usize; 256];
+            let mut active_len = 0usize;
+            let mut active_vec: Vec<usize> = Vec::new();
+            let use_stack = n0 * n1 <= 256;
             for i in 0..n0 {
                 if !node.active_rows[i] {
                     continue;
                 }
                 for j in 0..n1 {
                     if node.active_cols[j] {
-                        active_cells.push(i * n1 + j);
+                        if use_stack {
+                            active_buf[active_len] = i * n1 + j;
+                            active_len += 1;
+                        } else {
+                            active_vec.push(i * n1 + j);
+                        }
                     }
                 }
             }
+            let active_cells: &[usize] = if use_stack {
+                &active_buf[..active_len]
+            } else {
+                &active_vec
+            };
             let widest = || {
                 active_cells
                     .iter()
@@ -657,7 +712,7 @@ impl<'d> BoundSolver<'d> {
             } else if let Some(witness) = node.strat.as_ref() {
                 if !support_br {
                     let mut best = (f64::NEG_INFINITY, widest());
-                    for &ci in &active_cells {
+                    for &ci in active_cells {
                         let (i, j) = (ci / n1, ci % n1);
                         let c = &node.cells[ci];
                         let score = witness.xlo[i].max(witness.xhi[i])
@@ -673,7 +728,7 @@ impl<'d> BoundSolver<'d> {
                     // It is redundant as a proof witness but empirically
                     // valuable on tiny lethal fans that close immediately.
                     let mut best = (f64::NEG_INFINITY, widest());
-                    for &ci in &active_cells {
+                    for &ci in active_cells {
                         let (i, j) = (ci / n1, ci % n1);
                         let c = &node.cells[ci];
                         let score = witness.xlo[i].max(witness.xhi[i])
@@ -685,13 +740,25 @@ impl<'d> BoundSolver<'d> {
                     }
                     (if best.0 > 0.0 { best.1 } else { widest() }, 4u8)
                 } else if node.select_count % 2 == 0 {
-                    let guarantees: Vec<f64> = (0..n1)
-                        .map(|j| {
-                            (0..n0)
+                    let mut guar_stack = [0.0f64; 16];
+                    let guar_vec: Vec<f64>;
+                    let guarantees: &[f64] = if n1 <= 16 {
+                        for j in 0..n1 {
+                            guar_stack[j] = (0..n0)
                                 .map(|i| witness.xlo[i] * node.cells[i * n1 + j].lo)
-                                .sum()
-                        })
-                        .collect();
+                                .sum();
+                        }
+                        &guar_stack[..n1]
+                    } else {
+                        guar_vec = (0..n1)
+                            .map(|j| {
+                                (0..n0)
+                                    .map(|i| witness.xlo[i] * node.cells[i * n1 + j].lo)
+                                    .sum()
+                            })
+                            .collect();
+                        &guar_vec
+                    };
                     let best_response = guarantees
                         .iter()
                         .enumerate()
@@ -699,7 +766,7 @@ impl<'d> BoundSolver<'d> {
                         .map(|(_, &v)| v)
                         .fold(f64::INFINITY, f64::min);
                     let mut best = (f64::NEG_INFINITY, widest());
-                    for &ci in &active_cells {
+                    for &ci in active_cells {
                         let (i, j) = (ci / n1, ci % n1);
                         let c = &node.cells[ci];
                         let support = witness.xlo[i] * witness.ylo[j];
@@ -715,13 +782,25 @@ impl<'d> BoundSolver<'d> {
                     }
                     (if best.0 > 0.0 { best.1 } else { widest() }, 1u8)
                 } else {
-                    let guarantees: Vec<f64> = (0..n0)
-                        .map(|i| {
-                            (0..n1)
+                    let mut guar_stack = [0.0f64; 16];
+                    let guar_vec: Vec<f64>;
+                    let guarantees: &[f64] = if n0 <= 16 {
+                        for i in 0..n0 {
+                            guar_stack[i] = (0..n1)
                                 .map(|j| witness.yhi[j] * node.cells[i * n1 + j].hi)
-                                .sum()
-                        })
-                        .collect();
+                                .sum();
+                        }
+                        &guar_stack[..n0]
+                    } else {
+                        guar_vec = (0..n0)
+                            .map(|i| {
+                                (0..n1)
+                                    .map(|j| witness.yhi[j] * node.cells[i * n1 + j].hi)
+                                    .sum()
+                            })
+                            .collect();
+                        &guar_vec
+                    };
                     let best_response = guarantees
                         .iter()
                         .enumerate()
@@ -729,7 +808,7 @@ impl<'d> BoundSolver<'d> {
                         .map(|(_, &v)| v)
                         .fold(f64::NEG_INFINITY, f64::max);
                     let mut best = (f64::NEG_INFINITY, widest());
-                    for &ci in &active_cells {
+                    for &ci in active_cells {
                         let (i, j) = (ci / n1, ci % n1);
                         let c = &node.cells[ci];
                         let support = witness.xhi[i] * witness.yhi[j];
@@ -768,9 +847,9 @@ impl<'d> BoundSolver<'d> {
     /// First visit of a virgin cell: attempt the eager enumerator (range
     /// merge intact) within `cell_cap` runs; on success the whole cell
     /// resolves at once. Returns whether it did the work.
-    fn try_eager(&mut self, key: NodeKey, ci: usize) -> bool {
+    fn try_eager(&mut self, key: NodeId, ci: usize) -> bool {
         let (battle, choices) = {
-            let node = self.nodes.get_mut(&key).unwrap();
+            let node = &mut self.nodes[key.idx()];
             let cell = &mut node.cells[ci];
             if cell.tried_eager || !cell.resolved.is_empty() {
                 return false;
@@ -785,13 +864,13 @@ impl<'d> BoundSolver<'d> {
         };
         let step = enumerate_step(self.dex, &battle, choices, self.cfg.cell_cap);
         let Some(step) = step else {
-            self.nodes.get_mut(&key).unwrap().battle = Some(battle);
+            self.nodes[key.idx()].battle = Some(battle);
             self.stats.runs += self.cfg.cell_cap; // the aborted probe's cost
             return false;
         };
         self.stats.runs += step.runs;
         self.stats.expansions += 1;
-        let mut agg: HashMap<NodeKey, f64> = HashMap::new();
+        let mut agg: FxHashMap<NodeId, f64> = FxHashMap::default();
         let mut fixed_lo = 0.0;
         let mut fixed_hi = 0.0;
         for l in step.leaves {
@@ -813,10 +892,12 @@ impl<'d> BoundSolver<'d> {
             let k = self.intern(l.battle);
             *agg.entry(k).or_default() += prob;
         }
-        self.nodes.get_mut(&key).unwrap().battle = Some(battle);
-        let node = self.nodes.get_mut(&key).unwrap();
+        self.nodes[key.idx()].battle = Some(battle);
+        let node = &mut self.nodes[key.idx()];
         let cell = &mut node.cells[ci];
-        cell.resolved = agg.into_iter().map(|(k, m)| (m, k)).collect();
+        let mut resolved: Vec<(f64, NodeId)> = agg.into_iter().map(|(k, m)| (m, k)).collect();
+        resolved.sort_unstable_by_key(|&(_, k)| k);
+        cell.resolved = resolved;
         cell.fixed_lo = fixed_lo;
         cell.fixed_hi = fixed_hi;
         cell.pending.clear();
@@ -828,9 +909,9 @@ impl<'d> BoundSolver<'d> {
     /// yields the representative leaf; every non-default class after the
     /// prefix becomes a pending sibling at its exact mass. The leaf plus
     /// siblings partition the expanded mass exactly.
-    fn expand(&mut self, key: NodeKey, ci: usize) {
+    fn expand(&mut self, key: NodeId, ci: usize) {
         let (battle, choices, pending) = {
-            let node = self.nodes.get_mut(&key).unwrap();
+            let node = &mut self.nodes[key.idx()];
             let n1 = node.acts1.len();
             let (i, j) = (ci / n1, ci % n1);
             let choices = [node.acts0[i], node.acts1[j]];
@@ -850,9 +931,10 @@ impl<'d> BoundSolver<'d> {
             )
         };
 
-        let (leaf, trace) = run_scripted(self.dex, &battle, choices, &pending.script);
+        let mut leaf = self.scratch_leaf.take().unwrap_or_else(|| battle.clone());
+        let trace = run_scripted_clone_into(self.dex, &battle, &mut leaf, choices, &pending.script);
         self.check_stall_edge(&battle, &leaf);
-        self.nodes.get_mut(&key).unwrap().battle = Some(battle);
+        self.nodes[key.idx()].battle = Some(battle);
         self.stats.runs += 1;
         self.stats.expansions += 1;
 
@@ -886,14 +968,26 @@ impl<'d> BoundSolver<'d> {
             .fold_terminal_nodes
             .then(|| outcome_value(&leaf))
             .flatten();
-        let closed_bounds = if terminal_value.is_none() {
-            self.closed.get(&self.node_key(&leaf)).copied()
+        let leaf_key = if terminal_value.is_none() {
+            Some(self.node_key(&leaf))
         } else {
             None
         };
-        let child =
-            (terminal_value.is_none() && closed_bounds.is_none()).then(|| self.intern(leaf));
-        let node = self.nodes.get_mut(&key).unwrap();
+        let closed_bounds = leaf_key.and_then(|k| self.closed.get(&k).copied());
+        let child = if terminal_value.is_none() && closed_bounds.is_none() {
+            let k = leaf_key.unwrap();
+            if let Some(&existing_id) = self.node_index.get(&k) {
+                let id = self.intern(leaf);
+                debug_assert_eq!(id, existing_id);
+                Some(id)
+            } else {
+                Some(self.intern(leaf))
+            }
+        } else {
+            self.scratch_leaf = Some(leaf);
+            None
+        };
+        let node = &mut self.nodes[key.idx()];
         let cell = &mut node.cells[ci];
         cell.pending_mass = (cell.pending_mass - pending.mass).max(0.0)
             + siblings.iter().map(|s| s.mass).sum::<f64>();
@@ -912,36 +1006,46 @@ impl<'d> BoundSolver<'d> {
     /// Recompute one node's cell and node bounds from current children.
     /// Bounds are clamped monotone; resolved/fully-expanded nodes drop
     /// their Battle snapshot. Returns whether the node's bounds moved.
-    fn backup(&mut self, key: NodeKey) -> bool {
-        let (n0, n1, cell_bounds): (usize, usize, Vec<(f64, f64)>) = {
-            let node = &self.nodes[&key];
-            let bounds = node
-                .cells
-                .iter()
-                .map(|cell| {
-                    let mut lo = cell.fixed_lo;
-                    let mut hi = cell.fixed_hi + cell.pending_mass;
-                    for &(m, k) in &cell.resolved {
-                        let c = &self.nodes[&k];
-                        lo += m * c.lo;
-                        hi += m * c.hi;
-                    }
-                    (lo, hi)
-                })
-                .collect();
-            (node.acts0.len(), node.acts1.len(), bounds)
+    fn backup(&mut self, key: NodeId) -> bool {
+        let (n0, n1, n_cells) = {
+            let node = &self.nodes[key.idx()];
+            (node.acts0.len(), node.acts1.len(), node.cells.len())
         };
-
-        let mlo: Vec<f64> = cell_bounds.iter().map(|b| b.0).collect();
-        let mhi: Vec<f64> = cell_bounds.iter().map(|b| b.1).collect();
+        let mut mlo_stack = [0.0f64; 256];
+        let mut mhi_stack = [0.0f64; 256];
+        let mut mlo_vec: Vec<f64> = Vec::new();
+        let mut mhi_vec: Vec<f64> = Vec::new();
+        let use_stack = n_cells <= 256;
+        if !use_stack {
+            mlo_vec.resize(n_cells, 0.0);
+            mhi_vec.resize(n_cells, 0.0);
+        }
+        {
+            let mlo_slice: &mut [f64] = if use_stack { &mut mlo_stack[..n_cells] } else { &mut mlo_vec };
+            let mhi_slice: &mut [f64] = if use_stack { &mut mhi_stack[..n_cells] } else { &mut mhi_vec };
+            let node = &self.nodes[key.idx()];
+            for (ci, cell) in node.cells.iter().enumerate() {
+                let mut lo = cell.fixed_lo;
+                let mut hi = cell.fixed_hi + cell.pending_mass;
+                for &(m, k) in &cell.resolved {
+                    let c = &self.nodes[k.idx()];
+                    lo += m * c.lo;
+                    hi += m * c.hi;
+                }
+                mlo_slice[ci] = lo;
+                mhi_slice[ci] = hi;
+            }
+        }
+        let mlo: &[f64] = if use_stack { &mlo_stack[..n_cells] } else { &mlo_vec };
+        let mhi: &[f64] = if use_stack { &mhi_stack[..n_cells] } else { &mhi_vec };
         let (removed_rows, removed_cols, dominance_checks, avoided_cells) =
             if self.cfg.certified_action_pruning {
-                let node = self.nodes.get_mut(&key).unwrap();
+                let node = &mut self.nodes[key.idx()];
                 let before = node.active_rows.iter().filter(|&&v| v).count()
                     * node.active_cols.iter().filter(|&&v| v).count();
                 let (removed_rows, removed_cols, checks) = prune_dominated_actions(
-                    &mlo,
-                    &mhi,
+                    mlo,
+                    mhi,
                     n0,
                     n1,
                     &mut node.active_rows,
@@ -958,16 +1062,19 @@ impl<'d> BoundSolver<'d> {
         self.stats.dominance_checks += dominance_checks;
         self.stats.avoided_cells += avoided_cells;
 
-        let node = &self.nodes[&key];
-        let active_rows = node.active_rows.clone();
-        let active_cols = node.active_cols.clone();
-        let active_n0 = active_rows.iter().filter(|&&v| v).count();
-        let active_n1 = active_cols.iter().filter(|&&v| v).count();
-        if active_n0 > 1 && active_n1 > 1 {
-            self.stats.lp_solves += 2;
-        }
-        let slo = solve_restricted_game(&mlo, n0, n1, &active_rows, &active_cols);
-        let shi = solve_restricted_game(&mhi, n0, n1, &active_rows, &active_cols);
+        let (slo, shi) = {
+            let node = &self.nodes[key.idx()];
+            let active_rows = &node.active_rows;
+            let active_cols = &node.active_cols;
+            let active_n0 = active_rows.iter().filter(|&&v| v).count();
+            let active_n1 = active_cols.iter().filter(|&&v| v).count();
+            let slo = solve_restricted_game(mlo, n0, n1, active_rows, active_cols);
+            let shi = solve_restricted_game(mhi, n0, n1, active_rows, active_cols);
+            if active_n0 > 1 && active_n1 > 1 {
+                self.stats.lp_solves += 2;
+            }
+            (slo, shi)
+        };
         self.stats.worst_gap = self.stats.worst_gap.max(slo.gap).max(shi.gap);
         // `solve_matrix_full` reports the midpoint of its own best-response
         // bracket. Use the outward endpoints here: certificates must include
@@ -984,10 +1091,10 @@ impl<'d> BoundSolver<'d> {
         };
 
         let (fully_expanded, moved) = {
-            let node = self.nodes.get_mut(&key).unwrap();
-            for (cell, &(clo, chi)) in node.cells.iter_mut().zip(&cell_bounds) {
-                cell.lo = clo;
-                cell.hi = chi;
+            let node = &mut self.nodes[key.idx()];
+            for (ci, cell) in node.cells.iter_mut().enumerate() {
+                cell.lo = mlo[ci];
+                cell.hi = mhi[ci];
             }
             // monotone: lo never decreases, hi never increases
             let (plo, phi) = (node.lo, node.hi);
@@ -1002,7 +1109,7 @@ impl<'d> BoundSolver<'d> {
             });
             (fully_expanded, moved)
         };
-        let node = self.nodes.get_mut(&key).unwrap();
+        let node = &mut self.nodes[key.idx()];
         if node.hi - node.lo <= 1e-12 || fully_expanded {
             node.battle = None;
         }
@@ -1015,16 +1122,21 @@ impl<'d> BoundSolver<'d> {
     /// interval is semantics-neutral, and the normal later backup propagates
     /// it without perturbing the current scheduling decision.
     fn fold_closed_graph(&mut self) {
-        let fold: HashMap<NodeKey, Bounds> = self
+        let fold: FxHashMap<NodeId, (NodeKey, Bounds)> = self
             .nodes
             .iter()
-            .filter_map(|(&key, node)| {
-                (!self.roots.contains(&key) && node.lo == node.hi).then_some((
-                    key,
-                    Bounds {
-                        lo: node.lo,
-                        hi: node.hi,
-                    },
+            .enumerate()
+            .filter_map(|(idx, node)| {
+                let id = NodeId(idx as u32);
+                (!node.folded_out && !self.roots.contains(&id) && node.lo == node.hi).then_some((
+                    id,
+                    (
+                        node.key,
+                        Bounds {
+                            lo: node.lo,
+                            hi: node.hi,
+                        },
+                    ),
                 ))
             })
             .collect();
@@ -1032,11 +1144,14 @@ impl<'d> BoundSolver<'d> {
             return;
         }
 
-        for node in self.nodes.values_mut() {
+        for node in &mut self.nodes {
+            if node.folded_out {
+                continue;
+            }
             for cell in &mut node.cells {
                 let mut keep = Vec::with_capacity(cell.resolved.len());
                 for (mass, child) in cell.resolved.drain(..) {
-                    if let Some(bounds) = fold.get(&child) {
+                    if let Some((_, bounds)) = fold.get(&child) {
                         cell.fixed_lo += mass * bounds.lo;
                         cell.fixed_hi += mass * bounds.hi;
                     } else {
@@ -1046,9 +1161,15 @@ impl<'d> BoundSolver<'d> {
                 cell.resolved = keep;
             }
         }
-        for (key, bounds) in fold {
-            self.nodes.remove(&key);
+        for (id, (key, bounds)) in fold {
+            let node = &mut self.nodes[id.idx()];
+            node.folded_out = true;
+            node.battle = None;
+            node.cells.clear();
+            node.strat = None;
+            self.node_index.remove(&key);
             self.closed.insert(key, bounds);
+            self.live_nodes -= 1;
             self.stats.closed_folds += 1;
         }
     }
@@ -1090,41 +1211,102 @@ fn solve_restricted_game(
     active_rows: &[bool],
     active_cols: &[bool],
 ) -> RestrictedSolution {
-    let ri: Vec<usize> = (0..rows).filter(|&i| active_rows[i]).collect();
-    let cj: Vec<usize> = (0..cols).filter(|&j| active_cols[j]).collect();
+    let mut ri_stack = [0usize; 16];
+    let mut ri_len = 0usize;
+    let mut ri_vec: Vec<usize> = Vec::new();
+    let use_ri_stack = rows <= 16;
+    for (i, &active) in active_rows.iter().enumerate().take(rows) {
+        if active {
+            if use_ri_stack {
+                ri_stack[ri_len] = i;
+                ri_len += 1;
+            } else {
+                ri_vec.push(i);
+            }
+        }
+    }
+    let ri: &[usize] = if use_ri_stack { &ri_stack[..ri_len] } else { &ri_vec };
+
+    let mut cj_stack = [0usize; 16];
+    let mut cj_len = 0usize;
+    let mut cj_vec: Vec<usize> = Vec::new();
+    let use_cj_stack = cols <= 16;
+    for (j, &active) in active_cols.iter().enumerate().take(cols) {
+        if active {
+            if use_cj_stack {
+                cj_stack[cj_len] = j;
+                cj_len += 1;
+            } else {
+                cj_vec.push(j);
+            }
+        }
+    }
+    let cj: &[usize] = if use_cj_stack { &cj_stack[..cj_len] } else { &cj_vec };
     assert!(!ri.is_empty() && !cj.is_empty());
-    let reduced: Vec<f64> = ri
-        .iter()
-        .flat_map(|&i| cj.iter().map(move |&j| matrix[i * cols + j]))
-        .collect();
-    let (value, gap, rx, ry) = if ri.len() == 1 && cj.len() == 1 {
-        (reduced[0], 0.0, vec![1.0], vec![1.0])
-    } else if cj.len() == 1 {
-        let best = (0..ri.len())
-            .max_by(|&a, &b| reduced[a].partial_cmp(&reduced[b]).unwrap())
-            .unwrap();
-        let mut x = vec![0.0; ri.len()];
-        x[best] = 1.0;
-        (reduced[best], 0.0, x, vec![1.0])
-    } else if ri.len() == 1 {
-        let best = (0..cj.len())
-            .min_by(|&a, &b| reduced[a].partial_cmp(&reduced[b]).unwrap())
-            .unwrap();
-        let mut y = vec![0.0; cj.len()];
-        y[best] = 1.0;
-        (reduced[best], 0.0, vec![1.0], y)
+
+    let r_len = ri.len();
+    let c_len = cj.len();
+    let red_len = r_len * c_len;
+    let mut reduced_stack = [0.0f64; 256];
+    let reduced_vec: Vec<f64>;
+    let reduced: &[f64] = if red_len <= 256 {
+        let mut idx = 0;
+        for &i in ri {
+            for &j in cj {
+                reduced_stack[idx] = matrix[i * cols + j];
+                idx += 1;
+            }
+        }
+        &reduced_stack[..red_len]
     } else {
-        let solved = solve_matrix_full(&reduced, ri.len(), cj.len());
-        (solved.value, solved.gap, solved.x, solved.y)
+        reduced_vec = ri
+            .iter()
+            .flat_map(|&i| cj.iter().map(move |&j| matrix[i * cols + j]))
+            .collect();
+        &reduced_vec
     };
+
     let mut x = vec![0.0; rows];
     let mut y = vec![0.0; cols];
-    for (&i, p) in ri.iter().zip(rx) {
-        x[i] = p;
-    }
-    for (&j, p) in cj.iter().zip(ry) {
-        y[j] = p;
-    }
+    let (value, gap) = if r_len == 1 && c_len == 1 {
+        x[ri[0]] = 1.0;
+        y[cj[0]] = 1.0;
+        (reduced[0], 0.0)
+    } else if c_len == 1 {
+        let best = (0..r_len)
+            .max_by(|&a, &b| reduced[a].partial_cmp(&reduced[b]).unwrap())
+            .unwrap();
+        x[ri[best]] = 1.0;
+        y[cj[0]] = 1.0;
+        (reduced[best], 0.0)
+    } else if r_len == 1 {
+        let best = (0..c_len)
+            .min_by(|&a, &b| reduced[a].partial_cmp(&reduced[b]).unwrap())
+            .unwrap();
+        x[ri[0]] = 1.0;
+        y[cj[best]] = 1.0;
+        (reduced[best], 0.0)
+    } else if r_len <= 16 && c_len <= 16 {
+        let mut rx_stack = [0.0f64; 16];
+        let mut ry_stack = [0.0f64; 16];
+        let (v, g) = solve_matrix_into(reduced, r_len, c_len, &mut rx_stack[..r_len], &mut ry_stack[..c_len]);
+        for (idx, &i) in ri.iter().enumerate() {
+            x[i] = rx_stack[idx];
+        }
+        for (idx, &j) in cj.iter().enumerate() {
+            y[j] = ry_stack[idx];
+        }
+        (v, g)
+    } else {
+        let solved = solve_matrix_full(reduced, r_len, c_len);
+        for (&i, p) in ri.iter().zip(solved.x) {
+            x[i] = p;
+        }
+        for (&j, p) in cj.iter().zip(solved.y) {
+            y[j] = p;
+        }
+        (solved.value, solved.gap)
+    };
     RestrictedSolution { value, gap, x, y }
 }
 
@@ -1218,7 +1400,7 @@ mod tests {
 
     use super::{
         prune_dominated_actions, solve_restricted_game, BoundConfig, BoundSolver, Cell, Node,
-        NodeKey, StageWitness,
+        NodeId, NodeKey, StageWitness,
     };
     use crate::exact::solve_matrix;
 
@@ -1595,6 +1777,8 @@ mod tests {
 
     fn synthetic_node(select_count: usize, fair_cursor: usize) -> Node {
         Node {
+            key: NodeKey::Exact(7),
+            folded_out: false,
             battle: None,
             acts0: vec![None, None],
             acts1: vec![None, None],
@@ -1626,18 +1810,17 @@ mod tests {
     #[test]
     fn support_br_scheduler_visits_tied_pure_response_and_fair_cursor() {
         let dex = conformance::load_dex();
-        let key = NodeKey::Exact(7);
         let mut solver = BoundSolver::new(&dex, BoundConfig::default());
         // Next visit is lower-directed. Column 1 is a tied pure response to
         // xlo but has zero ylo support; the scheduler must still select it.
-        solver.nodes.insert(key, synthetic_node(1, 0));
-        assert_eq!(solver.select_cell(key), 1);
+        solver.nodes.push(synthetic_node(1, 0));
+        assert_eq!(solver.select_cell(NodeId(0)), 1);
         assert_eq!(solver.stats.lower_br_picks, 1);
 
         // Every 32nd visit ignores policy scores and advances a deterministic
         // cursor over all unresolved active cells.
-        solver.nodes.insert(key, synthetic_node(31, 2));
-        assert_eq!(solver.select_cell(key), 2);
+        solver.nodes[0] = synthetic_node(31, 2);
+        assert_eq!(solver.select_cell(NodeId(0)), 2);
         assert_eq!(solver.stats.fair_cell_picks, 1);
     }
 

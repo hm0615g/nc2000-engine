@@ -43,6 +43,7 @@ pub mod frozen;
 pub mod import;
 pub mod learning;
 pub mod learned;
+pub mod linear;
 pub mod mcts;
 pub mod m17e_artifact;
 pub mod observe;

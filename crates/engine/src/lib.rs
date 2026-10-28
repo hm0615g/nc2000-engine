@@ -7,10 +7,12 @@
 
 pub mod battle;
 pub mod choice;
+pub mod compact;
 pub mod dex;
 pub mod events;
 pub mod fxhash;
 pub mod prng;
 pub mod replay;
+mod search_prefix;
 pub mod state;
 pub mod validate;

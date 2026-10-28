@@ -218,17 +218,17 @@ enum ScalarTag {
 
 #[derive(Clone, Copy, Debug, Default)]
 struct PackedScalar {
-    bits: [u8; 8],
+    bits: [u8; 4],
     tag: ScalarTag,
 }
 
 impl std::hash::Hash for PackedScalar {
     #[inline(always)]
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
-        let bits = u64::from_le_bytes(self.bits);
+        let bits = u32::from_le_bytes(self.bits);
         match self.tag {
-            ScalarTag::Int => (0u8, bits as i64).hash(h),
-            ScalarTag::Float => (1u8, bits).hash(h),
+            ScalarTag::Int => (0u8, bits as i32 as i64).hash(h),
+            ScalarTag::Float => (1u8, (f32::from_bits(bits) as f64).to_bits()).hash(h),
             ScalarTag::Bool => (2u8, bits != 0).hash(h),
             ScalarTag::Move => (3u8, bits as u16).hash(h),
             ScalarTag::Cond => (4u8, bits as u16).hash(h),
@@ -240,21 +240,21 @@ impl std::hash::Hash for PackedScalar {
 impl PackedScalar {
     fn new(value: Scalar) -> Self {
         let (tag, bits) = match value {
-            Scalar::Int(v) => (ScalarTag::Int, v as u64),
-            Scalar::Float(v) => (ScalarTag::Float, v.to_bits()),
-            Scalar::Bool(v) => (ScalarTag::Bool, v as u64),
-            Scalar::MoveK(v) => (ScalarTag::Move, v.0 as u64),
-            Scalar::CondK(v) => (ScalarTag::Cond, v.0 as u64),
-            Scalar::Slot(a, b) => (ScalarTag::Slot, (a as u64) | ((b as u64) << 8)),
+            Scalar::Int(v) => (ScalarTag::Int, v as i32 as u32),
+            Scalar::Float(v) => (ScalarTag::Float, (v as f32).to_bits()),
+            Scalar::Bool(v) => (ScalarTag::Bool, v as u32),
+            Scalar::MoveK(v) => (ScalarTag::Move, v.0 as u32),
+            Scalar::CondK(v) => (ScalarTag::Cond, v.0 as u32),
+            Scalar::Slot(a, b) => (ScalarTag::Slot, (a as u32) | ((b as u32) << 8)),
         };
         Self { bits: bits.to_le_bytes(), tag }
     }
 
     fn value(self) -> Scalar {
-        let bits = u64::from_le_bytes(self.bits);
+        let bits = u32::from_le_bytes(self.bits);
         match self.tag {
-            ScalarTag::Int => Scalar::Int(bits as i64),
-            ScalarTag::Float => Scalar::Float(f64::from_bits(bits)),
+            ScalarTag::Int => Scalar::Int(bits as i32 as i64),
+            ScalarTag::Float => Scalar::Float(f32::from_bits(bits) as f64),
             ScalarTag::Bool => Scalar::Bool(bits != 0),
             ScalarTag::Move => Scalar::MoveK(crate::dex::MoveId(bits as u16)),
             ScalarTag::Cond => Scalar::CondK(crate::dex::CondId(bits as u16)),
@@ -415,10 +415,10 @@ pub struct EffectState {
     pub linked_status: Option<CondId>,
     /// bide `lastDamageSource` (object in PS — essence-invisible).
     pub last_damage_source: Option<PokeId>,
-    /// leppaberry `moveSlot` (object reference in PS): move slot index.
-    pub slot_ref: Option<usize>,
+    /// leppaberry `moveSlot` (object reference in PS): move slot index (`0..=3`).
+    pub slot_ref: Option<u8>,
     /// futuremove `moveData.damage` (nested object — essence-invisible).
-    pub future_damage: Option<f64>,
+    pub future_damage: Option<i16>,
     /// Everything else scalar: time, startTime, counter, boundDivisor, move...
     /// Insertion-ordered like a JS object (affects nothing in essence compare,
     /// which is key-based, but keep order for faithful iteration anyway).
@@ -427,11 +427,46 @@ pub struct EffectState {
     pub effect_order: u32,
 }
 
-// Manual Hash (future_damage is f64); used by `Battle::state_key`.
+// Manual Hash (future_damage is hashed as f64 bits for state_key parity); used by `Battle::state_key`.
 impl std::hash::Hash for EffectState {
     #[inline(always)]
     fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
         self.id.hash(h);
+        if !self.has_name && self.duration.is_none() && self.source_slot.is_none()
+            && self.source.is_none() && self.source_effect.is_none()
+            && self.linked_pokemon == LinkedPokes::default()
+            && self.linked_status.is_none() && self.last_damage_source.is_none()
+            && self.slot_ref.is_none() && self.future_damage.is_none() && self.data.n == 0
+        {
+            // Most status/item states have no payload. The exact same writes
+            // now have constant values, allowing polynomial folding to collapse.
+            EffectState::default().hash_payload(h);
+        } else {
+            self.hash_payload(h);
+        }
+        self.effect_order.hash(h);
+    }
+}
+
+impl EffectState {
+    #[inline(always)]
+    fn is_empty_payload(&self) -> bool {
+        !self.has_name
+            && self.duration.is_none()
+            && self.source_slot.is_none()
+            && self.source.is_none()
+            && self.source_effect.is_none()
+            && self.linked_pokemon == LinkedPokes::default()
+            && self.linked_status.is_none()
+            && self.last_damage_source.is_none()
+            && self.slot_ref.is_none()
+            && self.future_damage.is_none()
+            && self.data.n == 0
+    }
+
+    #[inline(always)]
+    fn hash_payload<H: std::hash::Hasher>(&self, h: &mut H) {
+        use std::hash::Hash;
         self.has_name.hash(h);
         self.duration.hash(h);
         self.source_slot.hash(h);
@@ -440,9 +475,46 @@ impl std::hash::Hash for EffectState {
         self.linked_pokemon.hash(h);
         self.linked_status.hash(h);
         self.last_damage_source.hash(h);
-        self.slot_ref.hash(h);
-        self.future_damage.map(f64::to_bits).hash(h);
+        self.slot_ref.map(usize::from).hash(h);
+        self.future_damage.map(|d| (d as f64).to_bits()).hash(h);
         self.data.hash(h);
+    }
+
+    #[inline(always)]
+    pub(crate) fn hash_empty_payload<H: std::hash::Hasher>(effect_order: u32, h: &mut H) {
+        use std::hash::Hash;
+        false.hash(h);
+        None::<i32>.hash(h);
+        None::<(u8, u8)>.hash(h);
+        None::<PokeId>.hash(h);
+        None::<crate::battle::EffectHandle>.hash(h);
+        LinkedPokes { p: [None, None], n: 0 }.hash(h);
+        None::<CondId>.hash(h);
+        None::<PokeId>.hash(h);
+        None::<usize>.hash(h);
+        None::<u64>.hash(h);
+        4usize.hash(h);
+        None::<()>.hash(h);
+        None::<()>.hash(h);
+        None::<()>.hash(h);
+        None::<()>.hash(h);
+        0u8.hash(h);
+        effect_order.hash(h);
+    }
+
+    #[inline(always)]
+    pub(crate) fn hash_state<H: crate::fxhash::StateHasher>(&self, h: &mut H) {
+        use std::hash::Hash;
+        self.id.hash(h);
+        if self.is_empty_payload() {
+            let eo = self.effect_order;
+            h.hash_batch::<24>(
+                |b| Self::hash_empty_payload(eo, b),
+                |h| Self::hash_empty_payload(eo, h),
+            );
+            return;
+        }
+        self.hash_payload(h);
         self.effect_order.hash(h);
     }
 }
@@ -503,6 +575,12 @@ pub struct MoveSlots {
 }
 
 impl MoveSlots {
+    #[inline(always)]
+    pub(crate) fn hash_state<H: crate::fxhash::StateHasher>(&self, h: &mut H) {
+        use std::hash::Hash;
+        h.hash_batch::<32>(|b| self.hash(b), |h| self.hash(h));
+    }
+
     pub fn len(&self) -> usize {
         self.n as usize
     }
@@ -645,14 +723,25 @@ pub enum MoveResult {
 }
 
 /// Entry in `pokemon.attackedBy` (Counter/Mirror Coat bookkeeping).
-#[derive(Clone, Copy, Debug, Hash)]
+#[derive(Clone, Copy, Debug)]
 pub struct Attacker {
     pub source: PokeId,
-    pub damage: i64,
+    pub damage: i16,
     pub move_id: MoveId,
     pub this_turn: bool,
     /// PS damageValue: number | false | undefined.
-    pub damage_value: Option<i64>,
+    pub damage_value: Option<i16>,
+}
+
+impl std::hash::Hash for Attacker {
+    #[inline(always)]
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.source.hash(h);
+        (self.damage as i64).hash(h);
+        self.move_id.hash(h);
+        self.this_turn.hash(h);
+        self.damage_value.map(i64::from).hash(h);
+    }
 }
 
 #[derive(Debug)]
@@ -764,18 +853,30 @@ impl Pokemon {
     /// abstraction); `None` hashes them exactly. Destructuring is total on
     /// purpose: adding a `Pokemon` field breaks this fn until it is placed.
     pub fn hash_with<H: std::hash::Hasher>(&self, h: &mut H, hp_buckets: Option<i64>) {
-        self.hash_with_options(h, hp_buckets, false);
+        let mut p = crate::fxhash::PlainHasher(h);
+        self.hash_with_options(&mut p, hp_buckets, false);
     }
 
     /// Solver-key variant. `omit_damage_bookkeeping` may only be enabled
     /// after proving that no reachable move can observe `attacked_by`
     /// (currently Counter/Mirror Coat). The other omitted fields are written
     /// by the engine but never read by future battle behavior.
-    pub(crate) fn hash_with_options<H: std::hash::Hasher>(
+    pub(crate) fn hash_with_options<H: crate::fxhash::StateHasher>(
         &self,
         h: &mut H,
         hp_buckets: Option<i64>,
         omit_damage_bookkeeping: bool,
+    ) {
+        self.hash_with_prefix(h, hp_buckets, omit_damage_bookkeeping,
+            |prefix, h| std::hash::Hash::hash(prefix, h));
+    }
+
+    pub(crate) fn hash_with_prefix<H: crate::fxhash::StateHasher>(
+        &self,
+        h: &mut H,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+        hash_prefix: impl FnOnce(&crate::search_prefix::PokemonHashPrefix, &mut H),
     ) {
         use std::hash::Hash;
         let Pokemon {
@@ -840,10 +941,15 @@ impl Pokemon {
             times_attacked,
             speed,
         } = self;
-        (species, base_species, name, level, gender, happiness).hash(h);
-        (set_ivs, set_evs, base_move_slots).hash(h);
-        (hp_type, hp_power, base_hp_type, base_hp_power).hash(h);
-        (base_stored_stats, stored_stats, base_maxhp, maxhp).hash(h);
+        let prefix = crate::search_prefix::PokemonHashPrefix {
+            species: *species, base_species: *base_species, name: *name,
+            level: *level, gender: *gender, happiness: *happiness,
+            set_ivs: *set_ivs, set_evs: *set_evs, base_move_slots: *base_move_slots,
+            hp_type: *hp_type, hp_power: *hp_power, base_hp_type: *base_hp_type,
+            base_hp_power: *base_hp_power, base_stored_stats: *base_stored_stats,
+            stored_stats: *stored_stats, base_maxhp: *base_maxhp, maxhp: *maxhp,
+        };
+        hash_prefix(&prefix, h);
         match (hp_buckets, omit_damage_bookkeeping) {
             (None, false) => {
                 hp.hash(h);
@@ -859,16 +965,142 @@ impl Pokemon {
                 (last_damage / 16).hash(h);
                 for a in attacked_by.iter() {
                     (a.source, a.move_id, a.this_turn).hash(h);
-                    (a.damage / 16).hash(h);
-                    a.damage_value.map(|v| v / 16).hash(h);
+                    (a.damage as i64 / 16).hash(h);
+                    a.damage_value.map(|v| v as i64 / 16).hash(h);
                 }
             }
             (None, true) => hp.hash(h),
             (Some(b), true) => ((*hp as i64) * b / (*maxhp).max(1) as i64).hash(h),
         }
-        (status, status_state, boosts, move_slots).hash(h);
-        (item, last_item, item_state, types).hash(h);
-        (volatiles, handler_mask).hash(h);
+        if status_state.id == EffId::None && status_state.is_empty_payload() {
+            let eo = status_state.effect_order;
+            h.hash_batch::<52>(
+                |b| {
+                    status.hash(b);
+                    EffId::None.hash(b);
+                    EffectState::hash_empty_payload(eo, b);
+                    boosts.hash(b);
+                    move_slots.hash(b);
+                },
+                |h| {
+                    status.hash(h);
+                    EffId::None.hash(h);
+                    EffectState::hash_empty_payload(eo, h);
+                    boosts.hash(h);
+                    move_slots.hash(h);
+                },
+            );
+        } else {
+            status.hash(h);
+            status_state.hash_state(h);
+            boosts.hash(h);
+            move_slots.hash_state(h);
+        }
+        item.hash(h);
+        last_item.hash(h);
+        macro_rules! fast_tail {
+            ($h:expr, $with_times:literal) => {{
+                handler_mask.hash($h);
+                (false, fainted, false).hash($h);
+                (
+                    is_active,
+                    is_started,
+                    position,
+                    active_turns,
+                    active_move_actions,
+                )
+                    .hash($h);
+                (
+                    newly_switched,
+                    false,
+                    None::<u16>,
+                    previously_switched_in,
+                )
+                    .hash($h);
+                (SwitchFlag::No, false, false).hash($h);
+                (false, false).hash($h);
+                (
+                    None::<MoveId>,
+                    None::<MoveId>,
+                    None::<MoveId>,
+                    None::<i8>,
+                )
+                    .hash($h);
+                (None::<MoveId>, move_this_turn_result, move_last_turn_result).hash($h);
+                (
+                    stats_raised_this_turn,
+                    stats_lowered_this_turn,
+                    used_item_this_turn,
+                )
+                    .hash($h);
+                if $with_times {
+                    times_attacked.hash($h);
+                }
+                speed.hash($h);
+            }};
+        }
+        let fast_flags = !*transformed
+            && !*faint_queued
+            && !*being_called_back
+            && dragged_in.is_none()
+            && matches!(switch_flag, SwitchFlag::No)
+            && !*force_switch_flag
+            && !*skip_before_switch_out
+            && !*trapped
+            && !*maybe_trapped
+            && last_move.is_none()
+            && last_move_encore.is_none()
+            && last_move_used.is_none()
+            && last_move_target_loc.is_none()
+            && move_this_turn.is_none();
+        if fast_flags && item_state.is_empty_payload() && volatiles.is_empty() {
+            item_state.id.hash(h);
+            let ieo = item_state.effect_order;
+            if omit_damage_bookkeeping {
+                h.hash_batch::<60>(
+                    |b| {
+                        EffectState::hash_empty_payload(ieo, b);
+                        types.hash(b);
+                        0usize.hash(b);
+                        fast_tail!(b, false);
+                    },
+                    |h| {
+                        EffectState::hash_empty_payload(ieo, h);
+                        types.hash(h);
+                        0usize.hash(h);
+                        fast_tail!(h, false);
+                    },
+                );
+            } else {
+                h.hash_batch::<60>(
+                    |b| {
+                        EffectState::hash_empty_payload(ieo, b);
+                        types.hash(b);
+                        0usize.hash(b);
+                        fast_tail!(b, true);
+                    },
+                    |h| {
+                        EffectState::hash_empty_payload(ieo, h);
+                        types.hash(h);
+                        0usize.hash(h);
+                        fast_tail!(h, true);
+                    },
+                );
+            }
+            return;
+        }
+        item_state.hash_state(h);
+        types.hash(h);
+        volatiles.hash(h);
+        if fast_flags {
+            if omit_damage_bookkeeping {
+                h.hash_batch::<40>(|b| fast_tail!(b, false), |h| fast_tail!(h, false));
+            } else {
+                h.hash_batch::<40>(|b| fast_tail!(b, true), |h| fast_tail!(h, true));
+            }
+            return;
+        }
+        handler_mask.hash(h);
         (transformed, fainted, faint_queued).hash(h);
         (
             is_active,
@@ -1033,14 +1265,23 @@ impl std::hash::Hash for Side {
 impl Side {
     /// See `Pokemon::hash_with`. Total destructuring on purpose.
     pub fn hash_with<H: std::hash::Hasher>(&self, h: &mut H, hp_buckets: Option<i64>) {
-        self.hash_with_options(h, hp_buckets, false);
+        let mut p = crate::fxhash::PlainHasher(h);
+        self.hash_with_options(&mut p, hp_buckets, false);
     }
 
-    pub(crate) fn hash_with_options<H: std::hash::Hasher>(
+    pub(crate) fn hash_with_options<H: crate::fxhash::StateHasher>(
         &self,
         h: &mut H,
         hp_buckets: Option<i64>,
         omit_damage_bookkeeping: bool,
+    ) {
+        self.hash_with_pokemon(h, |p, h| p.hash_with_options(h, hp_buckets, omit_damage_bookkeeping));
+    }
+
+    pub(crate) fn hash_with_pokemon<H: crate::fxhash::StateHasher>(
+        &self,
+        h: &mut H,
+        mut hash_pokemon: impl FnMut(&Pokemon, &mut H),
     ) {
         use std::hash::Hash;
         let Side {
@@ -1062,7 +1303,7 @@ impl Side {
         name.hash(h);
         roster.len().hash(h);
         for p in roster.iter() {
-            p.hash_with_options(h, hp_buckets, omit_damage_bookkeeping);
+            hash_pokemon(p, h);
         }
         (party, active, pokemon_left, total_fainted).hash(h);
         (side_conditions, slot_conditions, handler_mask).hash(h);
@@ -1238,11 +1479,11 @@ pub struct ActiveMove {
     pub target: &'static str,
     pub crit_ratio: i32,
     pub will_crit: Option<bool>,
-    pub status: Option<String>,
-    pub volatile_status: Option<String>,
-    pub side_condition: Option<String>,
-    pub weather: Option<String>,
-    pub pseudo_weather: Option<String>,
+    pub status: Option<&'static str>,
+    pub volatile_status: Option<&'static str>,
+    pub side_condition: Option<&'static str>,
+    pub weather: Option<&'static str>,
+    pub pseudo_weather: Option<&'static str>,
     pub boosts: SparseBoosts,
     pub has_boosts: bool,
     pub heal: Option<(i32, i32)>,
@@ -1250,12 +1491,12 @@ pub struct ActiveMove {
     pub recoil: Option<(i32, i32)>,
     pub struggle_recoil: bool,
     pub multihit: Option<Multihit>,
-    pub secondaries: Vec<HitEffect>,
+    pub secondaries: smallvec::SmallVec<[HitEffect; 2]>,
     pub self_effect: Option<HitEffect>,
     pub damage: Option<FixedDamage>,
     pub ohko: bool,
     pub selfdestruct: bool,
-    pub self_switch: Option<String>,
+    pub self_switch: Option<&'static str>,
     pub force_switch: bool,
     pub ignore_immunity: bool,
     pub ignore_accuracy: bool,
@@ -1283,13 +1524,13 @@ pub struct ActiveMove {
     /// beatup ally roster (mutated by getDamage).
     pub allies: Option<Vec<PokeId>>,
     /// triattack move.statusRoll.
-    pub status_roll: Option<String>,
+    pub status_roll: Option<&'static str>,
     /// curse's `delete move.onHit`.
     pub on_hit_suppressed: bool,
     /// present's `move.infiltrates = true`.
     pub infiltrates: bool,
-    /// Per-target-slot hit data ("p1a" → (crit, typeMod)).
-    pub move_hit_data: Vec<(String, (bool, i32))>,
+    /// Per-target-slot hit data (indexed by target side 0/1 → (crit, typeMod)).
+    pub move_hit_data: [(bool, i32); 2],
 }
 
 impl ActiveMove {
@@ -1297,24 +1538,19 @@ impl ActiveMove {
         self.flags & dex.flag_bit(flag) != 0
     }
 
-    pub fn hit_data_mut(&mut self, slot: String) -> &mut (bool, i32) {
-        if !self.move_hit_data.iter().any(|(s, _)| *s == slot) {
-            self.move_hit_data.push((slot.clone(), (false, 0)));
-        }
-        &mut self
-            .move_hit_data
-            .iter_mut()
-            .find(|(s, _)| *s == slot)
-            .unwrap()
-            .1
+    #[inline]
+    pub fn hit_data_mut_side(&mut self, side: u8) -> &mut (bool, i32) {
+        &mut self.move_hit_data[(side & 1) as usize]
+    }
+
+    pub fn hit_data_mut(&mut self, slot: impl AsRef<str>) -> &mut (bool, i32) {
+        let idx = usize::from(slot.as_ref().as_bytes().get(1).copied() == Some(b'2'));
+        &mut self.move_hit_data[idx]
     }
 
     pub fn hit_data(&self, slot: &str) -> (bool, i32) {
-        self.move_hit_data
-            .iter()
-            .find(|(s, _)| s == slot)
-            .map(|(_, d)| *d)
-            .unwrap_or((false, 0))
+        let idx = usize::from(slot.as_bytes().get(1).copied() == Some(b'2'));
+        self.move_hit_data[idx]
     }
 }
 
@@ -1360,7 +1596,7 @@ pub struct Battle {
     pub active_target: Option<PokeId>,
     pub last_move_id: Option<MoveId>,
     /// The boost table flowing through a TryBoost event (mist mutates it).
-    pub pending_boosts: Option<Vec<(usize, i8)>>,
+    pub pending_boosts: Option<SparseBoosts>,
     /// Reusable listener buffers (never state; clones start empty).
     pub listener_pool: crate::battle::events::ScratchPool,
     /// Union of every handler mask in the battle (all roster pokemon, side +
@@ -1386,3 +1622,61 @@ pub const BOOST_NAMES: [&str; 7] = ["atk", "def", "spa", "spd", "spe", "accuracy
 
 /// Map BTreeMap-based scalar bags (unused placeholder to keep serde imports out).
 pub type ScalarMap = BTreeMap<String, Scalar>;
+
+#[cfg(test)]
+mod effect_hash_tests {
+    use super::*;
+    use std::hash::{Hash, Hasher};
+
+    // The pre-optimization stream, intentionally independent of hash_payload.
+    fn reference<H: Hasher>(s: &EffectState, h: &mut H) {
+        s.id.hash(h); s.has_name.hash(h); s.duration.hash(h);
+        s.source_slot.hash(h); s.source.hash(h); s.source_effect.hash(h);
+        s.linked_pokemon.hash(h); s.linked_status.hash(h);
+        s.last_damage_source.hash(h); s.slot_ref.map(usize::from).hash(h);
+        s.future_damage.map(|d| (d as f64).to_bits()).hash(h); s.data.hash(h);
+        s.effect_order.hash(h);
+    }
+
+    fn compare<H: Hasher + Default>(s: &EffectState) {
+        let mut old = H::default(); let mut new = H::default();
+        old.write_u64(91); new.write_u64(91);
+        reference(s, &mut old); s.hash(&mut new);
+        old.write_u64(23); new.write_u64(23);
+        assert_eq!(old.finish(), new.finish(), "{s:?}");
+    }
+
+    #[test]
+    fn empty_effect_fast_path_preserves_payload_edge_cases() {
+        let base = EffectState::default();
+        let mut cases = vec![base];
+        macro_rules! change {
+            ($field:ident, $value:expr) => {{
+                let mut s = base; s.$field = $value; cases.push(s);
+            }};
+        }
+        change!(id, EffId::Item(ItemId(7))); change!(effect_order, u32::MAX);
+        change!(has_name, true); change!(duration, Some(0));
+        change!(source_slot, Some((0, 0))); change!(source, Some(PokeId { side: 0, slot: 0 }));
+        change!(source_effect, Some(crate::battle::EffectHandle::None));
+        change!(linked_pokemon, LinkedPokes::one(PokeId { side: 1, slot: 2 }));
+        // Even an unused backing slot participates in LinkedPokes' derived Hash.
+        change!(linked_pokemon, LinkedPokes { p: [None, Some(PokeId { side: 1, slot: 2 })], n: 0 });
+        change!(linked_status, Some(CondId(0)));
+        change!(last_damage_source, Some(PokeId { side: 1, slot: 0 }));
+        change!(slot_ref, Some(0));
+        for value in [0i16, 1, 125, i16::MAX] {
+            change!(future_damage, Some(value));
+        }
+        let mut data = DataBag::default(); data.push(DK::Counter, Scalar::Int(5));
+        change!(data, data);
+        // A retained empty bag may contain stale backing entries, which its
+        // original hash deliberately ignores.
+        data.retain(|_| false); change!(data, data);
+        for s in &cases {
+            compare::<crate::fxhash::FxHasher>(s);
+            compare::<crate::fxhash::SearchHasher>(s);
+            compare::<std::collections::hash_map::DefaultHasher>(s);
+        }
+    }
+}

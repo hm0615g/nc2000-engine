@@ -325,3 +325,13 @@
   color: var(--text-dim);
   margin: 4px 0 14px;
 }
+.eval-games {
+  position: relative;
+  max-height: 480px;
+  margin-top: 12px;
+}
+.eval-games thead {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+}

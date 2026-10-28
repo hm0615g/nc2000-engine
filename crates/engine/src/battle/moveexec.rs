@@ -1,7 +1,7 @@
 //! The move pipeline: gen2 `runMove` → base `useMove` → gen3 `useMoveInner`
 //! → gen2stadium2 `tryMoveHit` → gen2 `moveHit` → gen2stadium2 `getDamage`.
 
-use crate::dex::{Cb, Accuracy, Category, Dex, HitEffect, Multihit, MoveId};
+use crate::dex::{Accuracy, Category, Cb, Dex, HitEffect, MoveId, Multihit, SparseBoosts};
 use crate::prng::{DamageExactReason, DamageRollContext, DamageRollMode};
 use crate::state::*;
 
@@ -83,7 +83,7 @@ pub fn get_active_move(dex: &Dex, id: MoveId) -> ActiveMove {
         status_roll: None,
         on_hit_suppressed: false,
         infiltrates: false,
-        move_hit_data: Vec::new(),
+        move_hit_data: [(false, 0); 2],
     }
 }
 
@@ -105,14 +105,14 @@ pub fn synthetic_move(dex: &Dex, base_power: i32) -> ActiveMove {
         side_condition: None,
         weather: None,
         pseudo_weather: None,
-        boosts: Vec::new(),
+        boosts: SparseBoosts::EMPTY,
         has_boosts: false,
         heal: None,
         drain: None,
         recoil: None,
         struggle_recoil: false,
         multihit: None,
-        secondaries: Vec::new(),
+        secondaries: smallvec::SmallVec::new(),
         self_effect: None,
         damage: None,
         ohko: false,
@@ -144,7 +144,7 @@ pub fn synthetic_move(dex: &Dex, base_power: i32) -> ActiveMove {
         status_roll: None,
         on_hit_suppressed: false,
         infiltrates: false,
-        move_hit_data: Vec::new(),
+        move_hit_data: [(false, 0); 2],
     }
 }
 
@@ -310,10 +310,10 @@ pub fn dispatch_move_callback(
     source: Option<PokeId>,
     relay: RV,
 ) -> RV {
-    let key = dex.moves.key(m).to_string();
+    let key = dex.moves.key(m);
     let move_eff = EffectHandle::MoveEff(m);
     let tpoke = target.poke();
-    match (key.as_str(), callback_name) {
+    match (key, callback_name) {
         // ---------------------------------------------------- onModifyMove
         ("struggle", "onModifyMove") => {
             if let Some(am) = b.active_move.as_mut() {
@@ -359,7 +359,7 @@ pub fn dispatch_move_callback(
                     am.volatile_status = None;
                     am.cb_mask.clear(dex.known.on_hit);
                     am.self_effect = Some(HitEffect {
-                        boosts: vec![(0, 1), (1, 1), (4, -1)],
+                        boosts: SparseBoosts::from_slice(&[(0, 1), (1, 1), (4, -1)]),
                         ..Default::default()
                     });
                     am.target = non_ghost;
@@ -548,7 +548,7 @@ pub fn dispatch_move_callback(
                     crate::state::Scalar::MoveK(dex.moves.id("futuresight").unwrap()),
                 );
                 st.source = Some(user);
-                st.future_damage = damage;
+                st.future_damage = damage.map(|d| d as i16);
             }
             let ps = b.poke_str(user);
             b.add(&["-start", &ps, "Future Sight"]);
@@ -561,12 +561,12 @@ pub fn dispatch_move_callback(
             if b.poke(user).has_volatile(sub) {
                 let ps = b.poke_str(user);
                 b.add(&["-fail", &ps, "move: Substitute"]);
-                return RV::Str(String::new()); // NOT_FAIL
+                return RV::Str(""); // NOT_FAIL
             }
             if b.poke(user).hp as f64 <= b.poke(user).maxhp as f64 / 4.0 || b.poke(user).maxhp == 1 {
                 let ps = b.poke_str(user);
                 b.add(&["-fail", &ps, "move: Substitute", "[weak]"]);
-                return RV::Str(String::new()); // NOT_FAIL
+                return RV::Str(""); // NOT_FAIL
             }
             RV::Undef
         }
@@ -578,7 +578,7 @@ pub fn dispatch_move_callback(
                     am.volatile_status = None;
                     am.cb_mask.clear(dex.known.on_hit);
                     am.self_effect = Some(HitEffect {
-                        boosts: vec![(4, -1), (0, 1), (1, 1)],
+                        boosts: SparseBoosts::from_slice(&[(4, -1), (0, 1), (1, 1)]),
                         ..Default::default()
                     });
                 }
@@ -1043,7 +1043,7 @@ pub fn dispatch_move_callback(
             const STATUSES: [&str; 3] = ["par", "frz", "brn"];
             let pick = STATUSES[b.prng.sample_index(3)];
             if let Some(am) = b.active_move.as_mut() {
-                am.status_roll = Some(pick.to_string());
+                am.status_roll = Some(pick);
             }
             RV::Undef
         }
@@ -1053,7 +1053,7 @@ pub fn dispatch_move_callback(
                 b.attr_last_move(&["[still]"]);
                 let ts = b.poke_str(t);
                 b.add(&["-fail", &ts]);
-                return RV::Str(String::new()); // NOT_FAIL
+                return RV::Str(""); // NOT_FAIL
             }
             RV::Undef
         }
@@ -1090,9 +1090,9 @@ pub fn dispatch_move_callback(
         ("triattack", "secondary.onHit") => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
-            let roll = b.active_move.as_ref().and_then(|am| am.status_roll.clone());
+            let roll = b.active_move.as_ref().and_then(|am| am.status_roll);
             if let Some(status) = roll {
-                b.try_set_status(dex, t, &status, Some(user), EffectHandle::None);
+                b.try_set_status(dex, t, status, Some(user), EffectHandle::None);
             }
             RV::Undef
         }
@@ -1144,12 +1144,12 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
     let mut mv = get_active_move(dex, fs_id);
     mv.accuracy = Accuracy::Pct(90);
     mv.base_power = 0;
-    mv.damage = Some(crate::dex::FixedDamage::Amount(damage.unwrap_or(0.0) as i32));
+    mv.damage = Some(crate::dex::FixedDamage::Amount(damage.unwrap_or(0) as i32));
     mv.category = Category::Special;
     mv.move_type = dex.known_types.unknown;
     mv.will_crit = None;
     mv.crit_ratio = 0;
-    mv.secondaries = Vec::new();
+    mv.secondaries = smallvec::SmallVec::new();
     mv.self_effect = None;
     mv.volatile_status = None;
     mv.flags = dex.flag_bit("metronome") | dex.flag_bit("futuremove");
@@ -1527,7 +1527,7 @@ impl Battle {
     }
 
     /// pokemon.getSemiLockedMove.
-    pub fn get_semi_locked_move(&mut self, dex: &Dex, id: PokeId) -> Option<String> {
+    pub fn get_semi_locked_move(&mut self, dex: &Dex, id: PokeId) -> Option<&'static str> {
         let rv = self.priority_event(dex, &ev::SemiLockMove, EvTarget::Poke(id), None, EffectHandle::None, None);
         match rv {
             RV::Str(s) => Some(s),
@@ -1617,17 +1617,19 @@ impl Battle {
         }
 
         // |move| line
-        let ps = self.poke_str(pokemon);
-        let move_name = self.active_move_name(dex);
-        let target_str = match target {
-            Some(t) => self.poke_str(t),
-            None => "null".to_string(),
-        };
-        let mut last_part = target_str;
-        if let EffectHandle::MoveEff(se) = source_effect_h {
-            last_part = format!("{last_part}|[from] {}", dex.move_static(se).name);
+        if self.log_enabled {
+            let ps = self.poke_str(pokemon);
+            let move_name = self.active_move_name(dex);
+            let target_str = match target {
+                Some(t) => self.poke_str(t),
+                None => "null".to_string(),
+            };
+            let mut last_part = target_str;
+            if let EffectHandle::MoveEff(se) = source_effect_h {
+                last_part = format!("{last_part}|[from] {}", dex.move_static(se).name);
+            }
+            self.add_move(&["move", &ps, &move_name, &last_part]);
         }
-        self.add_move(&["move", &ps, &move_name, &last_part]);
 
         if target.is_none() {
             self.attr_last_move(&["[notarget]"]);
@@ -1885,38 +1887,51 @@ impl Battle {
             Accuracy::Pct(a) => Some(a as f64),
         };
         if let Some(a) = acc_num {
-            let mut acc = (a * 255.0 / 100.0).floor();
-            if ohko {
-                let plevel = self.poke(pokemon).level as f64;
-                let tlevel = self.poke(target).level as f64;
-                if plevel >= tlevel {
-                    acc += (plevel - tlevel) * 2.0;
-                    acc = acc.min(255.0);
-                } else {
-                    let ts = self.poke_str(target);
-                    self.add(&["-immune", &ts, "[ohko]"]);
-                    return MoveOutcome::Fail;
+            if !ohko && (0.0..=100.0).contains(&a) {
+                let acc = crate::compact::lookup_accuracy_threshold(
+                    a as u8,
+                    self.poke(pokemon).boosts[5],
+                    self.poke(target).boosts[6],
+                    ignore_accuracy,
+                    ignore_evasion,
+                    ignore_positive_evasion,
+                    false,
+                ) as f64;
+                acc_num = Some(acc);
+            } else {
+                let mut acc = (a * 255.0 / 100.0).floor();
+                if ohko {
+                    let plevel = self.poke(pokemon).level as f64;
+                    let tlevel = self.poke(target).level as f64;
+                    if plevel >= tlevel {
+                        acc += (plevel - tlevel) * 2.0;
+                        acc = acc.min(255.0);
+                    } else {
+                        let ts = self.poke_str(target);
+                        self.add(&["-immune", &ts, "[ohko]"]);
+                        return MoveOutcome::Fail;
+                    }
                 }
-            }
-            if !ignore_accuracy {
-                let boost = self.poke(pokemon).boosts[5].clamp(-6, 6);
-                if boost > 0 {
-                    acc *= POS_BOOST[boost as usize];
-                } else {
-                    acc *= NEG_BOOST[(-boost) as usize];
+                if !ignore_accuracy {
+                    let boost = self.poke(pokemon).boosts[5].clamp(-6, 6);
+                    if boost > 0 {
+                        acc *= POS_BOOST[boost as usize];
+                    } else {
+                        acc *= NEG_BOOST[(-boost) as usize];
+                    }
                 }
-            }
-            if !ignore_evasion {
-                let boost = self.poke(target).boosts[6].clamp(-6, 6);
-                if boost > 0 && !ignore_positive_evasion {
-                    acc *= NEG_BOOST[boost as usize];
-                } else if boost < 0 {
-                    acc *= POS_BOOST[(-boost) as usize];
+                if !ignore_evasion {
+                    let boost = self.poke(target).boosts[6].clamp(-6, 6);
+                    if boost > 0 && !ignore_positive_evasion {
+                        acc *= NEG_BOOST[boost as usize];
+                    } else if boost < 0 {
+                        acc *= POS_BOOST[(-boost) as usize];
+                    }
                 }
+                acc = acc.floor().min(255.0);
+                acc = acc.max(1.0);
+                acc_num = Some(acc);
             }
-            acc = acc.floor().min(255.0);
-            acc = acc.max(1.0);
-            acc_num = Some(acc);
         } else {
             // accuracy true: run Accuracy event again (PS quirk)
             let _ = self.run_accuracy_event(dex, target, pokemon, Accuracy::AlwaysHits);
@@ -2385,7 +2400,7 @@ impl Battle {
                     for secondary in md.secondaries.clone() {
                         // brn/frz immunity if target shares the move's type
                         let move_type = self.active_move.as_ref().unwrap().move_type;
-                        if let Some(st) = &secondary.status {
+                        if let Some(st) = secondary.status {
                             if (st == "brn" || st == "frz") && self.poke(t).has_type(move_type) {
                                 continue;
                             }
@@ -2460,14 +2475,14 @@ impl Battle {
             }
             MoveHitData::Sub(h) => EffectiveMoveData {
                 has_boosts: !h.boosts.is_empty(),
-                boosts: h.boosts.clone(),
-                status: h.status.clone(),
-                volatile_status: h.volatile_status.clone(),
+                boosts: h.boosts,
+                status: h.status,
+                volatile_status: h.volatile_status,
                 side_condition: None,
                 weather: None,
                 heal: None,
                 self_effect: h.self_effect.as_deref().cloned(),
-                secondaries: Vec::new(),
+                secondaries: smallvec::SmallVec::new(),
                 force_switch: false,
                 self_switch: false,
             },
@@ -2731,8 +2746,7 @@ impl Battle {
                 .run_event(dex, &ev::CriticalHit, EvTarget::Poke(target), None, move_eff, None, false, false)
                 .truthy()
         {
-            let slot = self.slot_str(target);
-            self.active_move.as_mut().unwrap().hit_data_mut(slot).0 = true;
+            self.active_move.as_mut().unwrap().hit_data_mut_side(target.side).0 = true;
         }
 
         // BasePower event (after crit calc)
@@ -3052,14 +3066,14 @@ impl Tri {
 /// Flattened view of the effective move data for a hit.
 struct EffectiveMoveData {
     has_boosts: bool,
-    boosts: Vec<(usize, i8)>,
-    status: Option<String>,
-    volatile_status: Option<String>,
-    side_condition: Option<String>,
-    weather: Option<String>,
+    boosts: SparseBoosts,
+    status: Option<&'static str>,
+    volatile_status: Option<&'static str>,
+    side_condition: Option<&'static str>,
+    weather: Option<&'static str>,
     heal: Option<(i32, i32)>,
     self_effect: Option<HitEffect>,
-    secondaries: Vec<HitEffect>,
+    secondaries: smallvec::SmallVec<[HitEffect; 2]>,
     force_switch: bool,
     self_switch: bool,
 }

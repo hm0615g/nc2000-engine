@@ -68,9 +68,11 @@ impl Battle {
                     if self.sides[side_n].pokemon_left > 0 {
                         self.sides[side_n].pokemon_left = len;
                     }
-                    let side_id = format!("p{}", side_n + 1);
-                    let len_str = len.to_string();
-                    self.add(&["teamsize", &side_id, &len_str]);
+                    if self.log_enabled {
+                        let side_id = format!("p{}", side_n + 1);
+                        let len_str = len.to_string();
+                        self.add(&["teamsize", &side_id, &len_str]);
+                    }
                 }
                 self.add(&["start"]);
                 // BattleStart species/format/rule singleEvents: none in NC2000.
@@ -168,15 +170,11 @@ impl Battle {
             return;
         }
 
-        let switches: Vec<bool> = (0..2)
-            .map(|side_n| {
-                self.active_id(side_n)
-                    .map(|a| self.poke(a).switch_flag.is_set())
-                    .unwrap_or(false)
-            })
-            .collect();
-
-        let mut switches = switches;
+        let mut switches: [bool; 2] = [0, 1].map(|side_n| {
+            self.active_id(side_n)
+                .map(|a| self.poke(a).switch_flag.is_set())
+                .unwrap_or(false)
+        });
         for side_n in 0..2usize {
             if switches[side_n] && !self.can_switch(side_n as u8) {
                 if let Some(active) = self.active_id(side_n) {
@@ -426,24 +424,17 @@ impl Battle {
                 {
                     // PS iterates backwards, marking thisTurn=false for active
                     // sources and removing gone ones.
-                    let sources: Vec<(usize, bool)> = self
-                        .poke(active)
-                        .attacked_by
-                        .iter()
-                        .enumerate()
-                        .map(|(i, a)| (i, self.poke(a.source).is_active))
-                        .collect();
-                    let p = self.poke_mut(active);
-                    let mut remove: Vec<usize> = Vec::new();
-                    for (i, src_active) in sources.into_iter().rev() {
+                    let mut i = self.poke(active).attacked_by.len();
+                    while i > 0 {
+                        i -= 1;
+                        let src = self.poke(active).attacked_by[i].source;
+                        let src_active = self.poke(src).is_active;
+                        let p = self.poke_mut(active);
                         if src_active {
                             p.attacked_by[i].this_turn = false;
                         } else {
-                            remove.push(i);
+                            p.attacked_by.remove(i);
                         }
-                    }
-                    for i in remove {
-                        p.attacked_by.remove(i);
                     }
                 }
 
@@ -485,8 +476,10 @@ impl Battle {
             // full staleness tracking not ported (unreachable in fixtures)
         }
 
-        let turn_str = self.turn.to_string();
-        self.add(&["turn", &turn_str]);
+        if self.log_enabled {
+            let turn_str = self.turn.to_string();
+            self.add(&["turn", &turn_str]);
+        }
 
         // gen2 quick claw roll — every endTurn, RNG parity critical
         self.quick_claw_roll = self.prng.random_chance(60, 256);
@@ -512,8 +505,8 @@ impl Battle {
     }
 
     /// battle.getRequests.
-    fn get_requests(&self, kind: RequestState) -> Vec<RequestKind> {
-        let mut requests = vec![RequestKind::Wait, RequestKind::Wait];
+    fn get_requests(&self, kind: RequestState) -> [RequestKind; 2] {
+        let mut requests = [RequestKind::Wait, RequestKind::Wait];
         match kind {
             RequestState::Switch => {
                 for side_n in 0..2usize {

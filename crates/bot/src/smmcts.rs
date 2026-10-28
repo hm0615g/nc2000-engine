@@ -341,9 +341,25 @@ pub(crate) fn select_ucb(
     side: usize,
 ) -> usize {
     let k = node.acts[side].len();
-    let untried: Vec<usize> = (0..k).filter(|&a| node.n[side][a] == 0).collect();
-    let pick = if !untried.is_empty() {
-        untried[rng.below(untried.len())]
+    let mut n_untried = 0usize;
+    for &cnt in node.n[side].iter() {
+        if cnt == 0 {
+            n_untried += 1;
+        }
+    }
+    let pick = if n_untried > 0 {
+        let mut target = rng.below(n_untried);
+        let mut chosen = 0;
+        for (a, &cnt) in node.n[side].iter().enumerate() {
+            if cnt == 0 {
+                if target == 0 {
+                    chosen = a;
+                    break;
+                }
+                target -= 1;
+            }
+        }
+        chosen
     } else {
         let total: u32 = node.n[side].iter().sum();
         let ln_total = (total as f64).ln();
@@ -414,7 +430,9 @@ pub(crate) fn run_iteration_with_leaf(
     leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
     mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
 ) -> f64 {
-    let mut path: Vec<(usize, usize, usize)> = Vec::new(); // (node, side, act)
+    let mut path_buf = [(0usize, 0usize, 0usize); 32];
+    let mut path_len = 0usize;
+    let mut path_overflow: Vec<(usize, usize, usize)> = Vec::new();
     let mut node_idx = start;
 
     // ---- selection until a leaf: terminal, horizon, or unexpanded state
@@ -437,7 +455,12 @@ pub(crate) fn run_iteration_with_leaf(
                     }
                     _ => select_ucb(cfg, rng, &mut nodes[node_idx], s),
                 };
-                path.push((node_idx, s, ai));
+                if path_len < path_buf.len() {
+                    path_buf[path_len] = (node_idx, s, ai);
+                    path_len += 1;
+                } else {
+                    path_overflow.push((node_idx, s, ai));
+                }
                 ai
             };
             joint[s] = Some(nodes[node_idx].acts[s][ai]);
@@ -495,7 +518,10 @@ pub(crate) fn run_iteration_with_leaf(
     }
 
     // ---- backprop: UCB stats along the path
-    for (ni, s, ai) in path {
+    for &(ni, s, ai) in &path_buf[..path_len] {
+        nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
+    }
+    for (ni, s, ai) in path_overflow {
         nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
     }
     reward0

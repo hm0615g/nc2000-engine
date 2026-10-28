@@ -8,7 +8,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const server = createHttpServer();
 let browser, vite;
 try {
-  await new Promise((resolve) => server.listen(0, "0.0.0.0", resolve));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   vite = await createServer({
     root,
     server: { middlewareMode: true, hmr: { server, clientPort: server.address().port } },

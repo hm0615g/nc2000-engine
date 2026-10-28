@@ -64,11 +64,11 @@ import { announce, announceAssertive } from "./announcer";
 import { moveNote } from "./behavior-notes";
 import { noteRef } from "./tooltip";
 import type { SelectedTeam } from "./app";
-import { liveBudget, type Strength } from "./search-profile";
+import { DEFAULT_STRENGTH, liveBudget } from "./search-profile";
 import { Modal } from "./modal";
 import { sheetMon } from "./set-info";
 import { MonSheet, TeamSheets } from "./team-sheet";
-import { KifuExport } from "./kifu-export";
+import { KifuExport, type WinRatePoint } from "./kifu-export";
 
 const HUMAN = 0;
 const BOT = 1;
@@ -135,7 +135,6 @@ const UNKNOWN_ITEM = "?";
 export function Game(props: {
   /** The opponent prior the bot's belief narrows down (belief-pool-v3). */
   poolJson: string;
-  strength: Strength;
   humanTeam: SelectedTeam;
   botTeam: SelectedTeam;
   /** Raw belief-prior table text, only when the player loaded one by hand
@@ -156,6 +155,7 @@ export function Game(props: {
   const [botPreviewReady, setBotPreviewReady] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false); // battle: team-sheets modal
   const [kifuOpen, setKifuOpen] = useState(false);
+  const [winRates, setWinRates] = useState<WinRatePoint[]>([]);
   // The searcher's own read of the hidden opponent, refreshed by the
   // worker after every observe(). About the bot, not about the foe.
   const [belief, setBelief] = useState<{
@@ -342,7 +342,7 @@ export function Game(props: {
 
   async function searchBot(req: Request, legal: Choice[]) {
     const bot = botRef.current!;
-    const budget = liveBudget(props.strength, legal[0].kind === "team");
+    const budget = liveBudget(DEFAULT_STRENGTH, legal[0].kind === "team");
     // Start before the human commits to hide latency. The worker finishes
     // exactly this budget regardless of when the human chooses.
     const ponder = req.needs[HUMAN] && req.picks[HUMAN] === null;
@@ -363,6 +363,15 @@ export function Game(props: {
     if (!aliveRef.current || req !== reqRef.current) return;
     setThinking(null);
     if (legal[0].kind === "team") setBotPreviewReady(true);
+    else {
+      const turn = battleRef.current?.turn() ?? 0;
+      const acts = r.policy.actions;
+      if (turn > 0 && acts.length > 0) {
+        const chosen = acts.find(a => a.input === r.best) ?? acts.reduce((a, b) => (b.visits > a.visits ? b : a), acts[0]);
+        const botMean = Math.max(0, Math.min(1, chosen.mean));
+        setWinRates(prev => [...prev, { turn, winRate: 1 - botMean }]);
+      }
+    }
     req.picks[BOT] = r.best ?? legal[0].input;
     maybeCommit(req);
   }
@@ -373,7 +382,7 @@ export function Game(props: {
     req.picks[HUMAN] = input;
     setHumanChoices(null);
     setHumanWaiting(true);
-    // Notify the worker; fixed-budget searches ignore this legacy signal.
+    // Notify experimental timed searches; fixed-budget searches ignore flush.
     if (req.needs[BOT] && req.picks[BOT] === null) botRef.current!.flush();
     maybeCommit(req);
   }
@@ -686,7 +695,7 @@ export function Game(props: {
 
       <LogPane log={log} />
 
-      {(kifuOpen || phase === "end") && battleRef.current && <KifuExport battle={battleRef.current} mode="blind" state={view} />}
+      {(kifuOpen || phase === "end") && battleRef.current && <KifuExport battle={battleRef.current} mode="blind" state={view} winRates={winRates} ended={phase === "end"} />}
 
       <section class="choice-panel" aria-label={ui().srYourAction}>
         {phase !== "end" && (

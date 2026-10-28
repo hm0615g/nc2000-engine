@@ -150,8 +150,23 @@ impl Battle {
     /// Damage bookkeeping may be omitted only when it cannot affect future play.
     pub fn search_key(&self, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
         use std::hash::Hasher;
+        crate::search_prefix::with_cache(|cache| {
+            let mut h = crate::fxhash::SearchHasher::default();
+            match cache {
+                Some(cache) => self.state_hash_with_sides(&mut h, hp_buckets, omit_damage_bookkeeping,
+                    |side, h| side.hash_with_pokemon(h, |pokemon, h|
+                        pokemon.hash_with_prefix(h, hp_buckets, omit_damage_bookkeeping,
+                            |prefix, h| cache.hash(prefix, h)))),
+                None => self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping),
+            }
+            h.finish()
+        })
+    }
+
+    pub fn type_key(&self) -> u64 {
+        use std::hash::Hasher;
         let mut h = crate::fxhash::SearchHasher::default();
-        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping);
+        self.state_hash_into(&mut h, None, false);
         h.finish()
     }
 
@@ -195,11 +210,22 @@ impl Battle {
         })
     }
 
-    fn state_hash_into<H: std::hash::Hasher>(
+    fn state_hash_into<H: crate::fxhash::StateHasher>(
         &self,
-        mut h: H,
+        h: &mut H,
         hp_buckets: Option<i64>,
         omit_damage_bookkeeping: bool,
+    ) {
+        self.state_hash_with_sides(h, hp_buckets, omit_damage_bookkeeping,
+            |side, h| side.hash_with_options(h, hp_buckets, omit_damage_bookkeeping));
+    }
+
+    fn state_hash_with_sides<H: crate::fxhash::StateHasher>(
+        &self,
+        mut h: &mut H,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+        mut hash_side: impl FnMut(&Side, &mut H),
     ) {
         use std::hash::Hash;
         // Total destructuring on purpose: adding a `Battle` field breaks
@@ -244,7 +270,7 @@ impl Battle {
         }
         field.hash(&mut h);
         for side in sides.iter() {
-            side.hash_with_options(&mut h, hp_buckets, omit_damage_bookkeeping);
+            hash_side(side, h);
         }
         (queue, faint_queue, effect_order, event_depth).hash(&mut h);
         last_successful_move_this_turn.hash(&mut h);
