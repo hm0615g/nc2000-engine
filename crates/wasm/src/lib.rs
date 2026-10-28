@@ -580,9 +580,10 @@ impl WasmBlindSearcher {
             .map_err(js_err)?;
         self.baked = None;
         let seed = self.rng.next();
-        let search =
+        let mut search =
             BlindSearch::new(&battle.battle, &self.dex, self.cfg.clone(), self.side, seed);
         if search.is_preview() {
+            search.prune_preview_aliases(&self.dex);
             // Pinned (open sheet): both sheets public — resolve the pair
             // directly by signature, no identification condition. Else the
             // M10 belief-mediated lookup (singleton identification only).

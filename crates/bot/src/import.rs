@@ -2095,6 +2095,7 @@ impl ProtocolAgent {
             if allowed.iter().any(|&a| a) {
                 search.mask_actions(&allowed);
             }
+            search.prune_preview_aliases(dex);
             // baked pair tables, restricted to the legal picks
             let pick = if self.pinned_sets.is_some() {
                 filtered_open_preview(&self.tables, &battle, self.side, &levels, &mut self.rng)

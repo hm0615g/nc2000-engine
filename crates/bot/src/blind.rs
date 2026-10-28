@@ -189,6 +189,7 @@ fn search_choose(
     choices: &[SearchChoice],
 ) -> SearchChoice {
     let mut bs = BlindSearch::with_rng(battle, dex, cfg.clone(), side, rng.clone());
+    bs.prune_preview_aliases(dex);
     debug_assert_eq!(bs.actions(), choices, "root action set drifted from caller's choices");
     for _ in 0..cfg.iterations {
         bs.step_one(dex, &g.belief, &g.observer);
@@ -983,6 +984,48 @@ impl BlindSearch {
     pub fn is_preview(&self) -> bool {
         matches!(self.my_acts.first(), Some(SearchChoice::Team(_)))
     }
+
+    pub fn prune_preview_aliases(&mut self, dex: &Dex) -> usize {
+        if !self.is_preview() || team_has_order_sensitive_bench_effect(&self.base.sides[self.side], dex) {
+            return 0;
+        }
+        assert_eq!(self.done, 0, "preview aliases must be pruned before search");
+        let mut allowed = self.my_mask.clone().unwrap_or_else(|| vec![true; self.my_acts.len()]);
+        let mut seen = Vec::new();
+        let mut removed = 0;
+        for (i, action) in self.my_acts.iter().enumerate() {
+            if !allowed[i] { continue; }
+            let SearchChoice::Team(mut triple) = *action else { continue };
+            if triple[2] == 0 { continue; }
+            triple[1..].sort_unstable();
+            if seen.contains(&triple) {
+                allowed[i] = false;
+                removed += 1;
+            } else {
+                seen.push(triple);
+            }
+        }
+        if removed > 0 { self.mask_actions(&allowed); }
+        removed
+    }
+
+    pub fn root_policy_evidence(&self) -> (Vec<bool>, ()) {
+        let eligible: Vec<bool> = (0..self.my_acts.len())
+            .map(|i| self.my_mask.as_ref().map_or(true, |m| m[i]) && !self.my_dominated[i])
+            .collect();
+        (eligible, ())
+    }
+}
+
+/// Returns true if any Pokémon on `side` has an order-sensitive move (e.g. Beat Up)
+/// or an effect acquisition move that could reveal or depend on bench order.
+pub fn team_has_order_sensitive_bench_effect(side: &nc2000_engine::state::Side, dex: &Dex) -> bool {
+    side.roster.iter().any(|p| {
+        p.base_move_slots.iter().chain(p.move_slots.iter()).any(|m| {
+            matches!(dex.moves.key(m.id),
+                "beatup" | "metronome" | "mimic" | "mirrormove" | "sketch" | "transform")
+        })
+    })
 }
 
 /// UCB1 over the global (information-set) root stats — same rule and rng
