@@ -100,12 +100,12 @@ if (args.help || args.h) {
                     --opp-team-file)
   --iters N         legacy/manual search iterations per decision (default
                     27000 in blind mode, 30000 in open mode)
-  --web-policy P    use the browser product search policy in blind mode:
+  --web-policy P    use the browser product search policy in blind or open mode:
                     strong (default browser strength) or standard.
                     Battle budgets and team-preview policy come from
-                    data/live-search.json. Known compatible previews use
-                    data/compiled-preview-v1.json; all other previews run the
-                    browser's fixed unknown-preview budget. Cannot be combined
+                    data/live-search.json. Blind mode may use compatible
+                    data/compiled-preview-v1.json policies; open mode always
+                    runs the fixed live team-preview budget. Cannot be combined
                     with --iters
   --seed N          searcher / random-mode seed (default 1)
   --search-runtime R
@@ -171,9 +171,6 @@ const LIVE_SEARCH = require('../data/live-search.json');
 const WEB_POLICY = args['web-policy'] === true
     ? String(LIVE_SEARCH.defaultStrength)
     : args['web-policy'] ? String(args['web-policy']) : '';
-if (WEB_POLICY && MODE !== 'blind') {
-    throw new Error('--web-policy is only available with --mode blind');
-}
 if (WEB_POLICY && args.iters !== undefined) {
     throw new Error('--web-policy and --iters cannot be combined');
 }
@@ -543,7 +540,7 @@ let compiledPreviewPublicRosters = null;
 let compiledPreviewCompatible = false;
 let compiledPreviewCompatibilityReason = '';
 
-if (!RANDOM && WEB_POLICY) {
+if (!RANDOM && WEB_POLICY && MODE === 'blind') {
 	try {
 		compiledPreviewArtifact = JSON.parse(
 			fs.readFileSync(
@@ -604,6 +601,7 @@ if (!RANDOM && WEB_POLICY) {
 function compiledPreviewPick(searcher, seed) {
 	if (
 		!WEB_POLICY ||
+		MODE !== 'blind' ||
 		!compiledPreviewCompatible ||
 		BELIEF_PRIOR_ARG ||
 		!searcher
@@ -669,7 +667,12 @@ if (WEB_POLICY) {
 		`[${NAME}] web policy ${WEB_POLICY}: battle=${ITERS}, ` +
 		`unknown-preview=${PREVIEW_ITERS}, c=${PROFILE.c}`
 	);
-	if (compiledPreviewCompatible) {
+	if (MODE === 'open') {
+		console.log(
+			`[${NAME}] open-sheet web policy: compiled preview disabled; ` +
+			`team preview uses live search`
+		);
+	} else if (compiledPreviewCompatible) {
 		console.log(
 			`[${NAME}] compiled preview ready: ` +
 			`${Object.keys(compiledPreviewArtifact.policies).length} policies, ` +
@@ -1742,7 +1745,7 @@ class BattleDriver {
 		let searchSource = 'live-search';
 		let searchIterations = 0;
 
-		if (WEB_POLICY && req.teamPreview) {
+		if (WEB_POLICY && req.teamPreview && MODE === 'blind') {
 			choice = compiledPreviewPick(this.searcher, searchSeed);
 			if (choice) searchSource = 'compiled-preview';
 		} else if (!WEB_POLICY) {
