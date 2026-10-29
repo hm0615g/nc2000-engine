@@ -652,16 +652,32 @@ fn compact_greedy_pick(
         }
     }
 
-    // Forced switch: healthiest bench target.
+    // Forced or self-switch target selection:
+    // When the outgoing active Pokemon is alive (`hp > 0`, i.e. `self_switch` / Baton Pass)
+    // and carries positive offensive boosts, add the marginal damage gain from those boosts;
+    // when fainted or unboosted, keep healthiest-bench selection.
     let mut best_sw = None;
-    let mut best_hp = -1.0f64;
+    let mut best_score = -1.0f64;
+    let passing_alive = cb.sides[side].request == 2
+        && att_slot < 3
+        && cb.mons[att_idx].hp() > 0
+        && (cb.mons[att_idx].boosts[0] > 0 || cb.mons[att_idx].boosts[2] > 0)
+        && (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
+        && cb.mons[def_side * 3 + def_slot].hp() > 0;
     for &c in cs {
         if (4..7).contains(&c) {
             let slot = (c - 4) as usize;
             let idx = side * 3 + slot;
-            let frac = (cb.mons[idx].hp() as f64) / (table.mons[idx].maxhp.max(1) as f64);
-            if best_sw.is_none() || frac >= best_hp {
-                best_hp = frac;
+            let mut score = (cb.mons[idx].hp() as f64) / (table.mons[idx].maxhp.max(1) as f64);
+            if passing_alive {
+                let base_h = cb.best_hit_fraction(table, side, slot, def_side, def_slot, true);
+                let mut tmp = *cb;
+                tmp.mons[idx].boosts = cb.mons[att_idx].boosts;
+                let boosted_h = tmp.best_hit_fraction(table, side, slot, def_side, def_slot, true);
+                score += (boosted_h - base_h).clamp(0.0, 1.0);
+            }
+            if best_sw.is_none() || score >= best_score {
+                best_score = score;
                 best_sw = Some(c);
             }
         }
