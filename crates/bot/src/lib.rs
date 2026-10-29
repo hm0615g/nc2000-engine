@@ -62,7 +62,7 @@ pub mod teamgen;
 
 pub use agent::{Agent, MaxDamageAgent, RandomAgent};
 pub use belief::{Belief, FallbackPolicy, FallbackSource};
-pub use blind::{baked_preview_pick, open_preview_pick, BlindAgent, BlindSearch, OpenAgent};
+pub use blind::{baked_preview_pick, open_preview_pick, BlindAgent, BlindSearch, OpenAgent, team_has_order_sensitive_bench_effect};
 pub use observe::{ItemObs, MonObs, Observer};
 pub use duel::{run_duel, DuelSpec, DuelStats};
 pub use eval::EvalWeights;
