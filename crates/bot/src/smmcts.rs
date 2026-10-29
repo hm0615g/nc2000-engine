@@ -144,6 +144,7 @@ impl RmConfig {
             switch: self.rollout_switch,
             perish_escape: self.rollout_perish,
             perish_combo: self.rollout_combo,
+            blindspot_leaf: true,
         }
     }
 }
@@ -402,11 +403,21 @@ pub(crate) fn run_iteration(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
 ) -> f64 {
+    let preview_root = nodes.get(start).is_some_and(|n| n.preview);
     run_iteration_with_leaf(
         cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root,
         root_joint, depth_out, &mut |sim, rng, rollout| {
+            let mut rules = cfg.rollout_rules();
+            if preview_root {
+                rules.blindspot_leaf = false;
+            }
             if rollout {
-                playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_rules())
+                playout_value(sim, dex, &cfg.playout, turn_cap, rng, rules)
+            } else if rules.blindspot_leaf {
+                match &cfg.playout {
+                    Playout::Uniform => crate::mcts::hp_eval(sim),
+                    Playout::Heavy { weights, .. } => crate::eval::eval_leaf_blindspot(sim, dex, weights),
+                }
             } else {
                 leaf_eval(cfg, sim, dex)
             }

@@ -211,6 +211,9 @@ pub struct RolloutRules {
     /// Rollout sides play the Perish trap and its counter ([`perish_combo`]).
     /// Implies `perish_escape`, without which the combo kills its own singer.
     pub perish_combo: bool,
+    /// Apply surgical balance-sheet blind-spot accounting (`compact_eval_leaf_blindspot`)
+    /// at the 8-turn rollout cutoff leaf (active on Turn 1+ battle decisions; off on TeamPreview).
+    pub blindspot_leaf: bool,
 }
 
 /// Unfinished rollouts return a leaf evaluation rather than a terminal outcome.
@@ -278,7 +281,13 @@ pub fn compact_playout_value(
         if cb.turn > cutoff {
             return match playout {
                 Playout::Uniform => compact_hp_eval(cb, table),
-                Playout::Heavy { weights, .. } => eval::compact_eval_leaf(cb, table, weights),
+                Playout::Heavy { weights, .. } => {
+                    if rules.blindspot_leaf {
+                        eval::compact_eval_leaf_blindspot(cb, table, weights)
+                    } else {
+                        eval::compact_eval_leaf(cb, table, weights)
+                    }
+                }
             };
         }
         let mut picks = [7u8; 2];
