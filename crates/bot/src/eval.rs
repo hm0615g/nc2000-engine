@@ -594,10 +594,15 @@ pub fn compact_eval_leaf_blindspot(cb: &CompactBattle, table: &MatchTable, w: &E
 }
 
 /// Win-probability-shaped eval in `(0, 1)` from side 0's perspective on `CompactBattle`
-/// with surgical balance-sheet blind-spot adjustments (`compact_blindspot_diff`).
+/// with surgical balance-sheet blind-spot adjustments (`compact_false_boost_refund_diff`).
 #[inline]
 pub fn compact_eval01_blindspot(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
     let mut diff = compact_side_score(cb, table, w, 0) - compact_side_score(cb, table, w, 1);
+    let n0 = cb.sides[0].alive_mask.count_ones();
+    let n1 = cb.sides[1].alive_mask.count_ones();
+    if n0 > 1 || n1 > 1 {
+        diff += compact_false_boost_refund_diff(cb, table, w);
+    }
     let mut old_rm = 0.0;
     if w.race != 0.0 {
         old_rm = compact_race_margin(cb, table, w);
@@ -606,9 +611,144 @@ pub fn compact_eval01_blindspot(cb: &CompactBattle, table: &MatchTable, w: &Eval
     if w.exchange != 0.0 {
         diff += w.exchange * compact_exchange_margin(cb, table, w);
     }
-    diff += compact_blindspot_diff(cb, table, w);
     diff += crate::linear::compact_linear_diff(cb, table, diff, old_rm, w.race, w.scale);
     1.0 / (1.0 + (-w.scale * diff).exp())
+}
+
+#[inline(always)]
+fn move_has_pos_self_boost(ms: &nc2000_engine::compact::CompactMoveSpec) -> bool {
+    (ms.boosts_self
+        && ((ms.boosts[0].0 < 7 && ms.boosts[0].1 > 0)
+            || (ms.boosts[1].0 < 7 && ms.boosts[1].1 > 0)
+            || (ms.boosts[2].0 < 7 && ms.boosts[2].1 > 0)))
+        || ((ms.sec_boost.0 & 0x80) != 0 && (ms.sec_boost.0 & 0x7F) < 7 && ms.sec_boost.1 > 0)
+        || matches!(ms.pseudo_kind, 5..=8)
+        || ms.special_kind == 22
+}
+
+/// Strictly antisymmetric refund of false positive stat-stage credits in `compact_side_score`:
+/// 1. `Swagger` false `+Atk` credit on a mon with no self-setup/sustain move (`!has_self_setup && !team_has_bp`):
+///    - `100%` of `w.boost[0] * boosts[0]` if it has no physical moves (`!has_any_phys`).
+///    - `70%` of `w.boost[0] * boosts[0]` while `CONFUSION` is active.
+/// 2. `Encore` lock on a boosted setup mon without Baton Pass (`vol_bit::ENCORE && !has_bp`).
+/// Returns identically `0.0` (`0.0 ULP`) on all states with no positive stat stages.
+#[inline]
+pub fn compact_false_boost_refund_diff(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    w: &EvalWeights,
+) -> f64 {
+    if cb.sides[0].alive_mask.count_ones() <= 1 && cb.sides[1].alive_mask.count_ones() <= 1 {
+        return 0.0;
+    }
+    compact_side_false_boost_refund(cb, table, w, 0)
+        - compact_side_false_boost_refund(cb, table, w, 1)
+}
+
+#[inline]
+fn compact_side_false_boost_refund(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    w: &EvalWeights,
+    s: usize,
+) -> f64 {
+    let side_st = &cb.sides[s];
+    let act_slot = side_st.active_idx as usize;
+    if (side_st.alive_mask & (1 << act_slot)) == 0 {
+        return 0.0;
+    }
+    let act_idx = s * 3 + act_slot;
+    let act_mon = &cb.mons[act_idx];
+    if act_mon.hp() <= 0 {
+        return 0.0;
+    }
+    // Fast path: if no positive stat stages are present on the active mon, refund is identically 0.0.
+    if act_mon.boosts[0] <= 0
+        && act_mon.boosts[1] <= 0
+        && act_mon.boosts[2] <= 0
+        && act_mon.boosts[3] <= 0
+        && act_mon.boosts[4] <= 0
+        && act_mon.boosts[5] <= 0
+        && act_mon.boosts[6] <= 0
+    {
+        return 0.0;
+    }
+
+    let act_spec = &table.mons[act_idx];
+    let dis = (act_mon.vol_flags & vol_bit::DISABLE) != 0;
+    let dis_slot = ((act_mon.slot_refs >> 4) & 0x03) as usize;
+    let mut has_any_phys = false;
+    let mut has_bp = false;
+    let mut has_self_setup = false;
+    for m_i in 0..act_spec.num_moves as usize {
+        let ms = &table.move_specs[act_idx][m_i];
+        if ms.boosts_self || matches!(ms.pseudo_kind, 5..=8) {
+            has_self_setup = true;
+        }
+        if act_mon.pp[m_i] == 0 || (dis && m_i == dis_slot) {
+            continue;
+        }
+        let deals_dmg = !ms.is_status
+            && (ms.base_power > 0
+                || ms.var_bp_kind != 0
+                || ms.fixed_damage != 0
+                || ms.special_kind == 15);
+        if deals_dmg && ms.is_physical {
+            has_any_phys = true;
+        }
+        if ms.special_kind == 18 && side_st.alive_mask.count_ones() >= 2 {
+            has_bp = true;
+        }
+    }
+
+    let mut team_has_bp = has_bp;
+    if !team_has_bp {
+        for slot in 0..3usize {
+            if (side_st.alive_mask & (1 << slot)) == 0 {
+                continue;
+            }
+            let idx = s * 3 + slot;
+            if cb.mons[idx].hp() <= 0 {
+                continue;
+            }
+            for m_i in 0..table.mons[idx].num_moves as usize {
+                if table.move_specs[idx][m_i].special_kind == 18 {
+                    team_has_bp = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    let mut delta = 0.0;
+    let mut atk_refunded = false;
+
+    // 1. Swagger false-boost refund: only when `act_mon` has no self-setup/sustain move and no team Baton Pass,
+    // so `boosts[0] > 0` came from an opponent's `Swagger`.
+    if !has_self_setup && !team_has_bp && act_mon.boosts[0] > 0 {
+        if !has_any_phys {
+            delta -= w.boost[0] * (act_mon.boosts[0] as f64);
+            atk_refunded = true;
+        } else if (act_mon.vol_flags & vol_bit::CONFUSION) != 0 {
+            delta -= 0.70 * w.boost[0] * (act_mon.boosts[0] as f64);
+            atk_refunded = true;
+        }
+    }
+
+    // 2. Encore lock on a boosted setup mon without Baton Pass: positive boosts cannot be leveraged
+    // while locked into a non-attacking encored move.
+    if (act_mon.vol_flags & vol_bit::ENCORE) != 0 && !has_bp {
+        for i in 0..7 {
+            if act_mon.boosts[i] > 0 {
+                if i == 0 && atk_refunded {
+                    continue;
+                }
+                delta -= 0.50 * w.boost[i] * (act_mon.boosts[i] as f64);
+            }
+        }
+    }
+
+    delta
 }
 
 /// Zero-sum balance-sheet blind-spot adjustment (`side 0 - side 1`) in pre-sigmoid logit units:
@@ -694,7 +834,7 @@ fn compact_side_blindspot_ledger(
             && !(mon.item != 0 && spec.is_miracleberry)
         {
             let base_val = w.alive + w.hp * hp_frac - w.frz;
-            let scrap_val = (0.10 + 0.20 * hp_frac) * w.hp;
+            let scrap_val = w.alive + 0.12 * hp_frac * w.hp;
             if base_val > scrap_val {
                 delta -= (base_val - scrap_val) * cleric_mult;
             }
@@ -723,7 +863,7 @@ fn compact_side_blindspot_ledger(
         }
     }
 
-    // 2. Active Setup / Stat-Boost Liability (from foe's perspective; capital for `s`)
+    // 2. Active Setup / Stat-Boost / Swagger / Encore Accounting
     let act_slot = side_st.active_idx as usize;
     if (side_st.alive_mask & (1 << act_slot)) == 0 {
         return delta;
@@ -744,13 +884,15 @@ fn compact_side_blindspot_ledger(
     let dis = (act_mon.vol_flags & vol_bit::DISABLE) != 0;
     let dis_slot = ((act_mon.slot_refs >> 4) & 0x03) as usize;
     let mut has_phys = false;
+    let mut has_any_phys = false;
     let mut has_spec = false;
     let mut has_heal = false;
     let mut has_bp = false;
     let mut has_self_setup = false;
+    let mut has_sleeptalk = false;
     for m_i in 0..act_spec.num_moves as usize {
         let ms = &table.move_specs[act_idx][m_i];
-        if ms.boosts_self || matches!(ms.pseudo_kind, 5 | 6 | 7) {
+        if move_has_pos_self_boost(ms) {
             has_self_setup = true;
         }
         if act_mon.pp[m_i] == 0 || (dis && m_i == dis_slot) {
@@ -761,8 +903,11 @@ fn compact_side_blindspot_ledger(
                 || ms.var_bp_kind != 0
                 || ms.fixed_damage != 0
                 || ms.special_kind == 15);
-        if deals_dmg && ms.is_physical && !ms.is_selfdestruct {
-            has_phys = true;
+        if deals_dmg && ms.is_physical {
+            has_any_phys = true;
+            if !ms.is_selfdestruct {
+                has_phys = true;
+            }
         } else if deals_dmg && !ms.is_physical {
             has_spec = true;
         }
@@ -772,16 +917,34 @@ fn compact_side_blindspot_ledger(
         if ms.special_kind == 18 && side_st.alive_mask.count_ones() >= 2 {
             has_bp = true;
         }
+        if ms.special_kind == 10 || ms.is_sleep_usable {
+            has_sleeptalk = true;
+        }
     }
 
-    if (!has_self_setup && !team_has_bp) || (act_mon.vol_flags & vol_bit::CONFUSION) != 0 {
+    if !has_any_phys && !has_bp && act_mon.boosts[0] > 0 {
+        delta -= w.boost[0] * (act_mon.boosts[0] as f64);
+    }
+    if !has_spec && !has_bp && act_mon.boosts[2] > 0 {
+        delta -= w.boost[2] * (act_mon.boosts[2] as f64);
+    }
+
+    if (act_mon.vol_flags & vol_bit::CONFUSION) != 0 {
+        if !has_self_setup && !team_has_bp && act_mon.boosts[0] > 0 && (has_any_phys || has_bp) {
+            delta -= 0.70 * w.boost[0] * (act_mon.boosts[0] as f64);
+        }
         return delta;
     }
-    if (act_mon.vol_flags & (vol_bit::PERISH_SONG | vol_bit::TRAPPED_OR_LOCKED)) != 0 {
+
+    if !has_self_setup && !team_has_bp {
+        return delta;
+    }
+    if (act_mon.vol_flags & (vol_bit::PERISH_SONG | vol_bit::TRAPPED_OR_LOCKED | vol_bit::ENCORE)) != 0 {
         return delta;
     }
 
     let hp_frac = (act_mon.hp() as f64) / (act_spec.maxhp.max(1) as f64);
+    let st = act_mon.status_raw();
     let my_spd = cb.mon_action_speed(table, s, act_slot);
     let (foe_spd, foe_hit) = if foe_alive {
         (
@@ -792,6 +955,11 @@ fn compact_side_blindspot_ledger(
         (0, 0.0)
     };
     let me_faster = my_spd > foe_spd;
+    let my_hit = if foe_alive {
+        cb.best_hit_fraction(table, s, act_slot, foe_s, foe_slot, w.couple_evasion)
+    } else {
+        0.5
+    };
 
     let mut counter_mult: f64 = 1.0;
     let mut walled_without_bp = false;
@@ -800,7 +968,6 @@ fn compact_side_blindspot_ledger(
         let foe_st = foe_mon.status_raw();
         let foe_can_act_soon = foe_st != Status::Frz as u8
             && !(foe_st == Status::Slp as u8 && foe_mon.status_counter() >= 2);
-        let my_hit = cb.best_hit_fraction(table, s, act_slot, foe_s, foe_slot, w.couple_evasion);
         if my_hit < 0.05 && !has_bp {
             walled_without_bp = true;
         }
@@ -896,21 +1063,29 @@ fn compact_side_blindspot_ledger(
         || (b_off + b_def + b_spd) >= 3.0
         || (b_def + b_spd) >= 2.0
         || b_eva > 0.0
-        || (has_bp && (b_off > 0.0 || b_spe > 0.0))
+        || ((has_bp || team_has_bp) && (b_off > 0.0 || b_spe > 0.0))
     {
-        let bp_term = if has_bp {
-            0.16 * (b_off + 0.8 * b_spe + b_eva)
+        let raw_intensity = if has_bp {
+            0.14 * b_off
+                + 0.08 * (b_def + b_spd)
+                + 0.10 * b_spe
+                + 0.22 * b_eva
+                + 0.06 * b_off * (b_def + 0.7 * b_spe + b_eva)
         } else {
-            0.0
+            let eff_mult = (my_hit / 0.45).clamp(0.25, 1.10);
+            let bp_recv_term = if team_has_bp {
+                let spe_sweep = if me_faster { 0.18 * b_spe.min(2.0) } else { 0.06 * b_spe.min(2.0) };
+                (0.10 * b_off + spe_sweep) * eff_mult
+            } else {
+                0.0
+            };
+            (0.16 * b_off + 0.08 * b_off * (b_def + 0.7 * b_spe + b_eva)) * eff_mult
+                + 0.10 * (b_def + b_spd)
+                + 0.24 * b_eva
+                + bp_recv_term
         };
-        let raw_intensity = 0.28 * b_off
-            + 0.14 * (b_def + b_spd)
-            + 0.32 * b_eva
-            + 0.12 * b_off * (b_def + 0.7 * b_spe + b_eva)
-            + bp_term;
         let concave_cap = raw_intensity / (1.0 + 0.55 * raw_intensity);
 
-        let st = act_mon.status_raw();
         let mut sust = if has_heal {
             if st == Status::Slp as u8 {
                 let rem = act_mon.status_counter().saturating_sub(1) as f64;
@@ -924,6 +1099,14 @@ fn compact_side_blindspot_ledger(
                 hp_frac.max(0.85)
             } else {
                 0.40 * hp_frac
+            }
+        } else if st == Status::Slp as u8 && !has_sleeptalk {
+            let rem = act_mon.status_counter().saturating_sub(1) as f64;
+            let hp_wake = (hp_frac - rem * foe_hit.max(0.15) * 0.85).clamp(0.0, 1.0);
+            if rem == 0.0 && (hp_frac > foe_hit || me_faster) {
+                0.65 * hp_frac
+            } else {
+                0.25 * hp_wake
             }
         } else if hp_frac > foe_hit || me_faster {
             hp_frac
@@ -1426,6 +1609,14 @@ mod blindspot_tests {
         );
         cb_ab.mons[0].vol_flags &= !vol_bit::CONFUSION;
 
+        cb_ab.mons[0].vol_flags |= vol_bit::ENCORE;
+        assert_eq!(
+            compact_blindspot_diff(&cb_ab, &tbl_ab, &w),
+            0.0,
+            "encored mon must not receive setup capital"
+        );
+        cb_ab.mons[0].vol_flags &= !vol_bit::ENCORE;
+
         cb_ab.mons[0].boosts = [0; 7];
         cb_ab.mons[1].set_status(Status::Frz as u8, 0);
         let d_frz_with_cleric = compact_blindspot_diff(&cb_ab, &tbl_ab, &w);
@@ -1446,6 +1637,18 @@ mod blindspot_tests {
             d_tox_healer < 0.0,
             "Recover wall with Toxic must incur poison liability: {d_tox_healer}"
         );
+
+        cb_ab.sides[0].alive_mask = 0b011;
+        cb_ab.sides[1].alive_mask = 0b011;
+        cb_ab.mons[0].boosts[0] = 2;
+        cb_ab.mons[0].vol_flags |= vol_bit::ENCORE;
+        let refund_encore = compact_false_boost_refund_diff(&cb_ab, &tbl_ab, &w);
+        assert!(
+            (refund_encore - (-0.50 * 2.0 * w.boost[0])).abs() < 1e-12,
+            "Encored boosted Snorlax without Baton Pass must refund 50% of +2 Atk: {refund_encore}"
+        );
+        cb_ab.mons[0].vol_flags &= !vol_bit::ENCORE;
+        cb_ab.mons[0].boosts[0] = 0;
 
         cb_ab.sides[0].alive_mask = 0b001;
         cb_ab.sides[1].alive_mask = 0b001;
