@@ -11162,6 +11162,7 @@ fn cmd_converge_conclusion(args: &[String]) {
     let mut persisted_nemeses: Vec<String> = Vec::new();
     let mut persisted_member_weights: BTreeMap<String, Vec<f64>> = BTreeMap::new();
     for prev_path in [
+        root.join("data/dominance-audit-v11-fullnash/converged-report.json"),
         root.join("data/dominance-audit-v10-fullnash/converged-report.json"),
         root.join("data/dominance-audit-v9-clean/converged-report-s8.json"),
         root.join("data/dominance-audit-v9-clean/converged-report-s7.json"),
@@ -12912,7 +12913,9 @@ fn cmd_converge_conclusion(args: &[String]) {
                         for (r_idx, &(ru, m_i)) in row_owner.iter().enumerate() {
                             if ru == u_idx {
                                 let raw_alpha = gamma[r_idx] / w_u;
-                                new_mw[m_i] = if raw_alpha >= 0.01 { raw_alpha } else { 0.0 };
+                                // Blend 50% tilted-minimax weight with 50% existing shell weight so
+                                // linear vertex selection never zeroes out active shell siblings before LOO audit
+                                new_mw[m_i] = (0.5 * raw_alpha + 0.5 * old_mw[m_i]).max(0.05);
                             }
                         }
                         normalize_member_weights(&mut new_mw, m_len);
@@ -12951,12 +12954,16 @@ fn cmd_converge_conclusion(args: &[String]) {
                 };
 
                 let all_idxs: Vec<usize> = (0..m_len).collect();
-                let v_full = eval_subset_w8(&all_idxs, &new_mw);
+                let mut loo_base_w: Vec<f64> = (0..m_len)
+                    .map(|k| 0.5 * new_mw[k] + 0.5 / (m_len as f64))
+                    .collect();
+                normalize_member_weights(&mut loo_base_w, m_len);
+                let v_full = eval_subset_w8(&all_idxs, &loo_base_w);
                 let mut loo_dv = vec![0.0f64; m_len];
                 let mut w8_m = vec![0.5f64; m_len];
                 for m_i in 0..m_len {
                     let sub_idxs: Vec<usize> = (0..m_len).filter(|&k| k != m_i).collect();
-                    let mut sub_w: Vec<f64> = sub_idxs.iter().map(|&k| new_mw[k]).collect();
+                    let mut sub_w: Vec<f64> = sub_idxs.iter().map(|&k| loo_base_w[k]).collect();
                     normalize_member_weights(&mut sub_w, sub_idxs.len());
                     let v_minus = eval_subset_w8(&sub_idxs, &sub_w);
                     loo_dv[m_i] = (v_full - v_minus).max(0.0);
@@ -12978,13 +12985,30 @@ fn cmd_converge_conclusion(args: &[String]) {
                 let max_keep = 4usize.min(max_shell_variants.max(1));
                 let mut keep_set: Vec<usize> = Vec::new();
                 for (rk, &m_i) in rank_order.iter().enumerate() {
-                    if rk == 0 || (keep_set.len() < max_keep && loo_dv[m_i] > 0.0005) {
+                    if rk == 0
+                        || (keep_set.len() < max_keep
+                            && (loo_dv[m_i] > 0.0005 || w8_m[m_i] >= mean_w8 - 0.005))
+                    {
                         keep_set.push(m_i);
                     }
                 }
                 keep_set.sort_unstable();
 
-                if keep_set.len() < m_len {
+                let mut pruned_mw: Vec<f64> = keep_set
+                    .iter()
+                    .map(|&k| {
+                        (new_mw[k].max(0.05))
+                            * (10.0 * loo_dv[k] + 5.0 * (w8_m[k] - mean_w8)).exp()
+                    })
+                    .collect();
+                normalize_member_weights(&mut pruned_mw, keep_set.len());
+                let v_pruned = if keep_set.len() < m_len {
+                    eval_subset_w8(&keep_set, &pruned_mw)
+                } else {
+                    v_full
+                };
+
+                if keep_set.len() < m_len && (keep_set.len() == max_keep || v_pruned >= v_full - 0.001) {
                     let old_uid = units[u_idx].unit_id.clone();
                     units[u_idx].member_ids = keep_set
                         .iter()
@@ -12998,14 +13022,6 @@ fn cmd_converge_conclusion(args: &[String]) {
                         .iter()
                         .map(|&k| units[u_idx].member_raw[k].clone())
                         .collect();
-                    let mut pruned_mw: Vec<f64> = keep_set
-                        .iter()
-                        .map(|&k| {
-                            (new_mw[k].max(0.02))
-                                * (10.0 * loo_dv[k] + 5.0 * (w8_m[k] - mean_w8)).exp()
-                        })
-                        .collect();
-                    normalize_member_weights(&mut pruned_mw, keep_set.len());
                     units[u_idx].member_weights = pruned_mw;
                     units[u_idx].unit_id = format_shell_unit_id(&units[u_idx].member_ids);
                     unit_q_indices[u_idx] = units[u_idx]
@@ -14608,13 +14624,17 @@ fn cmd_converge_conclusion(args: &[String]) {
                 }));
 
                 // Full-Search MCTS + Bayesian Election-Call promotion gate:
-                // Must pass 60-Action LOO Hitchhiker screen (`!ho_st.is_hitchhiker`)
-                // AND Full-Search `BlindAgent` MCTS Election-Call (`election_status != "LOSS_CALLED"`, `blind_mcts_wr >= 0.500`, `tot_mcts_red_wr >= 0.500`)!
+                // Must pass 60-Action LOO Hitchhiker screen (`!ho_st.is_hitchhiker`, `ho_red_wr >= 0.495`)
+                // AND Full-Search `BlindAgent` MCTS Election-Call (`election_status != "LOSS_CALLED"`, `blind_mcts_wr >= 0.500`, `tot_mcts_red_wr >= 0.505`)!
                 let passes_blind = holdout_mcts_el
                     .as_ref()
-                    .map(|el| el.election_status != "LOSS_CALLED" && el.red_wr >= 0.500)
+                    .map(|el| {
+                        el.election_status != "LOSS_CALLED"
+                            && (el.election_status == "WIN_CALLED"
+                                || (el.red_wr >= 0.500 && ho_red_wr >= 0.495))
+                    })
                     .unwrap_or(false);
-                if !ho_st.is_hitchhiker && tot_mcts_red_wr >= 0.500 && passes_blind {
+                if !ho_st.is_hitchhiker && tot_mcts_red_wr >= 0.505 && passes_blind {
                     if let Some(reg_id) = register_team(
                         &mut team_db,
                         &mut seen_db_keys,
