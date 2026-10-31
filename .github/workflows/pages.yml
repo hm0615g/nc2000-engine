@@ -21,6 +21,7 @@ on:
       - "tools/preview-cache.js"
       - "tools/render-preview-cache-doc.py"
       - "tools/render-native-handoff.py"
+      - "docs/PREVIEW-CACHE.md"
       - "docs/NATIVE-FORK-HANDOFF.md"
       - "README.md"
       - ".github/workflows/pages.yml"
