@@ -8213,6 +8213,132 @@ fn eval_vs_pi_star_qmc(
     }
 }
 
+#[allow(dead_code)]
+struct FullMctsElectionOut {
+    red_wr: f64,
+    lcb99: f64,
+    ucb99: f64,
+    election_status: &'static str, // "OPEN", "LOSS_CALLED", "WIN_CALLED"
+    games_played: usize,
+    pairs_done: usize,
+    slot_pick_rates: [f64; 6],
+    slot_win_rates: [f64; 6],
+}
+
+/// Evaluate a Red challenger `red_sets` against `\pi^*` using **Full `BlindAgent` MCTS**
+/// (`eval_vs_pi_star_qmc`) coupled with **Sequential Bayesian Election-Call (`選挙当確速報`)**
+/// across progressive QMC pair waves `wave_pairs` (starting at `initial_pair_offset`).
+///
+/// - Never relies on simplified rollouts (`Playout::Heavy`) for survival decisions.
+/// - Immediately calls `"LOSS_CALLED"` (`落選当確`) when the 99% Jeffreys Beta-Binomial upper credible
+///   bound `ucb99 < loss_ucb_thresh`, or `"WIN_CALLED"` (`当選当確`) when `lcb99 > win_lcb_thresh`
+///   after at least 2 waves (`pairs_done >= 8`), while keeping uncertain contenders `"OPEN"` (`開票継続`).
+#[allow(clippy::too_many_arguments)]
+fn eval_full_mcts_bayesian_election_qmc(
+    dex: &Dex,
+    pi_sets: &[Vec<PokemonSet>],
+    pi_weights: &[f64],
+    red_sets: &[PokemonSet],
+    blue_prior: Arc<MetaPool>,
+    red_prior: Arc<MetaPool>,
+    initial_pair_offset: usize,
+    wave_pairs: &[usize],
+    loss_ucb_thresh: f64,
+    win_lcb_thresh: f64,
+    agent_iters: u32,
+    c: f64,
+    max_turns: u16,
+    threads: usize,
+    seed: u64,
+) -> FullMctsElectionOut {
+    let mut cur_pair_offset = initial_pair_offset;
+    let mut tot_games = 0usize;
+    let mut tot_blue_wins = 0.0f64;
+    let mut tot_picks = [0.0f64; 6];
+    let mut tot_wins = [0.0f64; 6];
+    let mut lcb99 = 0.0f64;
+    let mut ucb99 = 1.0f64;
+    let mut status: &'static str = "OPEN";
+
+    for (w_idx, &n_pairs) in wave_pairs.iter().enumerate() {
+        if n_pairs == 0 {
+            continue;
+        }
+        let out = eval_vs_pi_star_qmc(
+            dex,
+            pi_sets,
+            pi_weights,
+            red_sets,
+            blue_prior.clone(),
+            red_prior.clone(),
+            cur_pair_offset,
+            n_pairs,
+            agent_iters,
+            c,
+            max_turns,
+            threads,
+            seed,
+        );
+        cur_pair_offset += n_pairs;
+        tot_games += out.games_played;
+        tot_blue_wins += out.blue_score * (out.games_played as f64);
+        for s in 0..6 {
+            tot_picks[s] += out.red_slot_picks[s];
+            tot_wins[s] += out.red_slot_wins[s];
+        }
+        let red_wr = if tot_games > 0 {
+            (1.0 - tot_blue_wins / (tot_games as f64)).clamp(0.0, 1.0)
+        } else {
+            0.5
+        };
+        // Effective independent sample size across paired mirror games (1.5 effective games per variance-reduced mirror pair)
+        let n_eff = ((tot_games as f64) * 0.75).max(1.0);
+        let alpha = 0.5 + n_eff * red_wr;
+        let beta = 0.5 + n_eff * (1.0 - red_wr);
+        let mu_post = alpha / (alpha + beta);
+        let sigma_post = (alpha * beta / ((alpha + beta).powi(2) * (alpha + beta + 1.0))).sqrt();
+        lcb99 = (mu_post - 2.326 * sigma_post).max(0.0);
+        ucb99 = (mu_post + 2.326 * sigma_post).min(1.0);
+
+        if ucb99 < loss_ucb_thresh {
+            status = "LOSS_CALLED";
+            break;
+        }
+        if w_idx >= 1 && lcb99 > win_lcb_thresh {
+            status = "WIN_CALLED";
+            break;
+        }
+    }
+
+    let red_wr = if tot_games > 0 {
+        1.0 - tot_blue_wins / (tot_games as f64)
+    } else {
+        0.5
+    };
+    let mut slot_pick_rates = [0.5f64; 6];
+    let mut slot_win_rates = [0.5f64; 6];
+    if tot_games > 0 {
+        for s in 0..6 {
+            slot_pick_rates[s] = tot_picks[s] / (tot_games as f64);
+            slot_win_rates[s] = if tot_picks[s] > 0.0 {
+                tot_wins[s] / tot_picks[s]
+            } else {
+                red_wr
+            };
+        }
+    }
+    FullMctsElectionOut {
+        red_wr,
+        lcb99,
+        ucb99,
+        election_status: status,
+        games_played: tot_games,
+        pairs_done: cur_pair_offset - initial_pair_offset,
+        slot_pick_rates,
+        slot_win_rates,
+    }
+}
+
 fn cmd_falsify_conclusion(args: &[String]) {
     let t_start = std::time::Instant::now();
     let dex = load_dex();
@@ -11159,7 +11285,7 @@ fn cmd_converge_conclusion(args: &[String]) {
             .collect();
         let n_cols = n_u + outside_q_indices.len();
 
-        // Helper: solve all Bayesian Shell-vs-Shell Preview Nash games from `pair_mat_cache`
+        // Helper: solve all Bayesian Shell-vs-Shell Preview Nash games from `pair_mat_cache` in parallel
         // to populate `payoff[u][j]`, `mem_payoff[u][m_i][j]`, `cell_games[u][j]`, `mem_games[u][m_i][j]`, and `m_solve[u][c]`!
         let solve_all_shell_cells =
             |units_slice: &[ShellUnit],
@@ -11190,41 +11316,127 @@ fn cmd_converge_conclusion(args: &[String]) {
                     .collect::<Vec<_>>();
                 let mut m_solve_out = vec![vec![0.5f64; ncols_loc]; nu];
 
-                // 1. Solve all Shell U vs Shell V (`u <= v`) via `solve_bayesian_shell_preview_nash`
-                for u_idx in 0..nu {
-                    let u = &units_slice[u_idx];
-                    let mu_len = u.member_ids.len();
-                    let ka = r_db[&u.member_ids[0]].legal.len();
+                // Parallelize across `u_idx in 0..nu` via `std::thread::scope`
+                let cursor = std::sync::atomic::AtomicUsize::new(0);
+                type RowResult = (
+                    usize,
+                    Vec<f64>, // self_per_u
+                    Vec<(usize, f64, Vec<f64>, Vec<f64>, f64)>, // (v_idx, val_uv, per_u, per_v, g_eff)
+                    Vec<(usize, usize, f64, Vec<f64>, f64)>, // (k_out, j_out, val_uq, per_u, g_eff)
+                );
+                let mut row_results: Vec<RowResult> = Vec::with_capacity(nu);
+                std::thread::scope(|scope| {
+                    let mut handles = Vec::new();
+                    for _ in 0..threads.max(1) {
+                        let cursor_ref = &cursor;
+                        handles.push(scope.spawn(move || {
+                            let mut loc: Vec<RowResult> = Vec::new();
+                            loop {
+                                let u_idx =
+                                    cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                if u_idx >= nu {
+                                    break;
+                                }
+                                let u = &units_slice[u_idx];
+                                let mu_len = u.member_ids.len();
+                                let ka = r_db[&u.member_ids[0]].legal.len();
+
+                                // Intra-shell mirror game (`u` vs `u`): compute exact per-variant mirror payoffs `self_per_u`
+                                let self_per_u = if mu_len > 1 {
+                                    let mut self_mats: Vec<&[f64]> =
+                                        Vec::with_capacity(mu_len * mu_len);
+                                    for mid_a in &u.member_ids {
+                                        for mid_b in &u.member_ids {
+                                            self_mats.push(
+                                                pmc[&(mid_a.clone(), mid_b.clone())].0.as_slice(),
+                                            );
+                                        }
+                                    }
+                                    let (_, per_u_self, _, _, _) = solve_bayesian_shell_preview_nash(
+                                        &self_mats,
+                                        ka,
+                                        ka,
+                                        &u.member_weights,
+                                        &u.member_weights,
+                                        250,
+                                    );
+                                    per_u_self
+                                } else {
+                                    vec![0.5; mu_len]
+                                };
+
+                                let mut uv_list = Vec::with_capacity(nu.saturating_sub(u_idx + 1));
+                                for v_idx in (u_idx + 1)..nu {
+                                    let v = &units_slice[v_idx];
+                                    let mv_len = v.member_ids.len();
+                                    let kb = r_db[&v.member_ids[0]].legal.len();
+                                    let mut mats_ref: Vec<&[f64]> =
+                                        Vec::with_capacity(mu_len * mv_len);
+                                    let mut min_ns = u32::MAX;
+                                    for mid_u in &u.member_ids {
+                                        for mid_v in &v.member_ids {
+                                            let (ref m_vec, ns) =
+                                                pmc[&(mid_u.clone(), mid_v.clone())];
+                                            mats_ref.push(m_vec.as_slice());
+                                            min_ns = min_ns.min(ns);
+                                        }
+                                    }
+                                    let (val_uv, per_u, per_v, _p_strats, _q_strats) =
+                                        solve_bayesian_shell_preview_nash(
+                                            &mats_ref,
+                                            ka,
+                                            kb,
+                                            &u.member_weights,
+                                            &v.member_weights,
+                                            300,
+                                        );
+                                    let g_eff = (min_ns.max(1) as f64) * 64.0;
+                                    uv_list.push((v_idx, val_uv, per_u, per_v, g_eff));
+                                }
+
+                                let mut out_list = Vec::with_capacity(out_q_idxs.len());
+                                for (k_out, &j_out) in out_q_idxs.iter().enumerate() {
+                                    let qid = &q_list[j_out];
+                                    let kb = r_db[qid].legal.len();
+                                    let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(mu_len);
+                                    let mut min_ns = u32::MAX;
+                                    for mid_u in &u.member_ids {
+                                        let (ref m_vec, ns) = pmc[&(mid_u.clone(), qid.clone())];
+                                        mats_ref.push(m_vec.as_slice());
+                                        min_ns = min_ns.min(ns);
+                                    }
+                                    let (val_uq, per_u, _, _, _) = solve_bayesian_shell_preview_nash(
+                                        &mats_ref,
+                                        ka,
+                                        kb,
+                                        &u.member_weights,
+                                        &[1.0],
+                                        300,
+                                    );
+                                    let g_eff = (min_ns.max(1) as f64) * 64.0;
+                                    out_list.push((k_out, j_out, val_uq, per_u, g_eff));
+                                }
+                                loc.push((u_idx, self_per_u, uv_list, out_list));
+                            }
+                            loc
+                        }));
+                    }
+                    for h in handles {
+                        row_results.extend(h.join().unwrap());
+                    }
+                });
+
+                for (u_idx, self_per_u, uv_list, out_list) in row_results {
+                    let mu_len = units_slice[u_idx].member_ids.len();
                     m_solve_out[u_idx][u_idx] = 0.5;
                     for &ju in &u_q_idxs[u_idx] {
                         payoff_mat[u_idx][ju] = 0.5;
                         for m_i in 0..mu_len {
-                            mem_pay[u_idx][m_i][ju] = 0.5;
+                            mem_pay[u_idx][m_i][ju] = self_per_u[m_i];
                         }
                     }
-                    for v_idx in (u_idx + 1)..nu {
-                        let v = &units_slice[v_idx];
-                        let mv_len = v.member_ids.len();
-                        let kb = r_db[&v.member_ids[0]].legal.len();
-                        let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(mu_len * mv_len);
-                        let mut min_ns = u32::MAX;
-                        for mid_u in &u.member_ids {
-                            for mid_v in &v.member_ids {
-                                let (ref m_vec, ns) = pmc[&(mid_u.clone(), mid_v.clone())];
-                                mats_ref.push(m_vec.as_slice());
-                                min_ns = min_ns.min(ns);
-                            }
-                        }
-                        let (val_uv, per_u, per_v, _p_strats, _q_strats) =
-                            solve_bayesian_shell_preview_nash(
-                                &mats_ref,
-                                ka,
-                                kb,
-                                &u.member_weights,
-                                &v.member_weights,
-                                300,
-                            );
-                        let g_eff = (min_ns.max(1) as f64) * 64.0;
+                    for (v_idx, val_uv, per_u, per_v, g_eff) in uv_list {
+                        let mv_len = units_slice[v_idx].member_ids.len();
                         m_solve_out[u_idx][v_idx] = val_uv;
                         m_solve_out[v_idx][u_idx] = 1.0 - val_uv;
                         for &jv in &u_q_idxs[v_idx] {
@@ -11244,26 +11456,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                             }
                         }
                     }
-                    // 2. Solve Shell U vs outside columns `out_q_idxs`
-                    for (k_out, &j_out) in out_q_idxs.iter().enumerate() {
-                        let qid = &q_list[j_out];
-                        let kb = r_db[qid].legal.len();
-                        let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(mu_len);
-                        let mut min_ns = u32::MAX;
-                        for mid_u in &u.member_ids {
-                            let (ref m_vec, ns) = pmc[&(mid_u.clone(), qid.clone())];
-                            mats_ref.push(m_vec.as_slice());
-                            min_ns = min_ns.min(ns);
-                        }
-                        let (val_uq, per_u, _, _, _) = solve_bayesian_shell_preview_nash(
-                            &mats_ref,
-                            ka,
-                            kb,
-                            &u.member_weights,
-                            &[1.0],
-                            300,
-                        );
-                        let g_eff = (min_ns.max(1) as f64) * 64.0;
+                    for (k_out, j_out, val_uq, per_u, g_eff) in out_list {
                         payoff_mat[u_idx][j_out] = val_uq;
                         games_mat[u_idx][j_out] = g_eff;
                         for m_i in 0..mu_len {
@@ -11499,11 +11692,43 @@ fn cmd_converge_conclusion(args: &[String]) {
             .collect();
         if !top_shell_targets.is_empty() && sibling_cands > 0 {
             eprintln!(
-                "\n  [Round {} Phase 2.5] N-Variant Sibling-Deme Forge (Full-Combination 60-Action Bayesian Preview Nash + Asymmetric Alpha Sweep): synthesizing {} same-shell candidates for {} top active shells (n -> n+1)...",
+                "\n  [Round {} Phase 2.5] N-Variant Sibling-Deme Forge (Full-Combination 60-Action Bayesian Preview Nash + Full BlindAgent MCTS Election-Call): synthesizing {} same-shell candidates for {} top active shells (n -> n+1)...",
                 o_round,
                 sibling_cands,
                 top_shell_targets.len()
             );
+            // Build current equilibrium support `(forge_pi_sets, forge_pi_weights)` and zero-prior-smuggling `forge_pi_mp`
+            // for Full-Search `BlindAgent` MCTS Election-Call verification of forged siblings!
+            let mut forge_pi_sets: Vec<Vec<PokemonSet>> = Vec::new();
+            let mut forge_pi_weights: Vec<f64> = Vec::new();
+            let mut forge_pi_sigs: BTreeSet<PreviewSig> = BTreeSet::new();
+            for &(au_idx, w_sh) in &active_units {
+                forge_pi_sigs.insert(units[au_idx].sig.clone());
+                for (m_i, m_sets) in units[au_idx].member_sets.iter().enumerate() {
+                    let mw = units[au_idx].member_weights[m_i];
+                    if mw > 1e-6 {
+                        forge_pi_sets.push(m_sets.clone());
+                        forge_pi_weights.push(w_sh * mw);
+                    }
+                }
+            }
+            let bp_text_forge =
+                std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
+            let raw_mp_forge: MetaPool =
+                serde_json::from_str(&bp_text_forge).expect("parse belief-pool");
+            let mut forge_base_mp = normalize_belief_pool(&dex, &gen, &raw_mp_forge);
+            forge_base_mp
+                .teams
+                .retain(|t| !forge_pi_sigs.contains(&preview_sig_sets(&t.sets)));
+            for (k, p_sets) in forge_pi_sets.iter().enumerate() {
+                forge_base_mp.teams.push(nc2000_bot::preview::MetaTeam {
+                    id: format!("forge-pi-{}", k),
+                    sets: p_sets.clone(),
+                    weight: Some(forge_pi_weights[k]),
+                });
+            }
+            let forge_red_mp = Arc::new(forge_base_mp);
+
             let mut forge_endo_pool = nc2000_bot::teamgen::EndogenousPool::default();
             for &(au_idx, w_sh) in &active_units {
                 for m_raw in &units[au_idx].member_raw {
@@ -11766,7 +11991,47 @@ fn cmd_converge_conclusion(args: &[String]) {
                 );
 
                 // Accept if expanding `n -> n + 1` improves worst-8 Bayesian Preview Nash payoff by >= +0.012
+                // AND survives Full-Search `BlindAgent` MCTS + Sequential Bayesian Election-Call (`選挙当確速報`)!
                 if best_deme_w8 >= parent_worst8_avg + 0.012 {
+                    let mut blue_mp_forge = (*forge_red_mp).clone();
+                    blue_mp_forge.teams.push(nc2000_bot::preview::MetaTeam {
+                        id: format!("forge-disclosed-{}", best_cid),
+                        sets: best_roster.sets.clone(),
+                        weight: Some((w_shell / (new_n as f64)).max(0.05)),
+                    });
+                    let forge_mcts_seed = seed
+                        ^ 0x6A09_E667_F3BC_C908_u64
+                        ^ (((o_round * 97 + t_rank * 13 + best_c_idx + 1) as u64)
+                            .wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                    let mcts_el = eval_full_mcts_bayesian_election_qmc(
+                        &dex,
+                        &forge_pi_sets,
+                        &forge_pi_weights,
+                        &best_roster.sets,
+                        Arc::new(blue_mp_forge),
+                        forge_red_mp.clone(),
+                        0,
+                        &[4, 4, 8],
+                        0.485,
+                        0.515,
+                        50,
+                        0.4,
+                        max_turns,
+                        threads,
+                        forge_mcts_seed,
+                    );
+                    eprintln!(
+                        "      [Forge Full-MCTS Election] {} -> FullMCTS_WR={:.4} [{:.4}, {:.4}] status={} ({}g)",
+                        best_cid,
+                        mcts_el.red_wr,
+                        mcts_el.lcb99,
+                        mcts_el.ucb99,
+                        mcts_el.election_status,
+                        mcts_el.games_played
+                    );
+                    if mcts_el.election_status == "LOSS_CALLED" || mcts_el.red_wr < 0.475 {
+                        continue;
+                    }
                     if let Some(reg_id) = register_team(
                         &mut team_db,
                         &mut seen_db_keys,
@@ -11939,11 +12204,11 @@ fn cmd_converge_conclusion(args: &[String]) {
             }
         }
 
-        // Phase 2.7: Endogenous Within-Shell Variant Weight Optimization (`重み自由化`):
-        // Jointly optimize shell weights `w_u` and within-shell member weights `alpha_{u, k} >= 0`
-        // via Tilted Member-Level Minimax, then re-solve `solve_bayesian_shell_preview_nash` for all
-        // shell pairs using the updated `member_weights` so the Bayesian Preview Nash equilibrium is
-        // at a self-consistent fixed point!
+        // Phase 2.7: Endogenous Within-Shell Variant Weight Optimization & Intra-Shell LOO Pruning (`重み自由化 + 殻内LOO剪定`):
+        // 1. Uses exact intra-shell mirror payoffs `self_per_u[m_i]` on diagonal columns `u_idx == v` (eliminating the 0.5 tie).
+        // 2. Computes each variant's Leave-One-Out marginal contribution `\Delta V_{shell, -k}` against the shell's 8 worst
+        //    opponent columns, pruning redundant/dominated variants (`\Delta V_{shell, -k} <= 0.0005` & `\alpha < 0.05`, or >4 variants)
+        //    so multi-variant shells stay sharp (`<= 4` essential variants) and never bloat into 8-12 noisy variants.
         {
             let n_q_cur = q_ids.len();
             let cand_shells: Vec<usize> = active_units.iter().map(|&(u, _)| u).collect();
@@ -11955,10 +12220,6 @@ fn cmd_converge_conclusion(args: &[String]) {
                 for m_i in 0..m_len {
                     let mut row = vec![0.5f64; n_cols];
                     for v in 0..n_u {
-                        if u_idx == v {
-                            row[v] = 0.5;
-                            continue;
-                        }
                         let mut sum_m_i = 0.0f64;
                         let mut cnt_v = 0.0f64;
                         for &jv in &unit_q_indices[v] {
@@ -11991,36 +12252,152 @@ fn cmd_converge_conclusion(args: &[String]) {
             }
 
             let mut any_weight_shifted = false;
-            for &u_idx in &cand_shells {
+            for u_idx in 0..n_u {
                 let m_len = units[u_idx].member_ids.len();
                 if m_len < 2 {
                     continue;
                 }
-                let w_u = shell_gamma_sum.get(&u_idx).copied().unwrap_or(0.0);
-                if w_u < 0.002 {
-                    continue;
-                }
                 let old_mw = units[u_idx].member_weights.clone();
-                let mut new_mw = vec![0.0f64; m_len];
-                for (r_idx, &(ru, m_i)) in row_owner.iter().enumerate() {
-                    if ru == u_idx {
-                        let raw_alpha = gamma[r_idx] / w_u;
-                        new_mw[m_i] = if raw_alpha >= 0.01 { raw_alpha } else { 0.0 };
+                let mut new_mw = old_mw.clone();
+                if let Some(&w_u) = shell_gamma_sum.get(&u_idx) {
+                    if w_u >= 0.002 {
+                        for (r_idx, &(ru, m_i)) in row_owner.iter().enumerate() {
+                            if ru == u_idx {
+                                let raw_alpha = gamma[r_idx] / w_u;
+                                new_mw[m_i] = if raw_alpha >= 0.01 { raw_alpha } else { 0.0 };
+                            }
+                        }
+                        normalize_member_weights(&mut new_mw, m_len);
                     }
                 }
-                normalize_member_weights(&mut new_mw, m_len);
-                let max_diff = old_mw
-                    .iter()
-                    .zip(new_mw.iter())
-                    .map(|(a, b)| (a - b).abs())
-                    .fold(0.0f64, f64::max);
-                units[u_idx].member_weights = new_mw;
-                if max_diff > 0.02 {
+
+                // Compute Intra-Shell Leave-One-Out marginal value `\Delta V_{shell, -k}` on the shell's 8 worst Q columns
+                let ka = roster_db[&units[u_idx].member_ids[0]].legal.len();
+                let mut q_ranked: Vec<(usize, f64)> =
+                    (0..n_q_cur).map(|j| (j, payoff[u_idx][j])).collect();
+                q_ranked.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let worst_qs: Vec<usize> = q_ranked.iter().take(8).map(|&(j, _)| j).collect();
+                let nw = worst_qs.len().max(1) as f64;
+
+                let eval_subset_w8 = |keep_idxs: &[usize], weights_sub: &[f64]| -> f64 {
+                    let mut sum_v = 0.0f64;
+                    for &j in &worst_qs {
+                        let qid = &q_ids[j];
+                        let kb = roster_db[qid].legal.len();
+                        let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(keep_idxs.len());
+                        for &k_i in keep_idxs {
+                            let mid = &units[u_idx].member_ids[k_i];
+                            mats_ref.push(pair_mat_cache[&(mid.clone(), qid.clone())].0.as_slice());
+                        }
+                        let (val_d, _, _, _, _) = solve_bayesian_shell_preview_nash(
+                            &mats_ref,
+                            ka,
+                            kb,
+                            weights_sub,
+                            &[1.0],
+                            200,
+                        );
+                        sum_v += val_d;
+                    }
+                    sum_v / nw
+                };
+
+                let all_idxs: Vec<usize> = (0..m_len).collect();
+                let v_full = eval_subset_w8(&all_idxs, &new_mw);
+                let mut loo_dv = vec![0.0f64; m_len];
+                let mut w8_m = vec![0.5f64; m_len];
+                for m_i in 0..m_len {
+                    let sub_idxs: Vec<usize> = (0..m_len).filter(|&k| k != m_i).collect();
+                    let mut sub_w: Vec<f64> = sub_idxs.iter().map(|&k| new_mw[k]).collect();
+                    normalize_member_weights(&mut sub_w, sub_idxs.len());
+                    let v_minus = eval_subset_w8(&sub_idxs, &sub_w);
+                    loo_dv[m_i] = (v_full - v_minus).max(0.0);
+                    w8_m[m_i] = worst_qs
+                        .iter()
+                        .map(|&j| mem_payoff[u_idx][m_i][j])
+                        .sum::<f64>()
+                        / nw;
+                }
+                let mean_w8 = w8_m.iter().sum::<f64>() / (m_len as f64);
+
+                // Rank variants by LOO marginal contribution + worst-8 payoff, pruning redundant variants (`<= 4` max)
+                let mut rank_order: Vec<usize> = (0..m_len).collect();
+                rank_order.sort_by(|&a, &b| {
+                    let sa = loo_dv[a] + 0.25 * (w8_m[a] - mean_w8) + 0.05 * new_mw[a];
+                    let sb = loo_dv[b] + 0.25 * (w8_m[b] - mean_w8) + 0.05 * new_mw[b];
+                    sb.partial_cmp(&sa).unwrap()
+                });
+                let max_keep = 4usize.min(max_shell_variants.max(1));
+                let mut keep_set: Vec<usize> = Vec::new();
+                for (rk, &m_i) in rank_order.iter().enumerate() {
+                    if rk == 0 || (keep_set.len() < max_keep && loo_dv[m_i] > 0.0005) {
+                        keep_set.push(m_i);
+                    }
+                }
+                keep_set.sort_unstable();
+
+                if keep_set.len() < m_len {
+                    let old_uid = units[u_idx].unit_id.clone();
+                    units[u_idx].member_ids = keep_set
+                        .iter()
+                        .map(|&k| units[u_idx].member_ids[k].clone())
+                        .collect();
+                    units[u_idx].member_sets = keep_set
+                        .iter()
+                        .map(|&k| units[u_idx].member_sets[k].clone())
+                        .collect();
+                    units[u_idx].member_raw = keep_set
+                        .iter()
+                        .map(|&k| units[u_idx].member_raw[k].clone())
+                        .collect();
+                    let mut pruned_mw: Vec<f64> = keep_set
+                        .iter()
+                        .map(|&k| {
+                            (new_mw[k].max(0.02))
+                                * (10.0 * loo_dv[k] + 5.0 * (w8_m[k] - mean_w8)).exp()
+                        })
+                        .collect();
+                    normalize_member_weights(&mut pruned_mw, keep_set.len());
+                    units[u_idx].member_weights = pruned_mw;
+                    units[u_idx].unit_id = format_shell_unit_id(&units[u_idx].member_ids);
+                    unit_q_indices[u_idx] = units[u_idx]
+                        .member_ids
+                        .iter()
+                        .filter_map(|mid| id_to_qidx.get(mid).copied())
+                        .collect();
+                    eprintln!(
+                        "    [Phase 2.7 Intra-Shell LOO Prune] {} ({} -> {} variants): kept {}",
+                        old_uid,
+                        m_len,
+                        keep_set.len(),
+                        units[u_idx].unit_id
+                    );
                     any_weight_shifted = true;
+                } else {
+                    for m_i in 0..m_len {
+                        new_mw[m_i] = (new_mw[m_i].max(0.02))
+                            * (10.0 * loo_dv[m_i] + 5.0 * (w8_m[m_i] - mean_w8)).exp();
+                    }
+                    normalize_member_weights(&mut new_mw, m_len);
+                    let max_diff = old_mw
+                        .iter()
+                        .zip(new_mw.iter())
+                        .map(|(a, b)| (a - b).abs())
+                        .fold(0.0f64, f64::max);
+                    units[u_idx].member_weights = new_mw;
+                    if max_diff > 0.02 {
+                        any_weight_shifted = true;
+                    }
                 }
             }
 
             if any_weight_shifted {
+                unit_member_set.clear();
+                for u in &units {
+                    for mid in &u.member_ids {
+                        unit_member_set.insert(mid.clone());
+                    }
+                }
                 let solved = solve_all_shell_cells(
                     &units,
                     &pair_mat_cache,
@@ -12031,10 +12408,11 @@ fn cmd_converge_conclusion(args: &[String]) {
                 );
                 payoff = solved.0;
                 cell_games = solved.1;
+                mem_payoff = solved.2;
                 mem_games = solved.3;
                 m_solve = solved.4;
             }
-            let _ = (&payoff, &cell_games, &mem_games);
+            let _ = (&payoff, &cell_games, &mem_payoff, &mem_games);
 
             let m_in_opt: Vec<Vec<f64>> =
                 (0..n_u).map(|u| m_solve[u][0..n_u].to_vec()).collect();
@@ -12137,9 +12515,9 @@ fn cmd_converge_conclusion(args: &[String]) {
         }
 
         // Phase 3: Allopatric Island Speciation (`地理的隔絶`) + Open-Ended Red-Oracle + Independent Holdout Verification
-        // Evaluated 100% via Full-Combination Bayesian Shell-vs-Shell Preview Nash + Pinpoint LOO Hitchhiker Eradication!
+        // Evaluated via Full `BlindAgent` MCTS + Sequential Bayesian Election-Call (`フル探索 + 選挙当確速報`) + Pinpoint 60-Action LOO Hitchhiker Eradication!
         eprintln!(
-            "\n  [Round {} Phase 3] Running Allopatric Island Speciation (4 isolated islands x 4 gens) + Mainland Red-Oracle ({} waves) under Full-Combination Bayesian Preview Nash...",
+            "\n  [Round {} Phase 3] Running Allopatric Island Speciation (4 isolated islands x 4 gens) + Mainland Red-Oracle ({} waves) under Full BlindAgent MCTS + Sequential Bayesian Election-Call...",
             o_round, red_waves
         );
         #[derive(Clone)]
@@ -12996,19 +13374,83 @@ fn cmd_converge_conclusion(args: &[String]) {
             }
         }
 
+        // Prepare zero-prior-smuggling `pi_star_mp` for Full-Search `BlindAgent` MCTS in Mainland Red-Oracle & Holdout
+        let bp_text =
+            std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
+        let raw_mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
+        let mut red_mp = normalize_belief_pool(&dex, &gen, &raw_mp);
+        red_mp
+            .teams
+            .retain(|t| !pi_shell_counts.contains_key(&preview_sig_sets(&t.sets)));
+        for (k, pid) in pi_ids.iter().enumerate() {
+            red_mp.teams.push(nc2000_bot::preview::MetaTeam {
+                id: format!("pi-star-{}", pid),
+                sets: pi_sets[k].clone(),
+                weight: Some(pi_weights[k]),
+            });
+        }
+        let pi_star_mp = Arc::new(red_mp);
+
+        // Reset rollout counters from island speciation so Mainland Red-Oracle survival & election-calls
+        // are 100% driven by Full-Search `BlindAgent` MCTS (`フル探索 + 選挙当確速報`)!
+        for st in &mut population {
+            if !st.is_hitchhiker {
+                st.tiers_done = 0;
+                st.games = 0;
+                st.blue_wins = 0.0;
+                st.election_status = "OPEN";
+            }
+        }
+
         let mut hall_of_fame: Vec<RedStrain> = Vec::new();
         for w in 1..=red_waves {
-            // Sequential Bayesian Election-Call (`選挙当確速報`) progressive doubling waves:
-            // No arbitrary point-estimate truncation! Every challenger stays `OPEN` until its
-            // 99% Bayesian credible interval `[LCB99, UCB99]` decisively calls `LOSS_CALLED` (`UCB99 < 0.495`)
-            // or `WIN_CALLED` (`LCB99 > 0.510`), or reaches the full 13-seed ceiling.
-            let tiers: [(usize, u32); 4] = [
-                (1, 1), // Wave 1: 1 CRN seed base across all 3v3 cells
-                (2, 2), // Wave 2: +2 CRN seeds (cumulative 3)
-                (3, 4), // Wave 3: +4 CRN seeds (cumulative 7)
-                (4, 6), // Wave 4: +6 CRN seeds (cumulative 13)
+            // Step A: Pinpoint 60-Action LOO Hitchhiker Screen (`n_seeds = 1`) for newly born strains
+            // strictly to obtain exact 60-action Leave-One-Out `slot_marginals` (\Delta V_{-s}) and `is_hitchhiker`,
+            // then reset `games = 0` so simplified rollout win rates never pollute Full-Search MCTS survival!
+            let mut new_loo_batch: Vec<usize> = Vec::new();
+            for s_idx in 0..population.len() {
+                if !population[s_idx].is_hitchhiker
+                    && population[s_idx].tiers_done == 0
+                    && population[s_idx].games == 0
+                    && population[s_idx].slot_marginals.iter().all(|&m| m == 0.0)
+                {
+                    new_loo_batch.push(s_idx);
+                }
+            }
+            if !new_loo_batch.is_empty() {
+                let loo_seed = seed
+                    ^ ((o_round as u64).wrapping_mul(0x5555_6666_7777_8888))
+                    ^ ((w as u64).wrapping_mul(0x1357_9BDF_2468_ACE0));
+                eval_strains_bayesian_nash(
+                    &mut population,
+                    &new_loo_batch,
+                    &active_def_shells,
+                    1,
+                    1,
+                    loo_seed,
+                );
+                for &s_idx in &new_loo_batch {
+                    let st = &mut population[s_idx];
+                    if !st.is_hitchhiker {
+                        st.tiers_done = 0;
+                        st.games = 0;
+                        st.blue_wins = 0.0;
+                        st.election_status = "OPEN";
+                    }
+                }
+            }
+
+            // Step B: Full-Search `BlindAgent` MCTS + Sequential Bayesian Election-Call (`フル探索 + 選挙当確速報`)
+            // Progressive QMC mirror-pair waves: [4, 4, 8, 8] pairs = [8, 16, 32, 48] Full-Search MCTS games!
+            // Every challenger stays `OPEN` until its 99% Jeffreys Beta-Binomial credible interval `[LCB99, UCB99]`
+            // decisively calls `LOSS_CALLED` (`UCB99 < 0.490`) or `WIN_CALLED` (`LCB99 > 0.510`), or completes all 4 waves.
+            let mcts_tiers: [(usize, usize); 4] = [
+                (1, 4), // Wave 1: 4 QMC pairs (8 Full-Search MCTS games)
+                (2, 4), // Wave 2: +4 QMC pairs (cumulative 16 Full-Search MCTS games)
+                (3, 8), // Wave 3: +8 QMC pairs (cumulative 32 Full-Search MCTS games)
+                (4, 8), // Wave 4: +8 QMC pairs (cumulative 48 Full-Search MCTS games)
             ];
-            for &(tier_id, n_seeds_tier) in &tiers {
+            for &(tier_id, n_pairs_tier) in &mcts_tiers {
                 let mut eval_batch: Vec<usize> = Vec::new();
                 for s_idx in 0..population.len() {
                     if population[s_idx].is_hitchhiker || population[s_idx].tiers_done >= tier_id {
@@ -13026,14 +13468,138 @@ fn cmd_converge_conclusion(args: &[String]) {
                     ^ ((o_round as u64).wrapping_mul(0x5555_6666_7777_8888))
                     ^ ((w as u64).wrapping_mul(0x1357_9BDF_2468_ACE0))
                     ^ ((tier_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15));
-                eval_strains_bayesian_nash(
-                    &mut population,
-                    &eval_batch,
-                    &active_def_shells,
-                    tier_id,
-                    n_seeds_tier,
-                    phase_seed,
-                );
+                let cursor = std::sync::atomic::AtomicUsize::new(0);
+                let mut mcts_results: Vec<(usize, PiStarEvalOut)> =
+                    Vec::with_capacity(eval_batch.len());
+                let inner_threads = if eval_batch.len() >= threads {
+                    1
+                } else {
+                    (threads / eval_batch.len().max(1)).max(1)
+                };
+                let outer_workers = threads.min(eval_batch.len()).max(1);
+                std::thread::scope(|scope| {
+                    let mut handles = Vec::new();
+                    for _ in 0..outer_workers {
+                        let (
+                            batch_ref,
+                            cursor_ref,
+                            pop_ref,
+                            dex_ref,
+                            pi_sets_ref,
+                            pi_weights_ref,
+                            pi_ids_ref,
+                            pi_shell_counts_ref,
+                            pi_star_mp_ref,
+                        ) = (
+                            &eval_batch,
+                            &cursor,
+                            &population,
+                            &dex,
+                            &pi_sets,
+                            &pi_weights,
+                            &pi_ids,
+                            &pi_shell_counts,
+                            &pi_star_mp,
+                        );
+                        handles.push(scope.spawn(move || {
+                            let mut loc = Vec::new();
+                            loop {
+                                let k =
+                                    cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                if k >= batch_ref.len() {
+                                    break;
+                                }
+                                let s_idx = batch_ref[k];
+                                let st = &pop_ref[s_idx];
+                                let pair_start = st.games / 2;
+                                let mut blue_mp = (**pi_star_mp_ref).clone();
+                                let s_sig = preview_sig_sets(&st.sets);
+                                let same_shell_w = pi_ids_ref
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|&(idx_p, _)| {
+                                        preview_sig_sets(&pi_sets_ref[idx_p]) == s_sig
+                                    })
+                                    .map(|(idx_p, _)| pi_weights_ref[idx_p])
+                                    .sum::<f64>();
+                                let disclose_w = if same_shell_w > 0.0 {
+                                    same_shell_w
+                                        / (pi_shell_counts_ref.get(&s_sig).copied().unwrap_or(1)
+                                            as f64)
+                                } else {
+                                    0.25
+                                };
+                                blue_mp.teams.push(nc2000_bot::preview::MetaTeam {
+                                    id: format!("disclosed-mainland-{}", st.id),
+                                    sets: st.sets.clone(),
+                                    weight: Some(disclose_w),
+                                });
+                                let st_seed = phase_seed
+                                    ^ (((s_idx + 1) as u64).wrapping_mul(0x94D0_49BB_1331_11EB));
+                                let qmc_out = eval_vs_pi_star_qmc(
+                                    dex_ref,
+                                    pi_sets_ref,
+                                    pi_weights_ref,
+                                    &st.sets,
+                                    Arc::new(blue_mp),
+                                    pi_star_mp_ref.clone(),
+                                    pair_start,
+                                    n_pairs_tier,
+                                    50,
+                                    0.4,
+                                    max_turns,
+                                    inner_threads,
+                                    st_seed,
+                                );
+                                loc.push((s_idx, qmc_out));
+                            }
+                            loc
+                        }));
+                    }
+                    for h in handles {
+                        mcts_results.extend(h.join().unwrap());
+                    }
+                });
+                for (s_idx, qmc_out) in mcts_results {
+                    let st = &mut population[s_idx];
+                    let old_games = st.games as f64;
+                    let add_games = qmc_out.games_played as f64;
+                    let new_games = (st.games + qmc_out.games_played).max(1) as f64;
+                    for s in 0..6 {
+                        let old_picks_s = st.slot_picks[s] * old_games;
+                        let old_wins_s = st.slot_wins[s] * old_picks_s;
+                        let new_picks_s = old_picks_s + qmc_out.red_slot_picks[s];
+                        let new_wins_s = old_wins_s + qmc_out.red_slot_wins[s];
+                        st.slot_picks[s] = new_picks_s / new_games;
+                        st.slot_wins[s] = if new_picks_s > 0.0 {
+                            new_wins_s / new_picks_s
+                        } else {
+                            0.5
+                        };
+                    }
+                    st.games += qmc_out.games_played;
+                    st.blue_wins += qmc_out.blue_score * add_games;
+                    st.tiers_done = tier_id;
+                    let b_wr = st.blue_wins / (st.games.max(1) as f64);
+                    st.red_wr = (1.0 - b_wr).clamp(0.0, 1.0);
+                    st.bayes_red_wr = (8.0 * 0.45 + (st.games as f64) * st.red_wr)
+                        / (8.0 + st.games as f64);
+                    let n_eff = ((st.games as f64) * 0.75).max(1.0);
+                    let alpha = 0.5 + n_eff * st.red_wr;
+                    let beta = 0.5 + n_eff * (1.0 - st.red_wr);
+                    let mu_post = alpha / (alpha + beta);
+                    let sigma_post =
+                        (alpha * beta / ((alpha + beta).powi(2) * (alpha + beta + 1.0))).sqrt();
+                    st.lcb99_red_wr = (mu_post - 2.326 * sigma_post).max(0.0);
+                    st.ucb99_red_wr = (mu_post + 2.326 * sigma_post).min(1.0);
+                    if st.ucb99_red_wr < 0.490 {
+                        st.election_status = "LOSS_CALLED";
+                    } else if st.tiers_done >= 2 && st.lcb99_red_wr > 0.510 {
+                        st.election_status = "WIN_CALLED";
+                    } else {
+                        st.election_status = "OPEN";
+                    }
+                }
             }
             recompute_red_wars_and_pool(&mut population, &mut global_endo_pool);
             population.sort_by(|a, b| b.bayes_red_wr.partial_cmp(&a.bayes_red_wr).unwrap());
@@ -13061,7 +13627,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                 .filter(|s| s.election_status == "LOSS_CALLED")
                 .count();
             eprintln!(
-                "  [{} wave {}/{}] best={} (from={}, origin={}, op={}, Red_Nash_WR={:.4} [{:.4}, {:.4}] status={}, min_LOO={:+.4}) | Election(win={}, loss={}) | HoF={} | HH_purged={}",
+                "  [{} wave {}/{}] best={} (from={}, origin={}, op={}, FullMCTS_WR={:.4} [{:.4}, {:.4}] status={} ({}g), min_LOO={:+.4}) | Election(win={}, loss={}) | HoF={} | HH_purged={}",
                 island_tag,
                 w,
                 red_waves,
@@ -13073,6 +13639,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                 best.lcb99_red_wr,
                 best.ucb99_red_wr,
                 best.election_status,
+                best.games,
                 best.slot_marginals.iter().cloned().fold(f64::INFINITY, f64::min),
                 win_called_cnt,
                 loss_called_cnt,
@@ -13217,33 +13784,16 @@ fn cmd_converge_conclusion(args: &[String]) {
         }
 
         // Holdout verification:
-        // Stage 1: Full-Combination 60-Action Bayesian Preview Nash with 16 independent CRN seeds per 3v3 cell
-        // Stage 2: Multi-Fidelity In-Battle MCTS `BlindAgent` (64 QMC mirror games @ 60 iters, zero prior smuggling)
+        // Stage 1: Full-Combination 60-Action Bayesian Preview Nash LOO Hitchhiker check (8 independent CRN seeds per 3v3 cell)
+        // Stage 2: Independent Holdout Full-Search `BlindAgent` MCTS + Sequential Bayesian Election-Call (`[8, 8, 16]` QMC pairs = up to 64g @ 60 iters)
         let holdout_n = hall_of_fame.len().min(6);
         let mut holdout_recs: Vec<Value> = Vec::new();
         let mut newly_promoted = 0usize;
         println!(
-            "\n=== [Round {}] Independent Multi-Fidelity Holdout Verification (Stage 1: 16 seeds/cell 60-Action Preview Nash | Stage 2: 64g In-Battle BlindAgent MCTS) ===",
+            "\n=== [Round {}] Independent Full-Search MCTS + Bayesian Election-Call Holdout Verification (Stage 1: 8 seeds/cell 60-Action LOO Check | Stage 2: [16,32,64]g BlindAgent MCTS Election) ===",
             o_round
         );
         if holdout_n > 0 {
-            // Prepare zero-prior-smuggling `pi_star_mp` for Stage 2 In-Battle BlindAgent verification
-            let bp_text =
-                std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
-            let raw_mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
-            let mut red_mp = normalize_belief_pool(&dex, &gen, &raw_mp);
-            red_mp
-                .teams
-                .retain(|t| !pi_shell_counts.contains_key(&preview_sig_sets(&t.sets)));
-            for (k, pid) in pi_ids.iter().enumerate() {
-                red_mp.teams.push(nc2000_bot::preview::MetaTeam {
-                    id: format!("pi-star-{}", pid),
-                    sets: pi_sets[k].clone(),
-                    weight: Some(pi_weights[k]),
-                });
-            }
-            let pi_star_mp = Arc::new(red_mp);
-
             let mut ho_slice: Vec<RedStrain> = hall_of_fame[..holdout_n]
                 .iter()
                 .map(|s| {
@@ -13263,25 +13813,18 @@ fn cmd_converge_conclusion(args: &[String]) {
                 &ho_indices,
                 &active_def_shells,
                 4,
-                16,
+                8,
                 h_seed,
             );
             for idx in 0..holdout_n {
                 let ho_st = &ho_slice[idx];
                 let s = &hall_of_fame[idx];
                 let ho_red_wr = if ho_st.is_hitchhiker { 0.0 } else { ho_st.red_wr };
-                let tot_games = s.games + ho_st.games;
-                let tot_blue_wins = s.blue_wins + ho_st.blue_wins;
-                let tot_red_wr = if ho_st.is_hitchhiker || s.is_hitchhiker {
-                    0.0
-                } else {
-                    1.0 - (tot_blue_wins / (tot_games.max(1) as f64))
-                };
 
-                // Stage 2: If candidate passes Stage 1 Preview Nash (`!is_hitchhiker && ho_red_wr > 0.500`),
-                // verify with 64 QMC mirror games of in-battle `BlindAgent` MCTS (`iters=60, c=0.4`)
-                // with full shell disclosure so Blue knows `s` is in the candidate pool!
-                let blind_mcts_red_wr: Option<f64> = if !ho_st.is_hitchhiker && ho_red_wr > 0.500 {
+                // Stage 2: If candidate passes Stage 1 60-Action LOO Hitchhiker screen (`!ho_st.is_hitchhiker`),
+                // verify on independent holdout QMC pairs (`initial_pair_offset = 64`, `wave_pairs = &[8, 8, 16]`)
+                // using Full-Search `BlindAgent` MCTS (`iters=60, c=0.4`) + Sequential Bayesian Election-Call (`選挙当確速報`)!
+                let holdout_mcts_el: Option<FullMctsElectionOut> = if !ho_st.is_hitchhiker {
                     let mut blue_mp = (*pi_star_mp).clone();
                     let s_sig = preview_sig_sets(&s.sets);
                     let same_shell_w = pi_ids
@@ -13301,7 +13844,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                         weight: Some(disclose_w),
                     });
                     let qmc_seed = h_seed ^ ((idx as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15));
-                    let qmc_out = eval_vs_pi_star_qmc(
+                    Some(eval_full_mcts_bayesian_election_qmc(
                         &dex,
                         &pi_sets,
                         &pi_weights,
@@ -13309,16 +13852,28 @@ fn cmd_converge_conclusion(args: &[String]) {
                         Arc::new(blue_mp),
                         pi_star_mp.clone(),
                         64,
-                        32,
+                        &[8, 8, 16],
+                        0.490,
+                        0.510,
                         60,
                         0.4,
                         max_turns,
                         threads,
                         qmc_seed,
-                    );
-                    Some(1.0 - qmc_out.blue_score)
+                    ))
                 } else {
                     None
+                };
+                let blind_mcts_red_wr = holdout_mcts_el.as_ref().map(|el| el.red_wr);
+                let ho_mcts_games = holdout_mcts_el.as_ref().map(|el| el.games_played).unwrap_or(0);
+                let tot_mcts_games = s.games + ho_mcts_games;
+                let tot_mcts_red_wr = if ho_st.is_hitchhiker || s.is_hitchhiker {
+                    0.0
+                } else if let Some(ref el) = holdout_mcts_el {
+                    ((s.games as f64) * s.red_wr + (el.games_played as f64) * el.red_wr)
+                        / (tot_mcts_games.max(1) as f64)
+                } else {
+                    0.0
                 };
 
                 let mons: Vec<String> = s
@@ -13344,11 +13899,17 @@ fn cmd_converge_conclusion(args: &[String]) {
                     .iter()
                     .cloned()
                     .fold(f64::INFINITY, f64::min);
-                let blind_str = blind_mcts_red_wr
-                    .map(|v| format!("{:.4}", v))
+                let blind_str = holdout_mcts_el
+                    .as_ref()
+                    .map(|el| {
+                        format!(
+                            "{:.4} [{:.4},{:.4}] {} ({}g)",
+                            el.red_wr, el.lcb99, el.ucb99, el.election_status, el.games_played
+                        )
+                    })
                     .unwrap_or_else(|| "  n/a ".to_string());
                 println!(
-                    "  [R{} HOLDOUT #{:02}] {:16} [{} | {:15}] | Holdout_Nash_WR={:.4} | BlindMCTS_WR={} | Total_Nash_WR={:.4} (Blue_WR={:.4}) | min_LOO={:+.4} hh={} | {}",
+                    "  [R{} HOLDOUT #{:02}] {:16} [{} | {:15}] | Search_MCTS_WR={:.4} ({}g) | Holdout_MCTS={} | Total_MCTS_WR={:.4} | Nash60_WR={:.4} min_LOO={:+.4} hh={} | {}",
                     o_round,
                     idx + 1,
                     s.id,
@@ -13358,10 +13919,11 @@ fn cmd_converge_conclusion(args: &[String]) {
                         "OUTSIDE-SHELL    "
                     },
                     s.origin,
-                    ho_red_wr,
+                    s.red_wr,
+                    s.games,
                     blind_str,
-                    tot_red_wr,
-                    1.0 - tot_red_wr,
+                    tot_mcts_red_wr,
+                    ho_red_wr,
                     min_loo,
                     ho_st.is_hitchhiker,
                     mons.join(", ")
@@ -13375,8 +13937,9 @@ fn cmd_converge_conclusion(args: &[String]) {
                     "search_red_wr": s.red_wr,
                     "holdout_red_wr": ho_red_wr,
                     "blind_mcts_red_wr": blind_mcts_red_wr,
-                    "total_red_wr": tot_red_wr,
-                    "total_blue_wr": 1.0 - tot_red_wr,
+                    "holdout_election_status": holdout_mcts_el.as_ref().map(|el| el.election_status),
+                    "total_red_wr": tot_mcts_red_wr,
+                    "total_blue_wr": 1.0 - tot_mcts_red_wr,
                     "slot_picks": ho_st.slot_picks,
                     "slot_marginals": ho_st.slot_marginals,
                     "slot_wars": ho_st.slot_wars,
@@ -13384,11 +13947,14 @@ fn cmd_converge_conclusion(args: &[String]) {
                     "sets": s.raw,
                 }));
 
-                // Multi-fidelity promotion gate:
-                // Must pass Stage 1 60-Action Preview Nash (`!is_hitchhiker`, `ho_red_wr > 0.505`, `tot_red_wr > 0.505`)
-                // AND Stage 2 In-Battle BlindAgent MCTS (`blind_mcts_red_wr >= 0.490`)!
-                let passes_blind = blind_mcts_red_wr.unwrap_or(0.0) >= 0.490;
-                if !ho_st.is_hitchhiker && ho_red_wr > 0.505 && tot_red_wr > 0.505 && passes_blind {
+                // Full-Search MCTS + Bayesian Election-Call promotion gate:
+                // Must pass 60-Action LOO Hitchhiker screen (`!ho_st.is_hitchhiker`)
+                // AND Full-Search `BlindAgent` MCTS Election-Call (`election_status != "LOSS_CALLED"`, `blind_mcts_wr >= 0.500`, `tot_mcts_red_wr >= 0.500`)!
+                let passes_blind = holdout_mcts_el
+                    .as_ref()
+                    .map(|el| el.election_status != "LOSS_CALLED" && el.red_wr >= 0.500)
+                    .unwrap_or(false);
+                if !ho_st.is_hitchhiker && tot_mcts_red_wr >= 0.500 && passes_blind {
                     if let Some(reg_id) = register_team(
                         &mut team_db,
                         &mut seen_db_keys,
