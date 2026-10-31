@@ -539,15 +539,18 @@ let compiledPreviewArtifact = null;
 let compiledPreviewPublicRosters = null;
 let compiledPreviewCompatible = false;
 let compiledPreviewCompatibilityReason = '';
+let compiledPreviewForkAttestation = null;
+let compiledPreviewForkAttestationValid = false;
+let compiledPreviewForkAttestationReason = '';
 
 if (!RANDOM && WEB_POLICY && MODE === 'blind') {
 	try {
-		compiledPreviewArtifact = JSON.parse(
-			fs.readFileSync(
-				path.join(REPO, 'data/compiled-preview-v1.json'),
-				'utf8'
-			)
+		const compiledPreviewArtifactText = fs.readFileSync(
+			path.join(REPO, 'data/compiled-preview-v1.json'),
+			'utf8'
 		);
+
+		compiledPreviewArtifact = JSON.parse(compiledPreviewArtifactText);
 
 		if (compiledPreviewArtifact.format !== 'nc2000-compiled-preview-v1') {
 			throw new Error('unexpected compiled-preview format');
@@ -591,11 +594,87 @@ if (!RANDOM && WEB_POLICY && MODE === 'blind') {
 			}
 		}
 
+		try {
+			compiledPreviewForkAttestation = JSON.parse(
+				fs.readFileSync(
+					path.join(
+						REPO,
+						'data/compiled-preview-fork-attestation-v1.json'
+					),
+					'utf8'
+				)
+			);
+
+			if (
+				compiledPreviewForkAttestation.format !==
+				'nc2000-compiled-preview-fork-attestation-v1'
+			) {
+				throw new Error('unexpected fork-attestation format');
+			}
+
+			if (
+				compiledPreviewForkAttestation.kind !==
+				'diagnostic-only-source-delta-v1'
+			) {
+				throw new Error('unexpected fork-attestation kind');
+			}
+
+			if (
+				compiledPreviewForkAttestation.artifactSha256 !==
+				sha256Text(compiledPreviewArtifactText)
+			) {
+				throw new Error('fork-attestation artifact SHA256 does not match');
+			}
+
+			if (
+				compiledPreviewForkAttestation.artifactBuild !==
+				compiledPreviewArtifact.build
+			) {
+				throw new Error('fork-attestation artifact build does not match');
+			}
+
+			if (
+				compiledPreviewForkAttestation.policyCount !==
+				Object.keys(compiledPreviewArtifact.policies || {}).length
+			) {
+				throw new Error('fork-attestation policy count does not match');
+			}
+
+			if (
+				compiledPreviewForkAttestation.policySha256 !==
+				sha256Text(JSON.stringify(compiledPreviewArtifact.policies || {}))
+			) {
+				throw new Error('fork-attestation policy SHA256 does not match');
+			}
+
+			compiledPreviewForkAttestationValid = true;
+		} catch (e) {
+			compiledPreviewForkAttestationReason =
+				e && e.message ? e.message : String(e);
+
+			compiledPreviewForkAttestation = null;
+			compiledPreviewForkAttestationValid = false;
+		}
+
 		compiledPreviewCompatible = true;
 	} catch (e) {
 		compiledPreviewCompatibilityReason = e && e.message ?
 			e.message : String(e);
 	}
+}
+
+function compiledPreviewBuildMatches(build) {
+	if (!compiledPreviewArtifact) return false;
+
+	if (build === compiledPreviewArtifact.build) {
+		return true;
+	}
+
+	return (
+		compiledPreviewForkAttestationValid &&
+		compiledPreviewForkAttestation &&
+		build === compiledPreviewForkAttestation.currentBuild
+	);
 }
 
 function compiledPreviewPick(searcher, seed) {
@@ -620,7 +699,7 @@ function compiledPreviewPick(searcher, seed) {
 
 	if (
 		info.format !== 'nc2000-preview-cache-info-v1' ||
-		info.build !== compiledPreviewArtifact.build ||
+		!compiledPreviewBuildMatches(info.build) ||
 		typeof info.teamKey !== 'string' ||
 		!Array.isArray(info.opponentPublic)
 	) {
@@ -671,6 +750,20 @@ if (WEB_POLICY) {
 		console.log(
 			`[${NAME}] open-sheet web policy: compiled preview disabled; ` +
 			`team preview uses live search`
+		);
+	} else if (
+		compiledPreviewCompatible &&
+		compiledPreviewForkAttestationValid
+	) {
+		console.log(
+			`[${NAME}] compiled preview fork attestation ready: ` +
+			`${compiledPreviewForkAttestation.artifactBuild} -> ` +
+			`${compiledPreviewForkAttestation.currentBuild}`
+		);
+		console.log(
+			`[${NAME}] compiled preview ready: ` +
+			`${Object.keys(compiledPreviewArtifact.policies).length} policies, ` +
+			`${compiledPreviewArtifact.iterations} source iterations`
 		);
 	} else if (compiledPreviewCompatible) {
 		console.log(

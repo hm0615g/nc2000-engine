@@ -85,18 +85,174 @@ function verifyCompiledPreview(): Plugin {
     name: "verify-compiled-preview",
     apply: "build",
     buildStart() {
-      const artifact = JSON.parse(fs.readFileSync(path.join(dataDir, "compiled-preview-v1.json"), "utf8"));
-      const catalog = JSON.parse(fs.readFileSync(path.join(dataDir, "team-pool-v2/team-pool.json"), "utf8"));
-      const profiles = JSON.parse(fs.readFileSync(path.join(dataDir, "search-profiles.json"), "utf8"));
-      const publicRosters = new Set(catalog.teams.map((t: { sets: { species: string; level: number }[] }) => JSON.stringify(t.sets.map(p => [p.species, p.level]))));
-      if (artifact.matchups !== catalog.teams.length * publicRosters.size)
-        throw new Error("Compiled previews do not cover the complete catalog matchup grid.");
-      if (artifact.format !== "nc2000-compiled-preview-v1" || !artifact.inputs || !artifact.matchups || Object.keys(artifact.policies ?? {}).length !== artifact.matchups)
-        throw new Error("Compiled previews are incomplete. Run compile_preview and tools/compile-preview-artifact.py.");
-      if (artifact.c !== profiles.blind.c) throw new Error("Compiled previews use a different search coefficient. Rebuild the preview artifact.");
-      for (const [relative, expected] of Object.entries(artifact.inputs)) {
-        const actual = createHash("sha256").update(fs.readFileSync(path.join(repoRoot, relative))).digest("hex");
-        if (actual !== expected) throw new Error(`Stale compiled previews: ${relative}. Rebuild the preview artifact.`);
+      const artifactPath = path.join(dataDir, "compiled-preview-v1.json");
+      const artifactText = fs.readFileSync(artifactPath, "utf8");
+      const artifact = JSON.parse(artifactText);
+      const catalog = JSON.parse(
+        fs.readFileSync(
+          path.join(dataDir, "team-pool-v2/team-pool.json"),
+          "utf8",
+        ),
+      );
+      const profiles = JSON.parse(
+        fs.readFileSync(
+          path.join(dataDir, "search-profiles.json"),
+          "utf8",
+        ),
+      );
+
+      const publicRosters = new Set(
+        catalog.teams.map(
+          (t: { sets: { species: string; level: number }[] }) =>
+            JSON.stringify(t.sets.map(p => [p.species, p.level])),
+        ),
+      );
+
+      if (artifact.matchups !== catalog.teams.length * publicRosters.size) {
+        throw new Error(
+          "Compiled previews do not cover the complete catalog matchup grid.",
+        );
+      }
+
+      if (
+        artifact.format !== "nc2000-compiled-preview-v1" ||
+        !artifact.inputs ||
+        !artifact.matchups ||
+        Object.keys(artifact.policies ?? {}).length !== artifact.matchups
+      ) {
+        throw new Error(
+          "Compiled previews are incomplete. Run compile_preview and " +
+          "tools/compile-preview-artifact.py.",
+        );
+      }
+
+      if (artifact.c !== profiles.blind.c) {
+        throw new Error(
+          "Compiled previews use a different search coefficient. " +
+          "Rebuild the preview artifact.",
+        );
+      }
+
+      const mismatches: Record<
+        string,
+        { artifact: string; current: string }
+      > = {};
+
+      for (const [relative, expectedValue] of Object.entries(
+        artifact.inputs,
+      )) {
+        const expected = String(expectedValue);
+        const actual = createHash("sha256")
+          .update(fs.readFileSync(path.join(repoRoot, relative)))
+          .digest("hex");
+
+        if (actual !== expected) {
+          mismatches[relative] = {
+            artifact: expected,
+            current: actual,
+          };
+        }
+      }
+
+      const mismatchKeys = Object.keys(mismatches).sort();
+
+      // Normal upstream build: exact source/artifact identity.
+      if (mismatchKeys.length === 0) return;
+
+      // Fork build: only an exact, artifact-bound sidecar attestation may
+      // authorize a reviewed source delta.
+      const sidecarPath = path.join(
+        dataDir,
+        "compiled-preview-fork-attestation-v1.json",
+      );
+
+      if (!fs.existsSync(sidecarPath)) {
+        throw new Error(
+          `Stale compiled previews: ${mismatchKeys[0]}. ` +
+          "Rebuild the preview artifact or provide a valid fork attestation.",
+        );
+      }
+
+      const sidecar = JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
+
+      if (
+        sidecar.format !==
+        "nc2000-compiled-preview-fork-attestation-v1"
+      ) {
+        throw new Error("Unexpected compiled-preview fork-attestation format.");
+      }
+
+      if (sidecar.kind !== "diagnostic-only-source-delta-v1") {
+        throw new Error("Unexpected compiled-preview fork-attestation kind.");
+      }
+
+      const artifactSha256 = createHash("sha256")
+        .update(artifactText)
+        .digest("hex");
+
+      if (sidecar.artifactSha256 !== artifactSha256) {
+        throw new Error(
+          "Fork attestation does not match compiled-preview artifact SHA256.",
+        );
+      }
+
+      if (sidecar.artifactBuild !== artifact.build) {
+        throw new Error(
+          "Fork attestation does not match compiled-preview artifact build.",
+        );
+      }
+
+      const policySha256 = createHash("sha256")
+        .update(JSON.stringify(artifact.policies ?? {}))
+        .digest("hex");
+
+      if (sidecar.policySha256 !== policySha256) {
+        throw new Error(
+          "Fork attestation does not match compiled-preview policy SHA256.",
+        );
+      }
+
+      if (
+        sidecar.policyCount !==
+        Object.keys(artifact.policies ?? {}).length
+      ) {
+        throw new Error(
+          "Fork attestation does not match compiled-preview policy count.",
+        );
+      }
+
+      if (
+        !sidecar.changedInputs ||
+        typeof sidecar.changedInputs !== "object"
+      ) {
+        throw new Error("Fork attestation changedInputs is missing.");
+      }
+
+      const attestedKeys = Object.keys(sidecar.changedInputs).sort();
+
+      if (
+        JSON.stringify(attestedKeys) !== JSON.stringify(mismatchKeys)
+      ) {
+        throw new Error(
+          "Fork attestation does not cover exactly the current " +
+          `source delta: actual=[${mismatchKeys.join(", ")}], ` +
+          `attested=[${attestedKeys.join(", ")}].`,
+        );
+      }
+
+      for (const relative of mismatchKeys) {
+        const attested = sidecar.changedInputs[relative];
+        const actual = mismatches[relative];
+
+        if (
+          !attested ||
+          attested.artifact !== actual.artifact ||
+          attested.current !== actual.current
+        ) {
+          throw new Error(
+            `Fork attestation digest mismatch: ${relative}.`,
+          );
+        }
       }
     },
   };

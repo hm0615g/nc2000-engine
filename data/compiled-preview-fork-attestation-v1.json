@@ -1,0 +1,20 @@
+{
+  "format": "nc2000-compiled-preview-fork-attestation-v1",
+  "kind": "diagnostic-only-source-delta-v1",
+  "artifactSha256": "be28ac68a01d117783c4dedc33aaebeebb62c41563360959eeeb5af2b1567691",
+  "artifactBuild": "fnv1a64:5a1bf2e2c44b22be:m17e-solver-build-v3",
+  "currentBuild": "fnv1a64:3f0afde2737498e3:m17e-solver-build-v3",
+  "policySha256": "de5c403dcf59861a80c35e04d7f898b8d350d8df83d280662e0e1c91909f39ef",
+  "policyCount": 504,
+  "changedInputs": {
+    "crates/bot/src/belief.rs": {
+      "artifact": "5c258995b98e6084902ddcc28b9fc64f27d716e43de9865f7c831f445ff37e1c",
+      "current": "bbec1613b77c0d94cf91c92bcd03e30b2ccf9976b6ba8516fadbd9c7ff1e4140"
+    },
+    "crates/bot/src/import.rs": {
+      "artifact": "4cda359610437d2ce9cc7cc28790ee9714b87670eb353e7b17f034c56495fb60",
+      "current": "7bcc288105c3c81dd01e48be346a5647e449aab2736a322a56144b02ef2f81b7"
+    }
+  },
+  "note": "Fork-local compatibility attestation. The upstream compiled-preview artifact is kept byte-for-byte unmodified. Only the exact reviewed belief/import diagnostic delta is permitted."
+}
