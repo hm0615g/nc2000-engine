@@ -144,6 +144,7 @@ impl RmConfig {
             switch: self.rollout_switch,
             perish_escape: self.rollout_perish,
             perish_combo: self.rollout_combo,
+            blindspot_leaf: true,
         }
     }
 }
@@ -402,11 +403,21 @@ pub(crate) fn run_iteration(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
 ) -> f64 {
+    let preview_root = nodes.get(start).is_some_and(|n| n.preview);
     run_iteration_with_leaf(
         cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root,
         root_joint, depth_out, &mut |sim, rng, rollout| {
+            let mut rules = cfg.rollout_rules();
+            if preview_root {
+                rules.blindspot_leaf = false;
+            }
             if rollout {
-                playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_rules())
+                playout_value(sim, dex, &cfg.playout, turn_cap, rng, rules)
+            } else if rules.blindspot_leaf {
+                match &cfg.playout {
+                    Playout::Uniform => crate::mcts::hp_eval(sim),
+                    Playout::Heavy { weights, .. } => crate::eval::eval_leaf_blindspot(sim, dex, weights),
+                }
             } else {
                 leaf_eval(cfg, sim, dex)
             }
@@ -626,6 +637,7 @@ pub struct MaskRules {
     /// "how much of the class is recoverable without ever being wrong".
     /// OFF by default.
     pub immunity_all_switchins: bool,
+    pub extended_noops: bool,
 }
 
 impl Default for MaskRules {
@@ -638,6 +650,7 @@ impl Default for MaskRules {
             sleep_talk_awake: true,
             immunity_ignores_switch_read: false,
             immunity_all_switchins: false,
+            extended_noops: true,
         }
     }
 }
@@ -680,8 +693,24 @@ pub(crate) fn dominated_reason(
             && faster_than_foe(b, dex, side)
             && b.has_sleeping_pokemon(1 - side)
         {
-            return Some("inflicting sleep would forfeit under Sleep Clause");
+            let opp = &b.sides[1 - side];
+            let bench_asleep = opp.party.iter().skip(1).any(|&slot| {
+                let p = &opp.roster[slot as usize];
+                !p.fainted && p.status == nc2000_engine::state::Status::Slp
+            });
+            if bench_asleep || foe_can_switch(b, side) {
+                return Some("inflicting sleep would forfeit under Sleep Clause");
+            }
         }
+    }
+    if b.active_id(side).is_some_and(|id| {
+        let me = b.poke(id);
+        dex.conds_id("encore").is_some_and(|cond| me.has_volatile(cond))
+            && (dex.conds_id("substitute").is_some_and(|cond| me.has_volatile(cond))
+                || me.boosts.iter().take(5).any(|&x| x > 0)
+                || b.active_id(1 - side).is_some_and(|f| b.poke(f).trapped))
+    }) {
+        return None;
     }
     if rules.destiny_bond_wait
         && b.active_id(1 - side).is_some_and(|id| {
@@ -704,9 +733,30 @@ pub(crate) fn dominated_reason(
     if rules.own_recovery_wait
         && b.active_id(side).is_some_and(|id| {
             let me = b.poke(id);
-            !me.fainted && me.hp > 0 && me.hp < me.maxhp
-                && me.item.is_some() && me.item == dex.items.id("leftovers")
+            !me.fainted
+                && me.hp > 0
+                && me.hp < me.maxhp
+                && me.item.is_some()
+                && me.item == dex.items.id("leftovers")
         })
+        && (!rules.extended_noops
+            || b.active_id(1 - side).is_some_and(|f| {
+                let fp = b.poke(f);
+                fp.status == nc2000_engine::state::Status::Slp
+                    || fp.status == nc2000_engine::state::Status::Frz
+                    || fp.transformed
+                    || fp.move_slots.iter().any(|slot| !slot.shared)
+                    || crate::belief::format_learnsets()
+                        .species(dex.species.key(fp.species))
+                        .map_or(true, |ls| {
+                            ls.moves.iter().any(|m| {
+                                matches!(
+                                    m.as_str(),
+                                    "counter" | "mirrorcoat" | "metronome" | "mirrormove" | "sketch"
+                                )
+                            })
+                        })
+            }))
     {
         return None;
     }
@@ -907,7 +957,10 @@ fn noop_reason(
         let me = b.poke(att);
         me.hp >= me.maxhp
     };
-    if ms.heal.is_some() || key == "rest" {
+    if ms.heal.is_some()
+        || key == "rest"
+        || (rules.extended_noops && matches!(key, "moonlight" | "morningsun" | "synthesis"))
+    {
         verdict!(
             full_hp && faster_than_foe(b, dex, side)
                 && (!rules.priority_heal || !foe_may_preempt_heal(b, dex, side, ms.priority)),
@@ -967,6 +1020,48 @@ fn noop_reason(
     // of 22 turns on the two that cannot do anything.
     if matches!(key, "perishsong" | "destinybond") && b.sides[side].pokemon_left == 1 {
         yes!("Perish Song and Destiny Bond fail from the last mon");
+    }
+    if rules.extended_noops && ms.self_switch.is_some() && !b.can_switch(side as u8) {
+        yes!("Baton Pass fails with nobody left to switch to");
+    }
+    if rules.extended_noops && key == "bellydrum" {
+        let me = b.poke(att);
+        let max_leftovers_gain = if me.item.is_some() && me.item == dex.items.id("leftovers") {
+            (me.maxhp / 16).max(1)
+        } else {
+            0
+        };
+        let foe_may_raise_hp = b.active_id(1 - side).is_some_and(|f| {
+            let fp = b.poke(f);
+            fp.transformed
+                || fp.move_slots.iter().any(|slot| !slot.shared)
+                || crate::belief::format_learnsets()
+                    .species(dex.species.key(fp.species))
+                    .map_or(true, |ls| {
+                        ls.moves.iter().any(|m| {
+                            matches!(
+                                m.as_str(),
+                                "painsplit" | "present" | "metronome" | "mirrormove" | "sketch"
+                            )
+                        })
+                    })
+        });
+        let hp_too_low_strict = (me.hp as f64) <= (me.maxhp as f64) / 2.0
+            && (faster_than_foe(b, dex, side)
+                || (!foe_may_raise_hp
+                    && ((me.hp + max_leftovers_gain) as f64) <= (me.maxhp as f64) / 2.0));
+        let atk_capped_strict = me.boosts[0] >= 6 && faster_than_foe(b, dex, side);
+        if hp_too_low_strict || atk_capped_strict {
+            yes!("Belly Drum needs over half HP and uncapped Attack");
+        }
+    }
+    if rules.extended_noops
+        && key == "healbell"
+        && faster_than_foe(b, dex, side)
+        && !foe_may_preempt_heal(b, dex, side, ms.priority)
+        && b.sides[side].roster.iter().all(|p| p.status == Status::None)
+    {
+        yes!("Heal Bell has no status to cure");
     }
     // ---- Sleep Talk / Snore chosen while AWAKE. `moveexec.rs:521`
     // (`("sleeptalk","onTry") | ("snore","onTry")` => `RV::from_bool(status ==
@@ -1136,6 +1231,41 @@ fn noop_reason(
         );
     }
 
+    if rules.extended_noops
+        && matches!(
+            key,
+            "disable" | "encore" | "spite" | "mirrormove" | "conversion2" | "mimic"
+        )
+    {
+        if let Some(def) = foe {
+            let d = b.poke(def);
+            let no_last = if key == "encore" {
+                d.last_move_encore.is_none()
+            } else {
+                d.last_move.is_none()
+            };
+            if no_last
+                && faster_than_foe(b, dex, side)
+                && !foe_may_preempt_heal(b, dex, side, ms.priority)
+            {
+                yes!("the target has not used a move yet");
+            }
+        }
+    }
+
+    // ---- Non-Ghost Curse (`moveexec.rs:576`: `curse` / `onModifyMove`).
+    // In `data/gen2stadium2.json`, `curse` has `volatileStatus: "curse"`,
+    // `target: "normal"`, and `boosts: None`, because Ghost-type Curse applies
+    // the `curse` volatile to the foe; for any non-Ghost user, `onModifyMove`
+    // rewrites the move into a self-boost (`+1 Atk, +1 Def, -1 Spe`).
+    if key == "curse" && !b.poke(att).has_type(dex.known_types.ghost) {
+        let me = b.poke(att);
+        verdict!(
+            me.boosts[0] >= 6 && me.boosts[1] >= 6 && faster_than_foe(b, dex, side),
+            "every stat this move moves is already capped"
+        );
+    }
+
     if let Some(v) = ms.volatile_status.as_deref() {
         // Safeguard again: side-wide, so it stops confusion whoever is in.
         if v == "confusion" && key != "swagger" && foe_targeted && safeguard {
@@ -1155,7 +1285,18 @@ fn noop_reason(
             // A volatile can also run out on its owner's own move (a
             // confusion clock is decremented before the move it hinders), so
             // the foe-directed half needs us to move first.
-            let stable = tgt == Some(att) || faster_than_foe(b, dex, side);
+            //
+            // `destinybond` on `att` is cleared by `onFoeAfterMoveSelf`
+            // (`conditions.rs:808`) and `onFoeSwitchOut` (`conditions.rs:815`),
+            // so when the foe switches or moves before us, `destinybond` is
+            // removed before our move executes and re-arming it succeeds.
+            let stable = if v == "destinybond" && tgt == Some(att) {
+                !foe_can_switch(b, side)
+                    && faster_than_foe(b, dex, side)
+                    && !foe_may_preempt_heal(b, dex, side, ms.priority)
+            } else {
+                tgt == Some(att) || faster_than_foe(b, dex, side)
+            };
             if stable && b.poke(t).has_volatile(vid) {
                 yes!("the target already has that volatile");
             }
@@ -2763,6 +2904,172 @@ mod dominated_action_tests {
             let best = s.best(0).map(|c| c.to_input(&dex)).unwrap();
             assert_ne!(best, "move reflect", "masked no-op won argmax (seed {seed})");
             assert_ne!(best, "move rest", "rest at full HP won argmax (seed {seed})");
+        }
+    }
+
+    #[test]
+    fn non_ghost_curse_and_slower_destiny_bond_and_encored_stayin_and_stranded_sleep_edges() {
+        let (dex, mut b) = ghost_setup("Haunter");
+        strand(&mut b, 1);
+        let snorlax = b.active_id(0).unwrap();
+        let misdreavus = b.active_id(1).unwrap();
+
+        // 1. Non-Ghost Curse vs a stranded foe that already carries `curse` volatile:
+        // Snorlax's Curse boosts (+1 Atk, +1 Def, -1 Spe) instead of applying `curse`.
+        b.add_volatile(&dex, misdreavus, "curse", Some(misdreavus), EffectHandle::None);
+        b.poke_mut(snorlax).boosts[4] = 6; // make Snorlax faster
+        assert!(
+            !certain_noop(&b, &dex, 0, mv(&dex, "curse")),
+            "non-Ghost Curse boosts user even when foe has curse volatile"
+        );
+        b.poke_mut(snorlax).boosts[0] = 6;
+        b.poke_mut(snorlax).boosts[1] = 6;
+        assert!(
+            certain_noop(&b, &dex, 0, mv(&dex, "curse")),
+            "non-Ghost Curse at +6 Atk/+6 Def when faster is capped"
+        );
+
+        // 2. Slower Destiny Bond re-arm: when slower Misdreavus still carries
+        // `destinybond` from moving second last turn, the faster foe's move
+        // clears `destinybond` via `onFoeAfterMoveSelf` before Misdreavus acts.
+        let (_, mut db) = st_setup();
+        strand(&mut db, 1);
+        let def1 = db.active_id(1).unwrap();
+        db.add_volatile(&dex, def1, "destinybond", Some(def1), EffectHandle::None);
+        assert!(
+            !certain_noop(&db, &dex, 1, mv(&dex, "destinybond")),
+            "slower holder re-arms Destiny Bond after faster foe acts"
+        );
+        db.poke_mut(def1).boosts[4] = 6; // now side 1 is faster and side 0 is stranded
+        strand(&mut db, 0);
+        assert!(
+            certain_noop(&db, &dex, 1, mv(&dex, "destinybond")),
+            "faster holder vs stranded non-priority foe cannot re-apply Destiny Bond"
+        );
+
+        // 3. Encore lock on a no-op move:
+        //    - Without switch-lost state (Substitute / positive boosts / trapped foe),
+        //      it remains masked so flat-root argmax cannot stay in on a dead move.
+        //    - With switch-lost state (e.g. Substitute or +1 boost), it is unmasked so
+        //      the holder is not forced to switch out and forfeit its state.
+        let (_, mut enc) = setup();
+        let e_att = enc.active_id(0).unwrap();
+        enc.add_side_condition(&dex, 0, "reflect", Some(e_att), EffectHandle::None);
+        assert!(
+            dominated_reason(&enc, &dex, 0, mv(&dex, "reflect"), MaskRules::default()).is_some()
+        );
+        enc.poke_mut(e_att).last_move_encore = dex.moves.id("reflect");
+        enc.add_volatile(&dex, e_att, "encore", None, EffectHandle::None);
+        assert!(
+            dominated_reason(&enc, &dex, 0, mv(&dex, "reflect"), MaskRules::default()).is_some(),
+            "Encored active mon without Substitute/boosts/trap still masks dead move"
+        );
+        enc.poke_mut(e_att).boosts[0] = 1;
+        assert!(
+            dominated_reason(&enc, &dex, 0, mv(&dex, "reflect"), MaskRules::default()).is_none(),
+            "Encored active mon with positive boosts or Substitute must not be forced to Switch"
+        );
+
+        // 4. Stranded active-only sleeping foe: sleep move cannot trigger Sleep Clause forfeit.
+        let (_, mut slp_b) = setup();
+        strand(&mut slp_b, 1);
+        let s_def = slp_b.active_id(1).unwrap();
+        slp_b.set_status(&dex, s_def, "slp", Some(e_att), EffectHandle::None, true);
+        assert_eq!(
+            dominated_reason(&slp_b, &dex, 0, mv(&dex, "sleeppowder"), MaskRules::default()),
+            Some("the target already carries a major status")
+        );
+        slp_b.add_volatile(&dex, s_def, "leechseed", Some(e_att), EffectHandle::None);
+        assert_eq!(
+            dominated_reason(&slp_b, &dex, 0, mv(&dex, "sleeppowder"), MaskRules::default()),
+            None,
+            "harmless sleep move into stranded sleeping foe is unmasked during residual wait"
+        );
+    }
+
+    #[test]
+    fn belly_drum_baton_pass_heal_bell_morning_sun_and_own_recovery_wait_edges() {
+        let (dex, mut b) = setup();
+        let me = b.active_id(0).unwrap();
+        let foe = b.active_id(1).unwrap();
+        let rules = MaskRules::default();
+        b.poke_mut(me).boosts[4] = 6; // side 0 acts first
+
+        // 1. Moonlight / Morning Sun / Synthesis at full HP are provable no-ops
+        for key in ["moonlight", "morningsun", "synthesis"] {
+            assert_eq!(
+                noop_reason(&b, &dex, 0, mv(&dex, key), rules),
+                Some("healing at full HP, and faster"),
+                "{key} at full HP must be masked as a no-op"
+            );
+        }
+        b.poke_mut(me).hp -= 1;
+        for key in ["moonlight", "morningsun", "synthesis"] {
+            assert_eq!(noop_reason(&b, &dex, 0, mv(&dex, key), rules), None);
+        }
+        b.poke_mut(me).hp = b.poke(me).maxhp;
+
+        // 2. Baton Pass with bench alive is live; when stranded (last mon), it is a no-op
+        assert_eq!(noop_reason(&b, &dex, 0, mv(&dex, "batonpass"), rules), None);
+        strand(&mut b, 0);
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "batonpass"), rules),
+            Some("Baton Pass fails with nobody left to switch to")
+        );
+
+        // 3. Belly Drum when HP <= 50% or Attack already at +6 is a no-op
+        assert_eq!(noop_reason(&b, &dex, 0, mv(&dex, "bellydrum"), rules), None);
+        b.poke_mut(me).hp = b.poke(me).maxhp / 2;
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "bellydrum"), rules),
+            Some("Belly Drum needs over half HP and uncapped Attack")
+        );
+        // Even with Leftovers and slower, if hp + leftovers <= maxhp/2 and foe has no Pain Split/Present/Metronome, still no-op
+        let orig_foe_species = b.poke(foe).species;
+        b.poke_mut(foe).species = dex.species.id("cloyster").unwrap();
+        b.poke_mut(me).boosts[4] = -6;
+        b.poke_mut(me).item = dex.items.id("leftovers");
+        b.poke_mut(me).hp = b.poke(me).maxhp / 4;
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "bellydrum"), rules),
+            Some("Belly Drum needs over half HP and uncapped Attack")
+        );
+        // Narrowed own_recovery_wait must NOT unmask dead Belly Drum against Cloyster (no Counter/Mirror Coat/Metronome)
+        assert!(
+            dominated_reason(&b, &dex, 0, mv(&dex, "bellydrum"), rules).is_some(),
+            "Leftovers alone must not unmask dead Belly Drum against Cloyster"
+        );
+        b.poke_mut(foe).species = orig_foe_species;
+        // At full HP and +6 Attack while faster, Belly Drum also fails
+        b.poke_mut(me).hp = b.poke(me).maxhp;
+        b.poke_mut(me).boosts[4] = 6;
+        b.poke_mut(me).boosts[0] = 6;
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "bellydrum"), rules),
+            Some("Belly Drum needs over half HP and uncapped Attack")
+        );
+        b.poke_mut(me).boosts[0] = 0;
+
+        // 4. Heal Bell when no party member has a major status
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "healbell"), rules),
+            Some("Heal Bell has no status to cure")
+        );
+        b.set_status(&dex, me, "par", Some(foe), EffectHandle::None, true);
+        assert_eq!(noop_reason(&b, &dex, 0, mv(&dex, "healbell"), rules), None);
+        b.pokemon_clear_status(&dex, me);
+
+        // 5. Disable / Encore / Spite / Mirror Move / Conversion2 / Mimic vs stranded foe with last_move == None
+        strand(&mut b, 1);
+        b.poke_mut(foe).last_move = None;
+        b.poke_mut(foe).last_move_encore = None;
+        b.poke_mut(me).boosts[4] = 6;
+        for key in ["disable", "encore", "spite", "mirrormove", "conversion2", "mimic"] {
+            assert_eq!(
+                noop_reason(&b, &dex, 0, mv(&dex, key), rules),
+                Some("the target has not used a move yet"),
+                "{key} vs stranded foe with no last_move must be masked"
+            );
         }
     }
 }

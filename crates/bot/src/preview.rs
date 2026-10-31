@@ -689,6 +689,7 @@ impl Agent for CounterPickAgent {
 pub struct RolloutAgent {
     playout: crate::mcts::Playout,
     rng: SplitMix64,
+    rules: crate::mcts::RolloutRules,
 }
 
 impl RolloutAgent {
@@ -700,7 +701,13 @@ impl RolloutAgent {
                 weights: crate::eval::EvalWeights::default(),
             },
             rng: SplitMix64::new(seed),
+            rules: crate::mcts::RolloutRules::default(),
         }
+    }
+
+    pub fn with_rules(mut self, rules: crate::mcts::RolloutRules) -> Self {
+        self.rules = rules;
+        self
     }
 }
 
@@ -716,10 +723,15 @@ impl Agent for RolloutAgent {
         side: usize,
         choices: &[SearchChoice],
     ) -> SearchChoice {
-        // M8 screen self-play stays the historical no-switch policy (its role
-        // is a cheap ranking signal; bit-identity with the baked tables).
-        let rules = crate::mcts::RolloutRules::default();
-        crate::mcts::playout_pick(battle, dex, &self.playout, side, choices, &mut self.rng, rules)
+        crate::mcts::playout_pick(
+            battle,
+            dex,
+            &self.playout,
+            side,
+            choices,
+            &mut self.rng,
+            self.rules,
+        )
     }
 }
 

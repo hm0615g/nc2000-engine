@@ -557,16 +557,27 @@ impl BlindSearch {
                 &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0, leaf, None,
             )
         } else if let Some(trace) = trace {
+            let preview_root = self.is_preview();
             crate::smmcts::run_iteration_with_leaf(
                 &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
                 &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
                 &mut |sim, rng, rollout| {
+                    let mut rules = self.cfg.rollout_rules();
+                    if preview_root {
+                        rules.blindspot_leaf = false;
+                    }
                     if rollout {
-                        crate::mcts::playout_value(sim, dex, &self.cfg.playout, self.turn_cap, rng, self.cfg.rollout_rules())
+                        crate::mcts::playout_value(sim, dex, &self.cfg.playout, self.turn_cap, rng, rules)
                     } else {
                         match &self.cfg.playout {
                             crate::mcts::Playout::Uniform => crate::mcts::hp_eval(sim),
-                            crate::mcts::Playout::Heavy { weights, .. } => crate::eval::eval_leaf(sim, dex, weights),
+                            crate::mcts::Playout::Heavy { weights, .. } => {
+                                if rules.blindspot_leaf {
+                                    crate::eval::eval_leaf_blindspot(sim, dex, weights)
+                                } else {
+                                    crate::eval::eval_leaf(sim, dex, weights)
+                                }
+                            }
                         }
                     }
                 }, Some(trace),
