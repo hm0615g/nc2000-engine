@@ -222,11 +222,7 @@ fn recompute_population_wars(strains: &mut [Strain]) -> (f64, f64, f64) {
             var_l += dl * dl;
         }
     }
-    let beta_l = if var_l > 1e-6 {
-        cov_lm / var_l
-    } else {
-        0.0
-    };
+    let beta_l = if var_l > 1e-6 { cov_lm / var_l } else { 0.0 };
     for s in strains.iter_mut().filter(|s| s.cum_games > 0.0) {
         let g = s.cum_games.max(1.0);
         for i in 0..s.team.len().min(6) {
@@ -292,13 +288,24 @@ where
         .unwrap_or(default)
 }
 
-fn build_constraint(dex: &Dex, anchors_str: &str, max_staples_str: &str) -> (Vec<String>, NicheConstraint) {
+fn build_constraint(
+    dex: &Dex,
+    anchors_str: &str,
+    max_staples_str: &str,
+) -> (Vec<String>, NicheConstraint) {
     let mut constraint = NicheConstraint::default();
     let mut anchor_list: Vec<String> = Vec::new();
     if !anchors_str.is_empty() {
-        for sp in anchors_str.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        for sp in anchors_str
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
             let sid = toid(sp);
-            assert!(dex.species.id(&sid).is_some(), "unknown anchor species: {sp}");
+            assert!(
+                dex.species.id(&sid).is_some(),
+                "unknown anchor species: {sp}"
+            );
             anchor_list.push(sid);
         }
         constraint.anchor_slots = anchor_list.len();
@@ -332,7 +339,10 @@ fn parse_agent_spec(
         );
         let kind = parts[0];
         let it: u32 = parts[1].parse().expect("agent iters");
-        let c: f64 = parts.get(2).map(|s| s.parse().expect("agent c")).unwrap_or(0.4);
+        let c: f64 = parts
+            .get(2)
+            .map(|s| s.parse().expect("agent c"))
+            .unwrap_or(0.4);
         match kind {
             "open" => (it, c, None, true),
             "blind" => {
@@ -358,8 +368,13 @@ fn load_gauntlet_file(dex: &Dex, gen: &TeamGen, gfile: &str) -> (Vec<Vec<Pokemon
     let gv: Value = serde_json::from_str(&gtext).unwrap();
     let mut teams = Vec::new();
     let mut weights = Vec::new();
-    for t in gv["teams"].as_array().expect("gauntlet-file: missing teams") {
-        let raw = t["sets"].as_array().expect("gauntlet-file team missing sets");
+    for t in gv["teams"]
+        .as_array()
+        .expect("gauntlet-file: missing teams")
+    {
+        let raw = t["sets"]
+            .as_array()
+            .expect("gauntlet-file team missing sets");
         let canon = gen.canonize(dex, raw).expect("gauntlet-file team invalid");
         teams.push(to_sets(&canon).unwrap());
         let w = t["weight"]
@@ -531,8 +546,11 @@ fn cmd_evolve_island(args: &[String]) {
                 .unwrap_or(4)
         });
 
-    let gfile = flag(args, "--gauntlet-file")
-        .unwrap_or_else(|| root.join("data/meta-nash-v3/pool-artifact.json").to_string_lossy().into_owned());
+    let gfile = flag(args, "--gauntlet-file").unwrap_or_else(|| {
+        root.join("data/meta-nash-v3/pool-artifact.json")
+            .to_string_lossy()
+            .into_owned()
+    });
     let (bench_teams, bench_weights) = load_gauntlet_file(&dex, &gen, &gfile);
     let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root, &dex, &gen);
     let max_per_archetype: usize = num(args, "--max-per-archetype", 2);
@@ -636,7 +654,9 @@ fn cmd_evolve_island(args: &[String]) {
             if let Some(ref sdir) = seed_dir {
                 let imported = import_seed_teams_from_dir(&dex, &gen, sdir, niche, &mut rng);
                 if !imported.is_empty() {
-                    let pick_idx = (slot_in_niche + ((rng.next_f64() * (imported.len() as f64)) as usize)) % imported.len();
+                    let pick_idx = (slot_in_niche
+                        + ((rng.next_f64() * (imported.len() as f64)) as usize))
+                        % imported.len();
                     let chosen = &imported[pick_idx];
                     if slot_in_niche == 0 {
                         team_opt = Some(chosen.clone());
@@ -806,12 +826,15 @@ fn cmd_evolve_island(args: &[String]) {
             }
         }
 
-        let bench_games_per_opp =
-            ((eval_games as usize * 3) / slice_len.max(1)).clamp(2, 6) as u32;
+        let bench_games_per_opp = ((eval_games as usize * 3) / slice_len.max(1)).clamp(2, 6) as u32;
         let bench_n_games = (bench_games_per_opp as usize * slice_len) as f64;
         let eco_n_games = (eval_games as usize * eco_opps.len()) as f64;
-        let total_w_games =
-            bench_n_games + if eco_opps.is_empty() { 0.0 } else { eco_n_games };
+        let total_w_games = bench_n_games
+            + if eco_opps.is_empty() {
+                0.0
+            } else {
+                eco_n_games
+            };
 
         let pre_wave_bayes: BTreeMap<String, f64> = ledger
             .active_strains
@@ -930,7 +953,10 @@ fn cmd_evolve_island(args: &[String]) {
                     if w.saturating_sub(s.born_wave) == 1 && !s.last_op.starts_with("level-tweak") {
                         if let Some((_, slot_str)) = s.last_op.split_once('@') {
                             if let Ok(slot_idx) = slot_str.parse::<usize>() {
-                                if slot_idx < 6 && s.last_wave_slot_picks[slot_idx] <= 1e-6 && delta > 0.0 {
+                                if slot_idx < 6
+                                    && s.last_wave_slot_picks[slot_idx] <= 1e-6
+                                    && delta > 0.0
+                                {
                                     delta = 0.0;
                                 }
                             }
@@ -1063,14 +1089,12 @@ fn bud_next_wave_by_niche(
     veterans.sort_by(|a, b| {
         let qa = a.bayes_fit + a.deme_bonus;
         let qb = b.bayes_fit + b.deme_bonus;
-        qb.partial_cmp(&qa)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        qb.partial_cmp(&qa).unwrap_or(std::cmp::Ordering::Equal)
     });
     grace_buds.sort_by(|a, b| {
         let qa = a.bayes_fit + a.deme_bonus;
         let qb = b.bayes_fit + b.deme_bonus;
-        qb.partial_cmp(&qa)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        qb.partial_cmp(&qa).unwrap_or(std::cmp::Ordering::Equal)
     });
 
     let top_vet_fit = veterans
@@ -1119,7 +1143,8 @@ fn bud_next_wave_by_niche(
         let viable = if max_per_archetype == usize::MAX {
             b_wr >= 0.32 || survivors.len() < carry
         } else {
-            s.bench_games < 20.0 || (b_wr >= 0.26 && s.bayes_fit + s.deme_bonus + 0.14 >= top_vet_fit)
+            s.bench_games < 20.0
+                || (b_wr >= 0.26 && s.bayes_fit + s.deme_bonus + 0.14 >= top_vet_fit)
         };
         let sp = s.species_set();
         if survivors.len() < carry
@@ -1140,8 +1165,7 @@ fn bud_next_wave_by_niche(
         ledger.archived_strains.sort_by(|a, b| {
             let qa = a.bayes_fit + a.deme_bonus;
             let qb = b.bayes_fit + b.deme_bonus;
-            qb.partial_cmp(&qa)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            qb.partial_cmp(&qa).unwrap_or(std::cmp::Ordering::Equal)
         });
         let mut remaining_archive = Vec::with_capacity(ledger.archived_strains.len());
         for mut s in ledger.archived_strains.drain(..) {
@@ -1157,7 +1181,9 @@ fn bud_next_wave_by_niche(
             let viable = if max_per_archetype == usize::MAX {
                 b_wr >= 0.35
             } else {
-                s.bench_games >= 20.0 && b_wr >= 0.28 && s.bayes_fit + s.deme_bonus + 0.12 >= top_vet_fit
+                s.bench_games >= 20.0
+                    && b_wr >= 0.28
+                    && s.bayes_fit + s.deme_bonus + 0.12 >= top_vet_fit
             };
             let sp = s.species_set();
             if s.symbiont_of.is_none()
@@ -1279,7 +1305,10 @@ fn bud_next_wave_by_niche(
         let mut active_graft = true;
         if let Some((op_name, slot_str)) = s.last_op.split_once('@') {
             if let Ok(slot_idx) = slot_str.parse::<usize>() {
-                if slot_idx < 6 && !op_name.starts_with("level-tweak") && s.last_wave_slot_picks[slot_idx] < 0.08 {
+                if slot_idx < 6
+                    && !op_name.starts_with("level-tweak")
+                    && s.last_wave_slot_picks[slot_idx] < 0.08
+                {
                     active_graft = false;
                 }
             }
@@ -1446,11 +1475,7 @@ fn collect_all_strains(in_dir: &Path, min_games: f64) -> Vec<Strain> {
         };
         0.75 * bench_eb + 0.25 * s.bayes_fit
     };
-    out.sort_by(|a, b| {
-        strain_quality(b)
-            .partial_cmp(&strain_quality(a))
-            .unwrap()
-    });
+    out.sort_by(|a, b| strain_quality(b).partial_cmp(&strain_quality(a)).unwrap());
     out
 }
 
@@ -1547,8 +1572,10 @@ fn cmd_extract_pool(args: &[String]) {
     // Re-sort `selected` by quality descending so `--top-candidates` in `update-pool`
     // always evaluates the highest-ranked strains across both Pass 1 and Pass 2.
     selected.sort_by(|a, b| {
-        let qa = 0.75 * ((a.bench_wins + 24.0 * 0.40) / (a.bench_games + 24.0)) + 0.25 * a.bayes_fit;
-        let qb = 0.75 * ((b.bench_wins + 24.0 * 0.40) / (b.bench_games + 24.0)) + 0.25 * b.bayes_fit;
+        let qa =
+            0.75 * ((a.bench_wins + 24.0 * 0.40) / (a.bench_games + 24.0)) + 0.25 * a.bayes_fit;
+        let qb =
+            0.75 * ((b.bench_wins + 24.0 * 0.40) / (b.bench_games + 24.0)) + 0.25 * b.bayes_fit;
         qb.partial_cmp(&qa).unwrap()
     });
 
@@ -1703,7 +1730,9 @@ fn cmd_extract_nash(args: &[String]) {
                         if let (Some(si), Some(sj), Some(p)) = (
                             ri.as_str(),
                             rj.as_str(),
-                            rmat.get(i).and_then(|row| row.get(j)).and_then(Value::as_f64),
+                            rmat.get(i)
+                                .and_then(|row| row.get(j))
+                                .and_then(Value::as_f64),
                         ) {
                             ref_payoff_map.insert((si.to_string(), sj.to_string()), p);
                         }
@@ -1745,7 +1774,9 @@ fn cmd_extract_nash(args: &[String]) {
                 if !op.starts_with("level-tweak") {
                     if let Some((_kind, slot_str)) = op.split_once('@') {
                         if let Ok(mut_slot) = slot_str.parse::<usize>() {
-                            if let Some(tel) = t["slot_telemetry"].as_array().and_then(|a| a.get(mut_slot)) {
+                            if let Some(tel) =
+                                t["slot_telemetry"].as_array().and_then(|a| a.get(mut_slot))
+                            {
                                 let pr = tel["pick_rate"].as_f64().unwrap_or(0.0);
                                 if pr < 0.10 {
                                     return false;
@@ -1797,7 +1828,11 @@ fn cmd_extract_nash(args: &[String]) {
             vs_old * 100.0,
             total_n,
             vs_old_fresh * 100.0,
-            if passed { "ADMITTED" } else { "REJECTED (below gate)" }
+            if passed {
+                "ADMITTED"
+            } else {
+                "REJECTED (below gate)"
+            }
         );
         if passed {
             ids.push(id);
@@ -1906,7 +1941,10 @@ fn cmd_extract_nash(args: &[String]) {
         std::fs::create_dir_all(parent).unwrap();
     }
     write_json_atomic(&out_file, &out);
-    println!("Solved Nash equilibrium over {n} teams -> {}", out_file.display());
+    println!(
+        "Solved Nash equilibrium over {n} teams -> {}",
+        out_file.display()
+    );
     for s in &support {
         println!(
             "  {:20} weight={:.4}",
@@ -1950,7 +1988,12 @@ fn cmd_verify_nash(args: &[String]) {
         .unwrap()
         .iter()
         .enumerate()
-        .map(|(i, t)| t["id"].as_str().map(String::from).unwrap_or_else(|| format!("new-{i}")))
+        .map(|(i, t)| {
+            t["id"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_else(|| format!("new-{i}"))
+        })
         .collect();
     let ov: Value = serde_json::from_str(&std::fs::read_to_string(&old_file).unwrap()).unwrap();
     let old_ids: Vec<String> = ov["teams"]
@@ -1958,7 +2001,12 @@ fn cmd_verify_nash(args: &[String]) {
         .unwrap()
         .iter()
         .enumerate()
-        .map(|(i, t)| t["id"].as_str().map(String::from).unwrap_or_else(|| format!("old-{i}")))
+        .map(|(i, t)| {
+            t["id"]
+                .as_str()
+                .map(String::from)
+                .unwrap_or_else(|| format!("old-{i}"))
+        })
         .collect();
 
     let ref_matrix_file = flag(args, "--ref-matrix").unwrap_or_else(|| {
@@ -1975,7 +2023,9 @@ fn cmd_verify_nash(args: &[String]) {
                         if let (Some(si), Some(sj), Some(p)) = (
                             ri.as_str(),
                             rj.as_str(),
-                            rmat.get(i).and_then(|row| row.get(j)).and_then(Value::as_f64),
+                            rmat.get(i)
+                                .and_then(|row| row.get(j))
+                                .and_then(Value::as_f64),
                         ) {
                             ref_payoff_map.insert((si.to_string(), sj.to_string()), p);
                         }
@@ -2082,7 +2132,8 @@ fn cmd_update_ring(args: &[String]) {
     } else {
         // Initialize slot 0 from baseline human Nash equilibrium (meta-nash-v3)
         let base_file = root.join("data/meta-nash-v3/pool-artifact.json");
-        let bv: Value = serde_json::from_str(&std::fs::read_to_string(&base_file).unwrap()).unwrap();
+        let bv: Value =
+            serde_json::from_str(&std::fs::read_to_string(&base_file).unwrap()).unwrap();
         let mut base_teams: Vec<Value> = Vec::new();
         let mut w_sum = 0.0;
         for t in bv["teams"].as_array().unwrap() {
@@ -2112,7 +2163,8 @@ fn cmd_update_ring(args: &[String]) {
     ring.capacity = capacity;
 
     if let Some(add_file) = flag(args, "--add-file") {
-        let gen_name = flag(args, "--gen-name").unwrap_or_else(|| format!("g{}", ring.generations.len()));
+        let gen_name =
+            flag(args, "--gen-name").unwrap_or_else(|| format!("g{}", ring.generations.len()));
         let av: Value = serde_json::from_str(&std::fs::read_to_string(&add_file).unwrap()).unwrap();
         let mut gen_teams: Vec<Value> = Vec::new();
         let mut w_sum = 0.0;
@@ -2251,7 +2303,8 @@ fn cmd_update_pool(args: &[String]) {
     let (agent_iters, agent_c, blind_pool, open_sheet) = parse_agent_spec(args, &root, &dex, &gen);
 
     let mut master_teams: Vec<Value> = if master_path.exists() {
-        let mv: Value = serde_json::from_str(&std::fs::read_to_string(&master_path).unwrap()).unwrap();
+        let mv: Value =
+            serde_json::from_str(&std::fs::read_to_string(&master_path).unwrap()).unwrap();
         mv["teams"].as_array().unwrap().clone()
     } else {
         // Initialize from the 24 teams of `data/team-pool-v2/team-pool.json`
@@ -2300,7 +2353,9 @@ fn cmd_update_pool(args: &[String]) {
         for t in raw_teams {
             let tid = t["id"].as_str().unwrap();
             let sets = t["sets"].as_array().unwrap();
-            let canon = gen.canonize(&dex, sets).expect("canonize team-pool-v2 team");
+            let canon = gen
+                .canonize(&dex, sets)
+                .expect("canonize team-pool-v2 team");
             let mut sum = 0.0;
             let mut cnt = 0usize;
             for oid in &ids24 {
@@ -2333,8 +2388,11 @@ fn cmd_update_pool(args: &[String]) {
 
     if let Some(cand_file) = flag(args, "--candidates") {
         let origin_tag = flag(args, "--origin").unwrap_or_else(|| "evolved".into());
-        let cv: Value = serde_json::from_str(&std::fs::read_to_string(&cand_file).unwrap()).unwrap();
-        let cand_arr = cv["teams"].as_array().expect("--candidates missing teams array");
+        let cv: Value =
+            serde_json::from_str(&std::fs::read_to_string(&cand_file).unwrap()).unwrap();
+        let cand_arr = cv["teams"]
+            .as_array()
+            .expect("--candidates missing teams array");
 
         // Snapshot current Master Pool teams as benchmark opponents
         let opp_teams: Vec<Vec<PokemonSet>> = master_teams
@@ -2406,7 +2464,10 @@ fn cmd_update_pool(args: &[String]) {
                 .collect();
 
             if best_overlap >= 4 {
-                let inc_id = master_teams[best_idx]["id"].as_str().unwrap_or("?").to_string();
+                let inc_id = master_teams[best_idx]["id"]
+                    .as_str()
+                    .unwrap_or("?")
+                    .to_string();
                 let inc_score = master_teams[best_idx]["score"].as_f64().unwrap_or(0.5);
                 if cand_score >= inc_score + 0.015 && cand_score >= min_admit_score {
                     println!(
@@ -2470,7 +2531,10 @@ fn cmd_update_pool(args: &[String]) {
                             min_i = mi;
                         }
                     }
-                    let evicted_id = master_teams[min_i]["id"].as_str().unwrap_or("?").to_string();
+                    let evicted_id = master_teams[min_i]["id"]
+                        .as_str()
+                        .unwrap_or("?")
+                        .to_string();
                     println!(
                         "    [Pool > {}] Evicted weakest team {} (score={:.4})",
                         max_pool, evicted_id, min_sc
@@ -2705,7 +2769,12 @@ fn cmd_tomography(args: &[String]) {
             .map(|&(mask, picks, wins)| {
                 let share = picks * 100.0;
                 let cwr = wins / picks.max(1e-9) * 100.0;
-                format!("{} ({:.0}% pick, {:.0}% wr)", format_core_mask(mask, &canon), share, cwr)
+                format!(
+                    "{} ({:.0}% pick, {:.0}% wr)",
+                    format_core_mask(mask, &canon),
+                    share,
+                    cwr
+                )
             })
             .collect();
         println!("     top cores: {}", top_cores_str.join("  ||  "));
@@ -3062,7 +3131,9 @@ fn cmd_kodoku(args: &[String]) {
         let mut rand_tries = 0usize;
         while active.len() < pop_target && rand_tries < pop_target * 8 {
             rand_tries += 1;
-            let Some(canon) = gen.random_team_constrained(&dex, &mut rng, &[], &free_constraint, 300) else {
+            let Some(canon) =
+                gen.random_team_constrained(&dex, &mut rng, &[], &free_constraint, 300)
+            else {
                 continue;
             };
             let k = team_key(&canon);
@@ -3259,18 +3330,19 @@ fn cmd_kodoku(args: &[String]) {
 
         // Partition active strains into Pass-1 (founders/parents) and Pass-2 (single-slot children
         // whose parent is evaluated in Pass 1) so Pass-2 children inherit `R_{-ms}(P)` verbatim.
-        let active_id_set: BTreeSet<String> = ledger
-            .active_strains
-            .iter()
-            .map(|s| s.id.clone())
-            .collect();
+        let active_id_set: BTreeSet<String> =
+            ledger.active_strains.iter().map(|s| s.id.clone()).collect();
         let single_slot_mut = |s: &Strain| -> Option<usize> {
             if !use_core_nash || s.born_wave == 0 || s.last_op.starts_with("level-tweak") {
                 return None;
             }
             let (_op, slot_str) = s.last_op.split_once('@')?;
             let ms = slot_str.parse::<usize>().ok()?;
-            if ms < 6 { Some(ms) } else { None }
+            if ms < 6 {
+                Some(ms)
+            } else {
+                None
+            }
         };
         let pass1_id_set: BTreeSet<String> = ledger
             .active_strains
@@ -3279,8 +3351,10 @@ fn cmd_kodoku(args: &[String]) {
             .map(|s| s.id.clone())
             .collect();
 
-        let mut parent_subgames: BTreeMap<String, (Vec<OpponentStage2Subgame>, Vec<OpponentStage2Subgame>, f64)> =
-            BTreeMap::new();
+        let mut parent_subgames: BTreeMap<
+            String,
+            (Vec<OpponentStage2Subgame>, Vec<OpponentStage2Subgame>, f64),
+        > = BTreeMap::new();
         let mut eval_outputs: BTreeMap<
             String,
             (
@@ -3410,7 +3484,14 @@ fn cmd_kodoku(args: &[String]) {
                     parent_subgames.insert(sid.clone(), (Vec::new(), Vec::new(), w_sc));
                     eval_outputs.insert(
                         sid,
-                        (bench_res, [0.0; 6], [[0.0; 4]; 6], eco_res, [0.0; 6], [[0.0; 4]; 6]),
+                        (
+                            bench_res,
+                            [0.0; 6],
+                            [[0.0; 4]; 6],
+                            eco_res,
+                            [0.0; 6],
+                            [[0.0; 4]; 6],
+                        ),
                     );
                 }
             });
@@ -3480,8 +3561,7 @@ fn cmd_kodoku(args: &[String]) {
                         + eco_res.slot_picks[slot] * eco_n_games;
                     let ww = bench_res.slot_wins[slot] * bench_n_games
                         + eco_res.slot_wins[slot] * eco_n_games;
-                    let wm = bench_marg[slot] * bench_n_games
-                        + eco_marg[slot] * eco_n_games;
+                    let wm = bench_marg[slot] * bench_n_games + eco_marg[slot] * eco_n_games;
                     s.last_wave_slot_picks[slot] = wp / total_w_games.max(1.0);
                     s.last_wave_slot_marginals[slot] = wm / total_w_games.max(1.0);
                     s.slot_picks[slot] += wp;
@@ -3489,8 +3569,9 @@ fn cmd_kodoku(args: &[String]) {
                     s.slot_marginals[slot] += wm;
                     for mk in 0..4 {
                         let w_mdq = 0.70 * bench_mdq[slot][mk] + 0.30 * eco_mdq[slot][mk];
-                        s.move_dqs[slot][mk] =
-                            (s.move_dqs[slot][mk] * prev_g + w_mdq * total_w_games) / new_g.max(1.0);
+                        s.move_dqs[slot][mk] = (s.move_dqs[slot][mk] * prev_g
+                            + w_mdq * total_w_games)
+                            / new_g.max(1.0);
                     }
                 }
                 // Paired Subgame Delta Anchoring for Pass-2 children:
@@ -3513,8 +3594,8 @@ fn cmd_kodoku(args: &[String]) {
                 s.bench_wins += bench_score * bench_n_games;
                 s.eco_games += eco_n_games;
                 s.eco_wins += eco_score * eco_n_games;
-                s.effective_cores = 0.70 * bench_res.effective_cores()
-                    + 0.30 * eco_res.effective_cores();
+                s.effective_cores =
+                    0.70 * bench_res.effective_cores() + 0.30 * eco_res.effective_cores();
                 s.last_wave_fit = wave_score;
                 s.cum_games += total_w_games;
                 s.cum_wins += wave_score * total_w_games;
@@ -3612,7 +3693,9 @@ fn cmd_kodoku(args: &[String]) {
             });
             let alpha_star = 0.20;
             let mut mp_mix = deme_base_mp.clone();
-            mp_mix.teams.retain(|t| preview_sig_sets(&t.sets) != deme_sig);
+            mp_mix
+                .teams
+                .retain(|t| preview_sig_sets(&t.sets) != deme_sig);
             mp_mix.teams.push(nc2000_bot::preview::MetaTeam {
                 id: format!("{prim_id}-prim"),
                 sets: prim_sets.clone(),
@@ -3674,8 +3757,7 @@ fn cmd_kodoku(args: &[String]) {
         ledger.active_strains.sort_by(|a, b| {
             let qa = a.bayes_fit + a.deme_bonus;
             let qb = b.bayes_fit + b.deme_bonus;
-            qb.partial_cmp(&qa)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            qb.partial_cmp(&qa).unwrap_or(std::cmp::Ordering::Equal)
         });
 
         let wave_secs = t_wave.elapsed().as_secs_f64();
@@ -3786,7 +3868,14 @@ fn run_forced_preview_games(
     jobs: &[CoreJob],
     threads: usize,
     max_turns: u16,
-    build_row_col: &(dyn Fn(&nc2000_engine::state::Battle, usize, usize, u64, u64) -> (Box<dyn nc2000_bot::Agent>, Box<dyn nc2000_bot::Agent>) + Sync),
+    build_row_col: &(dyn Fn(
+        &nc2000_engine::state::Battle,
+        usize,
+        usize,
+        u64,
+        u64,
+    ) -> (Box<dyn nc2000_bot::Agent>, Box<dyn nc2000_bot::Agent>)
+          + Sync),
     log_enabled: bool,
 ) -> Vec<(usize, f64)> {
     use nc2000_bot::{play_game, GameResult};
@@ -3811,9 +3900,19 @@ fn run_forced_preview_games(
         )
         .unwrap();
         let res = if job.swap {
-            play_game(dex, &mut b, &mut [agent_b.as_mut(), agent_a.as_mut()], max_turns)
+            play_game(
+                dex,
+                &mut b,
+                &mut [agent_b.as_mut(), agent_a.as_mut()],
+                max_turns,
+            )
         } else {
-            play_game(dex, &mut b, &mut [agent_a.as_mut(), agent_b.as_mut()], max_turns)
+            play_game(
+                dex,
+                &mut b,
+                &mut [agent_a.as_mut(), agent_b.as_mut()],
+                max_turns,
+            )
         }
         .unwrap();
         let p1_score = match res {
@@ -3939,14 +4038,14 @@ fn select_top_k_orthogonal(
     br: &[f64],
     k: usize,
 ) -> Vec<usize> {
-    let core_mask = |t: [u8; 3]| -> u8 {
-        (1u8 << (t[0] - 1)) | (1u8 << (t[1] - 1)) | (1u8 << (t[2] - 1))
-    };
+    let core_mask =
+        |t: [u8; 3]| -> u8 { (1u8 << (t[0] - 1)) | (1u8 << (t[1] - 1)) | (1u8 << (t[2] - 1)) };
     let mut order: Vec<usize> = (0..legal.len()).collect();
     order.sort_by(|&i, &j| {
         let si = (eq[i] >= 0.01, eq[i] + 0.05 * br[i]);
         let sj = (eq[j] >= 0.01, eq[j] + 0.05 * br[j]);
-        sj.0.cmp(&si.0).then_with(|| sj.1.partial_cmp(&si.1).unwrap())
+        sj.0.cmp(&si.0)
+            .then_with(|| sj.1.partial_cmp(&si.1).unwrap())
     });
 
     // Pass 1: select up to `k` distinct 3-mon cores so lead permutations of a single core
@@ -4130,7 +4229,8 @@ fn core_nash_eval_weighted(
                 order.sort_by(|&i, &j| {
                     let si = (e0_m[i] >= 0.01, e0_m[i] + 0.05 * u_a_m[i]);
                     let sj = (e0_m[j] >= 0.01, e0_m[j] + 0.05 * u_a_m[j]);
-                    sj.0.cmp(&si.0).then_with(|| sj.1.partial_cmp(&si.1).unwrap())
+                    sj.0.cmp(&si.0)
+                        .then_with(|| sj.1.partial_cmp(&si.1).unwrap())
                 });
                 let mut picked = Vec::with_capacity(k_mut);
                 let mut seen_masks = BTreeSet::new();
@@ -4648,9 +4748,9 @@ fn core_nash_eval_flat_pass(
                     let res = if sub_i < n_wb {
                         let m = sub_i;
                         let adj_seed = wb_seed ^ ((m as u64 + 1).wrapping_mul(OPP_MIX)) ^ OPP_MIX;
-                        let inh = item
-                            .inh_bench
-                            .and_then(|(ms, subs)| subs.get(m).map(|ps| (ms, std::slice::from_ref(ps))));
+                        let inh = item.inh_bench.and_then(|(ms, subs)| {
+                            subs.get(m).map(|ps| (ms, std::slice::from_ref(ps)))
+                        });
                         core_nash_eval_weighted(
                             dex,
                             &item.sets,
@@ -4672,9 +4772,9 @@ fn core_nash_eval_flat_pass(
                     } else {
                         let m = sub_i - n_wb;
                         let adj_seed = eco_seed ^ ((m as u64 + 1).wrapping_mul(OPP_MIX)) ^ OPP_MIX;
-                        let inh = item
-                            .inh_eco
-                            .and_then(|(ms, subs)| subs.get(m).map(|ps| (ms, std::slice::from_ref(ps))));
+                        let inh = item.inh_eco.and_then(|(ms, subs)| {
+                            subs.get(m).map(|ps| (ms, std::slice::from_ref(ps)))
+                        });
                         core_nash_eval_weighted(
                             dex,
                             &item.sets,
@@ -5032,14 +5132,20 @@ fn cmd_core_nash(args: &[String]) {
                         c: c_val,
                         ..Default::default()
                     };
-                    let mut p1 = OpenAgent::new(rm_cfg.clone(), None, job.agent_seed ^ 0xA24B_AED4_963E_E407);
-                    let mut p2 = OpenAgent::new(rm_cfg, None, job.agent_seed ^ 0x9FB2_1C65_1E98_DF25);
+                    let mut p1 = OpenAgent::new(
+                        rm_cfg.clone(),
+                        None,
+                        job.agent_seed ^ 0xA24B_AED4_963E_E407,
+                    );
+                    let mut p2 =
+                        OpenAgent::new(rm_cfg, None, job.agent_seed ^ 0x9FB2_1C65_1E98_DF25);
                     let (team1, team2) = if job.swap {
                         (&sub_b, &sub_a)
                     } else {
                         (&sub_a, &sub_b)
                     };
-                    let mut b = Battle::from_fixture(dex_ref, &job.battle_seed, team1, team2).unwrap();
+                    let mut b =
+                        Battle::from_fixture(dex_ref, &job.battle_seed, team1, team2).unwrap();
                     b.set_log_enabled(true);
                     p1.init_at_preview(&b, 0);
                     p2.init_at_preview(&b, 1);
@@ -5051,7 +5157,8 @@ fn cmd_core_nash(args: &[String]) {
                         ],
                     )
                     .unwrap();
-                    let res = play_game(dex_ref, &mut b, &mut [&mut p1, &mut p2], max_turns).unwrap();
+                    let res =
+                        play_game(dex_ref, &mut b, &mut [&mut p1, &mut p2], max_turns).unwrap();
                     let p1_score = match res {
                         GameResult::Outcome(Outcome::P1Win) => 1.0,
                         GameResult::Outcome(Outcome::P2Win) => 0.0,
@@ -5178,7 +5285,11 @@ fn cmd_core_nash(args: &[String]) {
             / (m1.v.len().max(1) as f64)
     };
     let l1_dist = |p: &[f64], q: &[f64]| -> f64 {
-        p.iter().zip(q.iter()).map(|(a, b)| (a - b).abs()).sum::<f64>() * 0.5
+        p.iter()
+            .zip(q.iter())
+            .map(|(a, b)| (a - b).abs())
+            .sum::<f64>()
+            * 0.5
     };
     println!("\n=== Approximation Fidelity Diagnostics ===");
     println!(
@@ -5204,79 +5315,86 @@ fn cmd_core_nash(args: &[String]) {
     );
 
     // ---- Per-Slot Equilibrium Pick Share `p_i*` & Leave-One-Out Marginal Value `\Delta V_{-i}`
-    let print_slot_nash_analysis =
-        |label: &str, canon: &[Value], sup: &[usize], mat: &MatrixEst, sol: &PairSolution, is_row: bool| {
-            println!("\n=== Per-Slot Nash Equilibrium & Marginal Value: {} ===", label);
-            for slot in 0..canon.len().min(6) {
-                let s_idx = (slot + 1) as u8;
-                let sp = canon[slot]["species"].as_str().unwrap_or("?");
-                let lv = canon[slot]["level"].as_u64().unwrap_or(50);
-                let pol = if is_row { &sol.p_a } else { &sol.p_b };
-                let mut pick_share = 0.0;
-                let mut lead_share = 0.0;
-                for (a_idx, &pr) in pol.iter().enumerate() {
-                    if pr <= 0.0 {
-                        continue;
-                    }
-                    let tr = actions[a_idx];
-                    if tr.contains(&s_idx) {
-                        pick_share += pr;
-                    }
-                    if tr[0] == s_idx {
-                        lead_share += pr;
-                    }
+    let print_slot_nash_analysis = |label: &str,
+                                    canon: &[Value],
+                                    sup: &[usize],
+                                    mat: &MatrixEst,
+                                    sol: &PairSolution,
+                                    is_row: bool| {
+        println!(
+            "\n=== Per-Slot Nash Equilibrium & Marginal Value: {} ===",
+            label
+        );
+        for slot in 0..canon.len().min(6) {
+            let s_idx = (slot + 1) as u8;
+            let sp = canon[slot]["species"].as_str().unwrap_or("?");
+            let lv = canon[slot]["level"].as_u64().unwrap_or(50);
+            let pol = if is_row { &sol.p_a } else { &sol.p_b };
+            let mut pick_share = 0.0;
+            let mut lead_share = 0.0;
+            for (a_idx, &pr) in pol.iter().enumerate() {
+                if pr <= 0.0 {
+                    continue;
                 }
-                // Leave-one-out: solve the subgame where `slot` cannot be picked by this side
-                let kept_indices: Vec<usize> = (0..sup.len())
-                    .filter(|&i| !actions[sup[i]].contains(&s_idx))
-                    .collect();
-                let delta_v = if kept_indices.is_empty() {
-                    // Mandatory ace (every support core contains this mon)
-                    f64::NAN
-                } else if is_row {
-                    let sub_v: Vec<f64> = kept_indices
-                        .iter()
-                        .flat_map(|&ri| (0..mat.cols).map(move |ci| mat.at(ri, ci)))
-                        .collect();
-                    let (s_a, s_b) = solve_rm_plus(&sub_v, [kept_indices.len(), mat.cols], 20_000);
-                    let v_without: f64 = (0..kept_indices.len())
-                        .map(|ia| {
-                            (0..mat.cols)
-                                .map(|ib| sub_v[ia * mat.cols + ib] * s_a[ia] * s_b[ib])
-                                .sum::<f64>()
-                        })
-                        .sum();
-                    sol.value - v_without
-                } else {
-                    let sub_v: Vec<f64> = (0..mat.rows)
-                        .flat_map(|ri| kept_indices.iter().map(move |&ci| mat.at(ri, ci)))
-                        .collect();
-                    let (s_a, s_b) = solve_rm_plus(&sub_v, [mat.rows, kept_indices.len()], 20_000);
-                    let v_a_without: f64 = (0..mat.rows)
-                        .map(|ia| {
-                            (0..kept_indices.len())
-                                .map(|ib| sub_v[ia * kept_indices.len() + ib] * s_a[ia] * s_b[ib])
-                                .sum::<f64>()
-                        })
-                        .sum();
-                    (1.0 - sol.value) - (1.0 - v_a_without)
-                };
-                let dv_str = if delta_v.is_nan() {
-                    "MANDATORY_ACE".to_string()
-                } else {
-                    format!("{:+.4} ({:+.1}pt)", delta_v, delta_v * 100.0)
-                };
-                println!(
-                    "  slot {}: {:12} L{:2} | Nash Pick={:5.1}% (Lead={:4.1}%) | Marginal ΔV={}",
-                    slot,
-                    sp,
-                    lv,
-                    pick_share * 100.0,
-                    lead_share * 100.0,
-                    dv_str
-                );
+                let tr = actions[a_idx];
+                if tr.contains(&s_idx) {
+                    pick_share += pr;
+                }
+                if tr[0] == s_idx {
+                    lead_share += pr;
+                }
             }
-        };
+            // Leave-one-out: solve the subgame where `slot` cannot be picked by this side
+            let kept_indices: Vec<usize> = (0..sup.len())
+                .filter(|&i| !actions[sup[i]].contains(&s_idx))
+                .collect();
+            let delta_v = if kept_indices.is_empty() {
+                // Mandatory ace (every support core contains this mon)
+                f64::NAN
+            } else if is_row {
+                let sub_v: Vec<f64> = kept_indices
+                    .iter()
+                    .flat_map(|&ri| (0..mat.cols).map(move |ci| mat.at(ri, ci)))
+                    .collect();
+                let (s_a, s_b) = solve_rm_plus(&sub_v, [kept_indices.len(), mat.cols], 20_000);
+                let v_without: f64 = (0..kept_indices.len())
+                    .map(|ia| {
+                        (0..mat.cols)
+                            .map(|ib| sub_v[ia * mat.cols + ib] * s_a[ia] * s_b[ib])
+                            .sum::<f64>()
+                    })
+                    .sum();
+                sol.value - v_without
+            } else {
+                let sub_v: Vec<f64> = (0..mat.rows)
+                    .flat_map(|ri| kept_indices.iter().map(move |&ci| mat.at(ri, ci)))
+                    .collect();
+                let (s_a, s_b) = solve_rm_plus(&sub_v, [mat.rows, kept_indices.len()], 20_000);
+                let v_a_without: f64 = (0..mat.rows)
+                    .map(|ia| {
+                        (0..kept_indices.len())
+                            .map(|ib| sub_v[ia * kept_indices.len() + ib] * s_a[ia] * s_b[ib])
+                            .sum::<f64>()
+                    })
+                    .sum();
+                (1.0 - sol.value) - (1.0 - v_a_without)
+            };
+            let dv_str = if delta_v.is_nan() {
+                "MANDATORY_ACE".to_string()
+            } else {
+                format!("{:+.4} ({:+.1}pt)", delta_v, delta_v * 100.0)
+            };
+            println!(
+                "  slot {}: {:12} L{:2} | Nash Pick={:5.1}% (Lead={:4.1}%) | Marginal ΔV={}",
+                slot,
+                sp,
+                lv,
+                pick_share * 100.0,
+                lead_share * 100.0,
+                dv_str
+            );
+        }
+    };
 
     print_slot_nash_analysis(&id_a, &canon_a, &s0, &mat_bn6, &sol_bn6, true);
     print_slot_nash_analysis(&id_b, &canon_b, &s1, &mat_bn6, &sol_bn6, false);
@@ -5292,12 +5410,7 @@ fn cmd_core_nash(args: &[String]) {
             if g % 2 == 0 {
                 b_seed = rng.battle_seed();
             }
-            duel_jobs.push((
-                g % 2 == 0,
-                b_seed.clone(),
-                rng.next(),
-                rng.next(),
-            ));
+            duel_jobs.push((g % 2 == 0, b_seed.clone(), rng.next(), rng.next()));
         }
 
         let cursor = AtomicUsize::new(0);
@@ -5363,9 +5476,19 @@ fn cmd_core_nash(args: &[String]) {
                         b.apply_choices(dex_ref, joint).unwrap();
 
                         let res = if a_is_p1 {
-                            play_game(dex_ref, &mut b, &mut [&mut agent_a, &mut agent_b], max_turns)
+                            play_game(
+                                dex_ref,
+                                &mut b,
+                                &mut [&mut agent_a, &mut agent_b],
+                                max_turns,
+                            )
                         } else {
-                            play_game(dex_ref, &mut b, &mut [&mut agent_b, &mut agent_a], max_turns)
+                            play_game(
+                                dex_ref,
+                                &mut b,
+                                &mut [&mut agent_b, &mut agent_a],
+                                max_turns,
+                            )
                         }
                         .unwrap();
                         let p1_sc = match res {
@@ -5435,7 +5558,8 @@ fn cmd_verify_1gen(args: &[String]) {
     });
     let (all_bench_teams, all_bench_weights) = load_gauntlet_file(&dex, &gen, &bench_file);
     let slice_len = all_bench_teams.len().min(10);
-    let bench_teams: Vec<Vec<PokemonSet>> = all_bench_teams.iter().take(slice_len).cloned().collect();
+    let bench_teams: Vec<Vec<PokemonSet>> =
+        all_bench_teams.iter().take(slice_len).cloned().collect();
     let mut bench_weights: Vec<f64> = all_bench_weights.iter().take(slice_len).copied().collect();
     let bw_sum: f64 = bench_weights.iter().sum::<f64>().max(1e-12);
     for w in &mut bench_weights {
@@ -5796,7 +5920,9 @@ fn cmd_verify_1gen(args: &[String]) {
             .unwrap_or(0.0);
         let p_id = &parents[c.parent_idx].id;
         let slot_desc = if let Some(s) = c.mut_slot.filter(|&s| s < 6) {
-            let old_sp = parents[c.parent_idx].team[s]["species"].as_str().unwrap_or("?");
+            let old_sp = parents[c.parent_idx].team[s]["species"]
+                .as_str()
+                .unwrap_or("?");
             let new_sp = c.team[s]["species"].as_str().unwrap_or("?");
             let old_moves: Vec<&str> = parents[c.parent_idx].team[s]["moves"]
                 .as_array()
@@ -5809,8 +5935,16 @@ fn cmd_verify_1gen(args: &[String]) {
             let diff_detail = if old_sp != new_sp {
                 format!("{old_sp}->{new_sp}")
             } else if old_moves != new_moves {
-                let dropped: Vec<&str> = old_moves.iter().copied().filter(|m| !new_moves.contains(m)).collect();
-                let added: Vec<&str> = new_moves.iter().copied().filter(|m| !old_moves.contains(m)).collect();
+                let dropped: Vec<&str> = old_moves
+                    .iter()
+                    .copied()
+                    .filter(|m| !new_moves.contains(m))
+                    .collect();
+                let added: Vec<&str> = new_moves
+                    .iter()
+                    .copied()
+                    .filter(|m| !old_moves.contains(m))
+                    .collect();
                 format!("{old_sp}[{:?}->{:?}]", dropped, added)
             } else {
                 format!("{old_sp}->{new_sp}")
@@ -5988,7 +6122,8 @@ fn cmd_audit_elites(args: &[String]) {
     let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
     let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
 
-    let elites_file = flag(args, "--elites").unwrap_or_else(|| "/tmp/kodoku-endo-v1/kodoku-elites.json".to_string());
+    let elites_file = flag(args, "--elites")
+        .unwrap_or_else(|| "/tmp/kodoku-endo-v1/kodoku-elites.json".to_string());
     let bench_file = flag(args, "--bench").unwrap_or_else(|| {
         root.join("data/meta-nash-v3/pool-artifact.json")
             .to_string_lossy()
@@ -6080,7 +6215,9 @@ fn cmd_audit_elites(args: &[String]) {
                         for key in ["active_strains", "archived_strains"] {
                             if let Some(arr) = lv[key].as_array() {
                                 for s in arr {
-                                    if let (Some(id), Some(team)) = (s["id"].as_str(), s["team"].as_array()) {
+                                    if let (Some(id), Some(team)) =
+                                        (s["id"].as_str(), s["team"].as_array())
+                                    {
                                         if let Some(canon) = gen.canonize(&dex, team) {
                                             parent_map.entry(id.to_string()).or_insert(canon);
                                         }
@@ -6129,7 +6266,8 @@ fn cmd_audit_elites(args: &[String]) {
     let mut parent_cache_200: BTreeMap<String, nc2000_bot::teamgen::EvalResult> = BTreeMap::new();
     let mut parent_cache_2000: BTreeMap<String, nc2000_bot::teamgen::EvalResult> = BTreeMap::new();
     let mut parent_cache_blind: BTreeMap<String, nc2000_bot::teamgen::EvalResult> = BTreeMap::new();
-    let mut parent_cache_heldout: BTreeMap<String, nc2000_bot::teamgen::EvalResult> = BTreeMap::new();
+    let mut parent_cache_heldout: BTreeMap<String, nc2000_bot::teamgen::EvalResult> =
+        BTreeMap::new();
 
     let mut records = Vec::new();
     for t in evolved.iter() {
@@ -6415,8 +6553,7 @@ fn eval_blind_asymmetric_prior(
     let games = (games_per_opponent + games_per_opponent % 2) as usize;
     let mut jobs = Vec::with_capacity(gauntlet.len() * games);
     for opp in 0..gauntlet.len() {
-        let mut rng =
-            SplitMix64::new(seed ^ (opp as u64 + 1).wrapping_mul(0x9FB2_1C65_1E98_DF25));
+        let mut rng = SplitMix64::new(seed ^ (opp as u64 + 1).wrapping_mul(0x9FB2_1C65_1E98_DF25));
         let mut battle_seed = String::new();
         for g in 0..games {
             if g % 2 == 0 {
@@ -6452,10 +6589,18 @@ fn eval_blind_asymmetric_prior(
                         c,
                         ..Default::default()
                     };
-                    let mut cand_agent: Box<dyn Agent> =
-                        Box::new(BlindAgent::new(rm_cfg.clone(), cand_pool.clone(), None, job.cand_seed));
-                    let mut opp_agent: Box<dyn Agent> =
-                        Box::new(BlindAgent::new(rm_cfg, opp_pool.clone(), None, job.opp_seed));
+                    let mut cand_agent: Box<dyn Agent> = Box::new(BlindAgent::new(
+                        rm_cfg.clone(),
+                        cand_pool.clone(),
+                        None,
+                        job.cand_seed,
+                    ));
+                    let mut opp_agent: Box<dyn Agent> = Box::new(BlindAgent::new(
+                        rm_cfg,
+                        opp_pool.clone(),
+                        None,
+                        job.opp_seed,
+                    ));
                     let (t1, t2) = if job.cand_is_p1 {
                         (candidate, gauntlet[job.opp].as_slice())
                     } else {
@@ -6484,7 +6629,11 @@ fn eval_blind_asymmetric_prior(
                         GameResult::Outcome(Outcome::P2Win) => 0.0,
                         GameResult::Outcome(Outcome::Tie) | GameResult::TurnCapped => 0.5,
                     };
-                    let score = if job.cand_is_p1 { p1_score } else { 1.0 - p1_score };
+                    let score = if job.cand_is_p1 {
+                        p1_score
+                    } else {
+                        1.0 - p1_score
+                    };
                     let cand_side = if job.cand_is_p1 { 0 } else { 1 };
                     let mut cmask = 0u8;
                     for &slot in &b.sides[cand_side].party {
@@ -6654,7 +6803,11 @@ fn cmd_sibling_mix(args: &[String]) {
     let deme_sig = preview_sig_sets(&p_sets);
 
     let alphas: Vec<f64> = flag(args, "--alphas")
-        .map(|s| s.split(',').map(|x| x.trim().parse::<f64>().unwrap()).collect())
+        .map(|s| {
+            s.split(',')
+                .map(|x| x.trim().parse::<f64>().unwrap())
+                .collect()
+        })
         .unwrap_or_else(|| vec![0.0, 0.0001, 0.15, 0.25, 0.40, 0.60, 0.9999]);
 
     eprintln!(
@@ -6704,7 +6857,8 @@ fn cmd_sibling_mix(args: &[String]) {
 
         // Sanity check that `Belief` sees both P and C alive at preview when `0 < alpha < 1`
         {
-            let tb = nc2000_engine::state::Battle::from_fixture(&dex, "1,2,3,4", &p_sets, &c_sets).unwrap();
+            let tb = nc2000_engine::state::Battle::from_fixture(&dex, "1,2,3,4", &p_sets, &c_sets)
+                .unwrap();
             let obs_p = nc2000_bot::Observer::new(&tb, 1); // observing side 0 (P)
             let bel_p = nc2000_bot::Belief::new(&dex, &opp_pool, &obs_p);
             let obs_c = nc2000_bot::Observer::new(&tb, 0); // observing side 1 (C)
@@ -6803,13 +6957,24 @@ fn classify_team_strata(sets: &[PokemonSet]) -> Vec<String> {
         if mset.iter().any(|m| {
             matches!(
                 m.as_str(),
-                "rest" | "recover" | "milkdrink" | "softboiled" | "moonlight" | "synthesis" | "morningsun"
+                "rest"
+                    | "recover"
+                    | "milkdrink"
+                    | "softboiled"
+                    | "moonlight"
+                    | "synthesis"
+                    | "morningsun"
             )
         }) {
             rec_count += 1;
         }
         let sp = toid(&s.species);
-        if s.level >= 55 && matches!(sp.as_str(), "zapdos" | "raikou" | "jolteon" | "electabuzz" | "electrode") {
+        if s.level >= 55
+            && matches!(
+                sp.as_str(),
+                "zapdos" | "raikou" | "jolteon" | "electabuzz" | "electrode"
+            )
+        {
             has_elec55 = true;
         }
         if s.level >= 55 && sp == "snorlax" {
@@ -6823,14 +6988,18 @@ fn classify_team_strata(sets: &[PokemonSet]) -> Vec<String> {
         || all_moves.contains("whirlpool")
         || all_moves.contains("firespin")
         || all_moves.contains("clamp"))
-        && (all_moves.contains("perishsong") || all_moves.contains("batonpass") || all_moves.contains("destinybond"))
+        && (all_moves.contains("perishsong")
+            || all_moves.contains("batonpass")
+            || all_moves.contains("destinybond"))
     {
         out.push("trap".to_string());
     }
     if boom_count >= 2 {
         out.push("boom".to_string());
     }
-    if all_moves.contains("spikes") && (all_moves.contains("roar") || all_moves.contains("whirlwind")) {
+    if all_moves.contains("spikes")
+        && (all_moves.contains("roar") || all_moves.contains("whirlwind"))
+    {
         out.push("spikes".to_string());
     }
     if rec_count >= 3 {
@@ -6981,11 +7150,7 @@ fn cmd_dominance_audit(args: &[String]) {
         for set in &mut upgraded {
             let moves: Vec<String> = set["moves"]
                 .as_array()
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|v| v.as_str().map(toid))
-                        .collect()
-                })
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(toid)).collect())
                 .unwrap_or_default();
             let has_hp = moves.iter().any(|m| m.starts_with("hiddenpower"));
             let has_caller = moves.iter().any(|m| {
@@ -7089,7 +7254,11 @@ fn cmd_dominance_audit(args: &[String]) {
             add_blue(tid, orig, t["sets"].as_array().unwrap());
         }
     }
-    for eb_file in extra_blue_str.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+    for eb_file in extra_blue_str
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         if let Ok(txt) = std::fs::read_to_string(eb_file) {
             if let Ok(v) = serde_json::from_str::<Value>(&txt) {
                 if let Some(arr) = v["teams"].as_array() {
@@ -7120,7 +7289,11 @@ fn cmd_dominance_audit(args: &[String]) {
         let w = m["weight"].as_f64().unwrap_or(0.0);
         let st: Vec<String> = m["strata"]
             .as_array()
-            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
         panel_weights.insert(id.clone(), w);
         panel_strata.insert(id, st);
@@ -7201,10 +7374,22 @@ fn cmd_dominance_audit(args: &[String]) {
     }
 
     for (extra_path, grp_tag, cap) in [
-        ("data/community-rentals-v0/teams.json", "community_rental", 30usize),
+        (
+            "data/community-rentals-v0/teams.json",
+            "community_rental",
+            30usize,
+        ),
         ("data/eco-r17/pool-artifact.json", "eco_r17", 12usize),
-        ("data/kodoku-r1/nash-candidates.json", "kodoku_r1_cand", 10usize),
-        ("data/kodoku-r2/nash-candidates.json", "kodoku_r2_cand", 12usize),
+        (
+            "data/kodoku-r1/nash-candidates.json",
+            "kodoku_r1_cand",
+            10usize,
+        ),
+        (
+            "data/kodoku-r2/nash-candidates.json",
+            "kodoku_r2_cand",
+            12usize,
+        ),
     ] {
         if let Ok(txt) = std::fs::read_to_string(root.join(extra_path)) {
             if let Ok(v) = serde_json::from_str::<Value>(&txt) {
@@ -7218,7 +7403,11 @@ fn cmd_dominance_audit(args: &[String]) {
             }
         }
     }
-    for er_file in extra_red_str.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+    for er_file in extra_red_str
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         if let Ok(txt) = std::fs::read_to_string(er_file) {
             if let Ok(v) = serde_json::from_str::<Value>(&txt) {
                 if let Some(arr) = v["teams"].as_array() {
@@ -7243,9 +7432,7 @@ fn cmd_dominance_audit(args: &[String]) {
         .iter()
         .map(|sig| {
             sig.iter()
-                .map(|(sp, lv, g, it)| {
-                    format!("{}:{}{}{}", sp, lv, g, if *it { "@" } else { "" })
-                })
+                .map(|(sp, lv, g, it)| format!("{}:{}{}{}", sp, lv, g, if *it { "@" } else { "" }))
                 .collect::<Vec<_>>()
                 .join(",")
         })
@@ -7348,14 +7535,15 @@ fn cmd_dominance_audit(args: &[String]) {
         }
         let total_cells = n_p * n_q;
         let done_cells: usize = measured.iter().flatten().filter(|&&b| b).count();
-        eprintln!("Merged {done_cells}/{total_cells} matrix cells from {}", mdir.display());
+        eprintln!(
+            "Merged {done_cells}/{total_cells} matrix cells from {}",
+            mdir.display()
+        );
 
         // Solve Minimax Conclusion Mixture `\pi^*` over P against all Q
         let (minimax_w, adv_q_w, minimax_val) = solve_rectangular_minimax(&payoff, 250_000);
         // Also solve symmetric Nash on the 17x17 internal submatrix `P x P`
-        let sub_payoff: Vec<Vec<f64>> = (0..n_p)
-            .map(|i| payoff[i][0..n_p].to_vec())
-            .collect();
+        let sub_payoff: Vec<Vec<f64>> = (0..n_p).map(|i| payoff[i][0..n_p].to_vec()).collect();
         let sym_nash_w = solve_symmetric_nash(&sub_payoff, 250_000);
 
         // Build named mixtures over `P`
@@ -7457,11 +7645,7 @@ fn cmd_dominance_audit(args: &[String]) {
             let mut order: Vec<usize> = (0..n_q).collect();
             order.sort_by(|&a, &b| col_scores[a].partial_cmp(&col_scores[b]).unwrap());
             let min_payoff = col_scores[order[0]];
-            let cvar8 = order
-                .iter()
-                .take(8)
-                .map(|&j| col_scores[j])
-                .sum::<f64>()
+            let cvar8 = order.iter().take(8).map(|&j| col_scores[j]).sum::<f64>()
                 / (order.len().min(8) as f64);
             // Count outside challengers (`w[j] < 0.01` if `j < n_p`) that beat or tie `w`
             let losses_lt50 = (0..n_q)
@@ -7537,15 +7721,24 @@ fn cmd_dominance_audit(args: &[String]) {
         mix_reports.push(evaluate_dist("1. meta-nash-v3 (Old Human Nash)", &w_mn3));
         mix_reports.push(evaluate_dist("2. kodoku-r1-nash", &w_kr1));
         mix_reports.push(evaluate_dist("3. kodoku-r2-nash (Current)", &w_kr2));
-        mix_reports.push(evaluate_dist("4. unified-17-sym-nash (Internal P x P Nash)", &sym_nash_w));
-        mix_reports.push(evaluate_dist("5. minimax-conclusion-nash (Max-Min vs All Q)", &minimax_w));
+        mix_reports.push(evaluate_dist(
+            "4. unified-17-sym-nash (Internal P x P Nash)",
+            &sym_nash_w,
+        ));
+        mix_reports.push(evaluate_dist(
+            "5. minimax-conclusion-nash (Max-Min vs All Q)",
+            &minimax_w,
+        ));
 
         println!("\n================ INDIVIDUAL CANDIDATE AUDIT (17 Teams) ================");
         let mut indiv_reports = Vec::new();
         for i in 0..n_p {
             let mut unit_w = vec![0.0f64; n_p];
             unit_w[i] = 1.0;
-            indiv_reports.push(evaluate_dist(&format!("cand:{}:{}", p_ids[i], p_origins[i]), &unit_w));
+            indiv_reports.push(evaluate_dist(
+                &format!("cand:{}:{}", p_ids[i], p_origins[i]),
+                &unit_w,
+            ));
         }
 
         // Top adversarial exploiters from saddle-point `adv_q_w`
@@ -7567,7 +7760,10 @@ fn cmd_dominance_audit(args: &[String]) {
                 .partial_cmp(&a["weight"].as_f64().unwrap())
                 .unwrap()
         });
-        println!("\n=== Saddle-Point Adversarial Exploiter Support (Minimax Value = {:.4}) ===", minimax_val);
+        println!(
+            "\n=== Saddle-Point Adversarial Exploiter Support (Minimax Value = {:.4}) ===",
+            minimax_val
+        );
         for a in &adv_support {
             println!(
                 "  {:24} w_adv={:.4} group={:15} strata={:?}",
@@ -7633,7 +7829,10 @@ fn cmd_dominance_audit(args: &[String]) {
             })
         });
         println!("\n=== Same-Preview-Signature Deme Summary (Multi-Variant Shells) ===");
-        for d in deme_reports.iter().filter(|d| d["deme_size"].as_u64().unwrap() >= 2) {
+        for d in deme_reports
+            .iter()
+            .filter(|d| d["deme_size"].as_u64().unwrap() >= 2)
+        {
             let m_ids: Vec<String> = d["members"]
                 .as_array()
                 .unwrap()
@@ -7714,7 +7913,8 @@ fn cmd_dominance_audit(args: &[String]) {
     );
 
     // Prepare base `MetaPool` (`belief-pool-v3` normalized + all `P` candidates registered!)
-    let bp_text = std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
+    let bp_text =
+        std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
     let raw_mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
     let mut base_mp = normalize_belief_pool(&dex, &gen, &raw_mp);
     for i in 0..n_p {
@@ -7779,7 +7979,8 @@ fn cmd_dominance_audit(args: &[String]) {
                                         continue;
                                     }
                                     completed_map.insert((pid.to_string(), qid.to_string()), sc);
-                                    completed_map.insert((qid.to_string(), pid.to_string()), 1.0 - sc);
+                                    completed_map
+                                        .insert((qid.to_string(), pid.to_string()), 1.0 - sc);
                                 }
                             }
                         }
@@ -7837,26 +8038,8 @@ fn cmd_dominance_audit(args: &[String]) {
         std::thread::scope(|scope| {
             let mut handles = Vec::new();
             for _ in 0..threads.max(1) {
-                let (
-                    chunk,
-                    cursor,
-                    dex,
-                    p_ids,
-                    q_ids,
-                    p_sets,
-                    q_sets,
-                    cand_pool,
-                    opp_pools,
-                ) = (
-                    chunk,
-                    &cursor,
-                    &dex,
-                    &p_ids,
-                    &q_ids,
-                    &p_sets,
-                    &q_sets,
-                    &cand_pool,
-                    &opp_pools,
+                let (chunk, cursor, dex, p_ids, q_ids, p_sets, q_sets, cand_pool, opp_pools) = (
+                    chunk, &cursor, &dex, &p_ids, &q_ids, &p_sets, &q_sets, &cand_pool, &opp_pools,
                 );
                 handles.push(scope.spawn(move || {
                     let mut loc = Vec::new();
@@ -7953,10 +8136,7 @@ fn cmd_dominance_audit(args: &[String]) {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let sub = args
-        .first()
-        .map(String::as_str)
-        .unwrap_or("evolve-island");
+    let sub = args.first().map(String::as_str).unwrap_or("evolve-island");
     match sub {
         "evolve-island" => cmd_evolve_island(&args[1..]),
         "extract-pool" => cmd_extract_pool(&args[1..]),
@@ -8002,8 +8182,7 @@ fn normalize_team_dvs_evs(dex: &Dex, raw: &[Value]) -> Vec<Value> {
         if !has_hp && !has_caller && !has_physical && sp != "unown" {
             set["evs"] =
                 json!({"hp": 255, "atk": 0, "def": 255, "spa": 255, "spd": 255, "spe": 255});
-            set["ivs"] =
-                json!({"hp": 31, "atk": 3, "def": 31, "spa": 31, "spd": 31, "spe": 31});
+            set["ivs"] = json!({"hp": 31, "atk": 3, "def": 31, "spa": 31, "spd": 31, "spe": 31});
             if let Some(obj) = set.as_object_mut() {
                 obj.remove("gender");
                 obj.remove("shiny");
@@ -8028,6 +8207,160 @@ struct PiStarEvalOut {
     red_slot_wins: [f64; 6],
 }
 
+#[derive(Clone, Default)]
+struct PiStarPreviewPolicies {
+    /// For each Blue support team `blue_idx in 0..pi_sets.len()`, Blue's 60-action canonical preview policy
+    /// when facing `red_sets`'s outer shell.
+    blue_own_pol_by_idx: Vec<Vec<f64>>,
+    /// For each Blue support team `blue_idx`, Blue's prior over Red's 60-action canonical preview policy
+    /// (averaged over disclosed variants sharing Red's outer shell).
+    blue_opp_pol_by_idx: Vec<Vec<f64>>,
+    /// For each Blue support team `blue_idx`, Red's 60-action canonical preview policy when observing
+    /// `pi_sets[blue_idx]`'s outer shell.
+    red_own_pol_by_blue_idx: Vec<Vec<f64>>,
+    /// For each Blue support team `blue_idx`, Red's prior over Blue's 60-action canonical preview policy
+    /// (averaged over active `\pi^*` variants sharing `pi_sets[blue_idx]`'s outer shell).
+    red_opp_pol_by_blue_idx: Vec<Vec<f64>>,
+}
+
+fn expand_to_canonical_60(legal: &[[usize; 3]], strat: &[f64]) -> Vec<f64> {
+    let actions = nc2000_bot::preview::preview_actions();
+    let mut out = vec![0.0f64; 60];
+    for (t0, &p) in legal.iter().zip(strat.iter()) {
+        if p <= 0.0 {
+            continue;
+        }
+        let triple_1based = [t0[0] as u8 + 1, t0[1] as u8 + 1, t0[2] as u8 + 1];
+        if let Some(idx60) = nc2000_bot::preview::action_index(&actions, triple_1based) {
+            out[idx60] += p;
+        }
+    }
+    let sum: f64 = out.iter().sum();
+    if sum > 0.0 {
+        for x in &mut out {
+            *x /= sum;
+        }
+    }
+    out
+}
+
+fn build_pi_star_preview_policies(
+    dex: &Dex,
+    pi_sets: &[Vec<PokemonSet>],
+    pi_weights: &[f64],
+    red_sets: &[PokemonSet],
+    max_turns: u16,
+    seed: u64,
+) -> PiStarPreviewPolicies {
+    let n_pi = pi_sets.len();
+    if n_pi == 0 || red_sets.len() != 6 {
+        return PiStarPreviewPolicies::default();
+    }
+    let r_red = CompiledRoster6::compile(dex, red_sets);
+    let ka = r_red.legal.len();
+    let red_sig = preview_sig_sets(red_sets);
+
+    // Group `pi_sets` by outer preview shell `PreviewSig`
+    let mut shell_map: BTreeMap<PreviewSig, Vec<(usize, CompiledRoster6, f64)>> = BTreeMap::new();
+    for (b_idx, b_sets) in pi_sets.iter().enumerate() {
+        if b_sets.len() != 6 {
+            continue;
+        }
+        let sig = preview_sig_sets(b_sets);
+        let r_b = CompiledRoster6::compile(dex, b_sets);
+        let w_b = pi_weights.get(b_idx).copied().unwrap_or(1.0);
+        shell_map.entry(sig).or_default().push((b_idx, r_b, w_b));
+    }
+
+    // Build Red's disclosed shell variants `(chall_rosters, chall_alpha, my_k_idx)`
+    let mut chall_rosters: Vec<CompiledRoster6> = Vec::new();
+    let mut chall_alpha: Vec<f64> = Vec::new();
+    if let Some(same_shell_members) = shell_map.get(&red_sig) {
+        let sum_w: f64 = same_shell_members
+            .iter()
+            .map(|x| x.2)
+            .sum::<f64>()
+            .max(1e-9);
+        for (_, r_m, w_m) in same_shell_members {
+            chall_rosters.push(r_m.clone());
+            chall_alpha.push(*w_m / sum_w);
+        }
+        let my_k_idx = chall_rosters.len();
+        chall_rosters.push(r_red.clone());
+        chall_alpha.push(1.0 / (same_shell_members.len() as f64));
+        let _ = my_k_idx;
+    } else {
+        chall_rosters.push(r_red.clone());
+        chall_alpha.push(1.0);
+    }
+    let n_c = chall_rosters.len();
+    let my_k_idx = n_c - 1;
+
+    let mut blue_own_pol_by_idx = vec![vec![0.0; 60]; n_pi];
+    let mut blue_opp_pol_by_idx = vec![vec![0.0; 60]; n_pi];
+    let mut red_own_pol_by_blue_idx = vec![vec![0.0; 60]; n_pi];
+    let mut red_opp_pol_by_blue_idx = vec![vec![0.0; 60]; n_pi];
+
+    for (sh_ord, (_b_sig, b_members)) in shell_map.iter().enumerate() {
+        let n_d = b_members.len();
+        let kb = b_members[0].1.legal.len();
+        let mut d_alpha = Vec::with_capacity(n_d);
+        let mut mats_storage: Vec<Vec<f64>> = Vec::with_capacity(n_c * n_d);
+        for (c_m, r_c) in chall_rosters.iter().enumerate() {
+            for (d_m, &(_, ref r_d, w_d)) in b_members.iter().enumerate() {
+                if c_m == 0 {
+                    d_alpha.push(w_d);
+                }
+                let pair_seed = seed
+                    ^ 0x3C6E_F372_FE94_F82A_u64
+                    ^ (((sh_ord * 131 + c_m * 17 + d_m) as u64)
+                        .wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                mats_storage.push(eval_full_preview_matrix_compact(
+                    r_c, r_d, 1, max_turns, pair_seed,
+                ));
+            }
+        }
+        let mats_refs: Vec<&[f64]> = mats_storage.iter().map(|v| v.as_slice()).collect();
+        let (_game_v, _per_c, _per_d, p_strats, q_strats) =
+            solve_bayesian_shell_preview_nash(&mats_refs, ka, kb, &chall_alpha, &d_alpha, 400);
+
+        let red_own_60 = expand_to_canonical_60(&r_red.legal, &p_strats[my_k_idx]);
+        let mut red_shell_avg_ka = vec![0.0f64; ka];
+        let c_sum: f64 = chall_alpha.iter().sum::<f64>().max(1e-9);
+        for c_m in 0..n_c {
+            let w_c = chall_alpha[c_m] / c_sum;
+            for ia in 0..ka {
+                red_shell_avg_ka[ia] += w_c * p_strats[c_m][ia];
+            }
+        }
+        let blue_opp_60 = expand_to_canonical_60(&r_red.legal, &red_shell_avg_ka);
+
+        let mut blue_shell_avg_kb = vec![0.0f64; kb];
+        let d_sum: f64 = d_alpha.iter().sum::<f64>().max(1e-9);
+        for d_m in 0..n_d {
+            let w_d = d_alpha[d_m] / d_sum;
+            for ib in 0..kb {
+                blue_shell_avg_kb[ib] += w_d * q_strats[d_m][ib];
+            }
+        }
+        let red_opp_60 = expand_to_canonical_60(&b_members[0].1.legal, &blue_shell_avg_kb);
+
+        for (d_m, &(b_idx, ref r_d, _)) in b_members.iter().enumerate() {
+            blue_own_pol_by_idx[b_idx] = expand_to_canonical_60(&r_d.legal, &q_strats[d_m]);
+            blue_opp_pol_by_idx[b_idx] = blue_opp_60.clone();
+            red_own_pol_by_blue_idx[b_idx] = red_own_60.clone();
+            red_opp_pol_by_blue_idx[b_idx] = red_opp_60.clone();
+        }
+    }
+
+    PiStarPreviewPolicies {
+        blue_own_pol_by_idx,
+        blue_opp_pol_by_idx,
+        red_own_pol_by_blue_idx,
+        red_opp_pol_by_blue_idx,
+    }
+}
+
 /// Evaluate a Red challenger `red_sets` against the fixed Conclusion Mixture `\pi^* = {(pi_sets[k], pi_weights[k])}`
 /// using a seamless Quasi-Monte Carlo (golden-ratio low-discrepancy) sequence of P1/P2 mirror pairs
 /// `m in pair_start .. (pair_start + num_pairs)` (`2 * num_pairs` games total).
@@ -8035,6 +8368,7 @@ struct PiStarEvalOut {
 /// - `blue_prior`: standard `MetaPool` used by Blue (`\pi^*`) when facing a potentially unknown Red team.
 /// - `red_prior`: exact smuggling-free `MetaPool` (`pi_star_mp`) used by Red, containing ONLY the active
 ///   support members of `\pi^*` with their exact equilibrium weights `w*_k` (and zero legacy ghosts on `\pi^*` shells).
+#[allow(clippy::too_many_arguments)]
 fn eval_vs_pi_star_qmc(
     dex: &Dex,
     pi_sets: &[Vec<PokemonSet>],
@@ -8050,12 +8384,57 @@ fn eval_vs_pi_star_qmc(
     threads: usize,
     seed: u64,
 ) -> PiStarEvalOut {
+    eval_vs_pi_star_qmc_with_preview(
+        dex,
+        pi_sets,
+        pi_weights,
+        red_sets,
+        blue_prior,
+        red_prior,
+        None,
+        pair_start,
+        num_pairs,
+        agent_iters,
+        c,
+        max_turns,
+        threads,
+        seed,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn eval_vs_pi_star_qmc_with_preview(
+    dex: &Dex,
+    pi_sets: &[Vec<PokemonSet>],
+    pi_weights: &[f64],
+    red_sets: &[PokemonSet],
+    blue_prior: Arc<MetaPool>,
+    red_prior: Arc<MetaPool>,
+    preview_pols: Option<&PiStarPreviewPolicies>,
+    pair_start: usize,
+    num_pairs: usize,
+    agent_iters: u32,
+    c: f64,
+    max_turns: u16,
+    threads: usize,
+    seed: u64,
+) -> PiStarEvalOut {
     use nc2000_bot::runner::{play_game, GameResult};
     use nc2000_bot::smmcts::{RmConfig, SelRule};
     use nc2000_bot::{Agent, BlindAgent};
     use nc2000_engine::battle::Outcome;
     use nc2000_engine::state::Battle;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let owned_pols;
+    let pols_ref: &PiStarPreviewPolicies = match preview_pols {
+        Some(p) => p,
+        None => {
+            owned_pols =
+                build_pi_star_preview_policies(dex, pi_sets, pi_weights, red_sets, max_turns, seed);
+            &owned_pols
+        }
+    };
 
     struct QmcJob {
         blue_idx: usize,
@@ -8103,7 +8482,8 @@ fn eval_vs_pi_star_qmc(
     std::thread::scope(|scope| {
         let mut handles = Vec::new();
         for _ in 0..threads.max(1) {
-            let (jobs, cursor, blue_prior, red_prior) = (&jobs, &cursor, &blue_prior, &red_prior);
+            let (jobs, cursor, blue_prior, red_prior, pols) =
+                (&jobs, &cursor, &blue_prior, &red_prior, pols_ref);
             handles.push(scope.spawn(move || {
                 let mut loc = Vec::new();
                 loop {
@@ -8118,18 +8498,36 @@ fn eval_vs_pi_star_qmc(
                         c,
                         ..Default::default()
                     };
-                    let mut blue_agent: Box<dyn Agent> = Box::new(BlindAgent::new(
-                        rm_cfg.clone(),
-                        blue_prior.clone(),
-                        None,
-                        job.blue_seed,
-                    ));
-                    let mut red_agent: Box<dyn Agent> = Box::new(BlindAgent::new(
-                        rm_cfg,
-                        red_prior.clone(),
-                        None,
-                        job.red_seed,
-                    ));
+                    let mut blue_blind =
+                        BlindAgent::new(rm_cfg.clone(), blue_prior.clone(), None, job.blue_seed)
+                            .with_preview_iterations(agent_iters.max(240));
+                    if let Some(own_p) = pols.blue_own_pol_by_idx.get(job.blue_idx) {
+                        if !own_p.is_empty() {
+                            blue_blind = blue_blind.with_own_preview_policy(own_p.clone());
+                        }
+                    }
+                    if let Some(opp_p) = pols.blue_opp_pol_by_idx.get(job.blue_idx) {
+                        if !opp_p.is_empty() {
+                            blue_blind = blue_blind.with_opponent_pick_policy(opp_p.clone(), 0.10);
+                        }
+                    }
+
+                    let mut red_blind =
+                        BlindAgent::new(rm_cfg, red_prior.clone(), None, job.red_seed)
+                            .with_preview_iterations(agent_iters.max(240));
+                    if let Some(own_p) = pols.red_own_pol_by_blue_idx.get(job.blue_idx) {
+                        if !own_p.is_empty() {
+                            red_blind = red_blind.with_own_preview_policy(own_p.clone());
+                        }
+                    }
+                    if let Some(opp_p) = pols.red_opp_pol_by_blue_idx.get(job.blue_idx) {
+                        if !opp_p.is_empty() {
+                            red_blind = red_blind.with_opponent_pick_policy(opp_p.clone(), 0.10);
+                        }
+                    }
+
+                    let mut blue_agent: Box<dyn Agent> = Box::new(blue_blind);
+                    let mut red_agent: Box<dyn Agent> = Box::new(red_blind);
                     let b_sets = &pi_sets[job.blue_idx];
                     let (t1, t2) = if job.blue_is_p1 {
                         (b_sets.as_slice(), red_sets)
@@ -8241,6 +8639,7 @@ fn eval_full_mcts_bayesian_election_qmc(
     red_sets: &[PokemonSet],
     blue_prior: Arc<MetaPool>,
     red_prior: Arc<MetaPool>,
+    preview_pols: Option<&PiStarPreviewPolicies>,
     initial_pair_offset: usize,
     wave_pairs: &[usize],
     loss_ucb_thresh: f64,
@@ -8251,6 +8650,15 @@ fn eval_full_mcts_bayesian_election_qmc(
     threads: usize,
     seed: u64,
 ) -> FullMctsElectionOut {
+    let owned_pols;
+    let pols_ref: &PiStarPreviewPolicies = match preview_pols {
+        Some(p) => p,
+        None => {
+            owned_pols =
+                build_pi_star_preview_policies(dex, pi_sets, pi_weights, red_sets, max_turns, seed);
+            &owned_pols
+        }
+    };
     let mut cur_pair_offset = initial_pair_offset;
     let mut tot_games = 0usize;
     let mut tot_blue_wins = 0.0f64;
@@ -8264,13 +8672,14 @@ fn eval_full_mcts_bayesian_election_qmc(
         if n_pairs == 0 {
             continue;
         }
-        let out = eval_vs_pi_star_qmc(
+        let out = eval_vs_pi_star_qmc_with_preview(
             dex,
             pi_sets,
             pi_weights,
             red_sets,
             blue_prior.clone(),
             red_prior.clone(),
+            Some(pols_ref),
             cur_pair_offset,
             n_pairs,
             agent_iters,
@@ -8445,7 +8854,11 @@ fn cmd_falsify_conclusion(args: &[String]) {
             reg_blue(tid, orig, t["sets"].as_array().unwrap());
         }
     }
-    for eb_file in extra_blue_str.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+    for eb_file in extra_blue_str
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         if let Ok(txt) = std::fs::read_to_string(eb_file) {
             if let Ok(v) = serde_json::from_str::<Value>(&txt) {
                 if let Some(arr) = v["teams"].as_array() {
@@ -8468,7 +8881,10 @@ fn cmd_falsify_conclusion(args: &[String]) {
             return;
         }
         let upgraded = normalize_team_dvs_evs(&dex, raw);
-        let Some(canon) = gen.canonize(&dex, &upgraded).or_else(|| gen.canonize(&dex, raw)) else {
+        let Some(canon) = gen
+            .canonize(&dex, &upgraded)
+            .or_else(|| gen.canonize(&dex, raw))
+        else {
             return;
         };
         if !seen_q_keys.insert(team_key(&canon)) {
@@ -8492,10 +8908,22 @@ fn cmd_falsify_conclusion(args: &[String]) {
         }
     }
     for (extra_path, grp_tag, cap) in [
-        ("data/community-rentals-v0/teams.json", "community_rental", 30usize),
+        (
+            "data/community-rentals-v0/teams.json",
+            "community_rental",
+            30usize,
+        ),
         ("data/eco-r17/pool-artifact.json", "eco_r17", 12usize),
-        ("data/kodoku-r1/nash-candidates.json", "kodoku_r1_cand", 10usize),
-        ("data/kodoku-r2/nash-candidates.json", "kodoku_r2_cand", 12usize),
+        (
+            "data/kodoku-r1/nash-candidates.json",
+            "kodoku_r1_cand",
+            10usize,
+        ),
+        (
+            "data/kodoku-r2/nash-candidates.json",
+            "kodoku_r2_cand",
+            12usize,
+        ),
     ] {
         if let Ok(txt) = std::fs::read_to_string(root.join(extra_path)) {
             if let Ok(v) = serde_json::from_str::<Value>(&txt) {
@@ -8509,7 +8937,11 @@ fn cmd_falsify_conclusion(args: &[String]) {
             }
         }
     }
-    for er_file in extra_red_str.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+    for er_file in extra_red_str
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
         if let Ok(txt) = std::fs::read_to_string(er_file) {
             if let Ok(v) = serde_json::from_str::<Value>(&txt) {
                 if let Some(arr) = v["teams"].as_array() {
@@ -8524,7 +8956,8 @@ fn cmd_falsify_conclusion(args: &[String]) {
     }
 
     // 2. Load the matrix report and solve exact full-precision minimax weights `w_p`
-    let rep_v: Value = serde_json::from_str(&std::fs::read_to_string(&report_path).unwrap()).unwrap();
+    let rep_v: Value =
+        serde_json::from_str(&std::fs::read_to_string(&report_path).unwrap()).unwrap();
     let p_ids: Vec<String> = rep_v["p_ids"]
         .as_array()
         .unwrap()
@@ -8597,7 +9030,8 @@ fn cmd_falsify_conclusion(args: &[String]) {
     //    - Any legacy entry in `belief-pool.json` sharing an outer shell with any active member of `\pi^*`
     //      is REMOVED so singletons in `supp(\pi^*)` have ZERO smuggled ghost variants.
     //    - Only active members `(p_k, w*_k)` in `supp(\pi^*)` are pushed for those shells!
-    let bp_text = std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
+    let bp_text =
+        std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
     let raw_mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
     let base_mp = normalize_belief_pool(&dex, &gen, &raw_mp);
 
@@ -8635,8 +9069,9 @@ fn cmd_falsify_conclusion(args: &[String]) {
     for (k, pid) in pi_ids.iter().enumerate() {
         let sig = preview_sig_sets(&pi_sets[k]);
         let expected_cands = active_shell_counts[&sig];
-        let tb = nc2000_engine::state::Battle::from_fixture(&dex, "1,2,3,4", &pi_sets[k], &pi_sets[k])
-            .unwrap();
+        let tb =
+            nc2000_engine::state::Battle::from_fixture(&dex, "1,2,3,4", &pi_sets[k], &pi_sets[k])
+                .unwrap();
         let obs = nc2000_bot::Observer::new(&tb, 1); // Red (side 1) observing Blue (side 0)
         let bel = nc2000_bot::Belief::new(&dex, &pi_star_mp, &obs);
         assert_eq!(
@@ -8653,9 +9088,7 @@ fn cmd_falsify_conclusion(args: &[String]) {
             verified_multi_demes += 1;
         }
     }
-    eprintln!(
-        "=== Zero-Smuggling Prior Verification Passed ==="
-    );
+    eprintln!("=== Zero-Smuggling Prior Verification Passed ===");
     eprintln!(
         "  supp(pi*): {} active teams across {} shells ({} Pure/Unmasked Singletons with alive=1 at Turn 0; {} Multi-Variant Deme members with alive>=2)",
         pi_ids.len(),
@@ -8729,10 +9162,10 @@ fn cmd_falsify_conclusion(args: &[String]) {
         // Prior pseudo-games from matrix = 16.0 (since smuggled singletons changed prior disclosure,
         // we give fresh smuggling-free games primary weight as soon as Stage 1 completes!)
         let stages: [(usize, usize, f64, usize); 4] = [
-            (1, 8, 0.565, 80),   // Stage 1: +16 games (16 total) for top 80 or matrix_wr < 0.565
-            (2, 16, 0.540, 32),  // Stage 2: +32 games (48 total) for top 32 or running_wr < 0.540
-            (3, 24, 0.520, 14),  // Stage 3: +48 games (96 total) for top 14 or running_wr < 0.520
-            (4, 32, 0.505, 8),   // Stage 4: +64 games (160 total) for top 8 or running_wr < 0.505
+            (1, 8, 0.565, 80),  // Stage 1: +16 games (16 total) for top 80 or matrix_wr < 0.565
+            (2, 16, 0.540, 32), // Stage 2: +32 games (48 total) for top 32 or running_wr < 0.540
+            (3, 24, 0.520, 14), // Stage 3: +48 games (96 total) for top 14 or running_wr < 0.520
+            (4, 32, 0.505, 8),  // Stage 4: +64 games (160 total) for top 8 or running_wr < 0.505
         ];
 
         for &(st_idx, add_pairs, wr_gate, rank_gate) in &stages {
@@ -8947,8 +9380,8 @@ fn cmd_falsify_conclusion(args: &[String]) {
                     let b_wr = self.blue_wins / (self.games as f64);
                     self.red_wr = 1.0 - b_wr;
                     // Empirical-Bayes Red winrate with conservative prior 16 games @ 0.43 Red WR
-                    self.bayes_red_wr =
-                        (16.0 * 0.43 + (self.games as f64) * self.red_wr) / (16.0 + self.games as f64);
+                    self.bayes_red_wr = (16.0 * 0.43 + (self.games as f64) * self.red_wr)
+                        / (16.0 + self.games as f64);
                 } else {
                     self.red_wr = 0.43;
                     self.bayes_red_wr = 0.43;
@@ -8965,47 +9398,46 @@ fn cmd_falsify_conclusion(args: &[String]) {
         let mut population: Vec<RedStrain> = Vec::new();
         let mut seq = 1usize;
 
-        let push_red_candidate =
-            |pop: &mut Vec<RedStrain>,
-             seen: &mut BTreeSet<String>,
-             seq_counter: &mut usize,
-             parent_id: &str,
-             origin: &str,
-             born_wave: usize,
-             op: &str,
-             raw_in: &[Value]|
-             -> bool {
-                let upgraded = normalize_team_dvs_evs(&dex, raw_in);
-                let Some(canon) = gen.canonize(&dex, &upgraded) else {
-                    return false;
-                };
-                let k = team_key(&canon);
-                if !seen.insert(k) {
-                    return false;
-                }
-                let Ok(sets) = to_sets(&canon) else {
-                    return false;
-                };
-                let id = format!("{}-s{:04}", island, *seq_counter);
-                *seq_counter += 1;
-                pop.push(RedStrain {
-                    id,
-                    parent_id: parent_id.to_string(),
-                    origin: origin.to_string(),
-                    born_wave,
-                    last_op: op.to_string(),
-                    sets,
-                    raw: canon,
-                    pairs_done: 0,
-                    games: 0,
-                    blue_wins: 0.0,
-                    red_wr: 0.43,
-                    bayes_red_wr: 0.43,
-                    slot_picks: [0.0; 6],
-                    slot_wins: [0.0; 6],
-                });
-                true
+        let push_red_candidate = |pop: &mut Vec<RedStrain>,
+                                  seen: &mut BTreeSet<String>,
+                                  seq_counter: &mut usize,
+                                  parent_id: &str,
+                                  origin: &str,
+                                  born_wave: usize,
+                                  op: &str,
+                                  raw_in: &[Value]|
+         -> bool {
+            let upgraded = normalize_team_dvs_evs(&dex, raw_in);
+            let Some(canon) = gen.canonize(&dex, &upgraded) else {
+                return false;
             };
+            let k = team_key(&canon);
+            if !seen.insert(k) {
+                return false;
+            }
+            let Ok(sets) = to_sets(&canon) else {
+                return false;
+            };
+            let id = format!("{}-s{:04}", island, *seq_counter);
+            *seq_counter += 1;
+            pop.push(RedStrain {
+                id,
+                parent_id: parent_id.to_string(),
+                origin: origin.to_string(),
+                born_wave,
+                last_op: op.to_string(),
+                sets,
+                raw: canon,
+                pairs_done: 0,
+                games: 0,
+                blue_wins: 0.0,
+                red_wr: 0.43,
+                bayes_red_wr: 0.43,
+                slot_picks: [0.0; 6],
+                slot_wins: [0.0; 6],
+            });
+            true
+        };
 
         // Seed Group A: Top 10 closest outside challengers from Q
         for qid in closest_non_supp_ids.iter().take(10) {
@@ -9079,7 +9511,9 @@ fn cmd_falsify_conclusion(args: &[String]) {
                     }
                 }
             }
-            if let Some(team) = gen.random_team_constrained(&dex, &mut rng, &[], &free_constraint, 300) {
+            if let Some(team) =
+                gen.random_team_constrained(&dex, &mut rng, &[], &free_constraint, 300)
+            {
                 push_red_candidate(
                     &mut population,
                     &mut seen_red_keys,
@@ -9105,10 +9539,10 @@ fn cmd_falsify_conclusion(args: &[String]) {
             // - Tier 4 (Confirm 160g): strains with `red_wr >= 0.500` (Blue WR <= 0.500) play up to 160 games (80 pairs)
             // - Tier 5 (Ultra 256g): strains with `red_wr >= 0.505` at 160g play up to 256 games (128 pairs)
             let tiers: [(usize, f64); 5] = [
-                (8, 0.0),    // 16 games for everyone
-                (24, 0.455), // 48 games if Red WR >= 45.5%
-                (48, 0.485), // 96 games if Red WR >= 48.5%
-                (80, 0.500), // 160 games if Red WR >= 50.0%
+                (8, 0.0),     // 16 games for everyone
+                (24, 0.455),  // 48 games if Red WR >= 45.5%
+                (48, 0.485),  // 96 games if Red WR >= 48.5%
+                (80, 0.500),  // 160 games if Red WR >= 50.0%
                 (128, 0.505), // 256 games if Red WR >= 50.5%
             ];
 
@@ -9617,9 +10051,8 @@ impl CompiledRoster6 {
             let i1 = 2 * k + 1;
             let s0 = [clean_sets[i0].clone(), dummy50.clone(), dummy50.clone()];
             let s1 = [clean_sets[i1].clone(), dummy50.clone(), dummy50.clone()];
-            let mut b =
-                nc2000_engine::state::Battle::from_fixture(dex, "1,2,3,4", &s0, &s1)
-                    .expect("valid 3v3 fixture");
+            let mut b = nc2000_engine::state::Battle::from_fixture(dex, "1,2,3,4", &s0, &s1)
+                .expect("valid 3v3 fixture");
             b.set_log_enabled(false);
             b.apply_choices(
                 dex,
@@ -9681,7 +10114,9 @@ fn assemble_3v3_compact(
     ];
     let mut fp = 0xcbf29ce484222325u64;
     for m in &static_mons {
-        fp = fp.wrapping_add(m.static_fp).wrapping_mul(0xf1357aea2e62a9c5);
+        fp = fp
+            .wrapping_add(m.static_fp)
+            .wrapping_mul(0xf1357aea2e62a9c5);
     }
     let table = MatchTable {
         mons: static_mons,
@@ -9726,7 +10161,7 @@ fn assemble_3v3_compact(
         turn: 1,
         weather_kind: 0,
         weather_turns: 0,
-        quick_claw_roll: 0,
+        quick_claw_roll: (((prng_seed >> 32) & 0xFF) < 60) as u8,
         outcome: 0,
         speed_order: 0,
         clause_flags: 5,
@@ -9769,14 +10204,24 @@ fn eval_full_preview_matrix_compact(
                 let (tab_ab, mut cb_ab) = assemble_3v3_compact(r_a, ta, r_b, tb, prng);
                 let mut rng_ab = SplitMix64::new(cell_seed ^ 0xA5A5_5A5A_F0F0_0F0F);
                 let v_ab = nc2000_bot::mcts::compact_playout_value(
-                    &mut cb_ab, &tab_ab, &playout, max_turns, &mut rng_ab, rules,
+                    &mut cb_ab,
+                    &tab_ab,
+                    &playout,
+                    max_turns,
+                    &mut rng_ab,
+                    rules,
                 );
 
                 let (tab_ba, mut cb_ba) = assemble_3v3_compact(r_b, tb, r_a, ta, prng);
                 let mut rng_ba = SplitMix64::new(cell_seed ^ 0x5A5A_A5A5_0F0F_F0F0);
                 let v_ba = 1.0
                     - nc2000_bot::mcts::compact_playout_value(
-                        &mut cb_ba, &tab_ba, &playout, max_turns, &mut rng_ba, rules,
+                        &mut cb_ba,
+                        &tab_ba,
+                        &playout,
+                        max_turns,
+                        &mut rng_ba,
+                        rules,
                     );
 
                 sum += v_ab + v_ba;
@@ -9837,14 +10282,24 @@ fn eval_adaptive_preview_matrix_compact(
                 let (tab_ab, mut cb_ab) = assemble_3v3_compact(r_a, ta, r_b, tb, prng);
                 let mut rng_ab = SplitMix64::new(cell_seed ^ 0xA5A5_5A5A_F0F0_0F0F);
                 let v_ab = nc2000_bot::mcts::compact_playout_value(
-                    &mut cb_ab, &tab_ab, &playout, max_turns, &mut rng_ab, rules,
+                    &mut cb_ab,
+                    &tab_ab,
+                    &playout,
+                    max_turns,
+                    &mut rng_ab,
+                    rules,
                 );
 
                 let (tab_ba, mut cb_ba) = assemble_3v3_compact(r_b, tb, r_a, ta, prng);
                 let mut rng_ba = SplitMix64::new(cell_seed ^ 0x5A5A_A5A5_0F0F_F0F0);
                 let v_ba = 1.0
                     - nc2000_bot::mcts::compact_playout_value(
-                        &mut cb_ba, &tab_ba, &playout, max_turns, &mut rng_ba, rules,
+                        &mut cb_ba,
+                        &tab_ba,
+                        &playout,
+                        max_turns,
+                        &mut rng_ba,
+                        rules,
                     );
 
                 let pair_val = 0.5 * (v_ab + v_ba);
@@ -9929,6 +10384,155 @@ fn eval_adaptive_preview_matrix_compact(
     mean_mat
 }
 
+/// Incremental Sequential Bayesian Election-Call (`選挙当確速報`) Matrix Refiner for Phase 2 Cutting-Plane:
+/// Starting from an already-evaluated `old_mat` (`old_seeds >= 1` across all 3600 cells), solves the current
+/// Preview Nash `(p_hat, q_hat, v_hat)`, prunes sub-optimal rows/columns (`落選当確`), and evaluates `add_seeds`
+/// new CRN seed waves strictly on the open (`開票継続`) equilibrium-relevant cells!
+fn eval_incremental_adaptive_preview_matrix_compact(
+    r_a: &CompiledRoster6,
+    r_b: &CompiledRoster6,
+    old_mat: &[f64],
+    old_seeds: u32,
+    add_seeds: u32,
+    max_turns: u16,
+    base_seed: u64,
+) -> (Vec<f64>, u32) {
+    let ka = r_a.legal.len();
+    let kb = r_b.legal.len();
+    let n_cells = ka * kb;
+    if ka == 0 || kb == 0 || old_mat.len() != n_cells || add_seeds == 0 {
+        return (old_mat.to_vec(), old_seeds.max(1));
+    }
+    let init_n = old_seeds.max(1);
+    let mut sum_mat: Vec<f64> = old_mat.iter().map(|&mu| mu * (init_n as f64)).collect();
+    let mut sq_mat: Vec<f64> = old_mat
+        .iter()
+        .map(|&mu| {
+            let prior_var = 0.5 * mu * (1.0 - mu);
+            (mu * mu + prior_var) * (init_n as f64)
+        })
+        .collect();
+    let mut cnt_mat = vec![init_n; n_cells];
+    let mut mean_mat = old_mat.to_vec();
+
+    let playout = nc2000_bot::Playout::heavy();
+    let rules = nc2000_bot::mcts::RolloutRules::default();
+    let mut active_row = vec![true; ka];
+    let mut active_col = vec![true; kb];
+    let mut cell_called = vec![false; n_cells];
+
+    for step in 0..add_seeds {
+        // Update cell credible intervals `[lcb, ucb]` and check Election-Call conditions BEFORE each incremental wave
+        let mut lcb_mat = vec![0.0f64; n_cells];
+        let mut ucb_mat = vec![1.0f64; n_cells];
+        for idx in 0..n_cells {
+            let n = cnt_mat[idx].max(1) as f64;
+            let mu = mean_mat[idx];
+            let emp_var = ((sq_mat[idx] / n) - mu * mu).max(0.0);
+            let beta_var = (mu * (1.0 - mu) + 0.02 / (n + 1.0)) / n;
+            let rad = 1.96 * (0.5 * (emp_var / n) + 0.5 * beta_var).sqrt()
+                + (0.04 + 0.24 * mu * (1.0 - mu)) / (n + 1.0);
+            lcb_mat[idx] = (mu - rad).max(0.0);
+            ucb_mat[idx] = (mu + rad).min(1.0);
+            if cnt_mat[idx] >= 2 && rad <= 0.065 {
+                cell_called[idx] = true;
+            }
+        }
+
+        let (p_hat, q_hat, _v_hat) = solve_preview_nash(&mean_mat, ka, kb, 250);
+        let mut v_pess_a = f64::INFINITY;
+        for ib in 0..kb {
+            let mut col_lcb = 0.0f64;
+            for ia in 0..ka {
+                col_lcb += p_hat[ia] * lcb_mat[ia * kb + ib];
+            }
+            v_pess_a = v_pess_a.min(col_lcb);
+        }
+        let mut v_opt_b = f64::NEG_INFINITY;
+        for ia in 0..ka {
+            let mut row_ucb = 0.0f64;
+            for ib in 0..kb {
+                row_ucb += ucb_mat[ia * kb + ib] * q_hat[ib];
+            }
+            v_opt_b = v_opt_b.max(row_ucb);
+        }
+
+        for ia in 0..ka {
+            if !active_row[ia] {
+                continue;
+            }
+            let mut row_ucb = 0.0f64;
+            for ib in 0..kb {
+                row_ucb += ucb_mat[ia * kb + ib] * q_hat[ib];
+            }
+            if p_hat[ia] < 1e-3 && row_ucb + 0.015 < v_pess_a {
+                active_row[ia] = false;
+            }
+        }
+        for ib in 0..kb {
+            if !active_col[ib] {
+                continue;
+            }
+            let mut col_lcb = 0.0f64;
+            for ia in 0..ka {
+                col_lcb += p_hat[ia] * lcb_mat[ia * kb + ib];
+            }
+            if q_hat[ib] < 1e-3 && col_lcb - 0.015 > v_opt_b {
+                active_col[ib] = false;
+            }
+        }
+        if !active_row.iter().any(|&x| x) || !active_col.iter().any(|&x| x) {
+            break;
+        }
+
+        let s = init_n + step;
+        for (ia, &ta) in r_a.legal.iter().enumerate() {
+            if !active_row[ia] {
+                continue;
+            }
+            for (ib, &tb) in r_b.legal.iter().enumerate() {
+                let idx = ia * kb + ib;
+                if !active_col[ib] || cell_called[idx] {
+                    continue;
+                }
+                let cell_seed = base_seed
+                    ^ ((s as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                    ^ (((ia * 64 + ib) as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9));
+                let prng = cell_seed | 1;
+                let (tab_ab, mut cb_ab) = assemble_3v3_compact(r_a, ta, r_b, tb, prng);
+                let mut rng_ab = SplitMix64::new(cell_seed ^ 0xA5A5_5A5A_F0F0_0F0F);
+                let v_ab = nc2000_bot::mcts::compact_playout_value(
+                    &mut cb_ab,
+                    &tab_ab,
+                    &playout,
+                    max_turns,
+                    &mut rng_ab,
+                    rules,
+                );
+
+                let (tab_ba, mut cb_ba) = assemble_3v3_compact(r_b, tb, r_a, ta, prng);
+                let mut rng_ba = SplitMix64::new(cell_seed ^ 0x5A5A_A5A5_0F0F_F0F0);
+                let v_ba = 1.0
+                    - nc2000_bot::mcts::compact_playout_value(
+                        &mut cb_ba,
+                        &tab_ba,
+                        &playout,
+                        max_turns,
+                        &mut rng_ba,
+                        rules,
+                    );
+
+                let pair_val = 0.5 * (v_ab + v_ba);
+                sum_mat[idx] += pair_val;
+                sq_mat[idx] += pair_val * pair_val;
+                cnt_mat[idx] += 1;
+                mean_mat[idx] = sum_mat[idx] / (cnt_mat[idx] as f64);
+            }
+        }
+    }
+    (mean_mat, init_n + add_seeds)
+}
+
 fn transpose_preview_matrix(mat: &[f64], ka: usize, kb: usize) -> Vec<f64> {
     let mut out = vec![0.5f64; kb * ka];
     for ia in 0..ka {
@@ -9990,139 +10594,131 @@ fn solve_bayesian_shell_preview_nash(
         return (v, vec![v], vec![1.0 - v], vec![p], vec![q]);
     }
 
+    // Simultaneous Regret Matching+ (RM+) with linear averaging `(w_t = t)` across all variants `(k, m)`
+    // (exact Rust counterpart of `tpu/src/gen2_tpu/kodoku.py::solve_bayesian_shell_preview_nash_np`)
+    let mut reg_p = vec![vec![0.0f64; ka]; n_u];
+    let mut reg_q = vec![vec![0.0f64; kb]; n_v];
     let mut p_cum = vec![vec![0.0f64; ka]; n_u];
     let mut q_cum = vec![vec![0.0f64; kb]; n_v];
-    for k in 0..n_u {
-        let mut best_i = 0usize;
-        let mut best_sc = f64::NEG_INFINITY;
-        for ia in 0..ka {
-            let mut sc = 0.0f64;
-            for m in 0..n_v {
-                if b_norm[m] <= 0.0 {
-                    continue;
-                }
-                let mat = mats_km[k * n_v + m];
-                let row_sum: f64 = mat[ia * kb..(ia + 1) * kb].iter().sum();
-                sc += b_norm[m] * (row_sum / (kb as f64));
-            }
-            if sc > best_sc {
-                best_sc = sc;
-                best_i = ia;
-            }
-        }
-        p_cum[k][best_i] = 1.0;
-    }
-    for m in 0..n_v {
-        let mut best_j = 0usize;
-        let mut best_sc = f64::INFINITY;
-        for ib in 0..kb {
-            let mut sc = 0.0f64;
-            for k in 0..n_u {
-                if a_norm[k] <= 0.0 {
-                    continue;
-                }
-                let mat = mats_km[k * n_v + m];
-                let mut col_sum = 0.0f64;
-                for ia in 0..ka {
-                    col_sum += mat[ia * kb + ib];
-                }
-                sc += a_norm[k] * (col_sum / (ka as f64));
-            }
-            if sc < best_sc {
-                best_sc = sc;
-                best_j = ib;
-            }
-        }
-        q_cum[m][best_j] = 1.0;
-    }
+    let mut p_cur = vec![vec![1.0 / (ka as f64); ka]; n_u];
+    let mut q_cur = vec![vec![1.0 / (kb as f64); kb]; n_v];
+    let unif_p = 1.0 / (ka as f64);
+    let unif_q = 1.0 / (kb as f64);
 
-    let mut w_total = 1.0f64;
-    let n_iters = sweeps.max(250);
+    let n_iters = sweeps.max(400);
     for t in 1..=n_iters {
-        let w = t as f64;
-        for m in 0..n_v {
-            if b_norm[m] <= 1e-12 {
-                continue;
-            }
-            let mut best_j = 0usize;
-            let mut best_col = f64::INFINITY;
-            for ib in 0..kb {
-                let mut col_val = 0.0f64;
-                for k in 0..n_u {
-                    if a_norm[k] <= 1e-12 {
-                        continue;
-                    }
-                    let mat = mats_km[k * n_v + m];
-                    let pk = &p_cum[k];
-                    let mut dot = 0.0f64;
-                    for ia in 0..ka {
-                        let p_ia = pk[ia];
-                        if p_ia > 0.0 {
-                            dot += p_ia * mat[ia * kb + ib];
-                        }
-                    }
-                    col_val += a_norm[k] * dot;
+        for k in 0..n_u {
+            let sp: f64 = reg_p[k].iter().sum();
+            if sp > 1e-12 {
+                for ia in 0..ka {
+                    p_cur[k][ia] = reg_p[k][ia] / sp;
                 }
-                if col_val < best_col {
-                    best_col = col_val;
-                    best_j = ib;
-                }
+            } else {
+                p_cur[k].fill(unif_p);
             }
-            q_cum[m][best_j] += w;
         }
-        let w_q = w_total + w;
+        for m in 0..n_v {
+            let sq: f64 = reg_q[m].iter().sum();
+            if sq > 1e-12 {
+                for ib in 0..kb {
+                    q_cur[m][ib] = reg_q[m][ib] / sq;
+                }
+            } else {
+                q_cur[m].fill(unif_q);
+            }
+        }
+
+        // Update Row Player U regrets `reg_p[k][ia]` against `q_cur`
         for k in 0..n_u {
             if a_norm[k] <= 1e-12 {
                 continue;
             }
-            let mut best_i = 0usize;
-            let mut best_row = f64::NEG_INFINITY;
+            let mut u_p = vec![0.0f64; ka];
+            let mut v_p = 0.0f64;
             for ia in 0..ka {
-                let mut row_val = 0.0f64;
+                let mut val_ia = 0.0f64;
                 for m in 0..n_v {
                     if b_norm[m] <= 1e-12 {
                         continue;
                     }
                     let mat = mats_km[k * n_v + m];
-                    let qm = &q_cum[m];
                     let row_slice = &mat[ia * kb..(ia + 1) * kb];
+                    let qm = &q_cur[m];
                     let mut dot = 0.0f64;
                     for ib in 0..kb {
-                        let q_ib = qm[ib];
-                        if q_ib > 0.0 {
-                            dot += q_ib * row_slice[ib];
-                        }
+                        dot += row_slice[ib] * qm[ib];
                     }
-                    row_val += b_norm[m] * (dot / w_q);
+                    val_ia += b_norm[m] * dot;
                 }
-                if row_val > best_row {
-                    best_row = row_val;
-                    best_i = ia;
-                }
+                u_p[ia] = val_ia;
+                v_p += p_cur[k][ia] * val_ia;
             }
-            p_cum[k][best_i] += w;
+            for ia in 0..ka {
+                reg_p[k][ia] = (reg_p[k][ia] + (u_p[ia] - v_p)).max(0.0);
+            }
         }
-        w_total = w_q;
+
+        // Update Col Player V regrets `reg_q[m][ib]` against `p_cur` (maximizing `1 - M[k, m]`)
+        for m in 0..n_v {
+            if b_norm[m] <= 1e-12 {
+                continue;
+            }
+            let mut u_q = vec![0.0f64; kb];
+            let mut v_q = 0.0f64;
+            for ib in 0..kb {
+                let mut loss_ib = 0.0f64;
+                for k in 0..n_u {
+                    if a_norm[k] <= 1e-12 {
+                        continue;
+                    }
+                    let mat = mats_km[k * n_v + m];
+                    let pk = &p_cur[k];
+                    let mut dot = 0.0f64;
+                    for ia in 0..ka {
+                        dot += pk[ia] * mat[ia * kb + ib];
+                    }
+                    loss_ib += a_norm[k] * dot;
+                }
+                let val_ib = 1.0 - loss_ib;
+                u_q[ib] = val_ib;
+                v_q += q_cur[m][ib] * val_ib;
+            }
+            for ib in 0..kb {
+                reg_q[m][ib] = (reg_q[m][ib] + (u_q[ib] - v_q)).max(0.0);
+            }
+        }
+
+        let w_t = t as f64;
+        for k in 0..n_u {
+            for ia in 0..ka {
+                p_cum[k][ia] += w_t * p_cur[k][ia];
+            }
+        }
+        for m in 0..n_v {
+            for ib in 0..kb {
+                q_cum[m][ib] += w_t * q_cur[m][ib];
+            }
+        }
     }
 
     for k in 0..n_u {
         let s: f64 = p_cum[k].iter().sum();
-        if s > 0.0 {
+        if s > 1e-12 {
             for x in &mut p_cum[k] {
                 *x /= s;
             }
         } else {
-            p_cum[k].fill(1.0 / (ka as f64));
+            p_cum[k].fill(unif_p);
         }
     }
     for m in 0..n_v {
         let s: f64 = q_cum[m].iter().sum();
-        if s > 0.0 {
+        if s > 1e-12 {
             for x in &mut q_cum[m] {
                 *x /= s;
             }
         } else {
-            q_cum[m].fill(1.0 / (kb as f64));
+            q_cum[m].fill(unif_q);
         }
     }
 
@@ -10380,7 +10976,10 @@ fn structural_hitchhiker_reason(sets: &[PokemonSet]) -> Option<String> {
     for (s, m) in sets.iter().enumerate() {
         let sp = toid(&m.species);
         if DECOY_SPECIES.contains(&sp.as_str()) {
-            return Some(format!("hitchhiker_species:{}L{}@{}", m.species, m.level, s));
+            return Some(format!(
+                "hitchhiker_species:{}L{}@{}",
+                m.species, m.level, s
+            ));
         }
     }
     None
@@ -10405,14 +11004,14 @@ fn cmd_converge_conclusion(args: &[String]) {
     let sibling_shells: usize = num(args, "--sibling-shells", 6);
     let sibling_cands: usize = num(args, "--sibling-cands", 10);
     let max_shell_variants: usize = num(args, "--max-shell-variants", usize::MAX);
-    let cache_file = PathBuf::from(
-        flag(args, "--cache-file")
-            .unwrap_or_else(|| "data/dominance-audit-v10-fullnash/cache-matrices.json".to_string()),
-    );
-    let out_file = PathBuf::from(
-        flag(args, "--out")
-            .unwrap_or_else(|| "data/dominance-audit-v10-fullnash/converged-report.json".to_string()),
-    );
+    let cache_file =
+        PathBuf::from(flag(args, "--cache-file").unwrap_or_else(|| {
+            "data/dominance-audit-v10-fullnash/cache-matrices.json".to_string()
+        }));
+    let out_file =
+        PathBuf::from(flag(args, "--out").unwrap_or_else(|| {
+            "data/dominance-audit-v10-fullnash/converged-report.json".to_string()
+        }));
     let threads: usize = flag(args, "--threads")
         .map(|v| v.parse().unwrap())
         .unwrap_or_else(|| {
@@ -10425,53 +11024,65 @@ fn cmd_converge_conclusion(args: &[String]) {
     let mut team_db: BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)> = BTreeMap::new();
     let mut seen_db_keys: BTreeSet<String> = BTreeSet::new();
     let mut key_to_id: BTreeMap<String, String> = BTreeMap::new();
-    let purged_hitchhikers: std::cell::RefCell<Vec<Value>> =
-        std::cell::RefCell::new(Vec::new());
+    let purged_hitchhikers: std::cell::RefCell<Vec<Value>> = std::cell::RefCell::new(Vec::new());
 
-    let register_team =
-        |db: &mut BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)>,
-         seen_keys: &mut BTreeSet<String>,
-         k2id: &mut BTreeMap<String, String>,
-         id: &str,
-         grp: &str,
-         raw: &[Value]|
-         -> Option<String> {
-            let upgraded = normalize_team_dvs_evs(&dex, raw);
-            let canon = gen.canonize(&dex, &upgraded).or_else(|| gen.canonize(&dex, raw))?;
-            let k = team_key(&canon);
-            if let Some(existing_id) = k2id.get(&k) {
-                return Some(existing_id.clone());
-            }
-            let sets = to_sets(&canon).ok()?;
-            if let Some(reason) = structural_hitchhiker_reason(&sets) {
-                let mons: Vec<String> = sets
-                    .iter()
-                    .map(|m| format!("{}L{}", m.species, m.level))
-                    .collect();
-                purged_hitchhikers.borrow_mut().push(json!({
-                    "id": id,
-                    "group": grp,
-                    "stage": "phase0a_structural",
-                    "reason": reason,
-                    "roster": mons,
-                }));
-                return None;
-            }
-            let final_id = if db.contains_key(id) {
-                format!("{}-{}", grp, id)
-            } else {
-                id.to_string()
-            };
-            k2id.insert(k.clone(), final_id.clone());
-            seen_keys.insert(k);
-            db.insert(final_id.clone(), (sets, canon, grp.to_string()));
-            Some(final_id)
+    let register_team = |db: &mut BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)>,
+                         seen_keys: &mut BTreeSet<String>,
+                         k2id: &mut BTreeMap<String, String>,
+                         id: &str,
+                         grp: &str,
+                         raw: &[Value]|
+     -> Option<String> {
+        let upgraded = normalize_team_dvs_evs(&dex, raw);
+        let canon = gen
+            .canonize(&dex, &upgraded)
+            .or_else(|| gen.canonize(&dex, raw))?;
+        let k = team_key(&canon);
+        if let Some(existing_id) = k2id.get(&k) {
+            return Some(existing_id.clone());
+        }
+        let sets = to_sets(&canon).ok()?;
+        if let Some(reason) = structural_hitchhiker_reason(&sets) {
+            let mons: Vec<String> = sets
+                .iter()
+                .map(|m| format!("{}L{}", m.species, m.level))
+                .collect();
+            purged_hitchhikers.borrow_mut().push(json!({
+                "id": id,
+                "group": grp,
+                "stage": "phase0a_structural",
+                "reason": reason,
+                "roster": mons,
+            }));
+            return None;
+        }
+        let final_id = if db.contains_key(id) {
+            format!("{}-{}", grp, id)
+        } else {
+            id.to_string()
         };
+        k2id.insert(k.clone(), final_id.clone());
+        seen_keys.insert(k);
+        db.insert(final_id.clone(), (sets, canon, grp.to_string()));
+        Some(final_id)
+    };
 
     for (path, grp, cap) in [
-        ("data/meta-nash-v3/pool-artifact.json", "meta-nash-v3", 100usize),
-        ("data/eco-pool/nash-solution.json", "kodoku-r2-nash", 100usize),
-        ("data/kodoku-r1/nash-solution-next.json", "kodoku-r1-nash", 100usize),
+        (
+            "data/meta-nash-v3/pool-artifact.json",
+            "meta-nash-v3",
+            100usize,
+        ),
+        (
+            "data/eco-pool/nash-solution.json",
+            "kodoku-r2-nash",
+            100usize,
+        ),
+        (
+            "data/kodoku-r1/nash-solution-next.json",
+            "kodoku-r1-nash",
+            100usize,
+        ),
         ("data/eco-pool/master-pool.json", "master-pool", 200usize),
         ("data/kodoku-r3/step2-promotes.json", "step2", 100usize),
         ("data/kodoku-r3/step3-promotes.json", "step3", 100usize),
@@ -10480,11 +11091,27 @@ fn cmd_converge_conclusion(args: &[String]) {
         ("data/kodoku-r3/step6-deme-promotes.json", "step6", 100usize),
         ("data/kodoku-r3/step7-deme-promotes.json", "step7", 100usize),
         ("data/kodoku-r3/step8-deme-promotes.json", "step8", 100usize),
-        ("data/team-inventory-v1/eval/teams.json", "inventory", 200usize),
-        ("data/community-rentals-v0/teams.json", "community_rental", 30usize),
+        (
+            "data/team-inventory-v1/eval/teams.json",
+            "inventory",
+            200usize,
+        ),
+        (
+            "data/community-rentals-v0/teams.json",
+            "community_rental",
+            30usize,
+        ),
         ("data/eco-r17/pool-artifact.json", "eco_r17", 12usize),
-        ("data/kodoku-r1/nash-candidates.json", "kodoku_r1_cand", 10usize),
-        ("data/kodoku-r2/nash-candidates.json", "kodoku_r2_cand", 12usize),
+        (
+            "data/kodoku-r1/nash-candidates.json",
+            "kodoku_r1_cand",
+            10usize,
+        ),
+        (
+            "data/kodoku-r2/nash-candidates.json",
+            "kodoku_r2_cand",
+            12usize,
+        ),
         ("data/kodoku-r3/red-gauntlet.json", "red_gauntlet", 100usize),
     ] {
         if let Ok(txt) = std::fs::read_to_string(root.join(path)) {
@@ -10510,7 +11137,9 @@ fn cmd_converge_conclusion(args: &[String]) {
         }
     }
 
-    if let Ok(txt) = std::fs::read_to_string(root.join("data/dominance-audit-v7-deme/red-oracle-i0-holdout.json")) {
+    if let Ok(txt) = std::fs::read_to_string(
+        root.join("data/dominance-audit-v7-deme/red-oracle-i0-holdout.json"),
+    ) {
         if let Ok(v) = serde_json::from_str::<Value>(&txt) {
             if let Some(arr) = v["hall_of_fame"].as_array() {
                 for t in arr {
@@ -10567,7 +11196,8 @@ fn cmd_converge_conclusion(args: &[String]) {
                                 ) {
                                     let mws: Vec<f64> =
                                         mw_arr.iter().filter_map(|x| x.as_f64()).collect();
-                                    if !mws.is_empty() && !persisted_member_weights.contains_key(uid)
+                                    if !mws.is_empty()
+                                        && !persisted_member_weights.contains_key(uid)
                                     {
                                         persisted_member_weights.insert(uid.to_string(), mws);
                                     }
@@ -10587,13 +11217,24 @@ fn cmd_converge_conclusion(args: &[String]) {
                                         &prev_tag,
                                         sets,
                                     ) {
-                                        let ho_wr =
-                                            n_val["holdout_red_wr"].as_f64().unwrap_or(0.0);
+                                        let is_hh =
+                                            n_val["is_hitchhiker"].as_bool().unwrap_or(false);
+                                        let el_stat = n_val["holdout_election_status"]
+                                            .as_str()
+                                            .unwrap_or("OPEN");
+                                        let ho_wr = n_val["blind_mcts_red_wr"]
+                                            .as_f64()
+                                            .or_else(|| n_val["holdout_red_wr"].as_f64())
+                                            .unwrap_or(0.0);
                                         let tot_wr = n_val["total_red_wr"]
                                             .as_f64()
                                             .or_else(|| n_val["total_512g_red_wr"].as_f64())
                                             .unwrap_or(0.0);
-                                        if ho_wr > 0.505 && tot_wr > 0.505 {
+                                        if !is_hh
+                                            && el_stat != "LOSS_CALLED"
+                                            && ho_wr > 0.505
+                                            && tot_wr > 0.505
+                                        {
                                             persisted_nemeses.push(reg_id);
                                         }
                                     }
@@ -10775,9 +11416,8 @@ fn cmd_converge_conclusion(args: &[String]) {
     let mut units: Vec<ShellUnit> = Vec::new();
     let mut seen_unit_sigs: BTreeSet<PreviewSig> = BTreeSet::new();
 
-    let format_shell_unit_id = |m_ids: &[String]| -> String {
-        format!("DEME{}:{}", m_ids.len(), m_ids.join("+"))
-    };
+    let format_shell_unit_id =
+        |m_ids: &[String]| -> String { format!("DEME{}:{}", m_ids.len(), m_ids.join("+")) };
 
     let normalize_member_weights = |m_weights: &mut Vec<f64>, n: usize| {
         if m_weights.len() != n {
@@ -10795,9 +11435,9 @@ fn cmd_converge_conclusion(args: &[String]) {
     };
 
     let add_shell_unit = |units_vec: &mut Vec<ShellUnit>,
-                              seen_sigs: &mut BTreeSet<PreviewSig>,
-                              db: &BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)>,
-                              m_ids: &[&str]|
+                          seen_sigs: &mut BTreeSet<PreviewSig>,
+                          db: &BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)>,
+                          m_ids: &[&str]|
      -> bool {
         let mut resolved_ids = Vec::new();
         let mut resolved_sets = Vec::new();
@@ -10870,9 +11510,7 @@ fn cmd_converge_conclusion(args: &[String]) {
          seen_sigs: &mut BTreeSet<PreviewSig>,
          db: &BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)>,
          qid: &str|
-         -> bool {
-            add_shell_unit(units_vec, seen_sigs, db, &[qid])
-        };
+         -> bool { add_shell_unit(units_vec, seen_sigs, db, &[qid]) };
 
     // A. Register the Committed 2-Variant Deme Pairs (if both members passed Phase 0 Hitchhiker Sanitizer)
     let initial_deme_pairs: &[(&str, &str)] = &[
@@ -10987,7 +11625,9 @@ fn cmd_converge_conclusion(args: &[String]) {
     for nem_id in &persisted_nemeses {
         promote_or_upgrade_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, nem_id);
     }
-    if let Ok(txt) = std::fs::read_to_string(root.join("data/dominance-audit-v7-deme/report-step8-deme.json")) {
+    if let Ok(txt) =
+        std::fs::read_to_string(root.join("data/dominance-audit-v7-deme/report-step8-deme.json"))
+    {
         if let Ok(v) = serde_json::from_str::<Value>(&txt) {
             if let Some(arr) = v["p_ids"].as_array() {
                 for pv in arr {
@@ -11009,7 +11649,9 @@ fn cmd_converge_conclusion(args: &[String]) {
             }
         }
     }
-    if let Ok(txt) = std::fs::read_to_string(root.join("data/dominance-audit-v7-deme/report-step8-deme.json")) {
+    if let Ok(txt) =
+        std::fs::read_to_string(root.join("data/dominance-audit-v7-deme/report-step8-deme.json"))
+    {
         if let Ok(v) = serde_json::from_str::<Value>(&txt) {
             if let Some(arr) = v["q_ids"].as_array() {
                 for qv in arr {
@@ -11107,9 +11749,12 @@ fn cmd_converge_conclusion(args: &[String]) {
                             if mat.len() == ka * kb {
                                 let ns_u32 = ns as u32;
                                 let rev = transpose_preview_matrix(&mat, ka, kb);
-                                pair_mat_cache.insert((pid.to_string(), qid.to_string()), (mat, ns_u32));
-                                pair_mat_cache.insert((qid.to_string(), pid.to_string()), (rev, ns_u32));
-                            } else if ka % 3 == 0 && kb % 3 == 0 && mat.len() == (ka / 3) * (kb / 3) {
+                                pair_mat_cache
+                                    .insert((pid.to_string(), qid.to_string()), (mat, ns_u32));
+                                pair_mat_cache
+                                    .insert((qid.to_string(), pid.to_string()), (rev, ns_u32));
+                            } else if ka % 3 == 0 && kb % 3 == 0 && mat.len() == (ka / 3) * (kb / 3)
+                            {
                                 // Lift legacy 20-subset matrix into 60-action space with `ns_u32 = 0`
                                 // so Phase 2 Cutting-Plane completely replaces active pairs with true 60-action matrices
                                 let ka20 = ka / 3;
@@ -11126,8 +11771,10 @@ fn cmd_converge_conclusion(args: &[String]) {
                                     }
                                 }
                                 let rev = transpose_preview_matrix(&lifted, ka, kb);
-                                pair_mat_cache.insert((pid.to_string(), qid.to_string()), (lifted, 0u32));
-                                pair_mat_cache.insert((qid.to_string(), pid.to_string()), (rev, 0u32));
+                                pair_mat_cache
+                                    .insert((pid.to_string(), qid.to_string()), (lifted, 0u32));
+                                pair_mat_cache
+                                    .insert((qid.to_string(), pid.to_string()), (rev, 0u32));
                             }
                         }
                     }
@@ -11140,7 +11787,10 @@ fn cmd_converge_conclusion(args: &[String]) {
         let mut recs: Vec<Value> = Vec::new();
         for ((pid, qid), (mat, ns)) in pmc {
             if pid <= qid {
-                let rounded: Vec<f64> = mat.iter().map(|&x| (x * 10000.0).round() / 10000.0).collect();
+                let rounded: Vec<f64> = mat
+                    .iter()
+                    .map(|&x| (x * 10000.0).round() / 10000.0)
+                    .collect();
                 recs.push(json!({
                     "p_id": pid,
                     "q_id": qid,
@@ -11211,7 +11861,8 @@ fn cmd_converge_conclusion(args: &[String]) {
                         handles.push(scope.spawn(move || {
                             let mut loc = Vec::new();
                             loop {
-                                let k = cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                let k =
+                                    cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                 if k >= chunk_ref.len() {
                                     break;
                                 }
@@ -11225,8 +11876,9 @@ fn cmd_converge_conclusion(args: &[String]) {
                                     let p_seed = seed
                                         ^ (((c_idx * 512 + k) as u64)
                                             .wrapping_mul(0x9E37_79B9_7F4A_7C15));
-                                    let raw_m =
-                                        eval_full_preview_matrix_compact(r_p, r_q, 1, max_turns, p_seed);
+                                    let raw_m = eval_full_preview_matrix_compact(
+                                        r_p, r_q, 1, max_turns, p_seed,
+                                    );
                                     for ia in 0..ka {
                                         mat[ia * ka + ia] = 0.5;
                                         for ib in (ia + 1)..ka {
@@ -11242,8 +11894,9 @@ fn cmd_converge_conclusion(args: &[String]) {
                                     let p_seed = seed
                                         ^ (((c_idx * 512 + k) as u64)
                                             .wrapping_mul(0x9E37_79B9_7F4A_7C15));
-                                    let mat =
-                                        eval_full_preview_matrix_compact(r_p, r_q, 1, max_turns, p_seed);
+                                    let mat = eval_full_preview_matrix_compact(
+                                        r_p, r_q, 1, max_turns, p_seed,
+                                    );
                                     let rev = transpose_preview_matrix(&mat, ka, kb);
                                     loc.push((pid.clone(), qid.clone(), mat, rev, 1u32));
                                 }
@@ -11287,187 +11940,184 @@ fn cmd_converge_conclusion(args: &[String]) {
 
         // Helper: solve all Bayesian Shell-vs-Shell Preview Nash games from `pair_mat_cache` in parallel
         // to populate `payoff[u][j]`, `mem_payoff[u][m_i][j]`, `cell_games[u][j]`, `mem_games[u][m_i][j]`, and `m_solve[u][c]`!
-        let solve_all_shell_cells =
-            |units_slice: &[ShellUnit],
-             pmc: &BTreeMap<(String, String), (Vec<f64>, u32)>,
-             r_db: &BTreeMap<String, CompiledRoster6>,
-             q_list: &[String],
-             u_q_idxs: &[Vec<usize>],
-             out_q_idxs: &[usize]|
-             -> (
-                Vec<Vec<f64>>,
-                Vec<Vec<f64>>,
-                Vec<Vec<Vec<f64>>>,
-                Vec<Vec<Vec<f64>>>,
-                Vec<Vec<f64>>,
-            ) {
-                let nu = units_slice.len();
-                let nq_loc = q_list.len();
-                let ncols_loc = nu + out_q_idxs.len();
-                let mut payoff_mat = vec![vec![0.5f64; nq_loc]; nu];
-                let mut games_mat = vec![vec![64.0f64; nq_loc]; nu];
-                let mut mem_pay = units_slice
-                    .iter()
-                    .map(|u| vec![vec![0.5f64; nq_loc]; u.member_ids.len()])
-                    .collect::<Vec<_>>();
-                let mut mem_gms = units_slice
-                    .iter()
-                    .map(|u| vec![vec![64.0f64; nq_loc]; u.member_ids.len()])
-                    .collect::<Vec<_>>();
-                let mut m_solve_out = vec![vec![0.5f64; ncols_loc]; nu];
+        let solve_all_shell_cells = |units_slice: &[ShellUnit],
+                                     pmc: &BTreeMap<(String, String), (Vec<f64>, u32)>,
+                                     r_db: &BTreeMap<String, CompiledRoster6>,
+                                     q_list: &[String],
+                                     u_q_idxs: &[Vec<usize>],
+                                     out_q_idxs: &[usize]|
+         -> (
+            Vec<Vec<f64>>,
+            Vec<Vec<f64>>,
+            Vec<Vec<Vec<f64>>>,
+            Vec<Vec<Vec<f64>>>,
+            Vec<Vec<f64>>,
+        ) {
+            let nu = units_slice.len();
+            let nq_loc = q_list.len();
+            let ncols_loc = nu + out_q_idxs.len();
+            let mut payoff_mat = vec![vec![0.5f64; nq_loc]; nu];
+            let mut games_mat = vec![vec![64.0f64; nq_loc]; nu];
+            let mut mem_pay = units_slice
+                .iter()
+                .map(|u| vec![vec![0.5f64; nq_loc]; u.member_ids.len()])
+                .collect::<Vec<_>>();
+            let mut mem_gms = units_slice
+                .iter()
+                .map(|u| vec![vec![64.0f64; nq_loc]; u.member_ids.len()])
+                .collect::<Vec<_>>();
+            let mut m_solve_out = vec![vec![0.5f64; ncols_loc]; nu];
 
-                // Parallelize across `u_idx in 0..nu` via `std::thread::scope`
-                let cursor = std::sync::atomic::AtomicUsize::new(0);
-                type RowResult = (
-                    usize,
-                    Vec<f64>, // self_per_u
-                    Vec<(usize, f64, Vec<f64>, Vec<f64>, f64)>, // (v_idx, val_uv, per_u, per_v, g_eff)
-                    Vec<(usize, usize, f64, Vec<f64>, f64)>, // (k_out, j_out, val_uq, per_u, g_eff)
-                );
-                let mut row_results: Vec<RowResult> = Vec::with_capacity(nu);
-                std::thread::scope(|scope| {
-                    let mut handles = Vec::new();
-                    for _ in 0..threads.max(1) {
-                        let cursor_ref = &cursor;
-                        handles.push(scope.spawn(move || {
-                            let mut loc: Vec<RowResult> = Vec::new();
-                            loop {
-                                let u_idx =
-                                    cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                if u_idx >= nu {
-                                    break;
-                                }
-                                let u = &units_slice[u_idx];
-                                let mu_len = u.member_ids.len();
-                                let ka = r_db[&u.member_ids[0]].legal.len();
+            // Parallelize across `u_idx in 0..nu` via `std::thread::scope`
+            let cursor = std::sync::atomic::AtomicUsize::new(0);
+            type RowResult = (
+                usize,
+                Vec<f64>,                                   // self_per_u
+                Vec<(usize, f64, Vec<f64>, Vec<f64>, f64)>, // (v_idx, val_uv, per_u, per_v, g_eff)
+                Vec<(usize, usize, f64, Vec<f64>, f64)>,    // (k_out, j_out, val_uq, per_u, g_eff)
+            );
+            let mut row_results: Vec<RowResult> = Vec::with_capacity(nu);
+            std::thread::scope(|scope| {
+                let mut handles = Vec::new();
+                for _ in 0..threads.max(1) {
+                    let cursor_ref = &cursor;
+                    handles.push(scope.spawn(move || {
+                        let mut loc: Vec<RowResult> = Vec::new();
+                        loop {
+                            let u_idx =
+                                cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            if u_idx >= nu {
+                                break;
+                            }
+                            let u = &units_slice[u_idx];
+                            let mu_len = u.member_ids.len();
+                            let ka = r_db[&u.member_ids[0]].legal.len();
 
-                                // Intra-shell mirror game (`u` vs `u`): compute exact per-variant mirror payoffs `self_per_u`
-                                let self_per_u = if mu_len > 1 {
-                                    let mut self_mats: Vec<&[f64]> =
-                                        Vec::with_capacity(mu_len * mu_len);
-                                    for mid_a in &u.member_ids {
-                                        for mid_b in &u.member_ids {
-                                            self_mats.push(
-                                                pmc[&(mid_a.clone(), mid_b.clone())].0.as_slice(),
-                                            );
-                                        }
-                                    }
-                                    let (_, per_u_self, _, _, _) = solve_bayesian_shell_preview_nash(
-                                        &self_mats,
-                                        ka,
-                                        ka,
-                                        &u.member_weights,
-                                        &u.member_weights,
-                                        250,
-                                    );
-                                    per_u_self
-                                } else {
-                                    vec![0.5; mu_len]
-                                };
-
-                                let mut uv_list = Vec::with_capacity(nu.saturating_sub(u_idx + 1));
-                                for v_idx in (u_idx + 1)..nu {
-                                    let v = &units_slice[v_idx];
-                                    let mv_len = v.member_ids.len();
-                                    let kb = r_db[&v.member_ids[0]].legal.len();
-                                    let mut mats_ref: Vec<&[f64]> =
-                                        Vec::with_capacity(mu_len * mv_len);
-                                    let mut min_ns = u32::MAX;
-                                    for mid_u in &u.member_ids {
-                                        for mid_v in &v.member_ids {
-                                            let (ref m_vec, ns) =
-                                                pmc[&(mid_u.clone(), mid_v.clone())];
-                                            mats_ref.push(m_vec.as_slice());
-                                            min_ns = min_ns.min(ns);
-                                        }
-                                    }
-                                    let (val_uv, per_u, per_v, _p_strats, _q_strats) =
-                                        solve_bayesian_shell_preview_nash(
-                                            &mats_ref,
-                                            ka,
-                                            kb,
-                                            &u.member_weights,
-                                            &v.member_weights,
-                                            300,
+                            // Intra-shell mirror game (`u` vs `u`): compute exact per-variant mirror payoffs `self_per_u`
+                            let self_per_u = if mu_len > 1 {
+                                let mut self_mats: Vec<&[f64]> =
+                                    Vec::with_capacity(mu_len * mu_len);
+                                for mid_a in &u.member_ids {
+                                    for mid_b in &u.member_ids {
+                                        self_mats.push(
+                                            pmc[&(mid_a.clone(), mid_b.clone())].0.as_slice(),
                                         );
-                                    let g_eff = (min_ns.max(1) as f64) * 64.0;
-                                    uv_list.push((v_idx, val_uv, per_u, per_v, g_eff));
+                                    }
                                 }
+                                let (_, per_u_self, _, _, _) = solve_bayesian_shell_preview_nash(
+                                    &self_mats,
+                                    ka,
+                                    ka,
+                                    &u.member_weights,
+                                    &u.member_weights,
+                                    250,
+                                );
+                                per_u_self
+                            } else {
+                                vec![0.5; mu_len]
+                            };
 
-                                let mut out_list = Vec::with_capacity(out_q_idxs.len());
-                                for (k_out, &j_out) in out_q_idxs.iter().enumerate() {
-                                    let qid = &q_list[j_out];
-                                    let kb = r_db[qid].legal.len();
-                                    let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(mu_len);
-                                    let mut min_ns = u32::MAX;
-                                    for mid_u in &u.member_ids {
-                                        let (ref m_vec, ns) = pmc[&(mid_u.clone(), qid.clone())];
+                            let mut uv_list = Vec::with_capacity(nu.saturating_sub(u_idx + 1));
+                            for v_idx in (u_idx + 1)..nu {
+                                let v = &units_slice[v_idx];
+                                let mv_len = v.member_ids.len();
+                                let kb = r_db[&v.member_ids[0]].legal.len();
+                                let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(mu_len * mv_len);
+                                let mut min_ns = u32::MAX;
+                                for mid_u in &u.member_ids {
+                                    for mid_v in &v.member_ids {
+                                        let (ref m_vec, ns) = pmc[&(mid_u.clone(), mid_v.clone())];
                                         mats_ref.push(m_vec.as_slice());
                                         min_ns = min_ns.min(ns);
                                     }
-                                    let (val_uq, per_u, _, _, _) = solve_bayesian_shell_preview_nash(
+                                }
+                                let (val_uv, per_u, per_v, _p_strats, _q_strats) =
+                                    solve_bayesian_shell_preview_nash(
                                         &mats_ref,
                                         ka,
                                         kb,
                                         &u.member_weights,
-                                        &[1.0],
+                                        &v.member_weights,
                                         300,
                                     );
-                                    let g_eff = (min_ns.max(1) as f64) * 64.0;
-                                    out_list.push((k_out, j_out, val_uq, per_u, g_eff));
-                                }
-                                loc.push((u_idx, self_per_u, uv_list, out_list));
+                                let g_eff = (min_ns.max(1) as f64) * 64.0;
+                                uv_list.push((v_idx, val_uv, per_u, per_v, g_eff));
                             }
-                            loc
-                        }));
-                    }
-                    for h in handles {
-                        row_results.extend(h.join().unwrap());
-                    }
-                });
 
-                for (u_idx, self_per_u, uv_list, out_list) in row_results {
-                    let mu_len = units_slice[u_idx].member_ids.len();
-                    m_solve_out[u_idx][u_idx] = 0.5;
-                    for &ju in &u_q_idxs[u_idx] {
-                        payoff_mat[u_idx][ju] = 0.5;
-                        for m_i in 0..mu_len {
-                            mem_pay[u_idx][m_i][ju] = self_per_u[m_i];
-                        }
-                    }
-                    for (v_idx, val_uv, per_u, per_v, g_eff) in uv_list {
-                        let mv_len = units_slice[v_idx].member_ids.len();
-                        m_solve_out[u_idx][v_idx] = val_uv;
-                        m_solve_out[v_idx][u_idx] = 1.0 - val_uv;
-                        for &jv in &u_q_idxs[v_idx] {
-                            payoff_mat[u_idx][jv] = val_uv;
-                            games_mat[u_idx][jv] = g_eff;
-                            for m_i in 0..mu_len {
-                                mem_pay[u_idx][m_i][jv] = per_u[m_i];
-                                mem_gms[u_idx][m_i][jv] = g_eff;
+                            let mut out_list = Vec::with_capacity(out_q_idxs.len());
+                            for (k_out, &j_out) in out_q_idxs.iter().enumerate() {
+                                let qid = &q_list[j_out];
+                                let kb = r_db[qid].legal.len();
+                                let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(mu_len);
+                                let mut min_ns = u32::MAX;
+                                for mid_u in &u.member_ids {
+                                    let (ref m_vec, ns) = pmc[&(mid_u.clone(), qid.clone())];
+                                    mats_ref.push(m_vec.as_slice());
+                                    min_ns = min_ns.min(ns);
+                                }
+                                let (val_uq, per_u, _, _, _) = solve_bayesian_shell_preview_nash(
+                                    &mats_ref,
+                                    ka,
+                                    kb,
+                                    &u.member_weights,
+                                    &[1.0],
+                                    300,
+                                );
+                                let g_eff = (min_ns.max(1) as f64) * 64.0;
+                                out_list.push((k_out, j_out, val_uq, per_u, g_eff));
                             }
+                            loc.push((u_idx, self_per_u, uv_list, out_list));
                         }
-                        for &ju in &u_q_idxs[u_idx] {
-                            payoff_mat[v_idx][ju] = 1.0 - val_uv;
-                            games_mat[v_idx][ju] = g_eff;
-                            for m_i in 0..mv_len {
-                                mem_pay[v_idx][m_i][ju] = per_v[m_i];
-                                mem_gms[v_idx][m_i][ju] = g_eff;
-                            }
-                        }
-                    }
-                    for (k_out, j_out, val_uq, per_u, g_eff) in out_list {
-                        payoff_mat[u_idx][j_out] = val_uq;
-                        games_mat[u_idx][j_out] = g_eff;
-                        for m_i in 0..mu_len {
-                            mem_pay[u_idx][m_i][j_out] = per_u[m_i];
-                            mem_gms[u_idx][m_i][j_out] = g_eff;
-                        }
-                        m_solve_out[u_idx][nu + k_out] = val_uq;
+                        loc
+                    }));
+                }
+                for h in handles {
+                    row_results.extend(h.join().unwrap());
+                }
+            });
+
+            for (u_idx, self_per_u, uv_list, out_list) in row_results {
+                let mu_len = units_slice[u_idx].member_ids.len();
+                m_solve_out[u_idx][u_idx] = 0.5;
+                for &ju in &u_q_idxs[u_idx] {
+                    payoff_mat[u_idx][ju] = 0.5;
+                    for m_i in 0..mu_len {
+                        mem_pay[u_idx][m_i][ju] = self_per_u[m_i];
                     }
                 }
-                (payoff_mat, games_mat, mem_pay, mem_gms, m_solve_out)
-            };
+                for (v_idx, val_uv, per_u, per_v, g_eff) in uv_list {
+                    let mv_len = units_slice[v_idx].member_ids.len();
+                    m_solve_out[u_idx][v_idx] = val_uv;
+                    m_solve_out[v_idx][u_idx] = 1.0 - val_uv;
+                    for &jv in &u_q_idxs[v_idx] {
+                        payoff_mat[u_idx][jv] = val_uv;
+                        games_mat[u_idx][jv] = g_eff;
+                        for m_i in 0..mu_len {
+                            mem_pay[u_idx][m_i][jv] = per_u[m_i];
+                            mem_gms[u_idx][m_i][jv] = g_eff;
+                        }
+                    }
+                    for &ju in &u_q_idxs[u_idx] {
+                        payoff_mat[v_idx][ju] = 1.0 - val_uv;
+                        games_mat[v_idx][ju] = g_eff;
+                        for m_i in 0..mv_len {
+                            mem_pay[v_idx][m_i][ju] = per_v[m_i];
+                            mem_gms[v_idx][m_i][ju] = g_eff;
+                        }
+                    }
+                }
+                for (k_out, j_out, val_uq, per_u, g_eff) in out_list {
+                    payoff_mat[u_idx][j_out] = val_uq;
+                    games_mat[u_idx][j_out] = g_eff;
+                    for m_i in 0..mu_len {
+                        mem_pay[u_idx][m_i][j_out] = per_u[m_i];
+                        mem_gms[u_idx][m_i][j_out] = g_eff;
+                    }
+                    m_solve_out[u_idx][nu + k_out] = val_uq;
+                }
+            }
+            (payoff_mat, games_mat, mem_pay, mem_gms, m_solve_out)
+        };
 
         let (mut payoff, mut cell_games, mut mem_payoff, mut mem_games, mut m_solve) =
             solve_all_shell_cells(
@@ -11568,7 +12218,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                 break;
             }
             let cursor = std::sync::atomic::AtomicUsize::new(0);
-            let mut ref_out: Vec<(String, String, Vec<f64>)> =
+            let mut ref_out: Vec<(String, String, Vec<f64>, u32)> =
                 Vec::with_capacity(refine_jobs.len());
             std::thread::scope(|scope| {
                 let mut handles = Vec::new();
@@ -11585,17 +12235,29 @@ fn cmd_converge_conclusion(args: &[String]) {
                             let (ref pid, ref qid) = jobs_ref[k];
                             let r_p = &roster_ref[pid];
                             let r_q = &roster_ref[qid];
-                            let prev_ns = pmc_ref
+                            let (old_mat, prev_ns) = pmc_ref
                                 .get(&(pid.clone(), qid.clone()))
-                                .map(|x| x.1)
-                                .unwrap_or(1);
+                                .cloned()
+                                .unwrap_or_else(|| {
+                                    (vec![0.5f64; r_p.legal.len() * r_q.legal.len()], 0)
+                                });
                             let p_seed = seed
                                 ^ 0xA5A5_5A5A_1111_2222_u64
                                 ^ (((k + 1) as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
                                 ^ ((prev_ns as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9));
-                            let add_mat =
-                                eval_full_preview_matrix_compact(r_p, r_q, 1, max_turns, p_seed);
-                            loc.push((pid.clone(), qid.clone(), add_mat));
+                            let (blended_mat, new_ns) = if prev_ns > 0 {
+                                eval_incremental_adaptive_preview_matrix_compact(
+                                    r_p, r_q, &old_mat, prev_ns, 2, max_turns, p_seed,
+                                )
+                            } else {
+                                (
+                                    eval_full_preview_matrix_compact(
+                                        r_p, r_q, 2, max_turns, p_seed,
+                                    ),
+                                    2,
+                                )
+                            };
+                            loc.push((pid.clone(), qid.clone(), blended_mat, new_ns));
                         }
                         loc
                     }));
@@ -11604,18 +12266,9 @@ fn cmd_converge_conclusion(args: &[String]) {
                     ref_out.extend(h.join().unwrap());
                 }
             });
-            for (pid, qid, add_mat) in ref_out {
+            for (pid, qid, blended, new_ns) in ref_out {
                 let ka = roster_db[&pid].legal.len();
                 let kb = roster_db[&qid].legal.len();
-                let (old_mat, old_ns) = pair_mat_cache
-                    .get(&(pid.clone(), qid.clone()))
-                    .cloned()
-                    .unwrap_or_else(|| (add_mat.clone(), 0));
-                let new_ns = old_ns + 1;
-                let mut blended = vec![0.5f64; ka * kb];
-                for i in 0..(ka * kb) {
-                    blended[i] = ((old_ns as f64) * old_mat[i] + add_mat[i]) / (new_ns as f64);
-                }
                 let rev = transpose_preview_matrix(&blended, ka, kb);
                 pair_mat_cache.insert((pid.clone(), qid.clone()), (blended, new_ns));
                 pair_mat_cache.insert((qid, pid), (rev, new_ns));
@@ -11647,10 +12300,7 @@ fn cmd_converge_conclusion(args: &[String]) {
         if active_indices.is_empty() {
             active_indices = (0..n_u).collect();
         }
-        let m_polish: Vec<Vec<f64>> = active_indices
-            .iter()
-            .map(|&u| m_solve[u].clone())
-            .collect();
+        let m_polish: Vec<Vec<f64>> = active_indices.iter().map(|&u| m_solve[u].clone()).collect();
         let (w_pol, _, _min_pol_rect) = solve_rectangular_minimax(&m_polish, 80_000);
         let min_val: f64;
         let mut active_units: Vec<(usize, f64)> = active_indices
@@ -11685,9 +12335,7 @@ fn cmd_converge_conclusion(args: &[String]) {
         let top_shell_targets: Vec<(usize, f64)> = active_units
             .iter()
             .copied()
-            .filter(|&(u_idx, w)| {
-                units[u_idx].member_ids.len() < max_shell_variants && w >= 0.025
-            })
+            .filter(|&(u_idx, w)| units[u_idx].member_ids.len() < max_shell_variants && w >= 0.025)
             .take(sibling_shells)
             .collect();
         if !top_shell_targets.is_empty() && sibling_cands > 0 {
@@ -11753,11 +12401,9 @@ fn cmd_converge_conclusion(args: &[String]) {
                     .collect();
                 q_ranked.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
                 let worst_qs: Vec<usize> = q_ranked.iter().take(8).map(|&(j, _)| j).collect();
-                let parent_worst8_avg: f64 = worst_qs
-                    .iter()
-                    .map(|&j| payoff[u_idx][j])
-                    .sum::<f64>()
-                    / (worst_qs.len().max(1) as f64);
+                let parent_worst8_avg: f64 =
+                    worst_qs.iter().map(|&j| payoff[u_idx][j]).sum::<f64>()
+                        / (worst_qs.len().max(1) as f64);
 
                 // Compute per-slot counter-vulnerability weights `vuln_slot_w` on `anchor_id` against `worst_qs`
                 let ka = roster_db[&cur_member_ids[0]].legal.len();
@@ -11839,7 +12485,8 @@ fn cmd_converge_conclusion(args: &[String]) {
                 // Evaluate full-combination 3v3 matrices for all `(c_idx, j in worst_qs)` in parallel
                 let new_n = cur_n + 1;
                 let w_each = 1.0 / (new_n as f64);
-                let mut cand_jobs: Vec<(usize, usize)> = Vec::with_capacity(cands.len() * worst_qs.len());
+                let mut cand_jobs: Vec<(usize, usize)> =
+                    Vec::with_capacity(cands.len() * worst_qs.len());
                 for c_idx in 0..cands.len() {
                     for &j in &worst_qs {
                         cand_jobs.push((c_idx, j));
@@ -11856,7 +12503,8 @@ fn cmd_converge_conclusion(args: &[String]) {
                         handles.push(scope.spawn(move || {
                             let mut loc = Vec::new();
                             loop {
-                                let k = cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                let k =
+                                    cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                 if k >= jobs_ref.len() {
                                     break;
                                 }
@@ -11911,9 +12559,8 @@ fn cmd_converge_conclusion(args: &[String]) {
                             let kb = roster_db[qid].legal.len();
                             let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(new_n);
                             for mid in &cur_member_ids {
-                                mats_ref.push(
-                                    pair_mat_cache[&(mid.clone(), qid.clone())].0.as_slice(),
-                                );
+                                mats_ref
+                                    .push(pair_mat_cache[&(mid.clone(), qid.clone())].0.as_slice());
                             }
                             let c_mat = &cand_mat_map[&(c_idx, j)];
                             mats_ref.push(c_mat.as_slice());
@@ -12010,11 +12657,12 @@ fn cmd_converge_conclusion(args: &[String]) {
                         &best_roster.sets,
                         Arc::new(blue_mp_forge),
                         forge_red_mp.clone(),
+                        None,
                         0,
                         &[4, 4, 8],
                         0.485,
                         0.515,
-                        50,
+                        60,
                         0.4,
                         max_turns,
                         threads,
@@ -12414,8 +13062,7 @@ fn cmd_converge_conclusion(args: &[String]) {
             }
             let _ = (&payoff, &cell_games, &mem_payoff, &mem_games);
 
-            let m_in_opt: Vec<Vec<f64>> =
-                (0..n_u).map(|u| m_solve[u][0..n_u].to_vec()).collect();
+            let m_in_opt: Vec<Vec<f64>> = (0..n_u).map(|u| m_solve[u][0..n_u].to_vec()).collect();
             let (w_in_opt, _, min_in_opt) = solve_rectangular_minimax(&m_in_opt, 100_000);
             let (w_rect_opt, _, min_rect_opt) = solve_rectangular_minimax(&m_solve, 100_000);
             let mut act_idx_opt: Vec<usize> = (0..n_u)
@@ -12543,6 +13190,8 @@ fn cmd_converge_conclusion(args: &[String]) {
             slot_marginals: [f64; 6],
             slot_wars: [f64; 6],
             is_hitchhiker: bool,
+            loo_screened: bool,
+            preview_pols: Option<Arc<PiStarPreviewPolicies>>,
         }
         impl RedStrain {
             fn update_stats(&mut self) {
@@ -12587,8 +13236,7 @@ fn cmd_converge_conclusion(args: &[String]) {
         }
 
         let recompute_red_wars_and_pool =
-            |pop_slice: &mut [RedStrain],
-             endo_pool: &mut nc2000_bot::teamgen::EndogenousPool| {
+            |pop_slice: &mut [RedStrain], endo_pool: &mut nc2000_bot::teamgen::EndogenousPool| {
                 let mut n_obs = 0.0f64;
                 let mut sum_x = 0.0f64;
                 let mut sum_y = 0.0f64;
@@ -12682,14 +13330,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                 std::thread::scope(|scope| {
                     let mut handles = Vec::new();
                     for _ in 0..threads.max(1).min(eval_indices.len()) {
-                        let (
-                            indices_ref,
-                            cursor_ref,
-                            pop_ref,
-                            def_ref,
-                            peers_ref,
-                            pi_sh_map_ref,
-                        ) = (
+                        let (indices_ref, cursor_ref, pop_ref, def_ref, peers_ref, pi_sh_map_ref) = (
                             eval_indices,
                             &cursor,
                             &*pop_slice,
@@ -12700,7 +13341,8 @@ fn cmd_converge_conclusion(args: &[String]) {
                         handles.push(scope.spawn(move || {
                             let mut loc = Vec::new();
                             loop {
-                                let k = cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                let k =
+                                    cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                 if k >= indices_ref.len() {
                                     break;
                                 }
@@ -12827,15 +13469,10 @@ fn cmd_converge_conclusion(args: &[String]) {
                                         && avg_picks[s] < 0.005
                                         && max_loo[s] < 0.0005
                                 });
-                                let eq_games = (def_ref.len() * (n_seeds_eval as usize) * 32).max(16);
+                                let eq_games =
+                                    (def_ref.len() * (n_seeds_eval as usize) * 32).max(16);
                                 loc.push((
-                                    s_idx,
-                                    red_ev,
-                                    eq_games,
-                                    avg_picks,
-                                    avg_wins,
-                                    avg_loo,
-                                    is_hh,
+                                    s_idx, red_ev, eq_games, avg_picks, avg_wins, avg_loo, is_hh,
                                 ));
                             }
                             loc
@@ -12854,6 +13491,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                     st.slot_picks = sp;
                     st.slot_wins = sw;
                     st.slot_marginals = sm;
+                    st.loo_screened = true;
                     if is_hh {
                         st.is_hitchhiker = true;
                     }
@@ -12861,7 +13499,8 @@ fn cmd_converge_conclusion(args: &[String]) {
                 }
             };
 
-        let mut rng = SplitMix64::new(seed ^ ((o_round as u64).wrapping_mul(0xCAFE_BABE_1234_5678)));
+        let mut rng =
+            SplitMix64::new(seed ^ ((o_round as u64).wrapping_mul(0xCAFE_BABE_1234_5678)));
         let free_constraint = NicheConstraint::default();
         let mut global_endo_pool = nc2000_bot::teamgen::EndogenousPool::default();
         let mut pi_slot_wars: Vec<[f64; 6]> = Vec::with_capacity(pi_raw.len());
@@ -12935,9 +13574,11 @@ fn cmd_converge_conclusion(args: &[String]) {
                 election_status: "OPEN",
                 slot_picks: [0.5; 6],
                 slot_wins: [0.5; 6],
-                slot_marginals: [0.05; 6],
+                slot_marginals: [0.0; 6],
                 slot_wars: init_wars,
                 is_hitchhiker: false,
+                loo_screened: false,
+                preview_pols: None,
             });
             true
         };
@@ -12950,10 +13591,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                     && !seen_unit_sigs.contains(&preview_sig_sets(&team_db[&q_ids[j]].0))
             })
             .map(|j| {
-                let s: f64 = active_units
-                    .iter()
-                    .map(|&(u, w)| w * payoff[u][j])
-                    .sum();
+                let s: f64 = active_units.iter().map(|&(u, w)| w * payoff[u][j]).sum();
                 (j, s)
             })
             .collect();
@@ -13243,6 +13881,9 @@ fn cmd_converge_conclusion(args: &[String]) {
                 migrant.lcb99_red_wr = 0.0;
                 migrant.ucb99_red_wr = 1.0;
                 migrant.election_status = "OPEN";
+                migrant.slot_marginals = [0.0; 6];
+                migrant.loo_screened = false;
+                migrant.preview_pols = None;
                 population.push(migrant);
             }
         }
@@ -13409,11 +14050,7 @@ fn cmd_converge_conclusion(args: &[String]) {
             // then reset `games = 0` so simplified rollout win rates never pollute Full-Search MCTS survival!
             let mut new_loo_batch: Vec<usize> = Vec::new();
             for s_idx in 0..population.len() {
-                if !population[s_idx].is_hitchhiker
-                    && population[s_idx].tiers_done == 0
-                    && population[s_idx].games == 0
-                    && population[s_idx].slot_marginals.iter().all(|&m| m == 0.0)
-                {
+                if !population[s_idx].is_hitchhiker && !population[s_idx].loo_screened {
                     new_loo_batch.push(s_idx);
                 }
             }
@@ -13469,7 +14106,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                     ^ ((w as u64).wrapping_mul(0x1357_9BDF_2468_ACE0))
                     ^ ((tier_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15));
                 let cursor = std::sync::atomic::AtomicUsize::new(0);
-                let mut mcts_results: Vec<(usize, PiStarEvalOut)> =
+                let mut mcts_results: Vec<(usize, PiStarEvalOut, Arc<PiStarPreviewPolicies>)> =
                     Vec::with_capacity(eval_batch.len());
                 let inner_threads = if eval_batch.len() >= threads {
                     1
@@ -13536,22 +14173,34 @@ fn cmd_converge_conclusion(args: &[String]) {
                                 });
                                 let st_seed = phase_seed
                                     ^ (((s_idx + 1) as u64).wrapping_mul(0x94D0_49BB_1331_11EB));
-                                let qmc_out = eval_vs_pi_star_qmc(
+                                let pols_arc = match st.preview_pols {
+                                    Some(ref p) => p.clone(),
+                                    None => Arc::new(build_pi_star_preview_policies(
+                                        dex_ref,
+                                        pi_sets_ref,
+                                        pi_weights_ref,
+                                        &st.sets,
+                                        max_turns,
+                                        st_seed,
+                                    )),
+                                };
+                                let qmc_out = eval_vs_pi_star_qmc_with_preview(
                                     dex_ref,
                                     pi_sets_ref,
                                     pi_weights_ref,
                                     &st.sets,
                                     Arc::new(blue_mp),
                                     pi_star_mp_ref.clone(),
+                                    Some(pols_arc.as_ref()),
                                     pair_start,
                                     n_pairs_tier,
-                                    50,
+                                    60,
                                     0.4,
                                     max_turns,
                                     inner_threads,
                                     st_seed,
                                 );
-                                loc.push((s_idx, qmc_out));
+                                loc.push((s_idx, qmc_out, pols_arc));
                             }
                             loc
                         }));
@@ -13560,8 +14209,11 @@ fn cmd_converge_conclusion(args: &[String]) {
                         mcts_results.extend(h.join().unwrap());
                     }
                 });
-                for (s_idx, qmc_out) in mcts_results {
+                for (s_idx, qmc_out, pols_arc) in mcts_results {
                     let st = &mut population[s_idx];
+                    if st.preview_pols.is_none() {
+                        st.preview_pols = Some(pols_arc);
+                    }
                     let old_games = st.games as f64;
                     let add_games = qmc_out.games_played as f64;
                     let new_games = (st.games + qmc_out.games_played).max(1) as f64;
@@ -13582,8 +14234,8 @@ fn cmd_converge_conclusion(args: &[String]) {
                     st.tiers_done = tier_id;
                     let b_wr = st.blue_wins / (st.games.max(1) as f64);
                     st.red_wr = (1.0 - b_wr).clamp(0.0, 1.0);
-                    st.bayes_red_wr = (8.0 * 0.45 + (st.games as f64) * st.red_wr)
-                        / (8.0 + st.games as f64);
+                    st.bayes_red_wr =
+                        (8.0 * 0.45 + (st.games as f64) * st.red_wr) / (8.0 + st.games as f64);
                     let n_eff = ((st.games as f64) * 0.75).max(1.0);
                     let alpha = 0.5 + n_eff * st.red_wr;
                     let beta = 0.5 + n_eff * (1.0 - st.red_wr);
@@ -13819,7 +14471,11 @@ fn cmd_converge_conclusion(args: &[String]) {
             for idx in 0..holdout_n {
                 let ho_st = &ho_slice[idx];
                 let s = &hall_of_fame[idx];
-                let ho_red_wr = if ho_st.is_hitchhiker { 0.0 } else { ho_st.red_wr };
+                let ho_red_wr = if ho_st.is_hitchhiker {
+                    0.0
+                } else {
+                    ho_st.red_wr
+                };
 
                 // Stage 2: If candidate passes Stage 1 60-Action LOO Hitchhiker screen (`!ho_st.is_hitchhiker`),
                 // verify on independent holdout QMC pairs (`initial_pair_offset = 64`, `wave_pairs = &[8, 8, 16]`)
@@ -13851,11 +14507,12 @@ fn cmd_converge_conclusion(args: &[String]) {
                         &s.sets,
                         Arc::new(blue_mp),
                         pi_star_mp.clone(),
+                        s.preview_pols.as_deref(),
                         64,
                         &[8, 8, 16],
                         0.490,
                         0.510,
-                        60,
+                        80,
                         0.4,
                         max_turns,
                         threads,
@@ -13865,7 +14522,10 @@ fn cmd_converge_conclusion(args: &[String]) {
                     None
                 };
                 let blind_mcts_red_wr = holdout_mcts_el.as_ref().map(|el| el.red_wr);
-                let ho_mcts_games = holdout_mcts_el.as_ref().map(|el| el.games_played).unwrap_or(0);
+                let ho_mcts_games = holdout_mcts_el
+                    .as_ref()
+                    .map(|el| el.games_played)
+                    .unwrap_or(0);
                 let tot_mcts_games = s.games + ho_mcts_games;
                 let tot_mcts_red_wr = if ho_st.is_hitchhiker || s.is_hitchhiker {
                     0.0

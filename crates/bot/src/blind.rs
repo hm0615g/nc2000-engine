@@ -99,6 +99,14 @@ pub struct BlindAgent {
     /// M18 community belief prior. `None` (the default) leaves the fallback
     /// imputation exactly as shipped.
     prior: Option<Arc<BeliefPrior>>,
+    /// Optional 60-action canonical preview policy (`crate::preview::preview_actions()`)
+    /// used directly at Team Preview (e.g., solved Bayesian Shell-vs-Shell Preview Nash).
+    own_preview_policy: Option<Vec<f64>>,
+    /// Optional 60-action canonical preview distribution `(policy, smoothing)` used to
+    /// condition hidden opponent bench sampling (`Belief::condition_canonical_pick_policy`).
+    opp_pick_policy: Option<(Vec<f64>, f64)>,
+    /// Optional dedicated iteration budget when `BlindSearch` runs at Team Preview (`60` legal actions).
+    preview_iterations: Option<u32>,
     game: Option<GameState>,
     adaptive_mixture: Option<AdaptiveMixture>,
     decision_policy: Option<Vec<f64>>,
@@ -116,13 +124,7 @@ impl BlindAgent {
         tables: Option<Arc<TableSet>>,
         seed: u64,
     ) -> Self {
-        Self::new_with_fallback_policy(
-            cfg,
-            pool,
-            tables,
-            seed,
-            FallbackPolicy::default(),
-        )
+        Self::new_with_fallback_policy(cfg, pool, tables, seed, FallbackPolicy::default())
     }
 
     pub fn new_with_fallback_policy(
@@ -139,12 +141,34 @@ impl BlindAgent {
             tables,
             fallback_policy,
             prior: None,
+            own_preview_policy: None,
+            opp_pick_policy: None,
+            preview_iterations: None,
             game: None,
             adaptive_mixture: None,
             decision_policy: None,
             root_stats: RootSearchStats::default(),
             root_pruning: false,
         }
+    }
+
+    pub fn with_own_preview_policy(mut self, policy: Vec<f64>) -> Self {
+        self.own_preview_policy = Some(policy);
+        self
+    }
+
+    pub fn with_opponent_pick_policy(mut self, policy: Vec<f64>, smoothing: f64) -> Self {
+        self.opp_pick_policy = Some((policy, smoothing));
+        self
+    }
+
+    pub fn with_preview_iterations(mut self, preview_iterations: u32) -> Self {
+        assert!(
+            preview_iterations > 0,
+            "preview search budget must be positive"
+        );
+        self.preview_iterations = Some(preview_iterations);
+        self
     }
 
     pub fn with_adaptive_mixture(mut self, probe_iterations: u32) -> Self {
@@ -196,21 +220,39 @@ impl BlindAgent {
     /// fall through to the determinized preview search.
     fn baked_pick(&mut self, battle: &Battle, side: usize) -> Option<SearchChoice> {
         let tables = self.tables.as_ref()?;
-        let g = self.game.as_ref().expect("baked_pick after lifecycle setup");
+        let g = self
+            .game
+            .as_ref()
+            .expect("baked_pick after lifecycle setup");
         baked_preview_pick(tables, &g.belief, battle, side, &mut self.rng)
     }
 
     // -------------------------------------------------------------- search
 
-    fn search(&mut self, battle: &Battle, dex: &Dex, side: usize, choices: &[SearchChoice]) -> SearchChoice {
+    fn search(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> SearchChoice {
         let g = self.game.as_ref().expect("search after lifecycle setup");
         if !matches!(choices[0], SearchChoice::Team(_)) {
             self.root_stats.searches += 1;
             if let Some(mixture) = self.adaptive_mixture.as_mut() {
-                let mut search = BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
-                if self.root_pruning { search.prune_dominated(); }
+                let mut search =
+                    BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
+                if self.root_pruning {
+                    search.prune_dominated();
+                }
                 debug_assert_eq!(search.actions(), choices);
-                let probes = search.finish_with_typed_mixed_probes(dex, &g.belief, &g.observer, self.cfg.iterations, mixture.probe_iterations);
+                let probes = search.finish_with_typed_mixed_probes(
+                    dex,
+                    &g.belief,
+                    &g.observer,
+                    self.cfg.iterations,
+                    mixture.probe_iterations,
+                );
                 self.root_stats.probed_searches += u64::from(probes > 0);
                 self.root_stats.probe_iterations += u64::from(probes);
                 self.rng = search.rng.clone();
@@ -220,10 +262,28 @@ impl BlindAgent {
                     self.root_stats.mixed_searches += 1;
                     return draw_policy(choices, policy, draw).unwrap();
                 }
-                return search.best().expect("search called with a non-empty choice list");
+                return search
+                    .best()
+                    .expect("search called with a non-empty choice list");
             }
         }
-        search_choose(&self.cfg, &mut self.rng, g, battle, dex, side, choices, self.root_pruning)
+        let mut cfg = self.cfg.clone();
+        if matches!(choices[0], SearchChoice::Team(_)) {
+            if let Some(p_iters) = self.preview_iterations {
+                cfg.iterations = p_iters;
+            }
+        }
+        search_choose(
+            &cfg,
+            &mut self.rng,
+            g,
+            battle,
+            dex,
+            side,
+            choices,
+            self.root_pruning,
+            self.opp_pick_policy.is_some(),
+        )
     }
 }
 
@@ -236,11 +296,21 @@ fn search_choose(
     side: usize,
     choices: &[SearchChoice],
     prune: bool,
+    opp_preview_prior: bool,
 ) -> SearchChoice {
     let mut bs = BlindSearch::with_rng(battle, dex, cfg.clone(), side, rng.clone());
     bs.prune_preview_aliases(dex);
-    if prune { bs.prune_dominated(); }
-    debug_assert_eq!(bs.actions(), choices, "root action set drifted from caller's choices");
+    if opp_preview_prior {
+        bs.set_opponent_preview_prior(true);
+    }
+    if prune {
+        bs.prune_dominated();
+    }
+    debug_assert_eq!(
+        bs.actions(),
+        choices,
+        "root action set drifted from caller's choices"
+    );
     for _ in 0..cfg.iterations {
         bs.step_one(dex, &g.belief, &g.observer);
         if bs.should_early_stop() {
@@ -248,7 +318,8 @@ fn search_choose(
         }
     }
     *rng = bs.rng.clone();
-    bs.best().expect("search called with a non-empty choice list")
+    bs.best()
+        .expect("search called with a non-empty choice list")
 }
 
 /// Belief-mediated M8 table lookup at team preview: own side by signature
@@ -300,9 +371,13 @@ fn draw_policy(actions: &[SearchChoice], policy: &[f64], draw: f64) -> Option<Se
     let mut total = 0.;
     let mut last = None;
     for (&action, &mass) in actions.iter().zip(policy) {
-        if mass > 0. { last = Some(action); }
+        if mass > 0. {
+            last = Some(action);
+        }
         total += mass;
-        if draw < total { return Some(action); }
+        if draw < total {
+            return Some(action);
+        }
     }
     last
 }
@@ -322,7 +397,10 @@ fn sample_mixed(p: &[f64], rng: &mut SplitMix64) -> usize {
 }
 
 enum ForcedRoot {
-    Action { own: usize, reply: Option<SearchChoice> },
+    Action {
+        own: usize,
+        reply: Option<SearchChoice>,
+    },
     TypeProbe,
 }
 
@@ -337,12 +415,14 @@ pub(crate) fn root_search_key(cfg: &RmConfig, dex: &Dex, battle: &mut Battle) ->
         return key_of(cfg, dex, battle);
     }
     let coin = battle.quick_claw_roll;
-    let speeds = [0,1].map(|side| battle.active_id(side).map(|id| (id,battle.poke(id).speed)));
+    let speeds = [0, 1].map(|side| battle.active_id(side).map(|id| (id, battle.poke(id).speed)));
     battle.quick_claw_roll = false;
     battle.update_all_speeds(dex);
     let key = key_of(cfg, dex, battle);
     battle.quick_claw_roll = coin;
-    for (id,speed) in speeds.into_iter().flatten() { battle.poke_mut(id).speed=speed; }
+    for (id, speed) in speeds.into_iter().flatten() {
+        battle.poke_mut(id).speed = speed;
+    }
     key
 }
 
@@ -418,15 +498,22 @@ impl BlindSearch {
         assert_eq!(self.done, 0);
         assert!(self.first_continuation.is_none());
         assert!(!self.cfg.continuation_exp3_ix && !self.cfg.continuation_exp3_mean);
-        self.history_continuation = Some(crate::history_continuation::HistoryContinuation::new(self.side, shared));
+        self.history_continuation = Some(crate::history_continuation::HistoryContinuation::new(
+            self.side, shared,
+        ));
     }
 
     pub fn enable_compact_history_continuation(&mut self, shared: bool) {
         self.enable_history_continuation(shared);
-        self.history_continuation.as_mut().unwrap().use_compact_index();
+        self.history_continuation
+            .as_mut()
+            .unwrap()
+            .use_compact_index();
     }
 
-    pub fn history_continuation(&self) -> Option<&crate::history_continuation::HistoryContinuation> {
+    pub fn history_continuation(
+        &self,
+    ) -> Option<&crate::history_continuation::HistoryContinuation> {
         self.history_continuation.as_ref()
     }
 
@@ -434,7 +521,9 @@ impl BlindSearch {
         assert!(self.history_continuation.is_none());
         assert_eq!(self.done, 0);
         assert!(!self.cfg.continuation_exp3_ix && !self.cfg.continuation_exp3_mean);
-        self.first_continuation = Some(crate::first_continuation::FirstContinuation::new(self.side, shared));
+        self.first_continuation = Some(crate::first_continuation::FirstContinuation::new(
+            self.side, shared,
+        ));
     }
 
     pub fn first_continuation(&self) -> Option<&crate::first_continuation::FirstContinuation> {
@@ -459,20 +548,21 @@ impl BlindSearch {
         if cfg.key_no_damage && battle.damage_bookkeeping_observable(dex) {
             cfg.key_no_damage = false;
         }
-        if matches!(battle.request_state, nc2000_engine::state::RequestState::TeamPreview)
-            && matches!(
-                cfg.settlement,
-                crate::accounting::LeafSettlementMode::BlindSpotLeaf
-                    | crate::accounting::LeafSettlementMode::BlindSpotRollout
-                    | crate::accounting::LeafSettlementMode::BlindSpotBoth
-            )
-        {
+        if matches!(
+            battle.request_state,
+            nc2000_engine::state::RequestState::TeamPreview
+        ) && matches!(
+            cfg.settlement,
+            crate::accounting::LeafSettlementMode::BlindSpotLeaf
+                | crate::accounting::LeafSettlementMode::BlindSpotRollout
+                | crate::accounting::LeafSettlementMode::BlindSpotBoth
+        ) {
             cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
         }
         let mut base = battle.clone();
         base.set_log_enabled(false);
         if cfg.unseen_claw_root && base.is_idle_move_request() {
-            base.quick_claw_roll=false;
+            base.quick_claw_roll = false;
             base.update_all_speeds(dex);
         }
         let turn_cap = base.turn.saturating_add(cfg.horizon);
@@ -753,63 +843,126 @@ impl BlindSearch {
         trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
     ) -> f64 {
         let pick = belief.sample(&mut self.rng);
-        let (mut sim, root, type_index) =
-            self.determinize_and_resolve_root(dex, belief, obs, pick);
-        let my_pick = if self.cfg.root_revisit_interval > 0 && !self.is_preview()
-            && self.done > 0 && self.done % self.cfg.root_revisit_interval == 0
+        let (mut sim, root, type_index) = self.determinize_and_resolve_root(dex, belief, obs, pick);
+        let my_pick = if self.cfg.root_revisit_interval > 0
+            && !self.is_preview()
+            && self.done > 0
+            && self.done % self.cfg.root_revisit_interval == 0
         {
             let action = (0..self.my_acts.len())
                 .filter(|&i| self.my_mask.as_ref().map_or(true, |mask| mask[i]))
-                .min_by_key(|&i| self.my_n[i]).unwrap();
+                .min_by_key(|&i| self.my_n[i])
+                .unwrap();
             self.my_n[action] += 1;
             action
-        } else { select_global(
-            &self.cfg,
-            &mut self.rng,
-            &mut self.my_n,
-            &self.my_w,
-            self.my_mask.as_deref(),
-        ) };
+        } else {
+            select_global(
+                &self.cfg,
+                &mut self.rng,
+                &mut self.my_n,
+                &self.my_w,
+                self.my_mask.as_deref(),
+            )
+        };
         let mut force = [None, None];
         force[self.side] = Some(my_pick);
         if self.opponent_preview_prior && self.is_preview() {
             force[1 - self.side] = belief.sample_preview_prior(
-                pick, obs, &self.nodes[root].acts[1 - self.side], &mut self.rng,
+                pick,
+                obs,
+                &self.nodes[root].acts[1 - self.side],
+                &mut self.rng,
             );
         }
         let mut joint = [0usize; 2];
         let r = if let Some(policy) = self.history_continuation.as_mut() {
             assert!(leaf.is_none());
             crate::smmcts::run_iteration_with_root_child_value(
-                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
-                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
-                &mut |sim, rng, rollout| crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout),
-                trace, None, None, Some(policy),
+                &self.cfg,
+                &mut self.rng,
+                &mut self.nodes,
+                &mut self.table,
+                &mut sim,
+                dex,
+                self.turn_cap,
+                root,
+                force,
+                &mut joint,
+                &mut 0,
+                &mut |sim, rng, rollout| {
+                    crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout)
+                },
+                trace,
+                None,
+                None,
+                Some(policy),
             )
         } else if let Some(policy) = self.first_continuation.as_mut() {
             assert!(leaf.is_none());
             crate::smmcts::run_iteration_with_root_child_value(
-                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
-                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
-                &mut |sim, rng, rollout| crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout),
-                trace, None, Some(policy), None,
+                &self.cfg,
+                &mut self.rng,
+                &mut self.nodes,
+                &mut self.table,
+                &mut sim,
+                dex,
+                self.turn_cap,
+                root,
+                force,
+                &mut joint,
+                &mut 0,
+                &mut |sim, rng, rollout| {
+                    crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout)
+                },
+                trace,
+                None,
+                Some(policy),
+                None,
             )
         } else if let Some(leaf) = leaf {
             crate::smmcts::run_iteration_with_leaf(
-                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
-                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0, leaf, None,
+                &self.cfg,
+                &mut self.rng,
+                &mut self.nodes,
+                &mut self.table,
+                &mut sim,
+                dex,
+                self.turn_cap,
+                root,
+                force,
+                &mut joint,
+                &mut 0,
+                leaf,
+                None,
             )
         } else if let Some(trace) = trace {
             crate::smmcts::run_iteration_with_leaf(
-                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
-                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
+                &self.cfg,
+                &mut self.rng,
+                &mut self.nodes,
+                &mut self.table,
+                &mut sim,
+                dex,
+                self.turn_cap,
+                root,
+                force,
+                &mut joint,
+                &mut 0,
                 &mut |sim, rng, rollout| {
                     if rollout {
-                        crate::mcts::playout_value(sim, dex, &self.cfg.playout, self.turn_cap, rng, self.cfg.rollout_rules())
+                        crate::mcts::playout_value(
+                            sim,
+                            dex,
+                            &self.cfg.playout,
+                            self.turn_cap,
+                            rng,
+                            self.cfg.rollout_rules(),
+                        )
                     } else {
                         crate::smmcts::leaf_eval(&self.cfg, sim, dex)
                     }
-                }, Some(trace),
+                },
+                Some(trace),
             )
         } else {
             run_iteration(
@@ -846,7 +999,15 @@ impl BlindSearch {
         obs: &Observer,
         my_pick: usize,
     ) -> f64 {
-        self.step_forced_impl(dex, belief, obs, ForcedRoot::Action { own: my_pick, reply: None })
+        self.step_forced_impl(
+            dex,
+            belief,
+            obs,
+            ForcedRoot::Action {
+                own: my_pick,
+                reply: None,
+            },
+        )
     }
 
     // Unavailable replies use the sampled opponent's tree policy.
@@ -858,8 +1019,16 @@ impl BlindSearch {
         my_pick: usize,
         reply: SearchChoice,
     ) -> f64 {
-        let value=self.step_forced_impl(dex, belief, obs, ForcedRoot::Action { own: my_pick, reply: Some(reply) });
-        self.joint_probe_n[my_pick]+=1;
+        let value = self.step_forced_impl(
+            dex,
+            belief,
+            obs,
+            ForcedRoot::Action {
+                own: my_pick,
+                reply: Some(reply),
+            },
+        );
+        self.joint_probe_n[my_pick] += 1;
         value
     }
 
@@ -882,8 +1051,16 @@ impl BlindSearch {
         reply: SearchChoice,
         trace: &mut impl FnMut(crate::smmcts::SearchTrace<'_>),
     ) -> f64 {
-        let value = self.step_forced_impl_observed(dex, belief, obs,
-            ForcedRoot::Action { own: my_pick, reply: Some(reply) }, Some(trace));
+        let value = self.step_forced_impl_observed(
+            dex,
+            belief,
+            obs,
+            ForcedRoot::Action {
+                own: my_pick,
+                reply: Some(reply),
+            },
+            Some(trace),
+        );
         self.joint_probe_n[my_pick] += 1;
         value
     }
@@ -896,7 +1073,7 @@ impl BlindSearch {
         forcing: ForcedRoot,
         trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
     ) -> f64 {
-        self.step_forced_impl_with_root_child_value(dex,belief,obs,forcing,trace,None)
+        self.step_forced_impl_with_root_child_value(dex, belief, obs, forcing, trace, None)
     }
 
     pub fn step_forced_joint_with_root_child_value(
@@ -908,8 +1085,17 @@ impl BlindSearch {
         reply: SearchChoice,
         evaluate: &mut impl FnMut(&Battle) -> Option<f64>,
     ) -> f64 {
-        let value = self.step_forced_impl_with_root_child_value(dex,belief,obs,
-            ForcedRoot::Action {own:my_pick,reply:Some(reply)},None,Some(evaluate));
+        let value = self.step_forced_impl_with_root_child_value(
+            dex,
+            belief,
+            obs,
+            ForcedRoot::Action {
+                own: my_pick,
+                reply: Some(reply),
+            },
+            None,
+            Some(evaluate),
+        );
         self.joint_probe_n[my_pick] += 1;
         value
     }
@@ -925,21 +1111,34 @@ impl BlindSearch {
     ) -> f64 {
         if let ForcedRoot::Action { own, .. } = forcing {
             assert!(own < self.my_acts.len(), "forced root action out of range");
-            assert!(self.my_mask.as_ref().map_or(true, |mask| mask[own]), "forced root action is masked");
+            assert!(
+                self.my_mask.as_ref().map_or(true, |mask| mask[own]),
+                "forced root action is masked"
+            );
         }
         let pick = belief.sample(&mut self.rng);
-        let (mut sim, root, type_index) =
-            self.determinize_and_resolve_root(dex, belief, obs, pick);
+        let (mut sim, root, type_index) = self.determinize_and_resolve_root(dex, belief, obs, pick);
         let (my_pick, forced_reply, override_reply) = match forcing {
             ForcedRoot::Action { own, reply } => {
                 self.my_n[own] += 1;
-                (own, reply.and_then(|a| self.nodes[root].acts[1 - self.side].iter().position(|&c| c == a)), reply.is_some())
+                (
+                    own,
+                    reply.and_then(|a| {
+                        self.nodes[root].acts[1 - self.side]
+                            .iter()
+                            .position(|&c| c == a)
+                    }),
+                    reply.is_some(),
+                )
             }
             ForcedRoot::TypeProbe => {
                 let replies = self.nodes[root].acts[1 - self.side].len();
                 let stats = &self.root_types[type_index];
-                let selected = (0..self.my_acts.len()).filter(|&own|
-                    !self.my_dominated[own] && self.my_mask.as_ref().map_or(true, |mask| mask[own]))
+                let selected = (0..self.my_acts.len())
+                    .filter(|&own| {
+                        !self.my_dominated[own]
+                            && self.my_mask.as_ref().map_or(true, |mask| mask[own])
+                    })
                     .flat_map(|own| (0..replies).map(move |reply| (own, reply)))
                     .min_by_key(|&(own, reply)| stats.cells[own * replies + reply].0);
                 match selected {
@@ -948,8 +1147,17 @@ impl BlindSearch {
                         self.joint_probe_n[own] += 1;
                         (own, Some(reply), true)
                     }
-                    None => (select_global(&self.cfg, &mut self.rng, &mut self.my_n,
-                        &self.my_w, self.my_mask.as_deref()), None, false),
+                    None => (
+                        select_global(
+                            &self.cfg,
+                            &mut self.rng,
+                            &mut self.my_n,
+                            &self.my_w,
+                            self.my_mask.as_deref(),
+                        ),
+                        None,
+                        false,
+                    ),
                 }
             }
         };
@@ -957,7 +1165,10 @@ impl BlindSearch {
         force[self.side] = Some(my_pick);
         if self.opponent_preview_prior && self.is_preview() {
             force[1 - self.side] = belief.sample_preview_prior(
-                pick, obs, &self.nodes[root].acts[1 - self.side], &mut self.rng,
+                pick,
+                obs,
+                &self.nodes[root].acts[1 - self.side],
+                &mut self.rng,
             );
         }
         if override_reply {
@@ -967,46 +1178,101 @@ impl BlindSearch {
         let r = if let Some(policy) = self.history_continuation.as_mut() {
             assert!(root_child_value.is_none());
             crate::smmcts::run_iteration_with_root_child_value(
-                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
-                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
-                &mut |sim, rng, rollout| crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout),
-                trace, None, None, Some(policy),
+                &self.cfg,
+                &mut self.rng,
+                &mut self.nodes,
+                &mut self.table,
+                &mut sim,
+                dex,
+                self.turn_cap,
+                root,
+                force,
+                &mut joint,
+                &mut 0,
+                &mut |sim, rng, rollout| {
+                    crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout)
+                },
+                trace,
+                None,
+                None,
+                Some(policy),
             )
         } else if let Some(policy) = self.first_continuation.as_mut() {
             assert!(root_child_value.is_none());
             crate::smmcts::run_iteration_with_root_child_value(
-                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
-                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
-                &mut |sim, rng, rollout| crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout),
-                trace, None, Some(policy), None,
+                &self.cfg,
+                &mut self.rng,
+                &mut self.nodes,
+                &mut self.table,
+                &mut sim,
+                dex,
+                self.turn_cap,
+                root,
+                force,
+                &mut joint,
+                &mut 0,
+                &mut |sim, rng, rollout| {
+                    crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout)
+                },
+                trace,
+                None,
+                Some(policy),
+                None,
             )
         } else if let Some(evaluate) = root_child_value {
             crate::smmcts::run_iteration_with_root_child_value(
-                &self.cfg,&mut self.rng,&mut self.nodes,&mut self.table,&mut sim,dex,
-                self.turn_cap,root,force,&mut joint,&mut 0,
-                &mut |sim,rng,rollout| crate::smmcts::default_leaf(&self.cfg,sim,dex,self.turn_cap,rng,rollout),
-                trace,Some(evaluate),None,None,
+                &self.cfg,
+                &mut self.rng,
+                &mut self.nodes,
+                &mut self.table,
+                &mut sim,
+                dex,
+                self.turn_cap,
+                root,
+                force,
+                &mut joint,
+                &mut 0,
+                &mut |sim, rng, rollout| {
+                    crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout)
+                },
+                trace,
+                Some(evaluate),
+                None,
+                None,
             )
         } else if let Some(trace) = trace {
             crate::smmcts::run_iteration_with_leaf(
-                &self.cfg, &mut self.rng, &mut self.nodes, &mut self.table,
-                &mut sim, dex, self.turn_cap, root, force, &mut joint, &mut 0,
-                &mut |sim, rng, rollout| crate::smmcts::default_leaf(
-                    &self.cfg, sim, dex, self.turn_cap, rng, rollout), Some(trace),
+                &self.cfg,
+                &mut self.rng,
+                &mut self.nodes,
+                &mut self.table,
+                &mut sim,
+                dex,
+                self.turn_cap,
+                root,
+                force,
+                &mut joint,
+                &mut 0,
+                &mut |sim, rng, rollout| {
+                    crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout)
+                },
+                Some(trace),
             )
-        } else { run_iteration(
-            &self.cfg,
-            &mut self.rng,
-            &mut self.nodes,
-            &mut self.table,
-            &mut sim,
-            dex,
-            self.turn_cap,
-            root,
-            force,
-            &mut joint,
-            &mut 0,
-        ) };
+        } else {
+            run_iteration(
+                &self.cfg,
+                &mut self.rng,
+                &mut self.nodes,
+                &mut self.table,
+                &mut sim,
+                dex,
+                self.turn_cap,
+                root,
+                force,
+                &mut joint,
+                &mut 0,
+            )
+        };
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         self.scratch = Some(sim);
         self.record_joint(root, type_index, my_pick, joint, r);
@@ -1015,7 +1281,14 @@ impl BlindSearch {
         r
     }
 
-    fn record_joint(&mut self, root: usize, type_index: usize, my_pick: usize, joint: [usize; 2], r: f64) {
+    fn record_joint(
+        &mut self,
+        root: usize,
+        type_index: usize,
+        my_pick: usize,
+        joint: [usize; 2],
+        r: f64,
+    ) {
         let mine = if self.side == 0 { r } else { 1.0 - r };
         self.endgame.record(
             self.base.turn,
@@ -1034,20 +1307,24 @@ impl BlindSearch {
             cell.1 += mine;
         }
         let indices = self.root_avail.entry(root).or_insert_with(|| {
-            acts.iter().map(|&choice| {
-                match self.avail.iter().position(|(action, _)| *action == choice) {
-                    Some(index) => index,
-                    None => {
-                        self.avail.push((choice, 0));
-                        self.avail.len() - 1
-                    }
-                }
-            }).collect()
+            acts.iter()
+                .map(
+                    |&choice| match self.avail.iter().position(|(action, _)| *action == choice) {
+                        Some(index) => index,
+                        None => {
+                            self.avail.push((choice, 0));
+                            self.avail.len() - 1
+                        }
+                    },
+                )
+                .collect()
         });
         for &index in indices.iter() {
             self.avail[index].1 += 1;
         }
-        let Some(&opp_act) = acts.get(joint[opp]) else { return };
+        let Some(&opp_act) = acts.get(joint[opp]) else {
+            return;
+        };
         let index = match self.joint_index.entry((my_pick, opp_act)) {
             std::collections::hash_map::Entry::Occupied(entry) => *entry.get(),
             std::collections::hash_map::Entry::Vacant(entry) => {
@@ -1125,8 +1402,12 @@ impl BlindSearch {
             if sim.outcome().is_some() {
                 break;
             }
-            let mut search =
-                SkuctSearch::new(&sim, dex, self.cfg.clone(), seed ^ (0x9E37_79B9 * (ply as u64 + 1)));
+            let mut search = SkuctSearch::new(
+                &sim,
+                dex,
+                self.cfg.clone(),
+                seed ^ (0x9E37_79B9 * (ply as u64 + 1)),
+            );
             search.step(dex, iters);
             let mut joint = [search.best(0), search.best(1)];
             // The line exists to explain the move the analysis recommends, so
@@ -1145,16 +1426,20 @@ impl BlindSearch {
             if joint == [None, None] {
                 break;
             }
-            let Some(step) =
-                enumerate_step_with_damage_mode(dex, &sim, joint, LINE_ENUM_CAP, DamageRollMode::Mean)
-            else {
+            let Some(step) = enumerate_step_with_damage_mode(
+                dex,
+                &sim,
+                joint,
+                LINE_ENUM_CAP,
+                DamageRollMode::Mean,
+            ) else {
                 break;
             };
-            let Some(leaf) = step
-                .leaves
-                .into_iter()
-                .max_by(|a, b| a.prob.partial_cmp(&b.prob).unwrap_or(std::cmp::Ordering::Equal))
-            else {
+            let Some(leaf) = step.leaves.into_iter().max_by(|a, b| {
+                a.prob
+                    .partial_cmp(&b.prob)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            }) else {
                 break;
             };
             // Resolve switch targets before the step, while the party that
@@ -1233,7 +1518,9 @@ impl BlindSearch {
         let cfg = self.cfg.clone();
         let turn_cap = self.turn_cap;
         for _ in 0..n {
-            if session.expired(clock()) { break; }
+            if session.expired(clock()) {
+                break;
+            }
             self.step_with_leaf(dex, belief, obs, 1, &mut |sim, rng, rollout| {
                 session.leaf(dex, &cfg, turn_cap, sim, rng, rollout, clock)
             });
@@ -1293,10 +1580,19 @@ impl BlindSearch {
         let mut rng = SplitMix64::new(seed);
         let pick = belief.sample(&mut rng);
         let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut rng);
-        if self.cfg.unseen_claw_root && sim.is_idle_move_request() { sim.update_all_speeds(dex); }
+        if self.cfg.unseen_claw_root && sim.is_idle_move_request() {
+            sim.update_all_speeds(dex);
+        }
         crate::frozen::evaluate_sim(
-            dex, &self.cfg, &mut sim, &self.nodes, &self.table,
-            forced, policy, &mut rng, trace,
+            dex,
+            &self.cfg,
+            &mut sim,
+            &self.nodes,
+            &self.table,
+            forced,
+            policy,
+            &mut rng,
+            trace,
         )
     }
 
@@ -1348,7 +1644,10 @@ impl BlindSearch {
     }
 
     pub fn prune_dominated(&mut self) {
-        let allowed: Vec<bool> = self.my_dominated.iter().enumerate()
+        let allowed: Vec<bool> = self
+            .my_dominated
+            .iter()
+            .enumerate()
             .map(|(i, &dominated)| !dominated && self.my_mask.as_ref().map_or(true, |m| m[i]))
             .collect();
         if allowed.iter().any(|&x| x) {
@@ -1357,22 +1656,43 @@ impl BlindSearch {
     }
 
     pub fn prune_preview_aliases(&mut self, dex: &Dex) -> usize {
-        if !self.is_preview() || self.base.sides[self.side].roster.iter().any(|p| {
-            p.base_move_slots.iter().chain(p.move_slots.iter()).any(|m| {
-                matches!(dex.moves.key(m.id),
-                    "beatup" | "metronome" | "mimic" | "mirrormove" | "sketch" | "transform")
+        if !self.is_preview()
+            || self.base.sides[self.side].roster.iter().any(|p| {
+                p.base_move_slots
+                    .iter()
+                    .chain(p.move_slots.iter())
+                    .any(|m| {
+                        matches!(
+                            dex.moves.key(m.id),
+                            "beatup"
+                                | "metronome"
+                                | "mimic"
+                                | "mirrormove"
+                                | "sketch"
+                                | "transform"
+                        )
+                    })
             })
-        }) {
+        {
             return 0;
         }
         assert_eq!(self.done, 0, "preview aliases must be pruned before search");
-        let mut allowed = self.my_mask.clone().unwrap_or_else(|| vec![true; self.my_acts.len()]);
+        let mut allowed = self
+            .my_mask
+            .clone()
+            .unwrap_or_else(|| vec![true; self.my_acts.len()]);
         let mut seen = Vec::new();
         let mut removed = 0;
         for (i, action) in self.my_acts.iter().enumerate() {
-            if !allowed[i] { continue; }
-            let SearchChoice::Team(mut triple) = *action else { continue };
-            if triple[2] == 0 { continue; }
+            if !allowed[i] {
+                continue;
+            }
+            let SearchChoice::Team(mut triple) = *action else {
+                continue;
+            };
+            if triple[2] == 0 {
+                continue;
+            }
             triple[1..].sort_unstable();
             if seen.contains(&triple) {
                 allowed[i] = false;
@@ -1381,33 +1701,49 @@ impl BlindSearch {
                 seen.push(triple);
             }
         }
-        if removed > 0 { self.mask_actions(&allowed); }
+        if removed > 0 {
+            self.mask_actions(&allowed);
+        }
         removed
     }
 
     pub fn prune_rest_aliases(&mut self, dex: &Dex) -> usize {
         use nc2000_engine::state::{Status, DK};
-        let Some(id) = self.base.active_id(self.side) else { return 0 };
+        let Some(id) = self.base.active_id(self.side) else {
+            return 0;
+        };
         let own = self.base.poke(id);
-        if own.status != Status::Slp || own.status_state.source != Some(id)
+        if own.status != Status::Slp
+            || own.status_state.source != Some(id)
             || own.status_state.get_int(DK::StartTime) != 3
         {
             return 0;
         }
-        let allowed = self.my_mask.clone().unwrap_or_else(|| vec![true; self.my_acts.len()]);
+        let allowed = self
+            .my_mask
+            .clone()
+            .unwrap_or_else(|| vec![true; self.my_acts.len()]);
         let mut indices: Vec<_> = (0..self.my_acts.len()).filter(|&i| allowed[i]).collect();
         indices.sort_by_key(|&i| self.my_dominated[i]);
         let mut representatives: Vec<_> = indices.iter().map(|&i| self.my_acts[i]).collect();
         crate::smmcts::collapse_sleep_choices(&self.base, dex, self.side, &mut representatives);
         let removed = indices.len() - representatives.len();
         if removed > 0 {
-            self.mask_actions(&self.my_acts.iter().enumerate()
-                .map(|(i,a)| allowed[i] && representatives.contains(a)).collect::<Vec<_>>());
+            self.mask_actions(
+                &self
+                    .my_acts
+                    .iter()
+                    .enumerate()
+                    .map(|(i, a)| allowed[i] && representatives.contains(a))
+                    .collect::<Vec<_>>(),
+            );
         }
         removed
     }
 
-    pub fn joint_probe_visits(&self) -> &[u32] { &self.joint_probe_n }
+    pub fn joint_probe_visits(&self) -> &[u32] {
+        &self.joint_probe_n
+    }
 
     fn reply_metrics(&self, own: usize, n_i: u32, mean_i: f64) -> (f64, f64) {
         // Compute within-type reply risk and opponent-mistake EV per `RootTypeStats`
@@ -1433,11 +1769,8 @@ impl BlindSearch {
             }
             let type_w: f64 = row.iter().map(|&(_, w)| w).sum();
             let type_mean = type_w / type_n as f64;
-            let (t_risk, t_mistake) = crate::smmcts::reply_risk_and_mistake_ev(
-                type_n,
-                type_mean,
-                row.iter().copied(),
-            );
+            let (t_risk, t_mistake) =
+                crate::smmcts::reply_risk_and_mistake_ev(type_n, type_mean, row.iter().copied());
             let w_t = type_n as f64;
             mistake_weighted_sum += w_t * t_mistake;
             mistake_weight_total += w_t;
@@ -1475,8 +1808,8 @@ impl BlindSearch {
         let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |m| m[i]);
         let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
         let eligible = |i: usize| allowed(i) && (!safe || !self.my_dominated[i]);
-        let ordinary = (0..self.my_acts.len())
-            .any(|i| eligible(i) && self.my_n[i] > self.joint_probe_n[i]);
+        let ordinary =
+            (0..self.my_acts.len()).any(|i| eligible(i) && self.my_n[i] > self.joint_probe_n[i]);
         let eff_n: Vec<u32> = (0..self.my_acts.len())
             .map(|i| {
                 if ordinary {
@@ -1501,8 +1834,8 @@ impl BlindSearch {
         let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |m| m[i]);
         let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
         let eligible = |i: usize| allowed(i) && (!safe || !self.my_dominated[i]);
-        let ordinary = (0..self.my_acts.len())
-            .any(|i| eligible(i) && self.my_n[i] > self.joint_probe_n[i]);
+        let ordinary =
+            (0..self.my_acts.len()).any(|i| eligible(i) && self.my_n[i] > self.joint_probe_n[i]);
         if self.cfg.endgame_rules.decision_any() && !self.is_preview() {
             let eff_n: Vec<u32> = (0..self.my_acts.len())
                 .map(|i| {
@@ -1526,6 +1859,25 @@ impl BlindSearch {
                 )
                 .map(|i| self.my_acts[i]);
         }
+        if self.is_preview() {
+            return (0..self.my_acts.len())
+                .filter(|&i| eligible(i))
+                .max_by(|&a, &b| {
+                    let na = if ordinary {
+                        self.my_n[a] - self.joint_probe_n[a]
+                    } else {
+                        self.my_n[a]
+                    };
+                    let nb = if ordinary {
+                        self.my_n[b] - self.joint_probe_n[b]
+                    } else {
+                        self.my_n[b]
+                    };
+                    na.cmp(&nb)
+                        .then_with(|| self.my_w[a].total_cmp(&self.my_w[b]))
+                })
+                .map(|i| self.my_acts[i]);
+        }
         (0..self.my_acts.len())
             .filter(|&i| eligible(i))
             .max_by_key(|&i| {
@@ -1540,12 +1892,18 @@ impl BlindSearch {
 
     /// Actual execution probabilities, not `rootPolicy` visit diagnostics.
     /// Neither empirical mode certifies equilibrium or policy improvement.
-    pub fn decision_policy(&self, mode: crate::decision::PolicyMode) -> Option<crate::decision::DecisionPolicy<SearchChoice>> {
+    pub fn decision_policy(
+        &self,
+        mode: crate::decision::PolicyMode,
+    ) -> Option<crate::decision::DecisionPolicy<SearchChoice>> {
         use crate::decision::{DecisionPolicy, PolicyMode};
         let best = self.best()?;
         if mode == PolicyMode::EstimatedMix {
             if let Some(mixed) = self.mixed_policy() {
-                if let Ok(policy) = DecisionPolicy::new("estimated-mix", self.my_acts.iter().copied().zip(mixed.policy)) {
+                if let Ok(policy) = DecisionPolicy::new(
+                    "estimated-mix",
+                    self.my_acts.iter().copied().zip(mixed.policy),
+                ) {
                     return Some(policy);
                 }
             }
@@ -1554,88 +1912,172 @@ impl BlindSearch {
         if mode == PolicyMode::VisitSample {
             let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
             let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
-            let entries = self.my_acts.iter().enumerate()
+            let entries = self
+                .my_acts
+                .iter()
+                .enumerate()
                 .filter(|&(i, _)| allowed(i) && (!safe || !self.my_dominated[i]))
                 .map(|(i, &action)| (action, f64::from(self.my_n[i] - self.joint_probe_n[i])));
-            if let Ok(policy) = DecisionPolicy::new("visit-sample", entries) { return Some(policy); }
+            if let Ok(policy) = DecisionPolicy::new("visit-sample", entries) {
+                return Some(policy);
+            }
             return Some(DecisionPolicy::pure("visit-sample-fallback", best));
         }
         Some(DecisionPolicy::pure("legacy", best))
     }
 
     pub fn root_policy_evidence(&self) -> (Vec<bool>, Vec<crate::root_policy::RootType>) {
-        let eligible: Vec<bool> = (0..self.my_acts.len()).map(|i|
-            self.my_mask.as_ref().map_or(true, |m| m[i]) && !self.my_dominated[i]).collect();
-        let types = self.root_types.iter().map(|t| crate::root_policy::RootType {
-            samples: t.samples,
-            replies: t.replies,
-            cells: t.cells.iter().enumerate().filter(|(_, (n, _))| *n > 0)
-                .map(|(i, &(samples, sum))| crate::root_policy::RootCell {
-                    own: i / t.replies, reply: i % t.replies, samples, mean: sum / f64::from(samples),
-                }).collect(),
-        }).collect();
+        let eligible: Vec<bool> = (0..self.my_acts.len())
+            .map(|i| self.my_mask.as_ref().map_or(true, |m| m[i]) && !self.my_dominated[i])
+            .collect();
+        let types = self
+            .root_types
+            .iter()
+            .map(|t| crate::root_policy::RootType {
+                samples: t.samples,
+                replies: t.replies,
+                cells: t
+                    .cells
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, (n, _))| *n > 0)
+                    .map(|(i, &(samples, sum))| crate::root_policy::RootCell {
+                        own: i / t.replies,
+                        reply: i % t.replies,
+                        samples,
+                        mean: sum / f64::from(samples),
+                    })
+                    .collect(),
+            })
+            .collect();
         (eligible, types)
     }
 
     pub fn mixed_policy(&self) -> Option<crate::root_policy::MixedRoot> {
-        if self.my_acts.iter().any(|a|matches!(a,SearchChoice::Team(_))) {return None;}
+        if self
+            .my_acts
+            .iter()
+            .any(|a| matches!(a, SearchChoice::Team(_)))
+        {
+            return None;
+        }
         let (eligible, types) = self.root_policy_evidence();
         crate::root_policy::bayesian_mixed_root(&eligible, self.done, &types)
     }
 
     pub fn estimated_mix_gain(&self) -> Option<f64> {
-        if self.my_acts.iter().any(|a|matches!(a,SearchChoice::Team(_))) {return None;}
+        if self
+            .my_acts
+            .iter()
+            .any(|a| matches!(a, SearchChoice::Team(_)))
+        {
+            return None;
+        }
         let (eligible, types) = self.root_policy_evidence();
         crate::root_policy::estimated_bayesian_mix_gain(&eligible, self.done, &types)
     }
 
-    pub fn step_joint_probes(&mut self,dex:&Dex,belief:&Belief,obs:&Observer,n:u32) -> u32 {
+    pub fn step_joint_probes(&mut self, dex: &Dex, belief: &Belief, obs: &Observer, n: u32) -> u32 {
         for _ in 0..n {
-            let mut selected=None;
+            let mut selected = None;
             for own in 0..self.my_acts.len() {
-                if self.my_dominated[own] || !self.my_mask.as_ref().map_or(true,|m|m[own]) {continue;}
-                for &(reply,available) in &self.avail {
-                    if available!=self.done {continue;}
-                    let count=self.joint.iter().find(|&&(i,a,_,_)|i==own && a==reply).map(|c|c.2).unwrap_or(0);
-                    if selected.as_ref().map_or(true,|&(_,_,n)|count<n) {selected=Some((own,reply,count));}
+                if self.my_dominated[own] || !self.my_mask.as_ref().map_or(true, |m| m[own]) {
+                    continue;
+                }
+                for &(reply, available) in &self.avail {
+                    if available != self.done {
+                        continue;
+                    }
+                    let count = self
+                        .joint
+                        .iter()
+                        .find(|&&(i, a, _, _)| i == own && a == reply)
+                        .map(|c| c.2)
+                        .unwrap_or(0);
+                    if selected.as_ref().map_or(true, |&(_, _, n)| count < n) {
+                        selected = Some((own, reply, count));
+                    }
                 }
             }
-            if let Some((own,reply,_))=selected {self.step_forced_joint(dex,belief,obs,own,reply);}
-            else {self.step_one(dex,belief,obs);}
+            if let Some((own, reply, _)) = selected {
+                self.step_forced_joint(dex, belief, obs, own, reply);
+            } else {
+                self.step_one(dex, belief, obs);
+            }
         }
         self.done
     }
 
-    pub fn step_typed_joint_probes(&mut self, dex: &Dex, belief: &Belief, obs: &Observer, n: u32) -> u32 {
-        if self.is_preview() { return self.step(dex, belief, obs, n); }
+    pub fn step_typed_joint_probes(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        n: u32,
+    ) -> u32 {
+        if self.is_preview() {
+            return self.step(dex, belief, obs, n);
+        }
         for _ in 0..n {
             self.step_forced_impl(dex, belief, obs, ForcedRoot::TypeProbe);
         }
         self.done
     }
 
-    pub fn finish_with_mixed_probes(&mut self,dex:&Dex,belief:&Belief,obs:&Observer,total:u32,reserved:u32) -> u32 {
+    pub fn finish_with_mixed_probes(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        total: u32,
+        reserved: u32,
+    ) -> u32 {
         self.finish_mixed_probes(dex, belief, obs, total, reserved, false)
     }
 
-    pub fn finish_with_typed_mixed_probes(&mut self,dex:&Dex,belief:&Belief,obs:&Observer,total:u32,reserved:u32) -> u32 {
+    pub fn finish_with_typed_mixed_probes(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        total: u32,
+        reserved: u32,
+    ) -> u32 {
         self.finish_mixed_probes(dex, belief, obs, total, reserved, true)
     }
 
-    fn finish_mixed_probes(&mut self,dex:&Dex,belief:&Belief,obs:&Observer,total:u32,reserved:u32,typed:bool) -> u32 {
-        assert!(reserved<total && self.done<=total-reserved);
-        self.step(dex,belief,obs,total-reserved-self.done);
-        let probe=reserved>0 && self.estimated_mix_gain().is_some_and(|gain|gain>0.02) && self.mixed_policy().is_none();
+    fn finish_mixed_probes(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+        total: u32,
+        reserved: u32,
+        typed: bool,
+    ) -> u32 {
+        assert!(reserved < total && self.done <= total - reserved);
+        self.step(dex, belief, obs, total - reserved - self.done);
+        let probe = reserved > 0
+            && self.estimated_mix_gain().is_some_and(|gain| gain > 0.02)
+            && self.mixed_policy().is_none();
         if probe {
-            if typed { self.step_typed_joint_probes(dex,belief,obs,reserved); }
-            else { self.step_joint_probes(dex,belief,obs,reserved); }
+            if typed {
+                self.step_typed_joint_probes(dex, belief, obs, reserved);
+            } else {
+                self.step_joint_probes(dex, belief, obs, reserved);
+            }
             reserved
-        } else {self.step(dex,belief,obs,reserved);0}
+        } else {
+            self.step(dex, belief, obs, reserved);
+            0
+        }
     }
 
     pub fn sample_mixed(&self, draw: f64) -> Option<SearchChoice> {
         assert!(draw.is_finite() && (0.0..1.0).contains(&draw));
-        let Some(mixed) = self.mixed_policy() else { return self.best(); };
+        let Some(mixed) = self.mixed_policy() else {
+            return self.best();
+        };
         draw_policy(&self.my_acts, &mixed.policy, draw)
     }
 
@@ -1789,7 +2231,10 @@ impl OpenAgent {
 
 impl Agent for OpenAgent {
     fn name(&self) -> String {
-        format!("open:{}:{}:{}", self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets)
+        format!(
+            "open:{}:{}:{}",
+            self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets
+        )
     }
 
     fn choose(
@@ -1813,7 +2258,12 @@ impl Agent for OpenAgent {
         if stale {
             let observer = Observer::new(battle, side);
             let belief = Belief::pinned_from_battle(battle, &observer);
-            self.game = Some(GameState { side, last_turn: battle.turn, observer, belief });
+            self.game = Some(GameState {
+                side,
+                last_turn: battle.turn,
+                observer,
+                belief,
+            });
         }
         {
             let g = self.game.as_mut().unwrap();
@@ -1821,7 +2271,8 @@ impl Agent for OpenAgent {
             g.observer.observe(battle, dex);
             g.belief.sync(dex, &g.observer);
             if let Some((ref pol, smoothing)) = self.opp_pick_policy {
-                g.belief.condition_canonical_pick_policy(pol, smoothing, &g.observer);
+                g.belief
+                    .condition_canonical_pick_policy(pol, smoothing, &g.observer);
             }
         }
 
@@ -1844,7 +2295,11 @@ impl Agent for OpenAgent {
         let g = self.game.as_ref().expect("choose after lifecycle setup");
         let mut bs = BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
         bs.prune_preview_aliases(dex);
-        debug_assert_eq!(bs.actions(), choices, "root action set drifted from caller's choices");
+        debug_assert_eq!(
+            bs.actions(),
+            choices,
+            "root action set drifted from caller's choices"
+        );
         for _ in 0..self.cfg.iterations {
             bs.step_one(dex, &g.belief, &g.observer);
             if bs.should_early_stop() {
@@ -1852,7 +2307,9 @@ impl Agent for OpenAgent {
             }
         }
         self.rng = bs.rng.clone();
-        let picked = bs.best().expect("search called with a non-empty choice list");
+        let picked = bs
+            .best()
+            .expect("search called with a non-empty choice list");
 
         // Record mid-battle move-level counterfactual regret \Delta Q_{-m_k}
         if !is_preview {
@@ -1891,39 +2348,79 @@ impl Agent for OpenAgent {
 }
 
 impl Agent for BlindAgent {
-    fn root_search_stats(&self) -> Option<RootSearchStats> { Some(self.root_stats) }
+    fn root_search_stats(&self) -> Option<RootSearchStats> {
+        Some(self.root_stats)
+    }
 
-    fn root_policy(&mut self, battle: &Battle, dex: &Dex, side: usize, choices: &[SearchChoice]) -> Vec<f64> {
+    fn root_policy(
+        &mut self,
+        battle: &Battle,
+        dex: &Dex,
+        side: usize,
+        choices: &[SearchChoice],
+    ) -> Vec<f64> {
         let picked = self.choose(battle, dex, side, choices);
-        if let Some(policy) = &self.decision_policy { return policy.clone(); }
+        if let Some(policy) = &self.decision_policy {
+            return policy.clone();
+        }
         if matches!(choices[0], SearchChoice::Team(_)) {
             if let (Some(tables), Some(game)) = (&self.tables, &self.game) {
                 if game.belief.candidate_count() == 1 {
                     if let Some(me) = tables.side_index(battle, side) {
-                        if let Some((table, first)) = tables.pair_by_idx(me, game.belief.alive()[0]) {
-                            let policy = if first { &table.sol.p_a } else { &table.sol.p_b };
-                            let aligned: Vec<f64> = choices.iter().map(|action|
-                                tables.actions().iter().position(|t| SearchChoice::Team(*t) == *action)
-                                    .map_or(0., |i| policy[i])).collect();
-                            if (aligned.iter().sum::<f64>() - 1.).abs() < 1e-8 { return aligned; }
+                        if let Some((table, first)) = tables.pair_by_idx(me, game.belief.alive()[0])
+                        {
+                            let policy = if first {
+                                &table.sol.p_a
+                            } else {
+                                &table.sol.p_b
+                            };
+                            let aligned: Vec<f64> = choices
+                                .iter()
+                                .map(|action| {
+                                    tables
+                                        .actions()
+                                        .iter()
+                                        .position(|t| SearchChoice::Team(*t) == *action)
+                                        .map_or(0., |i| policy[i])
+                                })
+                                .collect();
+                            if (aligned.iter().sum::<f64>() - 1.).abs() < 1e-8 {
+                                return aligned;
+                            }
                         }
                     }
                 }
             }
         }
-        choices.iter().map(|&c| if c == picked {1.} else {0.}).collect()
+        choices
+            .iter()
+            .map(|&c| if c == picked { 1. } else { 0. })
+            .collect()
     }
 
     fn name(&self) -> String {
-        let mut name = format!("blind:{}:{}:{}", self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets);
+        let mut name = format!(
+            "blind:{}:{}:{}",
+            self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets
+        );
         if let Some(mixture) = &self.adaptive_mixture {
             name.push_str(&format!(":mix-probes={}", mixture.probe_iterations));
         }
-        if self.root_pruning { name.push_str(":root-prune"); }
-        if self.cfg.unseen_claw_root { name.push_str(":unseen-claw-root"); }
-        if self.cfg.canonical_claw_key { name.push_str(":canonical-claw"); }
-        if self.cfg.collapse_sleep_actions { name.push_str(":sleep-collapse"); }
-        if self.cfg.root_revisit_interval > 0 { name.push_str(&format!(":revisit-{}", self.cfg.root_revisit_interval)); }
+        if self.root_pruning {
+            name.push_str(":root-prune");
+        }
+        if self.cfg.unseen_claw_root {
+            name.push_str(":unseen-claw-root");
+        }
+        if self.cfg.canonical_claw_key {
+            name.push_str(":canonical-claw");
+        }
+        if self.cfg.collapse_sleep_actions {
+            name.push_str(":sleep-collapse");
+        }
+        if self.cfg.root_revisit_interval > 0 {
+            name.push_str(&format!(":revisit-{}", self.cfg.root_revisit_interval));
+        }
         name
     }
 
@@ -1943,28 +2440,55 @@ impl Agent for BlindAgent {
         };
         if stale {
             let observer = Observer::new(battle, side);
-            let mut belief = Belief::with_fallback_policy(
-                dex,
-                &self.pool,
-                &observer,
-                self.fallback_policy,
-            );
+            let mut belief =
+                Belief::with_fallback_policy(dex, &self.pool, &observer, self.fallback_policy);
             if let Some(prior) = self.prior.clone() {
                 belief.set_prior(prior);
             }
-            self.game = Some(GameState { side, last_turn: battle.turn, observer, belief });
+            self.game = Some(GameState {
+                side,
+                last_turn: battle.turn,
+                observer,
+                belief,
+            });
         }
         {
             let g = self.game.as_mut().unwrap();
             g.last_turn = battle.turn;
             g.observer.observe(battle, dex);
             g.belief.sync(dex, &g.observer);
+            if let Some((ref pol, smoothing)) = self.opp_pick_policy {
+                g.belief
+                    .condition_canonical_pick_policy(pol, smoothing, &g.observer);
+            }
         }
 
         if choices.len() == 1 {
             return choices[0];
         }
         if is_preview {
+            if let Some(ref own_pol) = self.own_preview_policy {
+                let canon_acts = crate::preview::preview_actions();
+                if own_pol.len() == canon_acts.len() {
+                    let mut legal_probs = Vec::with_capacity(canon_acts.len());
+                    let mut legal_choices = Vec::with_capacity(canon_acts.len());
+                    let mut p_sum = 0.0f64;
+                    for (&triple, &prob) in canon_acts.iter().zip(own_pol.iter()) {
+                        let sc = SearchChoice::Team(triple);
+                        if prob > 0.0 && choices.contains(&sc) {
+                            legal_choices.push(sc);
+                            legal_probs.push(prob);
+                            p_sum += prob;
+                        }
+                    }
+                    if p_sum > 0.0 && !legal_choices.is_empty() {
+                        for p in &mut legal_probs {
+                            *p /= p_sum;
+                        }
+                        return legal_choices[sample_mixed(&legal_probs, &mut self.rng)];
+                    }
+                }
+            }
             if let Some(c) = self.baked_pick(battle, side) {
                 debug_assert!(choices.contains(&c), "baked preview outside legal set");
                 if choices.contains(&c) {
@@ -2027,7 +2551,10 @@ fn diff_actives(before: &Battle, after: &Battle) -> Vec<LineEffect> {
     let mut out = Vec::new();
     for side in 0..2 {
         for slot in 0..after.sides[side].roster.len() {
-            let (b, a) = (&before.sides[side].roster[slot], &after.sides[side].roster[slot]);
+            let (b, a) = (
+                &before.sides[side].roster[slot],
+                &after.sides[side].roster[slot],
+            );
             let active = after.sides[side].active == Some(slot as u8);
             let switched_in = active && before.sides[side].active != Some(slot as u8);
             if b.hp == a.hp && b.status == a.status && !switched_in {
@@ -2062,7 +2589,10 @@ pub struct PrincipalLine {
     /// The opponent roster the line assumed: `(species, the four moves the
     /// determinizer gave it)` per roster slot. Meaningful for the mons whose
     /// set is still hidden; for a revealed one it is just the truth.
-    pub assumed: Vec<(nc2000_engine::dex::SpeciesId, Vec<nc2000_engine::dex::MoveId>)>,
+    pub assumed: Vec<(
+        nc2000_engine::dex::SpeciesId,
+        Vec<nc2000_engine::dex::MoveId>,
+    )>,
     pub steps: Vec<LineStep>,
 }
 
@@ -2074,36 +2604,72 @@ mod mixed_selection_tests {
     fn root_revisits_match_forced_steps_preserve_masks_and_skip_preview() {
         let dex = conformance::load_dex();
         let set = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
-            serde_json::from_value(serde_json::json!({"species":species,"name":species,"level":50,"moves":moves})).unwrap()
+            serde_json::from_value(
+                serde_json::json!({"species":species,"name":species,"level":50,"moves":moves}),
+            )
+            .unwrap()
         };
-        let mut b = Battle::from_fixture(&dex,"1,2,3,4",
-            &[set("Snorlax", &["Return","Curse","Rest","Sleep Talk"]),set("Magikarp", &["Splash"])],
-            &[set("Suicune", &["Surf","Rest","Sleep Talk"]),set("Pidgey", &["Tackle"])]).unwrap();
+        let mut b = Battle::from_fixture(
+            &dex,
+            "1,2,3,4",
+            &[
+                set("Snorlax", &["Return", "Curse", "Rest", "Sleep Talk"]),
+                set("Magikarp", &["Splash"]),
+            ],
+            &[
+                set("Suicune", &["Surf", "Rest", "Sleep Talk"]),
+                set("Pidgey", &["Tackle"]),
+            ],
+        )
+        .unwrap();
         let preview = b.clone();
-        b.choose(&dex,0,"team 1,2").unwrap();
-        b.choose(&dex,1,"team 1,2").unwrap();
-        for base in [&preview,&b] {
+        b.choose(&dex, 0, "team 1,2").unwrap();
+        b.choose(&dex, 1, "team 1,2").unwrap();
+        for base in [&preview, &b] {
             for side in 0..2 {
-                let obs = Observer::new(base,side);
-                let belief = Belief::pinned_from_battle(base,&obs);
-                let cfg = RmConfig {c:0.4,..Default::default()};
-                let mut reference = BlindSearch::new(base,&dex,cfg.clone(),side,901);
-                let mut candidate = BlindSearch::new(base,&dex,RmConfig {root_revisit_interval:64,..cfg},side,901);
-                let allowed: Vec<_> = (0..reference.actions().len()).map(|i|reference.is_preview() || i!=1).collect();
+                let obs = Observer::new(base, side);
+                let belief = Belief::pinned_from_battle(base, &obs);
+                let cfg = RmConfig {
+                    c: 0.4,
+                    ..Default::default()
+                };
+                let mut reference = BlindSearch::new(base, &dex, cfg.clone(), side, 901);
+                let mut candidate = BlindSearch::new(
+                    base,
+                    &dex,
+                    RmConfig {
+                        root_revisit_interval: 64,
+                        ..cfg
+                    },
+                    side,
+                    901,
+                );
+                let allowed: Vec<_> = (0..reference.actions().len())
+                    .map(|i| reference.is_preview() || i != 1)
+                    .collect();
                 reference.mask_actions(&allowed);
                 candidate.mask_actions(&allowed);
                 for i in 0..300 {
-                    if i>0 && i%64==0 && !reference.is_preview() {
-                        let action = (0..allowed.len()).filter(|&i|allowed[i]).min_by_key(|&i|reference.visits()[i]).unwrap();
-                        reference.step_forced(&dex,&belief,&obs,action);
-                    } else {reference.step(&dex,&belief,&obs,1);}
+                    if i > 0 && i % 64 == 0 && !reference.is_preview() {
+                        let action = (0..allowed.len())
+                            .filter(|&i| allowed[i])
+                            .min_by_key(|&i| reference.visits()[i])
+                            .unwrap();
+                        reference.step_forced(&dex, &belief, &obs, action);
+                    } else {
+                        reference.step(&dex, &belief, &obs, 1);
+                    }
                 }
-                candidate.step(&dex,&belief,&obs,300);
-                assert_eq!(candidate.visits(),reference.visits());
-                assert_eq!(candidate.means(),reference.means());
-                assert_eq!(candidate.rng.0,reference.rng.0);
-                assert_eq!(candidate.iterations(),300);
-                assert!(candidate.visits().iter().zip(&allowed).all(|(&n,&ok)|ok || n==0));
+                candidate.step(&dex, &belief, &obs, 300);
+                assert_eq!(candidate.visits(), reference.visits());
+                assert_eq!(candidate.means(), reference.means());
+                assert_eq!(candidate.rng.0, reference.rng.0);
+                assert_eq!(candidate.iterations(), 300);
+                assert!(candidate
+                    .visits()
+                    .iter()
+                    .zip(&allowed)
+                    .all(|(&n, &ok)| ok || n == 0));
             }
         }
     }
@@ -2113,37 +2679,71 @@ mod mixed_selection_tests {
         let dex = conformance::load_dex();
         let set = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
             serde_json::from_value(serde_json::json!({"name":species,"species":species,
-                "level":50,"moves":moves,"happiness":255})).unwrap()
+                "level":50,"moves":moves,"happiness":255}))
+            .unwrap()
         };
         for (species, moves, expected) in [
             ("Alakazam", vec!["Recover", "Psychic"], vec![true, false]),
-            ("Gengar", vec!["Destiny Bond", "Perish Song"], vec![true, true]),
-            ("Alakazam", vec!["Psychic", "Thunder Punch"], vec![false, false]),
+            (
+                "Gengar",
+                vec!["Destiny Bond", "Perish Song"],
+                vec![true, true],
+            ),
+            (
+                "Alakazam",
+                vec!["Psychic", "Thunder Punch"],
+                vec![false, false],
+            ),
         ] {
-            let mut battle = Battle::from_fixture(&dex, "1,2,3,4",
-                &[set(species, &moves)], &[set("Snorlax", &["Return"])]).unwrap();
+            let mut battle = Battle::from_fixture(
+                &dex,
+                "1,2,3,4",
+                &[set(species, &moves)],
+                &[set("Snorlax", &["Return"])],
+            )
+            .unwrap();
             let preview = battle.clone();
             let mut observer = Observer::new(&battle, 0);
             battle.choose(&dex, 0, "team 1").unwrap();
             battle.choose(&dex, 1, "team 1").unwrap();
             observer.observe(&battle, &dex);
             let legal = battle.legal_choices(&dex, 0);
-            let cfg = RmConfig { iterations: 300, c: 0.4, ..Default::default() };
+            let cfg = RmConfig {
+                iterations: 300,
+                c: 0.4,
+                ..Default::default()
+            };
             for prune in [false, true] {
                 let mut belief = Belief::pinned_from_battle(&preview, &observer);
                 belief.sync(&dex, &observer);
                 let mut reference = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 17);
                 assert_eq!(reference.dominated(), &expected);
-                if prune { reference.prune_dominated(); }
+                if prune {
+                    reference.prune_dominated();
+                }
                 reference.step(&dex, &belief, &observer, cfg.iterations);
-                let mut agent = BlindAgent::new(cfg.clone(), Arc::new(MetaPool { teams: vec![] }), None, 17);
-                if prune { agent = agent.with_root_pruning(); }
-                agent.game = Some(GameState { side: 0, last_turn: battle.turn,
-                    observer: observer.clone(), belief });
-                assert_eq!(Some(agent.choose(&battle, &dex, 0, &legal)), reference.best());
+                let mut agent =
+                    BlindAgent::new(cfg.clone(), Arc::new(MetaPool { teams: vec![] }), None, 17);
+                if prune {
+                    agent = agent.with_root_pruning();
+                }
+                agent.game = Some(GameState {
+                    side: 0,
+                    last_turn: battle.turn,
+                    observer: observer.clone(),
+                    belief,
+                });
+                assert_eq!(
+                    Some(agent.choose(&battle, &dex, 0, &legal)),
+                    reference.best()
+                );
                 assert_eq!(agent.search_rng_state(), reference.rng.0);
                 if prune && expected.iter().any(|&x| !x) {
-                    assert!(reference.visits().iter().zip(&expected).all(|(&n, &masked)| !masked || n == 0));
+                    assert!(reference
+                        .visits()
+                        .iter()
+                        .zip(&expected)
+                        .all(|(&n, &masked)| !masked || n == 0));
                 } else {
                     assert!(reference.visits().iter().all(|&n| n > 0));
                 }
@@ -2155,57 +2755,113 @@ mod mixed_selection_tests {
     fn adaptive_agent_uses_the_search_mixture_and_a_separate_draw_stream() {
         let dex = conformance::load_dex();
         let set = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
-            serde_json::from_value(serde_json::json!({"name":species,"species":species,"ability":"",
+            serde_json::from_value(
+                serde_json::json!({"name":species,"species":species,"ability":"",
                 "level":50,"moves":moves,"happiness":255,
                 "evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},
-                "ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30}})).unwrap()
+                "ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30}}),
+            )
+            .unwrap()
         };
         for (foe, moves, iterations, expect_mix) in [
-            ("Wobbuffet", vec!["Counter", "Mirror Coat", "Safeguard"], 27000, true),
+            (
+                "Wobbuffet",
+                vec!["Counter", "Mirror Coat", "Safeguard"],
+                27000,
+                true,
+            ),
             ("Magikarp", vec!["Splash"], 200, false),
         ] {
-            let mut battle = Battle::from_fixture(&dex, "1,2,3,4",
-                &[set("Starmie", &["Return", "Surf"])], &[set(foe, &moves)]).unwrap();
+            let mut battle = Battle::from_fixture(
+                &dex,
+                "1,2,3,4",
+                &[set("Starmie", &["Return", "Surf"])],
+                &[set(foe, &moves)],
+            )
+            .unwrap();
             let preview = battle.clone();
             let mut observer = Observer::new(&battle, 0);
             let mut belief = Belief::pinned_from_battle(&battle, &observer);
             battle.choose(&dex, 0, "team 1").unwrap();
             battle.choose(&dex, 1, "team 1").unwrap();
             for (side, hp) in [(0, 68), (1, 120)] {
-                let id = battle.active_id(side).unwrap(); battle.poke_mut(id).hp = hp;
+                let id = battle.active_id(side).unwrap();
+                battle.poke_mut(id).hp = hp;
             }
-            observer.observe(&battle, &dex); belief.sync(&dex, &observer);
-            let cfg = RmConfig {iterations, c:0.4, ..Default::default()};
+            observer.observe(&battle, &dex);
+            belief.sync(&dex, &observer);
+            let cfg = RmConfig {
+                iterations,
+                c: 0.4,
+                ..Default::default()
+            };
             let reserve = iterations * 2 / 5;
             let mut reference = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 7);
-            let probes = reference.finish_with_typed_mixed_probes(&dex, &belief, &observer, iterations, reserve);
-            assert_eq!(reference.mixed_policy().is_some(), expect_mix, "{:?}", reference.root_matrix());
+            let probes = reference
+                .finish_with_typed_mixed_probes(&dex, &belief, &observer, iterations, reserve);
+            assert_eq!(
+                reference.mixed_policy().is_some(),
+                expect_mix,
+                "{:?}",
+                reference.root_matrix()
+            );
             let mut draws = SplitMix64::new(7 ^ 0xa24baed4963ee407);
             let expected = reference.sample_mixed(draws.next_f64()).unwrap();
-            let mut agent = BlindAgent::new(cfg.clone(), Arc::new(MetaPool {teams:vec![]}), None, 7)
-                .with_adaptive_mixture(reserve);
-            agent.game = Some(GameState {side:0, last_turn:battle.turn, observer, belief});
+            let mut agent =
+                BlindAgent::new(cfg.clone(), Arc::new(MetaPool { teams: vec![] }), None, 7)
+                    .with_adaptive_mixture(reserve);
+            agent.game = Some(GameState {
+                side: 0,
+                last_turn: battle.turn,
+                observer,
+                belief,
+            });
             let legal = battle.legal_choices(&dex, 0);
             assert_eq!(agent.choose(&battle, &dex, 0, &legal), expected);
             assert_eq!(agent.search_rng_state(), reference.rng.0);
             assert_eq!(agent.adaptive_mixture.as_ref().unwrap().rng.0, draws.0);
-            let stats = RootSearchStats {searches:1, probed_searches:u64::from(probes>0),
-                probe_iterations:u64::from(probes), mixed_searches:u64::from(expect_mix)};
+            let stats = RootSearchStats {
+                searches: 1,
+                probed_searches: u64::from(probes > 0),
+                probe_iterations: u64::from(probes),
+                mixed_searches: u64::from(expect_mix),
+            };
             assert_eq!(agent.root_search_stats(), Some(stats));
             let obs = agent.game.as_ref().unwrap().observer.clone();
-            let mut exporter = BlindAgent::new(cfg.clone(), Arc::new(MetaPool {teams:vec![]}), None, 7)
-                .with_adaptive_mixture(reserve);
-            exporter.game = Some(GameState {side:0, last_turn:battle.turn,
-                belief:Belief::pinned_from_battle(&preview,&obs), observer:obs});
-            let expected_policy = reference.mixed_policy().map(|m|m.policy)
-                .unwrap_or_else(||legal.iter().map(|&a|if a==expected {1.} else {0.}).collect());
-            assert_eq!(exporter.root_policy(&battle,&dex,0,&legal), expected_policy);
+            let mut exporter =
+                BlindAgent::new(cfg.clone(), Arc::new(MetaPool { teams: vec![] }), None, 7)
+                    .with_adaptive_mixture(reserve);
+            exporter.game = Some(GameState {
+                side: 0,
+                last_turn: battle.turn,
+                belief: Belief::pinned_from_battle(&preview, &obs),
+                observer: obs,
+            });
+            let expected_policy = reference
+                .mixed_policy()
+                .map(|m| m.policy)
+                .unwrap_or_else(|| {
+                    legal
+                        .iter()
+                        .map(|&a| if a == expected { 1. } else { 0. })
+                        .collect()
+                });
+            assert_eq!(
+                exporter.root_policy(&battle, &dex, 0, &legal),
+                expected_policy
+            );
             assert_eq!(exporter.root_search_stats(), Some(stats));
             assert_eq!(exporter.search_rng_state(), agent.search_rng_state());
-            let mut forced = battle.clone(); let id = forced.active_id(0).unwrap();
-            forced.poke_mut(id).get_move_slot_mut(dex.moves.id("return").unwrap()).unwrap().pp = 0;
-            let only = forced.legal_choices(&dex,0); assert_eq!(only.len(),1);
-            assert_eq!(exporter.root_policy(&forced,&dex,0,&only),vec![1.]);
+            let mut forced = battle.clone();
+            let id = forced.active_id(0).unwrap();
+            forced
+                .poke_mut(id)
+                .get_move_slot_mut(dex.moves.id("return").unwrap())
+                .unwrap()
+                .pp = 0;
+            let only = forced.legal_choices(&dex, 0);
+            assert_eq!(only.len(), 1);
+            assert_eq!(exporter.root_policy(&forced, &dex, 0, &only), vec![1.]);
             assert_eq!(exporter.root_search_stats(), Some(stats));
             if !expect_mix {
                 assert_eq!(probes, 0);
@@ -2225,62 +2881,106 @@ mod mixed_selection_tests {
         let set: nc2000_engine::battle::PokemonSet = serde_json::from_value(serde_json::json!({
             "species":"Snorlax","name":"Snorlax","level":50,"item":"Quick Claw","moves":["Rest","Swagger"]
         })).unwrap();
-        let mut b = Battle::from_fixture(&dex,"1,2,3,4",&[set.clone()],&[set]).unwrap();
-        let cfg = RmConfig {unseen_claw_root:true,..Default::default()};
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &[set.clone()], &[set]).unwrap();
+        let cfg = RmConfig {
+            unseen_claw_root: true,
+            ..Default::default()
+        };
         assert!(!RmConfig::default().unseen_claw_root);
-        for idle in [false,true] {
+        for idle in [false, true] {
             if idle {
-                b.choose(&dex,0,"team 1").unwrap();
-                b.choose(&dex,1,"team 1").unwrap();
+                b.choose(&dex, 0, "team 1").unwrap();
+                b.choose(&dex, 1, "team 1").unwrap();
             }
-            assert_eq!(b.is_idle_move_request(),idle);
-            let mut roots=Vec::new();let mut continuation=Vec::new();
-            for coin in [false,true] {
-                b.quick_claw_roll=coin;
-                let before=format!("{b:?}");
-                roots.push(root_search_key(&cfg,&dex,&mut b));
-                continuation.push(key_of(&cfg,&dex,&mut b));
-                assert_eq!(before,format!("{b:?}"));
+            assert_eq!(b.is_idle_move_request(), idle);
+            let mut roots = Vec::new();
+            let mut continuation = Vec::new();
+            for coin in [false, true] {
+                b.quick_claw_roll = coin;
+                let before = format!("{b:?}");
+                roots.push(root_search_key(&cfg, &dex, &mut b));
+                continuation.push(key_of(&cfg, &dex, &mut b));
+                assert_eq!(before, format!("{b:?}"));
             }
-            assert_eq!(roots[0]==roots[1],idle);
-            assert_ne!(continuation[0],continuation[1]);
+            assert_eq!(roots[0] == roots[1], idle);
+            assert_ne!(continuation[0], continuation[1]);
         }
-        let obs=Observer::new(&b,0);
-        let belief=Belief::pinned_from_battle(&b,&obs);
-        let mut alternative=b.clone();
-        alternative.quick_claw_roll=!b.quick_claw_roll;
+        let obs = Observer::new(&b, 0);
+        let belief = Belief::pinned_from_battle(&b, &obs);
+        let mut alternative = b.clone();
+        alternative.quick_claw_roll = !b.quick_claw_roll;
         alternative.update_all_speeds(&dex);
-        let mut states=[&b,&alternative].map(|state| BlindSearch::new(state,&dex,RmConfig {horizon:1,..cfg.clone()},0,771));
-        assert_eq!(states[0].dominated(),states[1].dominated());
-        for state in &mut states { state.step(&dex,&belief,&obs,256); }
-        assert_eq!(states[0].visits(),states[1].visits());
-        assert_eq!(states[0].means(),states[1].means());
-        assert_eq!(states[0].node_count(),states[1].node_count());
-        let mut search=BlindSearch::new(&b,&dex,RmConfig {horizon:1,..cfg.clone()},0,771);
-        search.step(&dex,&belief,&obs,256);
-        let before=(search.visits().to_vec(),search.means(),search.node_count());
-        let mut roots=std::collections::BTreeSet::new();
-        let mut coins=std::collections::BTreeSet::new();
+        let mut states = [&b, &alternative].map(|state| {
+            BlindSearch::new(
+                state,
+                &dex,
+                RmConfig {
+                    horizon: 1,
+                    ..cfg.clone()
+                },
+                0,
+                771,
+            )
+        });
+        assert_eq!(states[0].dominated(), states[1].dominated());
+        for state in &mut states {
+            state.step(&dex, &belief, &obs, 256);
+        }
+        assert_eq!(states[0].visits(), states[1].visits());
+        assert_eq!(states[0].means(), states[1].means());
+        assert_eq!(states[0].node_count(), states[1].node_count());
+        let mut search = BlindSearch::new(
+            &b,
+            &dex,
+            RmConfig {
+                horizon: 1,
+                ..cfg.clone()
+            },
+            0,
+            771,
+        );
+        search.step(&dex, &belief, &obs, 256);
+        let before = (
+            search.visits().to_vec(),
+            search.means(),
+            search.node_count(),
+        );
+        let mut roots = std::collections::BTreeSet::new();
+        let mut coins = std::collections::BTreeSet::new();
         for seed in 0..64 {
-            let mut first=true;
-            search.evaluate_frozen_joint(&dex,&belief,&obs,[None,None],
-                [crate::frozen::FrozenPolicy::MostVisited;2],seed,&mut |choice| {
+            let mut first = true;
+            search.evaluate_frozen_joint(
+                &dex,
+                &belief,
+                &obs,
+                [None, None],
+                [crate::frozen::FrozenPolicy::MostVisited; 2],
+                seed,
+                &mut |choice| {
                     if first {
-                        first=false;
+                        first = false;
                         roots.insert(choice.node.expect("shared frozen root"));
                         coins.insert(choice.battle.quick_claw_roll);
                     }
-                });
+                },
+            );
         }
-        assert_eq!(roots.len(),1);
-        assert_eq!(coins.len(),2);
-        assert_eq!(before,(search.visits().to_vec(),search.means(),search.node_count()));
-        b.mid_turn=true;
+        assert_eq!(roots.len(), 1);
+        assert_eq!(coins.len(), 2);
+        assert_eq!(
+            before,
+            (
+                search.visits().to_vec(),
+                search.means(),
+                search.node_count()
+            )
+        );
+        b.mid_turn = true;
         assert!(!b.is_idle_move_request());
-        b.quick_claw_roll=false;
-        let key=root_search_key(&cfg,&dex,&mut b);
-        b.quick_claw_roll=true;
-        assert_ne!(key,root_search_key(&cfg,&dex,&mut b));
+        b.quick_claw_roll = false;
+        let key = root_search_key(&cfg, &dex, &mut b);
+        b.quick_claw_roll = true;
+        assert_ne!(key, root_search_key(&cfg, &dex, &mut b));
     }
 
     #[test]
@@ -2299,7 +2999,11 @@ mod mixed_selection_tests {
         assert_eq!(root_type_key(&mut battle), key);
         assert!(battle.quick_claw_roll);
         assert_eq!(format!("{rng:?}"), format!("{:?}", battle.prng));
-        let cfg = RmConfig { hp_buckets: 4, threshold_key: false, ..Default::default() };
+        let cfg = RmConfig {
+            hp_buckets: 4,
+            threshold_key: false,
+            ..Default::default()
+        };
         let opponent = battle.active_id(1).unwrap();
         battle.poke_mut(opponent).hp = 100;
         let key = root_type_key(&mut battle);
@@ -2311,48 +3015,66 @@ mod mixed_selection_tests {
 
     #[test]
     fn mixed_sampling_respects_masks_without_consuming_search_randomness() {
-        let dex=conformance::load_dex();
-        let set: nc2000_engine::battle::PokemonSet=serde_json::from_value(serde_json::json!({
+        let dex = conformance::load_dex();
+        let set: nc2000_engine::battle::PokemonSet = serde_json::from_value(serde_json::json!({
             "name":"starmie","species":"starmie","ability":"","level":50,"moves":["Return","Surf"]
-        })).unwrap();
-        let battle=Battle::from_fixture(&dex,"1,2,3,4",&[set.clone()],&[set]).unwrap();
-        let mut search=BlindSearch::new(&battle,&dex,RmConfig::default(),0,123);
-        let actions=["return","surf"].map(|m|SearchChoice::Move(dex.moves.id(m).unwrap()));
-        search.my_acts=actions.to_vec();search.my_n=vec![20000,20000];search.joint_probe_n=vec![0,0];search.my_w=vec![10000.,10000.];
-        search.my_dominated=vec![false,false];search.done=40000;
-        search.avail=vec![(actions[1],40000),(actions[0],40000)];
-        search.joint=vec![(0,actions[0],10000,0.),(0,actions[1],10000,10000.),
-            (1,actions[0],10000,10000.),(1,actions[1],10000,0.)];
-        search.root_types = vec![RootTypeStats { samples: 40000, replies: 2,
-            cells: vec![(10000, 0.), (10000, 10000.), (10000, 10000.), (10000, 0.)] }];
-        let rng=search.rng.0;
+        }))
+        .unwrap();
+        let battle = Battle::from_fixture(&dex, "1,2,3,4", &[set.clone()], &[set]).unwrap();
+        let mut search = BlindSearch::new(&battle, &dex, RmConfig::default(), 0, 123);
+        let actions = ["return", "surf"].map(|m| SearchChoice::Move(dex.moves.id(m).unwrap()));
+        search.my_acts = actions.to_vec();
+        search.my_n = vec![20000, 20000];
+        search.joint_probe_n = vec![0, 0];
+        search.my_w = vec![10000., 10000.];
+        search.my_dominated = vec![false, false];
+        search.done = 40000;
+        search.avail = vec![(actions[1], 40000), (actions[0], 40000)];
+        search.joint = vec![
+            (0, actions[0], 10000, 0.),
+            (0, actions[1], 10000, 10000.),
+            (1, actions[0], 10000, 10000.),
+            (1, actions[1], 10000, 0.),
+        ];
+        search.root_types = vec![RootTypeStats {
+            samples: 40000,
+            replies: 2,
+            cells: vec![(10000, 0.), (10000, 10000.), (10000, 10000.), (10000, 0.)],
+        }];
+        let rng = search.rng.0;
         use crate::decision::PolicyMode;
         let policy = search.decision_policy(PolicyMode::EstimatedMix).unwrap();
         assert_eq!(policy.source(), "estimated-mix");
         assert_eq!(policy.actions().len(), 2);
         assert_eq!(policy.sample(0.), actions[0]);
         assert_eq!(policy.sample(0.9), actions[1]);
-        assert_eq!(search.sample_mixed(0.),Some(actions[0]));
-        assert_eq!(search.sample_mixed(0.5),Some(actions[1]));
-        assert_eq!(search.sample_mixed(1.-f64::EPSILON),Some(actions[1]));
-        assert_eq!(search.rng.0,rng);
-        assert_eq!(search.visits(),&[20000,20000]);
-        search.my_n=vec![20000,10000];
-        assert_eq!(search.best(),Some(actions[0]));
-        search.my_n[1]+=30000;search.joint_probe_n[1]+=30000;
-        assert_eq!(search.best(),Some(actions[0]));
+        assert_eq!(search.sample_mixed(0.), Some(actions[0]));
+        assert_eq!(search.sample_mixed(0.5), Some(actions[1]));
+        assert_eq!(search.sample_mixed(1. - f64::EPSILON), Some(actions[1]));
+        assert_eq!(search.rng.0, rng);
+        assert_eq!(search.visits(), &[20000, 20000]);
+        search.my_n = vec![20000, 10000];
+        assert_eq!(search.best(), Some(actions[0]));
+        search.my_n[1] += 30000;
+        search.joint_probe_n[1] += 30000;
+        assert_eq!(search.best(), Some(actions[0]));
         let visits = search.decision_policy(PolicyMode::VisitSample).unwrap();
         assert!((visits.actions()[0].probability - 2. / 3.).abs() < 1e-12);
-        search.mask_actions(&[false,true]);
+        search.mask_actions(&[false, true]);
         assert!(search.mixed_policy().is_none());
-        assert_eq!(search.sample_mixed(0.),Some(actions[1]));
-        for mode in [PolicyMode::Legacy, PolicyMode::VisitSample, PolicyMode::EstimatedMix] {
+        assert_eq!(search.sample_mixed(0.), Some(actions[1]));
+        for mode in [
+            PolicyMode::Legacy,
+            PolicyMode::VisitSample,
+            PolicyMode::EstimatedMix,
+        ] {
             assert_eq!(search.decision_policy(mode).unwrap().actions().len(), 1);
             assert_eq!(search.decision_policy(mode).unwrap().sample(0.), actions[1]);
         }
-        search.mask_actions(&[true,true]);search.my_dominated[0]=true;
+        search.mask_actions(&[true, true]);
+        search.my_dominated[0] = true;
         assert!(search.mixed_policy().is_none());
-        assert_eq!(search.sample_mixed(0.),Some(actions[1]));
+        assert_eq!(search.sample_mixed(0.), Some(actions[1]));
     }
 
     #[test]

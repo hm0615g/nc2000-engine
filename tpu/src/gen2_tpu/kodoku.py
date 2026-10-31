@@ -2389,13 +2389,21 @@ def evaluate_kodoku_gauntlet_tpu(
     )
 
 
-def preview_signature_sets(sets: list[dict[str, Any]]) -> tuple[tuple[str, int], ...]:
-    """Canonical 6-mon preview shell signature `tuple(sorted((toid(species), level)))`.
+def preview_signature_sets(sets: list[dict[str, Any]]) -> tuple[tuple[str, int, str, bool], ...]:
+    """Canonical 6-mon preview shell signature `tuple(sorted((toid(species), level, gender, has_item)))`.
 
-    Matches `nc2000_bot::preview::preview_sig_sets` so two variants that share the exact same
-    6-Pokemon `(species, level)` multiset map to the same Team Preview outer shell.
+    Matches `meta_eco.rs::preview_sig_sets` so two variants that share the exact same
+    6-Pokemon `(species, level, gender, has_item)` multiset map to the same Team Preview outer shell.
     """
-    pairs = [(toid(str(m.get("species", ""))), int(m.get("level", 50))) for m in sets]
+    pairs = [
+        (
+            toid(str(m.get("species", ""))),
+            int(m.get("level", 50)),
+            str(m.get("gender", "")).upper(),
+            bool(toid(str(m.get("item", "")))),
+        )
+        for m in sets
+    ]
     pairs.sort()
     return tuple(pairs)
 
@@ -2552,18 +2560,30 @@ def build_coupled_shell_units(
                 continue
             uid = str(u.get("unit_id") or f"DEME{len(mids)}:{'+'.join(mids)}")
             sig = preview_signature_sets(teams_p[id_to_idx[mids[0]]]["sets"])
+            raw_mw = u.get("member_weights")
+            if raw_mw is not None and len(raw_mw) == len(mids):
+                mw_arr = np.asarray(raw_mw, dtype=np.float32)
+                mw_sum = float(np.sum(mw_arr))
+                mw_list = (
+                    [float(x / mw_sum) for x in mw_arr]
+                    if mw_sum > 1e-9
+                    else [1.0 / float(len(mids))] * len(mids)
+                )
+            else:
+                mw_list = [1.0 / float(len(mids))] * len(mids)
             out.append(
                 {
                     "unit_id": uid,
                     "member_ids": mids,
                     "member_indices": [id_to_idx[m] for m in mids],
+                    "member_weights": mw_list,
                     "sig": sig,
                 }
             )
         return out
 
-    sig_groups: dict[tuple[tuple[str, int], ...], list[str]] = {}
-    sig_order: list[tuple[tuple[str, int], ...]] = []
+    sig_groups: dict[tuple[tuple[str, int, str, bool], ...], list[str]] = {}
+    sig_order: list[tuple[tuple[str, int, str, bool], ...]] = []
     for i, t in enumerate(teams_p):
         tid = str(t.get("id", f"p_{i}"))
         sig = preview_signature_sets(t["sets"])
@@ -2577,11 +2597,15 @@ def build_coupled_shell_units(
     for sig in sig_order:
         mids = sig_groups[sig]
         uid = f"DEME{len(mids)}:{'+'.join(mids)}"
+        w_raw = [float(teams_p[id_to_idx[m]].get("weight", 1.0) or 1.0) for m in mids]
+        w_sum = sum(w_raw)
+        mw_list = [w / w_sum for w in w_raw] if w_sum > 1e-9 else [1.0 / float(len(mids))] * len(mids)
         units_out.append(
             {
                 "unit_id": uid,
                 "member_ids": mids,
                 "member_indices": [id_to_idx[m] for m in mids],
+                "member_weights": mw_list,
                 "sig": sig,
             }
         )
@@ -2655,7 +2679,16 @@ def solve_coupled_shell_equilibrium_tpu(
         unit_q_indices.append(q_idxs_u)
 
         rows = summary.payoff_matrix[m_idxs, :]  # [len(m_idxs), n_q]
-        unit_payoff[u_idx, :] = np.mean(rows, axis=0)
+        m_weights = np.asarray(
+            u.get("member_weights", [1.0 / float(len(m_idxs))] * len(m_idxs)),
+            dtype=np.float32,
+        )
+        m_w_sum = float(np.sum(m_weights))
+        if m_w_sum > 1e-9:
+            m_weights = m_weights / m_w_sum
+        else:
+            m_weights = np.full((len(m_idxs),), 1.0 / float(max(1, len(m_idxs))), dtype=np.float32)
+        unit_payoff[u_idx, :] = np.sum(m_weights[:, None] * rows, axis=0)
         unit_games[u_idx, :] = float(games_per_member_cell) * float(len(m_idxs))
         if len(m_ids) == 1 and m_ids[0] in id_to_qidx:
             j_self = id_to_qidx[m_ids[0]]
@@ -2742,17 +2775,19 @@ def solve_coupled_shell_equilibrium_tpu(
     for u_idx in order:
         w_sh = float(w_final[u_idx])
         m_ids = list(units[u_idx]["member_ids"])
+        m_ws = list(units[u_idx].get("member_weights", [1.0 / float(len(m_ids))] * len(m_ids)))
         active_shells.append(
             {
                 "unit_id": units[u_idx]["unit_id"],
                 "weight": round(w_sh, 6),
                 "member_ids": m_ids,
+                "member_weights": [round(float(mw), 6) for mw in m_ws],
             }
         )
-        w_mem = w_sh / float(len(m_ids))
-        for mid in m_ids:
-            deployed_ids.append(mid)
-            deployed_weights.append(round(w_mem, 6))
+        for mid, mw in zip(m_ids, m_ws):
+            if float(mw) > 1e-6:
+                deployed_ids.append(mid)
+                deployed_weights.append(round(w_sh * float(mw), 6))
 
     return CoupledShellEquilibriumResult(
         unit_ids=[u["unit_id"] for u in units],
