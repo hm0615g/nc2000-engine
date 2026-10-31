@@ -9405,7 +9405,7 @@ fn cmd_falsify_conclusion(args: &[String]) {
 }
 
 fn legal_triples_sets(sets: &[PokemonSet]) -> Vec<[usize; 3]> {
-    let mut out = Vec::with_capacity(20);
+    let mut out = Vec::with_capacity(60);
     if sets.len() < 3 {
         return out;
     }
@@ -9415,7 +9415,10 @@ fn legal_triples_sets(sets: &[PokemonSet]) -> Vec<[usize; 3]> {
             for k in (j + 1)..n {
                 let lsum = (sets[i].level as u16) + (sets[j].level as u16) + (sets[k].level as u16);
                 if lsum <= 155 {
+                    // Enumerate all 3 ordered (lead, bench1, bench2) actions for this legal 3-mon subset
                     out.push([i, j, k]);
+                    out.push([j, i, k]);
+                    out.push([k, i, j]);
                 }
             }
         }
@@ -9461,7 +9464,23 @@ impl CompiledRoster6 {
     fn compile(dex: &Dex, sets: &[PokemonSet]) -> Self {
         assert_eq!(sets.len(), 6, "CompiledRoster6 requires a 6-Pokemon team");
         let legal = legal_triples_sets(sets);
-        let mut dummy50 = sets[0].clone();
+        let ensure_det_gender = |s: &mut PokemonSet| {
+            if s.gender.is_none() {
+                if let Some(sid) = dex.species.id(&s.species) {
+                    let sp = dex.species.get(sid);
+                    s.gender = Some(match sp.gender.as_deref() {
+                        Some("N") => "N".to_string(),
+                        Some("F") => "F".to_string(),
+                        _ => "M".to_string(),
+                    });
+                }
+            }
+        };
+        let mut clean_sets: Vec<PokemonSet> = sets.to_vec();
+        for s in &mut clean_sets {
+            ensure_det_gender(s);
+        }
+        let mut dummy50 = clean_sets[0].clone();
         dummy50.level = 50;
         let mut specs = [nc2000_engine::compact::StaticMonSpec::default(); 6];
         let mut moves = [[nc2000_engine::compact::CompactMoveSpec::default(); 4]; 6];
@@ -9470,8 +9489,8 @@ impl CompiledRoster6 {
         for k in 0..3 {
             let i0 = 2 * k;
             let i1 = 2 * k + 1;
-            let s0 = [sets[i0].clone(), dummy50.clone(), dummy50.clone()];
-            let s1 = [sets[i1].clone(), dummy50.clone(), dummy50.clone()];
+            let s0 = [clean_sets[i0].clone(), dummy50.clone(), dummy50.clone()];
+            let s1 = [clean_sets[i1].clone(), dummy50.clone(), dummy50.clone()];
             let mut b =
                 nc2000_engine::state::Battle::from_fixture(dex, "1,2,3,4", &s0, &s1)
                     .expect("valid 3v3 fixture");
@@ -9607,6 +9626,9 @@ fn eval_full_preview_matrix_compact(
         return mat;
     }
     let ns = n_seeds.max(1);
+    if ns > 1 {
+        return eval_adaptive_preview_matrix_compact(r_a, r_b, ns, max_turns, base_seed);
+    }
     let denom = (2 * ns) as f64;
     let playout = nc2000_bot::Playout::heavy();
     let rules = nc2000_bot::mcts::RolloutRules::default();
@@ -9637,6 +9659,148 @@ fn eval_full_preview_matrix_compact(
         }
     }
     mat
+}
+
+/// Sequential Bayesian Election-Call (`選挙当確速報`) 3v3 Preview Matrix Evaluator:
+/// - Evaluates Wave `s = 0` across 100% of `ka x kb` legal 60-action cells (never dropping a cell unseen).
+/// - On subsequent seeds `s = 1..max_seeds`, maintains Beta-Binomial / Empirical-Bernstein credible bounds
+///   `[LCB(ia, ib), UCB(ia, ib)]` for each cell and solves the current Preview Nash equilibrium `(p_hat, q_hat, v_hat)`:
+///   1. One-sided blowout cells (`n >= 2` and `r_n <= 0.065`) are called early (`当確`).
+///   2. Rows `ia` whose optimistic best-response `sum_ib UCB(ia, ib) * q_hat[ib] < V_pess_A - 0.015` (and `p_hat[ia] < 1e-3`)
+///      and columns `ib` whose pessimistic loss `sum_ia p_hat[ia] * LCB(ia, ib) > V_opt_B + 0.015` (and `q_hat[ib] < 1e-3`)
+///      are Bayesian-certified sub-optimal (`落選当確`) and stop consuming rollouts, while any unlucky cell with wide
+///      uncertainty keeps a high `UCB` and automatically stays open (`開票継続`)!
+fn eval_adaptive_preview_matrix_compact(
+    r_a: &CompiledRoster6,
+    r_b: &CompiledRoster6,
+    max_seeds: u32,
+    max_turns: u16,
+    base_seed: u64,
+) -> Vec<f64> {
+    let ka = r_a.legal.len();
+    let kb = r_b.legal.len();
+    let n_cells = ka * kb;
+    let mut sum_mat = vec![0.0f64; n_cells];
+    let mut sq_mat = vec![0.0f64; n_cells];
+    let mut cnt_mat = vec![0u32; n_cells];
+    let mut mean_mat = vec![0.5f64; n_cells];
+    if ka == 0 || kb == 0 {
+        return mean_mat;
+    }
+    let ns = max_seeds.max(1);
+    let playout = nc2000_bot::Playout::heavy();
+    let rules = nc2000_bot::mcts::RolloutRules::default();
+
+    let mut active_row = vec![true; ka];
+    let mut active_col = vec![true; kb];
+    let mut cell_called = vec![false; n_cells];
+
+    for s in 0..ns {
+        for (ia, &ta) in r_a.legal.iter().enumerate() {
+            if !active_row[ia] {
+                continue;
+            }
+            for (ib, &tb) in r_b.legal.iter().enumerate() {
+                if !active_col[ib] || cell_called[ia * kb + ib] {
+                    continue;
+                }
+                let cell_seed = base_seed
+                    ^ ((s as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                    ^ (((ia * 64 + ib) as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9));
+                let prng = cell_seed | 1;
+                let (tab_ab, mut cb_ab) = assemble_3v3_compact(r_a, ta, r_b, tb, prng);
+                let mut rng_ab = SplitMix64::new(cell_seed ^ 0xA5A5_5A5A_F0F0_0F0F);
+                let v_ab = nc2000_bot::mcts::compact_playout_value(
+                    &mut cb_ab, &tab_ab, &playout, max_turns, &mut rng_ab, rules,
+                );
+
+                let (tab_ba, mut cb_ba) = assemble_3v3_compact(r_b, tb, r_a, ta, prng);
+                let mut rng_ba = SplitMix64::new(cell_seed ^ 0x5A5A_A5A5_0F0F_F0F0);
+                let v_ba = 1.0
+                    - nc2000_bot::mcts::compact_playout_value(
+                        &mut cb_ba, &tab_ba, &playout, max_turns, &mut rng_ba, rules,
+                    );
+
+                let pair_val = 0.5 * (v_ab + v_ba);
+                let idx = ia * kb + ib;
+                sum_mat[idx] += pair_val;
+                sq_mat[idx] += pair_val * pair_val;
+                cnt_mat[idx] += 1;
+                mean_mat[idx] = sum_mat[idx] / (cnt_mat[idx] as f64);
+            }
+        }
+
+        if s + 1 >= ns {
+            break;
+        }
+
+        // Update cell credible intervals `[lcb, ucb]` and check Election-Call conditions
+        let mut lcb_mat = vec![0.0f64; n_cells];
+        let mut ucb_mat = vec![1.0f64; n_cells];
+        for idx in 0..n_cells {
+            let n = cnt_mat[idx].max(1) as f64;
+            let mu = mean_mat[idx];
+            // Empirical variance + Beta(0.5, 0.5) prior variance smoothing so n=1 never collapses to 0 radius
+            let emp_var = ((sq_mat[idx] / n) - mu * mu).max(0.0);
+            let beta_var = (mu * (1.0 - mu) + 0.02 / (n + 1.0)) / n;
+            let rad = 1.96 * (0.5 * (emp_var / n) + 0.5 * beta_var).sqrt()
+                + (0.04 + 0.24 * mu * (1.0 - mu)) / (n + 1.0);
+            lcb_mat[idx] = (mu - rad).max(0.0);
+            ucb_mat[idx] = (mu + rad).min(1.0);
+            if cnt_mat[idx] >= 2 && rad <= 0.065 {
+                cell_called[idx] = true;
+            }
+        }
+
+        let (p_hat, q_hat, _v_hat) = solve_preview_nash(&mean_mat, ka, kb, 250);
+        // Pessimistic security floor for Row Player A (`min_ib sum_ia p_hat[ia] * LCB[ia, ib]`)
+        let mut v_pess_a = f64::INFINITY;
+        for ib in 0..kb {
+            let mut col_lcb = 0.0f64;
+            for ia in 0..ka {
+                col_lcb += p_hat[ia] * lcb_mat[ia * kb + ib];
+            }
+            v_pess_a = v_pess_a.min(col_lcb);
+        }
+        // Optimistic security ceiling for Col Player B (`max_ia sum_ib UCB[ia, ib] * q_hat[ib]`)
+        let mut v_opt_b = f64::NEG_INFINITY;
+        for ia in 0..ka {
+            let mut row_ucb = 0.0f64;
+            for ib in 0..kb {
+                row_ucb += ucb_mat[ia * kb + ib] * q_hat[ib];
+            }
+            v_opt_b = v_opt_b.max(row_ucb);
+        }
+
+        for ia in 0..ka {
+            if !active_row[ia] {
+                continue;
+            }
+            let mut row_ucb = 0.0f64;
+            for ib in 0..kb {
+                row_ucb += ucb_mat[ia * kb + ib] * q_hat[ib];
+            }
+            if p_hat[ia] < 1e-3 && row_ucb + 0.015 < v_pess_a {
+                active_row[ia] = false;
+            }
+        }
+        for ib in 0..kb {
+            if !active_col[ib] {
+                continue;
+            }
+            let mut col_lcb = 0.0f64;
+            for ia in 0..ka {
+                col_lcb += p_hat[ia] * lcb_mat[ia * kb + ib];
+            }
+            if q_hat[ib] < 1e-3 && col_lcb - 0.015 > v_opt_b {
+                active_col[ib] = false;
+            }
+        }
+        if !active_row.iter().any(|&x| x) || !active_col.iter().any(|&x| x) {
+            break;
+        }
+    }
+    mean_mat
 }
 
 fn transpose_preview_matrix(mat: &[f64], ka: usize, kb: usize) -> Vec<f64> {
@@ -9962,7 +10126,7 @@ fn structural_hitchhiker_reason(sets: &[PokemonSet]) -> Option<String> {
         return Some(format!("overpacked_L55:{}xL55", n55));
     }
     let legal = legal_triples_sets(sets);
-    if legal.len() <= 12 {
+    if legal.len() <= 36 {
         return Some(format!("combinatorial_starvation:legal={}", legal.len()));
     }
     for s in 0..6 {
@@ -10815,10 +10979,29 @@ fn cmd_converge_conclusion(args: &[String]) {
                             let kb = r_q.legal.len();
                             let mat: Vec<f64> = m_arr.iter().filter_map(|x| x.as_f64()).collect();
                             if mat.len() == ka * kb {
-                                let ns_u32 = (ns as u32).max(1);
+                                let ns_u32 = ns as u32;
                                 let rev = transpose_preview_matrix(&mat, ka, kb);
                                 pair_mat_cache.insert((pid.to_string(), qid.to_string()), (mat, ns_u32));
                                 pair_mat_cache.insert((qid.to_string(), pid.to_string()), (rev, ns_u32));
+                            } else if ka % 3 == 0 && kb % 3 == 0 && mat.len() == (ka / 3) * (kb / 3) {
+                                // Lift legacy 20-subset matrix into 60-action space with `ns_u32 = 0`
+                                // so Phase 2 Cutting-Plane completely replaces active pairs with true 60-action matrices
+                                let ka20 = ka / 3;
+                                let kb20 = kb / 3;
+                                let mut lifted = vec![0.5f64; ka * kb];
+                                for ia20 in 0..ka20 {
+                                    for ib20 in 0..kb20 {
+                                        let v = mat[ia20 * kb20 + ib20];
+                                        for la in 0..3 {
+                                            for lb in 0..3 {
+                                                lifted[(ia20 * 3 + la) * kb + (ib20 * 3 + lb)] = v;
+                                            }
+                                        }
+                                    }
+                                }
+                                let rev = transpose_preview_matrix(&lifted, ka, kb);
+                                pair_mat_cache.insert((pid.to_string(), qid.to_string()), (lifted, 0u32));
+                                pair_mat_cache.insert((qid.to_string(), pid.to_string()), (rev, 0u32));
                             }
                         }
                     }
@@ -11316,11 +11499,19 @@ fn cmd_converge_conclusion(args: &[String]) {
             .collect();
         if !top_shell_targets.is_empty() && sibling_cands > 0 {
             eprintln!(
-                "\n  [Round {} Phase 2.5] N-Variant Sibling-Deme Forge (Full-Combination Bayesian Preview Nash): synthesizing {} same-shell candidates for {} top active shells (n -> n+1)...",
+                "\n  [Round {} Phase 2.5] N-Variant Sibling-Deme Forge (Full-Combination 60-Action Bayesian Preview Nash + Asymmetric Alpha Sweep): synthesizing {} same-shell candidates for {} top active shells (n -> n+1)...",
                 o_round,
                 sibling_cands,
                 top_shell_targets.len()
             );
+            let mut forge_endo_pool = nc2000_bot::teamgen::EndogenousPool::default();
+            for &(au_idx, w_sh) in &active_units {
+                for m_raw in &units[au_idx].member_raw {
+                    for s_val in m_raw {
+                        forge_endo_pool.record_slot(s_val, 0.03 * w_sh.sqrt(), 0.5, &[0.02; 4]);
+                    }
+                }
+            }
             let mut forge_rng =
                 SplitMix64::new(seed ^ ((o_round as u64).wrapping_mul(0xD1B5_4A32_D192_ED03)));
             for (t_rank, &(u_idx, w_shell)) in top_shell_targets.iter().enumerate() {
@@ -11328,6 +11519,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                 let anchor_id = units[u_idx].member_ids[0].clone();
                 let cur_member_ids = units[u_idx].member_ids.clone();
                 let cur_member_raw = units[u_idx].member_raw.clone();
+                let cur_member_weights = units[u_idx].member_weights.clone();
                 let parent_sig = units[u_idx].sig.clone();
 
                 let mut q_ranked: Vec<(usize, f64)> = (0..n_q)
@@ -11342,6 +11534,35 @@ fn cmd_converge_conclusion(args: &[String]) {
                     .sum::<f64>()
                     / (worst_qs.len().max(1) as f64);
 
+                // Compute per-slot counter-vulnerability weights `vuln_slot_w` on `anchor_id` against `worst_qs`
+                let ka = roster_db[&cur_member_ids[0]].legal.len();
+                let mut vuln_slot_w = [1.0f64; 6];
+                {
+                    let r_anchor = &roster_db[&cur_member_ids[0]];
+                    let mut slot_loss_acc = [0.0f64; 6];
+                    for &j in &worst_qs {
+                        let qid = &q_ids[j];
+                        let kb = roster_db[qid].legal.len();
+                        let mat = &pair_mat_cache[&(cur_member_ids[0].clone(), qid.clone())].0;
+                        let (p_a, q_b, v_ab) = solve_preview_nash(mat, ka, kb, 200);
+                        let (sp, sw, sm) = compute_full_nash_slot_telemetry(
+                            &r_anchor.legal,
+                            kb,
+                            mat,
+                            &p_a,
+                            &q_b,
+                            v_ab,
+                        );
+                        for s in 0..6 {
+                            let struggle = sp[s] * (1.0 - sw[s]).max(0.1) + (0.05 - sm[s]).max(0.0);
+                            slot_loss_acc[s] += struggle;
+                        }
+                    }
+                    for s in 0..6 {
+                        vuln_slot_w[s] = (0.25 + slot_loss_acc[s]).max(0.1);
+                    }
+                }
+
                 let mut cands: Vec<(String, String, CompiledRoster6, Vec<Value>)> = Vec::new();
                 let mut seen_cand_keys: BTreeSet<String> = seen_db_keys.clone();
                 for m_raw in &cur_member_raw {
@@ -11351,7 +11572,19 @@ fn cmd_converge_conclusion(args: &[String]) {
                 while cands.len() < sibling_cands && tries < sibling_cands * 25 {
                     tries += 1;
                     let base_raw = &cur_member_raw[(tries - 1) % cur_n];
-                    if let Some(prop) = gen.propose_same_shell(&dex, base_raw, &mut forge_rng, 180) {
+                    let prop_opt = if tries % 4 == 0 {
+                        gen.propose_same_shell(&dex, base_raw, &mut forge_rng, 180)
+                    } else {
+                        gen.propose_same_shell_targeted(
+                            &dex,
+                            base_raw,
+                            Some(&vuln_slot_w),
+                            Some(&forge_endo_pool),
+                            &mut forge_rng,
+                            180,
+                        )
+                    };
+                    if let Some(prop) = prop_opt {
                         let k = team_key(&prop.team);
                         if !seen_cand_keys.insert(k) {
                             continue;
@@ -11381,8 +11614,6 @@ fn cmd_converge_conclusion(args: &[String]) {
                 // Evaluate full-combination 3v3 matrices for all `(c_idx, j in worst_qs)` in parallel
                 let new_n = cur_n + 1;
                 let w_each = 1.0 / (new_n as f64);
-                let alpha_exp = vec![w_each; new_n];
-                let ka = roster_db[&cur_member_ids[0]].legal.len();
                 let mut cand_jobs: Vec<(usize, usize)> = Vec::with_capacity(cands.len() * worst_qs.len());
                 for c_idx in 0..cands.len() {
                     for &j in &worst_qs {
@@ -11428,72 +11659,105 @@ fn cmd_converge_conclusion(args: &[String]) {
                     cand_mat_map.insert((c_idx, j), mat);
                 }
 
-                let mut screen_scores: Vec<(usize, f64, f64, bool)> =
+                // Sweep asymmetric sibling mixing weights `\alpha_{new} \in {0.15, 0.30, 0.50, 1/(n+1)}`
+                let alpha_grid: [f64; 4] = [0.15, 0.30, 0.50, w_each];
+                let mut screen_scores: Vec<(usize, f64, f64, Vec<f64>, bool)> =
                     Vec::with_capacity(cands.len());
                 for (c_idx, (_, _, ref c_roster, _)) in cands.iter().enumerate() {
-                    let mut sum_deme = 0.0f64;
-                    let mut sum_sib = 0.0f64;
-                    let mut sum_picks = [0.0f64; 6];
-                    let mut max_picks = [0.0f64; 6];
-                    let mut max_loo = [0.0f64; 6];
-                    for &j in &worst_qs {
-                        let qid = &q_ids[j];
-                        let kb = roster_db[qid].legal.len();
-                        let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(new_n);
-                        for mid in &cur_member_ids {
-                            mats_ref.push(pair_mat_cache[&(mid.clone(), qid.clone())].0.as_slice());
+                    let mut best_cand_deme = f64::NEG_INFINITY;
+                    let mut best_cand_sib = 0.0f64;
+                    let mut best_cand_alpha = vec![w_each; new_n];
+                    let mut best_cand_hh = true;
+                    let base_w_sum: f64 = cur_member_weights.iter().sum::<f64>().max(1e-9);
+                    for &a_new in &alpha_grid {
+                        let mut alpha_exp = Vec::with_capacity(new_n);
+                        for &mw in &cur_member_weights {
+                            alpha_exp.push((1.0 - a_new) * (mw / base_w_sum));
                         }
-                        let c_mat = &cand_mat_map[&(c_idx, j)];
-                        mats_ref.push(c_mat.as_slice());
-                        let (val_deme, per_u, _, p_strats, q_strats) =
-                            solve_bayesian_shell_preview_nash(
-                                &mats_ref,
-                                ka,
+                        alpha_exp.push(a_new);
+
+                        let mut sum_deme = 0.0f64;
+                        let mut sum_sib = 0.0f64;
+                        let mut sum_picks = [0.0f64; 6];
+                        let mut max_picks = [0.0f64; 6];
+                        let mut max_loo = [0.0f64; 6];
+                        for &j in &worst_qs {
+                            let qid = &q_ids[j];
+                            let kb = roster_db[qid].legal.len();
+                            let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(new_n);
+                            for mid in &cur_member_ids {
+                                mats_ref.push(
+                                    pair_mat_cache[&(mid.clone(), qid.clone())].0.as_slice(),
+                                );
+                            }
+                            let c_mat = &cand_mat_map[&(c_idx, j)];
+                            mats_ref.push(c_mat.as_slice());
+                            let (val_deme, per_u, _, p_strats, q_strats) =
+                                solve_bayesian_shell_preview_nash(
+                                    &mats_ref,
+                                    ka,
+                                    kb,
+                                    &alpha_exp,
+                                    &[1.0],
+                                    250,
+                                );
+                            sum_deme += val_deme;
+                            sum_sib += per_u[cur_n];
+                            let (sp, _sw, sm) = compute_full_nash_slot_telemetry(
+                                &c_roster.legal,
                                 kb,
-                                &alpha_exp,
-                                &[1.0],
-                                250,
+                                c_mat,
+                                &p_strats[cur_n],
+                                &q_strats[0],
+                                per_u[cur_n],
                             );
-                        sum_deme += val_deme;
-                        sum_sib += per_u[cur_n];
-                        let (sp, _sw, sm) = compute_full_nash_slot_telemetry(
-                            &c_roster.legal,
-                            kb,
-                            c_mat,
-                            &p_strats[cur_n],
-                            &q_strats[0],
-                            per_u[cur_n],
-                        );
-                        for s in 0..6 {
-                            sum_picks[s] += sp[s];
-                            max_picks[s] = max_picks[s].max(sp[s]);
-                            max_loo[s] = max_loo[s].max(sm[s]);
+                            for s in 0..6 {
+                                sum_picks[s] += sp[s];
+                                max_picks[s] = max_picks[s].max(sp[s]);
+                                max_loo[s] = max_loo[s].max(sm[s]);
+                            }
+                        }
+                        let n_w = worst_qs.len().max(1) as f64;
+                        let is_hitchhiker = (0..6).any(|s| {
+                            max_picks[s] < 0.015
+                                && (sum_picks[s] / n_w) < 0.005
+                                && max_loo[s] < 0.0005
+                        });
+                        let deme_avg = sum_deme / n_w;
+                        let sib_avg = sum_sib / n_w;
+                        if !is_hitchhiker && deme_avg > best_cand_deme {
+                            best_cand_deme = deme_avg;
+                            best_cand_sib = sib_avg;
+                            best_cand_alpha = alpha_exp;
+                            best_cand_hh = false;
                         }
                     }
-                    let n_w = worst_qs.len().max(1) as f64;
-                    let is_hitchhiker = (0..6).any(|s| {
-                        max_picks[s] < 0.015
-                            && (sum_picks[s] / n_w) < 0.005
-                            && max_loo[s] < 0.0005
-                    });
-                    screen_scores.push((c_idx, sum_deme / n_w, sum_sib / n_w, is_hitchhiker));
+                    screen_scores.push((
+                        c_idx,
+                        best_cand_deme,
+                        best_cand_sib,
+                        best_cand_alpha,
+                        best_cand_hh,
+                    ));
                 }
-                screen_scores.retain(|x| !x.3);
+                screen_scores.retain(|x| !x.4);
                 if screen_scores.is_empty() {
                     continue;
                 }
                 screen_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-                let (best_c_idx, best_deme_w8, best_sib_w8, _) = screen_scores[0];
+                let (best_c_idx, best_deme_w8, best_sib_w8, ref best_alpha_vec, _) =
+                    screen_scores[0];
                 let (ref best_cid, ref best_op, ref best_roster, ref best_raw) = cands[best_c_idx];
 
                 eprintln!(
-                    "    [Forge #{}/{} | {} (n={}->{}, w={:.4})] cur_worst8={:.4} -> best_deme_worst8={:.4} (sib_only={:.4}) via {} ({})",
+                    "    [Forge #{}/{} | {} (n={}->{}, w={:.4}, a_new={:.2})] cur_worst8={:.4} -> best_deme_worst8={:.4} (sib_only={:.4}) via {} ({})",
                     t_rank + 1,
                     top_shell_targets.len(),
                     units[u_idx].unit_id,
                     cur_n,
                     new_n,
                     w_shell,
+                    best_alpha_vec.last().copied().unwrap_or(w_each),
                     parent_worst8_avg,
                     best_deme_w8,
                     best_sib_w8,
@@ -11515,7 +11779,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                         units[u_idx].member_ids.push(reg_id.clone());
                         units[u_idx].member_sets.push(best_roster.sets.clone());
                         units[u_idx].member_raw.push(best_raw.clone());
-                        units[u_idx].member_weights = vec![w_each; new_n];
+                        units[u_idx].member_weights = best_alpha_vec.clone();
                         units[u_idx].unit_id = format_shell_unit_id(&units[u_idx].member_ids);
 
                         for &j in &worst_qs {
@@ -11893,9 +12157,13 @@ fn cmd_converge_conclusion(args: &[String]) {
             blue_wins: f64,
             red_wr: f64,
             bayes_red_wr: f64,
+            lcb99_red_wr: f64,
+            ucb99_red_wr: f64,
+            election_status: &'static str, // "OPEN", "LOSS_CALLED", "WIN_CALLED"
             slot_picks: [f64; 6],
             slot_wins: [f64; 6],
             slot_marginals: [f64; 6],
+            slot_wars: [f64; 6],
             is_hitchhiker: bool,
         }
         impl RedStrain {
@@ -11903,6 +12171,9 @@ fn cmd_converge_conclusion(args: &[String]) {
                 if self.is_hitchhiker {
                     self.red_wr = 0.0;
                     self.bayes_red_wr = 0.0;
+                    self.lcb99_red_wr = 0.0;
+                    self.ucb99_red_wr = 0.0;
+                    self.election_status = "LOSS_CALLED";
                     return;
                 }
                 if self.games > 0 {
@@ -11910,12 +12181,83 @@ fn cmd_converge_conclusion(args: &[String]) {
                     self.red_wr = 1.0 - b_wr;
                     self.bayes_red_wr = (16.0 * 0.43 + (self.games as f64) * self.red_wr)
                         / (16.0 + self.games as f64);
+                    // Sequential Bayesian Election-Call (`選挙当確速報`):
+                    // Effective independent sample size across coupled 60x60 cells (approx 16 active cells per shell evaluation)
+                    let n_eff = ((self.games as f64) / 16.0).max(1.0);
+                    let alpha = 0.5 + n_eff * self.red_wr.clamp(0.0, 1.0);
+                    let beta = 0.5 + n_eff * (1.0 - self.red_wr.clamp(0.0, 1.0));
+                    let mu_post = alpha / (alpha + beta);
+                    let sigma_post =
+                        (alpha * beta / ((alpha + beta).powi(2) * (alpha + beta + 1.0))).sqrt();
+                    self.lcb99_red_wr = (mu_post - 2.326 * sigma_post).max(0.0);
+                    self.ucb99_red_wr = (mu_post + 2.326 * sigma_post).min(1.0);
+                    if self.ucb99_red_wr < 0.495 {
+                        self.election_status = "LOSS_CALLED";
+                    } else if self.tiers_done >= 2 && self.lcb99_red_wr > 0.510 {
+                        self.election_status = "WIN_CALLED";
+                    } else {
+                        self.election_status = "OPEN";
+                    }
                 } else {
                     self.red_wr = 0.43;
                     self.bayes_red_wr = 0.43;
+                    self.lcb99_red_wr = 0.0;
+                    self.ucb99_red_wr = 1.0;
+                    self.election_status = "OPEN";
                 }
             }
         }
+
+        let recompute_red_wars_and_pool =
+            |pop_slice: &mut [RedStrain],
+             endo_pool: &mut nc2000_bot::teamgen::EndogenousPool| {
+                let mut n_obs = 0.0f64;
+                let mut sum_x = 0.0f64;
+                let mut sum_y = 0.0f64;
+                let mut sum_xx = 0.0f64;
+                let mut sum_xy = 0.0f64;
+                for st in pop_slice.iter() {
+                    if st.is_hitchhiker || st.games == 0 {
+                        continue;
+                    }
+                    for s in 0..6 {
+                        let x = (st.sets[s].level as f64) - 50.0;
+                        let y = st.slot_marginals[s];
+                        n_obs += 1.0;
+                        sum_x += x;
+                        sum_y += y;
+                        sum_xx += x * x;
+                        sum_xy += x * y;
+                    }
+                }
+                let (alpha, beta) = if n_obs >= 6.0 {
+                    let mean_x = sum_x / n_obs;
+                    let mean_y = sum_y / n_obs;
+                    let var_x = (sum_xx - n_obs * mean_x * mean_x).max(0.0);
+                    let cov_xy = sum_xy - n_obs * mean_x * mean_y;
+                    let b = if var_x > 1e-6 {
+                        (cov_xy / var_x).max(0.0)
+                    } else {
+                        0.0
+                    };
+                    let a = mean_y - b * mean_x;
+                    (a, b)
+                } else {
+                    (0.015, 0.004)
+                };
+                for st in pop_slice.iter_mut() {
+                    if st.is_hitchhiker || st.games == 0 {
+                        continue;
+                    }
+                    for s in 0..6 {
+                        let x = (st.sets[s].level as f64) - 50.0;
+                        let v_rep = alpha + beta * x;
+                        st.slot_wars[s] = st.slot_marginals[s] - v_rep;
+                        let mdq = [st.slot_marginals[s].max(0.01); 4];
+                        endo_pool.record_slot(&st.raw[s], st.slot_wars[s], st.slot_picks[s], &mdq);
+                    }
+                }
+            };
 
         // Pre-assemble active defender shells `(member_rosters, member_weights, w_shell)`
         let active_def_shells: Vec<(PreviewSig, Vec<CompiledRoster6>, Vec<f64>, f64)> =
@@ -12143,6 +12485,19 @@ fn cmd_converge_conclusion(args: &[String]) {
 
         let mut rng = SplitMix64::new(seed ^ ((o_round as u64).wrapping_mul(0xCAFE_BABE_1234_5678)));
         let free_constraint = NicheConstraint::default();
+        let mut global_endo_pool = nc2000_bot::teamgen::EndogenousPool::default();
+        let mut pi_slot_wars: Vec<[f64; 6]> = Vec::with_capacity(pi_raw.len());
+        for (k, raw_t) in pi_raw.iter().enumerate() {
+            let w_k = pi_weights[k];
+            let mut w_arr = [0.01f64; 6];
+            for (s, s_val) in raw_t.iter().enumerate().take(6) {
+                let lv = s_val["level"].as_u64().unwrap_or(50);
+                let war_est = if lv >= 54 { 0.035 } else { 0.015 } * w_k.sqrt();
+                w_arr[s] = war_est;
+                global_endo_pool.record_slot(s_val, war_est, 0.5, &[0.02; 4]);
+            }
+            pi_slot_wars.push(w_arr);
+        }
         let mut seen_red_keys: BTreeSet<String> = BTreeSet::new();
         for raw in &pi_raw {
             seen_red_keys.insert(team_key(raw));
@@ -12177,6 +12532,12 @@ fn cmd_converge_conclusion(args: &[String]) {
             let roster = CompiledRoster6::compile(&dex, &sets);
             let id = format!("{}-s{:04}", island_tag, *seq_counter);
             *seq_counter += 1;
+            let mut init_wars = [0.01f64; 6];
+            for s in 0..6 {
+                if sets[s].level >= 54 {
+                    init_wars[s] = 0.025;
+                }
+            }
             pop.push(RedStrain {
                 id,
                 parent_id: parent_id.to_string(),
@@ -12191,9 +12552,13 @@ fn cmd_converge_conclusion(args: &[String]) {
                 blue_wins: 0.0,
                 red_wr: 0.43,
                 bayes_red_wr: 0.43,
+                lcb99_red_wr: 0.0,
+                ucb99_red_wr: 1.0,
+                election_status: "OPEN",
                 slot_picks: [0.5; 6],
                 slot_wins: [0.5; 6],
                 slot_marginals: [0.05; 6],
+                slot_wars: init_wars,
                 is_hitchhiker: false,
             });
             true
@@ -12251,11 +12616,14 @@ fn cmd_converge_conclusion(args: &[String]) {
                         let mut ops = Vec::new();
                         let steps = 2 + rng.below(3);
                         for _ in 0..steps {
-                            if let Some(prop) = gen.propose_targeted(
+                            if let Some(prop) = gen.propose_marginal_targeted(
                                 &dex,
                                 &cur_raw,
                                 &[1.0; 6],
                                 &[0.4; 6],
+                                &[0.0; 6],
+                                None,
+                                Some(&global_endo_pool),
                                 &mut rng,
                                 &free_constraint,
                                 120,
@@ -12279,59 +12647,62 @@ fn cmd_converge_conclusion(args: &[String]) {
                     }
                 } else if mode == 1 && pi_raw.len() >= 2 {
                     let idx_a = (isl * 2 + f_tries) % pi_raw.len();
-                    let donor_raw = if !outside_q.is_empty() && f_tries % 2 == 0 {
+                    let (donor_raw, donor_wars) = if !outside_q.is_empty() && f_tries % 2 == 0 {
                         let (q_idx, _) = outside_q[rng.below(outside_q.len())];
-                        &team_db[&q_ids[q_idx]].1
+                        (&team_db[&q_ids[q_idx]].1, [0.02f64; 6])
                     } else {
-                        &pi_raw[(idx_a + 3) % pi_raw.len()]
+                        let d_idx = (idx_a + 3) % pi_raw.len();
+                        (&pi_raw[d_idx], pi_slot_wars[d_idx])
                     };
-                    let mut cur_raw = pi_raw[idx_a].clone();
-                    let s1 = rng.below(6);
-                    let s2 = (s1 + 1 + rng.below(5)) % 6;
-                    cur_raw[s1] = donor_raw[rng.below(6)].clone();
-                    cur_raw[s2] = donor_raw[rng.below(6)].clone();
-                    let lsum: i64 = cur_raw
-                        .iter()
-                        .map(|s| s["level"].as_i64().unwrap_or(50))
-                        .sum();
-                    if lsum > 310 {
-                        let mut excess = lsum - 310;
-                        for s in cur_raw.iter_mut() {
-                            let lv = s["level"].as_i64().unwrap_or(50);
-                            if lv > 50 && excess > 0 {
-                                let cut = (lv - 50).min(excess);
-                                s["level"] = json!(lv - cut);
-                                excess -= cut;
-                            }
-                        }
-                    }
-                    if let Some(prop) = gen.propose_targeted(
+                    if let Some((x_op, mut cur_raw)) = gen.propose_role_aware_crossover(
                         &dex,
-                        &cur_raw,
-                        &[1.0; 6],
-                        &[0.4; 6],
+                        &pi_raw[idx_a],
+                        &pi_slot_wars[idx_a],
+                        donor_raw,
+                        &donor_wars,
+                        2,
                         &mut rng,
-                        &free_constraint,
-                        120,
                     ) {
-                        cur_raw = prop.team;
+                        let mut op_desc = x_op;
+                        if let Some(prop2) = gen.propose_marginal_targeted(
+                            &dex,
+                            &cur_raw,
+                            &[1.0; 6],
+                            &[0.4; 6],
+                            &[0.0; 6],
+                            None,
+                            Some(&global_endo_pool),
+                            &mut rng,
+                            &free_constraint,
+                            120,
+                        ) {
+                            op_desc = format!("{}->{}@{}", op_desc, prop2.op.name(), prop2.slot);
+                            cur_raw = prop2.team;
+                        }
+                        push_red(
+                            &mut isl_pop,
+                            &mut seen_red_keys,
+                            &mut seq,
+                            &pi_ids[idx_a],
+                            &isl_origin,
+                            0,
+                            &op_desc,
+                            &cur_raw,
+                        );
                     }
-                    push_red(
-                        &mut isl_pop,
-                        &mut seen_red_keys,
-                        &mut seq,
-                        &pi_ids[idx_a],
-                        &isl_origin,
-                        0,
-                        &format!("chimera2@{s1}+{s2}"),
-                        &cur_raw,
-                    );
                 } else if mode == 2 {
                     let idx_a = (isl + f_tries) % pi_raw.len().max(1);
                     let mut cur_raw = pi_raw[idx_a].clone();
                     let mut ops = Vec::new();
                     for _ in 0..(2 + rng.below(2)) {
-                        if let Some(prop) = gen.propose_same_shell(&dex, &cur_raw, &mut rng, 150) {
+                        if let Some(prop) = gen.propose_same_shell_targeted(
+                            &dex,
+                            &cur_raw,
+                            None,
+                            Some(&global_endo_pool),
+                            &mut rng,
+                            150,
+                        ) {
                             ops.push(format!("{}@{}", prop.op.name(), prop.slot));
                             cur_raw = prop.team;
                         }
@@ -12352,11 +12723,14 @@ fn cmd_converge_conclusion(args: &[String]) {
                     gen.random_team_constrained(&dex, &mut rng, &[], &free_constraint, 250)
                 {
                     for _ in 0..2 {
-                        if let Some(prop) = gen.propose_targeted(
+                        if let Some(prop) = gen.propose_marginal_targeted(
                             &dex,
                             &team,
                             &[1.0; 6],
                             &[0.4; 6],
+                            &[0.0; 6],
+                            None,
+                            Some(&global_endo_pool),
                             &mut rng,
                             &free_constraint,
                             120,
@@ -12408,6 +12782,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                     isl_seed,
                 );
                 isl_pop.retain(|s| !s.is_hitchhiker);
+                recompute_red_wars_and_pool(&mut isl_pop, &mut global_endo_pool);
                 isl_pop.sort_by(|a, b| b.bayes_red_wr.partial_cmp(&a.bayes_red_wr).unwrap());
                 if ig == island_gens || isl_pop.is_empty() {
                     break;
@@ -12421,39 +12796,35 @@ fn cmd_converge_conclusion(args: &[String]) {
                     let parent = &isl_survivors[(b_tries - 1) % isl_survivors.len()];
                     if b_tries % 3 == 0 && isl_survivors.len() >= 2 {
                         let donor = &isl_survivors[b_tries % isl_survivors.len()];
-                        let mut child_raw = parent.raw.clone();
-                        let sw = rng.below(6);
-                        child_raw[sw] = donor.raw[rng.below(6)].clone();
-                        let lsum: i64 = child_raw
-                            .iter()
-                            .map(|s| s["level"].as_i64().unwrap_or(50))
-                            .sum();
-                        if lsum > 310 {
-                            let mut excess = lsum - 310;
-                            for s in child_raw.iter_mut() {
-                                let lv = s["level"].as_i64().unwrap_or(50);
-                                if lv > 50 && excess > 0 {
-                                    let cut = (lv - 50).min(excess);
-                                    s["level"] = json!(lv - cut);
-                                    excess -= cut;
-                                }
-                            }
+                        let n_grafts = 1 + (b_tries % 2);
+                        if let Some((x_op, x_team)) = gen.propose_role_aware_crossover(
+                            &dex,
+                            &parent.raw,
+                            &parent.slot_wars,
+                            &donor.raw,
+                            &donor.slot_wars,
+                            n_grafts,
+                            &mut rng,
+                        ) {
+                            push_red(
+                                &mut next_isl,
+                                &mut seen_red_keys,
+                                &mut seq,
+                                &parent.id,
+                                &isl_origin,
+                                ig,
+                                &format!("isl-{}", x_op),
+                                &x_team,
+                            );
                         }
-                        push_red(
-                            &mut next_isl,
-                            &mut seen_red_keys,
-                            &mut seq,
-                            &parent.id,
-                            &isl_origin,
-                            ig,
-                            &format!("isl-graft@{sw}"),
-                            &child_raw,
-                        );
-                    } else if let Some(prop) = gen.propose_targeted(
+                    } else if let Some(prop) = gen.propose_marginal_targeted(
                         &dex,
                         &parent.raw,
                         &parent.slot_picks,
                         &parent.slot_wins,
+                        &parent.slot_wars,
+                        None,
+                        Some(&global_endo_pool),
                         &mut rng,
                         &free_constraint,
                         140,
@@ -12491,6 +12862,9 @@ fn cmd_converge_conclusion(args: &[String]) {
                 migrant.blue_wins = 0.0;
                 migrant.red_wr = 0.43;
                 migrant.bayes_red_wr = 0.43;
+                migrant.lcb99_red_wr = 0.0;
+                migrant.ucb99_red_wr = 1.0;
+                migrant.election_status = "OPEN";
                 population.push(migrant);
             }
         }
@@ -12515,7 +12889,14 @@ fn cmd_converge_conclusion(args: &[String]) {
         for (idx, pid) in pi_ids.iter().take(10).enumerate() {
             let base_raw = &pi_raw[idx];
             for _ in 0..12 {
-                if let Some(prop) = gen.propose_same_shell(&dex, base_raw, &mut rng, 180) {
+                if let Some(prop) = gen.propose_same_shell_targeted(
+                    &dex,
+                    base_raw,
+                    None,
+                    Some(&global_endo_pool),
+                    &mut rng,
+                    180,
+                ) {
                     if push_red(
                         &mut population,
                         &mut seen_red_keys,
@@ -12535,11 +12916,14 @@ fn cmd_converge_conclusion(args: &[String]) {
         for (idx, pid) in pi_ids.iter().take(8).enumerate() {
             let base_raw = &pi_raw[idx];
             for _ in 0..8 {
-                if let Some(prop) = gen.propose_targeted(
+                if let Some(prop) = gen.propose_marginal_targeted(
                     &dex,
                     base_raw,
                     &[1.0; 6],
                     &[0.5; 6],
+                    &pi_slot_wars[idx],
+                    None,
+                    Some(&global_endo_pool),
                     &mut rng,
                     &free_constraint,
                     150,
@@ -12567,22 +12951,32 @@ fn cmd_converge_conclusion(args: &[String]) {
                 let ia = rng.below(population.len());
                 let ib = rng.below(population.len());
                 if ia != ib {
-                    let mut child_raw = population[ia].raw.clone();
-                    let sa = rng.below(6);
-                    let sb = rng.below(6);
                     let pid_a = population[ia].id.clone();
-                    child_raw[sa] = population[ib].raw[sb].clone();
-                    if push_red(
-                        &mut population,
-                        &mut seen_red_keys,
-                        &mut seq,
-                        &pid_a,
-                        "chimera-crossover",
-                        0,
-                        &format!("crossover@{sa}"),
-                        &child_raw,
+                    let raw_a = population[ia].raw.clone();
+                    let wars_a = population[ia].slot_wars;
+                    let raw_b = population[ib].raw.clone();
+                    let wars_b = population[ib].slot_wars;
+                    if let Some((x_op, x_team)) = gen.propose_role_aware_crossover(
+                        &dex,
+                        &raw_a,
+                        &wars_a,
+                        &raw_b,
+                        &wars_b,
+                        1 + (tries % 2),
+                        &mut rng,
                     ) {
-                        continue;
+                        if push_red(
+                            &mut population,
+                            &mut seen_red_keys,
+                            &mut seq,
+                            &pid_a,
+                            "chimera-crossover",
+                            0,
+                            &x_op,
+                            &x_team,
+                        ) {
+                            continue;
+                        }
                     }
                 }
             }
@@ -12604,21 +12998,29 @@ fn cmd_converge_conclusion(args: &[String]) {
 
         let mut hall_of_fame: Vec<RedStrain> = Vec::new();
         for w in 1..=red_waves {
-            let tiers: [(usize, u32, f64); 3] = [
-                (1, 2, 0.0),   // Tier 1: 2 CRN seeds per 3v3 cell across all active defender shells
-                (2, 4, 0.455), // Tier 2: +4 CRN seeds per 3v3 cell
-                (3, 6, 0.485), // Tier 3: +6 CRN seeds per 3v3 cell (total 12 CRN seeds per 3v3 cell)
+            // Sequential Bayesian Election-Call (`選挙当確速報`) progressive doubling waves:
+            // No arbitrary point-estimate truncation! Every challenger stays `OPEN` until its
+            // 99% Bayesian credible interval `[LCB99, UCB99]` decisively calls `LOSS_CALLED` (`UCB99 < 0.495`)
+            // or `WIN_CALLED` (`LCB99 > 0.510`), or reaches the full 13-seed ceiling.
+            let tiers: [(usize, u32); 4] = [
+                (1, 1), // Wave 1: 1 CRN seed base across all 3v3 cells
+                (2, 2), // Wave 2: +2 CRN seeds (cumulative 3)
+                (3, 4), // Wave 3: +4 CRN seeds (cumulative 7)
+                (4, 6), // Wave 4: +6 CRN seeds (cumulative 13)
             ];
-            for &(tier_id, n_seeds_tier, min_red_wr) in &tiers {
+            for &(tier_id, n_seeds_tier) in &tiers {
                 let mut eval_batch: Vec<usize> = Vec::new();
                 for s_idx in 0..population.len() {
                     if population[s_idx].is_hitchhiker || population[s_idx].tiers_done >= tier_id {
                         continue;
                     }
-                    if population[s_idx].games > 0 && population[s_idx].red_wr + 1e-9 < min_red_wr {
+                    if population[s_idx].games > 0 && population[s_idx].election_status != "OPEN" {
                         continue;
                     }
                     eval_batch.push(s_idx);
+                }
+                if eval_batch.is_empty() {
+                    continue;
                 }
                 let phase_seed = seed
                     ^ ((o_round as u64).wrapping_mul(0x5555_6666_7777_8888))
@@ -12633,9 +13035,13 @@ fn cmd_converge_conclusion(args: &[String]) {
                     phase_seed,
                 );
             }
+            recompute_red_wars_and_pool(&mut population, &mut global_endo_pool);
             population.sort_by(|a, b| b.bayes_red_wr.partial_cmp(&a.bayes_red_wr).unwrap());
             for s in &population {
-                if !s.is_hitchhiker && s.tiers_done >= 2 && s.red_wr >= 0.485 {
+                if !s.is_hitchhiker
+                    && s.tiers_done >= 2
+                    && (s.red_wr >= 0.485 || s.election_status == "WIN_CALLED")
+                {
                     if let Some(existing) = hall_of_fame.iter_mut().find(|h| h.id == s.id) {
                         *existing = s.clone();
                     } else {
@@ -12646,8 +13052,16 @@ fn cmd_converge_conclusion(args: &[String]) {
             hall_of_fame.sort_by(|a, b| b.red_wr.partial_cmp(&a.red_wr).unwrap());
             let best = &population[0];
             let hh_cnt = population.iter().filter(|s| s.is_hitchhiker).count();
+            let win_called_cnt = population
+                .iter()
+                .filter(|s| s.election_status == "WIN_CALLED")
+                .count();
+            let loss_called_cnt = population
+                .iter()
+                .filter(|s| s.election_status == "LOSS_CALLED")
+                .count();
             eprintln!(
-                "  [{} wave {}/{}] best={} (from={}, origin={}, op={}, Red_Nash_WR={:.4} / Blue_Nash_WR={:.4}, min_LOO={:+.4}) | HoF={} | HH_purged={}",
+                "  [{} wave {}/{}] best={} (from={}, origin={}, op={}, Red_Nash_WR={:.4} [{:.4}, {:.4}] status={}, min_LOO={:+.4}) | Election(win={}, loss={}) | HoF={} | HH_purged={}",
                 island_tag,
                 w,
                 red_waves,
@@ -12656,8 +13070,12 @@ fn cmd_converge_conclusion(args: &[String]) {
                 best.origin,
                 best.last_op,
                 best.red_wr,
-                1.0 - best.red_wr,
+                best.lcb99_red_wr,
+                best.ucb99_red_wr,
+                best.election_status,
                 best.slot_marginals.iter().cloned().fold(f64::INFINITY, f64::min),
+                win_called_cnt,
+                loss_called_cnt,
                 hall_of_fame.len(),
                 hh_cnt
             );
@@ -12714,7 +13132,26 @@ fn cmd_converge_conclusion(args: &[String]) {
                     } else {
                         &pi_ids[rng.below(pi_ids.len().max(1))]
                     };
-                    if let Some(prop) = gen.propose_same_shell(&dex, base_for_camo, &mut rng, 180) {
+                    let camo_slot_w = if parent_shares_pi_shell {
+                        let mut sw = [1.0f64; 6];
+                        for s in 0..6 {
+                            sw[s] = (0.2
+                                + parent.slot_picks[s] * (1.0 - parent.slot_wins[s]).max(0.1)
+                                + (-parent.slot_wars[s]).max(0.0) * 5.0)
+                                .max(0.1);
+                        }
+                        Some(sw)
+                    } else {
+                        None
+                    };
+                    if let Some(prop) = gen.propose_same_shell_targeted(
+                        &dex,
+                        base_for_camo,
+                        camo_slot_w.as_ref(),
+                        Some(&global_endo_pool),
+                        &mut rng,
+                        180,
+                    ) {
                         push_red(
                             &mut next_pop,
                             &mut seen_red_keys,
@@ -12727,11 +13164,14 @@ fn cmd_converge_conclusion(args: &[String]) {
                         );
                     }
                 } else if roll < 75 {
-                    if let Some(prop) = gen.propose_targeted(
+                    if let Some(prop) = gen.propose_marginal_targeted(
                         &dex,
                         &parent.raw,
                         &parent.slot_picks,
                         &parent.slot_wins,
+                        &parent.slot_wars,
+                        None,
+                        Some(&global_endo_pool),
                         &mut rng,
                         &free_constraint,
                         150,
@@ -12750,49 +13190,60 @@ fn cmd_converge_conclusion(args: &[String]) {
                 } else if survivors.len() >= 2 {
                     let donor_idx = (p_idx + 1 + rng.below(survivors.len() - 1)) % survivors.len();
                     let donor = &survivors[donor_idx];
-                    let weak_slot = rng.below(6);
-                    let strong_slot = rng.below(6);
-                    let mut child_raw = parent.raw.clone();
-                    child_raw[weak_slot] = donor.raw[strong_slot].clone();
-                    let lsum: i64 = child_raw
-                        .iter()
-                        .map(|s| s["level"].as_i64().unwrap_or(50))
-                        .sum();
-                    if lsum > 310 {
-                        let mut excess = lsum - 310;
-                        for s in child_raw.iter_mut() {
-                            let lv = s["level"].as_i64().unwrap_or(50);
-                            if lv > 50 && excess > 0 {
-                                let cut = (lv - 50).min(excess);
-                                s["level"] = json!(lv - cut);
-                                excess -= cut;
-                            }
-                        }
+                    let n_grafts = 1 + (b_tries % 2);
+                    if let Some((x_op, x_team)) = gen.propose_role_aware_crossover(
+                        &dex,
+                        &parent.raw,
+                        &parent.slot_wars,
+                        &donor.raw,
+                        &donor.slot_wars,
+                        n_grafts,
+                        &mut rng,
+                    ) {
+                        push_red(
+                            &mut next_pop,
+                            &mut seen_red_keys,
+                            &mut seq,
+                            &parent.id,
+                            "chimera-crossover",
+                            w,
+                            &x_op,
+                            &x_team,
+                        );
                     }
-                    push_red(
-                        &mut next_pop,
-                        &mut seen_red_keys,
-                        &mut seq,
-                        &parent.id,
-                        "chimera-crossover",
-                        w,
-                        &format!("graft@{weak_slot}"),
-                        &child_raw,
-                    );
                 }
             }
             population = next_pop;
         }
 
-        // Holdout verification (Full-Combination Bayesian Preview Nash with 16 independent CRN seeds per 3v3 cell) on top 6 Hall of Fame strains
+        // Holdout verification:
+        // Stage 1: Full-Combination 60-Action Bayesian Preview Nash with 16 independent CRN seeds per 3v3 cell
+        // Stage 2: Multi-Fidelity In-Battle MCTS `BlindAgent` (64 QMC mirror games @ 60 iters, zero prior smuggling)
         let holdout_n = hall_of_fame.len().min(6);
         let mut holdout_recs: Vec<Value> = Vec::new();
         let mut newly_promoted = 0usize;
         println!(
-            "\n=== [Round {}] Independent Full-Combination Bayesian Preview Nash Holdout Verification (16 seeds/cell) ===",
+            "\n=== [Round {}] Independent Multi-Fidelity Holdout Verification (Stage 1: 16 seeds/cell 60-Action Preview Nash | Stage 2: 64g In-Battle BlindAgent MCTS) ===",
             o_round
         );
         if holdout_n > 0 {
+            // Prepare zero-prior-smuggling `pi_star_mp` for Stage 2 In-Battle BlindAgent verification
+            let bp_text =
+                std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
+            let raw_mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
+            let mut red_mp = normalize_belief_pool(&dex, &gen, &raw_mp);
+            red_mp
+                .teams
+                .retain(|t| !pi_shell_counts.contains_key(&preview_sig_sets(&t.sets)));
+            for (k, pid) in pi_ids.iter().enumerate() {
+                red_mp.teams.push(nc2000_bot::preview::MetaTeam {
+                    id: format!("pi-star-{}", pid),
+                    sets: pi_sets[k].clone(),
+                    weight: Some(pi_weights[k]),
+                });
+            }
+            let pi_star_mp = Arc::new(red_mp);
+
             let mut ho_slice: Vec<RedStrain> = hall_of_fame[..holdout_n]
                 .iter()
                 .map(|s| {
@@ -12826,6 +13277,50 @@ fn cmd_converge_conclusion(args: &[String]) {
                 } else {
                     1.0 - (tot_blue_wins / (tot_games.max(1) as f64))
                 };
+
+                // Stage 2: If candidate passes Stage 1 Preview Nash (`!is_hitchhiker && ho_red_wr > 0.500`),
+                // verify with 64 QMC mirror games of in-battle `BlindAgent` MCTS (`iters=60, c=0.4`)
+                // with full shell disclosure so Blue knows `s` is in the candidate pool!
+                let blind_mcts_red_wr: Option<f64> = if !ho_st.is_hitchhiker && ho_red_wr > 0.500 {
+                    let mut blue_mp = (*pi_star_mp).clone();
+                    let s_sig = preview_sig_sets(&s.sets);
+                    let same_shell_w = pi_ids
+                        .iter()
+                        .enumerate()
+                        .filter(|&(k, _)| preview_sig_sets(&pi_sets[k]) == s_sig)
+                        .map(|(k, _)| pi_weights[k])
+                        .sum::<f64>();
+                    let disclose_w = if same_shell_w > 0.0 {
+                        same_shell_w / (pi_shell_counts.get(&s_sig).copied().unwrap_or(1) as f64)
+                    } else {
+                        0.25
+                    };
+                    blue_mp.teams.push(nc2000_bot::preview::MetaTeam {
+                        id: format!("disclosed-chall-{}", s.id),
+                        sets: s.sets.clone(),
+                        weight: Some(disclose_w),
+                    });
+                    let qmc_seed = h_seed ^ ((idx as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                    let qmc_out = eval_vs_pi_star_qmc(
+                        &dex,
+                        &pi_sets,
+                        &pi_weights,
+                        &s.sets,
+                        Arc::new(blue_mp),
+                        pi_star_mp.clone(),
+                        64,
+                        32,
+                        60,
+                        0.4,
+                        max_turns,
+                        threads,
+                        qmc_seed,
+                    );
+                    Some(1.0 - qmc_out.blue_score)
+                } else {
+                    None
+                };
+
                 let mons: Vec<String> = s
                     .sets
                     .iter()
@@ -12849,8 +13344,11 @@ fn cmd_converge_conclusion(args: &[String]) {
                     .iter()
                     .cloned()
                     .fold(f64::INFINITY, f64::min);
+                let blind_str = blind_mcts_red_wr
+                    .map(|v| format!("{:.4}", v))
+                    .unwrap_or_else(|| "  n/a ".to_string());
                 println!(
-                    "  [R{} HOLDOUT #{:02}] {:16} [{} | {:15}] | Holdout_Nash_WR={:.4} | Search_Nash_WR={:.4} | Total_Nash_WR={:.4} (Blue_WR={:.4}) | min_LOO={:+.4} hh={} | {}",
+                    "  [R{} HOLDOUT #{:02}] {:16} [{} | {:15}] | Holdout_Nash_WR={:.4} | BlindMCTS_WR={} | Total_Nash_WR={:.4} (Blue_WR={:.4}) | min_LOO={:+.4} hh={} | {}",
                     o_round,
                     idx + 1,
                     s.id,
@@ -12861,7 +13359,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                     },
                     s.origin,
                     ho_red_wr,
-                    s.red_wr,
+                    blind_str,
                     tot_red_wr,
                     1.0 - tot_red_wr,
                     min_loo,
@@ -12876,17 +13374,21 @@ fn cmd_converge_conclusion(args: &[String]) {
                     "shares_pi_shell": shares_pi_shell,
                     "search_red_wr": s.red_wr,
                     "holdout_red_wr": ho_red_wr,
+                    "blind_mcts_red_wr": blind_mcts_red_wr,
                     "total_red_wr": tot_red_wr,
                     "total_blue_wr": 1.0 - tot_red_wr,
                     "slot_picks": ho_st.slot_picks,
                     "slot_marginals": ho_st.slot_marginals,
+                    "slot_wars": ho_st.slot_wars,
                     "is_hitchhiker": ho_st.is_hitchhiker,
                     "sets": s.raw,
                 }));
 
-                // If this strain is a genuine clean Nemesis (`!is_hitchhiker`, `ho_red_wr > 0.505` and `tot_red_wr > 0.505`),
-                // register it into `team_db`, `roster_db`, `q_ids`, and `units` for the next outer round!
-                if !ho_st.is_hitchhiker && ho_red_wr > 0.505 && tot_red_wr > 0.505 {
+                // Multi-fidelity promotion gate:
+                // Must pass Stage 1 60-Action Preview Nash (`!is_hitchhiker`, `ho_red_wr > 0.505`, `tot_red_wr > 0.505`)
+                // AND Stage 2 In-Battle BlindAgent MCTS (`blind_mcts_red_wr >= 0.490`)!
+                let passes_blind = blind_mcts_red_wr.unwrap_or(0.0) >= 0.490;
+                if !ho_st.is_hitchhiker && ho_red_wr > 0.505 && tot_red_wr > 0.505 && passes_blind {
                     if let Some(reg_id) = register_team(
                         &mut team_db,
                         &mut seen_db_keys,

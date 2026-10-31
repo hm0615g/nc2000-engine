@@ -1128,6 +1128,24 @@ impl TeamGen {
         rng: &mut SplitMix64,
         tries: usize,
     ) -> Option<Proposal> {
+        self.propose_same_shell_targeted(dex, parent, None, None, rng, tries)
+    }
+
+    /// Propose a counter-targeted same-shell sibling / camouflage variant from `parent`:
+    /// - When `slot_weights` is provided (e.g. slots that struggle or are heavily exposed against
+    ///   the shell's worst counter-columns), biases mutation toward high-weight slots while
+    ///   maintaining a 20% uniform exploration floor across all 6 slots.
+    /// - When `endo_pool` is provided, uses empirically high-$\Delta Q$ moves on that species.
+    /// - Strictly preserves every slot's Team Preview signature `(species, level, gender, has_item)`.
+    pub fn propose_same_shell_targeted(
+        &self,
+        dex: &Dex,
+        parent: &[Value],
+        slot_weights: Option<&[f64; 6]>,
+        endo_pool: Option<&EndogenousPool>,
+        rng: &mut SplitMix64,
+        tries: usize,
+    ) -> Option<Proposal> {
         let mut parent_sig: Vec<(String, i64, String, bool)> = parent
             .iter()
             .map(|s| {
@@ -1139,6 +1157,27 @@ impl TeamGen {
             })
             .collect();
         parent_sig.sort();
+
+        let mut probs = [1.0f64 / 6.0; 6];
+        if let Some(sw) = slot_weights {
+            let sum: f64 = sw.iter().map(|&x| x.max(0.0)).sum();
+            if sum > 1e-9 {
+                let eps = 0.20;
+                for i in 0..6 {
+                    probs[i] = (1.0 - eps) * (sw[i].max(0.0) / sum) + eps / 6.0;
+                }
+            }
+        }
+        let sample_slot = |rng: &mut SplitMix64| -> usize {
+            let mut u = rng.next_f64();
+            for i in 0..6 {
+                u -= probs[i];
+                if u <= 0.0 {
+                    return i;
+                }
+            }
+            5
+        };
 
         for _ in 0..tries {
             let step_roll = rng.below(20);
@@ -1154,14 +1193,16 @@ impl TeamGen {
             let mut first_slot = 0usize;
             let mut applied = 0usize;
             for _ in 0..num_steps {
-                let slot = rng.below(6);
+                let slot = sample_slot(rng);
                 let op = if rng.below(10) < 7 {
                     MutOp::MoveSwap
                 } else {
                     MutOp::ItemSwap
                 };
                 let ok = match op {
-                    MutOp::MoveSwap => self.mut_move_swap(dex, &mut raw, slot, rng),
+                    MutOp::MoveSwap => {
+                        self.mut_move_swap_weighted(dex, &mut raw, slot, None, endo_pool, rng)
+                    }
                     MutOp::ItemSwap => self.mut_item_swap(dex, &mut raw, slot, rng),
                     _ => unreachable!(),
                 };
@@ -1231,6 +1272,171 @@ impl TeamGen {
             });
         }
         None
+    }
+
+    /// Role-Aware & Pareto-Level-Preserving Crossover between a `recipient` team and a `donor` team:
+    /// 1. Selects 1 or 2 weakest slots in `recipient` (lowest WAR / LOO marginal) and replaces them
+    ///    with 1 or 2 high-WAR slots from `donor` (respecting Species Clause).
+    /// 2. Re-allocates team levels onto a slack-free Pareto-optimal profile (`sum <= 155` legal 3v3s)
+    ///    preserving the relative level priority of Ace/core slots instead of naively shaving Slot 0's level!
+    /// 3. Repairs any Item Clause collisions or orphaned moves and runs `optimize_team_dominance` + `canonize`.
+    pub fn propose_role_aware_crossover(
+        &self,
+        dex: &Dex,
+        recipient: &[Value],
+        recip_wars: &[f64; 6],
+        donor: &[Value],
+        donor_wars: &[f64; 6],
+        num_grafts: usize,
+        rng: &mut SplitMix64,
+    ) -> Option<(String, Vec<Value>)> {
+        if recipient.len() != 6 || donor.len() != 6 {
+            return None;
+        }
+        let k_grafts = num_grafts.clamp(1, 2);
+        let mut raw = recipient.to_vec();
+        let mut cur_wars = *recip_wars;
+        let mut grafted_slots: Vec<usize> = Vec::new();
+
+        for _ in 0..k_grafts {
+            // Boltzmann sample a weak recipient slot (lowest WAR) not yet grafted
+            let t_weak = 0.035;
+            let mut rw = [0.0f64; 6];
+            let mut rsum = 0.0f64;
+            for i in 0..6 {
+                if !grafted_slots.contains(&i) {
+                    let w = (-cur_wars[i].clamp(-0.25, 0.25) / t_weak).exp();
+                    rw[i] = w;
+                    rsum += w;
+                }
+            }
+            if rsum <= 1e-12 {
+                break;
+            }
+            let mut u = rng.next_f64() * rsum;
+            let mut weak_s = 0usize;
+            for i in 0..6 {
+                if !grafted_slots.contains(&i) {
+                    u -= rw[i];
+                    if u <= 0.0 {
+                        weak_s = i;
+                        break;
+                    }
+                }
+            }
+            let teammates: Vec<String> = (0..6)
+                .filter(|&i| i != weak_s)
+                .map(|i| species_id(&raw[i]))
+                .collect();
+            let cur_sp = species_id(&raw[weak_s]);
+
+            // Boltzmann sample a strong donor slot (highest WAR) whose species is not in `teammates`
+            let mut dw = [0.0f64; 6];
+            let mut dsum = 0.0f64;
+            for j in 0..6 {
+                let dsp = species_id(&donor[j]);
+                if !dsp.is_empty() && dsp != cur_sp && !teammates.contains(&dsp) {
+                    let w = (donor_wars[j].clamp(-0.15, 0.30) / t_weak).exp();
+                    dw[j] = w;
+                    dsum += w;
+                }
+            }
+            if dsum <= 1e-12 {
+                continue;
+            }
+            let mut ud = rng.next_f64() * dsum;
+            let mut strong_j = 0usize;
+            for j in 0..6 {
+                if dw[j] > 0.0 {
+                    ud -= dw[j];
+                    if ud <= 0.0 {
+                        strong_j = j;
+                        break;
+                    }
+                }
+            }
+            raw[weak_s] = donor[strong_j].clone();
+            cur_wars[weak_s] = donor_wars[strong_j];
+            grafted_slots.push(weak_s);
+        }
+
+        if grafted_slots.is_empty() {
+            return None;
+        }
+
+        // Fit levels onto a valid Pareto-optimal profile preserving each slot's desired level + WAR rank
+        let floors: Vec<i64> = (0..6)
+            .map(|i| {
+                let sid = species_id(&raw[i]);
+                self.ls.species(&sid).map_or(50, |l| l.min_level.max(50))
+            })
+            .collect();
+        let desired_levels: Vec<i64> = (0..6)
+            .map(|i| set_level(&raw[i]).max(floors[i]).clamp(50, 55))
+            .collect();
+
+        // Check if current levels already satisfy NC2000 legal 3v3 constraints; if not (or to remove slack),
+        // map sorted rank order onto a compatible Pareto-optimal level profile.
+        let mut order: Vec<usize> = (0..6).collect();
+        order.sort_by(|&a, &b| {
+            floors[b]
+                .cmp(&floors[a])
+                .then(desired_levels[b].cmp(&desired_levels[a]))
+                .then_with(|| {
+                    cur_wars[b]
+                        .partial_cmp(&cur_wars[a])
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+        });
+
+        let target_aces = desired_levels.iter().filter(|&&lv| lv >= 55).count().min(3);
+        let bucket_idx = target_aces.min(self.pareto_by_aces.len().saturating_sub(1));
+        let bucket = &self.pareto_by_aces[bucket_idx];
+        let profile = bucket[rng.below(bucket.len())];
+        for (rank, &idx) in order.iter().enumerate() {
+            let lv = profile[rank].max(floors[idx]).clamp(50, 55);
+            raw[idx]["level"] = json!(lv);
+        }
+        maximize_slack_levels(&mut raw, &floors);
+
+        // Resolve any Item Clause collisions introduced by grafting
+        let mut seen_items: BTreeSet<String> = BTreeSet::new();
+        // Give non-grafted high-WAR slots priority on keeping their item, or resolve on grafted slots
+        let mut item_prio: Vec<usize> = (0..6).collect();
+        item_prio.sort_by(|&a, &b| {
+            cur_wars[b]
+                .partial_cmp(&cur_wars[a])
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        for &idx in &item_prio {
+            let it = toid(raw[idx]["item"].as_str().unwrap_or(""));
+            if !it.is_empty() && !seen_items.insert(it) {
+                raw[idx]["item"] = json!("");
+            }
+        }
+        for &idx in &item_prio {
+            if toid(raw[idx]["item"].as_str().unwrap_or("")).is_empty() {
+                let cands = self.non_dominated_items(dex, &raw, idx, false);
+                if !cands.is_empty() {
+                    raw[idx]["item"] = json!(cands[rng.below(cands.len())]);
+                }
+            }
+        }
+
+        self.optimize_team_dominance(dex, &mut raw, rng);
+        let canon = self.canonize(dex, &raw)?;
+        if team_key(&canon) == team_key(recipient) {
+            return None;
+        }
+        let op_str = format!(
+            "pareto-graft@{}",
+            grafted_slots
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join("+")
+        );
+        Some((op_str, canon))
     }
 
     /// Generate a random non-dominated legal team whose first `anchors.len()`

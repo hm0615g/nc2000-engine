@@ -1207,6 +1207,99 @@ def test_bayesian_shell_preview_nash_and_hitchhiker_detection():
     assert len(flagged_clean) == 0
 
 
+def test_bayesian_election_call_and_shell_belief_minimax_tpu():
+    """Verify Sequential Bayesian Election-Call (`選挙当確速報`) and In-Battle Intra-Shell
+    Bayesian Belief + 1-Ply Simultaneous-Move RM+ Search on TPU.
+    """
+    from gen2_tpu.dex_loader import load_dex
+    from gen2_tpu.kodoku import (
+        assemble_3v3_from_rosters_jax,
+        bayesian_election_call_bounds_np,
+        build_shared_dex_table,
+        compile_roster6,
+        evaluate_6v6_bayesian_election_call_tpu,
+        simulate_shell_belief_minimax_games_tpu,
+        update_shell_belief_mask_jax,
+    )
+
+    # 1. Verify credible bounds shrink immediately on 1.0/0.0 blowouts while staying wide on 50/50
+    sum_s = np.array([2.0, 1.0], dtype=np.float64)
+    sq_s = np.array([2.0, 1.0], dtype=np.float64)
+    cnt_s = np.array([2, 2], dtype=np.int32)
+    mean_b, lcb_b, ucb_b, rad_b = bayesian_election_call_bounds_np(sum_s, sq_s, cnt_s, z=2.326)
+    assert np.isclose(mean_b[0], 1.0)
+    assert np.isclose(mean_b[1], 0.5)
+    assert rad_b[0] < rad_b[1]
+    assert lcb_b[0] > 0.40
+
+    # 2. Verify `evaluate_6v6_bayesian_election_call_tpu` evaluates across waves with early cell calling
+    shared_dex = build_shared_dex_table()
+    t_a, t_b = _sample_6v6_teams()
+    r_a = compile_roster6(t_a)
+    r_b = compile_roster6(t_b)
+
+    res_elec = evaluate_6v6_bayesian_election_call_tpu(
+        r_a,
+        r_b,
+        shared_dex,
+        wave_games=(2, 2),
+        turns=4,
+        win_threshold=0.95,
+        loss_threshold=0.05,
+        cell_radius_tol=0.35,
+    )
+    assert 0.0 <= res_elec.value <= 1.0
+    assert 0.0 <= res_elec.lcb99 <= res_elec.ucb99 <= 1.0
+    assert res_elec.election_status in ("OPEN", "WIN_CALLED", "LOSS_CALLED")
+    assert res_elec.waves_used >= 1
+    assert res_elec.cells_called_early >= 0
+
+    # 3. Verify `update_shell_belief_mask_jax` eliminates incompatible opponent shell variants when PP drops
+    t_b_alt = [dict(m) for m in t_b]
+    t_b_alt[0] = dict(t_b[0], moves=["Thunderbolt", "Surf", "Ice Beam", "Rest"])
+    r_b_alt = compile_roster6(t_b_alt)
+
+    pick0 = jnp.array([0, 1, 2], dtype=jnp.int32)
+    b_seed = jnp.array([0x12345678, 0x9ABCDEF0], dtype=jnp.uint32)
+    tb_true, st_init = assemble_3v3_from_rosters_jax(r_a, r_b, pick0, pick0, b_seed, shared_dex)
+    tb_alt, _ = assemble_3v3_from_rosters_jax(r_a, r_b_alt, pick0, pick0, b_seed, shared_dex)
+    cand_tbs = jax.tree_util.tree_map(lambda x, y: jnp.stack([x, y], axis=0), tb_true, tb_alt)
+
+    # Simulate P1's lead (slot 3, move 0) losing 1 PP
+    st_after = st_init._replace(pp=st_init.pp.at[3, 0].set(st_init.pp[3, 0] - 1))
+    bmask_init = jnp.array([True, True], dtype=jnp.bool_)
+    bmask_upd = update_shell_belief_mask_jax(st_init, st_after, tb_true, cand_tbs, 0, bmask_init)
+    assert bool(bmask_upd[0]) is True
+    assert bool(bmask_upd[1]) is False
+
+    # 4. Verify `simulate_shell_belief_minimax_games_tpu` runs end-to-end on batched trajectories
+    pk_batch = pack_battle(jax.tree_util.tree_map(lambda x: x[None, ...], st_init))
+    true_tb_batch = jax.tree_util.tree_map(lambda x: x[None, ...], tb_true)
+    cand_p0_batch = jax.tree_util.tree_map(lambda x: x[None, ...], cand_tbs)
+    prior_p0_batch = jnp.array([[0.5, 0.5]], dtype=jnp.float32)
+    cand_p1_batch = jax.tree_util.tree_map(lambda x: x[None, None, ...], tb_true)
+    prior_p1_batch = jnp.array([[1.0]], dtype=jnp.float32)
+    p_seeds = jnp.array([[0x11112222, 0x33334444]], dtype=jnp.uint32)
+
+    ro_res, final_m0, final_m1 = simulate_shell_belief_minimax_games_tpu(
+        pk_batch,
+        true_tb_batch,
+        cand_p0_batch,
+        prior_p0_batch,
+        cand_p1_batch,
+        prior_p1_batch,
+        p_seeds,
+        turns=3,
+        rollout_turns=0,
+        rm_sweeps=16,
+    )
+    assert ro_res.leaf_values.shape == (1,)
+    assert 0.0 <= float(ro_res.leaf_values[0]) <= 1.0
+    assert bool(final_m0[0, 0]) is True
+    assert bool(final_m1[0, 0]) is True
+
+
+
 
 
 
