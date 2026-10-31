@@ -974,9 +974,7 @@ fn compact_side_blindspot_ledger(
         if foe_can_act_soon {
             let f_dis = (foe_mon.vol_flags & vol_bit::DISABLE) != 0;
             let f_dis_slot = ((foe_mon.slot_refs >> 4) & 0x03) as usize;
-            let foe_hp_frac =
-                (foe_mon.hp() as f64) / (table.mons[foe_idx].maxhp.max(1) as f64);
-            let foe_survives_first = my_hit < 0.90 * foe_hp_frac;
+            let foe_survives_first = my_hit < 0.90;
             let mut foe_has_wiper = false;
             let mut foe_has_perish = false;
             let mut foe_has_lethal_boom = false;
@@ -1007,7 +1005,7 @@ fn compact_side_blindspot_ledger(
                         m_i,
                         w.couple_evasion,
                     );
-                    if boom_dmg >= 0.65 * hp_frac {
+                    if boom_dmg >= 0.65 {
                         foe_has_lethal_boom = true;
                     }
                 }
