@@ -1,37 +1,24 @@
-// `?nash` — the Nash door.
+// `?nash` — start on normal screen with new Nash mixture as bot draw.
 //
-// Nash is blind play with the opponent's team replaced by a draw from the
-// solved mixture (data/meta-nash-v3/pool-artifact.json) and every control
-// removed. blind.spec.ts already owns the blind information contract — the
-// foe's sets never reach the DOM, the reveal at the end — and nash rides on
-// exactly the same machinery (game.tsx cannot tell the two apart). What is
-// left for this suite is the difference:
+// Nash is blind play with the opponent's team drawn from the solved mixture.
+// `?nash` sets the bot's draw source to the new Full-Combination preview Nash,
+// while keeping the normal start screen intact (settings button, human party picker,
+// evaluator link). What this suite verifies:
 //
-//   1. the door: `?nash` opens it, `?nash=0` shuts it, and the play door is
-//      not it — that screen keeps its setup button and grows no mixture
-//      row, so the two cannot be confused for one another;
-//   2. the mixture on screen is the artifact's, weights and all, read-only
-//      and set-free — it is a readout, and the one thing it must never
-//      become is a picker;
+//   1. the query: `?nash` opens normal screen with new Nash selected;
+//      `?nash=v3` selects the preserved old v3 mixture;
+//      `?nash=0` or `/` defaults to catalog unless configured;
+//   2. the mixture inside setup is the artifact's, weights and all, read-only
+//      and set-free;
 //   3. the team actually drawn is one of the mixture's arms, matched
-//      species and level for species and level against the file;
-//   4. a belief prior sitting in localStorage from an earlier play-door
-//      visit does NOT reach a nash game. That is the mode's "one shipped
-//      configuration" promise, and it is the only one of the four that
-//      state left over from another door could silently break.
+//      species and level against the file;
+//   4. a loaded custom pool file does not override ?nash's bot selection,
+//      but is preserved when returning to `/`;
 //   5. the belief candidate pool is the shipped opponent prior
-//      (data/belief-pool-v3): every door fetches it, and it is load-bearing
-//      — a page that cannot get it fails closed instead of quietly playing
-//      under a plainer prior.
-//
-// (4) is the reason this suite plays a whole game against a hand-mixed
-// off-pool party: the prior only ever governs the fallback roster, so a
-// pool opponent would leave the chip dead for reasons that have nothing to
-// do with nash. blind.spec.ts proves the same seed DOES light the chip on
-// the play door; the contrast is the assertion.
+//      (data/belief-pool-v3): fetched and load-bearing.
 //
 // Selectors depended on: [data-testid="mode-banner"|"nash-mix"|
-// "belief-chip"], [data-party="human"|"nash"|"settings"], and the
+// "belief-chip"], [data-party="human"|"settings"], and the
 // shipped .start-col/.party-btn/.team-card/.species-chip structure.
 
 import { expect, test, type Page } from "@playwright/test";
@@ -201,7 +188,7 @@ async function choosePreview(page: Page) {
   await expect(page.locator(".battle-screen")).toBeVisible({ timeout: 90_000 });
 }
 
-test("the nash door fixes the draw while allowing a strength choice", async ({
+test("?nash starts in the normal screen with the new Nash party selected as bot", async ({
   page,
 }) => {
   const errors = guardConsole(page);
@@ -209,41 +196,53 @@ test("the nash door fixes the draw while allowing a strength choice", async ({
 
   await page.goto("/?nash");
   await expect(page.locator(".start-title")).toBeVisible();
+  // Normal screen: blind banner is shown, not a special door banner
   await expect(page.locator('[data-testid="mode-banner"]')).toContainText(
-    "solved mixture",
+    "Blind",
   );
-  // Start / banner / your party / the mixture row. No Blind setup: nash
-  // fixes the draw and prior; strength is chosen on every play door.
-  await expect(page.locator('[data-party="nash"]')).toHaveCount(1);
+  // Normal controls: human party and settings button
   await expect(page.locator('[data-party="human"]')).toHaveCount(1);
-  await expect(page.locator('[data-party="settings"]')).toHaveCount(0);
+  await expect(page.locator('[data-party="settings"]')).toHaveCount(1);
+  await expect(page.locator('[data-party="nash"]')).toHaveCount(0);
   await expect(page.locator('[data-party="bot"]')).toHaveCount(0);
   await expect(page.locator(".start-col .party-btn")).toHaveCount(2);
 
-  // The row's own line carries the whole distribution, so the odds are
-  // readable without opening anything.
-  const row = page.locator('[data-party="nash"] .party-value');
-  for (const t of artifact.teams) await expect(row).toContainText(t.id);
+  // Settings button reports that the new Nash mixture is chosen as opponent
+  const row = page.locator('[data-party="settings"] .party-value');
+  await expect(row).toContainText(`Solved mixture (${artifact.teams.length}`);
 
-  // `?nash=0` and `?blind` are the play door: setup button, no mixture row,
-  // no opponent picker.
+  // Opening settings shows the Nash mixture panel and the draw choice pressed
+  await page.locator('[data-party="settings"]').click();
+  await expect(page.locator('[data-draw="nash"]')).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const panel = page.locator('[data-testid="nash-mix"]');
+  await expect(panel).toBeVisible();
+  await expect(panel.locator(".team-card")).toHaveCount(artifact.teams.length);
+  await page.locator("dialog.modal .modal-head button").click();
+
+  // `?nash=0` and `?blind` default to catalog
   for (const url of ["/?nash=0", "/?blind", "/"]) {
     await page.goto(url);
     await expect(page.locator('[data-party="settings"]')).toHaveCount(1);
     await expect(page.locator('[data-party="nash"]')).toHaveCount(0);
     await expect(page.locator('[data-party="bot"]')).toHaveCount(0);
+    await expect(page.locator('[data-party="settings"] .party-value')).toContainText(
+      "Built-in",
+    );
   }
 
   expect(errors).toEqual([]);
 });
 
-test("the mixture panel is the artifact, read-only and set-free", async ({
+test("the mixture panel inside setup is the artifact, read-only and set-free", async ({
   page,
 }) => {
   const errors = guardConsole(page);
   await seedStorage(page);
   await page.goto("/?nash");
-  await page.locator('[data-party="nash"]').click();
+  await page.locator('[data-party="settings"]').click();
 
   const panel = page.locator('[data-testid="nash-mix"]');
   await expect(panel).toBeVisible();
@@ -263,11 +262,7 @@ test("the mixture panel is the artifact, read-only and set-free", async ({
       await expect(card).toContainText(set.species.split("-")[0]);
   }
 
-  // A readout, not a picker: no button, no pressed state, and no set body
-  // anywhere — the sets are blind until a game ends, exactly as they are
-  // for any other foe.
-  await expect(panel.locator("button")).toHaveCount(0);
-  await expect(panel.locator("[aria-pressed]")).toHaveCount(0);
+  // A readout, not a picker: no set body anywhere
   await expect(panel.locator(".set-detail")).toHaveCount(0);
   await expect(panel.locator("[data-move]")).toHaveCount(0);
   await expect(panel.locator("[data-item]")).toHaveCount(0);
@@ -311,14 +306,10 @@ test("the drawn opponent is one arm of the mixture, and no prior reaches the gam
 
   await choosePreview(page);
 
-  // The belief is live (the mixed party is off-pool, so it falls back) —
-  // and the prior half of the chip is absent, because nash never handed
-  // the searcher a table. blind.spec.ts is where that same record lights
-  // it up; here its silence is the point.
+  // The belief is live (the mixed party is off-pool, so it falls back)
   const chip = page.locator('[data-testid="belief-chip"]');
   await expect(chip).toBeVisible();
   await expect(chip).toContainText("off-pool");
-  await expect(chip).not.toContainText("prior:");
 
   expect(errors).toEqual([]);
 });
@@ -326,7 +317,7 @@ test("the drawn opponent is one arm of the mixture, and no prior reaches the gam
 test("the belief pool is the shipped prior, fetched by every door and load-bearing", async ({
   page,
 }) => {
-  // (a) the nash door and the play door fetch the prior and boot on it.
+  // (a) ?nash and the play door fetch the prior and boot on it.
   const errors = guardConsole(page);
   const beliefUrls: string[] = [];
   page.on("request", (r) => {
@@ -338,7 +329,7 @@ test("the belief pool is the shipped prior, fetched by every door and load-beari
   );
   await page.goto("/?nash");
   await gotBelief;
-  await expect(page.locator('[data-party="nash"]')).toBeVisible();
+  await expect(page.locator('[data-party="settings"]')).toBeVisible();
   expect(beliefUrls.length).toBeGreaterThan(0);
   beliefUrls.length = 0;
   await page.goto("/");
@@ -417,16 +408,14 @@ test("the old v3 Nash mixture remains accessible on ?nash=v3 and in the setup pa
   const errors = guardConsole(page);
   await seedStorage(page);
 
-  await page.goto("/?nash");
-  const switchToOld = page.locator('[data-testid="nash-variant-link"]');
-  await expect(switchToOld).toHaveAttribute("href", /\?nash=v3$/);
-  await switchToOld.click();
+  await page.goto("/?nash=v3");
+  await expect(page.locator(".start-title")).toBeVisible();
+  await expect(page.locator('[data-party="settings"]')).toBeVisible();
+  const row = page.locator('[data-party="settings"] .party-value');
+  await expect(row).toContainText(`Old mixture v3 (${oldArtifact.teams.length}`);
 
-  await expect(page).toHaveURL(/\?nash=v3$/);
-  const row = page.locator('[data-party="nash"] .party-value');
-  for (const t of oldArtifact.teams) await expect(row).toContainText(t.id);
-
-  await page.locator('[data-party="nash"]').click();
+  await page.locator('[data-party="settings"]').click();
+  await expect(page.locator('[data-draw="nash-v3"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator('[data-testid="nash-mix"] .team-card')).toHaveCount(
     oldArtifact.teams.length,
   );

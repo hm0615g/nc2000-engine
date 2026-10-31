@@ -463,11 +463,13 @@ test("a loaded pool never reaches ?nash, and survives for the play door", async 
   await closeModal(page);
   await expectPickerPool(page, fx);
 
-  // The mode ships one configuration: its lists are the catalog whatever
-  // the play door was handed, and it has no setup button to say otherwise.
+  // ?nash opens the normal screen with the Nash mixture selected as bot:
+  // its lists are the catalog whatever the play door was handed, and its
+  // settings button reports the Nash mixture instead of the custom pool file.
   await page.goto("/?nash");
   await expect(page.locator(".start-screen")).toBeVisible();
-  await expect(page.locator('[data-party="settings"]')).toHaveCount(0);
+  await expect(page.locator('[data-party="settings"]')).toHaveCount(1);
+  await expect(setupValue(page)).toContainText("Solved mixture");
   await page.locator('[data-party="human"]').click();
   await expect(page.locator("dialog.modal [data-team]")).toHaveCount(
     fx.catalog,

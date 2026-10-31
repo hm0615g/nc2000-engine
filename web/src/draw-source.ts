@@ -5,8 +5,27 @@
 // unreadable falls back to the catalog.
 
 export type DrawSource = "catalog" | "nash" | "nash-v3";
+export type NashVariant = "new" | "v3";
 
 const KEY = "nc2000-bot-draw";
+
+/** Read draw source from URL search query (e.g. ?nash, ?nash=v3).
+ * Returns null if the query does not specify a draw source. */
+export function readDrawSourceFromQuery(search?: string): DrawSource | null {
+  const query = search ?? (typeof location === "undefined" ? "" : location.search);
+  const params = new URLSearchParams(query);
+  const nash = params.get("nash");
+  if (nash === null) return null;
+  const v = nash.trim().toLowerCase();
+  if (v === "0" || v === "false" || v === "catalog") return "catalog";
+  if (v === "v3" || v === "old") return "nash-v3";
+  return "nash";
+}
+
+/** Which Nash variant was requested in the URL, defaulting to "new". */
+export function readNashVariant(search?: string): NashVariant {
+  return readDrawSourceFromQuery(search) === "nash-v3" ? "v3" : "new";
+}
 
 export function loadDrawSource(): DrawSource {
   try {
@@ -16,6 +35,13 @@ export function loadDrawSource(): DrawSource {
   } catch {
     return "catalog";
   }
+}
+
+/** Determine initial draw source: URL query takes precedence, then stored choice. */
+export function initialDrawSource(search?: string): DrawSource {
+  const fromQuery = readDrawSourceFromQuery(search);
+  if (fromQuery !== null) return fromQuery;
+  return loadDrawSource();
 }
 
 export function storeDrawSource(source: DrawSource): void {

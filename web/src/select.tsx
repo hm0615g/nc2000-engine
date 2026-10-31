@@ -22,20 +22,15 @@
 // loaded a pool file must not read the prior's verdict as a verdict on
 // their file.
 //
-// Nash (`?nash`) swaps the halves over. Setup is gone — the mode ships
-// exactly one configuration, so there is nothing to press — and an opponent
-// row comes back as a readout of the solved mixture that opens a read-only
-// panel, never a picker. Showing the mixture is not a leak and is most of
-// the point: an equilibrium is a strategy that survives the opponent knowing
-// it. What stays hidden is what blind always hides — which party was drawn
-// this battle, and every set in it, until the game ends.
+// The play screen ships as the standard screen. `?nash` sets the bot's draw
+// source to the solved Nash mixture, and the mixture details are viewable
+// inside Opponent & Setup.
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { MetaPool, PoolTeam, PriorReport } from "./types";
 import type { SelectedTeam } from "./app";
 import type { NashMix, NashTeam } from "./nash-mix";
 import type { DrawSource } from "./draw-source";
-import type { NashVariant } from "./info-mode";
 import {
   clearStoredPool,
   parsePoolText,
@@ -818,12 +813,7 @@ export function StartScreen(props: {
   onPool: (p: LoadedPool) => void;
   locale: Locale;
   onLocale: (l: Locale) => void;
-  /** `?nash`: fixed opponent mixture, no setup. */
-  nash: boolean;
-  /** Which Nash mixture is active on `?nash` (`"new"` or `"v3"`). */
-  nashVariant: NashVariant;
-  /** The solved mixture: `?nash`'s read-only opponent panel, and the setup
-   * panel's Nash draw choice. */
+  /** The solved mixture: `NashMixPanel` inside Opponent & Setup. */
   nashMix: NashMix;
   /** The preserved v3 Nash mixture, kept alongside the new mixture until
    * non-regression is confirmed. */
@@ -844,14 +834,11 @@ export function StartScreen(props: {
 }) {
   const pool = props.loadedPool.pool;
   const teams = pool.teams;
-  const nash = props.nash;
   const [customs, setCustoms] = useState<CustomTeam[]>(loadCustomTeams);
   const [picks, setPicks] = useState<Picks>(() =>
     loadPicks(pool, loadCustomTeams()),
   );
-  const [modal, setModal] = useState<null | "human" | "settings" | "mix">(
-    null,
-  );
+  const [modal, setModal] = useState<null | "human" | "settings">(null);
 
   // A pool swap invalidates the pinned pick: an id from the old lists is
   // either absent from the new ones — the button would name a team that no
@@ -939,7 +926,7 @@ export function StartScreen(props: {
             redrawn each battle — and the second of them is why no opponent
             picker follows. */}
         <p class="mode-banner" data-testid="mode-banner">
-          {nash ? ui().nashBanner : ui().blindBanner}
+          {ui().blindBanner}
         </p>
         <button
           class="party-btn"
@@ -949,66 +936,28 @@ export function StartScreen(props: {
           <span class="party-label">{ui().yourParty}</span>
           <span class="party-value">{humanValue}</span>
         </button>
-        {nash && (
-          // Nash's opponent row is a readout of the distribution, not a
-          // picker: there is nothing to choose, but there IS something to
-          // read. Its value line carries the whole distribution, so the
-          // panel is for seeing which six species each arm brings, not for
-          // learning the odds.
-          <button
-            class="party-btn"
-            data-party="nash"
-            onClick={() => setModal("mix")}
-          >
-            <span class="party-label">{ui().oppParty}</span>
-            <span class="party-value">
-              {props.nashMix.teams.map((t) => `${t.id} ${pct(t.weight)}`).join(" · ")}
-            </span>
-          </button>
-        )}
-        {!nash && (
-          // Its value line reports both halves so the usual answer — the
-          // catalog, no prior — is readable without opening anything;
-          // .party-value wraps rather than truncates, so a long file name
-          // pushes the prior onto a second line instead of hiding it.
-          <button
-            class="party-btn"
-            data-party="settings"
-            onClick={() => setModal("settings")}
-          >
-            <span class="party-label">{ui().settingsLabel}</span>
-            <span class="party-value">
-              {ui().settingsValue(
-                props.loadedPool.name !== null
-                  ? ui().poolLoaded(props.loadedPool.name, teams.length)
-                  : props.drawSource === "nash"
-                    ? ui().drawNash(props.nashMix.teams.length)
-                    : props.drawSource === "nash-v3"
-                      ? ui().drawOldNash(props.oldNashMix.teams.length)
-                      : ui().poolBundled(teams.length),
-                props.prior ? props.prior.name : ui().priorNone,
-              )}
-            </span>
-          </button>
-        )}
+        <button
+          class="party-btn"
+          data-party="settings"
+          onClick={() => setModal("settings")}
+        >
+          <span class="party-label">{ui().settingsLabel}</span>
+          <span class="party-value">
+            {ui().settingsValue(
+              props.loadedPool.name !== null
+                ? ui().poolLoaded(props.loadedPool.name, teams.length)
+                : props.drawSource === "nash"
+                  ? ui().drawNash(props.nashMix.teams.length)
+                  : props.drawSource === "nash-v3"
+                    ? ui().drawOldNash(props.oldNashMix.teams.length)
+                    : ui().poolBundled(teams.length),
+              props.prior ? props.prior.name : ui().priorNone,
+            )}
+          </span>
+        </button>
         <a class="start-link" href={`${import.meta.env.BASE_URL}?evaluate`}>
           {ui().evaluateLink}
         </a>
-        {nash && (
-          <a
-            class="start-link"
-            data-testid="nash-variant-link"
-            href={
-              props.nashVariant === "v3"
-                ? `${import.meta.env.BASE_URL}?nash`
-                : `${import.meta.env.BASE_URL}?nash=v3`
-            }
-          >
-            {props.nashVariant === "v3"
-              ? ui().nashSwitchNew
-              : ui().nashSwitchOld}
-          </a>
-        )}
       </main>
 
       {modal === "human" && (
@@ -1026,11 +975,6 @@ export function StartScreen(props: {
             // fixes remain visible.
             onCustomsChange={customsChanged}
           />
-        </Modal>
-      )}
-      {modal === "mix" && (
-        <Modal title={ui().nashTitle} onClose={() => setModal(null)}>
-          <NashMixPanel mix={props.nashMix} />
         </Modal>
       )}
       {modal === "settings" && (

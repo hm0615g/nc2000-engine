@@ -2,26 +2,18 @@
  * "blind"; "open" names the retired open-sheet mode and survives only so
  * records made under it (forks, kifu) replay with their own semantics. */
 export type InfoMode = "open" | "blind";
-/** `play` is `/`; `?blind` is kept as an alias of it. */
-export type Door = "play" | "nash" | "solver" | "evaluate" | "fork";
-export type NashVariant = "new" | "v3";
+/** `play` is `/`; `?blind` is kept as an alias of it. Tools and alternate
+ * interfaces have their own doors (`?fork`, `?evaluate`, `?solver`). */
+export type Door = "play" | "solver" | "evaluate" | "fork";
+export { readNashVariant, type NashVariant } from "./draw-source";
 
 export function readDoor(search?: string): Door {
   const query = search ?? (typeof location === "undefined" ? "" : location.search);
   const params = new URLSearchParams(query);
-  for (const door of ["fork", "evaluate", "solver", "nash"] as const) {
+  for (const door of ["fork", "evaluate", "solver"] as const) {
     if (isOpen(params.get(door))) return door;
   }
   return "play";
-}
-
-/** `?nash=v3` or `?nash=old` selects the preserved v3 mixture; bare `?nash`
- * (or any other open value) selects the new Full-Combination Preview Nash. */
-export function readNashVariant(search?: string): NashVariant {
-  const query = search ?? (typeof location === "undefined" ? "" : location.search);
-  const params = new URLSearchParams(query);
-  const v = (params.get("nash") ?? "").trim().toLowerCase();
-  return v === "v3" || v === "old" ? "v3" : "new";
 }
 
 function isOpen(v: string | null): boolean {
