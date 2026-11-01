@@ -8153,8 +8153,9 @@ fn main() {
         "dominance-audit" => cmd_dominance_audit(&args[1..]),
         "falsify-conclusion" => cmd_falsify_conclusion(&args[1..]),
         "converge-conclusion" => cmd_converge_conclusion(&args[1..]),
+        "stress-falsify" => cmd_stress_falsify(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit | falsify-conclusion | converge-conclusion)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit | falsify-conclusion | converge-conclusion | stress-falsify)"
         ),
     }
 }
@@ -15030,4 +15031,388 @@ fn cmd_converge_conclusion(args: &[String]) {
             }),
         );
     }
+}
+
+fn cmd_stress_falsify(args: &[String]) {
+    let t_start = std::time::Instant::now();
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let agent_iters: u32 = num(args, "--iters", 400);
+    let c: f64 = num(args, "--c", 0.4);
+    let max_turns: u16 = num(args, "--max-turns", 250);
+    let num_pairs: usize = num(args, "--pairs", 32); // 64 games per test arm
+    let seed: u64 = num(args, "--seed", 20261109);
+    let out_file = PathBuf::from(flag(args, "--out").unwrap_or_else(|| {
+        "data/dominance-audit-v13-verified/stress-falsify-report.json".to_string()
+    }));
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+        });
+
+    // 1. Load the verified equilibrium `data/kodoku-r3/conclusion-equilibrium-deme.json`
+    let eq_txt =
+        std::fs::read_to_string(root.join("data/kodoku-r3/conclusion-equilibrium-deme.json"))
+            .expect("read conclusion-equilibrium-deme.json");
+    let eq_v: Value = serde_json::from_str(&eq_txt).unwrap();
+    let mut pi_ids: Vec<String> = Vec::new();
+    let mut pi_weights: Vec<f64> = Vec::new();
+    let mut pi_sets: Vec<Vec<PokemonSet>> = Vec::new();
+    for t in eq_v["teams"].as_array().unwrap() {
+        let id = t["id"].as_str().unwrap().to_string();
+        let w = t["weight"].as_f64().unwrap();
+        let raw = t["sets"].as_array().unwrap();
+        let upgraded = normalize_team_dvs_evs(&dex, raw);
+        let canon = gen.canonize(&dex, &upgraded).unwrap();
+        let sets = to_sets(&canon).unwrap();
+        pi_ids.push(id);
+        pi_weights.push(w);
+        pi_sets.push(sets);
+    }
+
+    // Build zero-prior-smuggling `pi_star_mp`
+    let bp_text =
+        std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
+    let raw_mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
+    let mut base_mp = normalize_belief_pool(&dex, &gen, &raw_mp);
+    let mut pi_sigs: BTreeSet<PreviewSig> = BTreeSet::new();
+    for s in &pi_sets {
+        pi_sigs.insert(preview_sig_sets(s));
+    }
+    base_mp
+        .teams
+        .retain(|t| !pi_sigs.contains(&preview_sig_sets(&t.sets)));
+    for (k, pid) in pi_ids.iter().enumerate() {
+        base_mp.teams.push(nc2000_bot::preview::MetaTeam {
+            id: format!("pi-star-{}", pid),
+            sets: pi_sets[k].clone(),
+            weight: Some(pi_weights[k]),
+        });
+    }
+    let pi_star_mp = Arc::new(base_mp);
+
+    // Load historical teams for Angle 1
+    let mut hist_db: BTreeMap<String, Vec<PokemonSet>> = BTreeMap::new();
+    for path in [
+        "data/team-inventory-v1/eval/teams.json",
+        "data/community-rentals-v0/teams.json",
+        "data/eco-pool/master-pool.json",
+    ] {
+        if let Ok(txt) = std::fs::read_to_string(root.join(path)) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(arr) = v["teams"].as_array() {
+                    for t in arr {
+                        if let (Some(id), Some(raw)) = (t["id"].as_str(), t["sets"].as_array()) {
+                            let upgraded = normalize_team_dvs_evs(&dex, raw);
+                            if let Some(canon) = gen.canonize(&dex, &upgraded) {
+                                if let Ok(sets) = to_sets(&canon) {
+                                    hist_db.entry(id.to_string()).or_insert(sets);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let make_sets = |raw_val: Value| -> Vec<PokemonSet> {
+        let arr = raw_val.as_array().unwrap();
+        let upgraded = normalize_team_dvs_evs(&dex, arr);
+        let canon = gen
+            .canonize(&dex, &upgraded)
+            .unwrap_or_else(|| panic!("invalid stress-test team: {}", raw_val));
+        to_sets(&canon).unwrap()
+    };
+
+    // Define all 4 Falsification Angles: `(angle_tag, chall_id, description, member_variants)`
+    // Note: `member_variants` has 1 element for singletons, or 2-3 elements for Angle 2 Counter-Demes!
+    let mut stress_suite: Vec<(&'static str, String, &'static str, Vec<Vec<PokemonSet>>)> =
+        Vec::new();
+
+    // =========================================================================
+    // ANGLE 1: Deep-MCTS Combo & Lock Archetypes (Testing if Playout::heavy() under-evaluated multi-turn combos)
+    // =========================================================================
+    for (tid, desc) in [
+        (
+            "hc75-1st-show",
+            "PerishTrap + MeanLook BatonPass (UmbreonL52 + MisdreavusL51 + AlakazamL52 + SuicuneL51 + SteelixL51 + SnorlaxL52)",
+        ),
+        (
+            "hc75-2nd-toriyama",
+            "PerishTrap + DestinyBond + SleepPowder (MisdreavusL50 + ExeggutorL50 + ZapdosL55 + SnorlaxL55)",
+        ),
+        (
+            "sample-09",
+            "Spore + Agility + BatonPass Smeargle -> BellyDrum Snorlax / SwordsDance MarowakL55",
+        ),
+        (
+            "mjj-2010-garap-a",
+            "Substitute + Swagger + BatonPass Jolteon + Zapdos -> SwordsDance + HP_Flying MarowakL55",
+        ),
+        (
+            "mjj-2023-ukethdr",
+            "HealBell Stall + Phaze Loop (Miltank + Skarmory + Suicune + Zapdos)",
+        ),
+        (
+            "rental-cban-2",
+            "BellyDrum + SelfDestruct Snorlax + Swagger/Sub ZapdosL55 + TyranitarL55",
+        ),
+    ] {
+        if let Some(sets) = hist_db.get(tid) {
+            stress_suite.push(("Angle1_ComboLock_DeepMCTS", tid.to_string(), desc, vec![sets.clone()]));
+        }
+    }
+
+    // =========================================================================
+    // ANGLE 3: Asymmetric Level-Creep (`52-52-51-50-50-50` & `54-51-50-50-50-50` Speed-Creep Assassins)
+    // Outspeeding ALL L50 Starmie, L50 Gengar, L50 Heracross, L50 Marowak, L50 Cloyster by +1/+2 levels!
+    // =========================================================================
+    let speed_creep_mirror = make_sets(json!([
+        {"species": "Snorlax", "level": 52, "item": "Leftovers", "moves": ["Curse", "Double-Edge", "Rest", "Sleep Talk"]},
+        {"species": "Starmie", "level": 52, "item": "Miracle Berry", "moves": ["Thunderbolt", "Surf", "Ice Beam", "Recover"]},
+        {"species": "Gengar", "level": 51, "item": "Berry Juice", "moves": ["Thunderbolt", "Ice Punch", "Giga Drain", "Destiny Bond"]},
+        {"species": "Marowak", "level": 51, "item": "Thick Club", "moves": ["Earthquake", "Rock Slide", "Hidden Power Flying", "Swords Dance"]},
+        {"species": "Heracross", "level": 51, "item": "Mint Berry", "moves": ["Megahorn", "Curse", "Earthquake", "Rest"]},
+        {"species": "Cloyster", "level": 50, "item": "Gold Berry", "moves": ["Spikes", "Surf", "Ice Beam", "Explosion"]}
+    ]));
+    stress_suite.push((
+        "Angle3_SpeedCreep_Levels",
+        "speed-creep-52-52-51".to_string(),
+        "52-52-51-51-51-50 Speed-Creep Mirror: StarmieL52 + GengarL51 + MarowakL51(HP_Flying) + HeracrossL51 outspeeding all L50s",
+        vec![speed_creep_mirror],
+    ));
+
+    let speed_creep_zap_wak = make_sets(json!([
+        {"species": "Zapdos", "level": 54, "item": "Leftovers", "moves": ["Thunderbolt", "Hidden Power Ice", "Reflect", "Rest"]},
+        {"species": "Marowak", "level": 51, "item": "Thick Club", "moves": ["Earthquake", "Rock Slide", "Hidden Power Flying", "Swords Dance"]},
+        {"species": "Starmie", "level": 51, "item": "Miracle Berry", "moves": ["Surf", "Thunderbolt", "Psychic", "Recover"]},
+        {"species": "Gengar", "level": 51, "item": "Gold Berry", "moves": ["Thunderbolt", "Ice Punch", "Explosion", "Perish Song"]},
+        {"species": "Snorlax", "level": 50, "item": "Mint Berry", "moves": ["Body Slam", "Earthquake", "Curse", "Self-Destruct"]},
+        {"species": "Exeggutor", "level": 50, "item": "Quick Claw", "moves": ["Sleep Powder", "Psychic", "Giga Drain", "Explosion"]}
+    ]));
+    stress_suite.push((
+        "Angle3_SpeedCreep_Levels",
+        "speed-creep-54-51-51".to_string(),
+        "54-51-51-51-50-50 Speed-Creep ZapdosL54 + MarowakL51(HP_Flying) + StarmieL51 + GengarL51",
+        vec![speed_creep_zap_wak],
+    ));
+
+    // =========================================================================
+    // ANGLE 4: 250-Turn TOD Pressure + Phaze + HealBell StallFortress
+    // Specifically engineered to wall SnorlaxL55/HeracrossL50/MarowakL50 and exhaust Perish Song (PP 5 -> 3 under Pressure)
+    // =========================================================================
+    let tod_pressure_fortress = make_sets(json!([
+        {"species": "Suicune", "level": 55, "item": "Leftovers", "moves": ["Surf", "Ice Beam", "Roar", "Rest"]},
+        {"species": "Zapdos", "level": 55, "item": "Miracle Berry", "moves": ["Thunderbolt", "Hidden Power Ice", "Whirlwind", "Rest"]},
+        {"species": "Skarmory", "level": 50, "item": "Gold Berry", "moves": ["Drill Peck", "Whirlwind", "Curse", "Rest"]},
+        {"species": "Miltank", "level": 50, "item": "Mint Berry", "moves": ["Body Slam", "Heal Bell", "Growl", "Milk Drink"]},
+        {"species": "Misdreavus", "level": 50, "item": "Bright Powder", "moves": ["Mean Look", "Perish Song", "Protect", "Pain Split"]},
+        {"species": "Cloyster", "level": 50, "item": "Quick Claw", "moves": ["Spikes", "Surf", "Toxic", "Rapid Spin"]}
+    ]));
+    stress_suite.push((
+        "Angle4_TOD_PressureStall",
+        "tod-pressure-suicune-skarm".to_string(),
+        "SuicuneL55(Roar/Rest) + ZapdosL55(Whirlwind/Rest) + SkarmoryL50(Whirlwind/Rest) + MiltankL50(HealBell/Growl) + Cloyster(Spikes/Spin)",
+        vec![tod_pressure_fortress],
+    ));
+
+    let tod_blissey_aerodactyl = make_sets(json!([
+        {"species": "Suicune", "level": 55, "item": "Leftovers", "moves": ["Surf", "Toxic", "Roar", "Rest"]},
+        {"species": "Raikou", "level": 55, "item": "Miracle Berry", "moves": ["Thunderbolt", "Hidden Power Ice", "Roar", "Rest"]},
+        {"species": "Skarmory", "level": 50, "item": "Gold Berry", "moves": ["Drill Peck", "Whirlwind", "Toxic", "Rest"]},
+        {"species": "Blissey", "level": 50, "item": "Bright Powder", "moves": ["Seismic Toss", "Heal Bell", "Light Screen", "Soft-Boiled"]},
+        {"species": "Marowak", "level": 50, "item": "Thick Club", "moves": ["Earthquake", "Rock Slide", "Hidden Power Flying", "Rest"]},
+        {"species": "Misdreavus", "level": 50, "item": "Mint Berry", "moves": ["Mean Look", "Perish Song", "Spite", "Rest"]}
+    ]));
+    stress_suite.push((
+        "Angle4_TOD_PressureStall",
+        "tod-spite-blissey-skarm".to_string(),
+        "SuicuneL55 + RaikouL55 + SkarmoryL50 + BlisseyL50(HealBell) + MisdreavusL50(Spite/Perish) PP-Depletion Fortress",
+        vec![tod_blissey_aerodactyl],
+    ));
+
+    // =========================================================================
+    // ANGLE 2: Coordinated Multi-Variant Counter-Demes (3-Variant Camouflage Shells engineered specifically against pi*)
+    // =========================================================================
+    // Counter-Deme A: `mjj-2010-garap` 3-Variant Camouflage Shell (Jolteon BatonPass + Zapdos + MarowakL55 + Lapras + Snorlax + Exeggutor)
+    let garap_v1 = hist_db["mjj-2010-garap-a"].clone();
+    let garap_v2 = make_sets(json!([
+        {"species": "Marowak", "level": 55, "item": "Thick Club", "moves": ["Earthquake", "Rock Slide", "Hidden Power Bug", "Flamethrower"]},
+        {"species": "Jolteon", "level": 50, "item": "Miracle Berry", "moves": ["Thunderbolt", "Hidden Power Ice", "Agility", "Baton Pass"]},
+        {"species": "Zapdos", "level": 50, "item": "Leftovers", "moves": ["Thunderbolt", "Hidden Power Ice", "Reflect", "Rest"]},
+        {"species": "Lapras", "level": 50, "item": "Mint Berry", "moves": ["Hydro Pump", "Ice Beam", "Thunderbolt", "Rest"]},
+        {"species": "Snorlax", "level": 50, "item": "Gold Berry", "moves": ["Double-Edge", "Earthquake", "Curse", "Self-Destruct"]},
+        {"species": "Exeggutor", "level": 50, "item": "Quick Claw", "moves": ["Giga Drain", "Psychic", "Leech Seed", "Explosion"]}
+    ]));
+    let garap_v3 = make_sets(json!([
+        {"species": "Marowak", "level": 55, "item": "Thick Club", "moves": ["Earthquake", "Rock Slide", "Swords Dance", "Fire Blast"]},
+        {"species": "Jolteon", "level": 50, "item": "Gold Berry", "moves": ["Thunderbolt", "Charm", "Substitute", "Baton Pass"]},
+        {"species": "Zapdos", "level": 50, "item": "Leftovers", "moves": ["Thunder", "Hidden Power Ice", "Swagger", "Substitute"]},
+        {"species": "Lapras", "level": 50, "item": "Miracle Berry", "moves": ["Surf", "Ice Beam", "Perish Song", "Rest"]},
+        {"species": "Snorlax", "level": 50, "item": "Mint Berry", "moves": ["Body Slam", "Fire Blast", "Curse", "Rest"]},
+        {"species": "Exeggutor", "level": 50, "item": "PRZ Cure Berry", "moves": ["Sleep Powder", "Psychic", "Hidden Power Fire", "Explosion"]}
+    ]));
+    stress_suite.push((
+        "Angle2_CounterDeme_Camo",
+        "counter-deme-garap-3var".to_string(),
+        "3-Variant Coordinated Counter-Deme on mjj-2010-garap Shell (BatonPass SwordsDance vs Agility 4-Atk vs Charm/Perish Trap)",
+        vec![garap_v1, garap_v2, garap_v3],
+    ));
+
+    // Counter-Deme B: Anti-pi* Apex Counter Shell (`ZapdosL55 + SuicuneL50 + SkarmoryL50 + MarowakL50 + ExeggutorL50 + SnorlaxL50`)
+    // Engineered to wall SnorlaxL55/HeracrossL50/MarowakL50 (via Skarmory+Zapdos+Exeggutor) AND beat MiltankL55/ZapdosL55!
+    let apex_v1 = make_sets(json!([
+        {"species": "Zapdos", "level": 55, "item": "Leftovers", "moves": ["Thunderbolt", "Hidden Power Ice", "Reflect", "Rest"]},
+        {"species": "Suicune", "level": 50, "item": "Mint Berry", "moves": ["Surf", "Ice Beam", "Roar", "Rest"]},
+        {"species": "Skarmory", "level": 50, "item": "Gold Berry", "moves": ["Drill Peck", "Whirlwind", "Curse", "Rest"]},
+        {"species": "Marowak", "level": 50, "item": "Thick Club", "moves": ["Earthquake", "Rock Slide", "Hidden Power Flying", "Swords Dance"]},
+        {"species": "Exeggutor", "level": 50, "item": "Miracle Berry", "moves": ["Sleep Powder", "Psychic", "Giga Drain", "Explosion"]},
+        {"species": "Snorlax", "level": 50, "item": "Quick Claw", "moves": ["Double-Edge", "Earthquake", "Fire Blast", "Self-Destruct"]}
+    ]));
+    let apex_v2 = make_sets(json!([
+        {"species": "Zapdos", "level": 55, "item": "Miracle Berry", "moves": ["Thunder", "Hidden Power Ice", "Swagger", "Substitute"]},
+        {"species": "Suicune", "level": 50, "item": "Leftovers", "moves": ["Surf", "Ice Beam", "Toxic", "Rest"]},
+        {"species": "Skarmory", "level": 50, "item": "Mint Berry", "moves": ["Drill Peck", "Whirlwind", "Toxic", "Rest"]},
+        {"species": "Marowak", "level": 50, "item": "Thick Club", "moves": ["Earthquake", "Rock Slide", "Flamethrower", "Swords Dance"]},
+        {"species": "Exeggutor", "level": 50, "item": "Gold Berry", "moves": ["Leech Seed", "Psychic", "Stun Spore", "Explosion"]},
+        {"species": "Snorlax", "level": 50, "item": "Quick Claw", "moves": ["Body Slam", "Earthquake", "Curse", "Rest"]}
+    ]));
+    stress_suite.push((
+        "Angle2_CounterDeme_Camo",
+        "counter-deme-apex-2var".to_string(),
+        "2-Variant Coordinated Counter-Deme (ZapdosL55 + SuicuneL50 + SkarmoryL50 + MarowakL50 + ExeggutorL50 + SnorlaxL50)",
+        vec![apex_v1, apex_v2],
+    ));
+
+    println!("\n=================================================================================");
+    println!(
+        "=== ULTIMATE FALSIFICATION STRESS-TEST ({} Chall Suites x {}g @ {} iters, Pure MCTS Preview + Battle) ===",
+        stress_suite.len(),
+        num_pairs * 2,
+        agent_iters
+    );
+    println!("=================================================================================");
+
+    let empty_pols = PiStarPreviewPolicies {
+        blue_own_pol_by_idx: vec![vec![]; pi_sets.len()],
+        blue_opp_pol_by_idx: vec![vec![]; pi_sets.len()],
+        red_own_pol_by_blue_idx: vec![vec![]; pi_sets.len()],
+        red_opp_pol_by_blue_idx: vec![vec![]; pi_sets.len()],
+    };
+
+    let mut report_rows: Vec<Value> = Vec::new();
+    for (idx, (angle, cid, desc, variants)) in stress_suite.iter().enumerate() {
+        let n_var = variants.len();
+        let var_w = 1.0 / (n_var as f64);
+        // Build `blue_mp_disclosed`: Blue knows all variants of this challenger/Counter-Deme
+        let mut blue_mp_disc = (*pi_star_mp).clone();
+        for (v_i, v_sets) in variants.iter().enumerate() {
+            blue_mp_disc.teams.push(nc2000_bot::preview::MetaTeam {
+                id: format!("stress-disc-{}-v{}", cid, v_i),
+                sets: v_sets.clone(),
+                weight: Some(0.25 * var_w),
+            });
+        }
+        let blue_mp_disc = Arc::new(blue_mp_disc);
+
+        // Evaluate each variant across `pairs_per_var` (summing to `num_pairs` mirror pairs = `2 * num_pairs` games)
+        let mut disc_games = 0usize;
+        let mut disc_blue_wins = 0.0f64;
+        let mut zk_games = 0usize;
+        let mut zk_blue_wins = 0.0f64;
+
+        for (v_i, v_sets) in variants.iter().enumerate() {
+            let p_start = (v_i * num_pairs) / n_var;
+            let p_end = ((v_i + 1) * num_pairs) / n_var;
+            let p_cnt = p_end.saturating_sub(p_start).max(1);
+            let test_seed = seed
+                ^ ((idx as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                ^ ((v_i as u64 + 1).wrapping_mul(0xBF58_476D_1CE4_E5B9));
+
+            // Arm A: Disclosed Bayesian-Shell-Nash Preview + Deep-MCTS Battle (`preview_pols = None` -> exact 60-action Nash preview!)
+            let out_disc = eval_vs_pi_star_qmc_with_preview(
+                &dex,
+                &pi_sets,
+                &pi_weights,
+                v_sets,
+                blue_mp_disc.clone(),
+                pi_star_mp.clone(),
+                None,
+                128 + p_start,
+                p_cnt,
+                agent_iters,
+                c,
+                max_turns,
+                threads,
+                test_seed,
+            );
+            disc_games += out_disc.games_played;
+            disc_blue_wins += out_disc.blue_score * (out_disc.games_played as f64);
+
+            // Arm B: Zero-Knowledge Encounter + Deep-MCTS Battle (`blue_prior = pi_star_mp`, zero prior knowledge of challenger)
+            let out_zk = eval_vs_pi_star_qmc_with_preview(
+                &dex,
+                &pi_sets,
+                &pi_weights,
+                v_sets,
+                pi_star_mp.clone(),
+                pi_star_mp.clone(),
+                Some(&empty_pols),
+                256 + p_start,
+                p_cnt,
+                agent_iters,
+                c,
+                max_turns,
+                threads,
+                test_seed ^ 0xCAFE_F00D_1234_5678,
+            );
+            zk_games += out_zk.games_played;
+            zk_blue_wins += out_zk.blue_score * (out_zk.games_played as f64);
+        }
+
+        let disc_red_wr = 1.0 - disc_blue_wins / (disc_games.max(1) as f64);
+        let zk_red_wr = 1.0 - zk_blue_wins / (zk_games.max(1) as f64);
+        let combined_red_wr = 0.5 * (disc_red_wr + zk_red_wr);
+        println!(
+            "  [{:25}] {:26} ({}v) | Disclosed_MCTS_Red_WR={:.4} ({}g) | ZeroKnow_MCTS_Red_WR={:.4} ({}g) | Avg_Red_WR={:.4} | {}",
+            angle,
+            cid,
+            n_var,
+            disc_red_wr,
+            disc_games,
+            zk_red_wr,
+            zk_games,
+            combined_red_wr,
+            desc
+        );
+        report_rows.push(json!({
+            "angle": angle,
+            "id": cid,
+            "variants": n_var,
+            "description": desc,
+            "disclosed_mcts_red_wr": disc_red_wr,
+            "disclosed_games": disc_games,
+            "zero_know_mcts_red_wr": zk_red_wr,
+            "zero_know_games": zk_games,
+            "avg_red_wr": combined_red_wr,
+        }));
+    }
+
+    write_json_atomic(
+        &out_file,
+        &json!({
+            "elapsed_secs": t_start.elapsed().as_secs_f64(),
+            "agent_iters": agent_iters,
+            "pairs_per_arm": num_pairs,
+            "results": report_rows,
+        }),
+    );
 }
