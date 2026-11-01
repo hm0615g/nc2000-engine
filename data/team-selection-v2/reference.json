@@ -6,9 +6,9 @@
   "records": 141,
   "eligible": 123,
   "measured": 111,
-  "selected": 26,
+  "selected": 27,
   "pending": 9,
-  "notSelected": 76,
+  "notSelected": 75,
   "prior": 103,
   "nashSupport": 4,
   "legacyNashV3Support": 5
@@ -133,7 +133,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.015873,
+   "drawWeight": 0.015152,
    "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -227,7 +227,7 @@
     "stage": "B"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -274,7 +274,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.015873,
+   "drawWeight": 0.015152,
    "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0.186817,
@@ -462,7 +462,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -697,7 +697,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -838,7 +838,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0.261004,
@@ -877,15 +877,15 @@
    },
    "measuredAs": "sample-06",
    "v1Label": "strong",
-   "label": "not-selected",
-   "reason": "superseded by Kodoku evolved descendant deme-r1-00-s0030 (L55 Tyranitar + L55 Raikou + L50 Snorlax)",
+   "label": "selected",
+   "reason": null,
    "evidence": {
     "score": 0.5926724137931039,
     "se": 0.026688819482695258,
     "stage": "C"
    },
-   "catalog": false,
-   "drawWeight": 0,
+   "catalog": true,
+   "drawWeight": 0.045455,
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -932,7 +932,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -1261,7 +1261,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -1308,7 +1308,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -1590,7 +1590,7 @@
     "stage": "B"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -1825,7 +1825,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -2884,7 +2884,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 0.125,
    "nashWeight": 0,
    "legacyNashV3Weight": 0.233512,
@@ -3474,8 +3474,8 @@
    },
    "measuredAs": "sample-06",
    "v1Label": "strong",
-   "label": "not-selected",
-   "reason": "superseded by Kodoku evolved descendant deme-r1-00-s0030 (L55 Tyranitar + L55 Raikou + L50 Snorlax)",
+   "label": "selected",
+   "reason": null,
    "evidence": {
     "score": 0.5926724137931039,
     "se": 0.026688819482695258,
@@ -3528,7 +3528,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.015873,
+   "drawWeight": 0.015152,
    "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -3620,7 +3620,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -3850,7 +3850,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -5242,7 +5242,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -5398,7 +5398,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -5964,7 +5964,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -6352,7 +6352,7 @@
     "stage": "kodoku-v14-nash"
    },
    "catalog": true,
-   "drawWeight": 0.011905,
+   "drawWeight": 0.011364,
    "priorWeight": 0,
    "nashWeight": 0.3,
    "legacyNashV3Weight": 0,
@@ -6396,7 +6396,7 @@
     "stage": "kodoku-v13-nash"
    },
    "catalog": true,
-   "drawWeight": 0.011905,
+   "drawWeight": 0.011364,
    "priorWeight": 0,
    "nashWeight": 0.25,
    "legacyNashV3Weight": 0,
@@ -6440,7 +6440,7 @@
     "stage": "kodoku-v14-nash"
    },
    "catalog": true,
-   "drawWeight": 0.011905,
+   "drawWeight": 0.011364,
    "priorWeight": 0,
    "nashWeight": 0.25,
    "legacyNashV3Weight": 0,
@@ -6484,7 +6484,7 @@
     "stage": "kodoku-v10-nash"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 0,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -6528,7 +6528,7 @@
     "stage": "kodoku-v13-nash"
    },
    "catalog": true,
-   "drawWeight": 0.011905,
+   "drawWeight": 0.011364,
    "priorWeight": 0,
    "nashWeight": 0.2,
    "legacyNashV3Weight": 0,
@@ -6572,7 +6572,7 @@
     "stage": "kodoku-v13-nash"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 0,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -6616,7 +6616,7 @@
     "stage": "kodoku-v10-nash"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 0,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -6660,7 +6660,7 @@
     "stage": "kodoku-v11-nash"
    },
    "catalog": true,
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "priorWeight": 0,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,

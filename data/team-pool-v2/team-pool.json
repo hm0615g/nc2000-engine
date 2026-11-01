@@ -16,9 +16,9 @@
  },
  "setOptimization": {
   "policy": "low-attack-v2: no Physical move, Hidden Power or external move access; minimum Attack DV preserving HP and shiny status; Attack EV 0; conditional female preference except own Attract users and multi-variant camouflage clusters",
-  "changedTeams": 18,
-  "changedSets": 32,
-  "changedGenders": 7,
+  "changedTeams": 19,
+  "changedSets": 34,
+  "changedGenders": 8,
   "femalePreference": {
    "enabled": true,
    "weightedDirectSources": {
@@ -55,7 +55,7 @@
     50,
     55
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.688218,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -281,7 +281,7 @@
     50,
     55
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.66056,
    "provenance": {
     "family": "community-rentals",
@@ -507,7 +507,7 @@
     50,
     55
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.644397,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -733,7 +733,7 @@
     50,
     50
    ],
-   "drawWeight": 0.011905,
+   "drawWeight": 0.011364,
    "score": 0.637672,
    "provenance": {
     "family": "kodoku-nash-v14",
@@ -959,7 +959,7 @@
     50,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.636853,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -1185,7 +1185,7 @@
     55,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.636494,
    "provenance": {
     "family": "meta-nash-neighborhood",
@@ -1411,7 +1411,7 @@
     50,
     50
    ],
-   "drawWeight": 0.011905,
+   "drawWeight": 0.011364,
    "score": 0.630972,
    "provenance": {
     "family": "kodoku-nash-v13",
@@ -1637,7 +1637,7 @@
     50,
     50
    ],
-   "drawWeight": 0.011905,
+   "drawWeight": 0.011364,
    "score": 0.628572,
    "provenance": {
     "family": "kodoku-nash-v14",
@@ -1863,7 +1863,7 @@
     55,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.627801,
    "provenance": {
     "family": "kodoku-evolved",
@@ -2089,7 +2089,7 @@
     50,
     50
    ],
-   "drawWeight": 0.011905,
+   "drawWeight": 0.011364,
    "score": 0.625695,
    "provenance": {
     "family": "kodoku-nash-v13",
@@ -2315,7 +2315,7 @@
     50,
     55
    ],
-   "drawWeight": 0.015873,
+   "drawWeight": 0.015152,
    "score": 0.615661,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -2541,7 +2541,7 @@
     50,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.609195,
    "provenance": {
     "family": "community-rentals",
@@ -2767,7 +2767,7 @@
     55,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.608537,
    "provenance": {
     "family": "kodoku-evolved",
@@ -2993,7 +2993,7 @@
     50,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.604885,
    "provenance": {
     "family": "majinjima",
@@ -3219,7 +3219,7 @@
     50,
     50
    ],
-   "drawWeight": 0.015873,
+   "drawWeight": 0.015152,
    "score": 0.603089,
    "provenance": {
     "family": "community-rentals",
@@ -3445,7 +3445,7 @@
     50,
     55
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.598779,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -3650,8 +3650,234 @@
    ]
   },
   {
-   "id": "red-v10-s1105-r2-s0155",
+   "id": "sample-06",
    "rank": 17,
+   "label": "selected",
+   "nash": false,
+   "evolved": false,
+   "species": [
+    "Umbreon",
+    "Skarmory",
+    "Marowak",
+    "Snorlax",
+    "Raikou",
+    "Suicune"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    55,
+    55,
+    50
+   ],
+   "drawWeight": 0.045455,
+   "score": 0.592672,
+   "provenance": {
+    "family": "smogon-hub-samples",
+    "origin": "human",
+    "source": "Smogon NC2000 Resource Hub sample teams (built by international + Japanese experts)",
+    "url": "https://www.smogon.com/forums/threads/nintendo-cup-2000-resource-hub.3682691/",
+    "version": "thread sample 06"
+   },
+   "sets": [
+    {
+     "name": "Umbreon",
+     "species": "Umbreon",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Pursuit",
+      "Charm",
+      "Toxic",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Skarmory",
+     "species": "Skarmory",
+     "item": "Mint Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Drill Peck",
+      "Curse",
+      "Toxic",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Marowak",
+     "species": "Marowak",
+     "item": "Thick Club",
+     "ability": "No Ability",
+     "moves": [
+      "Earthquake",
+      "Fire Blast",
+      "Rock Slide",
+      "Swords Dance"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Snorlax",
+     "species": "Snorlax",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Double-Edge",
+      "Curse",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Raikou",
+     "species": "Raikou",
+     "item": "Magnet",
+     "ability": "No Ability",
+     "moves": [
+      "Thunder",
+      "Hidden Power Ice",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 26,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Suicune",
+     "species": "Suicune",
+     "item": "Scope Lens",
+     "ability": "No Ability",
+     "moves": [
+      "Surf",
+      "Ice Beam",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ]
+  },
+  {
+   "id": "red-v10-s1105-r2-s0155",
+   "rank": 18,
    "label": "selected",
    "nash": false,
    "evolved": true,
@@ -3671,7 +3897,7 @@
     55,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.587777,
    "provenance": {
     "family": "kodoku-evolved",
@@ -3877,7 +4103,7 @@
   },
   {
    "id": "mjj-2010-garap-a",
-   "rank": 18,
+   "rank": 19,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -3897,7 +4123,7 @@
     50,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.586207,
    "provenance": {
     "family": "majinjima",
@@ -4103,7 +4329,7 @@
   },
   {
    "id": "mjj-2020-rraikou",
-   "rank": 19,
+   "rank": 20,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -4123,7 +4349,7 @@
     50,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.58477,
    "provenance": {
     "family": "majinjima",
@@ -4329,7 +4555,7 @@
   },
   {
    "id": "hc75-3rd-bean",
-   "rank": 20,
+   "rank": 21,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -4349,7 +4575,7 @@
     50,
     50
    ],
-   "drawWeight": 0.015873,
+   "drawWeight": 0.015152,
    "score": 0.578305,
    "provenance": {
     "family": "hc75-top8",
@@ -4555,7 +4781,7 @@
   },
   {
    "id": "sample-02",
-   "rank": 21,
+   "rank": 22,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -4575,7 +4801,7 @@
     50,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.573994,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -4781,7 +5007,7 @@
   },
   {
    "id": "sib-r1-n4-red-v6-r1-s0064-s07",
-   "rank": 22,
+   "rank": 23,
    "label": "selected",
    "nash": false,
    "evolved": true,
@@ -4801,7 +5027,7 @@
     55,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.55532,
    "provenance": {
     "family": "kodoku-evolved",
@@ -5007,7 +5233,7 @@
   },
   {
    "id": "hc75-top8-tsuru",
-   "rank": 23,
+   "rank": 24,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -5027,7 +5253,7 @@
     50,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.528017,
    "provenance": {
     "family": "hc75-top8",
@@ -5233,7 +5459,7 @@
   },
   {
    "id": "sample-09",
-   "rank": 24,
+   "rank": 25,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -5253,7 +5479,7 @@
     55,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.512931,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -5459,7 +5685,7 @@
   },
   {
    "id": "sample-22-orig",
-   "rank": 25,
+   "rank": 26,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -5479,7 +5705,7 @@
     50,
     55
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.511135,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -5685,7 +5911,7 @@
   },
   {
    "id": "sample-14",
-   "rank": 26,
+   "rank": 27,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -5705,7 +5931,7 @@
     50,
     50
    ],
-   "drawWeight": 0.047619,
+   "drawWeight": 0.045455,
    "score": 0.50018,
    "provenance": {
     "family": "smogon-hub-samples",

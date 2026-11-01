@@ -87,6 +87,10 @@ export const CATALOG_TEAM_NAMES: Record<string, TeamNameEntry> = {
     ja: "55ライコウナッシー",
     en: "55 Raikou Exeggutor",
   },
+  "sample-06": {
+    ja: "キチカビ3 (55ライコウカビゴンWA)",
+    en: "Kichikabi 3 (55 Raikou Snorlax WA)",
+  },
   "mjj-2010-garap-a": {
     ja: "ガラプラス",
     en: "Gala-Lapras",
