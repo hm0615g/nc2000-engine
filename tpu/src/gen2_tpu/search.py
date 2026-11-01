@@ -1768,6 +1768,18 @@ def _solve_depth2_from_leaves(
     )
 
 
+@partial(
+    jax.jit,
+    static_argnames=(
+        "top_k",
+        "ply1_samples",
+        "ply2_samples",
+        "rollout_turns",
+        "ply2_rollout_turns",
+        "rm_sweeps",
+        "base_seed_int",
+    ),
+)
 def evaluate_depth2_counterfactual_oracle(
     root_state: CompactBattle,
     table: MatchTable,
