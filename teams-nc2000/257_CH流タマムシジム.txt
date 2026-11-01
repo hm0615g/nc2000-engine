@@ -1,0 +1,48 @@
+Exeggutor (M) @ Leftovers
+Level: 51
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Psychic
+- Leech Seed
+- Sleep Powder
+- Explosion
+
+Nidoking (M) @ Gold Berry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Earthquake
+- Fire Blast
+- Thief
+- Reflect
+
+Gengar (M) @ PRZCureBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Ice Punch
+- Psychic
+- Explosion
+
+Cloyster (M) @ MiracleBerry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Ice Beam
+- Spikes
+- Rest
+- Explosion
+
+Snorlax (M) @ Pink Bow
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Curse
+- Rest
+- Sleep Talk
+
+Raikou @ Mint Berry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 22 Atk / 26 Def
+- Thunderbolt
+- Hidden Power [Ice]
+- Roar
+- Rest

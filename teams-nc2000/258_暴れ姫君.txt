@@ -1,0 +1,49 @@
+Jynx (F) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Ice Beam
+- Lovely Kiss
+- Swagger
+- Substitute
+
+Marowak (M) @ Thick Club
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Earthquake
+- Rock Slide
+- Fire Blast
+- Swords Dance
+
+Snorlax (M) @ Mint Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Curse
+- Rest
+- Self-Destruct
+
+Cloyster (M) @ Gold Berry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Surf
+- Spikes
+- Reflect
+- Explosion
+
+Houndoom (F) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Solar Beam
+- Sunny Day
+- Rest
+
+Gengar (M) @ Polkadot Bow
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Fire Punch
+- Destiny Bond
+- Explosion

@@ -1,0 +1,49 @@
+Marowak (M) @ Thick Club
+Level: 53
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 14 HP / 24 Atk / 26 Def
+- Earthquake
+- Rock Slide
+- Hidden Power [Flying]
+- Swords Dance
+
+Gengar (M) @ Gold Berry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Thunderbolt
+- Ice Punch
+- Destiny Bond
+- Explosion
+
+Snorlax (M) @ BrightPowder
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Return
+- Curse
+- Rest
+- Sleep Talk
+
+Cloyster (M) @ Mint Berry
+Level: 52
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Surf
+- Spikes
+- Rest
+- Explosion
+
+Charizard (M) @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Fire Blast
+- Earthquake
+- Belly Drum
+- Rest
+
+Umbreon (F) @ Leftovers
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Mean Look
+- Confuse Ray
+- Substitute
+- Baton Pass

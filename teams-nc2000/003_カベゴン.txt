@@ -1,0 +1,51 @@
+Snorlax (M) @ Leftovers
+Level: 55
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Double-Edge
+- Curse
+- Rest
+- Sleep Talk
+
+Marowak (M) @ Thick Club
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 26 Atk / 26 Def
+- Bonemerang
+- Rock Slide
+- Hidden Power [Bug]
+- Swords Dance
+
+Starmie @ MiracleBerry
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Hydro Pump
+- Psychic
+- Thunder Wave
+- Recover
+
+Blissey (F) @ Quick Claw
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Ice Beam
+- Fire Blast
+- Present
+- Soft-Boiled
+
+Heracross (M) @ Scope Lens
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+- Megahorn
+- Earthquake
+- Rest
+- Sleep Talk
+
+Moltres @ Charcoal
+Level: 50
+EVs: 252 HP / 252 Atk / 252 Def / 252 SpA / 252 SpD / 252 Spe
+IVs: 2 Atk
+- Fire Blast
+- Sunny Day
+- Rest
+- Sleep Talk
