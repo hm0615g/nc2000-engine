@@ -533,6 +533,7 @@ enum AttackerTier {
     T1bAdaptiveMixOnly,
     T1cBlind400AdaptiveMix,
     T1SuperCompute3200Mix,
+    T2aRulesSuperSearch3x,
     T2RulesBayesianOracleBr,
     T3ClairvoyantOpenSheet,
     T4Clairvoyant3v3FullInfo,
@@ -548,6 +549,7 @@ impl AttackerTier {
             Self::T1bAdaptiveMixOnly => "T1b_AdaptiveMix_Only",
             Self::T1cBlind400AdaptiveMix => "T1c_AdaptiveMix_And_Pruning",
             Self::T1SuperCompute3200Mix => "T1d_SuperCompute_8x_Mix",
+            Self::T2aRulesSuperSearch3x => "T2a_Rules_SuperSearch_3x",
             Self::T2RulesBayesianOracleBr => "T2_Rules_Bayesian_Oracle_BR",
             Self::T3ClairvoyantOpenSheet => "T3_Clairvoyant_OpenSheet",
             Self::T4Clairvoyant3v3FullInfo => "T4_Clairvoyant_3v3_FullInfo",
@@ -563,7 +565,8 @@ impl AttackerTier {
             Self::T1bAdaptiveMixOnly => "Rules-Compliant 1x Compute + Bayesian Adaptive Mixture Only (2/5 probe reserve)",
             Self::T1cBlind400AdaptiveMix => "Rules-Compliant 1x Compute + Bayesian Adaptive Mixture (1/5 reserve) + Root Pruning",
             Self::T1SuperCompute3200Mix => "Rules-Compliant 8x Compute + Root Mixing + Pruning",
-            Self::T2RulesBayesianOracleBr => "Rules-Compliant Bayesian Best-Response (Public Info Only + Determinized Policy Oracle + UCB-BR)",
+            Self::T2aRulesSuperSearch3x => "Rules-Compliant 3x Pure Search Oracle (3x Battle Iters + Bayesian BR Preview)",
+            Self::T2RulesBayesianOracleBr => "Rules-Compliant Coupled Bayesian Policy-Oracle BR (Public Info Only + Determinized 1x Policy Oracle + BoundSolver + Coupled UCB-BR)",
             Self::T3ClairvoyantOpenSheet => "Cheating Set-Sheet Reader (Knows Exact Variant/Moves/Items + Variant-BR Preview + OpenAgent)",
             Self::T4Clairvoyant3v3FullInfo => "Cheating 3v3-Pick & Lead Reader (Counter-Picks Blue's Exact Turn-0 3v3 Selection + Pinned 3-Mon Bench)",
             Self::T5OmniscientGodBr => "Omniscient God BR (Full State + Live-Policy Oracle + Certified BoundSolver Endgame + UCB-BR Search)",
@@ -579,6 +582,7 @@ impl AttackerTier {
                 | Self::T1bAdaptiveMixOnly
                 | Self::T1cBlind400AdaptiveMix
                 | Self::T1SuperCompute3200Mix
+                | Self::T2aRulesSuperSearch3x
                 | Self::T2RulesBayesianOracleBr
         )
     }
@@ -760,11 +764,30 @@ fn play_omniscient_duel_game(
                     .with_root_pruning(),
             )
         }
+        AttackerTier::T2aRulesSuperSearch3x => {
+            let super_iters = base_iters * 3;
+            let super_cfg = RmConfig {
+                iterations: super_iters,
+                rule: SelRule::Ucb,
+                c: 0.4,
+                ..Default::default()
+            };
+            Some(
+                BlindAgent::new(super_cfg, red_prior.clone(), None, red_seed)
+                    .with_preview_iterations(super_iters)
+                    .with_own_preview_policy(oracle.red_bayesian_br_pol60.clone())
+                    .with_opponent_pick_policy(oracle.red_opp_shell_pol60.clone(), 0.10)
+                    .with_root_pruning(),
+            )
+        }
         _ => None,
     };
 
     let mut red_obs: Option<Observer> = None;
     let mut red_belief: Option<Belief> = None;
+    // Publicly observable shadow tracker of what Blue knows about Red (100% public info: Red's own preview + Red's public moves/items)
+    let mut blue_public_obs: Option<Observer> = None;
+    let mut blue_public_bel: Option<Belief> = None;
     let mut blue_pick_one_hot60: Option<Vec<f64>> = None;
     let mut solver_interventions = 0usize;
 
@@ -828,12 +851,33 @@ fn play_omniscient_duel_game(
                 };
                 red_obs = Some(obs);
                 red_belief = Some(bel);
+
+                let b_obs = Observer::new(&battle, side_blue);
+                let b_bel = Belief::with_fallback_policy(
+                    dex,
+                    &blue_prior,
+                    &b_obs,
+                    FallbackPolicy::default(),
+                );
+                blue_public_obs = Some(b_obs);
+                blue_public_bel = Some(b_bel);
             }
 
             let obs = red_obs.as_mut().unwrap();
             let bel = red_belief.as_mut().unwrap();
             obs.observe(&battle, dex);
             bel.sync(dex, obs);
+            if let (Some(b_obs), Some(b_bel)) = (blue_public_obs.as_mut(), blue_public_bel.as_mut()) {
+                b_obs.observe(&battle, dex);
+                b_bel.sync(dex, b_obs);
+                if !is_preview {
+                    b_bel.condition_canonical_pick_policy(
+                        &oracle.blue_opp_pol60,
+                        0.10,
+                        b_obs,
+                    );
+                }
+            }
 
             if is_preview {
                 if let Some(bc) = blue_choice {
@@ -903,9 +947,16 @@ fn play_omniscient_duel_game(
                             bs.best().unwrap_or(choices_red[0])
                         }
                         AttackerTier::T2RulesBayesianOracleBr => {
-                            // Rules-compliant Bayesian Best Response
-                            let mut sampled_replies = Vec::with_capacity(k_oracle);
-                            if !choices_blue.is_empty() {
+                            // Rules-compliant Coupled Bayesian Policy-Oracle Best Response:
+                            // 1. Sample `k_oracle` determinized worlds `det_b` from Red's public posterior `bel`.
+                            // 2. In each world `det_b`, query Blue's 1x `BlindSearch` using only Blue's publicly
+                            //    observable belief `blue_public_bel` & `blue_public_obs` tracked from Turn 0.
+                            // 3. Evaluate Red's actions coupled to each `(det_b, rep_k)` world (including `BoundSolver` in 1v1).
+                            let mut coupled_worlds: Vec<(Battle, SearchChoice, Vec<SearchChoice>)> =
+                                Vec::with_capacity(k_oracle);
+                            if let (Some(b_obs), Some(b_bel)) =
+                                (blue_public_obs.as_ref(), blue_public_bel.as_ref())
+                            {
                                 for _ in 0..k_oracle {
                                     let cand = bel.sample(&mut red_rng);
                                     let mut det_b =
@@ -913,49 +964,183 @@ fn play_omniscient_duel_game(
                                     det_b.set_log_enabled(false);
                                     let det_blue_choices = det_b.legal_choices(dex, side_blue);
                                     if !det_blue_choices.is_empty() {
-                                        let mut sim_blue = BlindAgent::new(
-                                            base_cfg.clone(),
-                                            blue_prior.clone(),
-                                            None,
-                                            red_rng.next(),
-                                        )
-                                        .with_opponent_pick_policy(
-                                            oracle.blue_opp_pol60.clone(),
-                                            0.10,
-                                        );
-                                        let rep = sim_blue.choose(
-                                            &det_b,
-                                            dex,
-                                            side_blue,
-                                            &det_blue_choices,
-                                        );
-                                        sampled_replies.push(rep);
+                                        let rep = if det_blue_choices.len() == 1 {
+                                            det_blue_choices[0]
+                                        } else {
+                                            let mut b_search = BlindSearch::new(
+                                                &det_b,
+                                                dex,
+                                                base_cfg.clone(),
+                                                side_blue,
+                                                red_rng.next(),
+                                            );
+                                            for _ in 0..base_cfg.iterations {
+                                                b_search.step_one(dex, b_bel, b_obs);
+                                                if b_search.should_early_stop() {
+                                                    break;
+                                                }
+                                            }
+                                            b_search.best().unwrap_or(det_blue_choices[0])
+                                        };
+                                        coupled_worlds.push((det_b, rep, det_blue_choices));
                                     }
                                 }
                             }
-                            let mut bs = BlindSearch::new(
-                                &battle,
-                                dex,
-                                base_cfg.clone(),
-                                side_red,
-                                red_rng.next(),
-                            );
-                            let (w_it, br_it) = if same_budget {
-                                let w = (base_iters / 4).max(1);
-                                (w, base_iters.saturating_sub(w).max(1))
+
+                            let alive_red = count_alive_mons(&battle, side_red);
+                            let alive_blue = count_alive_mons(&battle, side_blue);
+                            let mut solver_pick: Option<SearchChoice> = None;
+                            if alive_red == 1 && alive_blue == 1 && !coupled_worlds.is_empty() {
+                                let mut ev_by_a = vec![0.0f64; choices_red.len()];
+                                let mut solved_w = 0usize;
+                                for (det_b, rep_k, det_b_choices) in &coupled_worlds {
+                                    if let Some(b_idx) =
+                                        det_b_choices.iter().position(|&c| c == *rep_k)
+                                    {
+                                        let mut solver = BoundSolver::new(
+                                            dex,
+                                            BoundConfig {
+                                                time_budget: Some(Duration::from_millis(80)),
+                                                work_budget: 25_000,
+                                                node_budget: 60_000,
+                                                cell_cap: 2048,
+                                                resource_closure_nodes: Some(6000),
+                                                eps: 0.02,
+                                                ..Default::default()
+                                            },
+                                        );
+                                        let _ = solver.solve(det_b, None);
+                                        if let Some(mat) = solver.root_payoffs(det_b) {
+                                            if mat.value.width() <= 0.10
+                                                && mat.actions[side_red].len() == choices_red.len()
+                                                && mat.actions[side_blue].len()
+                                                    == det_b_choices.len()
+                                            {
+                                                solved_w += 1;
+                                                let cols = mat.actions[1].len();
+                                                for a_idx in 0..choices_red.len() {
+                                                    let cell = if side_red == 0 {
+                                                        mat.cells[a_idx * cols + b_idx].mid()
+                                                    } else {
+                                                        1.0 - mat.cells[b_idx * cols + a_idx].mid()
+                                                    };
+                                                    ev_by_a[a_idx] += cell;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if solved_w == coupled_worlds.len() {
+                                    solver_interventions += 1;
+                                    let best_a = (0..choices_red.len())
+                                        .max_by(|&a, &b| ev_by_a[a].total_cmp(&ev_by_a[b]))
+                                        .unwrap_or(0);
+                                    solver_pick = Some(choices_red[best_a]);
+                                }
+                            }
+
+                            if let Some(sp) = solver_pick {
+                                sp
+                            } else if coupled_worlds.is_empty() {
+                                let mut bs = BlindSearch::new(
+                                    &battle,
+                                    dex,
+                                    base_cfg.clone(),
+                                    side_red,
+                                    red_rng.next(),
+                                );
+                                for _ in 0..(base_iters * 3) {
+                                    bs.step_one(dex, bel, obs);
+                                    if bs.should_early_stop() {
+                                        break;
+                                    }
+                                }
+                                bs.best().unwrap_or(choices_red[0])
                             } else {
-                                (base_iters * 2, base_iters * 6)
-                            };
-                            run_ucb_best_response_search(
-                                &mut bs,
-                                dex,
-                                bel,
-                                obs,
-                                side_red,
-                                &sampled_replies,
-                                w_it,
-                                br_it,
-                            )
+                                // Coupled multi-world UCB-BR: each sampled world `det_b` has its own
+                                // `BlindSearch` + `Pinned` belief paired with `rep_k`, while `(br_n, br_w)`
+                                // are shared across the `k_oracle` worlds!
+                                let (w_total, br_total) = if same_budget {
+                                    let w = (base_iters / 4).max(1);
+                                    (w, base_iters.saturating_sub(w).max(1))
+                                } else {
+                                    (base_iters, base_iters * 2)
+                                };
+                                let k_w = coupled_worlds.len();
+                                let w_per_world = ((w_total as usize) / k_w).max(1) as u32;
+                                let mut world_searches: Vec<(BlindSearch, Belief, SearchChoice)> =
+                                    Vec::with_capacity(k_w);
+                                for (det_b, rep_k, _) in &coupled_worlds {
+                                    let det_bel = Belief::pinned_from_battle(det_b, obs);
+                                    let mut w_bs = BlindSearch::new(
+                                        det_b,
+                                        dex,
+                                        base_cfg.clone(),
+                                        side_red,
+                                        red_rng.next(),
+                                    );
+                                    w_bs.prune_dominated();
+                                    for _ in 0..w_per_world {
+                                        w_bs.step_one(dex, &det_bel, obs);
+                                    }
+                                    world_searches.push((w_bs, det_bel, *rep_k));
+                                }
+                                let actions = world_searches[0].0.actions().to_vec();
+                                let n_own = actions.len();
+                                let dom = world_searches[0].0.dominated().to_vec();
+                                let any_safe = dom.iter().any(|&d| !d);
+                                let eligible: Vec<usize> =
+                                    (0..n_own).filter(|&i| !any_safe || !dom[i]).collect();
+                                if eligible.len() == 1 {
+                                    actions[eligible[0]]
+                                } else {
+                                    let mut br_n = vec![0u32; n_own];
+                                    let mut br_w = vec![0.0f64; n_own];
+                                    for it in 0..(br_total as usize) {
+                                        let own_a = if it < eligible.len() * 2 * k_w {
+                                            eligible[(it / k_w) % eligible.len()]
+                                        } else {
+                                            let tot = (it as f64).ln();
+                                            let mut best_a = eligible[0];
+                                            let mut best_ucb = f64::NEG_INFINITY;
+                                            for &a in &eligible {
+                                                let na = (br_n[a].max(1)) as f64;
+                                                let mean = br_w[a] / na;
+                                                let ucb = mean + 0.40 * (tot / na).sqrt();
+                                                if ucb > best_ucb {
+                                                    best_ucb = ucb;
+                                                    best_a = a;
+                                                }
+                                            }
+                                            best_a
+                                        };
+                                        let (ref mut w_bs, ref det_bel, rep_k) =
+                                            world_searches[it % k_w];
+                                        let r_side0 =
+                                            w_bs.step_forced_joint(dex, det_bel, obs, own_a, rep_k);
+                                        let r_my = if side_red == 0 {
+                                            r_side0
+                                        } else {
+                                            1.0 - r_side0
+                                        };
+                                        br_n[own_a] += 1;
+                                        br_w[own_a] += r_my;
+                                    }
+                                    let max_n =
+                                        eligible.iter().map(|&a| br_n[a]).max().unwrap_or(1);
+                                    let min_n = (max_n / 3).max(2);
+                                    let best_idx = eligible
+                                        .into_iter()
+                                        .filter(|&a| br_n[a] >= min_n)
+                                        .max_by(|&a, &b| {
+                                            let ma = br_w[a] / (br_n[a].max(1) as f64);
+                                            let mb = br_w[b] / (br_n[b].max(1) as f64);
+                                            ma.total_cmp(&mb).then_with(|| br_n[a].cmp(&br_n[b]))
+                                        })
+                                        .unwrap_or(0);
+                                    actions[best_idx]
+                                }
+                            }
                         }
                         AttackerTier::T5OmniscientGodBr => {
                             // Full-Info + True Live-Policy Oracle (`blue_agent.belief()` & `blue_agent.observer()`)
@@ -1522,7 +1707,27 @@ fn main() {
         });
     }
 
-    let tiers: Vec<AttackerTier> = if same_budget {
+    let all_tiers = [
+        AttackerTier::T0BaselineBlind400,
+        AttackerTier::T1aRootPruningOnly,
+        AttackerTier::T1bAdaptiveMixOnly,
+        AttackerTier::T1cBlind400AdaptiveMix,
+        AttackerTier::T1SuperCompute3200Mix,
+        AttackerTier::T2aRulesSuperSearch3x,
+        AttackerTier::T2RulesBayesianOracleBr,
+        AttackerTier::T3ClairvoyantOpenSheet,
+        AttackerTier::T4Clairvoyant3v3FullInfo,
+        AttackerTier::T5OmniscientGodBr,
+        AttackerTier::T6PsychicMoveReaderGod,
+    ];
+    let tiers: Vec<AttackerTier> = if let Some(filter_str) = find_flag("--tiers") {
+        let wanted: Vec<&str> = filter_str.split(',').map(|s| s.trim()).collect();
+        all_tiers
+            .iter()
+            .copied()
+            .filter(|t| wanted.iter().any(|&w| t.id().contains(w)))
+            .collect()
+    } else if same_budget {
         vec![
             AttackerTier::T1aRootPruningOnly,
             AttackerTier::T1bAdaptiveMixOnly,
@@ -1532,18 +1737,7 @@ fn main() {
             AttackerTier::T6PsychicMoveReaderGod,
         ]
     } else {
-        vec![
-            AttackerTier::T0BaselineBlind400,
-            AttackerTier::T1aRootPruningOnly,
-            AttackerTier::T1bAdaptiveMixOnly,
-            AttackerTier::T1cBlind400AdaptiveMix,
-            AttackerTier::T1SuperCompute3200Mix,
-            AttackerTier::T2RulesBayesianOracleBr,
-            AttackerTier::T3ClairvoyantOpenSheet,
-            AttackerTier::T4Clairvoyant3v3FullInfo,
-            AttackerTier::T5OmniscientGodBr,
-            AttackerTier::T6PsychicMoveReaderGod,
-        ]
+        all_tiers.to_vec()
     };
 
     println!(
