@@ -8166,6 +8166,13 @@ fn normalize_team_dvs_evs(dex: &Dex, raw: &[Value]) -> Vec<Value> {
             .as_array()
             .map(|a| a.iter().filter_map(|v| v.as_str().map(toid)).collect())
             .unwrap_or_default();
+        if let Some(m_arr) = set["moves"].as_array_mut() {
+            m_arr.sort_by(|a, b| {
+                let sa = toid(a.as_str().unwrap_or(""));
+                let sb = toid(b.as_str().unwrap_or(""));
+                sa.cmp(&sb)
+            });
+        }
         let has_hp = moves.iter().any(|m| m.starts_with("hiddenpower"));
         let has_caller = moves.iter().any(|m| {
             matches!(
@@ -8197,7 +8204,65 @@ fn normalize_team_dvs_evs(dex: &Dex, raw: &[Value]) -> Vec<Value> {
             }
         }
     }
+    // Canonical 6-slot ordering by `(-level, toid(species))` so slot-permuted clones
+    // (`sample-06 == rental-cban-5`, `sample-12 == rental-cban-1`, etc.) map to the
+    // exact same canonical representation and all variants in the same outer shell
+    // share 100% (`48/48`) identical legal 3v3 action indexing!
+    upgraded.sort_by(|a, b| {
+        let la = -(a["level"].as_i64().unwrap_or(50));
+        let lb = -(b["level"].as_i64().unwrap_or(50));
+        let sa = toid(a["species"].as_str().unwrap_or(""));
+        let sb = toid(b["species"].as_str().unwrap_or(""));
+        (la, sa).cmp(&(lb, sb))
+    });
     upgraded
+}
+
+/// Compute the bijection `row_map[ia_canon] = ia_raw` mapping each canonical 3v3 action `ia_canon`
+/// of `canon_sets` (after canonical 6-slot sorting) to its original index `ia_raw` in `raw` (before slot sorting).
+fn compute_raw_to_canon_action_map(raw: &[Value], canon_sets: &[PokemonSet]) -> Vec<usize> {
+    let leg_canon = legal_triples_sets(canon_sets);
+    let n_raw = raw.len().min(6);
+    let mut raw_lookup: BTreeMap<(String, String, String), usize> = BTreeMap::new();
+    let mut raw_idx = 0usize;
+    for i in 0..n_raw {
+        for j in (i + 1)..n_raw {
+            for k in (j + 1)..n_raw {
+                let li = raw[i]["level"].as_u64().unwrap_or(50) as u16;
+                let lj = raw[j]["level"].as_u64().unwrap_or(50) as u16;
+                let lk = raw[k]["level"].as_u64().unwrap_or(50) as u16;
+                if li + lj + lk <= 155 {
+                    for &(lead, b1, b2) in &[(i, j, k), (j, i, k), (k, i, j)] {
+                        let s_lead = toid(raw[lead]["species"].as_str().unwrap_or(""));
+                        let s_b1 = toid(raw[b1]["species"].as_str().unwrap_or(""));
+                        let s_b2 = toid(raw[b2]["species"].as_str().unwrap_or(""));
+                        let (lo, hi) = if s_b1 <= s_b2 {
+                            (s_b1, s_b2)
+                        } else {
+                            (s_b2, s_b1)
+                        };
+                        raw_lookup.insert((s_lead, lo, hi), raw_idx);
+                        raw_idx += 1;
+                    }
+                }
+            }
+        }
+    }
+    leg_canon
+        .iter()
+        .enumerate()
+        .map(|(ia_can, &[lead, b1, b2])| {
+            let s_lead = toid(&canon_sets[lead].species);
+            let s_b1 = toid(&canon_sets[b1].species);
+            let s_b2 = toid(&canon_sets[b2].species);
+            let (lo, hi) = if s_b1 <= s_b2 {
+                (s_b1, s_b2)
+            } else {
+                (s_b2, s_b1)
+            };
+            raw_lookup.get(&(s_lead, lo, hi)).copied().unwrap_or(ia_can)
+        })
+        .collect()
 }
 
 struct PiStarEvalOut {
@@ -10765,6 +10830,304 @@ fn solve_bayesian_shell_preview_nash(
     (game_val, per_u, per_v, p_cum, q_cum)
 }
 
+/// Deterministic Shell-Coupled Common Random Numbers (CRN) seed hashed strictly from the unordered
+/// pair of canonical outer shell signatures `(sig_a, sig_b)` so that every variant `k in U` and
+/// every variant `m in V` is evaluated on the exact same battle seeds cell-by-cell (`(ia, ib)`).
+fn shell_pair_crn_seed(seed: u64, sig_a: &PreviewSig, sig_b: &PreviewSig, extra: u64) -> u64 {
+    let (lo, hi) = if sig_a <= sig_b {
+        (sig_a, sig_b)
+    } else {
+        (sig_b, sig_a)
+    };
+    let mut h = 0xcbf2_9ce4_8422_2325_u64 ^ seed ^ extra.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    for (sp, lv, g, item) in lo.iter().chain(hi.iter()) {
+        for b in sp.as_bytes() {
+            h = (h ^ (*b as u64)).wrapping_mul(0x0100_0000_01b3);
+        }
+        h = (h ^ (*lv as u64)).wrapping_mul(0x0100_0000_01b3);
+        for b in g.as_bytes() {
+            h = (h ^ (*b as u64)).wrapping_mul(0x0100_0000_01b3);
+        }
+        h = (h ^ (*item as u64)).wrapping_mul(0x0100_0000_01b3);
+    }
+    h
+}
+
+fn mon_set_fingerprint(m: &PokemonSet) -> u64 {
+    let mut h = 0xcbf2_9ce4_8422_2325_u64;
+    for b in toid(&m.species).as_bytes() {
+        h = (h ^ (*b as u64)).wrapping_mul(0x0100_0000_01b3);
+    }
+    h = (h ^ (m.level as u64)).wrapping_mul(0x0100_0000_01b3);
+    for b in toid(&m.item).as_bytes() {
+        h = (h ^ (*b as u64)).wrapping_mul(0x0100_0000_01b3);
+    }
+    let mut mvs: Vec<String> = m.moves.iter().map(|x| toid(x)).collect();
+    mvs.sort();
+    for mv in &mvs {
+        for b in mv.as_bytes() {
+            h = (h ^ (*b as u64)).wrapping_mul(0x0100_0000_01b3);
+        }
+        h = (h ^ 0xff).wrapping_mul(0x0100_0000_01b3);
+    }
+    h
+}
+
+/// De-biased & Rao-Blackwellized Bayesian Shell-vs-Shell Preview Nash Solver:
+/// 1. Exact Physical 3v3 Subteam Equivalence Pooling (Rao-Blackwellization):
+///    When multiple variants `k in 0..n_u` of Shell U field the exact same 3 Pokemon sets on action `ia`
+///    (and/or multiple variants `m in 0..n_v` of Shell V field the exact same 3 Pokemon sets on action `ib`),
+///    their true infinite-sample 3v3 battle payoff `M*(k, m)[ia, ib]` is physically identical.
+///    Pooling their sample matrices `mats_km[k * n_v + m][ia * kb + ib]` weighted by `ns_km` eliminates
+///    spurious Monte Carlo divergence on unmutated 3v3 lineups (`56.25%` of all rows for 1-slot siblings).
+/// 2. Zero-Cardinality-Bias 1v1 Base Payoff + Empirical-Bayes Regularized Camouflage Bonus:
+///    Separates the exact prior-weighted 1v1 Preview Nash base payoff `\bar{v}_{1v1}(\tilde{M})`
+///    (which has exact zero cardinality bias for any `(n_u, n_v)`) from the multi-variant camouflage
+///    bonus `\Delta V_{camo}(M^{EB})` evaluated on Empirical-Bayes shrunk matrices
+///    `M^{EB}(k, m) = \bar{M} + \lambda(ns) * (\tilde{M}(k, m) - \bar{M})` (`\lambda = ns / (ns + 8.0)`).
+fn solve_debiased_bayesian_shell_preview_nash(
+    u_rosters: &[&CompiledRoster6],
+    v_rosters: &[&CompiledRoster6],
+    mats_km: &[&[f64]],
+    ns_km: &[u32],
+    ka: usize,
+    kb: usize,
+    alpha: &[f64],
+    beta: &[f64],
+    sweeps: usize,
+) -> (f64, Vec<f64>, Vec<f64>, Vec<Vec<f64>>, Vec<Vec<f64>>) {
+    let n_u = alpha.len();
+    let n_v = beta.len();
+    assert_eq!(u_rosters.len(), n_u);
+    assert_eq!(v_rosters.len(), n_v);
+    assert_eq!(mats_km.len(), n_u * n_v);
+    assert_eq!(ns_km.len(), n_u * n_v);
+    if (n_u <= 1 && n_v <= 1) || ka == 0 || kb == 0 {
+        return solve_bayesian_shell_preview_nash(mats_km, ka, kb, alpha, beta, sweeps);
+    }
+
+    let mut a_norm = alpha.to_vec();
+    let a_sum: f64 = a_norm.iter().sum();
+    if a_sum <= 1e-12 {
+        a_norm = vec![1.0 / (n_u as f64); n_u];
+    } else {
+        for x in &mut a_norm {
+            *x /= a_sum;
+        }
+    }
+    let mut b_norm = beta.to_vec();
+    let b_sum: f64 = b_norm.iter().sum();
+    if b_sum <= 1e-12 {
+        b_norm = vec![1.0 / (n_v as f64); n_v];
+    } else {
+        for x in &mut b_norm {
+            *x /= b_sum;
+        }
+    }
+
+    // 1. Precompute 64-bit physical 3v3 subteam fingerprints `sub_u[k][ia]` and `sub_v[m][ib]`
+    let leg_u = &u_rosters[0].legal;
+    let leg_v = &v_rosters[0].legal;
+    let mut sub_u = vec![vec![0u64; ka]; n_u];
+    for (k, r_u) in u_rosters.iter().enumerate() {
+        let mut m_fp = [0u64; 6];
+        for s in 0..6 {
+            m_fp[s] = mon_set_fingerprint(&r_u.sets[s]);
+        }
+        for (ia, &[s0, s1, s2]) in leg_u.iter().enumerate().take(ka) {
+            let h = m_fp[s0].wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                ^ m_fp[s1].wrapping_mul(0xBF58_476D_1CE4_E5B9)
+                ^ m_fp[s2].wrapping_mul(0x94D0_49BB_1331_11EB);
+            sub_u[k][ia] = h;
+        }
+    }
+    let mut sub_v = vec![vec![0u64; kb]; n_v];
+    for (m, r_v) in v_rosters.iter().enumerate() {
+        let mut m_fp = [0u64; 6];
+        for s in 0..6 {
+            m_fp[s] = mon_set_fingerprint(&r_v.sets[s]);
+        }
+        for (ib, &[s0, s1, s2]) in leg_v.iter().enumerate().take(kb) {
+            let h = m_fp[s0].wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                ^ m_fp[s1].wrapping_mul(0xBF58_476D_1CE4_E5B9)
+                ^ m_fp[s2].wrapping_mul(0x94D0_49BB_1331_11EB);
+            sub_v[m][ib] = h;
+        }
+    }
+
+    // 2. Pool matrices across identical `(sub_u[k][ia], sub_v[m][ib])` physical 3v3 subteams
+    let n_cells = ka * kb;
+    let mut pooled_mats: Vec<Vec<f64>> = mats_km.iter().map(|m| m.to_vec()).collect();
+    let mut pooled_ns: Vec<Vec<f64>> = ns_km
+        .iter()
+        .map(|&ns| vec![(ns.max(1)) as f64; n_cells])
+        .collect();
+
+    if n_u > 1 {
+        for ia in 0..ka {
+            for m in 0..n_v {
+                let mut visited = vec![false; n_u];
+                for k0 in 0..n_u {
+                    if visited[k0] {
+                        continue;
+                    }
+                    let fp0 = sub_u[k0][ia];
+                    let mut group = Vec::with_capacity(n_u);
+                    for k in k0..n_u {
+                        if sub_u[k][ia] == fp0 {
+                            visited[k] = true;
+                            group.push(k);
+                        }
+                    }
+                    if group.len() > 1 {
+                        let any_pos = group.iter().any(|&k| ns_km[k * n_v + m] >= 1);
+                        let mut w_sum = 0.0f64;
+                        for &k in &group {
+                            let ns_val = ns_km[k * n_v + m];
+                            let w = if any_pos {
+                                if ns_val >= 1 {
+                                    ns_val as f64
+                                } else {
+                                    0.0
+                                }
+                            } else {
+                                0.25
+                            };
+                            w_sum += w;
+                        }
+                        for ib in 0..kb {
+                            let idx = ia * kb + ib;
+                            let mut cell_acc = 0.0f64;
+                            for &k in &group {
+                                let ns_val = ns_km[k * n_v + m];
+                                let w = if any_pos {
+                                    if ns_val >= 1 {
+                                        ns_val as f64
+                                    } else {
+                                        0.0
+                                    }
+                                } else {
+                                    0.25
+                                };
+                                cell_acc += w * mats_km[k * n_v + m][idx];
+                            }
+                            let avg_val = cell_acc / w_sum.max(1e-9);
+                            for &k in &group {
+                                pooled_mats[k * n_v + m][idx] = avg_val;
+                                pooled_ns[k * n_v + m][idx] = w_sum;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if n_v > 1 {
+        for ib in 0..kb {
+            for k in 0..n_u {
+                let mut visited = vec![false; n_v];
+                for m0 in 0..n_v {
+                    if visited[m0] {
+                        continue;
+                    }
+                    let fp0 = sub_v[m0][ib];
+                    let mut group = Vec::with_capacity(n_v);
+                    for m in m0..n_v {
+                        if sub_v[m][ib] == fp0 {
+                            visited[m] = true;
+                            group.push(m);
+                        }
+                    }
+                    if group.len() > 1 {
+                        let mut w_sum = 0.0f64;
+                        for &m in &group {
+                            w_sum += pooled_ns[k * n_v + m][ib];
+                        }
+                        for ia in 0..ka {
+                            let idx = ia * kb + ib;
+                            let mut cell_acc = 0.0f64;
+                            let mut row_w_sum = 0.0f64;
+                            for &m in &group {
+                                let w = pooled_ns[k * n_v + m][idx];
+                                cell_acc += w * pooled_mats[k * n_v + m][idx];
+                                row_w_sum += w;
+                            }
+                            let avg_val = cell_acc / row_w_sum.max(1e-9);
+                            for &m in &group {
+                                pooled_mats[k * n_v + m][idx] = avg_val;
+                                pooled_ns[k * n_v + m][idx] = row_w_sum;
+                            }
+                        }
+                        let _ = w_sum;
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Build Empirical-Bayes shrunk matrices `eb_mats` toward the prior-weighted shell mean `\bar{M}`
+    let mut eb_mats: Vec<Vec<f64>> = vec![vec![0.5f64; n_cells]; n_u * n_v];
+    for idx in 0..n_cells {
+        let mut mean_cell = 0.0f64;
+        for k in 0..n_u {
+            for m in 0..n_v {
+                mean_cell += a_norm[k] * b_norm[m] * pooled_mats[k * n_v + m][idx];
+            }
+        }
+        for k in 0..n_u {
+            for m in 0..n_v {
+                let ns_eff = pooled_ns[k * n_v + m][idx];
+                let lam = ns_eff / (ns_eff + 1.5);
+                let raw_val = pooled_mats[k * n_v + m][idx];
+                eb_mats[k * n_v + m][idx] = mean_cell + lam * (raw_val - mean_cell);
+            }
+        }
+    }
+
+    // 4. Compute exact 1v1 Preview Nash values on `pooled_mats` and `eb_mats` to separate
+    //    zero-bias 1v1 base payoff from Empirical-Bayes regularized camouflage bonus!
+    let mut v1v1_pool_km = vec![0.5f64; n_u * n_v];
+    let mut v1v1_eb_km = vec![0.5f64; n_u * n_v];
+    for k in 0..n_u {
+        for m in 0..n_v {
+            let (_, _, vp) = solve_preview_nash(&pooled_mats[k * n_v + m], ka, kb, 200);
+            let (_, _, ve) = solve_preview_nash(&eb_mats[k * n_v + m], ka, kb, 200);
+            v1v1_pool_km[k * n_v + m] = vp;
+            v1v1_eb_km[k * n_v + m] = ve;
+        }
+    }
+    let eb_refs: Vec<&[f64]> = eb_mats.iter().map(|v| v.as_slice()).collect();
+    let (v_bay_eb, per_u_eb, per_v_eb, p_strats, q_strats) =
+        solve_bayesian_shell_preview_nash(&eb_refs, ka, kb, &a_norm, &b_norm, sweeps);
+
+    let mut base_1v1_pool = 0.0f64;
+    let mut base_1v1_eb = 0.0f64;
+    let mut per_u_out = vec![0.5f64; n_u];
+    let mut per_v_out = vec![0.5f64; n_v];
+    for k in 0..n_u {
+        let mut uk_pool = 0.0f64;
+        let mut uk_eb = 0.0f64;
+        for m in 0..n_v {
+            uk_pool += b_norm[m] * v1v1_pool_km[k * n_v + m];
+            uk_eb += b_norm[m] * v1v1_eb_km[k * n_v + m];
+        }
+        base_1v1_pool += a_norm[k] * uk_pool;
+        base_1v1_eb += a_norm[k] * uk_eb;
+        per_u_out[k] = (uk_pool + (per_u_eb[k] - uk_eb)).clamp(0.0, 1.0);
+    }
+    for m in 0..n_v {
+        let mut vm_pool = 0.0f64;
+        let mut vm_eb = 0.0f64;
+        for k in 0..n_u {
+            vm_pool += a_norm[k] * (1.0 - v1v1_pool_km[k * n_v + m]);
+            vm_eb += a_norm[k] * (1.0 - v1v1_eb_km[k * n_v + m]);
+        }
+        per_v_out[m] = (vm_pool + (per_v_eb[m] - vm_eb)).clamp(0.0, 1.0);
+    }
+    let v_debiased = (base_1v1_pool + (v_bay_eb - base_1v1_eb)).clamp(0.0, 1.0);
+    (v_debiased, per_u_out, per_v_out, p_strats, q_strats)
+}
+
 /// Compute per-slot equilibrium pick rate `slot_picks[s]`, conditional slot win rate `slot_wins[s]`,
 /// and exact Leave-One-Out marginal value `slot_marginals[s] = max(0, V* - V*_{-s})` for a variant `k`
 /// given its opponent-weighted effective matrix `m_eff` (`ka x kb`), its equilibrium strategy `p_k`,
@@ -11024,6 +11387,8 @@ fn cmd_converge_conclusion(args: &[String]) {
     let mut team_db: BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)> = BTreeMap::new();
     let mut seen_db_keys: BTreeSet<String> = BTreeSet::new();
     let mut key_to_id: BTreeMap<String, String> = BTreeMap::new();
+    let raw_alias_map: std::cell::RefCell<BTreeMap<String, (String, Vec<usize>)>> =
+        std::cell::RefCell::new(BTreeMap::new());
     let purged_hitchhikers: std::cell::RefCell<Vec<Value>> = std::cell::RefCell::new(Vec::new());
 
     let register_team = |db: &mut BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)>,
@@ -11038,10 +11403,15 @@ fn cmd_converge_conclusion(args: &[String]) {
             .canonize(&dex, &upgraded)
             .or_else(|| gen.canonize(&dex, raw))?;
         let k = team_key(&canon);
+        let sets = to_sets(&canon).ok()?;
+        let row_map = compute_raw_to_canon_action_map(raw, &sets);
         if let Some(existing_id) = k2id.get(&k) {
+            raw_alias_map
+                .borrow_mut()
+                .entry(id.to_string())
+                .or_insert_with(|| (existing_id.clone(), row_map));
             return Some(existing_id.clone());
         }
-        let sets = to_sets(&canon).ok()?;
         if let Some(reason) = structural_hitchhiker_reason(&sets) {
             let mons: Vec<String> = sets
                 .iter()
@@ -11061,6 +11431,12 @@ fn cmd_converge_conclusion(args: &[String]) {
         } else {
             id.to_string()
         };
+        raw_alias_map
+            .borrow_mut()
+            .insert(id.to_string(), (final_id.clone(), row_map.clone()));
+        raw_alias_map
+            .borrow_mut()
+            .insert(final_id.clone(), (final_id.clone(), row_map));
         k2id.insert(k.clone(), final_id.clone());
         seen_keys.insert(k);
         db.insert(final_id.clone(), (sets, canon, grp.to_string()));
@@ -11164,20 +11540,6 @@ fn cmd_converge_conclusion(args: &[String]) {
     for prev_path in [
         root.join("data/dominance-audit-v11-fullnash/converged-report.json"),
         root.join("data/dominance-audit-v10-fullnash/converged-report.json"),
-        root.join("data/dominance-audit-v9-clean/converged-report-s8.json"),
-        root.join("data/dominance-audit-v9-clean/converged-report-s7.json"),
-        root.join("data/dominance-audit-v9-clean/converged-report-s6.json"),
-        root.join("data/dominance-audit-v9-clean/converged-report-s5.json"),
-        root.join("data/dominance-audit-v9-clean/converged-report-s4.json"),
-        root.join("data/dominance-audit-v9-clean/converged-report-s3.json"),
-        root.join("data/dominance-audit-v9-clean/converged-report-s2.json"),
-        root.join("data/dominance-audit-v9-clean/converged-report.json"),
-        root.join("data/dominance-audit-v8-clean/converged-report-v6.json"),
-        root.join("data/dominance-audit-v8-clean/converged-report-v5.json"),
-        root.join("data/dominance-audit-v8-clean/converged-report-v4.json"),
-        root.join("data/dominance-audit-v8-clean/converged-report-v3.json"),
-        root.join("data/dominance-audit-v8-clean/converged-report-v2.json"),
-        root.join("data/dominance-audit-v8-clean/converged-report.json"),
         out_file.clone(),
     ] {
         let prev_tag = prev_path
@@ -11444,9 +11806,14 @@ fn cmd_converge_conclusion(args: &[String]) {
         let mut resolved_sets = Vec::new();
         let mut resolved_raw = Vec::new();
         for &mid in m_ids {
-            if let Some((sets, raw, _)) = db.get(mid) {
-                if !resolved_ids.iter().any(|x| x == mid) {
-                    resolved_ids.push(mid.to_string());
+            let mid_res = raw_alias_map
+                .borrow()
+                .get(mid)
+                .map(|(cid, _)| cid.clone())
+                .unwrap_or_else(|| mid.to_string());
+            if let Some((sets, raw, _)) = db.get(&mid_res) {
+                if !resolved_ids.iter().any(|x| x == &mid_res) {
+                    resolved_ids.push(mid_res);
                     resolved_sets.push(sets.clone());
                     resolved_raw.push(raw.clone());
                 }
@@ -11525,22 +11892,9 @@ fn cmd_converge_conclusion(args: &[String]) {
         ("deme-r2-05-s0029", "deme-r3-b0-s0013"),
         ("sample-14-orig", "deme-r3-b2-s0017"),
         ("mjj-2020-rraikou", "deme-r1-03-s0054"),
-        ("red-oracle-i0-s0110", "red-oracle-i0-s0122"),
         ("deme-r3-b2-s0013", "deme-r3-r0-s0018"),
-        ("red-oracle-i0-s0058", "red-oracle-i0-s0026"),
-        ("red-oracle-i0-s0083", "red-oracle-i0-s0016"),
-        ("red-oracle-i0-s0020", "red-oracle-i0-s0081"),
-        ("red-r2-s0106", "red-r2-s0060"),
-        ("red-v3-r1-s0082", "red-v3-r1-s0076"),
-        ("red-v3-r1-s0028", "red-v3-r1-s0080"),
-        ("deme-r2-01-s0030", "red-v3-r1-s0001"),
-        ("red-oracle-i0-s0116", "red-r2-s0110"),
         ("deme-r2-00-s0052", "deme-r2-02-s0029"),
         ("deme-r2-03-s0027", "deme-r2-02-s0029"),
-        ("red-v4-r1-s0099", "red-v4-r1-s0034"),
-        ("red-r1-s0078", "red-oracle-i0-s0086"),
-        ("red-r1-s0043", "red-r1-s0075"),
-        ("red-r2-s0108", "red-oracle-i0-s0018"),
     ];
     for &(a, b) in initial_deme_pairs {
         if !add_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, &[a, b]) {
@@ -11549,20 +11903,24 @@ fn cmd_converge_conclusion(args: &[String]) {
         }
     }
     for (p_id, s_id) in &persisted_siblings {
-        if !add_shell_unit(
+        let _ = add_shell_unit(
             &mut units,
             &mut seen_unit_sigs,
             &team_db,
             &[p_id.as_str(), s_id.as_str()],
-        ) {
-            add_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, &[p_id.as_str()]);
-            add_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, &[s_id.as_str()]);
-        }
+        );
     }
 
     // B. Register Singletons
     let initial_singletons: &[&str] = &[
         "deme-r2-01-s0030",
+        "deme-r1-00-s0030",
+        "sample-06",
+        "sample-08",
+        "rental-cban-6",
+        "sample-17",
+        "sample-02",
+        "deme-r3-b1-s0018",
         "rental-cban-7",
         "hc75-top8-tezan",
         "deme-r2-01-s0023",
@@ -11586,23 +11944,6 @@ fn cmd_converge_conclusion(args: &[String]) {
         "sample-13",
         "deme-r2-03-s0027",
         "ev-r1-pool-hc75-3rd-bean-0",
-        "red-oracle-i0-s0116",
-        "red-oracle-i0-s0137",
-        "red-oracle-i0-s0127",
-        "red-oracle-i0-s0111",
-        "red-oracle-i0-s0068",
-        "red-oracle-i0-s0095",
-        "red-r1-s0064",
-        "red-r1-s0043",
-        "red-r1-s0102",
-        "red-r1-s0095",
-        "red-r1-s0078",
-        "red-r1-s0060",
-        "red-r2-s0047",
-        "red-r2-s0103",
-        "red-r2-s0095",
-        "red-r2-s0012",
-        "red-r2-s0108",
         "hc75-1st-show",
         "sample-15",
         "mjj-2020-kb-2022",
@@ -11617,8 +11958,6 @@ fn cmd_converge_conclusion(args: &[String]) {
         "sample-16-orig",
         "deme-r1-02-s0036",
         "deme-r2-03-s0041",
-        "red-v5-r1-s0101",
-        "red-v5-r1-s0097",
     ];
     for &s_id in initial_singletons {
         add_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, &[s_id]);
@@ -11626,59 +11965,14 @@ fn cmd_converge_conclusion(args: &[String]) {
     for nem_id in &persisted_nemeses {
         promote_or_upgrade_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, nem_id);
     }
-    if let Ok(txt) =
-        std::fs::read_to_string(root.join("data/dominance-audit-v7-deme/report-step8-deme.json"))
-    {
-        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
-            if let Some(arr) = v["p_ids"].as_array() {
-                for pv in arr {
-                    if let Some(pid) = pv.as_str() {
-                        add_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, &[pid]);
-                    }
-                }
-            }
-        }
-    }
 
-    // Build Red Challenger List `q_ids`: all members of `units` first, then all remaining clean teams
+    // Build Red Challenger List `q_ids`: all members of `units`
     let mut q_ids: Vec<String> = Vec::new();
     let mut q_seen: BTreeSet<String> = BTreeSet::new();
     for u in &units {
         for mid in &u.member_ids {
             if q_seen.insert(mid.clone()) {
                 q_ids.push(mid.clone());
-            }
-        }
-    }
-    if let Ok(txt) =
-        std::fs::read_to_string(root.join("data/dominance-audit-v7-deme/report-step8-deme.json"))
-    {
-        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
-            if let Some(arr) = v["q_ids"].as_array() {
-                for qv in arr {
-                    if let Some(qid) = qv.as_str() {
-                        if team_db.contains_key(qid) && q_seen.insert(qid.to_string()) {
-                            q_ids.push(qid.to_string());
-                        }
-                    }
-                }
-            }
-        }
-    }
-    for tid in team_db.keys() {
-        if (tid.starts_with("red-oracle-")
-            || tid.starts_with("red-r")
-            || tid.starts_with("red-v")
-            || tid.starts_with("rp"))
-            && q_seen.insert(tid.clone())
-        {
-            q_ids.push(tid.clone());
-        }
-    }
-    for qid in &q_ids {
-        if let Some((sets, _, _)) = team_db.get(qid) {
-            if !seen_unit_sigs.contains(&preview_sig_sets(sets)) {
-                promote_or_upgrade_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, qid);
             }
         }
     }
@@ -11731,11 +12025,16 @@ fn cmd_converge_conclusion(args: &[String]) {
         return;
     }
 
-    // Load cached full-combination 3v3 payoff matrices `pair_mat_cache[(p_id, q_id)] = (mat_vec, n_seeds)`
+    // Load cached full-combination 3v3 payoff matrices `pair_mat_cache[(p_id, q_id)] = (mat_vec, n_seeds)`:
+    // 1. Purge all legacy `n_seeds == 0` 20-subset lifted matrices (which forced raw JSON slot order `min(i,j,k)` as lead
+    //    and introduced a +7.2%..+9.2% asymmetric upward distortion on `ns == 0` teams).
+    // 2. Remap all `n_seeds >= 1` full-combination 60-action matrices from raw JSON slot order into canonical 6-slot action order
+    //    via `raw_alias_map` (`rm_p`, `rm_q`), merging duplicate slot-permuted clone pairs by seed-weighted average!
     let mut pair_mat_cache: BTreeMap<(String, String), (Vec<f64>, u32)> = BTreeMap::new();
     if let Ok(txt) = std::fs::read_to_string(&cache_file) {
         if let Ok(v) = serde_json::from_str::<Value>(&txt) {
             if let Some(arr) = v["pair_matrices"].as_array() {
+                let alias_ref = raw_alias_map.borrow();
                 for c_val in arr {
                     if let (Some(pid), Some(qid), Some(ns), Some(m_arr)) = (
                         c_val["p_id"].as_str(),
@@ -11743,39 +12042,87 @@ fn cmd_converge_conclusion(args: &[String]) {
                         c_val["n_seeds"].as_u64(),
                         c_val["mat"].as_array(),
                     ) {
-                        if let (Some(r_p), Some(r_q)) = (roster_db.get(pid), roster_db.get(qid)) {
+                        if ns == 0 {
+                            continue;
+                        }
+                        let Some((canon_p, rm_p)) = alias_ref.get(pid) else {
+                            continue;
+                        };
+                        let Some((canon_q, rm_q)) = alias_ref.get(qid) else {
+                            continue;
+                        };
+                        if let (Some(r_p), Some(r_q)) =
+                            (roster_db.get(canon_p), roster_db.get(canon_q))
+                        {
                             let ka = r_p.legal.len();
                             let kb = r_q.legal.len();
                             let mat: Vec<f64> = m_arr.iter().filter_map(|x| x.as_f64()).collect();
-                            if mat.len() == ka * kb {
+                            if mat.len() == ka * kb && rm_p.len() == ka && rm_q.len() == kb {
                                 let ns_u32 = ns as u32;
-                                let rev = transpose_preview_matrix(&mat, ka, kb);
-                                pair_mat_cache
-                                    .insert((pid.to_string(), qid.to_string()), (mat, ns_u32));
-                                pair_mat_cache
-                                    .insert((qid.to_string(), pid.to_string()), (rev, ns_u32));
-                            } else if ka % 3 == 0 && kb % 3 == 0 && mat.len() == (ka / 3) * (kb / 3)
-                            {
-                                // Lift legacy 20-subset matrix into 60-action space with `ns_u32 = 0`
-                                // so Phase 2 Cutting-Plane completely replaces active pairs with true 60-action matrices
-                                let ka20 = ka / 3;
-                                let kb20 = kb / 3;
-                                let mut lifted = vec![0.5f64; ka * kb];
-                                for ia20 in 0..ka20 {
-                                    for ib20 in 0..kb20 {
-                                        let v = mat[ia20 * kb20 + ib20];
-                                        for la in 0..3 {
-                                            for lb in 0..3 {
-                                                lifted[(ia20 * 3 + la) * kb + (ib20 * 3 + lb)] = v;
-                                            }
+                                let mut mat_can = vec![0.5f64; ka * kb];
+                                for ia in 0..ka {
+                                    let raw_ia = rm_p[ia];
+                                    for ib in 0..kb {
+                                        let raw_ib = rm_q[ib];
+                                        mat_can[ia * kb + ib] = mat[raw_ia * kb + raw_ib];
+                                    }
+                                }
+                                if canon_p == canon_q {
+                                    for ia in 0..ka {
+                                        mat_can[ia * ka + ia] = 0.5;
+                                        for ib in (ia + 1)..ka {
+                                            let v_sym = 0.5
+                                                * (mat_can[ia * ka + ib]
+                                                    + (1.0 - mat_can[ib * ka + ia]));
+                                            mat_can[ia * ka + ib] = v_sym;
+                                            mat_can[ib * ka + ia] = 1.0 - v_sym;
                                         }
                                     }
                                 }
-                                let rev = transpose_preview_matrix(&lifted, ka, kb);
-                                pair_mat_cache
-                                    .insert((pid.to_string(), qid.to_string()), (lifted, 0u32));
-                                pair_mat_cache
-                                    .insert((qid.to_string(), pid.to_string()), (rev, 0u32));
+                                let rev_can = transpose_preview_matrix(&mat_can, ka, kb);
+                                if let Some((old_m, old_ns)) = pair_mat_cache
+                                    .get(&(canon_p.clone(), canon_q.clone()))
+                                    .cloned()
+                                {
+                                    let tot_ns = old_ns + ns_u32;
+                                    let w_old = (old_ns as f64) / (tot_ns as f64);
+                                    let w_new = (ns_u32 as f64) / (tot_ns as f64);
+                                    let mut merged: Vec<f64> = old_m
+                                        .iter()
+                                        .zip(mat_can.iter())
+                                        .map(|(&a, &b)| w_old * a + w_new * b)
+                                        .collect();
+                                    if canon_p == canon_q {
+                                        for ia in 0..ka {
+                                            merged[ia * ka + ia] = 0.5;
+                                            for ib in (ia + 1)..ka {
+                                                let v_sym = 0.5
+                                                    * (merged[ia * ka + ib]
+                                                        + (1.0 - merged[ib * ka + ia]));
+                                                merged[ia * ka + ib] = v_sym;
+                                                merged[ib * ka + ia] = 1.0 - v_sym;
+                                            }
+                                        }
+                                    }
+                                    let rev_m = transpose_preview_matrix(&merged, ka, kb);
+                                    pair_mat_cache.insert(
+                                        (canon_p.clone(), canon_q.clone()),
+                                        (merged, tot_ns),
+                                    );
+                                    pair_mat_cache.insert(
+                                        (canon_q.clone(), canon_p.clone()),
+                                        (rev_m, tot_ns),
+                                    );
+                                } else {
+                                    pair_mat_cache.insert(
+                                        (canon_p.clone(), canon_q.clone()),
+                                        (mat_can, ns_u32),
+                                    );
+                                    pair_mat_cache.insert(
+                                        (canon_q.clone(), canon_p.clone()),
+                                        (rev_can, ns_u32),
+                                    );
+                                }
                             }
                         }
                     }
@@ -11851,7 +12198,7 @@ fn cmd_converge_conclusion(args: &[String]) {
         );
 
         if !missing_team_pairs.is_empty() {
-            for (c_idx, chunk) in missing_team_pairs.chunks(512).enumerate() {
+            for (_c_idx, chunk) in missing_team_pairs.chunks(512).enumerate() {
                 let cursor = std::sync::atomic::AtomicUsize::new(0);
                 let mut chunk_out: Vec<(String, String, Vec<f64>, Vec<f64>, u32)> =
                     Vec::with_capacity(chunk.len());
@@ -11872,11 +12219,11 @@ fn cmd_converge_conclusion(args: &[String]) {
                                 let r_q = &roster_ref[qid];
                                 let ka = r_p.legal.len();
                                 let kb = r_q.legal.len();
+                                let sig_p = preview_sig_sets(&r_p.sets);
+                                let sig_q = preview_sig_sets(&r_q.sets);
+                                let p_seed = shell_pair_crn_seed(seed, &sig_p, &sig_q, 1);
                                 if pid == qid {
                                     let mut mat = vec![0.5f64; ka * kb];
-                                    let p_seed = seed
-                                        ^ (((c_idx * 512 + k) as u64)
-                                            .wrapping_mul(0x9E37_79B9_7F4A_7C15));
                                     let raw_m = eval_full_preview_matrix_compact(
                                         r_p, r_q, 1, max_turns, p_seed,
                                     );
@@ -11892,9 +12239,6 @@ fn cmd_converge_conclusion(args: &[String]) {
                                     }
                                     loc.push((pid.clone(), qid.clone(), mat.clone(), mat, 1u32));
                                 } else {
-                                    let p_seed = seed
-                                        ^ (((c_idx * 512 + k) as u64)
-                                            .wrapping_mul(0x9E37_79B9_7F4A_7C15));
                                     let mat = eval_full_preview_matrix_compact(
                                         r_p, r_q, 1, max_turns, p_seed,
                                     );
@@ -11934,10 +12278,10 @@ fn cmd_converge_conclusion(args: &[String]) {
             }
             unit_q_indices.push(idxs);
         }
-        let outside_q_indices: Vec<usize> = (0..n_q)
+        let mut outside_q_indices: Vec<usize> = (0..n_q)
             .filter(|&j| !unit_member_set.contains(&q_ids[j]))
             .collect();
-        let n_cols = n_u + outside_q_indices.len();
+        let mut n_cols = n_u + outside_q_indices.len();
 
         // Helper: solve all Bayesian Shell-vs-Shell Preview Nash games from `pair_mat_cache` in parallel
         // to populate `payoff[u][j]`, `mem_payoff[u][m_i][j]`, `cell_games[u][j]`, `mem_games[u][m_i][j]`, and `m_solve[u][c]`!
@@ -11993,26 +12337,33 @@ fn cmd_converge_conclusion(args: &[String]) {
                             let u = &units_slice[u_idx];
                             let mu_len = u.member_ids.len();
                             let ka = r_db[&u.member_ids[0]].legal.len();
+                            let u_rosters: Vec<&CompiledRoster6> =
+                                u.member_ids.iter().map(|mid| &r_db[mid]).collect();
 
                             // Intra-shell mirror game (`u` vs `u`): compute exact per-variant mirror payoffs `self_per_u`
                             let self_per_u = if mu_len > 1 {
                                 let mut self_mats: Vec<&[f64]> =
                                     Vec::with_capacity(mu_len * mu_len);
+                                let mut self_ns: Vec<u32> = Vec::with_capacity(mu_len * mu_len);
                                 for mid_a in &u.member_ids {
                                     for mid_b in &u.member_ids {
-                                        self_mats.push(
-                                            pmc[&(mid_a.clone(), mid_b.clone())].0.as_slice(),
-                                        );
+                                        let (ref m_vec, ns) = pmc[&(mid_a.clone(), mid_b.clone())];
+                                        self_mats.push(m_vec.as_slice());
+                                        self_ns.push(ns);
                                     }
                                 }
-                                let (_, per_u_self, _, _, _) = solve_bayesian_shell_preview_nash(
-                                    &self_mats,
-                                    ka,
-                                    ka,
-                                    &u.member_weights,
-                                    &u.member_weights,
-                                    250,
-                                );
+                                let (_, per_u_self, _, _, _) =
+                                    solve_debiased_bayesian_shell_preview_nash(
+                                        &u_rosters,
+                                        &u_rosters,
+                                        &self_mats,
+                                        &self_ns,
+                                        ka,
+                                        ka,
+                                        &u.member_weights,
+                                        &u.member_weights,
+                                        250,
+                                    );
                                 per_u_self
                             } else {
                                 vec![0.5; mu_len]
@@ -12023,18 +12374,25 @@ fn cmd_converge_conclusion(args: &[String]) {
                                 let v = &units_slice[v_idx];
                                 let mv_len = v.member_ids.len();
                                 let kb = r_db[&v.member_ids[0]].legal.len();
+                                let v_rosters: Vec<&CompiledRoster6> =
+                                    v.member_ids.iter().map(|mid| &r_db[mid]).collect();
                                 let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(mu_len * mv_len);
+                                let mut ns_vec: Vec<u32> = Vec::with_capacity(mu_len * mv_len);
                                 let mut min_ns = u32::MAX;
                                 for mid_u in &u.member_ids {
                                     for mid_v in &v.member_ids {
                                         let (ref m_vec, ns) = pmc[&(mid_u.clone(), mid_v.clone())];
                                         mats_ref.push(m_vec.as_slice());
+                                        ns_vec.push(ns);
                                         min_ns = min_ns.min(ns);
                                     }
                                 }
                                 let (val_uv, per_u, per_v, _p_strats, _q_strats) =
-                                    solve_bayesian_shell_preview_nash(
+                                    solve_debiased_bayesian_shell_preview_nash(
+                                        &u_rosters,
+                                        &v_rosters,
                                         &mats_ref,
+                                        &ns_vec,
                                         ka,
                                         kb,
                                         &u.member_weights,
@@ -12048,22 +12406,29 @@ fn cmd_converge_conclusion(args: &[String]) {
                             let mut out_list = Vec::with_capacity(out_q_idxs.len());
                             for (k_out, &j_out) in out_q_idxs.iter().enumerate() {
                                 let qid = &q_list[j_out];
-                                let kb = r_db[qid].legal.len();
+                                let r_q = &r_db[qid];
+                                let kb = r_q.legal.len();
                                 let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(mu_len);
+                                let mut ns_vec: Vec<u32> = Vec::with_capacity(mu_len);
                                 let mut min_ns = u32::MAX;
                                 for mid_u in &u.member_ids {
                                     let (ref m_vec, ns) = pmc[&(mid_u.clone(), qid.clone())];
                                     mats_ref.push(m_vec.as_slice());
+                                    ns_vec.push(ns);
                                     min_ns = min_ns.min(ns);
                                 }
-                                let (val_uq, per_u, _, _, _) = solve_bayesian_shell_preview_nash(
-                                    &mats_ref,
-                                    ka,
-                                    kb,
-                                    &u.member_weights,
-                                    &[1.0],
-                                    300,
-                                );
+                                let (val_uq, per_u, _, _, _) =
+                                    solve_debiased_bayesian_shell_preview_nash(
+                                        &u_rosters,
+                                        &[r_q],
+                                        &mats_ref,
+                                        &ns_vec,
+                                        ka,
+                                        kb,
+                                        &u.member_weights,
+                                        &[1.0],
+                                        300,
+                                    );
                                 let g_eff = (min_ns.max(1) as f64) * 64.0;
                                 out_list.push((k_out, j_out, val_uq, per_u, g_eff));
                             }
@@ -12242,10 +12607,14 @@ fn cmd_converge_conclusion(args: &[String]) {
                                 .unwrap_or_else(|| {
                                     (vec![0.5f64; r_p.legal.len() * r_q.legal.len()], 0)
                                 });
-                            let p_seed = seed
-                                ^ 0xA5A5_5A5A_1111_2222_u64
-                                ^ (((k + 1) as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
-                                ^ ((prev_ns as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9));
+                            let sig_p = preview_sig_sets(&r_p.sets);
+                            let sig_q = preview_sig_sets(&r_q.sets);
+                            let p_seed = shell_pair_crn_seed(
+                                seed ^ 0xA5A5_5A5A_1111_2222_u64,
+                                &sig_p,
+                                &sig_q,
+                                prev_ns as u64,
+                            );
                             let (blended_mat, new_ns) = if prev_ns > 0 {
                                 eval_incremental_adaptive_preview_matrix_compact(
                                     r_p, r_q, &old_mat, prev_ns, 2, max_turns, p_seed,
@@ -12457,11 +12826,15 @@ fn cmd_converge_conclusion(args: &[String]) {
                         )
                     };
                     if let Some(prop) = prop_opt {
-                        let k = team_key(&prop.team);
+                        let upgraded = normalize_team_dvs_evs(&dex, &prop.team);
+                        let Some(canon_team) = gen.canonize(&dex, &upgraded) else {
+                            continue;
+                        };
+                        let k = team_key(&canon_team);
                         if !seen_cand_keys.insert(k) {
                             continue;
                         }
-                        if let Ok(c_sets) = to_sets(&prop.team) {
+                        if let Ok(c_sets) = to_sets(&canon_team) {
                             if preview_sig_sets(&c_sets) == parent_sig
                                 && structural_hitchhiker_reason(&c_sets).is_none()
                             {
@@ -12474,7 +12847,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                                 );
                                 let op_tag = format!("{}@{}", prop.op.name(), prop.slot);
                                 let c_roster = CompiledRoster6::compile(&dex, &c_sets);
-                                cands.push((cid, op_tag, c_roster, prop.team));
+                                cands.push((cid, op_tag, c_roster, canon_team));
                             }
                         }
                     }
@@ -12512,10 +12885,9 @@ fn cmd_converge_conclusion(args: &[String]) {
                                 let (c_idx, j) = jobs_ref[k];
                                 let r_c = &cands_ref[c_idx].2;
                                 let r_q = &roster_ref[&q_ids_ref[j]];
-                                let base_seed = seed
-                                    ^ 0x7777_8888_9999_AAAA_u64
-                                    ^ (((u_idx * 997 + c_idx * 131 + j) as u64)
-                                        .wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                                let sig_c = preview_sig_sets(&r_c.sets);
+                                let sig_q = preview_sig_sets(&r_q.sets);
+                                let base_seed = shell_pair_crn_seed(seed, &sig_c, &sig_q, 1);
                                 let mat = eval_full_preview_matrix_compact(
                                     r_c, r_q, 1, max_turns, base_seed,
                                 );
@@ -12543,6 +12915,9 @@ fn cmd_converge_conclusion(args: &[String]) {
                     let mut best_cand_alpha = vec![w_each; new_n];
                     let mut best_cand_hh = true;
                     let base_w_sum: f64 = cur_member_weights.iter().sum::<f64>().max(1e-9);
+                    let mut u_rosters_exp: Vec<&CompiledRoster6> =
+                        cur_member_ids.iter().map(|mid| &roster_db[mid]).collect();
+                    u_rosters_exp.push(c_roster);
                     for &a_new in &alpha_grid {
                         let mut alpha_exp = Vec::with_capacity(new_n);
                         for &mw in &cur_member_weights {
@@ -12557,17 +12932,24 @@ fn cmd_converge_conclusion(args: &[String]) {
                         let mut max_loo = [0.0f64; 6];
                         for &j in &worst_qs {
                             let qid = &q_ids[j];
-                            let kb = roster_db[qid].legal.len();
+                            let r_q = &roster_db[qid];
+                            let kb = r_q.legal.len();
                             let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(new_n);
+                            let mut ns_vec: Vec<u32> = Vec::with_capacity(new_n);
                             for mid in &cur_member_ids {
-                                mats_ref
-                                    .push(pair_mat_cache[&(mid.clone(), qid.clone())].0.as_slice());
+                                let (ref m_vec, ns) = pair_mat_cache[&(mid.clone(), qid.clone())];
+                                mats_ref.push(m_vec.as_slice());
+                                ns_vec.push(ns);
                             }
                             let c_mat = &cand_mat_map[&(c_idx, j)];
                             mats_ref.push(c_mat.as_slice());
+                            ns_vec.push(1);
                             let (val_deme, per_u, _, p_strats, q_strats) =
-                                solve_bayesian_shell_preview_nash(
+                                solve_debiased_bayesian_shell_preview_nash(
+                                    &u_rosters_exp,
+                                    &[r_q],
                                     &mats_ref,
+                                    &ns_vec,
                                     ka,
                                     kb,
                                     &alpha_exp,
@@ -12745,10 +13127,9 @@ fn cmd_converge_conclusion(args: &[String]) {
                                         let qid = &rem_ref[k];
                                         let r_b = &roster_ref[qid];
                                         let kb_loc = r_b.legal.len();
-                                        let p_seed = seed
-                                            ^ 0xCAFE_F00D_1234_5678_u64
-                                            ^ (((u_idx * 1619 + k) as u64)
-                                                .wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                                        let sig_a = preview_sig_sets(&r_a.sets);
+                                        let sig_b = preview_sig_sets(&r_b.sets);
+                                        let p_seed = shell_pair_crn_seed(seed, &sig_a, &sig_b, 1);
                                         let raw_m = eval_full_preview_matrix_compact(
                                             r_a, r_b, 1, max_turns, p_seed,
                                         );
@@ -12813,6 +13194,10 @@ fn cmd_converge_conclusion(args: &[String]) {
                     }
                     unit_q_indices.push(idxs);
                 }
+                outside_q_indices = (0..q_ids.len())
+                    .filter(|&j| !unit_member_set.contains(&q_ids[j]))
+                    .collect();
+                n_cols = n_u + outside_q_indices.len();
                 let solved = solve_all_shell_cells(
                     &units,
                     &pair_mat_cache,
@@ -12855,9 +13240,9 @@ fn cmd_converge_conclusion(args: &[String]) {
 
         // Phase 2.7: Endogenous Within-Shell Variant Weight Optimization & Intra-Shell LOO Pruning (`重み自由化 + 殻内LOO剪定`):
         // 1. Uses exact intra-shell mirror payoffs `self_per_u[m_i]` on diagonal columns `u_idx == v` (eliminating the 0.5 tie).
-        // 2. Computes each variant's Leave-One-Out marginal contribution `\Delta V_{shell, -k}` against the shell's 8 worst
-        //    opponent columns, pruning redundant/dominated variants (`\Delta V_{shell, -k} <= 0.0005` & `\alpha < 0.05`, or >4 variants)
-        //    so multi-variant shells stay sharp (`<= 4` essential variants) and never bloat into 8-12 noisy variants.
+        // 2. Computes each variant's Leave-One-Out marginal contribution `\Delta V_{shell, -k}` = Camouflage Ambiguity Gain +
+        //    Complementary Counter-Column Coverage Gain against the shell's 8 worst opponent columns, pruning strictly redundant/dominated
+        //    variants (`loo_dv <= 0.0005 && w8_m < mean_w8 - 0.020`, or `> max_shell_variants`) so multi-variant shells stay sharp.
         {
             let n_q_cur = q_ids.len();
             let cand_shells: Vec<usize> = active_units.iter().map(|&(u, _)| u).collect();
@@ -12930,27 +13315,45 @@ fn cmd_converge_conclusion(args: &[String]) {
                 let worst_qs: Vec<usize> = q_ranked.iter().take(8).map(|&(j, _)| j).collect();
                 let nw = worst_qs.len().max(1) as f64;
 
-                let eval_subset_w8 = |keep_idxs: &[usize], weights_sub: &[f64]| -> f64 {
-                    let mut sum_v = 0.0f64;
+                // Evaluate pure Bayesian camouflage bonus `\Delta V_{camo}(S) = V_{debiased}(S) - \sum_{k \in S} w_k v_{1v1}(k)`
+                let eval_subset_camo_w8 = |keep_idxs: &[usize], weights_sub: &[f64]| -> f64 {
+                    if keep_idxs.len() <= 1 {
+                        return 0.0;
+                    }
+                    let sub_rosters: Vec<&CompiledRoster6> = keep_idxs
+                        .iter()
+                        .map(|&k_i| &roster_db[&units[u_idx].member_ids[k_i]])
+                        .collect();
+                    let mut sum_camo = 0.0f64;
                     for &j in &worst_qs {
                         let qid = &q_ids[j];
-                        let kb = roster_db[qid].legal.len();
+                        let r_q = &roster_db[qid];
+                        let kb = r_q.legal.len();
                         let mut mats_ref: Vec<&[f64]> = Vec::with_capacity(keep_idxs.len());
-                        for &k_i in keep_idxs {
+                        let mut ns_vec: Vec<u32> = Vec::with_capacity(keep_idxs.len());
+                        let mut base_1v1 = 0.0f64;
+                        for (idx_pos, &k_i) in keep_idxs.iter().enumerate() {
                             let mid = &units[u_idx].member_ids[k_i];
-                            mats_ref.push(pair_mat_cache[&(mid.clone(), qid.clone())].0.as_slice());
+                            let (ref m_vec, ns) = pair_mat_cache[&(mid.clone(), qid.clone())];
+                            mats_ref.push(m_vec.as_slice());
+                            ns_vec.push(ns);
+                            let (_, _, v1) = solve_preview_nash(m_vec, ka, kb, 150);
+                            base_1v1 += weights_sub[idx_pos] * v1;
                         }
-                        let (val_d, _, _, _, _) = solve_bayesian_shell_preview_nash(
+                        let (val_d, _, _, _, _) = solve_debiased_bayesian_shell_preview_nash(
+                            &sub_rosters,
+                            &[r_q],
                             &mats_ref,
+                            &ns_vec,
                             ka,
                             kb,
                             weights_sub,
                             &[1.0],
                             200,
                         );
-                        sum_v += val_d;
+                        sum_camo += (val_d - base_1v1).max(0.0);
                     }
-                    sum_v / nw
+                    sum_camo / nw
                 };
 
                 let all_idxs: Vec<usize> = (0..m_len).collect();
@@ -12958,15 +13361,28 @@ fn cmd_converge_conclusion(args: &[String]) {
                     .map(|k| 0.5 * new_mw[k] + 0.5 / (m_len as f64))
                     .collect();
                 normalize_member_weights(&mut loo_base_w, m_len);
-                let v_full = eval_subset_w8(&all_idxs, &loo_base_w);
+                let camo_full = eval_subset_camo_w8(&all_idxs, &loo_base_w);
                 let mut loo_dv = vec![0.0f64; m_len];
                 let mut w8_m = vec![0.5f64; m_len];
                 for m_i in 0..m_len {
                     let sub_idxs: Vec<usize> = (0..m_len).filter(|&k| k != m_i).collect();
                     let mut sub_w: Vec<f64> = sub_idxs.iter().map(|&k| loo_base_w[k]).collect();
                     normalize_member_weights(&mut sub_w, sub_idxs.len());
-                    let v_minus = eval_subset_w8(&sub_idxs, &sub_w);
-                    loo_dv[m_i] = (v_full - v_minus).max(0.0);
+                    let camo_minus = eval_subset_camo_w8(&sub_idxs, &sub_w);
+                    let camo_dv = (camo_full - camo_minus).max(0.0);
+                    let mut cover_sum = 0.0f64;
+                    for &j in &worst_qs {
+                        let max_all = (0..m_len)
+                            .map(|k| mem_payoff[u_idx][k][j])
+                            .fold(f64::NEG_INFINITY, f64::max);
+                        let max_minus = sub_idxs
+                            .iter()
+                            .map(|&k| mem_payoff[u_idx][k][j])
+                            .fold(f64::NEG_INFINITY, f64::max);
+                        cover_sum += (max_all - max_minus).max(0.0);
+                    }
+                    let cover_dv = cover_sum / nw;
+                    loo_dv[m_i] = camo_dv + cover_dv;
                     w8_m[m_i] = worst_qs
                         .iter()
                         .map(|&j| mem_payoff[u_idx][m_i][j])
@@ -12975,7 +13391,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                 }
                 let mean_w8 = w8_m.iter().sum::<f64>() / (m_len as f64);
 
-                // Rank variants by LOO marginal contribution + worst-8 payoff, pruning redundant variants (`<= 4` max)
+                // Rank variants by LOO marginal contribution + worst-8 payoff, pruning strictly dominated/excess variants (`<= 4` max)
                 let mut rank_order: Vec<usize> = (0..m_len).collect();
                 rank_order.sort_by(|&a, &b| {
                     let sa = loo_dv[a] + 0.25 * (w8_m[a] - mean_w8) + 0.05 * new_mw[a];
@@ -12987,7 +13403,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                 for (rk, &m_i) in rank_order.iter().enumerate() {
                     if rk == 0
                         || (keep_set.len() < max_keep
-                            && (loo_dv[m_i] > 0.0005 || w8_m[m_i] >= mean_w8 - 0.005))
+                            && (loo_dv[m_i] > 0.0005 || w8_m[m_i] >= mean_w8 - 0.020))
                     {
                         keep_set.push(m_i);
                     }
@@ -12997,18 +13413,18 @@ fn cmd_converge_conclusion(args: &[String]) {
                 let mut pruned_mw: Vec<f64> = keep_set
                     .iter()
                     .map(|&k| {
-                        (new_mw[k].max(0.05))
-                            * (10.0 * loo_dv[k] + 5.0 * (w8_m[k] - mean_w8)).exp()
+                        (new_mw[k].max(0.05)) * (8.0 * loo_dv[k] + 4.0 * (w8_m[k] - mean_w8)).exp()
                     })
                     .collect();
                 normalize_member_weights(&mut pruned_mw, keep_set.len());
-                let v_pruned = if keep_set.len() < m_len {
-                    eval_subset_w8(&keep_set, &pruned_mw)
+                let camo_pruned = if keep_set.len() < m_len {
+                    eval_subset_camo_w8(&keep_set, &pruned_mw)
                 } else {
-                    v_full
+                    camo_full
                 };
 
-                if keep_set.len() < m_len && (keep_set.len() == max_keep || v_pruned >= v_full - 0.001) {
+                if keep_set.len() < m_len && (m_len > max_keep || camo_pruned >= camo_full - 0.0005)
+                {
                     let old_uid = units[u_idx].unit_id.clone();
                     units[u_idx].member_ids = keep_set
                         .iter()
@@ -13039,8 +13455,8 @@ fn cmd_converge_conclusion(args: &[String]) {
                     any_weight_shifted = true;
                 } else {
                     for m_i in 0..m_len {
-                        new_mw[m_i] = (new_mw[m_i].max(0.02))
-                            * (10.0 * loo_dv[m_i] + 5.0 * (w8_m[m_i] - mean_w8)).exp();
+                        new_mw[m_i] = (new_mw[m_i].max(0.05))
+                            * (8.0 * loo_dv[m_i] + 4.0 * (w8_m[m_i] - mean_w8)).exp();
                     }
                     normalize_member_weights(&mut new_mw, m_len);
                     let max_diff = old_mw
@@ -13062,6 +13478,9 @@ fn cmd_converge_conclusion(args: &[String]) {
                         unit_member_set.insert(mid.clone());
                     }
                 }
+                outside_q_indices = (0..q_ids.len())
+                    .filter(|&j| !unit_member_set.contains(&q_ids[j]))
+                    .collect();
                 let solved = solve_all_shell_cells(
                     &units,
                     &pair_mat_cache,
@@ -13165,7 +13584,7 @@ fn cmd_converge_conclusion(args: &[String]) {
             &root.join("data/kodoku-r3/conclusion-equilibrium-deme.json"),
             &json!({
                 "name": format!("conclusion-equilibrium-full-preview-nash-r{}", o_round),
-                "source_solution": "data/dominance-audit-v10-fullnash/converged-report.json",
+                "source_solution": "data/dominance-audit-v12-debiased/converged-report.json",
                 "active_shells": active_units.len(),
                 "support_size": pi_ids.len(),
                 "min_matrix_payoff": min_val,
@@ -13395,6 +13814,8 @@ fn cmd_converge_conclusion(args: &[String]) {
                                 }
                                 let n_c = chall_rosters.len();
                                 let chall_alpha = vec![1.0 / (n_c as f64); n_c];
+                                let chall_refs: Vec<&CompiledRoster6> =
+                                    chall_rosters.iter().collect();
 
                                 let mut w_sum = 0.0f64;
                                 let mut weighted_red_ev = 0.0f64;
@@ -13404,19 +13825,19 @@ fn cmd_converge_conclusion(args: &[String]) {
                                 let mut sum_loo = [0.0f64; 6];
                                 let mut max_loo = [0.0f64; 6];
 
-                                for (d_idx, (_d_sig, d_rosters, d_alpha, w_sh)) in
+                                for (_d_idx, (d_sig, d_rosters, d_alpha, w_sh)) in
                                     def_ref.iter().enumerate()
                                 {
                                     let n_d = d_rosters.len();
                                     let kb = d_rosters[0].legal.len();
+                                    let d_refs: Vec<&CompiledRoster6> = d_rosters.iter().collect();
                                     let mut mats_storage: Vec<Vec<f64>> =
                                         Vec::with_capacity(n_c * n_d);
-                                    for (c_m, r_c) in chall_rosters.iter().enumerate() {
-                                        for (d_m, r_d) in d_rosters.iter().enumerate() {
-                                            let pair_seed = phase_seed
-                                                ^ (((s_idx * 997 + d_idx * 131 + c_m * 17 + d_m)
-                                                    as u64)
-                                                    .wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                                    let ns_vec = vec![n_seeds_eval; n_c * n_d];
+                                    let pair_seed =
+                                        shell_pair_crn_seed(phase_seed, &s_sig, d_sig, 1);
+                                    for r_c in &chall_rosters {
+                                        for r_d in d_rosters {
                                             mats_storage.push(eval_full_preview_matrix_compact(
                                                 r_c,
                                                 r_d,
@@ -13429,8 +13850,11 @@ fn cmd_converge_conclusion(args: &[String]) {
                                     let mats_refs: Vec<&[f64]> =
                                         mats_storage.iter().map(|v| v.as_slice()).collect();
                                     let (_game_v, per_c, _per_d, p_strats, q_strats) =
-                                        solve_bayesian_shell_preview_nash(
+                                        solve_debiased_bayesian_shell_preview_nash(
+                                            &chall_refs,
+                                            &d_refs,
                                             &mats_refs,
+                                            &ns_vec,
                                             ka,
                                             kb,
                                             &chall_alpha,
