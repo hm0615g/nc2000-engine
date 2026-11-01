@@ -148,9 +148,7 @@ pub struct RmConfig {
     /// Optional endgame decision & budget rules for decided/near-decided boards.
     /// Default = all `false` (bit-identical to baseline).
     pub endgame_rules: EndgameRules,
-    /// Optional external game-theoretic equity oracle mode (default `Off`).
-    pub oracle: crate::oracle::OracleMode,
-    /// Leaf tactical settlement & accounting/residual evaluation mode.
+    /// Leaf tactical settlement & evaluation mode.
     pub settlement: crate::accounting::LeafSettlementMode,
 }
 
@@ -925,7 +923,6 @@ impl RmConfig {
             capped_damage: self.rollout_capped_damage,
             rollout_residual: self.rollout_residual,
             baton_pass: self.rollout_baton_pass,
-            oracle: self.oracle,
             settlement: self.settlement,
         }
     }
@@ -960,7 +957,6 @@ impl Default for RmConfig {
             threshold_key: false,
             key_no_damage: false,
             mask_rules: MaskRules::default(),
-            oracle: crate::oracle::OracleMode::Off,
             settlement: crate::accounting::LeafSettlementMode::BlindSpotLeaf,
             endgame_rules: EndgameRules::default(),
         }
@@ -1655,29 +1651,13 @@ pub(crate) fn run_iteration_with_root_child_value(
 pub(crate) fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
     match &cfg.playout {
         Playout::Uniform => crate::mcts::hp_eval(sim),
-        Playout::Heavy { weights, .. } => match cfg.oracle {
-            crate::oracle::OracleMode::Off => {
-                if cfg.settlement.uses_blindspot_leaf() {
-                    crate::eval::eval_leaf_blindspot(sim, dex, weights)
-                } else if cfg.settlement.uses_legacy_playout_loop()
-                    && cfg.settlement != crate::accounting::LeafSettlementMode::RolloutAcct0
-                {
-                    crate::eval::eval_leaf(sim, dex, weights)
-                } else {
-                    crate::accounting::battle_settled_leaf(sim, dex, cfg.settlement)
-                }
+        Playout::Heavy { weights, .. } => {
+            if cfg.settlement.uses_blindspot_leaf() {
+                crate::eval::eval_leaf_blindspot(sim, dex, weights)
+            } else {
+                crate::eval::eval_leaf(sim, dex, weights)
             }
-            crate::oracle::OracleMode::EchoBase => {
-                let (table, cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
-                crate::oracle::echo_base_leaf(&cb, &table, weights)
-            }
-            crate::oracle::OracleMode::Cutoff { leaf_iters }
-            | crate::oracle::OracleMode::TreeLeaf { leaf_iters }
-            | crate::oracle::OracleMode::Coupled { leaf_iters, .. } => {
-                let (table, cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
-                crate::oracle::oracle_equity(&cb, &table, leaf_iters)
-            }
-        },
+        }
     }
 }
 
@@ -2198,14 +2178,8 @@ fn noop_reason(
     if rules.extended_noops && ms.self_switch.is_some() && !b.can_switch(side as u8) {
         yes!("Baton Pass fails with nobody left to switch to");
     }
-    if rules.extended_noops && key == "bellydrum" {
-        let me = b.poke(att);
-        let max_leftovers_gain = if me.item.is_some() && me.item == dex.items.id("leftovers") {
-            (me.maxhp / 16).max(1)
-        } else {
-            0
-        };
-        let foe_may_raise_hp = b.active_id(1 - side).is_some_and(|f| {
+    let foe_may_raise_hp = || {
+        b.active_id(1 - side).is_some_and(|f| {
             let fp = b.poke(f);
             fp.transformed
                 || fp.move_slots.iter().any(|slot| !slot.shared)
@@ -2219,10 +2193,18 @@ fn noop_reason(
                             )
                         })
                     })
-        });
+        })
+    };
+    if rules.extended_noops && key == "bellydrum" {
+        let me = b.poke(att);
+        let max_leftovers_gain = if me.item.is_some() && me.item == dex.items.id("leftovers") {
+            (me.maxhp / 16).max(1)
+        } else {
+            0
+        };
         let hp_too_low_strict = (me.hp as f64) <= (me.maxhp as f64) / 2.0
             && (faster_than_foe(b, dex, side)
-                || (!foe_may_raise_hp
+                || (!foe_may_raise_hp()
                     && ((me.hp + max_leftovers_gain) as f64) <= (me.maxhp as f64) / 2.0));
         let atk_capped_strict = me.boosts[0] >= 6 && faster_than_foe(b, dex, side);
         if hp_too_low_strict || atk_capped_strict {
@@ -2234,9 +2216,9 @@ fn noop_reason(
         && faster_than_foe(b, dex, side)
         && !foe_may_preempt_with_damage(b, dex, side, ms.priority)
         && b.sides[side]
-            .roster
+            .party
             .iter()
-            .all(|p| p.status == Status::None)
+            .all(|&slot| b.sides[side].roster[slot as usize].status == Status::None)
     {
         yes!("Heal Bell has no status to cure");
     }
@@ -2408,11 +2390,17 @@ fn noop_reason(
         let up = dex
             .conds_id("substitute")
             .is_some_and(|sid| me.has_volatile(sid));
+        let me_has_heal_berry = me
+            .item
+            .is_some_and(|id| matches!(dex.items.key(id), "berry" | "goldberry"));
+        let no_hp = (me.hp <= me.maxhp / 4 || me.maxhp == 1)
+            && (faster_than_foe(b, dex, side)
+                || (!me_has_heal_berry && !foe_may_raise_hp()));
+        let already_up = up
+            && faster_than_foe(b, dex, side)
+            && !foe_may_preempt_with_damage(b, dex, side, ms.priority);
         verdict!(
-            ((up && !foe_may_preempt_with_damage(b, dex, side, ms.priority))
-                || me.hp as f64 <= me.maxhp as f64 / 4.0
-                || me.maxhp == 1)
-                && faster_than_foe(b, dex, side),
+            no_hp || already_up,
             "Substitute is already up, or there is not enough HP to pay for one"
         );
     }
@@ -4473,11 +4461,18 @@ mod dominated_action_tests {
             let mut b = b.clone();
             let quarter = b.poke(def).maxhp / 4;
             b.poke_mut(def).hp = quarter;
-            // Our own HP only survives to our move if we act first: a faster
-            // foe can damage us past the gate, and then Substitute works.
+            // Against Zapdos (whose learnset has no HP-raising move like Pain Split/Present),
+            // Substitute at <= 25% HP is a guaranteed no-op even when moving second.
+            assert!(
+                noop(&b, 1, "substitute"),
+                "slower against a foe that cannot raise our HP: still a guaranteed no-op"
+            );
+            // If the faster foe is transformed (or could carry Pain Split / Present),
+            // our HP is only guaranteed to stay <= 25% when we act first.
+            b.poke_mut(att).transformed = true;
             assert!(
                 !noop(&b, 1, "substitute"),
-                "slower: the foe can change our HP first"
+                "slower against a transformed foe that could raise our HP first"
             );
             b.poke_mut(def).boosts[4] = 6;
             assert!(
