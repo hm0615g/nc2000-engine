@@ -11277,6 +11277,11 @@ fn cmd_converge_conclusion(args: &[String]) {
             300usize,
         ),
         (
+            "data/partybox-v0/teams.json",
+            "partybox_assassin",
+            150usize,
+        ),
+        (
             "data/kodoku-r3/apex-candidates.json",
             "apex_cand",
             50usize,
@@ -15516,6 +15521,7 @@ fn cmd_apex_experiment(args: &[String]) {
         ("data/kodoku-r2/nash-candidates.json", "kodoku_r2_cand", 12usize),
         ("data/kodoku-r3/red-gauntlet.json", "red_gauntlet", 100usize),
         ("data/kodoku-r3/majinjima-assassins.json", "majinjima_assassin", 300usize),
+        ("data/partybox-v0/teams.json", "partybox_assassin", 150usize),
         ("data/kodoku-r3/apex-candidates.json", "apex_cand", 50usize),
     ] {
         if let Ok(txt) = std::fs::read_to_string(root.join(path)) {
