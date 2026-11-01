@@ -153,6 +153,8 @@ export interface UIStrings {
   drawSourceLabel: string;
   drawCatalog: (n: number) => string;
   drawNash: (n: number) => string;
+  drawPrevNashSummary: string;
+  drawPrevNashR1: (n: number) => string;
   drawOldNash: (n: number) => string;
   nashSwitchOld: string;
   nashSwitchNew: string;
@@ -449,6 +451,8 @@ const EN: UIStrings = {
   drawSourceLabel: "Where the opponent comes from",
   drawCatalog: (n) => `Built-in (${n} ${n === 1 ? "party" : "parties"})`,
   drawNash: (n) => `Solved mixture (${n} ${n === 1 ? "party" : "parties"})`,
+  drawPrevNashSummary: "Previous Nash mixtures (2)",
+  drawPrevNashR1: (n) => `Old mixture r1 (${n} ${n === 1 ? "party" : "parties"})`,
   drawOldNash: (n) => `Old mixture v3 (${n} ${n === 1 ? "party" : "parties"})`,
   nashSwitchOld: "Play against the old mixture (v3)",
   nashSwitchNew: "Play against the new solved mixture",
@@ -736,6 +740,8 @@ const JA: UIStrings = {
   drawSourceLabel: "相手パーティの抽選元",
   drawCatalog: (n) => `標準(${n}パーティ)`,
   drawNash: (n) => `結論の混合戦略(${n}パーティ)`,
+  drawPrevNashSummary: "以前の混合戦略 (2種)",
+  drawPrevNashR1: (n) => `旧混合戦略 r1(${n}パーティ)`,
   drawOldNash: (n) => `旧混合戦略 v3(${n}パーティ)`,
   nashSwitchOld: "旧混合戦略(v3)と対戦する",
   nashSwitchNew: "新しい結論の混合戦略と対戦する",

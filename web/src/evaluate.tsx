@@ -6,6 +6,7 @@ import {
   fetchBeliefPool,
   fetchI18nJa,
   fetchNashArtifact,
+  fetchPrevNashR1Artifact,
   fetchOldNashArtifact,
   fetchDexJson,
 } from "./data";
@@ -198,11 +199,14 @@ export function Evaluate() {
   useEffect(() => {
     void (async () => {
       try {
+        const variant = readNashVariant();
         const [, nash, pool, , dex] = await Promise.all([
           loadEngine(),
-          readNashVariant() === "v3"
+          variant === "v3"
             ? fetchOldNashArtifact()
-            : fetchNashArtifact(),
+            : variant === "r1"
+              ? fetchPrevNashR1Artifact()
+              : fetchNashArtifact(),
           fetchBeliefPool(),
           loadJaNames(fetchI18nJa),
           fetchDexJson(),

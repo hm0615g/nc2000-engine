@@ -53,6 +53,13 @@ const artifact = JSON.parse(
   ),
 ) as { teams: NashTeamJson[] };
 
+const prevR1Artifact = JSON.parse(
+  readFileSync(
+    new URL("../../data/kodoku-r3/conclusion-equilibrium-r1.json", import.meta.url),
+    "utf8",
+  ),
+) as { teams: NashTeamJson[] };
+
 const oldArtifact = JSON.parse(
   readFileSync(
     new URL("../../data/meta-nash-v3/pool-artifact.json", import.meta.url),
@@ -402,7 +409,7 @@ test("the start screen links to the party evaluator", async ({ page }) => {
   await expect(page.getByLabel("Search iterations", { exact: true })).toHaveCount(0);
 });
 
-test("the old v3 Nash mixture remains accessible on ?nash=v3 and in the setup panel", async ({
+test("the previous two Nash mixtures (r1 and v3) are collapsed under details and remain accessible", async ({
   page,
 }) => {
   const errors = guardConsole(page);
@@ -415,15 +422,30 @@ test("the old v3 Nash mixture remains accessible on ?nash=v3 and in the setup pa
   await expect(row).toContainText(`Old mixture v3 (${oldArtifact.teams.length}`);
 
   await page.locator('[data-party="settings"]').click();
+  await expect(page.locator('[data-testid="old-nash-details"]')).toHaveJSProperty("open", true);
   await expect(page.locator('[data-draw="nash-v3"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator('[data-testid="nash-mix"] .team-card')).toHaveCount(
     oldArtifact.teams.length,
   );
   await page.locator("dialog.modal .modal-head button").click();
 
-  // Also selectable from the play door's setup panel (`nash-v3`).
+  // On `/` with catalog default, the previous mixtures are collapsed under <details>.
+  await page.evaluate(() => localStorage.removeItem("nc2000-bot-draw"));
   await page.goto("/");
   await page.locator('[data-party="settings"]').click();
+  const details = page.locator('[data-testid="old-nash-details"]');
+  await expect(details).toHaveJSProperty("open", false);
+  await details.locator("summary").click();
+  await expect(details).toHaveJSProperty("open", true);
+
+  // Select r1 mixture
+  await page.locator('[data-draw="nash-r1"]').click();
+  await expect(page.locator('[data-draw="nash-r1"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('[data-testid="nash-mix"] .team-card')).toHaveCount(
+    prevR1Artifact.teams.length,
+  );
+
+  // Select v3 mixture
   await page.locator('[data-draw="nash-v3"]').click();
   await expect(page.locator('[data-draw="nash-v3"]')).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator('[data-testid="nash-mix"] .team-card')).toHaveCount(

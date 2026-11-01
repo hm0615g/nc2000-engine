@@ -27,6 +27,7 @@ import {
   fetchDexJson,
   fetchI18nJa,
   fetchNashArtifact,
+  fetchPrevNashR1Artifact,
   fetchOldNashArtifact,
 } from "./data";
 import { loadSetDex } from "./set-info";
@@ -105,6 +106,7 @@ export function App() {
   // Never null once boot succeeded — a mixture that cannot load or validate
   // fails the page.
   const [nashMix, setNashMix] = useState<NashMix | null>(null);
+  const [prevNashR1Mix, setPrevNashR1Mix] = useState<NashMix | null>(null);
   const [oldNashMix, setOldNashMix] = useState<NashMix | null>(null);
   const [drawSource, setDrawSource] = useState<DrawSource>(initialDrawSource);
   // The shipped opponent prior: the blind searcher's candidate set only.
@@ -120,12 +122,13 @@ export function App() {
         // JP name tables and the set-sheet dex load alongside the engine;
         // both swallow failures (missing tables just mean English names /
         // sheets without move meta).
-        const [, catalogText, , , nashText, oldNashText, beliefPd] = await Promise.all([
+        const [, catalogText, , , nashText, prevNashR1Text, oldNashText, beliefPd] = await Promise.all([
           loadEngine(),
           fetchCatalog(),
           loadJaNames(fetchI18nJa),
           loadSetDex(fetchDexJson),
           fetchNashArtifact(),
+          fetchPrevNashR1Artifact(),
           fetchOldNashArtifact(),
           fetchBeliefPool(),
         ]);
@@ -138,6 +141,9 @@ export function App() {
         const mix = parseNashArtifact(nashText);
         if (!mix.ok) throw new Error(mix.errors.join("; "));
         setNashMix(mix.mix);
+        const prevR1Mix = parseNashArtifact(prevNashR1Text);
+        if (!prevR1Mix.ok) throw new Error(prevR1Mix.errors.join("; "));
+        setPrevNashR1Mix(prevR1Mix.mix);
         const oldMix = parseNashArtifact(oldNashText);
         if (!oldMix.ok) throw new Error(oldMix.errors.join("; "));
         setOldNashMix(oldMix.mix);
@@ -164,6 +170,7 @@ export function App() {
     !loadedPool ||
     !catalog ||
     !nashMix ||
+    !prevNashR1Mix ||
     !oldNashMix ||
     !beliefJson
   ) {
@@ -201,9 +208,11 @@ export function App() {
       ? randomPoolTeam(activePool.pool)
       : drawSource === "nash"
         ? drawNashTeam(nashMix)
-        : drawSource === "nash-v3"
-          ? drawNashTeam(oldNashMix)
-          : drawCatalogTeam(catalog);
+        : drawSource === "nash-r1"
+          ? drawNashTeam(prevNashR1Mix)
+          : drawSource === "nash-v3"
+            ? drawNashTeam(oldNashMix)
+            : drawCatalogTeam(catalog);
   /** The human's "Random": the catalog's draw weights, or uniform over a
    * loaded file — the same rule as the bot's draw from the same lists. */
   const drawHuman = (): SelectedTeam =>
@@ -221,6 +230,7 @@ export function App() {
           setLoc(l);
         }}
         nashMix={nashMix}
+        prevNashR1Mix={prevNashR1Mix}
         oldNashMix={oldNashMix}
         drawSource={drawSource}
         onDrawSource={(s) => {

@@ -636,10 +636,14 @@ function PoolPanel(props: {
   drawSource: DrawSource;
   onDrawSource: (s: DrawSource) => void;
   nashMix: NashMix;
+  prevNashR1Mix: NashMix;
   oldNashMix: NashMix;
 }) {
   const [result, setResult] = useState<PoolResult | null>(null);
   const fileLoaded = props.loaded.name !== null;
+  const isPrevNash =
+    !fileLoaded &&
+    (props.drawSource === "nash-r1" || props.drawSource === "nash-v3");
 
   /** Picking a draw source is picking the built-in lists again: a loaded
    * file would otherwise keep overriding the choice just made. */
@@ -669,7 +673,7 @@ function PoolPanel(props: {
   return (
     <div class="pool-panel">
       <div class="draw-choice" role="group" aria-label={ui().drawSourceLabel}>
-        {(["catalog", "nash", "nash-v3"] as const).map((source) => (
+        {(["catalog", "nash"] as const).map((source) => (
           <button
             key={source}
             class="draw-choice-btn"
@@ -679,18 +683,45 @@ function PoolPanel(props: {
           >
             {source === "catalog"
               ? ui().drawCatalog(props.catalog.pool.teams.length)
-              : source === "nash"
-                ? ui().drawNash(props.nashMix.teams.length)
-                : ui().drawOldNash(props.oldNashMix.teams.length)}
+              : ui().drawNash(props.nashMix.teams.length)}
           </button>
         ))}
       </div>
       {!fileLoaded && props.drawSource === "nash" && (
         <NashMixPanel mix={props.nashMix} />
       )}
-      {!fileLoaded && props.drawSource === "nash-v3" && (
-        <NashMixPanel mix={props.oldNashMix} />
-      )}
+      <details
+        class="old-nash-details"
+        data-testid="old-nash-details"
+        open={isPrevNash}
+      >
+        <summary class="old-nash-summary">{ui().drawPrevNashSummary}</summary>
+        <div
+          class="draw-choice old-nash-choice"
+          role="group"
+          aria-label={ui().drawPrevNashSummary}
+        >
+          {(["nash-r1", "nash-v3"] as const).map((source) => (
+            <button
+              key={source}
+              class="draw-choice-btn"
+              data-draw={source}
+              aria-pressed={!fileLoaded && props.drawSource === source}
+              onClick={() => chooseDraw(source)}
+            >
+              {source === "nash-r1"
+                ? ui().drawPrevNashR1(props.prevNashR1Mix.teams.length)
+                : ui().drawOldNash(props.oldNashMix.teams.length)}
+            </button>
+          ))}
+        </div>
+        {!fileLoaded && props.drawSource === "nash-r1" && (
+          <NashMixPanel mix={props.prevNashR1Mix} />
+        )}
+        {!fileLoaded && props.drawSource === "nash-v3" && (
+          <NashMixPanel mix={props.oldNashMix} />
+        )}
+      </details>
       <p class="modal-note">{ui().poolHelp}</p>
       <div class="pool-actions">
         {/* Same construction as the prior panel's picker: a real <label>
@@ -776,6 +807,7 @@ function SetupPanel(props: {
   drawSource: DrawSource;
   onDrawSource: (s: DrawSource) => void;
   nashMix: NashMix;
+  prevNashR1Mix: NashMix;
   oldNashMix: NashMix;
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
@@ -791,6 +823,7 @@ function SetupPanel(props: {
           drawSource={props.drawSource}
           onDrawSource={props.onDrawSource}
           nashMix={props.nashMix}
+          prevNashR1Mix={props.prevNashR1Mix}
           oldNashMix={props.oldNashMix}
         />
       </section>
@@ -815,8 +848,8 @@ export function StartScreen(props: {
   onLocale: (l: Locale) => void;
   /** The solved mixture: `NashMixPanel` inside Opponent & Setup. */
   nashMix: NashMix;
-  /** The preserved v3 Nash mixture, kept alongside the new mixture until
-   * non-regression is confirmed. */
+  /** The preserved r1 and v3 Nash mixtures, collapsed under <details>. */
+  prevNashR1Mix: NashMix;
   oldNashMix: NashMix;
   /** Where the bot's party comes from when no pool file is loaded. */
   drawSource: DrawSource;
@@ -948,9 +981,11 @@ export function StartScreen(props: {
                 ? ui().poolLoaded(props.loadedPool.name, teams.length)
                 : props.drawSource === "nash"
                   ? ui().drawNash(props.nashMix.teams.length)
-                  : props.drawSource === "nash-v3"
-                    ? ui().drawOldNash(props.oldNashMix.teams.length)
-                    : ui().poolBundled(teams.length),
+                  : props.drawSource === "nash-r1"
+                    ? ui().drawPrevNashR1(props.prevNashR1Mix.teams.length)
+                    : props.drawSource === "nash-v3"
+                      ? ui().drawOldNash(props.oldNashMix.teams.length)
+                      : ui().poolBundled(teams.length),
               props.prior ? props.prior.name : ui().priorNone,
             )}
           </span>
@@ -986,6 +1021,7 @@ export function StartScreen(props: {
             drawSource={props.drawSource}
             onDrawSource={props.onDrawSource}
             nashMix={props.nashMix}
+            prevNashR1Mix={props.prevNashR1Mix}
             oldNashMix={props.oldNashMix}
             prior={props.prior}
             onPrior={props.onPrior}

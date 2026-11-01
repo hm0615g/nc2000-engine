@@ -21,7 +21,7 @@ Rust battle engine, imperfect-information search bot, WebAssembly/Preact client,
 - **Three distinct team-data roles (`web/src/data.ts`, `docs/TEAM-POOL-REBUILD-PLAN.md`)** — never substitute one for another:
   1. **Catalog (`data/team-pool-v2/team-pool.json`)**: Human built-in party list and ordinary bot draw (weighted by `drawWeight`).
   2. **Opponent prior (`data/belief-pool-v3/belief-pool.json`)**: Frozen weighted candidate set used by `Belief` across all doors and tools. User pool overrides never replace this prior. The optional marginal species/move prior (`crates/bot/src/prior.rs`) is opt-in and inert by default (never place a file at `data/belief-prior-v0.json`).
-  3. **Solved Nash mixtures (`data/kodoku-r3/conclusion-equilibrium-deme.json` primary; `data/meta-nash-v3/pool-artifact.json` preserved v3)**: Bot party draw when mixture draw (`?nash` or setup selector) is active.
+  3. **Solved Nash mixtures (`data/kodoku-r3/conclusion-equilibrium-deme.json` primary; `data/kodoku-r3/conclusion-equilibrium-r1.json` and `data/meta-nash-v3/pool-artifact.json` preserved under `<details>`)**: Bot party draw when mixture draw (`?nash` or setup selector) is active.
 - **Budgets & compiled preview**: Search coefficients and iteration budgets are read from `data/search-profiles.json` and `data/live-search.json` (never hardcoded in docs). Known catalog preview information sets use `data/compiled-preview-v1.json` (`crates/bot/src/compiled_preview.rs`); production web builds fail-close if the artifact does not match current source/data (`npm run build:research` disables lookup for research builds).
 
 ### 3. WASM, Web App & TPU (`crates/wasm`, `web`, `tpu`)

@@ -1,15 +1,15 @@
 // Where the bot's party comes from on the play door when no pool file is
-// loaded: the catalog by its draw weights, the new solved Nash mixture, or
-// the preserved v3 Nash mixture. A loaded pool file overrides all of them
-// (app.tsx). Kept per browser like the other setup choices; anything
-// unreadable falls back to the catalog.
+// loaded: the catalog by its draw weights, the verified solved Nash mixture,
+// or one of the two preserved previous Nash mixtures (r1, v3). A loaded pool
+// file overrides all of them (app.tsx). Kept per browser like the other setup
+// choices; anything unreadable falls back to the catalog.
 
-export type DrawSource = "catalog" | "nash" | "nash-v3";
-export type NashVariant = "new" | "v3";
+export type DrawSource = "catalog" | "nash" | "nash-r1" | "nash-v3";
+export type NashVariant = "new" | "r1" | "v3";
 
 const KEY = "nc2000-bot-draw";
 
-/** Read draw source from URL search query (e.g. ?nash, ?nash=v3).
+/** Read draw source from URL search query (e.g. ?nash, ?nash=r1, ?nash=v3).
  * Returns null if the query does not specify a draw source. */
 export function readDrawSourceFromQuery(search?: string): DrawSource | null {
   const query = search ?? (typeof location === "undefined" ? "" : location.search);
@@ -18,19 +18,23 @@ export function readDrawSourceFromQuery(search?: string): DrawSource | null {
   if (nash === null) return null;
   const v = nash.trim().toLowerCase();
   if (v === "0" || v === "false" || v === "catalog") return "catalog";
+  if (v === "r1" || v === "v10" || v === "prev") return "nash-r1";
   if (v === "v3" || v === "old") return "nash-v3";
   return "nash";
 }
 
 /** Which Nash variant was requested in the URL, defaulting to "new". */
 export function readNashVariant(search?: string): NashVariant {
-  return readDrawSourceFromQuery(search) === "nash-v3" ? "v3" : "new";
+  const s = readDrawSourceFromQuery(search);
+  if (s === "nash-r1") return "r1";
+  if (s === "nash-v3") return "v3";
+  return "new";
 }
 
 export function loadDrawSource(): DrawSource {
   try {
     const v = localStorage.getItem(KEY);
-    if (v === "nash" || v === "nash-v3") return v;
+    if (v === "nash" || v === "nash-r1" || v === "nash-v3") return v;
     return "catalog";
   } catch {
     return "catalog";
@@ -46,7 +50,7 @@ export function initialDrawSource(search?: string): DrawSource {
 
 export function storeDrawSource(source: DrawSource): void {
   try {
-    if (source === "nash" || source === "nash-v3")
+    if (source === "nash" || source === "nash-r1" || source === "nash-v3")
       localStorage.setItem(KEY, source);
     else localStorage.removeItem(KEY);
   } catch {

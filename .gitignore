@@ -30,6 +30,7 @@ data/kodoku-r*/
 !data/kodoku-r3/
 data/kodoku-r3/*
 !data/kodoku-r3/conclusion-equilibrium-deme.json
+!data/kodoku-r3/conclusion-equilibrium-r1.json
 data/psro-r*/
 data/dominance-audit-*/
 !data/dominance-audit-v8-clean/

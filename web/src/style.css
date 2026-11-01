@@ -2028,6 +2028,25 @@ td.solver-cell {
 .draw-choice + .nash-mix {
   margin-bottom: 12px;
 }
+.old-nash-details {
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 10px;
+}
+.old-nash-summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  user-select: none;
+  padding: 2px 0;
+}
+.old-nash-details[open] .old-nash-summary {
+  margin-bottom: 8px;
+}
+.old-nash-choice {
+  margin-bottom: 6px;
+}
 
 /* A quiet text link under the start column: another tool, not a step of
  * starting a battle. */
