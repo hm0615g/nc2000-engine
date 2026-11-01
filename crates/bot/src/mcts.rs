@@ -21,6 +21,8 @@
 //! configuration survives untouched as `Playout::Uniform` (same PRNG draw
 //! order) so gate measurements compare against the real baseline.
 
+use std::cell::Cell;
+
 use nc2000_engine::battle::{Outcome, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::fxhash::FxHashMap;
@@ -29,6 +31,65 @@ use nc2000_engine::state::Battle;
 use crate::agent::Agent;
 use crate::eval::{self, EvalWeights};
 use crate::rng::SplitMix64;
+
+/// Summary of the state at the end of a single MCTS simulation (tree terminal or rollout cutoff).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SimEndInfo {
+    pub turn: u16,
+    /// 0 = non-terminal (cutoff/leaf), 1 = P1Win, 2 = P2Win, 3 = Tie
+    pub outcome: u8,
+    /// Living Pokemon counts `[side 0, side 1]` at simulation end.
+    pub alive: [u8; 2],
+}
+
+impl SimEndInfo {
+    #[inline]
+    pub fn from_battle(b: &Battle, o: Option<Outcome>) -> Self {
+        let outcome = match o {
+            Some(Outcome::P1Win) => 1,
+            Some(Outcome::P2Win) => 2,
+            Some(Outcome::Tie) => 3,
+            None => 0,
+        };
+        let alive = [
+            b.sides[0].pokemon_left.max(0) as u8,
+            b.sides[1].pokemon_left.max(0) as u8,
+        ];
+        SimEndInfo { turn: b.turn, outcome, alive }
+    }
+
+    #[inline]
+    pub fn from_compact(cb: &nc2000_engine::compact::CompactBattle) -> Self {
+        SimEndInfo {
+            turn: cb.turn,
+            outcome: cb.outcome,
+            alive: [
+                cb.sides[0].alive_mask.count_ones() as u8,
+                cb.sides[1].alive_mask.count_ones() as u8,
+            ],
+        }
+    }
+}
+
+thread_local! {
+    static LAST_SIM_END: Cell<SimEndInfo> = const {
+        Cell::new(SimEndInfo {
+            turn: 0,
+            outcome: 0,
+            alive: [0, 0],
+        })
+    };
+}
+
+#[inline]
+pub fn set_last_sim_end(info: SimEndInfo) {
+    LAST_SIM_END.with(|c| c.set(info));
+}
+
+#[inline]
+pub fn last_sim_end() -> SimEndInfo {
+    LAST_SIM_END.with(|c| c.get())
+}
 
 /// Rollout policy + leaf evaluation (M6).
 #[derive(Clone, Debug)]
@@ -197,7 +258,7 @@ const PSEUDO_HEAL: f64 = 0.25;
 /// Optional rules layered over the heavy rollout's ε-greedy pick. The
 /// default is none of them; the shipped set is
 /// `RmConfig::default().rollout_rules()`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RolloutRules {
     /// Parked M16c upgrade: status-move pseudo-values
     /// (`RmConfig::rollout_status`).
@@ -211,9 +272,27 @@ pub struct RolloutRules {
     /// Rollout sides play the Perish trap and its counter ([`perish_combo`]).
     /// Implies `perish_escape`, without which the combo kills its own singer.
     pub perish_combo: bool,
-    /// Apply surgical balance-sheet blind-spot accounting (`compact_eval_leaf_blindspot`)
-    /// at the 8-turn rollout cutoff leaf (active on Turn 1+ battle decisions; off on TeamPreview).
-    pub blindspot_leaf: bool,
+    pub capped_damage: bool,
+    pub rollout_residual: bool,
+    pub baton_pass: bool,
+    pub oracle: crate::oracle::OracleMode,
+    pub settlement: crate::accounting::LeafSettlementMode,
+}
+
+impl Default for RolloutRules {
+    fn default() -> Self {
+        RolloutRules {
+            status: false,
+            switch: false,
+            perish_escape: false,
+            perish_combo: false,
+            capped_damage: false,
+            rollout_residual: false,
+            baton_pass: true,
+            oracle: crate::oracle::OracleMode::Off,
+            settlement: crate::accounting::LeafSettlementMode::LegacyRollout,
+        }
+    }
 }
 
 /// Unfinished rollouts return a leaf evaluation rather than a terminal outcome.
@@ -230,6 +309,7 @@ pub fn playout_value(
         Playout::Heavy { turns, .. } => turn_cap.min(sim.turn.saturating_add(*turns)),
     };
     if let Some(o) = sim.outcome() {
+        set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
         return outcome_reward(o);
     }
     // If either side is still in TeamPreview, advance that single step on `Battle`
@@ -238,9 +318,11 @@ pub fn playout_value(
         || sim.sides[1].request_state() == Some(nc2000_engine::state::RequestKind::TeamPreview)
     {
         if let Some(o) = sim.outcome() {
+            set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
             return outcome_reward(o);
         }
         if sim.turn > cutoff {
+            set_last_sim_end(SimEndInfo::from_battle(sim, None));
             return match playout {
                 Playout::Uniform => hp_eval(sim),
                 Playout::Heavy { weights, .. } => eval::eval_leaf(sim, dex, weights),
@@ -258,6 +340,26 @@ pub fn playout_value(
     }
 
     let (table, mut cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
+    if !rules.baton_pass {
+        cb.sides[0].side_flags |= 0x80;
+    }
+    if let crate::oracle::OracleMode::TreeLeaf { leaf_iters } = rules.oracle {
+        set_last_sim_end(SimEndInfo::from_compact(&cb));
+        return crate::oracle::oracle_equity(&cb, &table, leaf_iters);
+    }
+    if matches!(playout, Playout::Heavy { .. })
+        && rules.oracle == crate::oracle::OracleMode::Off
+        && !rules.settlement.uses_legacy_playout_loop()
+    {
+        if let crate::accounting::LeafSettlementMode::StochAcctRollout { turns } = rules.settlement
+        {
+            let v = crate::accounting::stoch_accounting_rollout(&mut cb, &table, turns, rng);
+            set_last_sim_end(SimEndInfo::from_compact(&cb));
+            return v;
+        }
+        set_last_sim_end(SimEndInfo::from_compact(&cb));
+        return crate::accounting::evaluate_settled_leaf(&cb, &table, rules.settlement);
+    }
     compact_playout_value(&mut cb, &table, playout, cutoff, rng, rules)
 }
 
@@ -273,21 +375,46 @@ pub fn compact_playout_value(
 ) -> f64 {
     loop {
         match cb.outcome {
-            1 => return 1.0,
-            2 => return 0.0,
-            3 => return 0.5,
+            1 => {
+                set_last_sim_end(SimEndInfo::from_compact(cb));
+                return 1.0;
+            }
+            2 => {
+                set_last_sim_end(SimEndInfo::from_compact(cb));
+                return 0.0;
+            }
+            3 => {
+                set_last_sim_end(SimEndInfo::from_compact(cb));
+                return 0.5;
+            }
             _ => {}
         }
         if cb.turn > cutoff {
+            set_last_sim_end(SimEndInfo::from_compact(cb));
             return match playout {
                 Playout::Uniform => compact_hp_eval(cb, table),
-                Playout::Heavy { weights, .. } => {
-                    if rules.blindspot_leaf {
-                        eval::compact_eval_leaf_blindspot(cb, table, weights)
-                    } else {
-                        eval::compact_eval_leaf(cb, table, weights)
+                Playout::Heavy { weights, .. } => match rules.oracle {
+                    crate::oracle::OracleMode::Off | crate::oracle::OracleMode::TreeLeaf { .. } => {
+                        if rules.settlement == crate::accounting::LeafSettlementMode::RolloutAcct0 {
+                            crate::accounting::evaluate_settled_leaf(
+                                cb,
+                                table,
+                                crate::accounting::LeafSettlementMode::Accounting0,
+                            )
+                        } else if rules.settlement.uses_blindspot_leaf() {
+                            eval::compact_eval_leaf_blindspot(cb, table, weights)
+                        } else {
+                            eval::compact_eval_leaf(cb, table, weights)
+                        }
                     }
-                }
+                    crate::oracle::OracleMode::EchoBase => {
+                        crate::oracle::echo_base_leaf(cb, table, weights)
+                    }
+                    crate::oracle::OracleMode::Cutoff { leaf_iters }
+                    | crate::oracle::OracleMode::Coupled { leaf_iters, .. } => {
+                        crate::oracle::oracle_equity(cb, table, leaf_iters)
+                    }
+                },
             };
         }
         let mut picks = [7u8; 2];
@@ -571,6 +698,205 @@ fn compact_status_pseudo_score(
 }
 
 #[inline]
+fn compact_side_has_usable_heal(
+    cb: &nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+    side: usize,
+    slot: usize,
+) -> bool {
+    use nc2000_engine::compact::vol_bit;
+    let idx = side * 3 + slot;
+    let mon = &cb.mons[idx];
+    if (mon.vol_flags & vol_bit::PERISH_SONG) != 0 {
+        return false;
+    }
+    let dis = (mon.vol_flags & vol_bit::DISABLE) != 0;
+    let dis_slot = ((mon.slot_refs >> 4) & 0x03) as usize;
+    for m_i in 0..table.mons[idx].num_moves as usize {
+        if mon.pp[m_i] > 0 && !(dis && m_i == dis_slot) {
+            let ms = &table.move_specs[idx][m_i];
+            if ms.is_rest || ms.is_half_heal {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Surgical sign-error overrides inside the 8-turn `CompactBattle` rollout (`BlindSpotRollout` /
+/// `BlindSpotBoth`). Strictly deterministic (zero PRNG draws):
+/// - **R2a**: Defensive `Whirlwind`/`Roar`/`Haze` against already-stacked setup (`>= +2`) we cannot 2HKO.
+/// - **R3b**: Zero-damage free offensive switch on an already-sleeping (`status_counter >= 2`)
+///   non-`Sleep Talk` foe when our active mon deals `< 0.20` chip.
+/// - **R2b**: Bulky setup + recovery (`Curse`/`SD`/`Amnesia`/`Growth`) punishing a passive
+///   non-phazing wall (`foe_non_sd_hit < 0.22`), so switching a passive wall into a setup
+///   sweeper is punished inside the rollout.
+#[inline]
+fn compact_blindspot_tactical_override(
+    cb: &nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+    side: usize,
+    cs: &[u8],
+    best_score: f64,
+) -> Option<u8> {
+    use nc2000_engine::compact::vol_bit;
+    use nc2000_engine::state::Status;
+
+    let att_slot = cb.sides[side].active_idx as usize;
+    let att_idx = side * 3 + att_slot;
+    let def_side = 1 - side;
+    let def_slot = cb.sides[def_side].active_idx as usize;
+    let def_idx = def_side * 3 + def_slot;
+    let me = &cb.mons[att_idx];
+    let foe = &cb.mons[def_idx];
+    let me_maxhp = table.mons[att_idx].maxhp.max(1) as f64;
+    let me_hp_frac = (me.hp() as f64) / me_maxhp;
+
+    let foe_berry = foe.item != 0
+        && (table.mons[def_idx].is_mintberry || table.mons[def_idx].is_miracleberry);
+    let foe_guaranteed_asleep =
+        foe.status_raw() == Status::Slp as u8 && foe.status_counter() >= 2 && !foe_berry;
+    let mut foe_has_sleeptalk = false;
+    let f_dis = (foe.vol_flags & vol_bit::DISABLE) != 0;
+    let f_dis_slot = ((foe.slot_refs >> 4) & 0x03) as usize;
+    for m_i in 0..table.mons[def_idx].num_moves as usize {
+        if foe.pp[m_i] > 0 && !(f_dis && m_i == f_dis_slot) {
+            let ms = &table.move_specs[def_idx][m_i];
+            if ms.special_kind == 10 || ms.is_sleep_usable {
+                foe_has_sleeptalk = true;
+                break;
+            }
+        }
+    }
+
+    // R2a: Defensive phaze / Haze against stacked setup we cannot 2HKO
+    let foe_setup = foe.boosts[0].max(0) as i32
+        + foe.boosts[1].max(0) as i32
+        + foe.boosts[2].max(0) as i32
+        + foe.boosts[3].max(0) as i32
+        + 2 * (foe.boosts[6].max(0) as i32);
+    if foe_setup >= 2 && best_score < 0.48 {
+        let foe_imm_hit = if foe_guaranteed_asleep && !foe_has_sleeptalk {
+            0.0
+        } else {
+            cb.best_hit_fraction(table, def_side, def_slot, side, att_slot, true)
+        };
+        let foe_bench = cb.sides[def_side].alive_mask.count_ones() >= 2;
+        for &c in cs {
+            if c < 4 {
+                let sk = table.move_specs[att_idx][c as usize].special_kind;
+                if sk == 27
+                    && (foe_imm_hit < 0.85
+                        || cb.mon_action_speed(table, side, att_slot)
+                            > cb.mon_action_speed(table, def_side, def_slot))
+                {
+                    return Some(c);
+                }
+                if sk == 7 && foe_bench && foe_imm_hit < 0.85 {
+                    return Some(c);
+                }
+            }
+        }
+    }
+
+    // R3b: Free offensive pivot on guaranteed-sleeping non-SleepTalk foe when our active deals < 20%
+    if foe_guaranteed_asleep
+        && !foe_has_sleeptalk
+        && best_score < 0.20
+        && (me.vol_flags & vol_bit::TRAPPED_OR_LOCKED) == 0
+        && (me.vol_flags & vol_bit::SUBSTITUTE) == 0
+        && me.boosts[0] <= 0
+        && me.boosts[2] <= 0
+        && me.boosts[6] <= 0
+    {
+        let spikes_layers = (cb.sides[side].side_flags & 0x03) as usize;
+        let flying_mask = 1u32 << (table.flying_type & 31);
+        let mut best_sw: Option<(u8, f64)> = None;
+        for &c in cs {
+            if (4..7).contains(&c) {
+                let cand_slot = (c - 4) as usize;
+                let cand_idx = side * 3 + cand_slot;
+                let cand = &cb.mons[cand_idx];
+                let cst = cand.status_raw();
+                if cand.hp() <= 0 || cst == Status::Frz as u8 || cst == Status::Slp as u8 {
+                    continue;
+                }
+                let mut cand_hp_f =
+                    (cand.hp() as f64) / (table.mons[cand_idx].maxhp.max(1) as f64);
+                if spikes_layers > 0 && (table.mons[cand_idx].type_mask & flying_mask) == 0 {
+                    cand_hp_f -= 0.125;
+                }
+                if cand_hp_f <= 0.45 {
+                    continue;
+                }
+                let off = cb.best_hit_fraction(table, side, cand_slot, def_side, def_slot, true);
+                if off > best_score + 0.18 && best_sw.map_or(true, |(_, b)| off > b) {
+                    best_sw = Some((c, off));
+                }
+            }
+        }
+        if let Some((sw_act, _)) = best_sw {
+            return Some(sw_act);
+        }
+    }
+
+    // R2b: Healthy setup + recovery punishes passive non-phazing walls (`foe_non_sd_hit < 0.22`)
+    if compact_side_has_usable_heal(cb, table, side, att_slot)
+        && me_hp_frac >= 0.65
+        && (me.vol_flags & (vol_bit::ENCORE | vol_bit::PERISH_SONG)) == 0
+        && best_score < 0.45
+    {
+        let mut foe_non_sd_hit = 0.0f64;
+        let mut foe_has_counter = false;
+        if !(foe_guaranteed_asleep && !foe_has_sleeptalk)
+            && foe.status_raw() != Status::Frz as u8
+        {
+            for m_i in 0..table.mons[def_idx].num_moves as usize {
+                if foe.pp[m_i] == 0 || (f_dis && m_i == f_dis_slot) {
+                    continue;
+                }
+                let fms = &table.move_specs[def_idx][m_i];
+                if !fms.is_selfdestruct {
+                    let h = cb.expected_hit_fraction(
+                        table, def_side, def_slot, side, att_slot, m_i, true,
+                    );
+                    if h > foe_non_sd_hit {
+                        foe_non_sd_hit = h;
+                    }
+                }
+                if matches!(fms.special_kind, 7 | 8 | 19 | 27)
+                    || fms.primary_status == Status::Tox as u8
+                    || fms.pseudo_kind == 1
+                {
+                    foe_has_counter = true;
+                }
+            }
+        }
+        if foe_non_sd_hit < 0.22 && !foe_has_counter {
+            let is_ghost =
+                (table.mons[att_idx].type_mask & (1u32 << (table.ghost_type & 31))) != 0;
+            for &c in cs {
+                if c < 4 {
+                    let ms = &table.move_specs[att_idx][c as usize];
+                    let want = (ms.pseudo_kind == 5 && !is_ghost && me.boosts[0] < 2)
+                        || (ms.pseudo_kind == 6 && me.boosts[0] < 2)
+                        || (ms.pseudo_kind == 7 && me.boosts[3] < 2)
+                        || (ms.boosts_self
+                            && ms.boosts[0].0 == 2
+                            && ms.boosts[0].1 > 0
+                            && me.boosts[2] < 2);
+                    if want {
+                        return Some(c);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[inline]
 fn compact_greedy_pick(
     cb: &nc2000_engine::compact::CompactBattle,
     table: &nc2000_engine::compact::MatchTable,
@@ -579,6 +905,9 @@ fn compact_greedy_pick(
     rng: &mut SplitMix64,
     rules: RolloutRules,
 ) -> u8 {
+    if let crate::oracle::OracleMode::Coupled { rollout_iters, .. } = rules.oracle {
+        return crate::oracle::oracle_rollout_pick(cb, table, side, cs, rollout_iters, rng);
+    }
     let att_slot = cb.sides[side].active_idx as usize;
     let att_idx = side * 3 + att_slot;
     let def_side = 1 - side;
@@ -603,6 +932,7 @@ fn compact_greedy_pick(
         }
         cs[rng.below(cs.len())]
     };
+
     if cb.sides[side].request == 1
         && (cb.sides[side].alive_mask & (1 << att_slot)) != 0
         && (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
@@ -610,28 +940,62 @@ fn compact_greedy_pick(
         if let Some(la_pick) = crate::linear::compact_rollout_linear_pick(cb, table, side, cs) {
             return la_pick;
         }
-        let mut best: Option<(u8, f64)> = None;
+        let bs_rollout = rules.settlement.uses_blindspot_rollout();
+        let me_hp_frac = if bs_rollout {
+            (cb.mons[att_idx].hp() as f64) / (table.mons[att_idx].maxhp.max(1) as f64)
+        } else {
+            0.0
+        };
+        let mut best: Option<(u8, f64, f64)> = None;
         for &c in cs {
             if c < 4 {
                 if suicidal(c) {
                     continue;
                 }
                 let m_slot = c as usize;
-                let mut score = cb.expected_hit_fraction(
+                let raw_score = cb.expected_hit_fraction(
                     table, side, att_slot, def_side, def_slot, m_slot, true,
                 );
+                // R1: Do not waste a healthy Pokemon's Explosion/Self-Destruct into a surviving healer
+                if bs_rollout
+                    && table.move_specs[att_idx][m_slot].is_selfdestruct
+                    && me_hp_frac >= 0.50
+                    && raw_score < 0.82
+                    && compact_side_has_usable_heal(cb, table, def_side, def_slot)
+                    && cb.best_hit_fraction(table, def_side, def_slot, side, att_slot, true)
+                        < 0.75
+                {
+                    if best.is_none() {
+                        best = Some((c, 0.0, 0.0));
+                    }
+                    continue;
+                }
+                let mut score = if rules.capped_damage {
+                    let accuracy =
+                        cb.hit_probability(table, side, att_slot, def_side, def_slot, m_slot);
+                    if accuracy > 0.0 {
+                        (raw_score / accuracy).min(1.0) * accuracy
+                    } else {
+                        0.0
+                    }
+                } else {
+                    raw_score
+                };
                 if score <= 0.0 && rules.status {
                     score = compact_status_pseudo_score(
                         cb, table, side, att_slot, def_side, def_slot, m_slot,
                     );
                 }
-                if best.map_or(true, |(_, b)| score > b) {
-                    best = Some((c, score));
+                if best.map_or(true, |(_, old_score, old_raw)| {
+                    score > old_score
+                        || (rules.capped_damage && score == old_score && raw_score > old_raw)
+                }) {
+                    best = Some((c, score, raw_score));
                 }
             }
         }
         if rules.switch {
-            if let Some((_, stay)) = best {
+            if let Some((_, stay, _)) = best {
                 if stay < ROLLOUT_SWITCH_TRIGGER {
                     let mut sw: Option<(u8, f64)> = None;
                     for &c in cs {
@@ -653,7 +1017,48 @@ fn compact_greedy_pick(
                 }
             }
         }
-        if let Some((c, score)) = best {
+        if rules.rollout_residual {
+            let stay_dmg = best.map_or(0.0, |(_, s, _)| s) as f32;
+            if let Some(deltas) =
+                crate::eval::compute_rollout_action_residuals(cb, table, side, cs, stay_dmg)
+            {
+                for (i, &c) in cs.iter().take(7).enumerate() {
+                    if suicidal(c) {
+                        continue;
+                    }
+                    let dq = deltas[i] as f64;
+                    if dq <= 0.0 {
+                        continue;
+                    }
+                    let base = if c < 4 {
+                        cb.expected_hit_fraction(
+                            table,
+                            side,
+                            att_slot,
+                            def_side,
+                            def_slot,
+                            c as usize,
+                            true,
+                        )
+                    } else {
+                        0.0
+                    };
+                    let total = base + dq;
+                    if best.map_or(true, |(_, old_score, _)| total > old_score) {
+                        best = Some((c, total, base));
+                    }
+                }
+            }
+        }
+        if bs_rollout {
+            let stay_score = best.map_or(0.0, |(_, s, _)| s);
+            if let Some(tac_act) =
+                compact_blindspot_tactical_override(cb, table, side, cs, stay_score)
+            {
+                return tac_act;
+            }
+        }
+        if let Some((c, score, _)) = best {
             if score > 0.0 {
                 return c;
             }
@@ -662,12 +1067,13 @@ fn compact_greedy_pick(
     }
 
     // Forced or self-switch target selection:
-    // When the outgoing active Pokemon is alive (`hp > 0`, i.e. `self_switch` / Baton Pass)
-    // and carries positive offensive boosts, add the marginal damage gain from those boosts;
-    // when fainted or unboosted, keep healthiest-bench selection.
+    // When the outgoing active Pokemon is alive (`hp > 0`, i.e. `self_switch` / Baton Pass),
+    // score receivers by HP fraction + offensive effectiveness with passed boosts;
+    // when fainted (`hp <= 0`), keep exact healthiest-bench selection.
     let mut best_sw = None;
     let mut best_score = -1.0f64;
-    let passing_alive = cb.sides[side].request == 2
+    let passing_alive = rules.baton_pass
+        && cb.sides[side].request == 2
         && att_slot < 3
         && cb.mons[att_idx].hp() > 0
         && (cb.mons[att_idx].boosts[0] > 0 || cb.mons[att_idx].boosts[2] > 0)

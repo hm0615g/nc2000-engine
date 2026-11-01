@@ -22,15 +22,11 @@
 // loaded a pool file must not read the prior's verdict as a verdict on
 // their file.
 //
-// Nash (`?nash`) swaps the halves over. Setup is gone — the mode ships
-// exactly one configuration, so there is nothing to press — and an opponent
-// row comes back as a readout of the solved mixture that opens a read-only
-// panel, never a picker. Showing the mixture is not a leak and is most of
-// the point: an equilibrium is a strategy that survives the opponent knowing
-// it. What stays hidden is what blind always hides — which party was drawn
-// this battle, and every set in it, until the game ends.
+// The play screen ships as the standard screen. `?nash` sets the bot's draw
+// source to the solved Nash mixture, and the mixture details are viewable
+// inside Opponent & Setup.
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { MetaPool, PoolTeam, PriorReport } from "./types";
 import type { SelectedTeam } from "./app";
 import type { NashMix, NashTeam } from "./nash-mix";
@@ -56,16 +52,15 @@ import {
   saveCustomTeam,
   type CustomTeam,
 } from "./custom-teams";
-import { speciesName, ui, type Locale } from "./i18n";
+import { itemName, moveName, speciesName, ui, type Locale } from "./i18n";
 import { Lvl } from "./battle-ui";
+import { teamDisplayName } from "./team-names";
 
-function provenanceLine(t: PoolTeam): string {
-  const p = t.provenance;
-  const bits: string[] = [];
-  if (p.player) bits.push(p.player);
-  if (p.placement) bits.push(p.placement);
-  if (p.event) bits.push(p.event);
-  return bits.join(" · ") || p.source || "";
+interface MonSetLike {
+  species?: string;
+  level?: number;
+  item?: string;
+  moves?: string[];
 }
 
 function TeamCard(props: {
@@ -75,37 +70,69 @@ function TeamCard(props: {
   onTap: () => void;
 }) {
   const { team, index, selected } = props;
-  // Tier and provenance are optional metadata, and a loaded pool file
-  // usually carries neither (team-pool.ts defaults them to "" and {}). The
-  // tier pill is a bordered box, so rendering it empty draws a stray blank
-  // chip on every card; the provenance line just eats its margins. Both are
-  // dropped rather than rendered hollow — the catalog always fills
-  // them, so this only shows on a swapped pool.
-  const prov = provenanceLine(team);
+  const name = teamDisplayName(team.id);
+  const sets = Array.isArray(team.sets) ? (team.sets as MonSetLike[]) : [];
+
   return (
-    <button
+    <div
       class={`team-card ${selected ? "selected" : ""}`}
-      onClick={props.onTap}
-      aria-pressed={selected}
       data-team={index}
     >
-      <div class="team-card-head">
-        <span class="team-rank">#{index + 1}</span>
-        <span class="team-id">{team.id}</span>
-        {team.tier && <span class="team-tier">{team.tier}</span>}
-      </div>
-      {prov && <div class="team-prov">{prov}</div>}
-      <div class="team-species">
-        {team.species.map((sp, i) => (
-          <span class="species-chip" key={i}>
-            {speciesName(sp)}{" "}
-            <small>
-              <Lvl n={team.levels[i]} />
-            </small>
-          </span>
-        ))}
-      </div>
-    </button>
+      <button
+        class="team-card-select"
+        onClick={props.onTap}
+        aria-pressed={selected}
+      >
+        <div class="team-card-head">
+          <span class="team-rank">#{index + 1}</span>
+          {name ? (
+            <>
+              <span class="team-name">{name}</span>
+              <span class="team-id">{team.id}</span>
+            </>
+          ) : (
+            <span class="team-id">{team.id}</span>
+          )}
+        </div>
+        <div class="team-species">
+          {team.species.map((sp, i) => (
+            <span class="species-chip" key={i}>
+              {speciesName(sp)}{" "}
+              <small>
+                <Lvl n={team.levels[i]} />
+              </small>
+            </span>
+          ))}
+        </div>
+      </button>
+      {sets.length > 0 && (
+        <details class="team-sets-details">
+          <summary class="team-sets-summary">{ui().viewSets}</summary>
+          <div class="team-sets-content">
+            {sets.map((s, i) => (
+              <div class="team-set-row" key={i}>
+                <div class="team-set-header">
+                  <span class="team-set-mon">
+                    <strong>{speciesName(s.species ?? team.species[i])}</strong>{" "}
+                    <small>
+                      <Lvl n={s.level ?? team.levels[i]} />
+                    </small>
+                  </span>
+                  {s.item && (
+                    <span class="team-set-item">@{itemName(s.item)}</span>
+                  )}
+                </div>
+                {Array.isArray(s.moves) && s.moves.length > 0 && (
+                  <div class="team-set-moves">
+                    {s.moves.map((mv) => moveName(mv)).join(" · ")}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
   );
 }
 
@@ -133,11 +160,16 @@ function NashMixPanel(props: { mix: NashMix }) {
 
 function NashCard(props: { team: NashTeam; index: number }) {
   const { team, index } = props;
+  const isEvolved =
+    team.id.startsWith("red-") ||
+    team.id.startsWith("deme-") ||
+    team.id.startsWith("sib-");
   return (
     <div class="team-card nash-card" data-team={index} data-nash={team.id}>
       <div class="team-card-head">
         <span class="team-rank">{pct(team.weight)}</span>
         <span class="team-id">{team.id}</span>
+        {isEvolved && <span class="team-tier">{ui().evolvedBadge}</span>}
       </div>
       <div class="team-species">
         {team.species.map((sp, i) => (
@@ -428,6 +460,21 @@ function HumanPicker(props: {
   onCustomsChange: (list: CustomTeam[], picked?: CustomTeam) => void;
 }) {
   const { teams, choice, customs } = props;
+  const categories = useMemo(() => {
+    const hasSpecial = teams.some((t) => t.nash || t.evolved);
+    if (!hasSpecial) {
+      return [{ title: null, items: teams }];
+    }
+    const nash = teams.filter((t) => t.nash);
+    const evolved = teams.filter((t) => !t.nash && t.evolved);
+    const classic = teams.filter((t) => !t.nash && !t.evolved);
+    return [
+      { title: ui().poolNashCategory, items: nash },
+      { title: ui().poolEvolvedCategory, items: evolved },
+      { title: ui().poolClassicCategory, items: classic },
+    ].filter((cat) => cat.items.length > 0);
+  }, [teams]);
+
   return (
     <>
       <p class="modal-note">{ui().blindSheetNote}</p>
@@ -445,17 +492,25 @@ function HumanPicker(props: {
         onCustomsChange={props.onCustomsChange}
       />
       <h3>{ui().poolSection}</h3>
-      <div class="team-list">
-        {teams.map((t, i) => (
-          <TeamCard
-            key={t.id}
-            team={t}
-            index={i}
-            selected={choice.kind === "pool" && choice.id === t.id}
-            onTap={() => props.onPick({ kind: "pool", id: t.id })}
-          />
-        ))}
-      </div>
+      {categories.map((cat, catIdx) => (
+        <div class="pool-category" key={catIdx}>
+          {cat.title && <h4 class="pool-category-title">{cat.title}</h4>}
+          <div class="team-list">
+            {cat.items.map((t) => {
+              const originalIndex = teams.indexOf(t);
+              return (
+                <TeamCard
+                  key={t.id}
+                  team={t}
+                  index={originalIndex >= 0 ? originalIndex : 0}
+                  selected={choice.kind === "pool" && choice.id === t.id}
+                  onTap={() => props.onPick({ kind: "pool", id: t.id })}
+                />
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </>
   );
 }
@@ -640,9 +695,14 @@ function PoolPanel(props: {
   drawSource: DrawSource;
   onDrawSource: (s: DrawSource) => void;
   nashMix: NashMix;
+  prevNashR1Mix: NashMix;
+  oldNashMix: NashMix;
 }) {
   const [result, setResult] = useState<PoolResult | null>(null);
   const fileLoaded = props.loaded.name !== null;
+  const isPrevNash =
+    !fileLoaded &&
+    (props.drawSource === "nash-r1" || props.drawSource === "nash-v3");
 
   /** Picking a draw source is picking the built-in lists again: a loaded
    * file would otherwise keep overriding the choice just made. */
@@ -689,6 +749,38 @@ function PoolPanel(props: {
       {!fileLoaded && props.drawSource === "nash" && (
         <NashMixPanel mix={props.nashMix} />
       )}
+      <details
+        class="old-nash-details"
+        data-testid="old-nash-details"
+        open={isPrevNash}
+      >
+        <summary class="old-nash-summary">{ui().drawPrevNashSummary}</summary>
+        <div
+          class="draw-choice old-nash-choice"
+          role="group"
+          aria-label={ui().drawPrevNashSummary}
+        >
+          {(["nash-r1", "nash-v3"] as const).map((source) => (
+            <button
+              key={source}
+              class="draw-choice-btn"
+              data-draw={source}
+              aria-pressed={!fileLoaded && props.drawSource === source}
+              onClick={() => chooseDraw(source)}
+            >
+              {source === "nash-r1"
+                ? ui().drawPrevNashR1(props.prevNashR1Mix.teams.length)
+                : ui().drawOldNash(props.oldNashMix.teams.length)}
+            </button>
+          ))}
+        </div>
+        {!fileLoaded && props.drawSource === "nash-r1" && (
+          <NashMixPanel mix={props.prevNashR1Mix} />
+        )}
+        {!fileLoaded && props.drawSource === "nash-v3" && (
+          <NashMixPanel mix={props.oldNashMix} />
+        )}
+      </details>
       <p class="modal-note">{ui().poolHelp}</p>
       <div class="pool-actions">
         {/* Same construction as the prior panel's picker: a real <label>
@@ -774,6 +866,8 @@ function SetupPanel(props: {
   drawSource: DrawSource;
   onDrawSource: (s: DrawSource) => void;
   nashMix: NashMix;
+  prevNashR1Mix: NashMix;
+  oldNashMix: NashMix;
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
 }) {
@@ -788,6 +882,8 @@ function SetupPanel(props: {
           drawSource={props.drawSource}
           onDrawSource={props.onDrawSource}
           nashMix={props.nashMix}
+          prevNashR1Mix={props.prevNashR1Mix}
+          oldNashMix={props.oldNashMix}
         />
       </section>
       <section class="setup-section">
@@ -809,11 +905,11 @@ export function StartScreen(props: {
   onPool: (p: LoadedPool) => void;
   locale: Locale;
   onLocale: (l: Locale) => void;
-  /** `?nash`: fixed opponent mixture, no setup. */
-  nash: boolean;
-  /** The solved mixture: `?nash`'s read-only opponent panel, and the setup
-   * panel's Nash draw choice. */
+  /** The solved mixture: `NashMixPanel` inside Opponent & Setup. */
   nashMix: NashMix;
+  /** The preserved r1 and v3 Nash mixtures, collapsed under <details>. */
+  prevNashR1Mix: NashMix;
+  oldNashMix: NashMix;
   /** Where the bot's party comes from when no pool file is loaded. */
   drawSource: DrawSource;
   onDrawSource: (s: DrawSource) => void;
@@ -830,14 +926,11 @@ export function StartScreen(props: {
 }) {
   const pool = props.loadedPool.pool;
   const teams = pool.teams;
-  const nash = props.nash;
   const [customs, setCustoms] = useState<CustomTeam[]>(loadCustomTeams);
   const [picks, setPicks] = useState<Picks>(() =>
     loadPicks(pool, loadCustomTeams()),
   );
-  const [modal, setModal] = useState<null | "human" | "settings" | "mix">(
-    null,
-  );
+  const [modal, setModal] = useState<null | "human" | "settings">(null);
 
   // A pool swap invalidates the pinned pick: an id from the old lists is
   // either absent from the new ones — the button would name a team that no
@@ -925,7 +1018,7 @@ export function StartScreen(props: {
             redrawn each battle — and the second of them is why no opponent
             picker follows. */}
         <p class="mode-banner" data-testid="mode-banner">
-          {nash ? ui().nashBanner : ui().blindBanner}
+          {ui().blindBanner}
         </p>
         <button
           class="party-btn"
@@ -935,46 +1028,27 @@ export function StartScreen(props: {
           <span class="party-label">{ui().yourParty}</span>
           <span class="party-value">{humanValue}</span>
         </button>
-        {nash && (
-          // Nash's opponent row is a readout of the distribution, not a
-          // picker: there is nothing to choose, but there IS something to
-          // read. Its value line carries the whole distribution, so the
-          // panel is for seeing which six species each arm brings, not for
-          // learning the odds.
-          <button
-            class="party-btn"
-            data-party="nash"
-            onClick={() => setModal("mix")}
-          >
-            <span class="party-label">{ui().oppParty}</span>
-            <span class="party-value">
-              {props.nashMix.teams.map((t) => `${t.id} ${pct(t.weight)}`).join(" · ")}
-            </span>
-          </button>
-        )}
-        {!nash && (
-          // Its value line reports both halves so the usual answer — the
-          // catalog, no prior — is readable without opening anything;
-          // .party-value wraps rather than truncates, so a long file name
-          // pushes the prior onto a second line instead of hiding it.
-          <button
-            class="party-btn"
-            data-party="settings"
-            onClick={() => setModal("settings")}
-          >
-            <span class="party-label">{ui().settingsLabel}</span>
-            <span class="party-value">
-              {ui().settingsValue(
-                props.loadedPool.name !== null
-                  ? ui().poolLoaded(props.loadedPool.name, teams.length)
-                  : props.drawSource === "nash"
-                    ? ui().drawNash(props.nashMix.teams.length)
-                    : ui().poolBundled(teams.length),
-                props.prior ? props.prior.name : ui().priorNone,
-              )}
-            </span>
-          </button>
-        )}
+        <button
+          class="party-btn"
+          data-party="settings"
+          onClick={() => setModal("settings")}
+        >
+          <span class="party-label">{ui().settingsLabel}</span>
+          <span class="party-value">
+            {ui().settingsValue(
+              props.loadedPool.name !== null
+                ? ui().poolLoaded(props.loadedPool.name, teams.length)
+                : props.drawSource === "nash"
+                  ? ui().drawNash(props.nashMix.teams.length)
+                  : props.drawSource === "nash-r1"
+                    ? ui().drawPrevNashR1(props.prevNashR1Mix.teams.length)
+                    : props.drawSource === "nash-v3"
+                      ? ui().drawOldNash(props.oldNashMix.teams.length)
+                      : ui().poolBundled(teams.length),
+              props.prior ? props.prior.name : ui().priorNone,
+            )}
+          </span>
+        </button>
         <a class="start-link" href={`${import.meta.env.BASE_URL}?evaluate`}>
           {ui().evaluateLink}
         </a>
@@ -997,11 +1071,6 @@ export function StartScreen(props: {
           />
         </Modal>
       )}
-      {modal === "mix" && (
-        <Modal title={ui().nashTitle} onClose={() => setModal(null)}>
-          <NashMixPanel mix={props.nashMix} />
-        </Modal>
-      )}
       {modal === "settings" && (
         <Modal title={ui().settingsTitle} onClose={() => setModal(null)}>
           <SetupPanel
@@ -1011,6 +1080,8 @@ export function StartScreen(props: {
             drawSource={props.drawSource}
             onDrawSource={props.onDrawSource}
             nashMix={props.nashMix}
+            prevNashR1Mix={props.prevNashR1Mix}
+            oldNashMix={props.oldNashMix}
             prior={props.prior}
             onPrior={props.onPrior}
           />

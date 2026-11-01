@@ -20,6 +20,8 @@
 //! (class-count / 2^32) accumulated in f64 — deterministic, no seed noise.
 
 use std::cell::Cell;
+use std::cmp::Ordering;
+use std::collections::{BTreeMap, BinaryHeap, HashMap};
 
 use crate::dex::Dex;
 use crate::prng::{BattleRng, DamageRollMode, Draw, Oracle};
@@ -43,9 +45,174 @@ pub struct ChanceLeaf {
 pub struct StepEnum {
     pub leaves: Vec<ChanceLeaf>,
     pub runs: usize,
-    /// Diagnostic observations across scripted engine runs. These are not
-    /// unique battle events: probes deliberately replay the same prefix.
+    /// Diagnostic observations across scripted transitions, including cache
+    /// hits. These are not unique events: probes revisit the same prefix.
     pub damage: DamageEnumStats,
+}
+
+pub struct ChancePrefix {
+    pub script: Vec<usize>,
+    pub mass: f64,
+}
+
+pub struct PartialStepEnum {
+    pub leaves: Vec<ChanceLeaf>,
+    /// Full representative scripts aligned with leaves; a leaf may carry merged mass.
+    pub leaf_scripts: Option<Vec<Vec<usize>>>,
+    pub pending: Vec<ChancePrefix>,
+    pub runs: usize,
+    pub exhausted: bool,
+}
+
+struct RankedPrefix(ChancePrefix);
+
+impl PartialEq for RankedPrefix {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.mass == other.0.mass && self.0.script == other.0.script
+    }
+}
+
+impl Eq for RankedPrefix {}
+
+impl PartialOrd for RankedPrefix {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+}
+
+impl Ord for RankedPrefix {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.mass.total_cmp(&other.0.mass)
+            .then_with(|| other.0.script.cmp(&self.0.script))
+    }
+}
+
+pub fn enumerate_step_probability_first(
+    dex: &Dex, base: &Battle, choices: [Option<SearchChoice>; 2], cap: usize,
+) -> PartialStepEnum {
+    let mut pending = BinaryHeap::from([RankedPrefix(ChancePrefix { script: vec![], mass: 1.0 })]);
+    let mut leaves = Vec::new();
+    let mut scripts = Vec::new();
+    while leaves.len() < cap && !pending.is_empty() {
+        let prefix = pending.pop().unwrap().0;
+        let (battle, trace) = run_scripted(dex, base, choices, &prefix.script);
+        debug_assert!(trace.len() >= prefix.script.len());
+        let mut mass = 1.0;
+        let mut sibling_mass = 0.0;
+        for (index, draw) in trace.iter().enumerate() {
+            if index >= prefix.script.len() {
+                for (class, &count) in draw.counts.iter().enumerate() {
+                    if class != draw.chosen && count > 0 {
+                        let prob = mass * count as f64 / Draw::TOTAL as f64;
+                        let mut script: Vec<_> = trace[..index].iter().map(|d| d.chosen).collect();
+                        script.push(class);
+                        pending.push(RankedPrefix(ChancePrefix { script, mass: prob }));
+                        sibling_mass += prob;
+                    }
+                }
+            }
+            mass *= draw.prob();
+        }
+        debug_assert!((mass + sibling_mass - prefix.mass).abs() < 1e-9);
+        scripts.push(trace.iter().map(|d| d.chosen).collect());
+        leaves.push(ChanceLeaf { battle, prob: mass, draws: trace.len() });
+    }
+    let mut pending: Vec<_> = pending.into_vec().into_iter().map(|p| p.0).collect();
+    pending.sort_by(|a,b| a.script.cmp(&b.script));
+    assert!((leaves.iter().map(|l|l.prob).sum::<f64>() + pending.iter().map(|p|p.mass).sum::<f64>() - 1.0).abs() < 1e-9);
+    PartialStepEnum { runs: leaves.len(), leaves, leaf_scripts: Some(scripts), exhausted: !pending.is_empty(), pending }
+}
+
+#[derive(Default)]
+struct TracePartition {
+    counts: Option<Vec<u64>>,
+    children: BTreeMap<usize, TracePartition>,
+    terminal: bool,
+}
+
+impl TracePartition {
+    fn insert(&mut self, trace: &[Draw]) {
+        let mut node = self;
+        for draw in trace {
+            assert!(!node.terminal);
+            if let Some(counts) = &node.counts { assert_eq!(counts, &draw.counts); }
+            else { node.counts = Some(draw.counts.clone()); }
+            node = node.children.entry(draw.chosen).or_default();
+        }
+        assert!(node.counts.is_none());
+        node.terminal = true;
+    }
+
+    fn pending(&self, prefix: &mut Vec<usize>, mass: f64, out: &mut Vec<ChancePrefix>) {
+        if self.terminal { return; }
+        let Some(counts) = &self.counts else {
+            out.push(ChancePrefix { script: prefix.clone(), mass });
+            return;
+        };
+        for (class, &count) in counts.iter().enumerate().filter(|(_, n)| **n > 0) {
+            prefix.push(class);
+            let mass = mass * count as f64 / Draw::TOTAL as f64;
+            if let Some(child) = self.children.get(&class) { child.pending(prefix, mass, out); }
+            else { out.push(ChancePrefix { script: prefix.clone(), mass }); }
+            prefix.pop();
+        }
+    }
+}
+
+/// Leaves and pending prefixes partition the complete chance mass without overlap.
+pub fn enumerate_step_partial(
+    dex: &Dex, base: &Battle, choices: [Option<SearchChoice>; 2], cap: usize,
+) -> PartialStepEnum {
+    enumerate_partial(dex, base, choices, cap, false)
+}
+
+pub fn enumerate_step_partial_with_leaf_scripts(
+    dex: &Dex, base: &Battle, choices: [Option<SearchChoice>; 2], cap: usize,
+) -> PartialStepEnum {
+    enumerate_partial(dex, base, choices, cap, true)
+}
+
+fn enumerate_partial(
+    dex: &Dex, base: &Battle, choices: [Option<SearchChoice>; 2], cap: usize,
+    retain_complete_scripts: bool,
+) -> PartialStepEnum {
+    let mut observed = HashMap::new();
+    let mut runs = 0;
+    let complete = {
+        let mut runner = |script: &[usize]| {
+            let (battle, trace) = run_scripted(dex, base, choices, script);
+            runs += 1;
+            let path: Vec<_> = trace.iter().map(|d| d.chosen).collect();
+            observed.entry(path).or_insert_with(|| (battle.clone(), trace.clone()));
+            (battle, trace, true)
+        };
+        enumerate_step_with_runner(dex, base, choices, cap, &mut runner)
+    };
+    if let Some(step) = complete {
+        assert_eq!(step.runs, runs);
+        let leaf_scripts = retain_complete_scripts.then(|| {
+            let mut representatives: HashMap<u128, Vec<usize>> = HashMap::new();
+            for (script, (battle, _)) in observed {
+                representatives.entry(battle.state_key128())
+                    .and_modify(|old| { if script < *old { *old = script.clone(); } })
+                    .or_insert(script);
+            }
+            step.leaves.iter().map(|leaf| representatives.get(&leaf.battle.state_key128())
+                .expect("complete leaf has an observed representative").clone()).collect()
+        });
+        return PartialStepEnum { leaves: step.leaves, leaf_scripts, pending: Vec::new(), runs, exhausted: false };
+    }
+    let mut observed: Vec<_> = observed.into_iter().collect();
+    observed.sort_by(|a,b| a.0.cmp(&b.0));
+    let mut partition = TracePartition::default();
+    let mut scripts = Vec::new();
+    let leaves = observed.into_iter().map(|(script, (battle, trace))| {
+        scripts.push(script);
+        partition.insert(&trace);
+        ChanceLeaf { battle, prob: trace.iter().map(Draw::prob).product(), draws: trace.len() }
+    }).collect::<Vec<_>>();
+    let mut pending = Vec::new();
+    partition.pending(&mut Vec::new(), 1., &mut pending);
+    assert!((leaves.iter().map(|l|l.prob).sum::<f64>() + pending.iter().map(|p|p.mass).sum::<f64>() - 1.).abs()<1e-9);
+    PartialStepEnum { leaves, leaf_scripts: Some(scripts), pending, runs, exhausted: true }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -60,7 +227,6 @@ pub struct DamageEnumStats {
     pub heal_draws: usize,
 }
 
-#[derive(Clone)]
 struct LeafRec {
     battle: Battle,
     key: Cell<Option<u128>>,
@@ -71,13 +237,12 @@ struct LeafRec {
 impl LeafRec {
     #[inline]
     fn key(&self) -> u128 {
-        match self.key.get() {
-            Some(k) => k,
-            None => {
-                let k = self.battle.state_key128();
-                self.key.set(Some(k));
-                k
-            }
+        if let Some(k) = self.key.get() {
+            k
+        } else {
+            let k = self.battle.state_key128();
+            self.key.set(Some(k));
+            k
         }
     }
 }
@@ -94,23 +259,6 @@ pub fn run_scripted(
     script: &[usize],
 ) -> (Battle, Vec<Draw>) {
     run_scripted_with_damage_mode(dex, base, choices, script, DamageRollMode::Exact)
-}
-
-/// Same as `run_scripted`, reusing `out`'s allocations via `clone_from`.
-pub fn run_scripted_clone_into(
-    dex: &Dex,
-    base: &Battle,
-    out: &mut Battle,
-    choices: [Option<SearchChoice>; 2],
-    script: &[usize],
-) -> Vec<Draw> {
-    out.clone_from(base);
-    out.set_log_enabled(false);
-    out.prng = BattleRng::enumerating_with_damage_mode(script.to_vec(), DamageRollMode::Exact);
-    out.apply_choices(dex, choices).expect("run_scripted: choices must be legal");
-    let oracle = out.prng.oracle.take().expect("oracle survives the step");
-    let Oracle { trace, .. } = *oracle;
-    trace
 }
 
 /// Experimental counterpart of `run_scripted`. The production exact path
@@ -131,29 +279,32 @@ pub fn run_scripted_with_damage_mode(
     (b, trace)
 }
 
-struct Ctx<'a> {
+type ScriptRunner<'a> = dyn FnMut(&[usize]) -> (Battle, Vec<Draw>, bool) + 'a;
+
+struct Ctx<'a, 'r> {
     dex: &'a Dex,
     base: &'a Battle,
     choices: [Option<SearchChoice>; 2],
     damage_mode: DamageRollMode,
+    runner: Option<&'a mut ScriptRunner<'r>>,
     cap: usize,
     runs: usize,
     damage: DamageEnumStats,
 }
 
-impl Ctx<'_> {
+impl Ctx<'_, '_> {
     fn run(&mut self, script: &[usize]) -> Option<(Battle, Vec<Draw>)> {
         if self.runs >= self.cap {
             return None;
         }
-        self.runs += 1;
-        let result = run_scripted_with_damage_mode(
-            self.dex,
-            self.base,
-            self.choices,
-            script,
-            self.damage_mode,
-        );
+        let result = if let Some(runner) = self.runner.as_mut() {
+            let (battle, trace, executed) = runner(script);
+            self.runs += usize::from(executed);
+            (battle, trace)
+        } else {
+            self.runs += 1;
+            run_scripted_with_damage_mode(self.dex, self.base, self.choices, script, self.damage_mode)
+        };
         for draw in &result.1 {
             match draw.label {
                 "dmgvar" => self.damage.exact_draws += 1,
@@ -353,7 +504,32 @@ pub fn enumerate_step_with_damage_mode(
     cap: usize,
     damage_mode: DamageRollMode,
 ) -> Option<StepEnum> {
-    let clean_base = if base.log_enabled || !base.log.is_empty() {
+    enumerate_with_runner(dex, base, choices, cap, damage_mode, None)
+}
+
+/// The runner must return a semantically equivalent scripted successor
+/// and the identical chance trace, with
+/// `executed` true iff it performed an engine execution. Cached calls may
+/// cost zero; a depleted cap still stops before invoking the runner.
+pub fn enumerate_step_with_runner(
+    dex: &Dex,
+    base: &Battle,
+    choices: [Option<SearchChoice>; 2],
+    cap: usize,
+    runner: &mut ScriptRunner<'_>,
+) -> Option<StepEnum> {
+    enumerate_with_runner(dex, base, choices, cap, DamageRollMode::Exact, Some(runner))
+}
+
+fn enumerate_with_runner<'a>(
+    dex: &'a Dex,
+    base: &'a Battle,
+    choices: [Option<SearchChoice>; 2],
+    cap: usize,
+    damage_mode: DamageRollMode,
+    runner: Option<&'a mut ScriptRunner<'a>>,
+) -> Option<StepEnum> {
+    let clean_base = if runner.is_none() && (base.log_enabled || !base.log.is_empty()) {
         let mut b = base.clone();
         b.set_log_enabled(false);
         Some(b)
@@ -366,6 +542,7 @@ pub fn enumerate_step_with_damage_mode(
         base: base_ref,
         choices,
         damage_mode,
+        runner,
         cap,
         runs: 0,
         damage: DamageEnumStats::default(),

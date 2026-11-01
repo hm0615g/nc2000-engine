@@ -282,6 +282,7 @@ impl ProtocolTracker {
                 name: m.name.clone(),
                 preview_has_item: m.preview_item,
                 revealed_moves: Vec::new(),
+                hp_type_mask: u16::MAX,
                 item: Default::default(),
                 appeared: m.appeared,
             })
@@ -1902,7 +1903,6 @@ pub struct ProtocolAgent {
     baked: Option<SearchChoice>,
     forced: Option<String>,
     request: Option<Request>,
-    sampled_candidate: Option<usize>,
     /// Decision points where the synthesized own-side legal set differed
     /// from the request-derived one (target 0; the projection still keeps
     /// every submission PS-legal).
@@ -1940,7 +1940,6 @@ impl ProtocolAgent {
             baked: None,
             forced: None,
             request: None,
-            sampled_candidate: None,
             legality_drift: 0,
             projections: 0,
         }
@@ -2015,7 +2014,6 @@ impl ProtocolAgent {
             self.baked = None;
             self.forced = None;
             self.request = None;
-            self.sampled_candidate = None;
             return Ok(false);
         }
         if self.own_sets.is_empty() {
@@ -2068,7 +2066,6 @@ impl ProtocolAgent {
 
         // synthesize
         let pick = belief.alive().first().copied();
-        self.sampled_candidate = pick;
         let battle = {
             let refs = belief.refs(pick);
             self.tracker.synthesize(dex, &self.own_sets, refs, obs, &req, &mut self.rng)?
@@ -2099,7 +2096,6 @@ impl ProtocolAgent {
             if allowed.iter().any(|&a| a) {
                 search.mask_actions(&allowed);
             }
-            search.prune_preview_aliases(dex);
             // baked pair tables, restricted to the legal picks
             let pick = if self.pinned_sets.is_some() {
                 filtered_open_preview(&self.tables, &battle, self.side, &levels, &mut self.rng)
@@ -2164,6 +2160,20 @@ impl ProtocolAgent {
         self.search.as_ref().map_or(0, |s| s.iterations())
     }
 
+    pub fn step_with_endgame(
+        &mut self,
+        dex: &Dex,
+        n: u32,
+        session: &mut crate::endgame::EndgameSession,
+        clock: &mut impl FnMut() -> f64,
+    ) -> Result<u32, String> {
+        let search = self.search.as_mut().ok_or("step before on_request")?;
+        if self.baked.is_some() || self.forced.is_some() { return Ok(search.iterations()); }
+        let belief = self.belief.as_ref().ok_or("no belief")?;
+        let obs = self.observer.as_ref().ok_or("no observer")?;
+        Ok(search.step_with_endgame(dex, belief, obs, n, session, clock))
+    }
+
     pub fn step_observed(
         &mut self,
         dex: &Dex,
@@ -2222,49 +2232,40 @@ impl ProtocolAgent {
         Some(legal[0].clone())
     }
 
-    /// JSON belief info for decision logs and diagnostics. Keeps the
-    /// historical `count`/`fallback`/`candidates` aliases while adding the
-    /// explicit fields used by ps-client decision logs.
+    /// Execution distribution in request syntax. Project the whole policy
+    /// before sampling, merging aliases and displaced mass; never discard
+    /// probability after the draw. Preview tables have already sampled in
+    /// the legacy lifecycle and are explicitly labelled as such.
+    pub fn decision_policy(&self, dex: &Dex, mode: crate::decision::PolicyMode) -> Option<crate::decision::DecisionPolicy<String>> {
+        use crate::decision::DecisionPolicy;
+        if let Some(input) = &self.forced { return Some(DecisionPolicy::pure("forced", input.clone())); }
+        if let Some(action) = self.baked { return Some(DecisionPolicy::pure("preview-sampled", action.to_input(dex))); }
+        let policy = self.search.as_ref()?.decision_policy(mode)?.map(|&action| ps_input(dex, action));
+        let req = self.request.as_ref()?;
+        if req.team_preview { return Some(policy); }
+        let legal = req.legal_inputs();
+        if legal.is_empty() { return None; }
+        let projected = policy.actions().iter().any(|row| !legal.contains(&row.input));
+        DecisionPolicy::new(if projected { "request-projected" } else { policy.source() },
+            policy.actions().iter().map(|row| (
+                if legal.contains(&row.input) { row.input.clone() } else { legal[0].clone() }, row.probability,
+            ))).ok()
+    }
+
+    /// JSON belief info (mirrors the wasm `BlindSearcher.beliefInfo`).
     pub fn belief_info(&self) -> String {
         match &self.belief {
             Some(b) => {
-                let candidate_ids: Vec<&str> =
+                let candidates: Vec<&str> =
                     b.alive().iter().map(|&i| b.candidate_id(i)).collect();
-                let sampled_candidate_id = self.sampled_candidate.map(|i| b.candidate_id(i));
-                let last_observer_revision = self.observer.as_ref().map(|obs| obs.revision());
                 serde_json::json!({
-                    "mode": b.mode_id(),
-                    "candidateCount": b.candidate_count(),
-                    "isFallback": b.is_fallback(),
-                    "candidateIds": candidate_ids.clone(),
-                    "sampledCandidateId": sampled_candidate_id,
-                    "sampledCandidateName": sampled_candidate_id,
-                    "fallbackReason": b.fallback_reason(),
-                    "lastObserverRevision": last_observer_revision,
-                    // Backward-compatible aliases used by existing tests/tools.
                     "count": b.candidate_count(),
                     "fallback": b.is_fallback(),
-                    "candidates": candidate_ids,
+                    "candidates": candidates,
                 })
                 .to_string()
             }
-            None => {
-                let mode = if self.pinned_sets.is_some() { "pinned" } else { "blind" };
-                serde_json::json!({
-                    "mode": mode,
-                    "candidateCount": 0,
-                    "isFallback": false,
-                    "candidateIds": [],
-                    "sampledCandidateId": serde_json::Value::Null,
-                    "sampledCandidateName": serde_json::Value::Null,
-                    "fallbackReason": serde_json::Value::Null,
-                    "lastObserverRevision": serde_json::Value::Null,
-                    "count": 0,
-                    "fallback": false,
-                    "candidates": [],
-                })
-                .to_string()
-            }
+            None => r#"{"count":0,"fallback":false,"candidates":[]}"#.to_string(),
         }
     }
 
@@ -2697,6 +2698,7 @@ impl ProtocolTracker {
         // observer's roster (both follow `|poke|` order).
         for (slot, mo) in obs.mons().iter().enumerate() {
             let Some(m) = sides[opp].mons.get_mut(slot) else { break };
+            m.hp_type_mask = mo.hp_type_mask;
             m.revealed_moves = mo.revealed_moves.iter().map(|&x| move_key(dex, x)).collect();
             m.item_original =
                 ItemKnowledge::from_obs(mo.item.original.map(|x| x.map(|i| dex.items.key(i))));

@@ -714,6 +714,7 @@ fn handle(
             ))
         }
 
+
         "inspect" => {
             let session =
                 session_ref(sessions, msg)?;

@@ -142,7 +142,7 @@ impl Battle {
     fn state_key_with(&self, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
         use std::hash::Hasher;
         let mut h = FxHasher::default();
-        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping);
+        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping, false);
         h.finish()
     }
 
@@ -150,23 +150,22 @@ impl Battle {
     /// Damage bookkeeping may be omitted only when it cannot affect future play.
     pub fn search_key(&self, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
         use std::hash::Hasher;
-        crate::search_prefix::with_cache(|cache| {
-            let mut h = crate::fxhash::SearchHasher::default();
-            match cache {
-                Some(cache) => self.state_hash_with_sides(&mut h, hp_buckets, omit_damage_bookkeeping,
-                    |side, h| side.hash_with_pokemon(h, |pokemon, h|
-                        pokemon.hash_with_prefix(h, hp_buckets, omit_damage_bookkeeping,
-                            |prefix, h| cache.hash(prefix, h)))),
-                None => self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping),
-            }
-            h.finish()
-        })
+        let mut h = crate::fxhash::SearchHasher::default();
+        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping, false);
+        h.finish()
+    }
+
+    pub fn search_key_canonical_claw(&self, dex: &Dex, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
+        use std::hash::Hasher;
+        let mut h = crate::fxhash::SearchHasher::default();
+        self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping, !self.quick_claw_roll_observable(dex));
+        h.finish()
     }
 
     pub fn type_key(&self) -> u64 {
         use std::hash::Hasher;
         let mut h = crate::fxhash::SearchHasher::default();
-        self.state_hash_into(&mut h, None, false);
+        self.state_hash_into(&mut h, None, false, true);
         h.finish()
     }
 
@@ -176,7 +175,7 @@ impl Battle {
     /// merge must not — two hashes over independent functions push the
     /// collision odds to ~2^-128.
     pub fn state_key128(&self) -> u128 {
-        self.state_key128_with(false)
+        self.state_key128_with(false, false)
     }
 
     /// Certificate-grade solver key with damage-history fields removed.
@@ -184,16 +183,43 @@ impl Battle {
     /// the method is separate from `state_key128` so ordinary exact identity
     /// can never silently acquire this semantic quotient.
     pub fn state_key128_without_damage_bookkeeping(&self) -> u128 {
-        self.state_key128_with(true)
+        self.state_key128_with(true, false)
     }
 
-    fn state_key128_with(&self, omit_damage_bookkeeping: bool) -> u128 {
-        use std::hash::Hasher;
-        let mut h1 = FxHasher::default();
-        self.state_hash_into(&mut h1, None, omit_damage_bookkeeping);
-        let mut h2 = std::collections::hash_map::DefaultHasher::new();
-        self.state_hash_into(&mut h2, None, omit_damage_bookkeeping);
-        ((h1.finish() as u128) << 64) | h2.finish() as u128
+    fn state_key128_with(&self, omit_damage_bookkeeping: bool, omit_quick_claw_roll: bool) -> u128 {
+        let mut h = crate::fxhash::FingerprintHasher::default();
+        self.state_hash_into(&mut h, None, omit_damage_bookkeeping, omit_quick_claw_roll);
+        h.finish128()
+    }
+
+    pub fn state_key128_without_quick_claw_roll(&self, dex: &Dex, omit_damage_bookkeeping: bool) -> u128 {
+        assert!(!self.quick_claw_roll_observable(dex));
+        assert!(!omit_damage_bookkeeping || !self.damage_bookkeeping_observable(dex));
+        self.state_key128_with(omit_damage_bookkeeping, true)
+    }
+
+    /// After selection, unselected items cannot enter play. Fainted holders
+    /// are ignored only at idle move requests after pending callbacks finish.
+    pub fn quick_claw_roll_observable(&self, dex: &Dex) -> bool {
+        let selected = self.started && self.turn > 0 && self.request_state != RequestState::TeamPreview
+            && !self.queue.iter().any(|action| matches!(action.choice, ActionKind::Team { .. } | ActionKind::Start));
+        let idle = self.is_idle_move_request();
+        dex.known_items.quickclaw.is_some_and(|item| self.sides.iter().any(|side|
+            side.roster.iter().enumerate().any(|(slot,pokemon)| pokemon.item == Some(item)
+                && (!selected || side.party.contains(&(slot as u8)))
+                && (!idle || !pokemon.fainted || pokemon.hp > 0))))
+    }
+
+    pub fn is_idle_move_request(&self) -> bool {
+        self.started && !self.ended && self.request_state == RequestState::Move
+            && self.needs_choice() == [true, true] && !self.mid_turn
+            && self.queue.is_empty() && self.faint_queue.is_empty()
+            && self.event_stack.is_empty() && self.effect_stack.is_empty()
+            && self.active_move.is_none() && self.active_pokemon.is_none()
+            && self.active_target.is_none() && self.pending_boosts.is_none()
+            && self.sides.iter().all(|side| side.choice.actions.is_empty()
+                && side.choice.switch_ins.is_empty() && side.choice.forced_switches_left == 0
+                && side.choice.forced_passes_left == 0)
     }
 
     /// Whether dropping damage-history fields can change future behavior.
@@ -215,17 +241,7 @@ impl Battle {
         h: &mut H,
         hp_buckets: Option<i64>,
         omit_damage_bookkeeping: bool,
-    ) {
-        self.state_hash_with_sides(h, hp_buckets, omit_damage_bookkeeping,
-            |side, h| side.hash_with_options(h, hp_buckets, omit_damage_bookkeeping));
-    }
-
-    fn state_hash_with_sides<H: crate::fxhash::StateHasher>(
-        &self,
-        mut h: &mut H,
-        hp_buckets: Option<i64>,
-        omit_damage_bookkeeping: bool,
-        mut hash_side: impl FnMut(&Side, &mut H),
+        omit_quick_claw_roll: bool,
     ) {
         use std::hash::Hash;
         // Total destructuring on purpose: adding a `Battle` field breaks
@@ -264,26 +280,33 @@ impl Battle {
             listener_pool: _, // scratch buffers
             battle_mask: _,   // derived from hashed state
         } = self;
-        (turn, request_state, mid_turn, started, ended, winner).hash(&mut h);
+        (turn, request_state, mid_turn, started, ended, winner).hash(h);
         if *preview_level_caps != [Some(super::MAX_TOTAL_LEVEL); 2] {
-            preview_level_caps.hash(&mut h);
+            preview_level_caps.hash(h);
         }
-        field.hash(&mut h);
+        field.weather.hash(h);
+        field.weather_state.hash_state(h);
+        field.pseudo_weather.len().hash(h);
+        for (cid, st) in field.pseudo_weather.iter() {
+            cid.hash(h);
+            st.hash_state(h);
+        }
         for side in sides.iter() {
-            hash_side(side, h);
+            side.hash_with_options(h, hp_buckets, omit_damage_bookkeeping);
         }
-        (queue, faint_queue, effect_order, event_depth).hash(&mut h);
-        last_successful_move_this_turn.hash(&mut h);
+        (queue, faint_queue, effect_order, event_depth).hash(h);
+        last_successful_move_this_turn.hash(h);
         if !omit_damage_bookkeeping {
             match hp_buckets {
-                None => last_damage.hash(&mut h),
-                Some(_) => (last_damage / 16).hash(&mut h),
+                None => last_damage.hash(h),
+                Some(_) => (last_damage / 16).hash(h),
             }
         }
-        (quick_claw_roll, speed_order, format_data).hash(&mut h);
+        (if omit_quick_claw_roll { false } else { *quick_claw_roll }, speed_order).hash(h);
+        format_data.hash_state(h);
         // mid-event machinery: quiescent at request points, hashed as a guard
-        (event_stack.len(), effect_stack.len(), active_move.is_some()).hash(&mut h);
-        (active_pokemon, active_target, last_move_id, pending_boosts).hash(&mut h);
+        (event_stack.len(), effect_stack.len(), active_move.is_some()).hash(h);
+        (active_pokemon, active_target, last_move_id, pending_boosts).hash(h);
     }
 
     /// All legal choices for one side at the current request point. Empty ⇔

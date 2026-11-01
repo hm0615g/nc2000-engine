@@ -54,8 +54,23 @@ export async function fetchRecordPool(): Promise<PoolData> {
  * means — and because a draw that names the mixture cannot quietly become a
  * plainer one, this throws: the caller lets it reach the boot error box. */
 export async function fetchNashArtifact(): Promise<string> {
-  const res = await fetch(dataUrl("meta-nash-v3/pool-artifact.json"));
+  const res = await fetch(dataUrl("kodoku-r3/conclusion-equilibrium-deme.json"));
   if (!res.ok) throw new Error(`nash artifact fetch failed: ${res.status}`);
+  return res.text();
+}
+
+/** The previous Full-Combination Bayesian Preview Nash r1 mixture
+ * (conclusion-equilibrium-r1), collapsed under <details> alongside v3. */
+export async function fetchPrevNashR1Artifact(): Promise<string> {
+  const res = await fetch(dataUrl("kodoku-r3/conclusion-equilibrium-r1.json"));
+  if (!res.ok) throw new Error(`prev nash r1 artifact fetch failed: ${res.status}`);
+  return res.text();
+}
+
+/** The previous v3 Nash mixture (meta-nash-v3), collapsed under <details>. */
+export async function fetchOldNashArtifact(): Promise<string> {
+  const res = await fetch(dataUrl("meta-nash-v3/pool-artifact.json"));
+  if (!res.ok) throw new Error(`old nash artifact fetch failed: ${res.status}`);
   return res.text();
 }
 

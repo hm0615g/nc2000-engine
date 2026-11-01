@@ -298,8 +298,8 @@ test("/ and ?blind are the same blind door, and nothing about it is stored", asy
     await page.goto(url);
     await expectBlindScreen(page);
   }
-  // The built-in list is the catalog, in its order, and Random draws from
-  // exactly that many parties.
+  // The built-in list groups catalog parties by category (Nash, Evolved,
+  // Classic), and Random draws from exactly that many parties.
   await page.locator('[data-party="human"]').click();
   await expect(page.locator(".random-card")).toContainText(
     `Random (${catalog.teams.length} parties)`,
@@ -307,7 +307,12 @@ test("/ and ?blind are the same blind door, and nothing about it is stored", asy
   const ids = await page
     .locator("dialog.modal .team-card[data-team] .team-id")
     .allInnerTexts();
-  expect(ids).toEqual(catalog.teams.map((t) => t.id));
+  const expectedCatalogIds = [
+    ...catalog.teams.filter((t) => t.nash),
+    ...catalog.teams.filter((t) => !t.nash && t.evolved),
+    ...catalog.teams.filter((t) => !t.nash && !t.evolved),
+  ].map((t) => t.id);
+  expect(ids).toEqual(expectedCatalogIds);
   await page.locator("dialog.modal .modal-head button").click();
   expect(
     await page.evaluate(() =>

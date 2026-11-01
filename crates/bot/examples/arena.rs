@@ -58,6 +58,8 @@
 //!                                    table lookup, else pinned live search
 //!   exploit:<inner>                  best-response probe vs a frozen <inner> policy
 //!                                    (3-sample seed-marginal oracle, own budget = 3x inner's)
+//!   exploit-control:<inner>          Same BR search/rollout without oracle queries;
+//!                                    matches own search work, not total thinking time.
 //!   baked:<inner> | bakedarg:<inner>       M8 baked preview (mixed sample / argmax),
 //!                                          <inner> plays the battle; unknown matchup
 //!                                          falls back to <inner>'s own preview search
@@ -72,7 +74,7 @@ use std::sync::Arc;
 use conformance::fixture::{corpus_files, repo_root, Fixture};
 use conformance::load_dex;
 use nc2000_bot::preview::{load_meta_pool, MetaPool};
-use nc2000_bot::smmcts::{MaskRules, SelRule};
+use nc2000_bot::smmcts::{EndgameRules, MaskRules, SelRule};
 use nc2000_bot::{
     run_duel, Agent, BakedPreviewAgent, BlindAgent, BrAgent, CounterPickAgent, DuelSpec,
     EvalWeights, MaxDamageAgent, MctsAgent, MctsConfig, OpenAgent, Playout, PreviewMode,
@@ -100,14 +102,10 @@ enum AgentSpec {
     SkUctThr { iterations: u32, c: f64, buckets: i64 },
     /// Threshold key + damage-bookkeeping-free key (the full abstraction).
     SkUctAbs { iterations: u32, c: f64, buckets: i64 },
-    /// The shipped ladder agent. `mask` is the A/B seam: `RmAgent` never
-    /// calls `best()`, so `skuct`/`rm` duels are exactly blind to the root
-    /// mask; two blind agents in one process differing only in
-    /// `RmConfig::mask_rules` is the only CRN-paired A/B there is
-    /// (`smmcts::SkuctSearch::root_dominated`).
-    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c },
-    Open { iterations: u32, c: f64, buckets: i64, perish: PerishRollout, m16c: M16c },
+    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, res: bool, bp: bool, endgame: EndgameRules },
+    Open { iterations: u32, c: f64, buckets: i64, perish: PerishRollout, m16c: M16c, res: bool, bp: bool, endgame: EndgameRules },
     Exploit(Box<AgentSpec>),
+    ExploitControl(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
     Counter { inner: Box<AgentSpec>, target: PreviewMode },
 }
@@ -164,6 +162,59 @@ fn apply_mask_token(m: &mut MaskRules, tok: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn apply_endgame_token(e: &mut EndgameRules, tok: &str) -> bool {
+    let (on, name) = match tok.strip_prefix('-') {
+        Some(rest) => (false, rest),
+        None => (true, tok),
+    };
+    let norm: String =
+        name.chars().map(|c| if c == '-' { '_' } else { c.to_ascii_lowercase() }).collect();
+    match norm.as_str() {
+        "fast_win" => e.fast_win = on,
+        "safe_win" => e.safe_win = on,
+        "comeback_loss" => e.comeback_loss = on,
+        "early_stop" => e.early_stop = on,
+        "endgame" => {
+            e.fast_win = on;
+            e.safe_win = on;
+            e.comeback_loss = on;
+        }
+        "endgame_es" => {
+            e.fast_win = on;
+            e.safe_win = on;
+            e.comeback_loss = on;
+            e.early_stop = on;
+        }
+        _ => return false,
+    }
+    true
+}
+
+fn endgame_label(e: &EndgameRules) -> String {
+    if *e == EndgameRules::default() {
+        return String::new();
+    }
+    if *e == EndgameRules::none() {
+        return ":-endgame".into();
+    }
+    if *e == EndgameRules::all_with_early_stop() {
+        return ":early_stop".into();
+    }
+    let def = EndgameRules::default();
+    let mut parts = Vec::new();
+    for (name, cur, d) in [
+        ("fast_win", e.fast_win, def.fast_win),
+        ("safe_win", e.safe_win, def.safe_win),
+        ("comeback_loss", e.comeback_loss, def.comeback_loss),
+        ("early_stop", e.early_stop, def.early_stop),
+    ] {
+        if cur != d {
+            parts.push(if cur { name.into() } else { format!("-{name}") });
+        }
+    }
+    format!(":{}", parts.join(","))
+}
+
 /// `blind`'s fields: numeric ones keep their positions, non-numeric ones are
 /// comma-separated mask-rule tokens. Splitting on "starts with a digit"
 /// rather than on position is what lets `blind:300:immunity_all_switchins`
@@ -172,6 +223,10 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
     let mut nums: Vec<&str> = Vec::new();
     let mut perish = PerishRollout::shipped();
     let mut m16c = M16c::default();
+    let mut mixed = false;
+    let mut res = false;
+    let mut bp = true;
+    let mut endgame = EndgameRules::default();
     for part in &parts[1..] {
         if part.is_empty() {
             return Err("empty field in a blind spec".into());
@@ -180,7 +235,19 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
             nums.push(part);
         } else {
             for tok in part.split(',').filter(|t| !t.is_empty()) {
-                if !apply_rollout_token(&mut perish, &mut m16c, tok) {
+                if tok == "mix" {
+                    mixed = true;
+                } else if tok == "res" {
+                    res = true;
+                } else if tok == "-res" {
+                    res = false;
+                } else if tok == "bp" {
+                    bp = true;
+                } else if tok == "-bp" {
+                    bp = false;
+                } else if apply_endgame_token(&mut endgame, tok) {
+                    // handled
+                } else if !apply_rollout_token(&mut perish, &mut m16c, tok) {
                     apply_mask_token(&mut mask, tok)?;
                 }
             }
@@ -189,13 +256,19 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
     if nums.len() > 3 {
         return Err(format!("too many numeric fields in a blind spec: {nums:?}"));
     }
+    let iterations = opt_num(&nums, 0, "iters")?.unwrap_or(1000);
+    if mixed && iterations == 0 { return Err("mixed search needs a positive iteration budget".into()); }
     Ok(AgentSpec::Blind {
-        iterations: opt_num(&nums, 0, "iters")?.unwrap_or(1000),
+        iterations,
         c: opt_num(&nums, 1, "c")?.unwrap_or(1.0),
         buckets: opt_num(&nums, 2, "buckets")?.unwrap_or(16),
         mask,
         perish,
         m16c,
+        mixed,
+        res,
+        bp,
+        endgame,
     })
 }
 
@@ -275,12 +348,25 @@ fn parse_open(parts: &[&str]) -> Result<AgentSpec, String> {
     let mut nums: Vec<&str> = Vec::new();
     let mut perish = PerishRollout::shipped();
     let mut m16c = M16c::default();
+    let mut res = false;
+    let mut bp = true;
+    let mut endgame = EndgameRules::default();
     for part in &parts[1..] {
         if part.starts_with(|c: char| c.is_ascii_digit()) {
             nums.push(part);
         } else {
             for tok in part.split(',').filter(|t| !t.is_empty()) {
-                if !apply_rollout_token(&mut perish, &mut m16c, tok) {
+                if tok == "res" {
+                    res = true;
+                } else if tok == "-res" {
+                    res = false;
+                } else if tok == "bp" {
+                    bp = true;
+                } else if tok == "-bp" {
+                    bp = false;
+                } else if apply_endgame_token(&mut endgame, tok) {
+                    // handled
+                } else if !apply_rollout_token(&mut perish, &mut m16c, tok) {
                     return Err(format!("unknown open-spec token `{tok}`"));
                 }
             }
@@ -292,6 +378,9 @@ fn parse_open(parts: &[&str]) -> Result<AgentSpec, String> {
         buckets: opt_num(&nums, 2, "buckets")?.unwrap_or(16),
         perish,
         m16c,
+        res,
+        bp,
+        endgame,
     })
 }
 
@@ -345,6 +434,10 @@ impl AgentSpec {
                 let inner = s.strip_prefix("exploit:").ok_or("exploit needs an inner spec")?;
                 Ok(AgentSpec::Exploit(Box::new(AgentSpec::parse(inner)?)))
             }
+            "exploit-control" => {
+                let inner = s.strip_prefix("exploit-control:").ok_or("exploit-control needs an inner spec")?;
+                Ok(AgentSpec::ExploitControl(Box::new(AgentSpec::parse(inner)?)))
+            }
             tag @ ("baked" | "bakedarg" | "counter" | "counterarg") => {
                 let inner = s
                     .strip_prefix(tag)
@@ -372,7 +465,7 @@ impl AgentSpec {
             | AgentSpec::SkUctNs { iterations, .. }
             | AgentSpec::Blind { iterations, .. }
             | AgentSpec::Open { iterations, .. } => *iterations,
-            AgentSpec::Exploit(inner) => inner.iterations(),
+            AgentSpec::Exploit(inner) | AgentSpec::ExploitControl(inner) => inner.iterations(),
             AgentSpec::Baked { inner, .. } | AgentSpec::Counter { inner, .. } => {
                 inner.iterations()
             }
@@ -386,7 +479,7 @@ impl AgentSpec {
             | AgentSpec::Counter { .. }
             | AgentSpec::Blind { .. }
             | AgentSpec::Open { .. } => true,
-            AgentSpec::Exploit(inner) => inner.needs_tables(),
+            AgentSpec::Exploit(inner) | AgentSpec::ExploitControl(inner) => inner.needs_tables(),
             _ => false,
         }
     }
@@ -399,6 +492,7 @@ impl AgentSpec {
         match self {
             AgentSpec::Blind { .. } | AgentSpec::Open { .. } => true,
             AgentSpec::Exploit(inner)
+            | AgentSpec::ExploitControl(inner)
             | AgentSpec::Baked { inner, .. }
             | AgentSpec::Counter { inner, .. } => inner.is_blind(),
             _ => false,
@@ -486,43 +580,70 @@ impl AgentSpec {
                 },
                 seed,
             )),
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c } => Box::new(BlindAgent::new(
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, res, bp, endgame } => {
+                let playout = Playout::Heavy {
+                    eps: 0.2,
+                    turns: 8,
+                    weights: EvalWeights {
+                        residual_scale: if *res { 1.0 } else { 0.0 },
+                        ..EvalWeights::default()
+                    },
+                };
+                let agent = BlindAgent::new(
+                    RmConfig {
+                        iterations: *iterations,
+                        rule: SelRule::Ucb,
+                        c: *c,
+                        hp_buckets: *buckets,
+                        playout,
+                        mask_rules: *mask,
+                        rollout_perish: *perish == PerishRollout::Escape,
+                        rollout_combo: *perish == PerishRollout::Combo,
+                        rollout_status: m16c.status,
+                        rollout_switch: m16c.switch,
+                        rollout_baton_pass: *bp,
+                        endgame_rules: *endgame,
+                        ..Default::default()
+                    },
+                    pool.expect("blind agents need the meta pool").clone(),
+                    tables.cloned(),
+                    seed,
+                );
+                Box::new(if *mixed {agent.with_adaptive_mixture((u64::from(*iterations) * 2 / 5) as u32)} else {agent})
+            },
+            AgentSpec::Open { iterations, c, buckets, perish, m16c, res, bp, endgame } => Box::new(OpenAgent::new(
                 RmConfig {
                     iterations: *iterations,
                     rule: SelRule::Ucb,
                     c: *c,
                     hp_buckets: *buckets,
-                    mask_rules: *mask,
+                    playout: Playout::Heavy {
+                        eps: 0.2,
+                        turns: 8,
+                        weights: EvalWeights {
+                            residual_scale: if *res { 1.0 } else { 0.0 },
+                            ..EvalWeights::default()
+                        },
+                    },
                     rollout_perish: *perish == PerishRollout::Escape,
                     rollout_combo: *perish == PerishRollout::Combo,
                     rollout_status: m16c.status,
                     rollout_switch: m16c.switch,
-                    ..Default::default()
-                },
-                pool.expect("blind agents need the meta pool").clone(),
-                tables.cloned(),
-                seed,
-            )),
-            AgentSpec::Open { iterations, c, buckets, perish, m16c } => Box::new(OpenAgent::new(
-                RmConfig {
-                    iterations: *iterations,
-                    rule: SelRule::Ucb,
-                    c: *c,
-                    hp_buckets: *buckets,
-                    rollout_perish: *perish == PerishRollout::Escape,
-                    rollout_combo: *perish == PerishRollout::Combo,
-                    rollout_status: m16c.status,
-                    rollout_switch: m16c.switch,
+                    rollout_baton_pass: *bp,
+                    endgame_rules: *endgame,
                     ..Default::default()
                 },
                 tables.cloned(),
                 seed,
             )),
-            AgentSpec::Exploit(inner) => {
+            AgentSpec::Exploit(inner) | AgentSpec::ExploitControl(inner) => {
                 let model = inner.build(seed ^ 0x517C_C1B7_2722_0A95, tables, pool);
                 let cfg =
                     MctsConfig { iterations: inner.iterations() * 3, ..Default::default() };
-                Box::new(BrAgent::new(model, 3, cfg, seed))
+                let agent = BrAgent::new(model, 3, cfg, seed);
+                Box::new(if matches!(self, AgentSpec::ExploitControl(_)) {
+                    agent.without_oracle()
+                } else { agent })
             }
             AgentSpec::Baked { inner, mode } => Box::new(BakedPreviewAgent::new(
                 tables.expect("baked agents need --tables").clone(),
@@ -562,10 +683,8 @@ impl AgentSpec {
             AgentSpec::SkUctAbs { iterations, c, buckets } => {
                 format!("skuctabs:{iterations}:{c}:{buckets}")
             }
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c } => {
-                let rollout = format!("{}{}", perish.label(), m16c.label());
-                // The one pre-existing named ablation keeps its own label, so
-                // every artifact written before 2026-08-20 still compares.
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, res, bp, endgame } => {
+                let rollout = format!("{}{}{}{}{}{}", perish.label(), m16c.label(), if *mixed {":mix"} else {""}, if *res {":res"} else {""}, if *bp {""} else {":-bp"}, endgame_label(endgame));
                 if *mask == legacy_mask() {
                     return format!("blindlegacy:{iterations}:{c}:{buckets}{rollout}");
                 }
@@ -579,11 +698,12 @@ impl AgentSpec {
                     if diff.is_empty() { String::new() } else { format!(":{}", diff.join(",")) };
                 format!("blind:{iterations}:{c}:{buckets}{suffix}{rollout}")
             }
-            AgentSpec::Open { iterations, c, buckets, perish, m16c } => {
-                let rollout = format!("{}{}", perish.label(), m16c.label());
+            AgentSpec::Open { iterations, c, buckets, perish, m16c, res, bp, endgame } => {
+                let rollout = format!("{}{}{}{}{}", perish.label(), m16c.label(), if *res {":res"} else {""}, if *bp {""} else {":-bp"}, endgame_label(endgame));
                 format!("open:{iterations}:{c}:{buckets}{rollout}")
             }
             AgentSpec::Exploit(inner) => format!("exploit:{}", inner.label()),
+            AgentSpec::ExploitControl(inner) => format!("exploit-control:{}", inner.label()),
             AgentSpec::Baked { inner, mode } => match mode {
                 PreviewMode::Mixed => format!("baked:{}", inner.label()),
                 PreviewMode::Argmax => format!("bakedarg:{}", inner.label()),
@@ -781,9 +901,13 @@ fn main() {
     let is_blind = spec_a.is_blind() || spec_b.is_blind();
     let needs_meta =
         pool_spec.starts_with("meta") || spec_a.needs_tables() || spec_b.needs_tables();
-    let meta_path = root.join("data/meta-pool-v0/meta-pool.json");
+    let meta_path = flag(&args, "--belief-pool").map(PathBuf::from)
+        .unwrap_or_else(||root.join("data/meta-pool-v0/meta-pool.json"));
     let meta = needs_meta.then(|| Arc::new(load_meta_pool(&meta_path)));
-    let teams = if let Some(range) = pool_spec.strip_prefix("meta") {
+    let team_pool_path = flag(&args, "--teams");
+    let teams = if let Some(path) = &team_pool_path {
+        load_meta_pool(Path::new(path)).teams.into_iter().map(|team|team.sets).collect()
+    } else if let Some(range) = pool_spec.strip_prefix("meta") {
         let pool = meta.as_ref().unwrap();
         let (lo, hi) = match range.strip_prefix(':') {
             None => (0, pool.teams.len() - 1),
@@ -993,6 +1117,8 @@ fn main() {
                 "agent_a_iterations": spec_a.iterations(),
                 "agent_b_iterations": spec_b.iterations(),
                 "pool": pool_spec,
+                "team_pool_path": team_pool_path,
+                "belief_pool_path": meta_path,
                 "teams": teams.len(),
                 "baked_tables": tables.as_ref().map_or(0, |t| t.len()),
                 "log_on": is_blind,
@@ -1010,11 +1136,13 @@ fn main() {
                 "ci95": ci95,
                 "ci_unit": "side_swap_pair",
                 "pair_scores": &stats.pair_scores,
+                "game_scores": &stats.game_scores,
                 "split_pairs": split,
                 "turns_sum": stats.turns_sum,
                 "avg_turns": stats.avg_turns,
                 "wall_secs": stats.secs,
             },
+            "root_search": {"a":stats.a_root_search,"b":stats.b_root_search,"games":stats.game_root_search},
             "timing": {
                 "unit": "choose_call",
                 "a": {
@@ -1056,6 +1184,30 @@ fn load_team_pool() -> Vec<Vec<PokemonSet>> {
 #[cfg(test)]
 mod artifact_tests {
     use super::*;
+
+    #[test]
+    fn exploit_control_retains_target_configuration() {
+        for target in ["blind:3000:0.4", "skuct:3000:0.4"] {
+            let control = AgentSpec::parse(&format!("exploit-control:{target}")).unwrap();
+            let oracle = AgentSpec::parse(&format!("exploit:{target}")).unwrap();
+            assert_eq!(control.iterations(), oracle.iterations());
+            assert_eq!(control.is_blind(), oracle.is_blind());
+            assert_eq!(control.needs_tables(), oracle.needs_tables());
+            assert!(matches!(AgentSpec::parse(&control.label()).unwrap(), AgentSpec::ExploitControl(_)));
+        }
+    }
+
+    #[test]
+    fn mixed_agent_specs_keep_their_mode_when_labeled() {
+        for input in ["blind:27000:0.4:mix", "blindlegacy:100:mix", "blind:100:mix,-perish_combo"] {
+            let spec = AgentSpec::parse(input).unwrap();
+            assert!(matches!(spec, AgentSpec::Blind {mixed:true, ..}));
+            let label = spec.label();
+            assert!(matches!(AgentSpec::parse(&label).unwrap(), AgentSpec::Blind {mixed:true, ..}));
+        }
+        assert!(matches!(AgentSpec::parse("blind:27000:0.4").unwrap(), AgentSpec::Blind {mixed:false, ..}));
+        assert!(AgentSpec::parse("blind:0:mix").is_err());
+    }
 
     fn row() -> serde_json::Value {
         serde_json::json!({

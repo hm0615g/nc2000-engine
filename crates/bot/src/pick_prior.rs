@@ -172,6 +172,68 @@ impl PickPrior {
 }
 
 impl PickDistribution {
+    /// Construct a `PickDistribution` directly from a 60-action canonical preview
+    /// policy `p` (ordered as `crate::preview::preview_actions()`), conditioned on
+    /// `appeared` (6-bit roster mask of already-revealed opponent mons) and mixed
+    /// with uniform `smoothing` over all 3-mon masks containing `appeared`.
+    pub fn from_canonical_policy(p: &[f64], appeared: u8, smoothing: f64) -> Option<Self> {
+        let actions = crate::preview::preview_actions();
+        if p.len() != actions.len() || appeared.count_ones() > 3 {
+            return None;
+        }
+        let s = smoothing.clamp(0.0, 1.0);
+        let mut weights = [0.0f64; 64];
+        let mut preview = Vec::new();
+        let total: f64 = p.iter().copied().filter(|&x| x > 0.0).sum();
+        if total > 0.0 {
+            for (&triple, &prob) in actions.iter().zip(p.iter()) {
+                if prob <= 0.0 {
+                    continue;
+                }
+                let norm_p = prob / total;
+                let mask = (1u8 << (triple[0] - 1))
+                    | (1u8 << (triple[1] - 1))
+                    | (1u8 << (triple[2] - 1));
+                weights[mask as usize] += (1.0 - s) * norm_p;
+                preview.push((SearchChoice::Team(triple), norm_p));
+            }
+        }
+        let mut cumulative = Vec::new();
+        let mut sum = 0.0;
+        for mask in 0u8..64 {
+            if mask.count_ones() == 3 && (mask & appeared) == appeared {
+                let w = weights[mask as usize] + s / 20.0;
+                if w > 0.0 {
+                    sum += w;
+                    cumulative.push((mask, sum));
+                }
+            }
+        }
+        (!cumulative.is_empty() && sum > 0.0).then_some(PickDistribution {
+            cumulative,
+            total: sum,
+            preview,
+            smoothing: s,
+        })
+    }
+
+    pub(crate) fn sample_allowed(&self, allowed: &[u8], rng: &mut SplitMix64) -> Option<u8> {
+        let mut previous = 0.0;
+        let weights: Vec<_> = self.cumulative.iter().filter_map(|&(mask, cumulative)| {
+            let weight = cumulative - previous;
+            previous = cumulative;
+            (allowed.contains(&mask) && weight > 0.0).then_some((mask, weight))
+        }).collect();
+        let total: f64 = weights.iter().map(|(_, w)| w).sum();
+        if total <= 0.0 { return None; }
+        let mut target = rng.next_f64() * total;
+        for &(mask, weight) in &weights {
+            if target < weight { return Some(mask); }
+            target -= weight;
+        }
+        Some(weights.last().unwrap().0)
+    }
+
     pub(crate) fn sample(&self, rng: &mut SplitMix64) -> u8 {
         let draw = rng.next_f64() * self.total;
         self.cumulative
@@ -215,6 +277,26 @@ impl PickDistribution {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn allowed_masks_condition_weights_without_retrying_forbidden_mass() {
+        let distribution = PickDistribution {
+            cumulative: vec![(7, 0.1), (11, 0.4), (19, 1.0)], total: 1.0,
+            preview: vec![], smoothing: 0.2,
+        };
+        let mut rng = SplitMix64::new(41);
+        let mut first = 0;
+        for _ in 0..10000 {
+            let mask = distribution.sample_allowed(&[7, 11], &mut rng).unwrap();
+            assert!([7, 11].contains(&mask));
+            first += usize::from(mask == 7);
+        }
+        assert!((2300..2700).contains(&first), "{first}");
+        for _ in 0..10 { assert_eq!(distribution.sample_allowed(&[7], &mut rng), Some(7)); }
+        let mut untouched = rng.clone();
+        assert_eq!(distribution.sample_allowed(&[63], &mut rng), None);
+        assert_eq!(rng.next(), untouched.next());
+    }
 
     fn fixture() -> (PickPrior, Vec<PreviewMon>, Vec<String>) {
         let roster: Vec<String> = (b'a'..=b'f').map(|c| (c as char).to_string()).collect();

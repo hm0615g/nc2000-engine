@@ -1,12 +1,16 @@
 // Main-thread client for the bot search worker.
 
 import type { WorkerRequest, WorkerResponse } from "./bot-worker";
-import type { BeliefInfo, PriorInfo, PriorReport, RootPolicy } from "./types";
+import type { BeliefInfo, PriorInfo, PriorReport, RootPolicy, PlayPolicy, ActionPolicyMode } from "./types";
+import { endgameSettings, type EndgameSettings } from "./endgame-settings";
 
 export interface SearchOutcome {
   best: string | null;
   policy: RootPolicy;
+  playPolicy: PlayPolicy | null;
   ms: number;
+  wasmMemoryBytes: number;
+  endgame?: string;
   /** Where the pick came from (preview: "table" | "search"). */
   src?: "table" | "search";
 }
@@ -52,7 +56,10 @@ export class BotWorker {
             p.resolve({
               best: m.best,
               policy: JSON.parse(m.policy) as RootPolicy,
+              playPolicy: m.playPolicy,
               ms: m.ms,
+              wasmMemoryBytes: m.wasmMemoryBytes,
+              endgame: m.endgame,
               src: m.src,
             });
           }
@@ -92,10 +99,12 @@ export class BotWorker {
       seed: number;
       priorJson?: string;
       compiledPreview?: boolean;
+      endgame?: EndgameSettings;
+      actionPolicy?: ActionPolicyMode;
     },
   ): Promise<void> {
     await this.ready;
-    this.send({ t: "battle", p1, p2, seed, searcher });
+    this.send({ t: "battle", p1, p2, seed, searcher: { ...searcher, endgame: searcher.endgame ?? endgameSettings() } });
   }
 
   /** Start a forked battle (`?fork`): the worker's mirror is
@@ -109,10 +118,12 @@ export class BotWorker {
       side: number;
       seed: number;
       mode: "open" | "blind";
+      endgame?: EndgameSettings;
+      actionPolicy?: ActionPolicyMode;
     },
   ): Promise<void> {
     await this.ready;
-    this.send({ t: "fork", fork, seed, searcher });
+    this.send({ t: "fork", fork, seed, searcher: { ...searcher, endgame: searcher.endgame ?? endgameSettings() } });
   }
 
   /** Keep the mirror battle in lockstep (same picks, same order). */
@@ -122,7 +133,7 @@ export class BotWorker {
 
   /** Search the mirror battle's current decision point for `side`.
    * Live searches stop at exactly budget, even when launched while the
-   * human is choosing. `ponder` is retained for caller compatibility.
+   * human is choosing. `ponder` is retained for the opt-in solver experiment.
    * A later apply/newBattle/cancelAll supersedes the search: its promise
    * then never settles (callers holding a stale promise are per-game and
    * torn down with the game). */
@@ -141,7 +152,7 @@ export class BotWorker {
   }
 
   /** Human committed. Fixed-iteration searches ignore this notification;
-   * fixed-budget searches finish independently of this signal. */
+   * the opt-in timed solver experiment still uses it. */
   flush(): void {
     this.send({ t: "flush" });
   }

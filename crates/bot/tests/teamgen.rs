@@ -147,3 +147,133 @@ fn gauntlet_eval_is_thread_count_invariant() {
     assert_eq!(a.score.to_bits(), b.score.to_bits(), "{} vs {}", a.score, b.score);
     assert_eq!(a.per_opponent.len(), 1);
 }
+
+#[test]
+fn provable_dominance_and_preadaptation_rules_hold() {
+    let (dex, gen, ls) = load();
+    // 1. 110 unconditionally dominated species (including type-adding pre-evolutions) pruned -> 136 kept
+    assert_eq!(gen.non_dominated_species().len(), 136);
+    assert!(!gen.non_dominated_species().contains(&"caterpie".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"weedle".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"magikarp".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"bulbasaur".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"ivysaur".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"metapod".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"charmeleon".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"dragonair".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"pineco".to_string()));
+    assert!(!gen.non_dominated_species().contains(&"seadra".to_string()));
+    assert!(gen.non_dominated_species().contains(&"venusaur".to_string()));
+    // Special-item holders are kept even if pre-evolutions
+    assert!(gen.non_dominated_species().contains(&"pikachu".to_string()));
+    assert!(gen.non_dominated_species().contains(&"cubone".to_string()));
+    assert!(gen.non_dominated_species().contains(&"chansey".to_string()));
+
+    // 2. Pre-adaptation gating: Sleep Talk requires Rest; Dream Eater requires sleep move
+    let snorlax_no_rest = gen.non_dominated_moves(&dex, "snorlax", 55, &["return".into()]);
+    assert!(!snorlax_no_rest.contains(&"sleeptalk".to_string()));
+    assert!(!snorlax_no_rest.contains(&"snore".to_string()));
+    assert!(!snorlax_no_rest.contains(&"strength".to_string()));
+    assert!(!snorlax_no_rest.contains(&"tackle".to_string()));
+    assert!(!snorlax_no_rest.contains(&"headbutt".to_string()));
+    assert!(!snorlax_no_rest.contains(&"swift".to_string()));
+    assert!(!snorlax_no_rest.contains(&"lick".to_string()));
+    assert!(!snorlax_no_rest.contains(&"splash".to_string()));
+    assert!(!snorlax_no_rest.contains(&"frustration".to_string()));
+    // Body Slam (85 BP, 30% par) is within 20 BP of Return (102 BP) and kept
+    assert!(snorlax_no_rest.contains(&"bodyslam".to_string()));
+    assert!(snorlax_no_rest.contains(&"return".to_string()));
+
+    let nidoking_moves = gen.non_dominated_moves(&dex, "nidoking", 50, &[]);
+    assert!(!nidoking_moves.contains(&"poisonsting".to_string()));
+    assert!(!nidoking_moves.contains(&"tailwhip".to_string()));
+    assert!(!nidoking_moves.contains(&"leer".to_string()));
+
+    let starmie_moves = gen.non_dominated_moves(&dex, "starmie", 50, &[]);
+    assert!(!starmie_moves.contains(&"bubblebeam".to_string()));
+    assert!(!starmie_moves.contains(&"watergun".to_string()));
+    assert!(!starmie_moves.contains(&"psybeam".to_string()));
+    assert!(!starmie_moves.contains(&"confusion".to_string()));
+    assert!(starmie_moves.contains(&"surf".to_string()));
+    assert!(starmie_moves.contains(&"hydropump".to_string()));
+    assert!(starmie_moves.contains(&"psychic".to_string()));
+
+    let snorlax_with_rest = gen.non_dominated_moves(&dex, "snorlax", 55, &["rest".into()]);
+    assert!(snorlax_with_rest.contains(&"sleeptalk".to_string()));
+    // Snore is still dominated by Sleep Talk on Snorlax
+    assert!(!snorlax_with_rest.contains(&"snore".to_string()));
+
+    let gengar_no_sleep = gen.non_dominated_moves(&dex, "gengar", 55, &["thunderbolt".into()]);
+    assert!(!gengar_no_sleep.contains(&"dreameater".to_string()));
+    assert!(!gengar_no_sleep.contains(&"nightmare".to_string()));
+
+    let gengar_with_sleep = gen.non_dominated_moves(&dex, "gengar", 55, &["hypnosis".into()]);
+    assert!(gengar_with_sleep.contains(&"dreameater".to_string()));
+    assert!(gengar_with_sleep.contains(&"nightmare".to_string()));
+
+    // 3. Random teams and proposals never carry zero-effect items or dominated EVs
+    let mut rng = SplitMix64::new(20261028);
+    for _ in 0..20 {
+        let team = gen.random_team_valid(&dex, &mut rng, 50).unwrap();
+        assert_clean(&dex, &ls, &team, "dominance-checked random team");
+        for set in &team {
+            let item = set["item"].as_str().unwrap().to_lowercase();
+            assert!(!item.contains("ball") || item == "light ball", "unexpected ball item: {item}");
+            assert!(!item.contains("stone") || item == "hard stone", "unexpected stone item: {item}");
+            assert_ne!(item, "dragon scale");
+            assert_ne!(item, "up-grade");
+            let evs = &set["evs"];
+            assert_eq!(evs["hp"].as_i64(), Some(255));
+            assert_eq!(evs["def"].as_i64(), Some(255));
+            assert_eq!(evs["spa"].as_i64(), Some(255));
+            assert_eq!(evs["spd"].as_i64(), Some(255));
+            assert_eq!(evs["spe"].as_i64(), Some(255));
+        }
+    }
+
+    // 4. Utility/combo damaging moves (Whirlpool, Mud-Slap, Icy Wind, etc.)
+    // do not block same-type main STABs (Surf, Earthquake, Ice Beam) in move swaps,
+    // while existing >=60 BP main STABs still block redundant weak attacks (Bide, Present).
+    let mut base_team = gen.canonize(&dex, &gen.team_json(0)).unwrap();
+    base_team[0]["species"] = serde_json::json!("Blastoise");
+    base_team[0]["name"] = serde_json::json!("Blastoise");
+    base_team[0]["moves"] = serde_json::json!(["Whirlpool", "Mud-Slap", "Rest", "Roar"]);
+    let base_team = gen.canonize(&dex, &base_team).unwrap();
+    let mut saw_surf_or_hydro = false;
+    let mut saw_earthquake = false;
+    for seed in 1..=2500u64 {
+        let mut r = SplitMix64::new(seed);
+        if let Some(p) = gen.propose_valid(&dex, &base_team, &mut r, 20) {
+            if p.op == MutOp::MoveSwap && p.slot == 0 {
+                let mvs: Vec<String> = p.team[0]["moves"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_lowercase()))
+                    .collect();
+                if mvs.contains(&"whirlpool".to_string())
+                    && (mvs.contains(&"surf".to_string()) || mvs.contains(&"hydro pump".to_string()))
+                {
+                    saw_surf_or_hydro = true;
+                }
+                if mvs.contains(&"mud-slap".to_string()) && mvs.contains(&"earthquake".to_string()) {
+                    saw_earthquake = true;
+                }
+                if mvs.contains(&"body slam".to_string()) || mvs.contains(&"return".to_string()) {
+                    assert!(
+                        !mvs.contains(&"bide".to_string()) && !mvs.contains(&"present".to_string()),
+                        "main Normal STAB must block redundant Bide/Present: {mvs:?}"
+                    );
+                }
+            }
+        }
+    }
+    assert!(
+        saw_surf_or_hydro,
+        "Whirlpool on Blastoise must not block adding Surf/Hydro Pump in another slot"
+    );
+    assert!(
+        saw_earthquake,
+        "Mud-Slap (<60 BP) on Blastoise must not block adding Earthquake in another slot"
+    );
+}

@@ -879,14 +879,23 @@ function OwnTeamPicker(props: { pool: MetaPool; onPick: (sets: SetLike[]) => voi
       </div>
       {tab === "pool" && (
         <ul class="solver-team-list">
-          {props.pool.teams.map((t) => (
-            <li key={t.id}>
-              <button class="solver-team-btn" onClick={() => props.onPick(t.sets as SetLike[])}>
-                <strong>{t.id}</strong>
-                <span>{t.species.map((sp) => speciesName(sp)).join(" / ")}</span>
-              </button>
-            </li>
-          ))}
+          {props.pool.teams.map((t) => {
+            const tags = [
+              t.nash ? ui().nashBadge : "",
+              t.evolved ? ui().evolvedBadge : "",
+            ].filter(Boolean);
+            return (
+              <li key={t.id}>
+                <button class="solver-team-btn" onClick={() => props.onPick(t.sets as SetLike[])}>
+                  <strong>
+                    {t.id}
+                    {tags.length > 0 ? ` (${tags.join(" · ")})` : ""}
+                  </strong>
+                  <span>{t.species.map((sp) => speciesName(sp)).join(" / ")}</span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
       {tab === "custom" && (
@@ -947,17 +956,26 @@ function FoeRosterPicker(props: {
   return (
     <div class="solver-picker">
       <ul class="solver-team-list">
-        {props.pool.teams.map((t) => (
-          <li key={t.id}>
-            <button
-              class="solver-team-btn"
-              onClick={() => props.onPick(poolRoster(t))}
-            >
-              <strong>{t.id}</strong>
-              <span>{t.species.map((sp) => speciesName(sp)).join(" / ")}</span>
-            </button>
-          </li>
-        ))}
+        {props.pool.teams.map((t) => {
+          const tags = [
+            t.nash ? ui().nashBadge : "",
+            t.evolved ? ui().evolvedBadge : "",
+          ].filter(Boolean);
+          return (
+            <li key={t.id}>
+              <button
+                class="solver-team-btn"
+                onClick={() => props.onPick(poolRoster(t))}
+              >
+                <strong>
+                  {t.id}
+                  {tags.length > 0 ? ` (${tags.join(" · ")})` : ""}
+                </strong>
+                <span>{t.species.map((sp) => speciesName(sp)).join(" / ")}</span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
       <div class="solver-foe-manual">
         {rows.map((r, i) => (

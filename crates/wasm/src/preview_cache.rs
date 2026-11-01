@@ -29,7 +29,7 @@ impl Identity {
         let team_key = nc2000_bot::compiled_preview::key(battle, observer.side())?;
         let public: Vec<_> = observer.mons().iter().map(|m| json!([
             m.species.0, m.level, format!("{:?}", m.gender), m.preview_has_item,
-            serde_json::Value::Null, m.revealed_moves.iter().map(|x| x.0).collect::<Vec<_>>(),
+            m.hp_type_mask, m.revealed_moves.iter().map(|x| x.0).collect::<Vec<_>>(),
             format!("{:?}", m.item), m.appeared,
         ])).collect();
         Some(json!({

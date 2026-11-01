@@ -1,0 +1,292 @@
+use super::*;
+#[path="best_first.rs"]
+mod best_first;
+use std::collections::{BTreeMap,BinaryHeap};
+use nc2000_engine::battle::enumerate::enumerate_step;
+
+#[derive(Serialize,Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Config {
+    response: CounterResponse,
+    width: usize,
+    steps: usize,
+    cell_cap: usize,
+    work_budget: usize,
+    #[serde(default)]
+    time_budget_ms: u64,
+    lazy: bool,
+    #[serde(default)]
+    hp_storage_census: bool,
+    #[serde(default)]
+    guarded_keys: bool,
+    #[serde(default)]
+    packed_hp: bool,
+    #[serde(default)]
+    frontier_mass_order: bool,
+    #[serde(default)]
+    best_first: bool,
+    #[serde(default="state_cap")]
+    packed_state_cap: usize,
+    #[serde(default)]
+    healing_capacity: usize,
+    #[serde(default)]
+    reuse_attacks: bool,
+    #[serde(default)]
+    reuse_switches: bool,
+    #[serde(default)]
+    switch_kernel_capacity: usize,
+    #[serde(default)]
+    healing_kernel_capacity: usize,
+    #[serde(default)]
+    boom_eager_cap: usize,
+    #[serde(default)]
+    boom_terminal_quotient: bool,
+}
+
+#[derive(Default,Serialize)]
+struct BoomStats {attempts:usize,completed:usize,runs:usize,terminal_replacements:usize}
+
+fn state_cap()->usize {100_000}
+
+fn collect_step(step:nc2000_engine::battle::enumerate::StepEnum)->Frontier {
+    let mut leaves=Frontier::new();
+    for leaf in step.leaves {
+        leaves.entry(leaf.battle.state_key128()).and_modify(|(_,mass)|*mass+=leaf.prob)
+            .or_insert((leaf.battle,leaf.prob));
+    }
+    leaves
+}
+
+pub(super) type Frontier = BTreeMap<u128,(Battle,f64)>;
+
+pub(super) fn partial_step(dex:&Dex,battle:&Battle,choices:[Option<SearchChoice>;2],cap:usize,cache:&mut nc2000_bot::hp_transition::HpHealingCache)->(Frontier,f64,usize) {
+    let mut pending=BinaryHeap::from([(1.0f64.to_bits(),Vec::<usize>::new())]);
+    let mut leaves=Frontier::new();let mut runs=0;let mut observations=0;
+    let mut runner=cache.prepare(dex,battle,choices);
+    while observations<cap {
+        let Some((mass,script))=pending.pop() else {break;};
+        let (leaf,trace,executed)=runner.run(&script);runs+=usize::from(executed);observations+=1;
+        let mut prefix=1.0;let mut siblings=0.0;
+        for (p,draw) in trace.iter().enumerate() {
+            if p>=script.len() {
+                for (class,&count) in draw.counts.iter().enumerate() {
+                    if class!=draw.chosen && count>0 {
+                        let mut branch=trace[..p].iter().map(|draw|draw.chosen).collect::<Vec<_>>();
+                        branch.push(class);
+                        let probability=prefix*count as f64/(1u64<<32) as f64;
+                        pending.push((probability.to_bits(),branch));siblings+=probability;
+                    }
+                }
+            }
+            prefix*=draw.prob();
+        }
+        assert!((prefix+siblings-f64::from_bits(mass)).abs()<1e-10);
+        leaves.entry(leaf.state_key128()).and_modify(|(_,mass)|*mass+=prefix).or_insert((leaf,prefix));
+    }
+    let unresolved=pending.into_iter().map(|(mass,_)|f64::from_bits(mass)).sum();
+    (leaves,unresolved,runs)
+}
+
+fn analyze(dex:&Dex,root:&Battle,cfg:&Config,
+    choose:impl FnMut(&mut Battle,bool)->[Option<SearchChoice>;2])->Value {
+    let started=Instant::now();
+    analyze_until(dex,root,cfg,choose,started,||cfg.time_budget_ms>0 && started.elapsed().as_millis()>=u128::from(cfg.time_budget_ms))
+}
+
+fn analyze_until(dex:&Dex,root:&Battle,cfg:&Config,
+    mut choose:impl FnMut(&mut Battle,bool)->[Option<SearchChoice>;2],started:Instant,
+    mut stop:impl FnMut()->bool)->Value {
+    assert!(cfg.width>0 && cfg.width<=100_000 && cfg.steps>0 && cfg.steps<=2048 && cfg.cell_cap>0);
+    assert!(cfg.healing_capacity<=100_000 && (cfg.healing_capacity==0 || cfg.lazy));
+    assert!(cfg.boom_eager_cap<=1_000_000 && (cfg.boom_eager_cap==0 || cfg.lazy));
+    assert!(!cfg.boom_terminal_quotient || cfg.boom_eager_cap>0);
+    assert!(cfg.switch_kernel_capacity<=100_000 && (cfg.switch_kernel_capacity==0 || cfg.lazy));
+    assert!(cfg.healing_kernel_capacity<=100_000 && (cfg.healing_kernel_capacity==0 || cfg.lazy));
+    assert!(cfg.packed_state_cap>0 && cfg.packed_state_cap<=1_000_000);
+    if cfg.best_first {return best_first::analyze(dex,root,cfg,choose,started,stop);}
+    let mut healing=nc2000_bot::hp_transition::HpHealingCache::new(cfg.healing_capacity);
+    if cfg.reuse_attacks {healing=healing.with_attacks();}
+    if cfg.reuse_switches {healing=healing.with_switches();}
+    let mut kernels=super::switch_kernel::Cache::new(cfg.switch_kernel_capacity);
+    let mut healing_kernels=super::healing_kernel::Cache::new(cfg.healing_kernel_capacity);
+    let mut boom=BoomStats::default();
+    let mut time_exhausted=false;
+    let mut frontier=super::retained::Retained::new(cfg.packed_hp,cfg.guarded_keys);
+    frontier.insert(dex,root.clone(),1.0);
+    let (mut wins,mut ties,mut losses,mut dropped,mut failed)=(0.0,0.0,0.0,0.0,0.0);
+    let mut runs=0;let mut rows=Vec::new();let mut peak_frontier=1;let mut peak_templates=1;
+    let mut order_report=Vec::new();
+    for depth in 0..cfg.steps {
+        let mut next=super::retained::Retained::new(cfg.packed_hp,cfg.guarded_keys);let mut failures=0;
+        let mut census=super::hp_storage::Census::default();
+        let input_masses=frontier.sorted_masses();
+        let mut processed_states=0;let mut processed_mass=0.0;
+        for (mut battle,mass) in frontier.into_states(cfg.frontier_mass_order) {
+            if let Some(outcome)=battle.outcome() {
+                processed_states+=1;processed_mass+=mass;
+                match outcome {Outcome::P1Win=>wins+=mass,Outcome::Tie=>ties+=mass,Outcome::P2Win=>losses+=mass};
+                continue;
+            }
+            let cap=cfg.cell_cap.min(cfg.work_budget-runs);
+            time_exhausted=time_exhausted || stop();
+            if cap==0 || time_exhausted {failed+=mass;continue;}
+            processed_states+=1;processed_mass+=mass;
+            let choices=choose(&mut battle,depth==0);
+            let (leaves,unresolved,work)=if cfg.lazy {
+                let mut eager_work=0;
+                let eager=if cfg.boom_eager_cap>0 && super::terminal_step::admitted(dex,&battle,choices) {
+                    boom.attempts+=1;
+                    let (result,work,replacements)=super::terminal_step::enumerate(dex,&battle,choices,
+                        cfg.boom_eager_cap.min(cfg.work_budget-runs),cfg.boom_terminal_quotient);
+                    eager_work=work;boom.runs+=work;boom.terminal_replacements+=replacements;
+                    boom.completed+=usize::from(result.is_some());result
+                } else {None};
+                if let Some(step)=eager {(collect_step(step),0.0,eager_work)}
+                else {
+                    let cap=cfg.cell_cap.min(cfg.work_budget-runs-eager_work);
+                    let (leaves,unknown,work)=healing_kernels.run(dex,&battle,choices,cap,&mut healing,&mut kernels);
+                    (leaves,unknown,work+eager_work)
+                }
+            } else if let Some(step)=enumerate_step(dex,&battle,choices,cap) {
+                let work=step.runs;(collect_step(step),0.0,work)
+            } else {(Frontier::new(),1.0,cap)};
+            runs+=work;failed+=mass*unresolved;failures+=usize::from(unresolved>0.0);
+            let total:f64=leaves.values().map(|(_,prob)|prob).sum::<f64>()+unresolved;
+            assert!((total-1.0).abs()<1e-10);
+            for (_, (leaf,prob)) in leaves {
+                let probability=mass*prob;
+                if let Some(outcome)=leaf.outcome() {
+                    match outcome {Outcome::P1Win=>wins+=probability,Outcome::Tie=>ties+=probability,Outcome::P2Win=>losses+=probability};
+                } else {
+                    if cfg.hp_storage_census {census.observe(dex,&leaf,probability,cfg.response);}
+                    next.insert(dex,leaf,probability);
+                }
+            }
+            peak_frontier=peak_frontier.max(next.len());
+            peak_templates=peak_templates.max(next.templates());
+            if next.templates()>cfg.width*2 || (cfg.packed_hp && next.len()>cfg.packed_state_cap*2) {dropped+=next.prune(cfg.width,cfg.packed_state_cap);}
+        }
+        order_report.push(json!({"depth":depth+1,"input_states":input_masses.len(),"input_mass":input_masses.iter().sum::<f64>(),
+            "processed_states":processed_states,"processed_mass":processed_mass,"top_mass_same_count":input_masses.iter().take(processed_states).sum::<f64>()}));
+        dropped+=next.prune(cfg.width,cfg.packed_state_cap);
+        let unresolved=next.mass();
+        let unknown=dropped+failed+unresolved;
+        let mass_error=(wins+ties+losses+unknown-1.0).abs();
+        assert!(mass_error<1e-9);
+        rows.push(json!({"depth":depth+1,"runs":runs,"wins":wins,"ties":ties,"losses":losses,
+            "dropped_mass":dropped,"failed_mass":failed,"frontier_mass":unresolved,"unknown_mass":unknown,
+            "frontier_states":next.len(),"frontier_templates":next.templates(),"enumeration_failures":failures,"mass_error":mass_error,
+            "hp_storage_census":cfg.hp_storage_census.then(||census.report(cfg.width)),
+            "score":{"lo":(wins+0.5*ties-1e-9).max(0.0),"hi":(wins+0.5*ties+unknown+1e-9).min(1.0)}}));
+        frontier=next;
+        if frontier.len()==0 || runs==cfg.work_budget || time_exhausted {break;}
+    }
+    json!({"score":rows.last().unwrap()["score"],"layers":rows,"runs":runs,
+        "peak_frontier":peak_frontier,"peak_templates":peak_templates,"elapsed_ms":started.elapsed().as_secs_f64()*1000.0,
+        "time_exhausted":time_exhausted,"numerical_envelope":1e-9,"healing_cache":healing.stats(),"boom_eager":boom,"switch_kernels":kernels.stats,"healing_kernels":healing_kernels.stats,"frontier_order":order_report})
+}
+
+pub(super) fn execute(args:&[String]) {
+    assert_eq!(args.len(),5,"corpus certify config.json output.json");
+    let raw=std::fs::read(&args[1]).unwrap();
+    let cfg:Config=serde_json::from_slice(&std::fs::read(&args[3]).unwrap()).unwrap();
+    let game=std::str::from_utf8(&raw).unwrap().lines().map(|line|serde_json::from_str::<Game>(line).unwrap())
+        .find(|game|game.game==17).unwrap();
+    let dex=conformance::load_dex();let root=reconstruct(&dex,&game,21);
+    let report=analyze(&dex,&root,&cfg,|b,first|[0,1].map(|side|
+        choose_response(&dex,b,side,first,OwnPolicy::AfterBoom75,cfg.response)));
+    let result=json!({"schema":"nc2000-fixed-pair-enumeration-v1","state_key":root.state_key128().to_string(),
+        "config":cfg,"report":report,"manifest":manifest(&dex,&raw),
+        "interpretation":"Side-zero score for two fixed full-state policies after fixed first Body Slam / switch-2 actions. Every expanded step enumerates engine chance outcomes. Discarded frontier mass, incomplete enumerations and the final frontier remain in [0,1]. Default state aggregation uses full state_key128; optional guarded keys omit only unobservable damage history and Quick Claw rolls. Packed storage keeps each exact HP vector and its mass separately under a shared guarded template, and applies the width limit to templates plus a separate concrete-state cap. Optional frontier scheduling sorts input states by descending probability with deterministic state-key ties; unfinished probability remains unknown. Optional best-first scheduling retains pending states across depths, merges only same-depth guarded identities, and processes the largest accumulated probability. It stops after a complete cell if the global state/template limit is exceeded, retaining all pending probability without pruning. Depth-horizon and incomplete-cell probability remain unknown. No sampled value, heuristic terminal value or unrestricted-game certificate transfer is used. This pair's upper bound also bounds the fixed side-zero policy's worst-case score from above; it does not bound the unrestricted game value from above. Optional healing reuse admits only a strictly faster, below-full-HP Rest or restricted Sleep Talk user, and rejects changed HP-dependent control flow. Optional attack reuse uses the existing guarded positive-survivor translation domain. Optional voluntary-switch reuse preserves incoming HP and separately restores the two original actives' unchanged HP. Optional switch-kernel reuse retains the exact incoming HP and script cap, restores unchanged original-active HP in aggregated successors, and carries the same unresolved probability. Optional aggregated healing reuse applies the existing strictly-faster healer domain, preserves Rest-reset HP, and requires every translated non-reset leaf to survive; any failed HP guard falls back to ordinary enumeration. The input script cap and unresolved probability are retained. Work counts actual engine executions; each cell still caps scripted observations. Optional eager enumeration for the admitted Body Slam / Selfdestruct domain may quotient only terminal states by outcome, retaining exact nonterminal states and downstream draw traces. Failed eager attempts are charged before lazy fallback. An optional time limit is checked between input states; the current cell completes and all unprocessed mass stays unknown. Reported elapsed time includes final accounting and may exceed the limit. Floating-point probability arithmetic uses the reported numerical envelope."});
+    std::fs::write(&args[4],serde_json::to_vec_pretty(&result).unwrap()).unwrap();
+    println!("{}",serde_json::to_string(&result["report"]).unwrap());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    pub(super) fn config(width:usize,steps:usize,cap:usize,work:usize)->Config {
+        Config {response:CounterResponse {return_when:ReturnWhen::Always,ice_first:false,finish_low:false},
+            width,steps,cell_cap:cap,work_budget:work,time_budget_ms:0,lazy:false,hp_storage_census:false,guarded_keys:false,packed_hp:false,frontier_mass_order:false,best_first:false,packed_state_cap:state_cap(),healing_capacity:0,reuse_attacks:false,reuse_switches:false,switch_kernel_capacity:0,healing_kernel_capacity:0,boom_eager_cap:0,boom_terminal_quotient:false}
+    }
+    #[test]
+    fn time_stop_preserves_unexpanded_mass_and_completed_results() {
+        let dex=conformance::load_dex();let base=super::super::tests::battle(&dex,false);
+        for packed in [false,true] {for cutoff in [0,1,2,5,usize::MAX] {
+            let mut cfg=config(256,2,64,1000);cfg.lazy=true;cfg.guarded_keys=packed;cfg.packed_hp=packed;
+            let choices=["bodyslam","hydropump"].map(|name|Some(SearchChoice::Move(dex.moves.id(name).unwrap())));
+            let complete=analyze_until(&dex,&base,&cfg,|_,_|choices,Instant::now(),||false);
+            let mut calls=0;
+            let report=analyze_until(&dex,&base,&cfg,|_,_|choices,Instant::now(),||{calls+=1;calls>cutoff});
+            let lo=report["score"]["lo"].as_f64().unwrap();let hi=report["score"]["hi"].as_f64().unwrap();
+            assert!(lo<=complete["score"]["lo"].as_f64().unwrap()+1e-12);
+            assert!(hi>=complete["score"]["hi"].as_f64().unwrap()-1e-12);
+            assert!(report["runs"].as_u64().unwrap()<=complete["runs"].as_u64().unwrap());
+            for row in report["layers"].as_array().unwrap() {
+                let total=["wins","ties","losses","dropped_mass","failed_mass","frontier_mass"].iter().map(|k|row[k].as_f64().unwrap()).sum::<f64>();
+                assert!((total-1.0).abs()<1e-9);
+            }
+            if cutoff==0 {assert_eq!(report["runs"],0);assert_eq!(report["score"],json!({"lo":0.0,"hi":1.0}));assert_eq!(report["time_exhausted"],true);}
+            if cutoff==usize::MAX {assert_eq!(report["layers"],complete["layers"]);assert_eq!(report["time_exhausted"],false);}
+        }}
+    }
+
+    pub(super) fn exhaustive(dex:&Dex,b:&Battle)->f64 {
+        if let Some(outcome)=b.outcome() {return match outcome {Outcome::P1Win=>1.0,Outcome::Tie=>0.5,Outcome::P2Win=>0.0};}
+        let mut b=b.clone();let choices=[0,1].map(|s|b.needs_choice()[s].then(||b.legal_choices(dex,s)[0]));
+        enumerate_step(dex,&b,choices,100_000).unwrap().leaves.iter().map(|leaf|leaf.prob*exhaustive(dex,&leaf.battle)).sum()
+    }
+    #[test]
+    fn truncated_mass_encloses_exhaustive_two_step_value() {
+        let dex=conformance::load_dex();let mut b=super::super::tests::battle(&dex,false);
+        b.turn=999;
+        for side in 0..2 {let id=b.active_id(side).unwrap();b.poke_mut(id).hp=80;}
+        let exact=exhaustive(&dex,&b);
+        assert!(exact>0.0 && exact<1.0);
+        for (lazy,packed) in [(false,false),(true,false),(false,true),(true,true)] {for mass_order in [false,true] {
+        for mut cfg in [config(1,1,1,1),config(1,2,100_000,200_000),config(10_000,2,100_000,1_000_000)] {
+            cfg.lazy=lazy;cfg.packed_hp=packed;cfg.guarded_keys=packed;cfg.frontier_mass_order=mass_order;
+            let report=analyze(&dex,&b,&cfg,|b,_|[0,1].map(|s|b.needs_choice()[s].then(||b.legal_choices(&dex,s)[0])));
+            assert!(report["score"]["lo"].as_f64().unwrap()<=exact);
+            assert!(report["score"]["hi"].as_f64().unwrap()>=exact);
+            assert!(report["runs"].as_u64().unwrap()<=cfg.work_budget as u64);
+            if cfg.cell_cap==1 {assert!(report["layers"][0]["failed_mass"].as_f64().unwrap()>0.0);}
+            if !packed && cfg.width==1 && cfg.cell_cap>1 {assert!(report["layers"][0]["dropped_mass"].as_f64().unwrap()>0.0);}
+            if cfg.width==10_000 {assert!(report["score"]["hi"].as_f64().unwrap()-report["score"]["lo"].as_f64().unwrap()<3e-9);}
+        }
+    }}
+    }
+    #[test]
+    fn terminal_states_have_no_unknown_mass_or_engine_work() {
+        let dex=conformance::load_dex();let mut b=super::super::tests::battle(&dex,false);
+        b.turn=1000;
+        let choices=[0,1].map(|s|b.legal_choices(&dex,s)[0]);b.apply_choices(&dex,choices.map(Some)).unwrap();
+        assert!(b.outcome().is_some());
+        for best_first in [false,true] {
+            let mut cfg=config(1,1,1,1);cfg.best_first=best_first;cfg.lazy=best_first;cfg.guarded_keys=best_first;cfg.packed_hp=best_first;
+            let report=analyze(&dex,&b,&cfg,|_,_|panic!("terminal needs no policy"));
+            assert_eq!(report["runs"],0);
+            assert_eq!(report[if best_first {"checkpoints"} else {"layers"}][0]["unknown_mass"],0.0);
+        }
+    }
+    #[test]
+    fn eager_terminal_attempts_and_fallback_share_one_work_budget() {
+        let dex=conformance::load_dex();
+        let mon=PokemonSet {name:"Snorlax".into(),species:"Snorlax".into(),item:String::new(),ability:String::new(),
+            moves:vec!["Body Slam".into(),"Self-Destruct".into()],level:50,evs:None,ivs:None,gender:None,happiness:None};
+        let mut b=Battle::from_fixture(&dex,"1,2,3,4",std::slice::from_ref(&mon),std::slice::from_ref(&mon)).unwrap();
+        let preview=[0,1].map(|side|b.legal_choices(&dex,side)[0]);b.apply_choices(&dex,preview.map(Some)).unwrap();
+        for side in 0..2 {let id=b.active_id(side).unwrap();b.poke_mut(id).hp=30;}
+        let choices=["bodyslam","selfdestruct"].map(|name|Some(SearchChoice::Move(dex.moves.id(name).unwrap())));
+        for best_first in [false,true] {for (work,eager) in [(1,1),(9,1),(100_000,100_000)] {
+            let mut cfg=config(1000,2,4096,work);cfg.lazy=true;cfg.boom_eager_cap=eager;cfg.boom_terminal_quotient=true;
+            cfg.best_first=best_first;cfg.guarded_keys=best_first;cfg.packed_hp=best_first;
+            let report=analyze(&dex,&b,&cfg,|_,_|choices);
+            assert_eq!(report["runs"].as_u64().unwrap(),report["boom_eager"]["runs"].as_u64().unwrap()+report["healing_cache"]["runs"].as_u64().unwrap());
+            assert!(report["runs"].as_u64().unwrap()<=work as u64);
+            assert_eq!(report["score"]["hi"],1.0);
+            if work==100_000 {assert!(report["score"]["lo"].as_f64().unwrap()>1.0-3e-9);}
+        }}
+    }
+
+}

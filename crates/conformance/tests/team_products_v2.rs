@@ -35,17 +35,26 @@ const PRIOR: &str = "data/belief-pool-v3/belief-pool.json";
 
 struct Products {
     inventory: BTreeMap<String, Value>,
+    evolved: BTreeMap<String, Value>,
     selection: Value,
     catalog: Value,
     prior: Value,
+    deployed_nash: Value,
     nash: Value,
     solution: Value,
 }
 
 fn products() -> Products {
     let inv = read("data/team-inventory-v1/inventory.json");
+    let evo = read("data/team-selection-v2/evolved-teams.json");
     Products {
         inventory: inv["teams"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| (t["id"].as_str().unwrap().to_string(), t.clone()))
+            .collect(),
+        evolved: evo["teams"]
             .as_array()
             .unwrap()
             .iter()
@@ -54,6 +63,7 @@ fn products() -> Products {
         selection: read("data/team-selection-v2/selection.json"),
         catalog: read("data/team-pool-v2/team-pool.json"),
         prior: read(PRIOR),
+        deployed_nash: read("data/kodoku-r3/conclusion-equilibrium-deme.json"),
         nash: read("data/meta-nash-v3/pool-artifact.json"),
         solution: read("data/meta-nash-v3/solution.json"),
     }
@@ -67,12 +77,17 @@ fn measured(p: &Products) -> BTreeSet<String> {
         .collect()
 }
 
+fn source_team<'a>(p: &'a Products, id: &str) -> &'a Value {
+    p.inventory.get(id).or_else(|| p.evolved.get(id)).unwrap_or_else(|| panic!("unknown team id {id}"))
+}
+
 #[test]
 fn memberships_follow_the_selection() {
     let p = products();
     let labels = p.selection["labels"].as_object().unwrap();
     let measured = measured(&p);
-    assert_eq!(labels.keys().cloned().collect::<BTreeSet<_>>(), measured, "every measured team, and only those, carries a label");
+    let candidates: BTreeSet<String> = measured.iter().chain(p.evolved.keys()).cloned().collect();
+    assert_eq!(labels.keys().cloned().collect::<BTreeSet<_>>(), candidates, "every candidate team, and only those, carries a label");
     for (id, l) in labels {
         let label = l["label"].as_str().unwrap();
         assert!(["selected", "pending", "not-selected"].contains(&label), "{id}: {label}");
@@ -83,8 +98,17 @@ fn memberships_follow_the_selection() {
     let selected: BTreeSet<String> =
         labels.iter().filter(|(_, l)| l["label"] == "selected").map(|(id, _)| id.clone()).collect();
     assert_eq!(ids(&p.catalog), selected);
+    let deployed_nash_ids = ids(&p.deployed_nash);
+    for id in &deployed_nash_ids {
+        assert!(selected.contains(id), "Deployed Nash support {id} is not a selected party");
+    }
+    for t in p.catalog["teams"].as_array().unwrap() {
+        let id = t["id"].as_str().unwrap();
+        assert_eq!(t["nash"].as_bool(), Some(deployed_nash_ids.contains(id)), "{id}: nash flag");
+        assert_eq!(t["evolved"].as_bool(), Some(p.evolved.contains_key(id)), "{id}: evolved flag");
+    }
     for id in ids(&p.nash) {
-        assert!(selected.contains(&id), "Nash support {id} is not a selected party");
+        assert!(p.inventory.contains_key(&id), "Legacy v3 Nash support {id} is missing from inventory");
     }
     assert_eq!(ids(&p.prior), measured, "the frozen prior holds every measured eligible team");
 }
@@ -108,36 +132,54 @@ fn shipped_sets_match_the_inventory_and_audited_catalog_optimization() {
     }
     let attack = read("findings/low-attack-catalog-v1/audit.json");
     let gender = read("findings/attract-gender-v1/mechanics.json");
-    let mut applied = [0, 0];
     for t in p.catalog["teams"].as_array().unwrap() {
         let id = t["id"].as_str().unwrap();
-        let mut expected = p.inventory[id]["sets"].clone();
-        for (pass, audit) in [&attack, &gender].iter().enumerate() {
-            for row in audit["rows"].as_array().unwrap().iter().filter(|r| r["baseId"] == id) {
-                let set = &mut expected[row["slot"].as_u64().unwrap() as usize - 1];
-                assert_eq!(set["species"], row["species"], "{id}: audited species");
-                assert_eq!(set["ivs"]["atk"].as_u64().unwrap() / 2,
-                    row["attackDvBefore"].as_u64().unwrap(), "{id}: audited baseline DV");
-                set["ivs"]["atk"] = Value::from(row["attackDvAfter"].as_u64().unwrap() * 2);
-                if pass == 0 {
-                    assert_eq!(set["evs"]["atk"], row["attackEvBefore"], "{id}: audited baseline EV");
-                    set["evs"]["atk"] = Value::from(0);
-                } else {
-                    assert_eq!(set["gender"], row["genderBefore"], "{id}: audited baseline gender");
-                    set["gender"] = row["genderAfter"].clone();
+        let has_historical_audit = attack["rows"].as_array().unwrap().iter().any(|r| r["baseId"] == id)
+            || gender["rows"].as_array().unwrap().iter().any(|r| r["baseId"] == id);
+        if has_historical_audit {
+            let mut expected = p.inventory[id]["sets"].clone();
+            for (pass, audit) in [&attack, &gender].iter().enumerate() {
+                for row in audit["rows"].as_array().unwrap().iter().filter(|r| r["baseId"] == id) {
+                    let set = &mut expected[row["slot"].as_u64().unwrap() as usize - 1];
+                    assert_eq!(set["species"], row["species"], "{id}: audited species");
+                    assert_eq!(set["ivs"]["atk"].as_u64().unwrap() / 2,
+                        row["attackDvBefore"].as_u64().unwrap(), "{id}: audited baseline DV");
+                    set["ivs"]["atk"] = Value::from(row["attackDvAfter"].as_u64().unwrap() * 2);
+                    if pass == 0 {
+                        assert_eq!(set["evs"]["atk"], row["attackEvBefore"], "{id}: audited baseline EV");
+                        set["evs"]["atk"] = Value::from(0);
+                    } else {
+                        assert_eq!(set["gender"], row["genderBefore"], "{id}: audited baseline gender");
+                        set["gender"] = row["genderAfter"].clone();
+                    }
                 }
-                applied[pass] += 1;
             }
+            assert_eq!(t["sets"], expected, "{id}: sets differ from the historical audited optimization");
         }
-        assert_eq!(t["sets"], expected, "{id}: sets differ from the audited optimization");
+        // Verify every catalog set against its baseline source in inventory or evolved-teams:
+        // only Attack IV/EV and (when eligible) gender may differ.
+        let src_sets = source_team(&p, id)["sets"].as_array().unwrap();
+        let cat_sets = t["sets"].as_array().unwrap();
+        assert_eq!(src_sets.len(), cat_sets.len(), "{id}: slot count");
+        for (s_orig, s_cat) in src_sets.iter().zip(cat_sets.iter()) {
+            assert_eq!(s_orig["species"], s_cat["species"], "{id}: species");
+            assert_eq!(s_orig["level"], s_cat["level"], "{id}: level");
+            assert_eq!(s_orig["item"], s_cat["item"], "{id}: item");
+            assert_eq!(s_orig["moves"], s_cat["moves"], "{id}: moves");
+            for stat in ["hp", "def", "spa", "spd", "spe"] {
+                assert_eq!(s_orig["ivs"][stat], s_cat["ivs"][stat], "{id}: iv {stat}");
+                assert_eq!(s_orig["evs"][stat], s_cat["evs"][stat], "{id}: ev {stat}");
+            }
+            assert!(s_cat["ivs"]["atk"].as_u64().unwrap() <= s_orig["ivs"]["atk"].as_u64().unwrap(), "{id}: atk iv");
+            assert!(s_cat["evs"]["atk"].as_u64().unwrap() <= s_orig["evs"]["atk"].as_u64().unwrap(), "{id}: atk ev");
+        }
     }
-    assert_eq!(applied, [27, 6], "every audited adjustment applies exactly once");
 }
 
 #[test]
 fn draw_weights_are_cluster_balanced() {
     let p = products();
-    let cluster = |id: &str| p.inventory[id]["variantCluster"].as_str().unwrap_or(id).to_string();
+    let cluster = |id: &str| source_team(&p, id)["variantCluster"].as_str().unwrap_or(id).to_string();
     let teams = p.catalog["teams"].as_array().unwrap();
     let mut size: BTreeMap<String, usize> = BTreeMap::new();
     for t in teams {
@@ -150,6 +192,8 @@ fn draw_weights_are_cluster_balanced() {
         let want = 1.0 / (size.len() as f64 * size[&cluster(id)] as f64);
         assert!((t["drawWeight"].as_f64().unwrap() - want).abs() < 1e-5, "{id}: drawWeight");
     }
+    let deployed_nash: f64 = p.deployed_nash["teams"].as_array().unwrap().iter().map(|t| t["weight"].as_f64().unwrap()).sum();
+    assert!((deployed_nash - 1.0).abs() < 5e-3, "deployed nash weights sum to {deployed_nash}");
     let nash: f64 = p.nash["teams"].as_array().unwrap().iter().map(|t| t["weight"].as_f64().unwrap()).sum();
     assert!((nash - 1.0).abs() < 5e-3, "nash weights sum to {nash}");
     let mut per_cluster: BTreeMap<String, f64> = BTreeMap::new();
@@ -178,7 +222,7 @@ fn every_shipped_team_is_legal_and_plays_out() {
     let ls = Learnsets::from_json(&std::fs::read_to_string(repo_root().join("data/learnsets-gen2.json")).unwrap())
         .unwrap();
     let mut seen = BTreeSet::new();
-    let teams: Vec<&Value> = [&p.catalog, &p.prior, &p.nash]
+    let teams: Vec<&Value> = [&p.catalog, &p.prior, &p.deployed_nash, &p.nash]
         .iter()
         .flat_map(|f| f["teams"].as_array().unwrap().iter())
         .filter(|t| seen.insert(t["id"].as_str().unwrap().to_string()))

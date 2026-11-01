@@ -274,13 +274,9 @@ class NativeProtocolSession {
 		this.previewInfo =
 			result.previewInfo ?? null;
 
-		if (result.owes) {
-			await this.inspect();
-		} else {
-			this.root = null;
-			this.belief = null;
-			this.state = null;
-		}
+		this.root = null;
+		this.belief = null;
+		this.state = null;
 
 		return result.owes;
 	}
@@ -308,8 +304,6 @@ class NativeProtocolSession {
 
 		this.iterationCount =
 			result.iterations;
-
-		await this.inspect();
 
 		return result.choice ?? null;
 	}
@@ -414,14 +408,6 @@ class NativeProtocolSession {
 	beliefInfo() {
 		return JSON.stringify(
 			this.belief || {
-				mode: this.options.mode,
-				candidateCount: 0,
-				isFallback: false,
-				candidateIds: [],
-				sampledCandidateId: null,
-				sampledCandidateName: null,
-				fallbackReason: null,
-				lastObserverRevision: null,
 				count: 0,
 				fallback: false,
 				candidates: [],

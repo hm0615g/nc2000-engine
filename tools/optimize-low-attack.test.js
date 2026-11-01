@@ -124,34 +124,42 @@ test('female preference is supported only by the frozen prior source mix', () =>
 	assert.throws(() => attractGenderCensus(equal), /invalid weight/);
 });
 
-test('generated catalog matches the independently audited 27 adjustments exactly', () => {
+test('generated catalog matches the independently audited adjustments and cluster gender preservation', () => {
 	const catalog = require('../data/team-pool-v2/team-pool.json');
 	const inventory = require('../data/team-inventory-v1/inventory.json');
+	const evolved = require('../data/team-selection-v2/evolved-teams.json');
 	const audit = require('../findings/low-attack-catalog-v1/audit.json');
 	const genderAudit = require('../findings/attract-gender-v1/mechanics.json');
-	const original = new Map(inventory.teams.map(team => [team.id, team.sets]));
+	const original = new Map([...inventory.teams, ...evolved.teams].map(team => [team.id, team]));
 	assert.equal(catalog.teams.length, 24);
-	assert.equal(catalog.setOptimization.changedTeams, 14);
-	assert.equal(catalog.setOptimization.changedSets, 27);
-	assert.equal(catalog.setOptimization.changedGenders, 6);
+	assert.equal(catalog.setOptimization.changedTeams, 16);
+	assert.equal(catalog.setOptimization.changedSets, 29);
+	assert.equal(catalog.setOptimization.changedGenders, 7);
 	assert.equal(audit.rows.length, 27);
 	for (const team of catalog.teams) {
-		const expected = structuredClone(original.get(team.id));
-		for (const row of audit.rows.filter(row => row.baseId === team.id)) {
-			const mon = expected[row.slot - 1];
-			assert.equal(mon.species, row.species);
-			assert.equal(Math.floor(mon.ivs.atk / 2), row.attackDvBefore);
-			assert.equal(mon.evs.atk, row.attackEvBefore);
-			mon.ivs.atk = row.attackDvAfter * 2;
-			mon.evs.atk = 0;
+		const src = original.get(team.id);
+		assert(src, `missing source for ${team.id}`);
+		const preserveGenderSpecies = team.id === 'red-v10-s1105-r2-s0142' ? ['cloyster'] : null;
+		const opt = optimizeLowAttack(src.sets, dex, { preferFemale: true, preserveGenderSpecies });
+		assert.deepEqual(team.sets, opt.sets, team.id);
+		if (audit.rows.some(row => row.baseId === team.id) || genderAudit.rows.some(row => row.baseId === team.id)) {
+			const expected = structuredClone(src.sets);
+			for (const row of audit.rows.filter(row => row.baseId === team.id)) {
+				const mon = expected[row.slot - 1];
+				assert.equal(mon.species, row.species);
+				assert.equal(Math.floor(mon.ivs.atk / 2), row.attackDvBefore);
+				assert.equal(mon.evs.atk, row.attackEvBefore);
+				mon.ivs.atk = row.attackDvAfter * 2;
+				mon.evs.atk = 0;
+			}
+			for (const row of genderAudit.rows.filter(row => row.baseId === team.id)) {
+				const mon = expected[row.slot - 1];
+				assert.equal(mon.gender, row.genderBefore);
+				assert.equal(Math.floor(mon.ivs.atk / 2), row.attackDvBefore);
+				mon.gender = row.genderAfter;
+				mon.ivs.atk = row.attackDvAfter * 2;
+			}
+			assert.deepEqual(team.sets, expected, team.id);
 		}
-		for (const row of genderAudit.rows.filter(row => row.baseId === team.id)) {
-			const mon = expected[row.slot - 1];
-			assert.equal(mon.gender, row.genderBefore);
-			assert.equal(Math.floor(mon.ivs.atk / 2), row.attackDvBefore);
-			mon.gender = row.genderAfter;
-			mon.ivs.atk = row.attackDvAfter * 2;
-		}
-		assert.deepEqual(team.sets, expected, team.id);
 	}
 });

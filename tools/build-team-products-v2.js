@@ -43,12 +43,15 @@ const fnv1a64 = rel => {
 const fail = msg => { throw new Error(msg); };
 
 const inv = read('data/team-inventory-v1/inventory.json');
+const evolved = read('data/team-selection-v2/evolved-teams.json');
 const v1 = read('data/team-inventory-v1/classification.json');
 const sel = read(arg('--selection') || 'data/team-selection-v2/selection.json');
 const sol = read(arg('--solution') || 'data/meta-nash-v3/solution.json');
+const deployedNash = read('data/kodoku-r3/conclusion-equilibrium-deme.json');
 const PRIOR = 'data/belief-pool-v3/belief-pool.json';
 const prior = read(PRIOR);
-const byId = new Map(inv.teams.map(t => [t.id, t]));
+const allTeams = [...inv.teams, ...evolved.teams];
+const byId = new Map(allTeams.map(t => [t.id, t]));
 
 const priorFp = fnv1a64(PRIOR);
 if (sel.prior.fingerprint !== priorFp) fail(`selection was measured on another prior (${sel.prior.fingerprint} vs ${priorFp})`);
@@ -56,7 +59,8 @@ if (sol.prior.fingerprint !== priorFp) fail(`Nash solution was measured on anoth
 
 const LABELS = new Set(['selected', 'pending', 'not-selected']);
 const measured = inv.teams.filter(t => t.eligibility.status === 'eligible' && t.measuredAs === t.id);
-for (const t of measured) {
+const candidates = [...measured, ...evolved.teams];
+for (const t of candidates) {
 	const l = sel.labels[t.id];
 	if (!l || !LABELS.has(l.label)) fail(`${t.id}: no selection label`);
 	if (l.label !== 'selected' && !l.reason) fail(`${t.id}: ${l.label} without a reason`);
@@ -68,8 +72,9 @@ const priorIds = new Set(prior.teams.map(t => t.id));
 for (const t of measured) if (!priorIds.has(t.id)) fail(`${t.id}: measured but missing from the frozen prior`);
 
 // ------------------------------------------------------------ catalog
+const deployedNashW = new Map(deployedNash.teams.map(t => [t.id, t.weight]));
 const clusterKey = t => t.variantCluster || t.id;
-const selected = measured.filter(t => sel.labels[t.id].label === 'selected');
+const selected = candidates.filter(t => sel.labels[t.id].label === 'selected');
 if (selected.length === 0) fail('no selected parties');
 selected.sort((a, b) => sel.labels[b.id].score - sel.labels[a.id].score || a.id.localeCompare(b.id));
 const size = new Map();
@@ -80,26 +85,49 @@ const round = x => Math.round(x * 1e6) / 1e6;
 const provenance = t => ({ family: t.family, origin: t.origin, source: t.source.name, url: t.source.url, version: t.source.version || null });
 // Optimize only the playable catalog. All measurements, the Nash solution,
 // reference inventory and frozen opponent prior keep their original inputs.
+// Within any multi-member camouflage cluster, if a sibling keeps Male on a
+// species (e.g. because of a Physical move like Explosion), preserve Male on
+// that species across the cluster so Team Preview gender does not leak moves.
 const dex = read('data/gen2stadium2.json');
 const attract = attractGenderCensus(prior);
-const optimized = new Map(selected.map(t => [t.id, optimizeLowAttack(t.sets, dex, { preferFemale: attract.preferFemale })]));
+const clusterPreserve = new Map();
+for (const t of selected) {
+	const ck = clusterKey(t);
+	if (size.get(ck) <= 1) continue;
+	const pass1 = optimizeLowAttack(t.sets, dex, { preferFemale: attract.preferFemale }).sets;
+	for (const mon of pass1) {
+		if (mon.gender === 'M') {
+			if (!clusterPreserve.has(ck)) clusterPreserve.set(ck, new Set());
+			clusterPreserve.get(ck).add(mon.species);
+		}
+	}
+}
+const optimized = new Map(selected.map(t => [
+	t.id,
+	optimizeLowAttack(t.sets, dex, {
+		preferFemale: attract.preferFemale,
+		preserveGenderSpecies: clusterPreserve.get(clusterKey(t)) || null,
+	}),
+]));
 write('data/team-pool-v2/team-pool.json', {
 	format: 'nc2000-team-pool-v2',
 	generator: 'tools/build-team-products-v2.js',
 	protocol: sel.protocol,
 	condition: sel.condition,
 	setOptimization: {
-		policy: 'low-attack-v2: no Physical move, Hidden Power or external move access; minimum Attack DV preserving HP and shiny status; Attack EV 0; conditional female preference except own Attract users',
+		policy: 'low-attack-v2: no Physical move, Hidden Power or external move access; minimum Attack DV preserving HP and shiny status; Attack EV 0; conditional female preference except own Attract users and multi-variant camouflage clusters',
 		changedTeams: selected.filter(t => optimized.get(t.id).changedSets > 0).length,
 		changedSets: selected.reduce((sum, t) => sum + optimized.get(t.id).changedSets, 0),
 		changedGenders: selected.reduce((sum, t) => sum + optimized.get(t.id).changedGenders, 0),
 		femalePreference: { enabled: attract.preferFemale, weightedDirectSources: attract.weightedSources,
 			basis: attract.basis, priorFingerprint: priorFp },
-		scoreBasis: 'confirmation scores refer to the original inventory sets, before low-attack-v2; optimized sets have not been remeasured',
+		scoreBasis: 'confirmation scores refer to the original inventory/evolved sets, before low-attack-v2; optimized sets have not been remeasured',
 	},
 	drawRule: 'each variant cluster among the selected parties is drawn with equal probability, split equally among its members (drawWeight sums to 1); the same weights serve the human Random and the bot draw',
 	teams: selected.map((t, i) => ({
 		id: t.id, rank: i + 1, label: 'selected',
+		nash: deployedNashW.has(t.id),
+		evolved: t.origin === 'evolved',
 		species: t.species, levels: t.levels,
 		drawWeight: round(drawWeight(t)),
 		score: round(sel.labels[t.id].score),
@@ -109,9 +137,12 @@ write('data/team-pool-v2/team-pool.json', {
 });
 
 // ------------------------------------------------------------ nash
+for (const t of deployedNash.teams) {
+	if (!sel.labels[t.id] || sel.labels[t.id].label !== 'selected') fail(`Deployed Nash support ${t.id} is not a selected party`);
+}
 const nash = Object.entries(sol.weights).filter(([, w]) => w > 0).sort((a, b) => b[1] - a[1]);
 for (const [id] of nash) {
-	if (!sel.labels[id] || sel.labels[id].label !== 'selected') fail(`Nash support ${id} is not a selected party`);
+	if (!byId.has(id)) fail(`Legacy v3 Nash support ${id} is missing from inventory`);
 }
 write('data/meta-nash-v3/pool-artifact.json', {
 	format: 'meta-nash-pool-v3',
@@ -128,16 +159,17 @@ write('data/team-selection-v2/reference.json', {
 	generator: 'tools/build-team-products-v2.js',
 	protocol: sel.protocol,
 	counts: {
-		records: inv.teams.length,
-		eligible: inv.teams.filter(t => t.eligibility.status === 'eligible').length,
-		measured: measured.length,
+		records: allTeams.length,
+		eligible: allTeams.filter(t => t.eligibility.status === 'eligible').length,
+		measured: candidates.length,
 		selected: selected.length,
-		pending: measured.filter(t => sel.labels[t.id].label === 'pending').length,
-		notSelected: measured.filter(t => sel.labels[t.id].label === 'not-selected').length,
+		pending: candidates.filter(t => sel.labels[t.id].label === 'pending').length,
+		notSelected: candidates.filter(t => sel.labels[t.id].label === 'not-selected').length,
 		prior: prior.teams.length,
-		nashSupport: nash.length,
+		nashSupport: deployedNash.teams.length,
+		legacyNashV3Support: nash.length,
 	},
-	teams: inv.teams.map(t => {
+	teams: allTeams.map(t => {
 		const rep = t.eligibility.status === 'eligible' ? t.measuredAs : null;
 		const l = rep ? sel.labels[rep] : null;
 		return {
@@ -151,11 +183,12 @@ write('data/team-selection-v2/reference.json', {
 			catalog: !!l && l.label === 'selected' && rep === t.id,
 			drawWeight: l && l.label === 'selected' && rep === t.id ? round(drawWeight(t)) : 0,
 			priorWeight: priorW.get(t.id) || 0,
-			nashWeight: nashW.get(t.id) || 0,
+			nashWeight: deployedNashW.get(t.id) || 0,
+			legacyNashV3Weight: nashW.get(t.id) || 0,
 			variantCluster: t.variantCluster,
 			species: t.species, levels: t.levels,
 		};
 	}),
 });
 
-console.log(`catalog ${selected.length} (${clusters} clusters) | prior ${prior.teams.length} (frozen) | nash ${nash.length} | reference ${inv.teams.length}`);
+console.log(`catalog ${selected.length} (${clusters} clusters) | prior ${prior.teams.length} (frozen) | deployed nash ${deployedNash.teams.length} | reference ${allTeams.length}`);

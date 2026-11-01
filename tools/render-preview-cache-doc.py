@@ -1,4 +1,4 @@
-"""Render the authoritative README cache section for deployment or the shared preview hub."""
+"""Render the authoritative preview-cache specification for deployment or the shared preview hub."""
 from pathlib import Path
 import html
 import re
@@ -9,7 +9,7 @@ import zipfile
 repo = Path(__file__).resolve().parent.parent
 dest = Path(sys.argv[1])
 dest.mkdir(parents=True, exist_ok=True)
-text = (repo / 'README.md').read_text().split('## Server-side preview cache interface\n', 1)[1].split('\n## Party evaluator', 1)[0].strip()
+text = (repo / 'docs/PREVIEW-CACHE.md').read_text().strip()
 inline = lambda s: re.sub(r'`([^`]+)`', r'<code>\1</code>', re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', html.escape(s)))
 lines = text.splitlines()
 blocks = []

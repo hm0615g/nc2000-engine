@@ -63,11 +63,12 @@
 //! max-damage rollouts, truncation, weighted static eval).
 
 use nc2000_engine::battle::SearchChoice;
-use nc2000_engine::dex::{Dex, TypeId};
+use nc2000_engine::dex::Dex;
 use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::state::{Battle, PokeId};
 
 use crate::agent::Agent;
+use crate::eval::type_immune_to;
 use crate::mcts::{outcome_reward, playout_value, Playout, RolloutRules};
 use crate::rng::SplitMix64;
 
@@ -96,6 +97,12 @@ pub struct RmConfig {
     pub mix_actions: usize,
     /// UCB1 exploration constant.
     pub c: f64,
+    pub continuation_exp3_ix: bool,
+    pub continuation_exp3_mean: bool,
+    pub collapse_sleep_actions: bool,
+    pub root_revisit_interval: u32,
+    pub canonical_claw_key: bool,
+    pub unseen_claw_root: bool,
     /// Tree horizon in turns (same meaning as `MctsConfig::horizon`).
     pub horizon: u16,
     /// Rollout policy + leaf eval (shared with the M6 agent).
@@ -124,6 +131,9 @@ pub struct RmConfig {
     /// (`mcts::perish_combo`); implies `rollout_perish`'s escape. Shipped
     /// ON; gates and measurements in `data/perish-rollout-v1/README.md`.
     pub rollout_combo: bool,
+    pub rollout_capped_damage: bool,
+    pub rollout_residual: bool,
+    pub rollout_baton_pass: bool,
     /// M17 cluster-2 probe: replace the uniform HP grid in the node key with
     /// a threshold-preserving class for the two ACTIVE mons. See `hp_class`.
     pub threshold_key: bool,
@@ -135,6 +145,774 @@ pub struct RmConfig {
     /// shipped; an arena arm flips one field to A/B a mask change, which is
     /// the only harness that can see one at all (see `root_dominated`).
     pub mask_rules: MaskRules,
+    /// Optional endgame decision & budget rules for decided/near-decided boards.
+    /// Default = all `false` (bit-identical to baseline).
+    pub endgame_rules: EndgameRules,
+    /// Optional external game-theoretic equity oracle mode (default `Off`).
+    pub oracle: crate::oracle::OracleMode,
+    /// Leaf tactical settlement & accounting/residual evaluation mode.
+    pub settlement: crate::accounting::LeafSettlementMode,
+}
+
+/// Optional root decision & early-stop rules for won, near-won, and lost positions.
+///
+/// 1. `fast_win`: in completely winning positions ($\mu^* \ge 0.985$), prefer actions
+///    that minimize expected turns to win (`win_turns`) without increasing loss/downside risk.
+/// 2. `safe_win`: in near-winning positions ($\mu^* \ge 0.85$), penalize quadratic downside
+///    risk $E[(1 - R)^2]$, terminal loss rate, and worst-reply/worst-type drops to crush
+///    opponent comeback lines.
+/// 3. `comeback_loss`: in losing positions ($\mu^* \le 0.12$), weight opponent-mistake EV
+///    (payoff when the opponent misses their single best punishing reply), upside tail
+///    $\sqrt{E[R^2]}$, survival turns, and a static desperation tie-breaker.
+/// 4. `early_stop`: stop the search loop early when a 1-turn 100%-win KO or a fully
+///    saturated terminal root is locked in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EndgameRules {
+    pub fast_win: bool,
+    pub safe_win: bool,
+    pub comeback_loss: bool,
+    pub early_stop: bool,
+}
+
+impl Default for EndgameRules {
+    #[inline]
+    fn default() -> Self {
+        Self::all_decision()
+    }
+}
+
+impl EndgameRules {
+    #[inline]
+    pub const fn none() -> Self {
+        Self {
+            fast_win: false,
+            safe_win: false,
+            comeback_loss: false,
+            early_stop: false,
+        }
+    }
+
+    #[inline]
+    pub const fn any(self) -> bool {
+        self.fast_win || self.safe_win || self.comeback_loss || self.early_stop
+    }
+
+    #[inline]
+    pub const fn decision_any(self) -> bool {
+        self.fast_win || self.safe_win || self.comeback_loss
+    }
+
+    #[inline]
+    pub const fn all_decision() -> Self {
+        Self {
+            fast_win: true,
+            safe_win: true,
+            comeback_loss: true,
+            early_stop: false,
+        }
+    }
+
+    #[inline]
+    pub const fn all_with_early_stop() -> Self {
+        Self {
+            fast_win: true,
+            safe_win: true,
+            comeback_loss: true,
+            early_stop: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EndgameRegime {
+    Normal,
+    FastWin,
+    SafeWin,
+    ComebackLoss,
+}
+
+#[derive(Clone, Debug)]
+pub struct EndgameActionMetrics {
+    pub action: SearchChoice,
+    pub visits: u32,
+    pub mean: f64,
+    pub downside: f64,
+    pub win_rate: f64,
+    pub loss_rate: f64,
+    pub win_turns: f64,
+    pub survive_turns: f64,
+    pub trap_risk: f64,
+    pub mistake_ev: f64,
+    pub desperation: f64,
+    pub score: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct EndgameDecisionInfo {
+    pub regime: EndgameRegime,
+    pub mu_star: f64,
+    pub legacy_idx: usize,
+    pub chosen_idx: usize,
+    pub actions: Vec<EndgameActionMetrics>,
+}
+
+/// Per-root-action auxiliary statistics accumulated alongside `w` without altering
+/// RNG draws or tree exploration.
+#[derive(Clone, Debug, Default)]
+pub struct EndgameRootStats {
+    pub base_turn_offset: u16,
+    pub w2: Vec<f64>,
+    pub win_n: Vec<u32>,
+    pub loss_n: Vec<u32>,
+    pub win_turns: Vec<f64>,
+    pub survive_turns: Vec<f64>,
+    pub desperation: Vec<f64>,
+}
+
+impl EndgameRootStats {
+    pub fn new(b: &Battle, dex: &Dex, side: usize, acts: &[SearchChoice]) -> Self {
+        let k = acts.len();
+        let base_turn_offset = u16::from(matches!(
+            b.request_state,
+            nc2000_engine::state::RequestState::Switch
+        ));
+        let desperation = if matches!(
+            b.request_state,
+            nc2000_engine::state::RequestState::TeamPreview
+        ) {
+            vec![0.0; k]
+        } else {
+            acts.iter()
+                .map(|&c| tactical_desperation_bonus(b, dex, side, c))
+                .collect()
+        };
+        EndgameRootStats {
+            base_turn_offset,
+            w2: vec![0.0; k],
+            win_n: vec![0; k],
+            loss_n: vec![0; k],
+            win_turns: vec![0.0; k],
+            survive_turns: vec![0.0; k],
+            desperation,
+        }
+    }
+
+    #[inline]
+    pub fn record(
+        &mut self,
+        root_turn: u16,
+        side: usize,
+        act_idx: usize,
+        my_reward: f64,
+        end: crate::mcts::SimEndInfo,
+    ) {
+        let Some(w2) = self.w2.get_mut(act_idx) else {
+            return;
+        };
+        let mine = my_reward;
+        *w2 += mine * mine;
+        let my_win_code = if side == 0 { 1 } else { 2 };
+        let my_loss_code = if side == 0 { 2 } else { 1 };
+        let is_win = end.outcome == my_win_code || mine >= 0.999_999;
+        let is_loss = end.outcome == my_loss_code || mine <= 0.000_001;
+        let base_turn = root_turn.saturating_add(self.base_turn_offset);
+        let completed_turns = end.turn.saturating_sub(base_turn) as f64;
+        let opp_alive = end.alive[1 - side] as f64;
+        let my_alive = end.alive[side] as f64;
+        let win_t = if is_win {
+            completed_turns + 1.0
+        } else {
+            completed_turns + 2.0 + 3.0 * opp_alive + 6.0 * (1.0 - mine)
+        };
+        let survive_t = if is_loss {
+            completed_turns + 1.0
+        } else {
+            completed_turns + 2.0 + 3.0 * my_alive + 6.0 * mine
+        };
+        if is_win {
+            self.win_n[act_idx] += 1;
+        }
+        if is_loss {
+            self.loss_n[act_idx] += 1;
+        }
+        self.win_turns[act_idx] += win_t;
+        self.survive_turns[act_idx] += survive_t;
+    }
+
+    pub fn should_early_stop(
+        &self,
+        rules: EndgameRules,
+        done: u32,
+        target_iters: u32,
+        is_preview: bool,
+        total_visits: &[u32],
+        rewards: &[f64],
+        eligible: impl Fn(usize) -> bool,
+    ) -> bool {
+        if !rules.early_stop || is_preview || target_iters < 128 {
+            return false;
+        }
+        let min_done = (target_iters / 6).clamp(96, 1536);
+        if done < min_done || done % 32 != 0 {
+            return false;
+        }
+        let elig: Vec<usize> = (0..total_visits.len()).filter(|&i| eligible(i)).collect();
+        if elig.len() <= 1 {
+            return true;
+        }
+        let Some(&legacy_idx) = elig.iter().max_by_key(|&&i| total_visits[i]) else {
+            return false;
+        };
+        let min_ko_v = (target_iters / 30).clamp(32, 256);
+        // 1) Guaranteed 1-turn terminal KO lock: the leading action (or a fast_win
+        //    action when all alternatives are explored) has >= min_ko_v visits, 100%
+        //    terminal win rate, and mean win turns <= 1.001 (every simulation KOs immediately).
+        let n_leg = total_visits[legacy_idx];
+        if n_leg >= min_ko_v
+            && self.win_n[legacy_idx] == n_leg
+            && self.loss_n[legacy_idx] == 0
+            && (rewards[legacy_idx] / n_leg as f64) >= 0.999_999
+            && (self.win_turns[legacy_idx] / n_leg as f64) <= 1.001
+        {
+            return true;
+        }
+        if rules.fast_win && elig.iter().all(|&i| total_visits[i] >= 16) {
+            let leg_mean = rewards[legacy_idx] / n_leg.max(1) as f64;
+            if leg_mean >= 0.985 {
+                for &i in &elig {
+                    let n = total_visits[i];
+                    if n >= min_ko_v
+                        && self.win_n[i] == n
+                        && self.loss_n[i] == 0
+                        && (rewards[i] / n as f64) >= 0.999_999
+                        && (self.win_turns[i] / n as f64) <= 1.001
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        // 2) Full root saturation after 50% budget: every eligible action has >= 24 visits
+        //    and all are 100% immediate/1-turn terminal losses or 100% immediate wins.
+        if done >= (target_iters / 2).max(128) && elig.iter().all(|&i| total_visits[i] >= 24) {
+            let all_dead_now = elig.iter().all(|&i| {
+                let n = total_visits[i];
+                self.loss_n[i] == n
+                    && self.win_n[i] == 0
+                    && rewards[i] == 0.0
+                    && (self.survive_turns[i] / n as f64) <= 1.5
+            });
+            if all_dead_now {
+                return true;
+            }
+            let all_won_fast = elig.iter().all(|&i| {
+                let n = total_visits[i];
+                self.loss_n[i] == 0
+                    && self.win_n[i] == n
+                    && (rewards[i] / n as f64) >= 0.999
+                    && (self.win_turns[i] / n as f64) <= 2.0
+            });
+            if all_won_fast {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn analyze(
+        &self,
+        rules: EndgameRules,
+        acts: &[SearchChoice],
+        total_visits: &[u32],
+        effective_visits: &[u32],
+        rewards: &[f64],
+        eligible: impl Fn(usize) -> bool,
+        reply_metrics: impl Fn(usize, u32, f64) -> (f64, f64),
+    ) -> Option<EndgameDecisionInfo> {
+        let k = acts.len();
+        let elig: Vec<usize> = (0..k).filter(|&i| eligible(i)).collect();
+        if elig.is_empty() {
+            return None;
+        }
+        let legacy_idx = *elig.iter().max_by_key(|&&i| effective_visits[i])?;
+        let n_max = elig.iter().map(|&i| total_visits[i]).max().unwrap_or(0);
+        let mut metrics: Vec<EndgameActionMetrics> = (0..k)
+            .map(|i| {
+                let n = total_visits[i];
+                let mean = if n > 0 { rewards[i] / n as f64 } else { 0.5 };
+                let w2_i = self.w2.get(i).copied().unwrap_or(0.0);
+                let win_n_i = self.win_n.get(i).copied().unwrap_or(0);
+                let loss_n_i = self.loss_n.get(i).copied().unwrap_or(0);
+                let win_t_i = self.win_turns.get(i).copied().unwrap_or(0.0);
+                let surv_t_i = self.survive_turns.get(i).copied().unwrap_or(0.0);
+                let m2 = if n > 0 { w2_i / n as f64 } else { 0.25 };
+                let downside = (1.0 - 2.0 * mean + m2).max(0.0);
+                let win_rate = if n > 0 {
+                    win_n_i as f64 / n as f64
+                } else {
+                    0.0
+                };
+                let loss_rate = if n > 0 {
+                    loss_n_i as f64 / n as f64
+                } else {
+                    0.0
+                };
+                let win_turns = if n > 0 { win_t_i / n as f64 } else { 20.0 };
+                let survive_turns = if n > 0 { surv_t_i / n as f64 } else { 1.0 };
+                let (trap_risk, mistake_ev) = if n > 0 && eligible(i) {
+                    reply_metrics(i, n, mean)
+                } else {
+                    (0.0, mean)
+                };
+                EndgameActionMetrics {
+                    action: acts[i],
+                    visits: n,
+                    mean,
+                    downside,
+                    win_rate,
+                    loss_rate,
+                    win_turns,
+                    survive_turns,
+                    trap_risk,
+                    mistake_ev,
+                    desperation: self.desperation.get(i).copied().unwrap_or(0.0),
+                    score: mean,
+                }
+            })
+            .collect();
+
+        if elig.len() <= 1 || n_max == 0 || !rules.decision_any() {
+            return Some(EndgameDecisionInfo {
+                regime: EndgameRegime::Normal,
+                mu_star: metrics[legacy_idx].mean,
+                legacy_idx,
+                chosen_idx: legacy_idx,
+                actions: metrics,
+            });
+        }
+
+        let min_v = (n_max / 8).clamp(8, 256).min(n_max);
+        let well_sampled: Vec<usize> = elig
+            .iter()
+            .copied()
+            .filter(|&i| total_visits[i] >= min_v)
+            .collect();
+        let mu_star = well_sampled
+            .iter()
+            .map(|&i| metrics[i].mean)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let mu_legacy = metrics[legacy_idx].mean;
+        let emp_var = |i: usize| -> f64 {
+            let n = total_visits[i];
+            if n == 0 {
+                return 0.25;
+            }
+            let m = rewards[i] / n as f64;
+            let m2 = self.w2.get(i).copied().unwrap_or(0.0) / n as f64;
+            (m2 - m * m).max(1e-4)
+        };
+        let se_vs_legacy = |i: usize| -> f64 {
+            let n_i = total_visits[i].max(1) as f64;
+            let n_l = total_visits[legacy_idx].max(1) as f64;
+            (emp_var(i) / n_i + emp_var(legacy_idx) / n_l).sqrt()
+        };
+
+        // ---- Regime 1: Completely Winning (fast_win)
+        let max_win_rate = well_sampled
+            .iter()
+            .map(|&i| metrics[i].win_rate)
+            .fold(0.0_f64, f64::max);
+        let min_loss_rate = well_sampled
+            .iter()
+            .map(|&i| metrics[i].loss_rate)
+            .fold(1.0_f64, f64::min);
+        let is_fast_win_regime = (mu_star >= 0.985 && mu_legacy >= 0.970)
+            || (mu_star >= 0.93
+                && mu_legacy >= 0.91
+                && max_win_rate >= 0.85
+                && min_loss_rate <= 0.002);
+        if rules.fast_win && is_fast_win_regime {
+            let top_win: Vec<usize> = well_sampled
+                .iter()
+                .copied()
+                .filter(|&i| {
+                    let slack = (1.5 * se_vs_legacy(i)).clamp(0.0025, 0.012);
+                    metrics[i].mean + slack >= mu_star
+                })
+                .collect();
+            let min_loss = top_win
+                .iter()
+                .map(|&i| metrics[i].loss_rate)
+                .fold(f64::INFINITY, f64::min);
+            let min_down = top_win
+                .iter()
+                .map(|&i| metrics[i].downside)
+                .fold(f64::INFINITY, f64::min);
+            let min_trap = top_win
+                .iter()
+                .map(|&i| metrics[i].trap_risk)
+                .fold(f64::INFINITY, f64::min);
+
+            for &i in &elig {
+                let m = &metrics[i];
+                let switch_turn_pen = if matches!(acts[legacy_idx], SearchChoice::Move(_))
+                    && matches!(m.action, SearchChoice::Switch(_))
+                {
+                    0.45
+                } else {
+                    0.0
+                };
+                metrics[i].score = m.mean + 0.08 * m.win_rate
+                    - 0.50 * m.downside
+                    - 0.80 * m.loss_rate
+                    - 0.015 * (m.win_turns + switch_turn_pen);
+            }
+            let leg_win = metrics[legacy_idx].win_rate;
+            let leg_wt = metrics[legacy_idx].win_turns;
+            let safe_winners: Vec<usize> = top_win
+                .into_iter()
+                .filter(|&i| {
+                    metrics[i].win_rate + 0.005 >= leg_win
+                        && metrics[i].loss_rate <= min_loss + 0.003
+                        && metrics[i].downside <= min_down + 0.006
+                        && metrics[i].trap_risk <= min_trap + 0.020
+                })
+                .collect();
+            if let Some(&best_idx) = safe_winners
+                .iter()
+                .max_by(|&&a, &&b| metrics[a].score.total_cmp(&metrics[b].score))
+            {
+                let min_wt_gain = if matches!(acts[legacy_idx], SearchChoice::Move(_))
+                    && matches!(acts[best_idx], SearchChoice::Switch(_))
+                {
+                    0.80
+                } else {
+                    0.45
+                };
+                let chosen_idx = if metrics[best_idx].score > metrics[legacy_idx].score + 0.003
+                    && metrics[best_idx].win_turns + min_wt_gain <= leg_wt
+                {
+                    best_idx
+                } else {
+                    legacy_idx
+                };
+                return Some(EndgameDecisionInfo {
+                    regime: EndgameRegime::FastWin,
+                    mu_star,
+                    legacy_idx,
+                    chosen_idx,
+                    actions: metrics,
+                });
+            }
+        }
+
+        // ---- Regime 2: Almost Winning (safe_win)
+        // Guard against Jensen's inequality on 8-turn horizon cutoffs: a stalling move
+        // that ends in a non-terminal heuristic leaf (R ~ 0.85) has lower variance than
+        // a move that resolves terminally (90% R=1, 10% R=0), so we must never trade
+        // terminal `win_rate` for unresolved horizon cutoffs. Only prefer an alternative
+        // when it is well-sampled, preserves `mean` and terminal `win_rate`, and strictly
+        // reduces terminal `loss_rate` or `trap_risk`.
+        if rules.safe_win && mu_star >= 0.75 && mu_legacy >= 0.72 {
+            let turn_w = if rules.fast_win && mu_star >= 0.90 {
+                0.004
+            } else {
+                0.0
+            };
+            for &i in &elig {
+                let m = &metrics[i];
+                metrics[i].score = m.mean + 0.18 * m.win_rate
+                    - 1.15 * m.loss_rate
+                    - 0.30 * m.trap_risk
+                    - turn_w * m.win_turns;
+            }
+            let min_safe_v = (n_max / 4).clamp(16, 160).min(n_max);
+            let leg = &metrics[legacy_idx];
+            let leg_score = leg.score;
+            let leg_loss = leg.loss_rate;
+            let leg_win = leg.win_rate;
+            let leg_trap = leg.trap_risk;
+            let candidates: Vec<usize> = elig
+                .iter()
+                .copied()
+                .filter(|&i| {
+                    if i == legacy_idx {
+                        return true;
+                    }
+                    let slack = (1.25 * se_vs_legacy(i)).clamp(0.0020, 0.008);
+                    total_visits[i] >= min_safe_v
+                        && metrics[i].mean + slack >= mu_legacy
+                        && metrics[i].win_rate + 0.015 >= leg_win
+                        && metrics[i].loss_rate <= leg_loss
+                        && (metrics[i].loss_rate + 0.004 <= leg_loss
+                            || (metrics[i].trap_risk + 0.035 <= leg_trap
+                                && metrics[i].win_rate >= leg_win + 0.005)
+                            || (metrics[i].win_rate >= leg_win + 0.020
+                                && metrics[i].mean >= mu_legacy))
+                })
+                .collect();
+            if let Some(&best_idx) = candidates
+                .iter()
+                .max_by(|&&a, &&b| metrics[a].score.total_cmp(&metrics[b].score))
+            {
+                let cand = &metrics[best_idx];
+                let overrides = cand.score > leg_score + 0.004;
+                let chosen_idx = if overrides { best_idx } else { legacy_idx };
+                return Some(EndgameDecisionInfo {
+                    regime: EndgameRegime::SafeWin,
+                    mu_star,
+                    legacy_idx,
+                    chosen_idx,
+                    actions: metrics,
+                });
+            }
+        }
+
+        // ---- Regime 3: Losing (comeback_loss)
+        // "失うもの無しにわずかな勝率を回収": only when truly losing, NEVER reduce
+        // terminal `win_rate` or increase terminal `loss_rate`, never sacrifice true MCTS
+        // mean beyond standard error, and only use static `desperation` when every root
+        // action has 0 terminal wins and 100% terminal losses.
+        let is_comeback_regime =
+            mu_star <= 0.08 || (mu_star <= 0.12 && max_win_rate <= 0.015 && min_loss_rate >= 0.85);
+        if rules.comeback_loss && is_comeback_regime {
+            let all_guaranteed_loss = elig.iter().all(|&i| {
+                self.win_n.get(i).copied().unwrap_or(0) == 0
+                    && self.loss_n.get(i).copied().unwrap_or(0) == total_visits[i]
+            });
+            let alpha = ((0.10 - mu_star.min(0.10)) / 0.10).clamp(0.25, 1.00);
+            let desp_scale = if all_guaranteed_loss { 1.0 } else { 0.0 };
+            for &i in &elig {
+                let m = &metrics[i];
+                let m2 = if m.visits > 0 {
+                    (m.downside - 1.0 + 2.0 * m.mean).max(0.0)
+                } else {
+                    0.0
+                };
+                let upside = m2.sqrt();
+                let survive_norm = (m.survive_turns / 10.0).min(1.5);
+                metrics[i].score = m.mean
+                    + alpha
+                        * (0.22 * m.mistake_ev + 0.20 * upside + 0.25 * m.win_rate
+                            - 0.20 * m.loss_rate
+                            + 0.030 * survive_norm
+                            + 0.025 * desp_scale * m.desperation);
+            }
+            let min_loss_v = (n_max / 6).clamp(10, 128).min(n_max);
+            let leg_win = metrics[legacy_idx].win_rate;
+            let leg_loss = metrics[legacy_idx].loss_rate;
+            let leg_mev = metrics[legacy_idx].mistake_ev;
+            let leg_surv = metrics[legacy_idx].survive_turns;
+            let candidates: Vec<usize> = elig
+                .iter()
+                .copied()
+                .filter(|&i| {
+                    if i == legacy_idx {
+                        return true;
+                    }
+                    let slack = (1.25 * se_vs_legacy(i)).clamp(0.0015, 0.005);
+                    let leg_win_n = self.win_n.get(legacy_idx).copied().unwrap_or(0);
+                    let i_win_n = self.win_n.get(i).copied().unwrap_or(0);
+                    let i_loss_n = self.loss_n.get(i).copied().unwrap_or(0);
+                    let never_lose_all_wins =
+                        leg_win_n == 0 || (i_win_n > 0 && i_loss_n < total_visits[i]);
+                    let se_win = ((leg_win * (1.0 - leg_win))
+                        / (total_visits[legacy_idx].max(1) as f64))
+                        .sqrt();
+                    let no_terminal_regression = never_lose_all_wins
+                        && metrics[i].win_rate + se_win >= leg_win
+                        && metrics[i].loss_rate <= leg_loss + 0.0015;
+                    let has_gain = if !all_guaranteed_loss {
+                        metrics[i].mistake_ev >= leg_mev + 0.075
+                            || (metrics[i].win_rate >= leg_win + 0.003
+                                && metrics[i].mean + 0.0002 >= mu_legacy
+                                && metrics[i].mistake_ev + 0.020 >= leg_mev)
+                            || (metrics[i].loss_rate + 0.005 <= leg_loss
+                                && metrics[i].survive_turns >= leg_surv + 1.0)
+                    } else {
+                        metrics[i].mistake_ev >= leg_mev + 0.040
+                            || metrics[i].survive_turns >= leg_surv + 1.0
+                            || (metrics[i].mistake_ev + 0.005 >= leg_mev
+                                && metrics[i].desperation >= metrics[legacy_idx].desperation + 0.15)
+                    };
+                    total_visits[i] >= min_loss_v
+                        && metrics[i].mean + slack >= mu_legacy
+                        && no_terminal_regression
+                        && has_gain
+                })
+                .collect();
+            if let Some(&best_idx) = candidates
+                .iter()
+                .max_by(|&&a, &&b| metrics[a].score.total_cmp(&metrics[b].score))
+            {
+                let chosen_idx = if metrics[best_idx].score > metrics[legacy_idx].score + 0.001 {
+                    best_idx
+                } else {
+                    legacy_idx
+                };
+                return Some(EndgameDecisionInfo {
+                    regime: EndgameRegime::ComebackLoss,
+                    mu_star,
+                    legacy_idx,
+                    chosen_idx,
+                    actions: metrics,
+                });
+            }
+        }
+
+        Some(EndgameDecisionInfo {
+            regime: EndgameRegime::Normal,
+            mu_star,
+            legacy_idx,
+            chosen_idx: legacy_idx,
+            actions: metrics,
+        })
+    }
+
+    pub fn select_best(
+        &self,
+        rules: EndgameRules,
+        acts: &[SearchChoice],
+        total_visits: &[u32],
+        effective_visits: &[u32],
+        rewards: &[f64],
+        eligible: impl Fn(usize) -> bool,
+        reply_metrics: impl Fn(usize, u32, f64) -> (f64, f64),
+    ) -> Option<usize> {
+        let k = acts.len();
+        if !rules.decision_any() {
+            return (0..k)
+                .filter(|&i| eligible(i))
+                .max_by_key(|&i| effective_visits[i]);
+        }
+        self.analyze(
+            rules,
+            acts,
+            total_visits,
+            effective_visits,
+            rewards,
+            eligible,
+            reply_metrics,
+        )
+        .map(|info| info.chosen_idx)
+    }
+}
+
+pub fn reply_risk_and_mistake_ev(
+    n_i: u32,
+    mean_i: f64,
+    cells: impl Iterator<Item = (u32, f64)>,
+) -> (f64, f64) {
+    let min_cell_n = (n_i / 25).clamp(5, 32);
+    let mut worst_drop = 0.0_f64;
+    let mut smoothed_replies: Vec<(u32, f64)> = Vec::new();
+    for (cn, cw) in cells {
+        if cn == 0 {
+            continue;
+        }
+        if cn >= min_cell_n {
+            let shrunk_low = (cw + 4.0 * mean_i) / (cn as f64 + 4.0);
+            worst_drop = worst_drop.max((mean_i - shrunk_low).max(0.0));
+        }
+        let shrunk_up = (cw + 2.5 * mean_i) / (cn as f64 + 2.5);
+        smoothed_replies.push((cn, shrunk_up));
+    }
+    let mistake_ev = if smoothed_replies.len() >= 2 {
+        let min_idx = smoothed_replies
+            .iter()
+            .enumerate()
+            .filter(|(_, (cn, _))| *cn >= 3)
+            .min_by(|(_, a), (_, b)| a.1.total_cmp(&b.1))
+            .or_else(|| {
+                smoothed_replies
+                    .iter()
+                    .enumerate()
+                    .min_by(|(_, a), (_, b)| a.1.total_cmp(&b.1))
+            })
+            .map(|(idx, _)| idx)
+            .unwrap_or(0);
+        // Cap visit weight at `cn <= 25` so a second opponent KO move with thousands
+        // of UCB visits at 27k budget does not drown out non-KO opponent mistakes.
+        let mut sum_v = 0.0;
+        let mut sum_w = 0.0;
+        let mut max_v = mean_i;
+        for (idx, &(cn, val)) in smoothed_replies.iter().enumerate() {
+            if idx == min_idx {
+                continue;
+            }
+            let w = (cn as f64).clamp(1.0, 25.0).powf(0.25);
+            sum_v += w * val;
+            sum_w += w;
+            if val > max_v {
+                max_v = val;
+            }
+        }
+        if sum_w > 0.0 {
+            0.70 * (sum_v / sum_w) + 0.30 * max_v
+        } else {
+            mean_i
+        }
+    } else {
+        mean_i
+    };
+    (worst_drop, mistake_ev)
+}
+
+/// Static desperation tie-breaker in `[0, 1]` used when a losing root is flat zero.
+pub fn tactical_desperation_bonus(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> f64 {
+    use nc2000_engine::state::Status;
+    let (Some(att), Some(def)) = (b.active_id(side), b.active_id(1 - side)) else {
+        return 0.0;
+    };
+    let me = b.poke(att);
+    let foe = b.poke(def);
+    if me.fainted || me.hp <= 0 || foe.fainted || foe.hp <= 0 {
+        return 0.0;
+    }
+    match c {
+        SearchChoice::Move(id) => {
+            let ms = dex.move_static(id);
+            let key = dex.moves.key(id);
+            if me.status == Status::Slp {
+                return if ms.sleep_usable { 0.90 } else { 0.10 };
+            }
+            let mut bonus = 0.0_f64;
+            if me.status == Status::Frz && matches!(key, "flamewheel" | "sacredfire") {
+                bonus += 0.70;
+            }
+            let dmg =
+                crate::eval::expected_hit_fraction(b, dex, att, def, id, true).clamp(0.0, 1.5);
+            bonus += 0.45 * dmg.min(1.0);
+            if ms.priority > 0 && dmg > 0.0 {
+                bonus += 0.25;
+            }
+            if matches!(key, "protect" | "detect" | "endure") {
+                bonus += 0.20;
+            }
+            if ms.status.is_some() || ms.volatile_status.is_some() {
+                bonus += 0.25;
+            }
+            if ms.has_boosts || matches!(key, "curse" | "bellydrum") {
+                bonus += 0.20;
+            }
+            if !ms.secondaries.is_empty() && dmg > 0.0 {
+                bonus += 0.10;
+            }
+            bonus.clamp(0.0, 1.0)
+        }
+        SearchChoice::Switch(pos) => {
+            let Some(&slot) = b.sides[side].party.get(pos as usize - 1) else {
+                return 0.0;
+            };
+            let sub = &b.sides[side].roster[slot as usize];
+            if sub.fainted || sub.hp <= 0 {
+                return 0.0;
+            }
+            let hp_frac = (sub.hp as f64 / sub.maxhp.max(1) as f64).clamp(0.0, 1.0);
+            (0.15 + 0.20 * hp_frac).clamp(0.0, 1.0)
+        }
+        SearchChoice::Team(_) | SearchChoice::Pass => 0.0,
+    }
 }
 
 impl RmConfig {
@@ -144,7 +922,11 @@ impl RmConfig {
             switch: self.rollout_switch,
             perish_escape: self.rollout_perish,
             perish_combo: self.rollout_combo,
-            blindspot_leaf: true,
+            capped_damage: self.rollout_capped_damage,
+            rollout_residual: self.rollout_residual,
+            baton_pass: self.rollout_baton_pass,
+            oracle: self.oracle,
+            settlement: self.settlement,
         }
     }
 }
@@ -157,6 +939,12 @@ impl Default for RmConfig {
             probe: 0.25,
             mix_actions: 3,
             c: 1.0,
+            continuation_exp3_ix: false,
+            continuation_exp3_mean: false,
+            collapse_sleep_actions: false,
+            root_revisit_interval: 0,
+            canonical_claw_key: false,
+            unseen_claw_root: false,
             horizon: 100,
             playout: Playout::heavy(),
             threshold: 0.5,
@@ -166,9 +954,15 @@ impl Default for RmConfig {
             rollout_switch: false,
             rollout_perish: false,
             rollout_combo: true,
+            rollout_capped_damage: false,
+            rollout_residual: false,
+            rollout_baton_pass: true,
             threshold_key: false,
             key_no_damage: false,
             mask_rules: MaskRules::default(),
+            oracle: crate::oracle::OracleMode::Off,
+            settlement: crate::accounting::LeafSettlementMode::BlindSpotLeaf,
+            endgame_rules: EndgameRules::default(),
         }
     }
 }
@@ -182,6 +976,71 @@ pub(crate) struct Node {
     pub(crate) w: [Vec<f64>; 2],
     /// Team-preview node (always UCB1 + argmax).
     pub(crate) preview: bool,
+    continuation: Option<Box<ContinuationStats>>,
+}
+
+#[derive(Default)]
+struct ContinuationStats {
+    bandits: [Option<crate::exp3::Exp3Ix>; 2],
+    raw_count: u32,
+    raw_sum: f64,
+}
+
+fn record_raw_path(nodes: &mut [Node], path: &[usize], reward: f64) -> Vec<f64> {
+    for &index in path {
+        let stats = nodes[index]
+            .continuation
+            .get_or_insert_with(Default::default);
+        stats.raw_count += 1;
+        stats.raw_sum += reward;
+    }
+    path.iter()
+        .skip(1)
+        .map(|&index| {
+            let stats = nodes[index].continuation.as_ref().unwrap();
+            stats.raw_sum / f64::from(stats.raw_count)
+        })
+        .chain(std::iter::once(reward))
+        .collect()
+}
+
+#[cfg(test)]
+mod mean_update_tests {
+    use super::*;
+
+    #[test]
+    fn child_means_credit_raw_returns_once_without_averaging_averages() {
+        let mut nodes: Vec<_> = [(2, 1.), (4, 1.), (1, 0.)]
+            .into_iter()
+            .map(|(raw_count, raw_sum)| Node {
+                acts: [vec![], vec![]],
+                n: [vec![], vec![]],
+                w: [vec![], vec![]],
+                preview: false,
+                continuation: Some(Box::new(ContinuationStats {
+                    raw_count,
+                    raw_sum,
+                    ..Default::default()
+                })),
+            })
+            .collect();
+        assert_eq!(
+            record_raw_path(&mut nodes, &[0, 1, 2], 1.),
+            vec![0.4, 0.5, 1.]
+        );
+        assert_eq!(
+            nodes
+                .iter()
+                .map(|n| {
+                    let stats = n.continuation.as_ref().unwrap();
+                    (stats.raw_count, stats.raw_sum)
+                })
+                .collect::<Vec<_>>(),
+            vec![(3, 2.), (5, 2.), (2, 1.)]
+        );
+        assert_eq!(record_raw_path(&mut nodes, &[0], 0.25), vec![0.25]);
+        assert_eq!(nodes[0].continuation.as_ref().unwrap().raw_sum, 2.25);
+    }
 }
 
 pub enum SearchTrace<'a> {
@@ -194,13 +1053,29 @@ pub enum SearchTrace<'a> {
         rewards: &'a [Vec<f64>; 2],
         chosen: [Option<SearchChoice>; 2],
     },
-    Leaf { battle: &'a Battle, rng: &'a SplitMix64, rollout: bool },
-    Result { battle: &'a Battle, reward0: f64 },
+    Leaf {
+        battle: &'a Battle,
+        rng: &'a SplitMix64,
+        rollout: bool,
+    },
+    Result {
+        battle: &'a Battle,
+        reward0: f64,
+    },
 }
 
 impl Node {
     pub(crate) fn at(sim: &mut Battle, dex: &Dex) -> Node {
-        let acts = [sim.legal_choices(dex, 0), sim.legal_choices(dex, 1)];
+        Self::build(sim, dex, false)
+    }
+
+    fn build(sim: &mut Battle, dex: &Dex, collapse_sleep: bool) -> Node {
+        let mut acts = [sim.legal_choices(dex, 0), sim.legal_choices(dex, 1)];
+        if collapse_sleep {
+            for side in 0..2 {
+                collapse_sleep_choices(sim, dex, side, &mut acts[side]);
+            }
+        }
         let preview = acts
             .iter()
             .any(|a| matches!(a.first(), Some(SearchChoice::Team(_))));
@@ -208,15 +1083,42 @@ impl Node {
             n: [vec![0; acts[0].len()], vec![0; acts[1].len()]],
             w: [vec![0.0; acts[0].len()], vec![0.0; acts[1].len()]],
             preview,
+            continuation: None,
             acts,
         }
     }
+
+    fn continuation(sim: &mut Battle, dex: &Dex, cfg: &RmConfig) -> Node {
+        Self::build(sim, dex, cfg.collapse_sleep_actions)
+    }
 }
 
-/// Probe statistics over the top-m×top-m root joint cells: the estimated
-/// stage-game payoff matrix (side-0 perspective). Probes run against the
-/// already-mature tree, so plain per-cell means are unbiased and every
-/// sample counts (an EMA was tried and starved the estimate).
+pub fn collapse_sleep_choices(b: &Battle, dex: &Dex, side: usize, choices: &mut Vec<SearchChoice>) {
+    let Some(id) = b.active_id(side) else { return };
+    let p = b.poke(id);
+    if p.status != nc2000_engine::state::Status::Slp
+        || p.status_state.get_int(nc2000_engine::state::DK::Time) <= 1
+        || p.item
+            .is_some_and(|item| matches!(dex.items.key(item), "mintberry" | "miracleberry"))
+    {
+        return;
+    }
+    let mut priorities = [false; 256];
+    choices.retain(|action| {
+        let SearchChoice::Move(id) = action else {
+            return true;
+        };
+        let ms = dex.move_static(*id);
+        if ms.sleep_usable || ms.callbacks.iter().any(|key| key == "beforeTurnCallback") {
+            return true;
+        }
+        let priority = (i16::from(ms.priority) + 128) as usize;
+        let first = !priorities[priority];
+        priorities[priority] = true;
+        first
+    });
+}
+
 struct ProbeStats {
     /// Per-side probed action indices (into the root's action lists).
     support: [Vec<usize>; 2],
@@ -227,7 +1129,11 @@ struct ProbeStats {
 impl ProbeStats {
     fn new(support: [Vec<usize>; 2]) -> ProbeStats {
         let cells = support[0].len().max(1) * support[1].len().max(1);
-        ProbeStats { support, n: vec![0; cells], v: vec![0.5; cells] }
+        ProbeStats {
+            support,
+            n: vec![0; cells],
+            v: vec![0.5; cells],
+        }
     }
 
     fn dims(&self) -> [usize; 2] {
@@ -299,15 +1205,18 @@ pub fn key_for_test(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
 /// ones being hit and a damage estimate per bench mon would be paid on every
 /// descent step. The battle is restored before returning.
 pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
+    let hash = |b: &Battle, buckets, omit_damage| {
+        if cfg.canonical_claw_key {
+            b.search_key_canonical_claw(dex, buckets, omit_damage)
+        } else {
+            b.search_key(buckets, omit_damage)
+        }
+    };
     if cfg.hp_buckets <= 0 {
-        return b.search_key(None, false);
+        return hash(b, None, false);
     }
     if !cfg.threshold_key {
-        return if cfg.key_no_damage {
-            b.search_key(Some(cfg.hp_buckets), true)
-        } else {
-            b.search_key(Some(cfg.hp_buckets), false)
-        };
+        return hash(b, Some(cfg.hp_buckets), cfg.key_no_damage);
     }
     // Both classes are read before either mon is edited: Flail/Reversal make
     // the attacker's own HP an input to its damage.
@@ -322,11 +1231,7 @@ pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
             p.hp = ((p.maxhp as i64 * (2 * c + 1) / (2 * HP_CLASSES)).max(1)) as i32;
         }
     }
-    let key = if cfg.key_no_damage {
-        b.search_key(Some(cfg.hp_buckets), true)
-    } else {
-        b.search_key(Some(cfg.hp_buckets), false)
-    };
+    let key = hash(b, Some(cfg.hp_buckets), cfg.key_no_damage);
     for entry in saved.into_iter().flatten() {
         let (id, hp) = entry;
         b.sides[id.side as usize].roster[id.slot as usize].hp = hp;
@@ -341,9 +1246,18 @@ pub(crate) fn select_ucb(
     node: &mut Node,
     side: usize,
 ) -> usize {
-    let k = node.acts[side].len();
+    select_ucb_counts(cfg.c, rng, &mut node.n[side], &node.w[side])
+}
+
+pub(crate) fn select_ucb_counts(
+    c: f64,
+    rng: &mut SplitMix64,
+    counts: &mut [u32],
+    rewards: &[f64],
+) -> usize {
+    let k = counts.len();
     let mut n_untried = 0usize;
-    for &cnt in node.n[side].iter() {
+    for &cnt in counts.iter() {
         if cnt == 0 {
             n_untried += 1;
         }
@@ -351,7 +1265,7 @@ pub(crate) fn select_ucb(
     let pick = if n_untried > 0 {
         let mut target = rng.below(n_untried);
         let mut chosen = 0;
-        for (a, &cnt) in node.n[side].iter().enumerate() {
+        for (a, &cnt) in counts.iter().enumerate() {
             if cnt == 0 {
                 if target == 0 {
                     chosen = a;
@@ -362,13 +1276,13 @@ pub(crate) fn select_ucb(
         }
         chosen
     } else {
-        let total: u32 = node.n[side].iter().sum();
+        let total: u32 = counts.iter().sum();
         let ln_total = (total as f64).ln();
         let mut best = 0;
         let mut best_v = f64::NEG_INFINITY;
         for a in 0..k {
-            let (n, w) = (node.n[side][a] as f64, node.w[side][a]);
-            let v = w / n + cfg.c * (ln_total / n).sqrt();
+            let (n, w) = (counts[a] as f64, rewards[a]);
+            let v = w / n + c * (ln_total / n).sqrt();
             if v > best_v {
                 best_v = v;
                 best = a;
@@ -376,7 +1290,7 @@ pub(crate) fn select_ucb(
         }
         best
     };
-    node.n[side][pick] += 1;
+    counts[pick] += 1;
     pick
 }
 
@@ -385,8 +1299,7 @@ pub(crate) fn select_ucb(
 /// `force_root` fixes that side's root action index instead of UCB
 /// selection (the probe phase forces both sides; the blind search forces
 /// only its own, globally-selected action); forced picks still feed the
-/// root's per-action means (an unconditional sample of an action is an
-/// unbiased sample of it), and everything below the root selects normally.
+/// root's per-action means, and everything below the root selects normally.
 /// Returns the iteration's side-0 reward and writes the root joint's action
 /// indices into `root_joint`.
 #[allow(clippy::too_many_arguments)]
@@ -403,25 +1316,20 @@ pub(crate) fn run_iteration(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
 ) -> f64 {
-    let preview_root = nodes.get(start).is_some_and(|n| n.preview);
     run_iteration_with_leaf(
-        cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root,
-        root_joint, depth_out, &mut |sim, rng, rollout| {
-            let mut rules = cfg.rollout_rules();
-            if preview_root {
-                rules.blindspot_leaf = false;
-            }
-            if rollout {
-                playout_value(sim, dex, &cfg.playout, turn_cap, rng, rules)
-            } else if rules.blindspot_leaf {
-                match &cfg.playout {
-                    Playout::Uniform => crate::mcts::hp_eval(sim),
-                    Playout::Heavy { weights, .. } => crate::eval::eval_leaf_blindspot(sim, dex, weights),
-                }
-            } else {
-                leaf_eval(cfg, sim, dex)
-            }
-        }, None,
+        cfg,
+        rng,
+        nodes,
+        table,
+        sim,
+        dex,
+        turn_cap,
+        start,
+        force_root,
+        root_joint,
+        depth_out,
+        &mut |sim, rng, rollout| default_leaf(cfg, sim, dex, turn_cap, rng, rollout),
+        None,
     )
 }
 
@@ -439,17 +1347,82 @@ pub(crate) fn run_iteration_with_leaf(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
     leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
+    trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
+) -> f64 {
+    run_iteration_with_root_child_value(
+        cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root, root_joint, depth_out, leaf,
+        trace, None, None, None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_iteration_with_root_child_value(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<Node>,
+    table: &mut FxHashMap<u64, usize>,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+    leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
     mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
+    mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
+    mut continuation: Option<&mut crate::first_continuation::FirstContinuation>,
+    mut history_policy: Option<&mut crate::history_continuation::HistoryContinuation>,
 ) -> f64 {
     let mut path_buf = [(0usize, 0usize, 0usize); 32];
     let mut path_len = 0usize;
     let mut path_overflow: Vec<(usize, usize, usize)> = Vec::new();
+    let mut exp3_path = Vec::new();
+    let mut mean_path = Vec::new();
     let mut node_idx = start;
+    let mut decision_depth = 0;
+    let mut own_root_action = None;
+    let mut shared_pending = None;
+    let mut history_cursor = 0;
+    let mut history_previous = None;
+    let mut history_pending = Vec::new();
 
     // ---- selection until a leaf: terminal, horizon, or unexpanded state
     let reward0 = loop {
+        let path_index = mean_path.len();
+        if cfg.continuation_exp3_mean {
+            mean_path.push(node_idx);
+        }
         let at_root = node_idx == start;
         let mut joint = [None, None];
+        let mut continuation_group = None;
+        let mut history_group = None;
+        if decision_depth > 0 {
+            if let Some(policy) = history_policy.as_deref_mut() {
+                history_cursor = policy.advance(
+                    history_cursor,
+                    history_previous,
+                    sim.request_state,
+                    &sim.log,
+                );
+                sim.set_log_enabled(false);
+                let acts = &nodes[node_idx].acts[policy.side()];
+                if acts.len() > 1 {
+                    history_group = Some(policy.group(history_cursor, acts));
+                }
+            }
+        }
+        if decision_depth == 1 && sim.is_idle_move_request() {
+            if let Some(policy) = continuation.as_deref_mut() {
+                let acts = &nodes[node_idx].acts[policy.side()];
+                if acts.len() > 1 {
+                    continuation_group = Some(policy.group(own_root_action, &sim.log, acts));
+                }
+            }
+        }
+        if decision_depth == 1 && continuation.is_some() {
+            sim.set_log_enabled(false);
+        }
         for s in 0..2 {
             let k = nodes[node_idx].acts[s].len();
             if k == 0 {
@@ -464,6 +1437,46 @@ pub(crate) fn run_iteration_with_leaf(
                         nodes[node_idx].n[s][f] += 1;
                         f
                     }
+                    _ if history_group.is_some()
+                        && history_policy
+                            .as_ref()
+                            .is_some_and(|p| p.side() == s && p.shared()) =>
+                    {
+                        let action = history_policy.as_deref_mut().unwrap().select(
+                            history_group.unwrap(),
+                            cfg.c,
+                            rng,
+                        );
+                        nodes[node_idx].n[s][action] += 1;
+                        action
+                    }
+                    _ if continuation_group.is_some()
+                        && continuation
+                            .as_ref()
+                            .is_some_and(|p| p.side() == s && p.shared()) =>
+                    {
+                        let action = continuation.as_deref_mut().unwrap().select(
+                            continuation_group.unwrap(),
+                            cfg.c,
+                            rng,
+                        );
+                        nodes[node_idx].n[s][action] += 1;
+                        action
+                    }
+                    _ if (cfg.continuation_exp3_ix || cfg.continuation_exp3_mean)
+                        && !at_root
+                        && !nodes[node_idx].preview =>
+                    {
+                        let node = &mut nodes[node_idx];
+                        let stats = node.continuation.get_or_insert_with(Default::default);
+                        let draw = stats.bandits[s]
+                            .get_or_insert_with(|| crate::exp3::Exp3Ix::new(k))
+                            .sample(rng);
+                        let action = draw.action;
+                        node.n[s][action] += 1;
+                        exp3_path.push((node_idx, s, draw, path_index));
+                        action
+                    }
                     _ => select_ucb(cfg, rng, &mut nodes[node_idx], s),
                 };
                 if path_len < path_buf.len() {
@@ -475,6 +1488,29 @@ pub(crate) fn run_iteration_with_leaf(
                 ai
             };
             joint[s] = Some(nodes[node_idx].acts[s][ai]);
+            if let Some(policy) = continuation.as_deref_mut() {
+                if s == policy.side() {
+                    if decision_depth == 0 {
+                        own_root_action = joint[s];
+                    }
+                    if let Some(group) = continuation_group {
+                        if !policy.shared() {
+                            policy.record_selection(group, ai);
+                        }
+                        shared_pending = Some((group, ai));
+                    }
+                }
+            }
+            if let Some(policy) = history_policy.as_deref_mut() {
+                if s == policy.side() {
+                    if let Some(group) = history_group {
+                        if !policy.shared() {
+                            policy.record_selection(group, ai);
+                        }
+                        history_pending.push((group, ai));
+                    }
+                }
+            }
             if at_root {
                 root_joint[s] = ai;
             }
@@ -482,27 +1518,69 @@ pub(crate) fn run_iteration_with_leaf(
         if let Some(trace) = trace.as_deref_mut() {
             let node = &nodes[node_idx];
             trace(SearchTrace::Choice {
-                battle: sim, node: node_idx, actions: &node.acts,
-                visits: &node.n, rewards: &node.w, chosen: joint,
+                battle: sim,
+                node: node_idx,
+                actions: &node.acts,
+                visits: &node.n,
+                rewards: &node.w,
+                chosen: joint,
             });
         }
         if joint == [None, None] {
             // defensive: a rest point where neither side owes a choice
             // (never reached in practice — battles end instead)
             if let Some(trace) = trace.as_deref_mut() {
-                trace(SearchTrace::Leaf { battle: sim, rng, rollout: false });
+                trace(SearchTrace::Leaf {
+                    battle: sim,
+                    rng,
+                    rollout: false,
+                });
             }
+            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
             break leaf(sim, rng, false);
+        }
+        if decision_depth == 0 && continuation.is_some() {
+            sim.set_log_enabled(true);
+        }
+        if let Some(policy) = history_policy.as_deref() {
+            history_previous = joint[policy.side()];
+            sim.set_log_enabled(true);
         }
         sim.apply_choices(dex, joint)
             .expect("cached legal choice rejected (state_key collision?)");
+        decision_depth += 1;
         if let Some(o) = sim.outcome() {
+            if continuation.is_some() || history_policy.is_some() {
+                sim.set_log_enabled(false);
+            }
+            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, Some(o)));
             break outcome_reward(o);
         }
-        if sim.turn > turn_cap {
-            if let Some(trace) = trace.as_deref_mut() {
-                trace(SearchTrace::Leaf { battle: sim, rng, rollout: false });
+        if at_root {
+            if let Some(value) = root_child_value
+                .as_deref_mut()
+                .and_then(|evaluate| evaluate(sim))
+            {
+                assert!((0. ..=1.).contains(&value));
+                crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(
+                    sim,
+                    sim.outcome(),
+                ));
+                break value;
             }
+        }
+        if sim.turn > turn_cap {
+            if continuation.is_some() || history_policy.is_some() {
+                sim.set_log_enabled(false);
+            }
+            if let Some(trace) = trace.as_deref_mut() {
+                trace(SearchTrace::Leaf {
+                    battle: sim,
+                    rng,
+                    rollout: false,
+                });
+            }
+            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
             break leaf(sim, rng, false);
         }
         let key = key_of(cfg, dex, sim);
@@ -514,34 +1592,107 @@ pub(crate) fn run_iteration_with_leaf(
             None => {
                 // expand exactly one node per iteration, then roll out
                 let child = nodes.len();
-                nodes.push(Node::at(sim, dex));
+                nodes.push(Node::continuation(sim, dex, cfg));
                 table.insert(key, child);
-                if let Some(trace) = trace.as_deref_mut() {
-                    trace(SearchTrace::Leaf { battle: sim, rng, rollout: true });
+                if cfg.continuation_exp3_mean {
+                    mean_path.push(child);
                 }
+                if let Some(trace) = trace.as_deref_mut() {
+                    trace(SearchTrace::Leaf {
+                        battle: sim,
+                        rng,
+                        rollout: true,
+                    });
+                }
+                if continuation.is_some() || history_policy.is_some() {
+                    sim.set_log_enabled(false);
+                }
+                crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(
+                    sim,
+                    sim.outcome(),
+                ));
                 break leaf(sim, rng, true);
             }
         }
     };
 
+    if let (Some(policy), Some((group, action))) = (continuation, shared_pending) {
+        policy.observe(group, action, reward0);
+    }
+    if let Some(policy) = history_policy {
+        for (group, action) in history_pending {
+            policy.observe(group, action, reward0);
+        }
+    }
     if let Some(trace) = trace {
-        trace(SearchTrace::Result { battle: sim, reward0 });
+        trace(SearchTrace::Result {
+            battle: sim,
+            reward0,
+        });
     }
 
-    // ---- backprop: UCB stats along the path
     for &(ni, s, ai) in &path_buf[..path_len] {
         nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
     }
     for (ni, s, ai) in path_overflow {
         nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
     }
+    let mean_updates = if cfg.continuation_exp3_mean {
+        record_raw_path(nodes, &mean_path, reward0)
+    } else {
+        Vec::new()
+    };
+    for (ni, s, draw, index) in exp3_path {
+        let value = mean_updates.get(index).copied().unwrap_or(reward0);
+        nodes[ni].continuation.as_mut().unwrap().bandits[s]
+            .as_mut()
+            .unwrap()
+            .observe(draw, if s == 0 { 1. - value } else { value });
+    }
     reward0
 }
 
-fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
+pub(crate) fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
     match &cfg.playout {
         Playout::Uniform => crate::mcts::hp_eval(sim),
-        Playout::Heavy { weights, .. } => crate::eval::eval_leaf(sim, dex, weights),
+        Playout::Heavy { weights, .. } => match cfg.oracle {
+            crate::oracle::OracleMode::Off => {
+                if cfg.settlement.uses_blindspot_leaf() {
+                    crate::eval::eval_leaf_blindspot(sim, dex, weights)
+                } else if cfg.settlement.uses_legacy_playout_loop()
+                    && cfg.settlement != crate::accounting::LeafSettlementMode::RolloutAcct0
+                {
+                    crate::eval::eval_leaf(sim, dex, weights)
+                } else {
+                    crate::accounting::battle_settled_leaf(sim, dex, cfg.settlement)
+                }
+            }
+            crate::oracle::OracleMode::EchoBase => {
+                let (table, cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
+                crate::oracle::echo_base_leaf(&cb, &table, weights)
+            }
+            crate::oracle::OracleMode::Cutoff { leaf_iters }
+            | crate::oracle::OracleMode::TreeLeaf { leaf_iters }
+            | crate::oracle::OracleMode::Coupled { leaf_iters, .. } => {
+                let (table, cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
+                crate::oracle::oracle_equity(&cb, &table, leaf_iters)
+            }
+        },
+    }
+}
+
+pub(crate) fn default_leaf(
+    cfg: &RmConfig,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    rng: &mut SplitMix64,
+    rollout: bool,
+) -> f64 {
+    if rollout {
+        playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_rules())
+    } else {
+        leaf_eval(cfg, sim, dex)
     }
 }
 
@@ -570,6 +1721,9 @@ pub struct SkuctSearch {
     /// Final-choice exclusions from `dominated_reason`. Only `best()` uses
     /// this mask; RmAgent's sampled policy reads unfiltered root statistics.
     root_dominated: [Vec<bool>; 2],
+    endgame: [EndgameRootStats; 2],
+    joint_n: Vec<u32>,
+    joint_w0: Vec<f64>,
 }
 
 /// A self-KO move used by the side's LAST mon is an unconditional immediate
@@ -637,6 +1791,10 @@ pub struct MaskRules {
     /// "how much of the class is recoverable without ever being wrong".
     /// OFF by default.
     pub immunity_all_switchins: bool,
+    /// Extended provable no-op masks (`moonlight`/`morningsun`/`synthesis` at full HP,
+    /// last-mon `batonpass`, `bellydrum` at `<=50%` HP or `+6 Atk`, healthy-party `healbell`,
+    /// `disable`/`encore`/`spite`/`mirrormove`/`conversion2`/`mimic` vs stranded foe with
+    /// `last_move == None`, and narrowed `own_recovery_wait`).
     pub extended_noops: bool,
 }
 
@@ -705,8 +1863,11 @@ pub(crate) fn dominated_reason(
     }
     if b.active_id(side).is_some_and(|id| {
         let me = b.poke(id);
-        dex.conds_id("encore").is_some_and(|cond| me.has_volatile(cond))
-            && (dex.conds_id("substitute").is_some_and(|cond| me.has_volatile(cond))
+        dex.conds_id("encore")
+            .is_some_and(|cond| me.has_volatile(cond))
+            && (dex
+                .conds_id("substitute")
+                .is_some_and(|cond| me.has_volatile(cond))
                 || me.boosts.iter().take(5).any(|&x| x > 0)
                 || b.active_id(1 - side).is_some_and(|f| b.poke(f).trapped))
     }) {
@@ -714,16 +1875,19 @@ pub(crate) fn dominated_reason(
     }
     if rules.destiny_bond_wait
         && b.active_id(1 - side).is_some_and(|id| {
-            dex.conds_id("destinybond").is_some_and(|cond| b.poke(id).has_volatile(cond))
+            dex.conds_id("destinybond")
+                .is_some_and(|cond| b.poke(id).has_volatile(cond))
         })
     {
         return None;
     }
     if b.active_id(1 - side)
         .and_then(|id| {
-            dex.conds_id("perishsong").and_then(|cond| b.poke(id).volatile(cond))
+            dex.conds_id("perishsong")
+                .and_then(|cond| b.poke(id).volatile(cond))
         })
-        .and_then(|v| v.duration) == Some(1)
+        .and_then(|v| v.duration)
+        == Some(1)
     {
         return None;
     }
@@ -752,7 +1916,11 @@ pub(crate) fn dominated_reason(
                             ls.moves.iter().any(|m| {
                                 matches!(
                                     m.as_str(),
-                                    "counter" | "mirrorcoat" | "metronome" | "mirrormove" | "sketch"
+                                    "counter"
+                                        | "mirrorcoat"
+                                        | "metronome"
+                                        | "mirrormove"
+                                        | "sketch"
                                 )
                             })
                         })
@@ -765,20 +1933,29 @@ pub(crate) fn dominated_reason(
 
 fn foe_has_residual_damage(b: &Battle, dex: &Dex, side: usize) -> bool {
     use nc2000_engine::state::Status;
-    let Some(id) = b.active_id(1 - side) else { return false };
+    let Some(id) = b.active_id(1 - side) else {
+        return false;
+    };
     let foe = b.poke(id);
     if foe.fainted || foe.hp == 0 {
         return false;
     }
     // A failing move can avoid retaliation while public residual effects advance.
     matches!(foe.status, Status::Psn | Status::Tox | Status::Brn)
-        || ["curse", "leechseed", "partiallytrapped"].iter().any(|key| {
-            dex.conds_id(key).is_some_and(|cond| foe.has_volatile(cond))
-        })
+        || ["curse", "leechseed", "partiallytrapped"]
+            .iter()
+            .any(|key| dex.conds_id(key).is_some_and(|cond| foe.has_volatile(cond)))
         || (foe.status == Status::Slp
-            && dex.conds_id("nightmare").is_some_and(|cond| foe.has_volatile(cond)))
-        || (dex.conds_id("sandstorm").is_some_and(|cond| b.field.weather == Some(cond))
-            && !foe.types.iter().any(|t| dex.status_key_immune("sandstorm", t)))
+            && dex
+                .conds_id("nightmare")
+                .is_some_and(|cond| foe.has_volatile(cond)))
+        || (dex
+            .conds_id("sandstorm")
+            .is_some_and(|cond| b.field.weather == Some(cond))
+            && !foe
+                .types
+                .iter()
+                .any(|t| dex.status_key_immune("sandstorm", t)))
 }
 
 /// Whether the foe can leave before the move lands. **Switches resolve before
@@ -790,12 +1967,17 @@ fn foe_has_residual_damage(b: &Battle, dex: &Dex, side: usize) -> bool {
 /// a trapped mon cannot switch, and neither can one with no living bench.
 fn foe_can_switch(b: &Battle, side: usize) -> bool {
     let opp = 1 - side;
-    let Some(active) = b.active_id(opp) else { return false };
+    let Some(active) = b.active_id(opp) else {
+        return false;
+    };
     if b.poke(active).trapped {
         return false;
     }
     let s = &b.sides[opp];
-    s.party.iter().skip(1).any(|&slot| !s.roster[slot as usize].fainted)
+    s.party
+        .iter()
+        .skip(1)
+        .any(|&slot| !s.roster[slot as usize].fainted)
 }
 
 /// Whether `side`'s active moves first on speed alone (no tie, no priority
@@ -825,14 +2007,17 @@ fn faster_than_foe(b: &Battle, dex: &Dex, side: usize) -> bool {
     b.get_pokemon_action_speed(dex, me) > b.get_pokemon_action_speed(dex, foe)
 }
 
-fn foe_may_preempt_heal(b: &Battle, dex: &Dex, side: usize, priority: i8) -> bool {
-    let Some(id) = b.active_id(1 - side) else { return true };
+fn foe_may_preempt_with_damage(b: &Battle, dex: &Dex, side: usize, priority: i8) -> bool {
+    let Some(id) = b.active_id(1 - side) else {
+        return true;
+    };
     let foe = b.poke(id);
     // Copied move slots are public overlays; their identities and PP are not needed.
     if foe.transformed || foe.move_slots.iter().any(|slot| !slot.shared) {
         return true;
     }
-    let Some(learnset) = crate::belief::format_learnsets().species(dex.species.key(foe.species)) else {
+    let Some(learnset) = crate::belief::format_learnsets().species(dex.species.key(foe.species))
+    else {
         return true;
     };
     learnset.moves.iter().any(|key| {
@@ -841,28 +2026,6 @@ fn foe_may_preempt_heal(b: &Battle, dex: &Dex, side: usize, priority: i8) -> boo
             ms.priority > priority && ms.category != nc2000_engine::dex::Category::Status
         })
     })
-}
-
-/// Is `def` immune to a move of `move_type`? Mirrors
-/// `pokemon.rs::run_move_immunity`: Ground is resolved by groundedness
-/// (gen-2 `isGrounded` = "Flying-types are airborne, nothing else"), every
-/// other type by the chart.
-///
-/// **Known hole, shared with the shipped rule:** Foresight's
-/// `onNegateImmunity` (`conditions.rs:765`) strips a Ghost's Normal/Fighting
-/// immunity and nothing here reads the volatile, so a Foresighted Ghost is
-/// called immune when it is not. Out of distribution rather than merely
-/// rare — `foresight` occurs 0 times in the 32-team meta pool and 0 times in
-/// the 570-battle corpus — but any mask that can meet it needs the check
-/// added here first, in ONE place, which is why this predicate exists at all
-/// instead of the old inline expression.
-fn type_immune_to(b: &Battle, dex: &Dex, move_type: TypeId, def: PokeId) -> bool {
-    let d = b.poke(def);
-    if move_type == dex.known_types.ground {
-        d.has_type(dex.known_types.flying)
-    } else {
-        d.types.iter().any(|t| dex.type_immune(move_type, t))
-    }
 }
 
 /// Every foe mon that could be standing there when our move resolves, other
@@ -907,7 +2070,10 @@ fn foe_switchin_candidates(b: &Battle, side: usize) -> Vec<PokeId> {
     let all_picks_revealed = seen >= s.party.len();
     let mut out = Vec::new();
     for (slot, p) in s.roster.iter().enumerate() {
-        let id = PokeId { side: opp as u8, slot: slot as u8 };
+        let id = PokeId {
+            side: opp as u8,
+            slot: slot as u8,
+        };
         if Some(id) == active || p.fainted || p.hp <= 0 {
             continue;
         }
@@ -949,9 +2115,13 @@ fn noop_reason(
             return if $cond { Some($why) } else { None }
         };
     }
-    let SearchChoice::Move(id) = c else { return None };
+    let SearchChoice::Move(id) = c else {
+        return None;
+    };
     let ms = dex.move_static(id);
-    let Some(att) = b.active_id(side) else { return None };
+    let Some(att) = b.active_id(side) else {
+        return None;
+    };
     let key = dex.moves.key(id);
     let full_hp = {
         let me = b.poke(att);
@@ -962,15 +2132,19 @@ fn noop_reason(
         || (rules.extended_noops && matches!(key, "moonlight" | "morningsun" | "synthesis"))
     {
         verdict!(
-            full_hp && faster_than_foe(b, dex, side)
-                && (!rules.priority_heal || !foe_may_preempt_heal(b, dex, side, ms.priority)),
+            full_hp
+                && faster_than_foe(b, dex, side)
+                && (!rules.priority_heal
+                    || !foe_may_preempt_with_damage(b, dex, side, ms.priority)),
             "healing at full HP, and faster"
         );
     }
     if let Some(sc) = ms.side_condition.as_deref() {
         let on_foe = ms.target == "foeSide";
         let target_side = if on_foe { 1 - side } else { side };
-        let up = dex.conds_id(sc).is_some_and(|cid| b.sides[target_side].has_side_condition(cid));
+        let up = dex
+            .conds_id(sc)
+            .is_some_and(|cid| b.sides[target_side].has_side_condition(cid));
         // Our own screens cannot be removed in gen 2 and expire at upkeep,
         // after moves. Hazards on the FOE's side can be spun away first, so
         // that half needs us to move first.
@@ -1058,8 +2232,11 @@ fn noop_reason(
     if rules.extended_noops
         && key == "healbell"
         && faster_than_foe(b, dex, side)
-        && !foe_may_preempt_heal(b, dex, side, ms.priority)
-        && b.sides[side].roster.iter().all(|p| p.status == Status::None)
+        && !foe_may_preempt_with_damage(b, dex, side, ms.priority)
+        && b.sides[side]
+            .roster
+            .iter()
+            .all(|p| p.status == Status::None)
     {
         yes!("Heal Bell has no status to cure");
     }
@@ -1128,8 +2305,11 @@ fn noop_reason(
     // user's DVs (`moveexec.rs:340`). Reading the static field refused Hidden
     // Power into every Ghost — caught by `noop_census`, 7 refusals that the
     // engine damaged straight through.
-    let move_type =
-        if key == "hiddenpower" { b.poke(att).hp_type } else { ms.move_type };
+    let move_type = if key == "hiddenpower" {
+        b.poke(att).hp_type
+    } else {
+        ms.move_type
+    };
     if foe_targeted
         && !ms.ignore_immunity
         && !ms.selfdestruct
@@ -1145,8 +2325,7 @@ fn noop_reason(
         // when the foe CAN leave. They are `if`, never `verdict!`: a
         // `verdict!` here returns None on the miss and would shadow every
         // rule after it (the shadowing bug commit 238e48a exists for).
-        let front_immune =
-            || foe_here.is_some_and(|def| type_immune_to(b, dex, move_type, def));
+        let front_immune = || foe_here.is_some_and(|def| type_immune_to(b, dex, move_type, def));
         // Arm 1: refuse the mon in front regardless of the switch read.
         if rules.immunity_ignores_switch_read && front_immune() {
             yes!("the mon in front is immune (switch read ignored)");
@@ -1168,8 +2347,13 @@ fn noop_reason(
     if key == "dreameater" {
         if let Some(def) = foe {
             let d = b.poke(def);
-            let subbed = dex.conds_id("substitute").is_some_and(|sid| d.has_volatile(sid));
-            verdict!(d.status != Status::Slp || subbed, "Dream Eater needs a sleeping, unsubstituted target");
+            let subbed = dex
+                .conds_id("substitute")
+                .is_some_and(|sid| d.has_volatile(sid));
+            verdict!(
+                d.status != Status::Slp || subbed,
+                "Dream Eater needs a sleeping, unsubstituted target"
+            );
         }
     }
     if ms.category != Category::Status {
@@ -1178,7 +2362,8 @@ fn noop_reason(
 
     // Public state of the foe's protections, shared by the rules below.
     let sub_up = foe.is_some_and(|d| {
-        dex.conds_id("substitute").is_some_and(|sid| b.poke(d).has_volatile(sid))
+        dex.conds_id("substitute")
+            .is_some_and(|sid| b.poke(d).has_volatile(sid))
     });
     let safeguard = dex
         .conds_id("safeguard")
@@ -1220,12 +2405,13 @@ fn noop_reason(
     // (`moveexec.rs` substitute/onTryHit).
     if key == "substitute" {
         let me = b.poke(att);
-        let up = dex.conds_id("substitute").is_some_and(|sid| me.has_volatile(sid));
-        // Both halves are about OUR state at resolution time: a faster foe can
-        // break the sub we already have, or damage us past the quarter gate
-        // (72 of this rule's 1,138 firings were wrong for that reason).
+        let up = dex
+            .conds_id("substitute")
+            .is_some_and(|sid| me.has_volatile(sid));
         verdict!(
-            (up || me.hp as f64 <= me.maxhp as f64 / 4.0 || me.maxhp == 1)
+            ((up && !foe_may_preempt_with_damage(b, dex, side, ms.priority))
+                || me.hp as f64 <= me.maxhp as f64 / 4.0
+                || me.maxhp == 1)
                 && faster_than_foe(b, dex, side),
             "Substitute is already up, or there is not enough HP to pay for one"
         );
@@ -1246,27 +2432,23 @@ fn noop_reason(
             };
             if no_last
                 && faster_than_foe(b, dex, side)
-                && !foe_may_preempt_heal(b, dex, side, ms.priority)
+                && !foe_may_preempt_with_damage(b, dex, side, ms.priority)
             {
                 yes!("the target has not used a move yet");
             }
         }
     }
-
-    // ---- Non-Ghost Curse (`moveexec.rs:576`: `curse` / `onModifyMove`).
-    // In `data/gen2stadium2.json`, `curse` has `volatileStatus: "curse"`,
-    // `target: "normal"`, and `boosts: None`, because Ghost-type Curse applies
-    // the `curse` volatile to the foe; for any non-Ghost user, `onModifyMove`
-    // rewrites the move into a self-boost (`+1 Atk, +1 Def, -1 Spe`).
-    if key == "curse" && !b.poke(att).has_type(dex.known_types.ghost) {
-        let me = b.poke(att);
-        verdict!(
-            me.boosts[0] >= 6 && me.boosts[1] >= 6 && faster_than_foe(b, dex, side),
-            "every stat this move moves is already capped"
-        );
-    }
-
     if let Some(v) = ms.volatile_status.as_deref() {
+        // Non-Ghost Curse boosts the user (+1 Atk, +1 Def, -1 Spe) and clears
+        // `volatile_status` (`moveexec.rs:576`), so it only fails when both
+        // Attack and Defense are already at +6.
+        if key == "curse" && !b.poke(att).has_type(dex.known_types.ghost) {
+            let boosts = b.poke(att).boosts;
+            if boosts[0] >= 6 && boosts[1] >= 6 && faster_than_foe(b, dex, side) {
+                yes!("every stat this move moves is already capped");
+            }
+            return None;
+        }
         // Safeguard again: side-wide, so it stops confusion whoever is in.
         if v == "confusion" && key != "swagger" && foe_targeted && safeguard {
             yes!("Safeguard blocks confusion");
@@ -1284,16 +2466,14 @@ fn noop_reason(
             // since none of these conditions carries an `onRestart`
             // A volatile can also run out on its owner's own move (a
             // confusion clock is decremented before the move it hinders), so
-            // the foe-directed half needs us to move first.
-            //
-            // `destinybond` on `att` is cleared by `onFoeAfterMoveSelf`
-            // (`conditions.rs:808`) and `onFoeSwitchOut` (`conditions.rs:815`),
-            // so when the foe switches or moves before us, `destinybond` is
-            // removed before our move executes and re-arming it succeeds.
-            let stable = if v == "destinybond" && tgt == Some(att) {
+            // the foe-directed half needs us to move first. `destinybond` on
+            // `att` is also cleared by `onFoeAfterMoveSelf` and `onFoeSwitchOut`
+            // (`conditions.rs:808-818`), so a slower user or switchable foe
+            // clears it before our move resolves and re-arms Destiny Bond.
+            let stable = if v == "destinybond" {
                 !foe_can_switch(b, side)
                     && faster_than_foe(b, dex, side)
-                    && !foe_may_preempt_heal(b, dex, side, ms.priority)
+                    && !foe_may_preempt_with_damage(b, dex, side, ms.priority)
             } else {
                 tgt == Some(att) || faster_than_foe(b, dex, side)
             };
@@ -1311,15 +2491,20 @@ fn noop_reason(
             }
             // moves the Substitute rejects wholesale
             // (`conditions.rs` substitute/onTryPrimaryHit SUB_BLOCKED)
-            const SUB_BLOCKED: [&str; 6] =
-                ["leechseed", "lockon", "mindreader", "nightmare", "painsplit", "sketch"];
+            const SUB_BLOCKED: [&str; 6] = [
+                "leechseed",
+                "lockon",
+                "mindreader",
+                "nightmare",
+                "painsplit",
+                "sketch",
+            ];
             if sub_up && SUB_BLOCKED.contains(&key) {
                 yes!("a Substitute rejects this move outright");
             }
             // Leech Seed does not take on a Grass type
             // (`moveexec.rs` leechseed/onTryImmunity)
-            if key == "leechseed"
-                && foe.is_some_and(|d| b.poke(d).has_type(dex.known_types.grass))
+            if key == "leechseed" && foe.is_some_and(|d| b.poke(d).has_type(dex.known_types.grass))
             {
                 yes!("Leech Seed does not take on a Grass type");
             }
@@ -1367,7 +2552,9 @@ fn noop_reason(
             // (`conditions.rs` mist/onTryBoost), so a pure stat-drop move
             // into Mist changes nothing.
             let misted = !self_targeted
-                && dex.conds_id("mist").is_some_and(|cid| b.poke(t).has_volatile(cid));
+                && dex
+                    .conds_id("mist")
+                    .is_some_and(|cid| b.poke(t).has_volatile(cid));
             let subbed = !self_targeted && sub_up && key != "swagger";
             if misted {
                 yes!("Mist deletes foe-sourced stat drops");
@@ -1400,6 +2587,17 @@ impl SkuctSearch {
         if cfg.key_no_damage && battle.damage_bookkeeping_observable(dex) {
             cfg.key_no_damage = false;
         }
+        if matches!(
+            battle.request_state,
+            nc2000_engine::state::RequestState::TeamPreview
+        ) && matches!(
+            cfg.settlement,
+            crate::accounting::LeafSettlementMode::BlindSpotLeaf
+                | crate::accounting::LeafSettlementMode::BlindSpotRollout
+                | crate::accounting::LeafSettlementMode::BlindSpotBoth
+        ) {
+            cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
+        }
         let mut root = battle.clone();
         root.set_log_enabled(false);
         let turn_cap = root.turn.saturating_add(cfg.horizon);
@@ -1409,12 +2607,100 @@ impl SkuctSearch {
         let root_dominated = [0usize, 1].map(|s| {
             nodes[0].acts[s]
                 .iter()
-                .map(|&c| {
-                    dominated_reason(&root, dex, s, c, cfg.mask_rules).is_some()
-                })
+                .map(|&c| dominated_reason(&root, dex, s, c, cfg.mask_rules).is_some())
                 .collect::<Vec<bool>>()
         });
-        SkuctSearch { cfg, rng, root, scratch: None, turn_cap, nodes, table, done: 0, depth_sum: 0, root_dominated }
+        let endgame = [0usize, 1].map(|s| EndgameRootStats::new(&root, dex, s, &nodes[0].acts[s]));
+        let cells = nodes[0].acts[0].len().max(1) * nodes[0].acts[1].len().max(1);
+        SkuctSearch {
+            cfg,
+            rng,
+            root,
+            scratch: None,
+            turn_cap,
+            nodes,
+            table,
+            done: 0,
+            depth_sum: 0,
+            root_dominated,
+            endgame,
+            joint_n: vec![0u32; cells],
+            joint_w0: vec![0.0f64; cells],
+        }
+    }
+
+    fn record_root_endgame(&mut self, r0: f64, joint: [usize; 2]) {
+        let end = crate::mcts::last_sim_end();
+        let k0 = self.nodes[0].acts[0].len();
+        let k1 = self.nodes[0].acts[1].len();
+        if k0 > 0 && joint[0] < k0 {
+            self.endgame[0].record(self.root.turn, 0, joint[0], r0, end);
+        }
+        if k1 > 0 && joint[1] < k1 {
+            self.endgame[1].record(self.root.turn, 1, joint[1], 1.0 - r0, end);
+        }
+        let k1_stride = k1.max(1);
+        let cell = joint[0] * k1_stride + joint[1];
+        if cell < self.joint_n.len() {
+            self.joint_n[cell] += 1;
+            self.joint_w0[cell] += r0;
+        }
+    }
+
+    fn reply_metrics(&self, side: usize, own: usize, n_i: u32, mean_i: f64) -> (f64, f64) {
+        let foe = 1 - side;
+        let k_foe = self.nodes[0].acts[foe].len();
+        let k1_stride = self.nodes[0].acts[1].len().max(1);
+        if k_foe <= 1 {
+            return (0.0, mean_i);
+        }
+        reply_risk_and_mistake_ev(
+            n_i,
+            mean_i,
+            (0..k_foe).map(|j| {
+                let cell = if side == 0 {
+                    own * k1_stride + j
+                } else {
+                    j * k1_stride + own
+                };
+                let n = self.joint_n.get(cell).copied().unwrap_or(0);
+                let w0 = self.joint_w0.get(cell).copied().unwrap_or(0.0);
+                let w = if side == 0 { w0 } else { n as f64 - w0 };
+                (n, w)
+            }),
+        )
+    }
+
+    pub fn should_early_stop(&self, side: usize) -> bool {
+        let node = &self.nodes[0];
+        let sui = &self.root_dominated[side];
+        let safe = (0..node.acts[side].len()).any(|a| !sui.get(a).copied().unwrap_or(false));
+        let eligible = |a: usize| !safe || !sui.get(a).copied().unwrap_or(false);
+        self.endgame[side].should_early_stop(
+            self.cfg.endgame_rules,
+            self.done,
+            self.cfg.iterations,
+            self.is_preview(),
+            &node.n[side],
+            &node.w[side],
+            eligible,
+        )
+    }
+
+    pub fn endgame_analysis(&self, side: usize) -> Option<EndgameDecisionInfo> {
+        let node = &self.nodes[0];
+        let sui = &self.root_dominated[side];
+        let safe = (0..node.acts[side].len()).any(|a| !sui.get(a).copied().unwrap_or(false));
+        let eligible = |a: usize| !safe || !sui.get(a).copied().unwrap_or(false);
+        self.endgame[side].analyze(
+            self.cfg.endgame_rules,
+            &node.acts[side],
+            &node.n[side],
+            &node.n[side],
+            &node.w[side],
+            eligible,
+            |own, n_i, mean_i| self.reply_metrics(side, own, n_i, mean_i),
+        )
     }
 
     /// One UCB iteration (reset root, fresh chance seed, select/expand/
@@ -1449,6 +2735,7 @@ impl SkuctSearch {
         self.scratch = Some(sim);
         self.depth_sum += depth as u64;
         self.done += 1;
+        self.record_root_endgame(r, joint);
         (r, joint)
     }
 
@@ -1483,7 +2770,52 @@ impl SkuctSearch {
         self.scratch = Some(sim);
         self.depth_sum += depth as u64;
         self.done += 1;
+        self.record_root_endgame(r, joint);
         r
+    }
+
+    /// `step` with a caller-supplied value at every expansion and horizon
+    /// cutoff in place of the rollout/eval (`value::NetSearchAgent`).
+    pub fn step_with_leaf(
+        &mut self,
+        dex: &Dex,
+        n: u32,
+        leaf: &mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64,
+    ) -> u32 {
+        for _ in 0..n {
+            let mut sim = match self.scratch.take() {
+                Some(mut sim) => {
+                    sim.as_mut().clone_from(&self.root);
+                    sim
+                }
+                None => Box::new(self.root.clone()),
+            };
+            std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
+            sim.reseed(self.rng.next());
+            let mut joint = [0usize; 2];
+            let mut depth = 0u32;
+            let r = run_iteration_with_leaf(
+                &self.cfg,
+                &mut self.rng,
+                &mut self.nodes,
+                &mut self.table,
+                &mut sim,
+                dex,
+                self.turn_cap,
+                0,
+                [None, None],
+                &mut joint,
+                &mut depth,
+                leaf,
+                None,
+            );
+            std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
+            self.scratch = Some(sim);
+            self.depth_sum += depth as u64;
+            self.done += 1;
+            self.record_root_endgame(r, joint);
+        }
+        self.done
     }
 
     /// Pump `n` iterations, return the total run so far.
@@ -1550,6 +2882,21 @@ impl SkuctSearch {
         // a guaranteed instant loss (2026-07-21 last-mon-Explosion report).
         let node = &self.nodes[0];
         let sui = &self.root_dominated[side];
+        if self.cfg.endgame_rules.decision_any() && !self.is_preview() {
+            let safe = (0..node.acts[side].len()).any(|a| !sui.get(a).copied().unwrap_or(false));
+            let eligible = |a: usize| !safe || !sui.get(a).copied().unwrap_or(false);
+            return self.endgame[side]
+                .select_best(
+                    self.cfg.endgame_rules,
+                    &node.acts[side],
+                    &node.n[side],
+                    &node.n[side],
+                    &node.w[side],
+                    eligible,
+                    |own, n_i, mean_i| self.reply_metrics(side, own, n_i, mean_i),
+                )
+                .map(|a| node.acts[side][a]);
+        }
         (0..node.acts[side].len())
             .filter(|&a| !sui.get(a).copied().unwrap_or(false))
             .max_by_key(|&a| node.n[side][a])
@@ -1572,7 +2919,10 @@ pub struct RmAgent {
 
 impl RmAgent {
     pub fn new(cfg: RmConfig, seed: u64) -> Self {
-        RmAgent { cfg, rng: SplitMix64::new(seed) }
+        RmAgent {
+            cfg,
+            rng: SplitMix64::new(seed),
+        }
     }
 
     /// Run the search and return the root play distribution for `side`
@@ -1604,13 +2954,28 @@ impl RmAgent {
                 late_n[cell] += 1;
                 late_w[cell] += r;
             }
+            if ts.should_early_stop(side) {
+                break;
+            }
         }
 
         let acts = ts.nodes[0].acts[side].clone();
 
         // preview root (or argmax ablation): most-visited action, point mass
         if !mixed_root {
-            let best = (0..acts.len()).max_by_key(|&a| ts.nodes[0].n[side][a]).unwrap();
+            let best = if self.cfg.endgame_rules.decision_any() && !ts.is_preview() {
+                ts.best(side)
+                    .and_then(|c| acts.iter().position(|&a| a == c))
+                    .unwrap_or_else(|| {
+                        (0..acts.len())
+                            .max_by_key(|&a| ts.nodes[0].n[side][a])
+                            .unwrap()
+                    })
+            } else {
+                (0..acts.len())
+                    .max_by_key(|&a| ts.nodes[0].n[side][a])
+                    .unwrap()
+            };
             let mut probs = vec![0.0; acts.len()];
             probs[best] = 1.0;
             self.rng = ts.rng;
@@ -1652,7 +3017,9 @@ impl RmAgent {
 
         // purification: drop solver dust relative to the modal action
         // (the modal action itself always survives)
-        let imax = (0..probs.len()).max_by(|&a, &b| probs[a].total_cmp(&probs[b])).unwrap();
+        let imax = (0..probs.len())
+            .max_by(|&a, &b| probs[a].total_cmp(&probs[b]))
+            .unwrap();
         let pmax = probs[imax];
         for (i, p) in probs.iter_mut().enumerate() {
             if i != imax && *p < self.cfg.threshold * pmax {
@@ -1669,7 +3036,9 @@ impl RmAgent {
         // visit statistics (hundreds of samples vs ~tens per matrix cell),
         // so a purified point mass defers to argmax-visits.
         if probs.iter().filter(|&&p| p > 0.0).count() == 1 {
-            let best = (0..acts.len()).max_by_key(|&a| ts.nodes[0].n[side][a]).unwrap();
+            let best = (0..acts.len())
+                .max_by_key(|&a| ts.nodes[0].n[side][a])
+                .unwrap();
             probs.iter_mut().for_each(|p| *p = 0.0);
             probs[best] = 1.0;
         }
@@ -1765,7 +3134,10 @@ impl Agent for RmAgent {
                 self.cfg.iterations, self.cfg.probe, self.cfg.threshold, self.cfg.hp_buckets
             ),
             SelRule::Ucb => {
-                format!("skuct:{}:{}:{}", self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets)
+                format!(
+                    "skuct:{}:{}:{}",
+                    self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets
+                )
             }
         }
     }
@@ -1781,7 +3153,11 @@ impl Agent for RmAgent {
             return choices[0];
         }
         let (acts, probs) = self.search(battle, dex, side);
-        debug_assert_eq!(acts.as_slice(), choices, "root action set drifted from caller's choices");
+        debug_assert_eq!(
+            acts.as_slice(),
+            choices,
+            "root action set drifted from caller's choices"
+        );
         self.sample(&acts, &probs)
     }
 
@@ -1820,7 +3196,10 @@ mod dominated_action_tests {
     fn strand(b: &mut Battle, side: usize) {
         let party = b.sides[side].party.clone();
         for &slot in party.iter().skip(1) {
-            let id = PokeId { side: side as u8, slot };
+            let id = PokeId {
+                side: side as u8,
+                slot,
+            };
             b.poke_mut(id).hp = 0;
             b.poke_mut(id).fainted = true;
         }
@@ -1852,6 +3231,64 @@ mod dominated_action_tests {
         b.choose(&dex, 0, "team 1, 2, 3").unwrap();
         b.choose(&dex, 1, "team 2, 1, 3").unwrap();
         (dex, b)
+    }
+
+    #[test]
+    fn canonical_claw_key_preserves_observable_rolls_and_restores_state() {
+        let (dex, root) = setup();
+        assert!(!RmConfig::default().canonical_claw_key);
+        let mut states = vec![(root.clone(), false)];
+        for slot in [0, 1] {
+            let mut holder = root.clone();
+            holder.sides[0].roster[slot].item = dex.known_items.quickclaw;
+            states.push((holder, true));
+        }
+        let mut unselected = root.clone();
+        let mut holder = unselected.sides[0].roster[0].clone();
+        holder.item = dex.known_items.quickclaw;
+        unselected.sides[0].roster.push(holder);
+        states.push((unselected.clone(), false));
+        unselected.request_state = nc2000_engine::state::RequestState::TeamPreview;
+        states.push((unselected, true));
+        let mut fainted = states[2].0.clone();
+        fainted.sides[0].roster[1].hp = 0;
+        fainted.sides[0].roster[1].fainted = true;
+        fainted.sides[0].pokemon_left -= 1;
+        states.push((fainted.clone(), false));
+        fainted.mid_turn = true;
+        states.push((fainted, true));
+        for (state, observable) in states {
+            assert_eq!(state.quick_claw_roll_observable(&dex), observable);
+            for (hp_buckets, threshold_key, key_no_damage) in [
+                (0, false, false),
+                (16, false, false),
+                (16, true, false),
+                (16, false, true),
+            ] {
+                let cfg = RmConfig {
+                    hp_buckets,
+                    threshold_key,
+                    key_no_damage,
+                    ..Default::default()
+                };
+                let candidate = RmConfig {
+                    canonical_claw_key: true,
+                    ..cfg.clone()
+                };
+                let mut a = state.clone();
+                a.quick_claw_roll = false;
+                let mut b = state.clone();
+                b.quick_claw_roll = true;
+                let before = [a.state_key128(), b.state_key128()];
+                assert_ne!(key_of(&cfg, &dex, &mut a), key_of(&cfg, &dex, &mut b));
+                assert_eq!(key_of(&candidate, &dex, &mut a), key_of(&cfg, &dex, &mut a));
+                assert_eq!(
+                    key_of(&candidate, &dex, &mut a) != key_of(&candidate, &dex, &mut b),
+                    observable
+                );
+                assert_eq!(before, [a.state_key128(), b.state_key128()]);
+            }
+        }
     }
 
     fn mv(dex: &Dex, key: &str) -> SearchChoice {
@@ -1892,7 +3329,10 @@ mod dominated_action_tests {
             let att = b.active_id(0).unwrap();
             b.add_side_condition(&dex, 0, "reflect", Some(att), EffectHandle::None);
             b.add_side_condition(&dex, 1, "spikes", Some(att), EffectHandle::None);
-            assert!(noop(&b, 0, "reflect"), "Reflect already up (report B turn 6)");
+            assert!(
+                noop(&b, 0, "reflect"),
+                "Reflect already up (report B turn 6)"
+            );
             assert!(noop(&b, 0, "spikes"), "Spikes already laid");
         }
 
@@ -1924,9 +3364,15 @@ mod dominated_action_tests {
             b.add_volatile(&dex, def, "substitute", None, EffectHandle::None);
             // A confusion clock ticks down on its owner's own move, so this
             // rule needs the caster to move first.
-            assert!(!noop(&b, 1, "confuseray"), "slower: the clock may run out first");
+            assert!(
+                !noop(&b, 1, "confuseray"),
+                "slower: the clock may run out first"
+            );
             b.poke_mut(def).boosts[4] = 6;
-            assert!(noop(&b, 1, "confuseray"), "Confuse Ray onto confused foe, moving first");
+            assert!(
+                noop(&b, 1, "confuseray"),
+                "Confuse Ray onto confused foe, moving first"
+            );
             assert!(noop(&b, 1, "substitute"), "Substitute behind its own sub");
         }
     }
@@ -1935,14 +3381,26 @@ mod dominated_action_tests {
     fn sleep_forfeit_is_masked_as_risk_including_rest_sleep() {
         let (dex, base) = setup();
         let me = base.active_id(0).unwrap();
-        let bench = PokeId { side: 1, slot: base.sides[1].party[1] };
+        let bench = PokeId {
+            side: 1,
+            slot: base.sides[1].party[1],
+        };
         let sleep = mv(&dex, "sleeppowder");
         for rest in [false, true] {
             let mut b = base.clone();
-            b.set_status(&dex, bench, "slp", Some(if rest { bench } else { me }), EffectHandle::None, true);
+            b.set_status(
+                &dex,
+                bench,
+                "slp",
+                Some(if rest { bench } else { me }),
+                EffectHandle::None,
+                true,
+            );
             assert!(!certain_noop(&b, &dex, 0, sleep));
-            assert_eq!(dominated_reason(&b, &dex, 0, sleep, MaskRules::default()),
-                Some("inflicting sleep would forfeit under Sleep Clause"));
+            assert_eq!(
+                dominated_reason(&b, &dex, 0, sleep, MaskRules::default()),
+                Some("inflicting sleep would forfeit under Sleep Clause")
+            );
             let mut after = b.clone();
             after.choose(&dex, 0, "move sleeppowder").unwrap();
             after.choose(&dex, 1, "move bodyslam").unwrap();
@@ -1972,11 +3430,17 @@ mod dominated_action_tests {
         assert!(noop(&b, 0, "sleeppowder"), "statused foe, and we act first");
 
         b.poke_mut(def).item = dex.known_items.quickclaw;
-        assert!(!noop(&b, 0, "sleeppowder"), "a Quick Claw foe may move first");
+        assert!(
+            !noop(&b, 0, "sleeppowder"),
+            "a Quick Claw foe may move first"
+        );
         // …and when the coin is up it is the speed comparison itself that
         // says we are second.
         b.quick_claw_roll = true;
-        assert!(!noop(&b, 0, "sleeppowder"), "coin up: the foe is faster outright");
+        assert!(
+            !noop(&b, 0, "sleeppowder"),
+            "coin up: the foe is faster outright"
+        );
 
         // Same contract for the awake-Sleep-Talk rule, on the fixture that
         // carries the pair: a Quick Claw foe can preempt with a sleep move,
@@ -1990,11 +3454,17 @@ mod dominated_action_tests {
         let mut claw = st.clone();
         claw.poke_mut(st_foe).item = dex.known_items.quickclaw;
         for key in ["sleeptalk", "snore"] {
-            assert!(!st_noop(&claw, key), "a Quick Claw foe may sleep us first ({key})");
+            assert!(
+                !st_noop(&claw, key),
+                "a Quick Claw foe may sleep us first ({key})"
+            );
         }
         claw.quick_claw_roll = true;
         for key in ["sleeptalk", "snore"] {
-            assert!(!st_noop(&claw, key), "coin up: the foe is faster outright ({key})");
+            assert!(
+                !st_noop(&claw, key),
+                "coin up: the foe is faster outright ({key})"
+            );
         }
     }
 
@@ -2049,7 +3519,10 @@ mod dominated_action_tests {
         );
 
         // awake and faster ⇒ both halves of the engine's onTry arm are refused
-        assert!(noop(&b, "sleeptalk"), "awake Sleep Talk cannot call anything");
+        assert!(
+            noop(&b, "sleeptalk"),
+            "awake Sleep Talk cannot call anything"
+        );
         assert!(noop(&b, "snore"), "awake Snore, and it is physical");
         assert!(!noop(&b, "surf"), "the real move stays live");
 
@@ -2097,12 +3570,23 @@ mod dominated_action_tests {
                 pp_before - 1,
                 "the PP is spent anyway"
             );
-            assert_eq!(after.poke(me).hp, after.poke(me).maxhp, "no Rest was called");
-            assert_eq!(after.poke(foe).hp, after.poke(foe).maxhp, "no attack was called");
+            assert_eq!(
+                after.poke(me).hp,
+                after.poke(me).maxhp,
+                "no Rest was called"
+            );
+            assert_eq!(
+                after.poke(foe).hp,
+                after.poke(foe).maxhp,
+                "no attack was called"
+            );
             assert_eq!(after.poke(me).status, Status::None, "and no self-status");
             let ms = after.poke_str(me);
             assert!(
-                !after.log.iter().any(|l| l.starts_with(&format!("|-fail|{ms}"))),
+                !after
+                    .log
+                    .iter()
+                    .any(|l| l.starts_with(&format!("|-fail|{ms}"))),
                 "the engine fails it silently, with no -fail: {:?}",
                 after.log
             );
@@ -2137,9 +3621,17 @@ mod dominated_action_tests {
         strand(&mut b, 0);
         let acts = b.clone().legal_choices(&dex, 0);
         assert_eq!(acts.len(), 1, "the fixture must leave exactly one action");
-        assert_eq!(dominated_actions(&b, &dex, 0).len(), 1, "and the mask must refuse it");
+        assert_eq!(
+            dominated_actions(&b, &dex, 0).len(),
+            1,
+            "and the mask must refuse it"
+        );
 
-        let cfg = RmConfig { rule: SelRule::Ucb, iterations: 200, ..Default::default() };
+        let cfg = RmConfig {
+            rule: SelRule::Ucb,
+            iterations: 200,
+            ..Default::default()
+        };
         for seed in 1..=5u64 {
             let mut s = SkuctSearch::new(&b, &dex, cfg.clone(), seed);
             s.step(&dex, 200);
@@ -2156,21 +3648,32 @@ mod dominated_action_tests {
     #[test]
     fn mask_rules_ablation_isolates_the_sleep_talk_rule() {
         let (dex, b) = st_setup();
-        let legacy = MaskRules { sleep_talk_awake: false, ..MaskRules::default() };
-        assert!(certain_noop(&b, &dex, 0, mv(&dex, "sleeptalk")), "shipped refuses it");
+        let legacy = MaskRules {
+            sleep_talk_awake: false,
+            ..MaskRules::default()
+        };
+        assert!(
+            certain_noop(&b, &dex, 0, mv(&dex, "sleeptalk")),
+            "shipped refuses it"
+        );
         assert!(
             !super::certain_noop(&b, &dex, 0, mv(&dex, "sleeptalk"), legacy),
             "the ablation arm does not"
         );
         // …and nothing else moves: same position, same other verdicts.
-        let shipped: Vec<&str> =
-            dominated_actions(&b, &dex, 0).into_iter().map(|(_, why)| why).collect();
+        let shipped: Vec<&str> = dominated_actions(&b, &dex, 0)
+            .into_iter()
+            .map(|(_, why)| why)
+            .collect();
         let ablated: Vec<&str> = dominated_actions_with(&b, &dex, 0, legacy)
             .into_iter()
             .map(|(_, why)| why)
             .collect();
         assert_eq!(
-            shipped.iter().filter(|w| !w.starts_with("Sleep Talk")).count(),
+            shipped
+                .iter()
+                .filter(|w| !w.starts_with("Sleep Talk"))
+                .count(),
             ablated.len(),
             "the flag must move only its own rule: {shipped:?} vs {ablated:?}"
         );
@@ -2233,8 +3736,14 @@ mod dominated_action_tests {
         strand(&mut stuck, 1);
         let noop = |b: &Battle, side: usize, key: &str| certain_noop(b, &dex, side, mv(&dex, key));
         for key in ["thunderwave", "toxic"] {
-            assert!(!noop(&open, 0, key), "{key} is a switch read while the foe has a bench");
-            assert!(noop(&stuck, 0, key), "{key} is refused once the foe is stuck");
+            assert!(
+                !noop(&open, 0, key),
+                "{key} is a switch read while the foe has a bench"
+            );
+            assert!(
+                noop(&stuck, 0, key),
+                "{key} is refused once the foe is stuck"
+            );
         }
         // Trapping is the other way to be stuck, and the engine's own flag is
         // what both the mask and `legal_choices` read.
@@ -2242,7 +3751,10 @@ mod dominated_action_tests {
             let mut trapped = open.clone();
             let def = trapped.active_id(1).unwrap();
             trapped.poke_mut(def).trapped = true;
-            assert!(noop(&trapped, 0, "thunderwave"), "a trapped foe cannot leave either");
+            assert!(
+                noop(&trapped, 0, "thunderwave"),
+                "a trapped foe cannot leave either"
+            );
         }
         // Own-state rules are unaffected: a switch cannot heal me, refill my
         // HP, or move my stat stages.
@@ -2250,7 +3762,10 @@ mod dominated_action_tests {
             let mut b = open.clone();
             let att = b.active_id(0).unwrap();
             b.poke_mut(att).boosts[0] = 6;
-            assert!(noop(&b, 0, "swordsdance"), "capped self-boost does not care");
+            assert!(
+                noop(&b, 0, "swordsdance"),
+                "capped self-boost does not care"
+            );
         }
         // Safeguard is a SIDE condition: it survives the switch, so it still
         // refuses whoever comes in.
@@ -2324,7 +3839,10 @@ mod dominated_action_tests {
             let mut trapped = open.clone();
             let def = trapped.active_id(1).unwrap();
             trapped.poke_mut(def).trapped = true;
-            assert!(!noop(&trapped, 0, "whirlwind"), "a trapped foe is still draggable");
+            assert!(
+                !noop(&trapped, 0, "whirlwind"),
+                "a trapped foe is still draggable"
+            );
             let after = play(&dex, &trapped, 0, 1);
             assert_ne!(
                 after.active_id(1).unwrap(),
@@ -2384,7 +3902,10 @@ mod dominated_action_tests {
             b.set_log_enabled(true);
             b.log.clear();
             let after = play(&dex, &b, 0, slot);
-            after.log.iter().any(|l| l.contains("used by your last Pokemon"))
+            after
+                .log
+                .iter()
+                .any(|l| l.contains("used by your last Pokemon"))
         };
 
         // A live bench: both moves work, and the engine really does apply them.
@@ -2394,7 +3915,9 @@ mod dominated_action_tests {
         let ps_cond = dex.conds_id("perishsong").unwrap();
         let perished = play(&dex, &open, 0, 4);
         assert!(
-            perished.poke(perished.active_id(1).unwrap()).has_volatile(ps_cond),
+            perished
+                .poke(perished.active_id(1).unwrap())
+                .has_volatile(ps_cond),
             "the engine set the perish counter"
         );
         assert!(!hinted(&open, 4), "no Stadium refusal with a bench");
@@ -2412,7 +3935,9 @@ mod dominated_action_tests {
         }
         let after_ps = play(&dex, &last, 0, 4);
         assert!(
-            !after_ps.poke(after_ps.active_id(1).unwrap()).has_volatile(ps_cond),
+            !after_ps
+                .poke(after_ps.active_id(1).unwrap())
+                .has_volatile(ps_cond),
             "no perish counter from the last mon"
         );
         assert!(hinted(&last, 4), "the engine refused Perish Song");
@@ -2423,18 +3948,31 @@ mod dominated_action_tests {
         let mut foe_last = open.clone();
         strand(&mut foe_last, 1);
         for key in ["perishsong", "destinybond"] {
-            assert!(!noop(&foe_last, 0, key), "{key} does not read the foe's bench");
+            assert!(
+                !noop(&foe_last, 0, key),
+                "{key} does not read the foe's bench"
+            );
         }
         assert!(!noop(&last, 0, "icepunch"), "the damaging move stays live");
-        assert!(!noop(&last, 0, "meanlook"), "Mean Look still applies its volatile");
+        assert!(
+            !noop(&last, 0, "meanlook"),
+            "Mean Look still applies its volatile"
+        );
 
         // …and it is the argmax consequence that matters: with the mask in
         // place `best` can never submit one of the two while Ice Punch exists,
         // however flat the root values are.
         let acts = last.clone().legal_choices(&dex, 0);
-        let refused: Vec<&'static str> =
-            dominated_actions(&last, &dex, 0).into_iter().map(|(_, why)| why).collect();
-        assert_eq!(refused.len(), 2, "exactly the two moves, out of {}", acts.len());
+        let refused: Vec<&'static str> = dominated_actions(&last, &dex, 0)
+            .into_iter()
+            .map(|(_, why)| why)
+            .collect();
+        assert_eq!(
+            refused.len(),
+            2,
+            "exactly the two moves, out of {}",
+            acts.len()
+        );
     }
 
     /// Run one turn with `mover` using move slot `slot` (1-based) and the
@@ -2458,7 +3996,10 @@ mod dominated_action_tests {
         // Thunder Wave is Electric and Ground types are immune to the TYPE
         // (`pokemon.rs::run_move_immunity`), so the move never reaches its
         // status at all.
-        assert!(noop(&b, 0, "thunderwave"), "Thunder Wave into a Ground type");
+        assert!(
+            noop(&b, 0, "thunderwave"),
+            "Thunder Wave into a Ground type"
+        );
         assert_eq!(play(&dex, &b, 0, 1).poke(def).status, Status::None);
 
         // Toxic is not type-immune here (Poison into Poison is a resist, not
@@ -2523,15 +4064,24 @@ mod dominated_action_tests {
                 "Hidden Power is typed by the user's DVs, not the dex's Normal placeholder"
             );
             // A genuinely Normal-typed attack into the same Ghost IS refused.
-            assert!(certain_noop(&b3, &dex3, 0, mv(&dex3, "bodyslam")), "Body Slam into a Ghost");
+            assert!(
+                certain_noop(&b3, &dex3, 0, mv(&dex3, "bodyslam")),
+                "Body Slam into a Ghost"
+            );
         }
 
         // Controls: the same moves are live against a legal target.
         let (dex2, b2) = imm_setup("team 3, 1, 2"); // side 1 leads Exeggutor
         let noop2 =
             |b: &Battle, side: usize, key: &str| certain_noop(b, &dex2, side, mv(&dex2, key));
-        assert!(!noop2(&b2, 0, "thunderwave"), "Thunder Wave is live vs Grass/Psychic");
-        assert!(!noop2(&b2, 0, "toxic"), "Toxic is live vs a non-Poison type");
+        assert!(
+            !noop2(&b2, 0, "thunderwave"),
+            "Thunder Wave is live vs Grass/Psychic"
+        );
+        assert!(
+            !noop2(&b2, 0, "toxic"),
+            "Toxic is live vs a non-Poison type"
+        );
         // ...but Leech Seed does not take on a Grass type
         // (`moveexec.rs` leechseed/onTryImmunity).
         assert!(noop2(&b2, 0, "leechseed"), "Leech Seed into a Grass type");
@@ -2567,7 +4117,10 @@ mod dominated_action_tests {
         let sound = only(|r| r.immunity_all_switchins = true);
         let tw = mv(&dex, "thunderwave");
 
-        assert!(!certain_noop(&b, &dex, 0, tw), "shipped: a switchable foe disarms the rule");
+        assert!(
+            !certain_noop(&b, &dex, 0, tw),
+            "shipped: a switchable foe disarms the rule"
+        );
         assert!(
             super::certain_noop(&b, &dex, 0, tw, aggressive),
             "arm 1: the mon in front is Ground, refuse it anyway"
@@ -2586,7 +4139,11 @@ mod dominated_action_tests {
             after.choose(&dex, 0, "move thunderwave").unwrap();
             after.choose(&dex, 1, "switch 3").unwrap(); // Exeggutor
             let def = after.active_id(1).unwrap();
-            assert_eq!(after.poke(def).status, Status::Par, "the replacement was paralysed");
+            assert_eq!(
+                after.poke(def).status,
+                Status::Par,
+                "the replacement was paralysed"
+            );
         }
 
         // Control: nothing fires when the mon in front is not immune.
@@ -2600,7 +4157,10 @@ mod dominated_action_tests {
 
         // Each flag moves only its own rule: every OTHER verdict at this root
         // is untouched, so an A/B is measuring one thing.
-        let base: Vec<&str> = dominated_actions(&b, &dex, 0).into_iter().map(|(_, w)| w).collect();
+        let base: Vec<&str> = dominated_actions(&b, &dex, 0)
+            .into_iter()
+            .map(|(_, w)| w)
+            .collect();
         for r in [aggressive, sound] {
             let arm: Vec<&str> = dominated_actions_with(&b, &dex, 0, r)
                 .into_iter()
@@ -2669,16 +4229,34 @@ mod dominated_action_tests {
         {
             let (dex, b) = ghost_setup("Haunter");
             let bs = mv(&dex, "bodyslam");
-            assert!(!certain_noop(&b, &dex, 0, bs), "shipped: the foe can still leave");
-            assert!(super::certain_noop(&b, &dex, 0, bs, aggressive), "arm 1 refuses");
+            assert!(
+                !certain_noop(&b, &dex, 0, bs),
+                "shipped: the foe can still leave"
+            );
+            assert!(
+                super::certain_noop(&b, &dex, 0, bs, aggressive),
+                "arm 1 refuses"
+            );
             assert!(
                 super::certain_noop(&b, &dex, 0, bs, sound),
                 "arm 2 refuses: every switch-in is a Ghost"
             );
             // Earthquake, on the same board, is live under BOTH arms — the
             // rule is about the move's type, not about the position.
-            assert!(!super::certain_noop(&b, &dex, 0, mv(&dex, "earthquake"), sound));
-            assert!(!super::certain_noop(&b, &dex, 0, mv(&dex, "earthquake"), aggressive));
+            assert!(!super::certain_noop(
+                &b,
+                &dex,
+                0,
+                mv(&dex, "earthquake"),
+                sound
+            ));
+            assert!(!super::certain_noop(
+                &b,
+                &dex,
+                0,
+                mv(&dex, "earthquake"),
+                aggressive
+            ));
             // engine cross-check on the branch arm 2 claims to have proved:
             // the foe switches, and the Normal attack still does nothing.
             let mut after = b.clone();
@@ -2686,7 +4264,11 @@ mod dominated_action_tests {
             after.choose(&dex, 0, "move bodyslam").unwrap();
             after.choose(&dex, 1, "switch 2").unwrap(); // Gengar
             let def = after.active_id(1).unwrap();
-            assert_eq!(after.poke(def).hp, after.poke(def).maxhp, "no damage to the switch-in");
+            assert_eq!(
+                after.poke(def).hp,
+                after.poke(def).maxhp,
+                "no damage to the switch-in"
+            );
         }
 
         // (b) one hittable mon on the bench and arm 2 goes quiet, while the
@@ -2694,7 +4276,10 @@ mod dominated_action_tests {
         {
             let (dex, b) = ghost_setup("Snorlax");
             let bs = mv(&dex, "bodyslam");
-            assert!(super::certain_noop(&b, &dex, 0, bs, aggressive), "arm 1 does not care");
+            assert!(
+                super::certain_noop(&b, &dex, 0, bs, aggressive),
+                "arm 1 does not care"
+            );
             assert!(
                 !super::certain_noop(&b, &dex, 0, bs, sound),
                 "arm 2: the Snorlax switch-in is hittable"
@@ -2764,7 +4349,11 @@ mod dominated_action_tests {
         b.set_log_enabled(false);
         b.choose(&dex, 0, "team 1, 2, 3").unwrap();
         b.choose(&dex, 1, "team 1, 2, 3").unwrap(); // the three Ghosts
-        assert_eq!(b.sides[1].roster.len(), 6, "the fixture must carry a full roster");
+        assert_eq!(
+            b.sides[1].roster.len(),
+            6,
+            "the fixture must carry a full roster"
+        );
         assert_eq!(b.sides[1].party.len(), 3);
 
         let bs = mv(&dex, "bodyslam");
@@ -2789,13 +4378,20 @@ mod dominated_action_tests {
             let slot = b.sides[1].party[pos];
             b.poke_mut(PokeId { side: 1, slot }).previously_switched_in = 1;
         }
-        assert_eq!(super::foe_switchin_candidates(&b, 0).len(), 2, "the real bench, exactly");
+        assert_eq!(
+            super::foe_switchin_candidates(&b, 0).len(),
+            2,
+            "the real bench, exactly"
+        );
         assert!(
             super::certain_noop(&b, &dex, 0, bs, sound),
             "every pick is public now and all three are Ghosts"
         );
         // The shipped mask still says nothing, in every one of these states.
-        assert!(!certain_noop(&b, &dex, 0, bs), "the shipped gate is unchanged");
+        assert!(
+            !certain_noop(&b, &dex, 0, bs),
+            "the shipped gate is unchanged"
+        );
     }
 
     #[test]
@@ -2823,7 +4419,10 @@ mod dominated_action_tests {
             let mut b = b.clone();
             b.add_volatile(&dex, att, "substitute", None, EffectHandle::None);
             assert!(noop(&b, 1, "confuseray"), "Confuse Ray into a Substitute");
-            assert!(!noop(&b, 1, "swagger"), "Swagger still boosts through a Substitute");
+            assert!(
+                !noop(&b, 1, "swagger"),
+                "Swagger still boosts through a Substitute"
+            );
             let cf = dex.conds_id("confusion").unwrap();
             let after = play(&dex, &b, 1, 1);
             assert!(!after.poke(att).has_volatile(cf), "no confusion landed");
@@ -2876,9 +4475,15 @@ mod dominated_action_tests {
             b.poke_mut(def).hp = quarter;
             // Our own HP only survives to our move if we act first: a faster
             // foe can damage us past the gate, and then Substitute works.
-            assert!(!noop(&b, 1, "substitute"), "slower: the foe can change our HP first");
+            assert!(
+                !noop(&b, 1, "substitute"),
+                "slower: the foe can change our HP first"
+            );
             b.poke_mut(def).boosts[4] = 6;
-            assert!(noop(&b, 1, "substitute"), "Substitute at exactly a quarter, moving first");
+            assert!(
+                noop(&b, 1, "substitute"),
+                "Substitute at exactly a quarter, moving first"
+            );
             let sub = dex.conds_id("substitute").unwrap();
             let after = play(&dex, &b, 1, 2);
             assert!(!after.poke(after.active_id(1).unwrap()).has_volatile(sub));
@@ -2897,13 +4502,23 @@ mod dominated_action_tests {
         let (dex, mut b) = setup();
         let att = b.active_id(0).unwrap();
         b.add_side_condition(&dex, 0, "reflect", Some(att), EffectHandle::None);
-        let cfg = RmConfig { rule: SelRule::Ucb, iterations: 200, ..Default::default() };
+        let cfg = RmConfig {
+            rule: SelRule::Ucb,
+            iterations: 200,
+            ..Default::default()
+        };
         for seed in 1..=10u64 {
             let mut s = SkuctSearch::new(&b, &dex, cfg.clone(), seed);
             s.step(&dex, 200);
             let best = s.best(0).map(|c| c.to_input(&dex)).unwrap();
-            assert_ne!(best, "move reflect", "masked no-op won argmax (seed {seed})");
-            assert_ne!(best, "move rest", "rest at full HP won argmax (seed {seed})");
+            assert_ne!(
+                best, "move reflect",
+                "masked no-op won argmax (seed {seed})"
+            );
+            assert_ne!(
+                best, "move rest",
+                "rest at full HP won argmax (seed {seed})"
+            );
         }
     }
 
@@ -2916,7 +4531,13 @@ mod dominated_action_tests {
 
         // 1. Non-Ghost Curse vs a stranded foe that already carries `curse` volatile:
         // Snorlax's Curse boosts (+1 Atk, +1 Def, -1 Spe) instead of applying `curse`.
-        b.add_volatile(&dex, misdreavus, "curse", Some(misdreavus), EffectHandle::None);
+        b.add_volatile(
+            &dex,
+            misdreavus,
+            "curse",
+            Some(misdreavus),
+            EffectHandle::None,
+        );
         b.poke_mut(snorlax).boosts[4] = 6; // make Snorlax faster
         assert!(
             !certain_noop(&b, &dex, 0, mv(&dex, "curse")),
@@ -2976,12 +4597,24 @@ mod dominated_action_tests {
         let s_def = slp_b.active_id(1).unwrap();
         slp_b.set_status(&dex, s_def, "slp", Some(e_att), EffectHandle::None, true);
         assert_eq!(
-            dominated_reason(&slp_b, &dex, 0, mv(&dex, "sleeppowder"), MaskRules::default()),
+            dominated_reason(
+                &slp_b,
+                &dex,
+                0,
+                mv(&dex, "sleeppowder"),
+                MaskRules::default()
+            ),
             Some("the target already carries a major status")
         );
         slp_b.add_volatile(&dex, s_def, "leechseed", Some(e_att), EffectHandle::None);
         assert_eq!(
-            dominated_reason(&slp_b, &dex, 0, mv(&dex, "sleeppowder"), MaskRules::default()),
+            dominated_reason(
+                &slp_b,
+                &dex,
+                0,
+                mv(&dex, "sleeppowder"),
+                MaskRules::default()
+            ),
             None,
             "harmless sleep move into stranded sleeping foe is unmasked during residual wait"
         );
@@ -3026,6 +4659,7 @@ mod dominated_action_tests {
         );
         // Even with Leftovers and slower, if hp + leftovers <= maxhp/2 and foe has no Pain Split/Present/Metronome, still no-op
         let orig_foe_species = b.poke(foe).species;
+        let orig_me_item = b.poke(me).item;
         b.poke_mut(foe).species = dex.species.id("cloyster").unwrap();
         b.poke_mut(me).boosts[4] = -6;
         b.poke_mut(me).item = dex.items.id("leftovers");
@@ -3040,6 +4674,7 @@ mod dominated_action_tests {
             "Leftovers alone must not unmask dead Belly Drum against Cloyster"
         );
         b.poke_mut(foe).species = orig_foe_species;
+        b.poke_mut(me).item = orig_me_item;
         // At full HP and +6 Attack while faster, Belly Drum also fails
         b.poke_mut(me).hp = b.poke(me).maxhp;
         b.poke_mut(me).boosts[4] = 6;
@@ -3064,12 +4699,272 @@ mod dominated_action_tests {
         b.poke_mut(foe).last_move = None;
         b.poke_mut(foe).last_move_encore = None;
         b.poke_mut(me).boosts[4] = 6;
-        for key in ["disable", "encore", "spite", "mirrormove", "conversion2", "mimic"] {
+        for key in [
+            "disable",
+            "encore",
+            "spite",
+            "mirrormove",
+            "conversion2",
+            "mimic",
+        ] {
             assert_eq!(
                 noop_reason(&b, &dex, 0, mv(&dex, key), rules),
                 Some("the target has not used a move yet"),
                 "{key} vs stranded foe with no last_move must be masked"
             );
         }
+    }
+
+    #[test]
+    fn endgame_rules_fast_win_safe_win_comeback_loss_and_early_stop() {
+        let (dex, b) = setup();
+        let acts = vec![mv(&dex, "agility"), mv(&dex, "thunderbolt")];
+
+        // 1. FastWin: both moves win 100% (mean = 1.0, loss = 0), but action 0 (Agility)
+        //    wins in 4 turns with 155 visits while action 1 (Thunderbolt) wins in 1 turn
+        //    with 145 visits.
+        let mut stats = EndgameRootStats::new(&b, &dex, 0, &acts);
+        for _ in 0..155 {
+            stats.record(
+                b.turn,
+                0,
+                0,
+                1.0,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn + 3,
+                    outcome: 1,
+                    alive: [2, 0],
+                },
+            );
+        }
+        for _ in 0..145 {
+            stats.record(
+                b.turn,
+                0,
+                1,
+                1.0,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn,
+                    outcome: 1,
+                    alive: [2, 0],
+                },
+            );
+        }
+        let n = [155u32, 145];
+        let w = [155.0f64, 145.0];
+        // `EndgameRules::none()` (ablation) preserves legacy argmax-visits (index 0),
+        // while `EndgameRules::default()` (shipped) selects the 1-turn KO (index 1).
+        assert_eq!(
+            stats.select_best(
+                EndgameRules::none(),
+                &acts,
+                &n,
+                &n,
+                &w,
+                |_| true,
+                |_, _, m| (0.0, m)
+            ),
+            Some(0)
+        );
+        assert_eq!(
+            stats.select_best(
+                EndgameRules::default(),
+                &acts,
+                &n,
+                &n,
+                &w,
+                |_| true,
+                |_, _, m| (0.0, m)
+            ),
+            Some(1)
+        );
+        // FastWin picks index 1 (1-turn KO)
+        let info = stats
+            .analyze(
+                EndgameRules {
+                    fast_win: true,
+                    ..EndgameRules::none()
+                },
+                &acts,
+                &n,
+                &n,
+                &w,
+                |_| true,
+                |_, _, m| (0.0, m),
+            )
+            .unwrap();
+        assert_eq!(info.regime, EndgameRegime::FastWin);
+        assert_eq!(info.legacy_idx, 0);
+        assert_eq!(info.chosen_idx, 1);
+        assert!(
+            stats.should_early_stop(
+                EndgameRules {
+                    fast_win: true,
+                    early_stop: true,
+                    ..EndgameRules::none()
+                },
+                128,
+                300,
+                false,
+                &n,
+                &w,
+                |_| true,
+            ),
+            "early_stop triggers when a 1-turn 100%-win KO is locked in"
+        );
+
+        // 2. SafeWin: action 0 has slightly higher mean (0.9125) and visits (160) but 8.75%
+        //    catastrophic terminal losses, whereas action 1 has mean 0.907 (140 visits) with
+        //    90% terminal wins and 0% terminal losses.
+        let mut safe_stats = EndgameRootStats::new(&b, &dex, 0, &acts);
+        for k in 0..160 {
+            let win = k < 146;
+            safe_stats.record(
+                b.turn,
+                0,
+                0,
+                if win { 1.0 } else { 0.0 },
+                crate::mcts::SimEndInfo {
+                    turn: b.turn + 2,
+                    outcome: if win { 1 } else { 2 },
+                    alive: if win { [1, 0] } else { [0, 1] },
+                },
+            );
+        }
+        for k in 0..140 {
+            let r = if k < 126 { 1.0 } else { 0.07 };
+            safe_stats.record(
+                b.turn,
+                0,
+                1,
+                r,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn + 2,
+                    outcome: if k < 126 { 1 } else { 0 },
+                    alive: [2, 1],
+                },
+            );
+        }
+        let sn = [160u32, 140];
+        let sw = [146.0f64, 126.0 + 14.0 * 0.07];
+        let safe_info = safe_stats
+            .analyze(
+                EndgameRules {
+                    safe_win: true,
+                    ..EndgameRules::none()
+                },
+                &acts,
+                &sn,
+                &sn,
+                &sw,
+                |_| true,
+                |i, _, m| if i == 0 { (0.25, m) } else { (0.0, m) },
+            )
+            .unwrap();
+        assert_eq!(safe_info.regime, EndgameRegime::SafeWin);
+        assert_eq!(safe_info.legacy_idx, 0);
+        assert_eq!(
+            safe_info.chosen_idx, 1,
+            "SafeWin eliminates the 8.75% loss path"
+        );
+
+        // 3. ComebackLoss: both moves have 0.02 mean against opponent best play,
+        //    but action 1 survives 5 turns and recovers 0.45 when opponent errs.
+        let mut loss_stats = EndgameRootStats::new(&b, &dex, 0, &acts);
+        for _ in 0..155 {
+            loss_stats.record(
+                b.turn,
+                0,
+                0,
+                0.02,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn,
+                    outcome: 2,
+                    alive: [0, 2],
+                },
+            );
+        }
+        for _ in 0..145 {
+            loss_stats.record(
+                b.turn,
+                0,
+                1,
+                0.02,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn + 4,
+                    outcome: 2,
+                    alive: [0, 1],
+                },
+            );
+        }
+        let ln = [155u32, 145];
+        let lw = [155.0 * 0.02, 145.0 * 0.02];
+        let loss_info = loss_stats
+            .analyze(
+                EndgameRules {
+                    comeback_loss: true,
+                    ..EndgameRules::none()
+                },
+                &acts,
+                &ln,
+                &ln,
+                &lw,
+                |_| true,
+                |i, _, _| if i == 0 { (0.0, 0.02) } else { (0.0, 0.45) },
+            )
+            .unwrap();
+        assert_eq!(loss_info.regime, EndgameRegime::ComebackLoss);
+        assert_eq!(loss_info.legacy_idx, 0);
+        assert_eq!(
+            loss_info.chosen_idx, 1,
+            "ComebackLoss picks the high-mistake-EV line"
+        );
+
+        // 4. Side 1 symmetry: verify `my_reward` is not double-flipped for side == 1.
+        let mut s1_stats = EndgameRootStats::new(&b, &dex, 1, &acts);
+        for _ in 0..80 {
+            s1_stats.record(
+                b.turn,
+                1,
+                0,
+                1.0,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn + 3,
+                    outcome: 2,
+                    alive: [0, 2],
+                },
+            );
+            s1_stats.record(
+                b.turn,
+                1,
+                1,
+                1.0,
+                crate::mcts::SimEndInfo {
+                    turn: b.turn,
+                    outcome: 2,
+                    alive: [0, 2],
+                },
+            );
+        }
+        let s1_n = [80u32, 80];
+        let s1_w = [80.0f64, 80.0];
+        let s1_info = s1_stats
+            .analyze(
+                EndgameRules::all_decision(),
+                &acts,
+                &s1_n,
+                &s1_n,
+                &s1_w,
+                |_| true,
+                |_, _, m| (0.0, m),
+            )
+            .unwrap();
+        assert_eq!(s1_info.regime, EndgameRegime::FastWin);
+        assert_eq!(
+            s1_info.chosen_idx, 1,
+            "Side 1 FastWin selects the 1-turn KO"
+        );
+        assert!((s1_info.actions[1].win_rate - 1.0).abs() < 1e-9);
+        assert_eq!(s1_info.actions[1].loss_rate, 0.0);
     }
 }

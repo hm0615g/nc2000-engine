@@ -23,10 +23,10 @@
 //     --team pool:0|pool:random|FILE.json [--challenge USER | --accept any|U1,U2] \
 //     [--games N] [--iters 30000 | --web-policy strong|standard] [--seed 1] [--mode blind|open] \
 //     [--opp-team-file FILE.json] [--random] [--timer] \
-//     [--decision-log FILE.jsonl] [--belief-prior FILE.json|auto] \
+//     [--belief-prior FILE.json|auto] \
 //     [--password PW] [--loginserver URL] [--format gen2nintendocup2000noohkostadium2strict] \
 //     [--lobby lobby] [--pool FILE.json | --team-dir DIR] \
-//     [--unknown-log FILE.jsonl] [--drop SPEC] [--quiet]
+//     [--drop SPEC] [--quiet]
 //
 // --random turns the client into the second driver: choices are drawn
 // uniformly from the request-legal set (level-cap-aware at team preview)
@@ -128,16 +128,8 @@ if (args.help || args.h) {
                     data/belief-pool-v3/belief-pool.json. Without the flag the fallback
                     imputation is exactly today's. A malformed table warns
                     and degrades rather than failing the run
-  --unknown-log F   JSONL log for opponent observations outside the pool
-                    (default logs/opponent-observations.jsonl)
-  --unknown-log-all log every completed battle, not only unknown observations
-  --no-unknown-log  disable opponent observation logging
   --drop SPEC       verification hook: socket kills at chosen decision
                     points (see header comment)
-  --decision-log F  append private (mode 0600) JSONL for regret replay:
-                    request, incremental visible protocol, exact own team,
-                    pinned opponent team in open mode, submitted action,
-                    diagnostic state, root policy/config
   --quiet           per-game lines only`);
 	process.exit(0);
 }
@@ -164,9 +156,14 @@ const ACCEPT = args.accept && args.accept !== true ? String(args.accept) : '';
 const GAMES = parseInt(args.games || '1', 10);
 const MODE = String(args.mode || 'blind');
 const DYNAMIC_OPEN_FORMAT_ID = 'gen2nintendocup2000noohkostadium2strict';
-const BOT_AUTH_TOKEN = String(process.env.NC2000_DYNAMIC_OPEN_TOKEN || '').trim();
+const BOT_AUTH_TOKEN = String(process.env?.NC2000_DYNAMIC_OPEN_TOKEN || '').trim();
 if (!['blind', 'open'].includes(MODE)) throw new Error('--mode must be blind or open');
-const PROFILE = require('../data/search-profiles.json')[MODE];
+const profileText = fs.readFileSync(
+	path.join(REPO, 'data/search-profiles.json'),
+	'utf8'
+);
+const SEARCH_PROFILES = JSON.parse(profileText);
+const PROFILE = SEARCH_PROFILES[MODE];
 const LIVE_SEARCH = require('../data/live-search.json');
 const WEB_POLICY = args['web-policy'] === true
     ? String(LIVE_SEARCH.defaultStrength)
@@ -222,10 +219,6 @@ const DEFAULT_BELIEF_POOL_FILE =
 
 const DEFAULT_BELIEF_POOL_JSON =
 	fs.readFileSync(DEFAULT_BELIEF_POOL_FILE, 'utf8');
-const UNKNOWN_LOG = args['no-unknown-log'] ? '' : resolveUserPath(String(args['unknown-log'] && args['unknown-log'] !== true ? args['unknown-log'] : path.join(REPO, 'logs/opponent-observations.jsonl')));
-const UNKNOWN_LOG_ALL = !!args['unknown-log-all'];
-const DECISION_LOG = args['decision-log'] && args['decision-log'] !== true ?
-	path.resolve(String(args['decision-log'])) : '';
 const BELIEF_PRIOR_ARG = args['belief-prior'] && args['belief-prior'] !== true ? String(args['belief-prior']) : '';
 const BELIEF_PRIOR_AUTO = BELIEF_PRIOR_ARG.toLowerCase() === 'auto';
 const BELIEF_PRIOR_FILE = BELIEF_PRIOR_ARG && !BELIEF_PRIOR_AUTO ? resolveUserPath(BELIEF_PRIOR_ARG) : '';
@@ -243,30 +236,6 @@ const RECONNECT_MS = 500;
 // imposing Showdown's cumulative chess-clock-style timer on the human.
 const OPPONENT_WAIT_FORFEIT_MS = 300_000;
 const OPPONENT_WAIT_RETRY_MS = 5_000;
-
-if (DECISION_LOG) {
-	fs.mkdirSync(path.dirname(DECISION_LOG), { recursive: true });
-	if (!fs.existsSync(DECISION_LOG)) fs.closeSync(fs.openSync(DECISION_LOG, 'a', 0o600));
-	fs.chmodSync(DECISION_LOG, 0o600);
-}
-
-function appendDecision(row) {
-	if (!DECISION_LOG) return;
-	fs.appendFileSync(DECISION_LOG, `${JSON.stringify(row)}\n`, { mode: 0o600 });
-}
-
-function safeServer(raw) {
-	try {
-		const url = new URL(/^wss?:\/\//.test(raw) ? raw : `ws://${raw}`);
-		url.username = '';
-		url.password = '';
-		url.search = '';
-		url.hash = '';
-		return url.toString();
-	} catch {
-		return 'invalid-server-url';
-	}
-}
 
 const toID = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -543,7 +512,9 @@ let compiledPreviewForkAttestation = null;
 let compiledPreviewForkAttestationValid = false;
 let compiledPreviewForkAttestationReason = '';
 
-if (!RANDOM && WEB_POLICY && MODE === 'blind') {
+const PS_CLIENT_COMPILED_PREVIEW_ENABLED = false;
+
+if (PS_CLIENT_COMPILED_PREVIEW_ENABLED && !RANDOM && WEB_POLICY && MODE === 'blind') {
 	try {
 		const compiledPreviewArtifactText = fs.readFileSync(
 			path.join(REPO, 'data/compiled-preview-v1.json'),
@@ -746,37 +717,10 @@ if (WEB_POLICY) {
 		`[${NAME}] web policy ${WEB_POLICY}: battle=${ITERS}, ` +
 		`unknown-preview=${PREVIEW_ITERS}, c=${PROFILE.c}`
 	);
-	if (MODE === 'open') {
-		console.log(
-			`[${NAME}] open-sheet web policy: compiled preview disabled; ` +
-			`team preview uses live search`
-		);
-	} else if (
-		compiledPreviewCompatible &&
-		compiledPreviewForkAttestationValid
-	) {
-		console.log(
-			`[${NAME}] compiled preview fork attestation ready: ` +
-			`${compiledPreviewForkAttestation.artifactBuild} -> ` +
-			`${compiledPreviewForkAttestation.currentBuild}`
-		);
-		console.log(
-			`[${NAME}] compiled preview ready: ` +
-			`${Object.keys(compiledPreviewArtifact.policies).length} policies, ` +
-			`${compiledPreviewArtifact.iterations} source iterations`
-		);
-	} else if (compiledPreviewCompatible) {
-		console.log(
-			`[${NAME}] compiled preview ready: ` +
-			`${Object.keys(compiledPreviewArtifact.policies).length} policies, ` +
-			`${compiledPreviewArtifact.iterations} source iterations`
-		);
-	} else {
-		console.log(
-			`[${NAME}] compiled preview unavailable; live preview search will be used: ` +
-			compiledPreviewCompatibilityReason
-		);
-	}
+	console.log(
+		`[${NAME}] ps-client preview: compiled/baked preview disabled; ` +
+		`team preview uses live search`
+	);
 }
 
 // Match the browser worker's adaptive search slicing: keep individual
@@ -980,80 +924,6 @@ const NOISE = new Set([
 	'notify', 'tempnotify', 'tempnotifyoff', 'hidelines', 'unlink', 'b', 'battle',
 ]);
 
-function ensureParentDir(file) {
-	if (!file) return;
-	fs.mkdirSync(path.dirname(file), { recursive: true });
-}
-
-function appendJsonl(file, obj) {
-	if (!file) return;
-	ensureParentDir(file);
-	fs.appendFileSync(file, JSON.stringify(obj) + '\n');
-}
-
-function identSide(ident) {
-	const m = /^p([12])/.exec(String(ident || ''));
-	return m ? `p${m[1]}` : '';
-}
-
-function identSlot(ident) {
-	const m = /^(p[12][a-z]?):/.exec(String(ident || ''));
-	return m ? m[1] : '';
-}
-
-function speciesFromIdent(ident) {
-	const s = String(ident || '');
-	const i = s.indexOf(':');
-	return i >= 0 ? s.slice(i + 1).trim() : '';
-}
-
-function parseDetails(details) {
-	const raw = String(details || '');
-	const parts = raw.split(',').map(x => x.trim()).filter(Boolean);
-	const species = parts[0] || '';
-	let level = 100;
-	let gender = '';
-	for (const part of parts.slice(1)) {
-		const lm = /^L(\d+)$/.exec(part);
-		if (lm) level = parseInt(lm[1], 10);
-		else if (part === 'M' || part === 'F' || part === 'N') gender = part;
-	}
-	return { species, level, gender, details: raw };
-}
-
-function poolIndex(pool) {
-	const bySpecies = new Map();
-	const teamKeys = new Set();
-	const teamIdsByKey = new Map();
-	for (const team of pool && pool.teams || []) {
-		const keyParts = [];
-		for (const set of team.sets || []) {
-			const species = set.species || set.name || '';
-			const sid = toID(species);
-			if (!sid) continue;
-			let entry = bySpecies.get(sid);
-			if (!entry) {
-				entry = { species, moves: new Map(), items: new Map(), setCount: 0 };
-				bySpecies.set(sid, entry);
-			}
-			entry.setCount++;
-			for (const mv of set.moves || []) entry.moves.set(toID(mv), mv);
-			if (set.item) entry.items.set(toID(set.item), set.item);
-			keyParts.push(`${sid}:L${set.level || 100}`);
-		}
-		const key = keyParts.sort().join('|');
-		teamKeys.add(key);
-		if (!teamIdsByKey.has(key)) teamIdsByKey.set(key, []);
-		teamIdsByKey.get(key).push(team.id || String(team.rank || ''));
-	}
-	return { bySpecies, teamKeys, teamIdsByKey };
-}
-
-function previewKey(preview) {
-	return preview.map(p => `${toID(p.species)}:L${p.level || 100}`).sort().join('|');
-}
-
-
 // ----------------------------------------------------------------- stats
 const stats = {
 	games: 0, W: 0, L: 0, T: 0, turns: 0, decisions: 0,
@@ -1075,10 +945,6 @@ class BattleDriver {
 		this.opponentTeamSets = oppTeamSets;
 		this.side = -1;
 		this.lineBuffer = [];
-		this.visibleLines = [];
-		this.loggedLineCount = 0;
-		this.protocolReset = false;
-		this.loggedRqids = new Set();
 		this.pendingReq = null;
 		this.lastReq = null; // last non-wait request seen (|error| recovery)
 		this.errRecoveries = 0;
@@ -1100,21 +966,6 @@ class BattleDriver {
 		this.awaitingReplay = false; // set when we /join after a reconnect
 		this.drop = dropSpecs[battleIdx] || null;
 		this.preDropView = null; // { rqid, view } for the resume proof
-		this.players = {};
-		this.selfSide = '';
-		this.oppSide = '';
-		this.opponentName = '';
-		this.activeSpeciesBySlot = new Map();
-		this.oppPreview = [];
-		this.poolIdx = null;
-		this.poolLabel = '';
-		this.unknownTeam = false;
-		this.unknownTeamChecked = false;
-		this.unknownMoves = [];
-		this.unknownItems = [];
-		this.unknownSpecies = [];
-		this.revealedMoves = new Map();
-		this.revealedItems = new Map();
 		this.log = m => console.log(`[${this.room}] ${m}`);
 	}
 
@@ -1136,9 +987,6 @@ class BattleDriver {
 		this.freeSearcher();
 		this.clearOpponentWait();
 		this.lineBuffer = [];
-		this.visibleLines = [];
-		this.loggedLineCount = 0;
-		this.protocolReset = true;
 		this.pendingReq = null;
 		this.lastReq = null;
 		this.errRecoveries = 0;
@@ -1152,13 +1000,6 @@ class BattleDriver {
 		this.log(`rejoined; rebuilding from the replayed room log`);
 	}
 
-
-	setSelfSide(side) {
-		if (!side || (side !== 'p1' && side !== 'p2')) return;
-		this.selfSide = side;
-		this.oppSide = side === 'p1' ? 'p2' : 'p1';
-		this.opponentName = this.players[this.oppSide] || this.opponentName;
-	}
 
 	clearOpponentWait(reason = '') {
 		if (this.opponentWaitTimer) {
@@ -1339,163 +1180,6 @@ class BattleDriver {
 		return done;
 	}
 
-	getPoolIndex() {
-		if (this.poolIdx) return this.poolIdx;
-		const source = this.client.currentTeam || {};
-		let pool = source.pool;
-		this.poolLabel = source.poolLabel || '';
-		if (!pool) {
-			try {
-				const snap = loadPoolSnapshot();
-				pool = snap.pool;
-				this.poolLabel = snap.label;
-			} catch { /* unknown logging can proceed without pool */ }
-		}
-		this.poolIdx = poolIndex(pool || { teams: [] });
-		return this.poolIdx;
-	}
-
-	noteSpecies(species, line) {
-		const sid = toID(species);
-		if (!sid) return;
-		const idx = this.getPoolIndex();
-		if (!idx.bySpecies.has(sid) && !this.unknownSpecies.some(x => toID(x.species) === sid)) {
-			this.unknownSpecies.push({ species, line });
-		}
-	}
-
-	noteMove(species, move, line) {
-		const sid = toID(species);
-		const mid = toID(move);
-		if (!sid || !mid || mid === 'struggle') return;
-		this.noteSpecies(species, line);
-		if (!this.revealedMoves.has(sid)) this.revealedMoves.set(sid, new Map());
-		this.revealedMoves.get(sid).set(mid, move);
-		const idx = this.getPoolIndex();
-		const known = idx.bySpecies.get(sid);
-		if ((!known || !known.moves.has(mid)) && !this.unknownMoves.some(x => toID(x.species) === sid && toID(x.move) === mid)) {
-			this.unknownMoves.push({ species, move, line });
-		}
-	}
-
-	noteItem(species, item, line) {
-		const sid = toID(species);
-		const iid = toID(item);
-		if (!sid || !iid) return;
-		this.noteSpecies(species, line);
-		if (!this.revealedItems.has(sid)) this.revealedItems.set(sid, new Map());
-		this.revealedItems.get(sid).set(iid, item);
-		const idx = this.getPoolIndex();
-		const known = idx.bySpecies.get(sid);
-		if ((!known || !known.items.has(iid)) && !this.unknownItems.some(x => toID(x.species) === sid && toID(x.item) === iid)) {
-			this.unknownItems.push({ species, item, line });
-		}
-	}
-
-	speciesForIdent(ident, details) {
-		const slot = identSlot(ident);
-		if (details) return parseDetails(details).species;
-		if (slot && this.activeSpeciesBySlot.has(slot)) return this.activeSpeciesBySlot.get(slot);
-		return speciesFromIdent(ident);
-	}
-
-	maybeCheckUnknownTeam() {
-		if (this.unknownTeamChecked) return;
-		if (!this.oppSide || this.oppPreview.length < 6) return;
-		this.unknownTeamChecked = true;
-		const key = previewKey(this.oppPreview);
-		const idx = this.getPoolIndex();
-		this.unknownTeam = !idx.teamKeys.has(key);
-	}
-
-	observeOpponentLine(line) {
-		if (!UNKNOWN_LOG && !UNKNOWN_LOG_ALL) return;
-		if (!line.startsWith('|')) return;
-		const parts = line.split('|');
-		const cmd = parts[1] || '';
-		if (cmd === 'player') {
-			const side = parts[2] || '';
-			const name = (parts[3] || '').trim();
-			if (side === 'p1' || side === 'p2') this.players[side] = name;
-			if (toID(name) === toID(NAME)) this.setSelfSide(side);
-			else if (this.selfSide && side === this.oppSide) this.opponentName = name;
-			return;
-		}
-		if (cmd === 'poke') {
-			const side = parts[2] || '';
-			const info = parseDetails(parts[3] || '');
-			if (side && side === this.oppSide && info.species) {
-				this.oppPreview.push({ species: info.species, level: info.level, gender: info.gender, details: info.details, hasItem: !!parts[4] });
-				this.noteSpecies(info.species, line);
-			}
-			return;
-		}
-		if (cmd === 'teampreview') {
-			this.maybeCheckUnknownTeam();
-			return;
-		}
-		if (cmd === 'switch' || cmd === 'drag' || cmd === 'replace') {
-			const ident = parts[2] || '';
-			const side = identSide(ident);
-			const info = parseDetails(parts[3] || '');
-			const slot = identSlot(ident);
-			if (slot && info.species) this.activeSpeciesBySlot.set(slot, info.species);
-			if (side === this.oppSide && info.species) this.noteSpecies(info.species, line);
-			return;
-		}
-		if (cmd === 'move') {
-			const ident = parts[2] || '';
-			if (identSide(ident) !== this.oppSide) return;
-			const move = parts[3] || '';
-			if (parts.slice(4).some(p => /\[from\]\s*(move:\s*)?(metronome|mirror move|mimic)/i.test(p))) return;
-			const species = this.speciesForIdent(ident);
-			this.noteMove(species, move, line);
-			return;
-		}
-		if (cmd === '-enditem' || cmd === '-item') {
-			const ident = parts[2] || '';
-			if (identSide(ident) !== this.oppSide) return;
-			this.noteItem(this.speciesForIdent(ident), parts[3] || '', line);
-			return;
-		}
-		for (const token of parts.slice(3)) {
-			const m = /\[from\]\s*item:\s*(.+)$/i.exec(token);
-			if (!m) continue;
-			const ident = parts[2] || '';
-			if (identSide(ident) === this.oppSide) this.noteItem(this.speciesForIdent(ident), m[1], line);
-		}
-	}
-
-	writeUnknownObservation() {
-		if (!UNKNOWN_LOG) return;
-		this.maybeCheckUnknownTeam();
-		const hasUnknown = this.unknownTeam || this.unknownMoves.length || this.unknownItems.length || this.unknownSpecies.length;
-		if (!hasUnknown && !UNKNOWN_LOG_ALL) return;
-		const mapToObject = map => {
-			const obj = {};
-			for (const [sid, inner] of map) obj[sid] = Array.from(inner.values()).sort();
-			return obj;
-		};
-		appendJsonl(UNKNOWN_LOG, {
-			timestamp: new Date().toISOString(),
-			room: this.room,
-			format: FORMATID,
-			bot: NAME,
-			opponent: this.opponentName,
-			pool: this.poolLabel,
-			poolTeams: this.client.currentTeam && this.client.currentTeam.pool ? this.client.currentTeam.pool.teams.length : undefined,
-			unknownTeam: this.unknownTeam,
-			preview: this.oppPreview,
-			revealedMoves: mapToObject(this.revealedMoves),
-			revealedItems: mapToObject(this.revealedItems),
-			unknownSpecies: this.unknownSpecies,
-			unknownMoves: this.unknownMoves,
-			unknownItems: this.unknownItems,
-			result: this.result || 'T',
-			turns: this.turn,
-		});
-	}
-
 	onFrame(lines) {
 		if (this.ended) return;
 		if (lines[0] === '|init|battle' && this.initialized) this.resetForRejoin();
@@ -1533,7 +1217,6 @@ class BattleDriver {
 			}
 			return;
 		}
-		this.observeOpponentLine(line);
 		const cmd = line.split('|')[2] !== undefined ? line.split('|')[1] : line.slice(1);
 		if (cmd === 'request') {
 			const j = line.slice('|request|'.length);
@@ -1567,7 +1250,6 @@ class BattleDriver {
 		}
 		if (NOISE.has(cmd)) return;
 		this.lineBuffer.push(line);
-		this.visibleLines.push(line);
 		if (cmd === 'win' || cmd === 'tie') this.finalize();
 	}
 
@@ -1694,7 +1376,6 @@ class BattleDriver {
 				reqStr,
 				'our random choice'
 			);
-			this.recordDecision(req, choice, null, null, null, 'random');
 			this.maybeDrop(req, 'post');
 			return;
 		}
@@ -1838,14 +1519,9 @@ class BattleDriver {
 		let searchSource = 'live-search';
 		let searchIterations = 0;
 
-		if (WEB_POLICY && req.teamPreview && MODE === 'blind') {
-			choice = compiledPreviewPick(this.searcher, searchSeed);
-			if (choice) searchSource = 'compiled-preview';
-		} else if (!WEB_POLICY) {
-			choice = this.searcher.bakedPreview();
-			if (choice) searchSource = 'baked-preview';
-		}
-
+		// Current upstream ps-client intentionally does not answer team
+		// preview from baked/compiled tables. Blind and Open both run the
+		// live searcher so ps-client follows the current upstream bot path.
 		if (!choice) {
 			const searchIters = req.teamPreview ? PREVIEW_ITERS : ITERS;
 			const generation = this.searchGeneration;
@@ -1883,69 +1559,7 @@ class BattleDriver {
 			reqStr,
 			'our searched choice'
 		);
-		let policy = null;
-		try { policy = JSON.parse(this.searcher.rootPolicy()); } catch { /* diagnostic only */ }
-		let state = null;
-		try { state = JSON.parse(this.searcher.stateView()); } catch { /* diagnostic only */ }
-		let beliefInfo = null;
-		try { beliefInfo = JSON.parse(this.searcher.beliefInfo()); } catch { /* diagnostic only */ }
-		this.recordDecision(
-			req,
-			choice,
-			policy,
-			state,
-			beliefInfo,
-			'search',
-			{ source: searchSource, iterations: searchIterations }
-		);
 		this.maybeDrop(req, 'post');
-	}
-
-	recordDecision(req, choice, rootPolicy, stateView, beliefInfo, driver, searchMeta = null) {
-		if (!DECISION_LOG) return;
-		const rqidKey = String(req.rqid ?? `decision-${this.decisions}`);
-		if (this.loggedRqids.has(rqidKey)) return;
-		this.loggedRqids.add(rqidKey);
-		const protocolDelta = this.visibleLines.slice(this.loggedLineCount);
-		this.loggedLineCount = this.visibleLines.length;
-		appendDecision({
-			version: 3,
-			type: 'decision',
-			room: this.room,
-			battle: this.battleIdx,
-			decision: this.decisions,
-			rqid: req.rqid,
-			side: this.side >= 0 ? this.side : (req.side && req.side.id === 'p2' ? 1 : 0),
-			turn: this.turn,
-			server: safeServer(SERVER_RAW),
-			format: FORMATID,
-			mode: MODE,
-			driver,
-			searchC: PROFILE.c,
-			iterations: driver === 'search' ?
-				(searchMeta ? searchMeta.iterations : ITERS) : 0,
-			searchSource: driver === 'search' && searchMeta ?
-				searchMeta.source : null,
-			webPolicy: WEB_POLICY || null,
-			searchRuntime:
-				RANDOM ? null : SEARCH_RUNTIME,
-			battleIterations: WEB_POLICY ? ITERS : null,
-			previewIterations: WEB_POLICY ? PREVIEW_ITERS : null,
-			seed: SEED * 1000 + this.battleIdx,
-			teamLabel: this.client.currentTeam.label.startsWith('pool:') ?
-				this.client.currentTeam.label : path.basename(this.client.currentTeam.label),
-			ownTeam: this.client.currentTeam.sets,
-			opponentTeam: MODE === 'open' ? this.opponentTeamSets : null,
-			request: req,
-			protocolReset: this.protocolReset,
-			protocolDelta,
-			submitted: choice,
-			rootPolicy,
-			beliefInfo,
-			stateViewKind: 'diagnostic-imputed',
-			stateView,
-		});
-		this.protocolReset = false;
 	}
 
 	maybeDrop(req, when) {
@@ -1985,12 +1599,12 @@ class BattleDriver {
 	finalize() {
 		if (this.ended) return;
 		this.clearOpponentWait();
+if (!['W', 'L', 'T'].includes(this.result)) throw new Error('cannot finalize without a terminal result');
 		this.ended = true;
 		if (this.actTimer) clearTimeout(this.actTimer);
 		stats.games++;
-		stats[this.result || 'T']++;
+		stats[this.result]++;
 		stats.turns += this.turn;
-		this.writeUnknownObservation();
 		console.log(
 			`game ${stats.games}/${hasGameLimit() ? GAMES : 'unlimited'}: ${this.result} in ${this.turn} turns, ` +
 			`${this.decisions} decisions (${this.room})`

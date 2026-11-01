@@ -221,6 +221,7 @@ fn main() {
     let bounds = last_bounds.expect("at least one call");
     println!();
     match last_stop {
+        Stop::StrategyMet => unreachable!("threshold solves do not request a strategy target"),
         Stop::WidthMet => println!(
             "CONVERGED (width): side0 in [{:.4},{:.4}], p2 in [{:.4},{:.4}] after {cumulative} runs",
             bounds.lo,
@@ -242,7 +243,7 @@ fn main() {
             "CONTAINED in tau: side0 [{:.4},{:.4}] fits inside the band. {cumulative} runs",
             bounds.lo, bounds.hi
         ),
-        Stop::WorkExhausted | Stop::NodeBudget => println!(
+        Stop::WorkExhausted | Stop::TimeBudget | Stop::NodeBudget => println!(
             "NOT CONVERGED ({last_stop:?}): after {calls} call(s) and {cumulative} engine runs \
              the root interval is still side0 [{:.4},{:.4}] (width {:.4}), p2 [{:.4},{:.4}]. \
              The bound is SOUND but uninformative; do NOT read the midpoint as a value. \

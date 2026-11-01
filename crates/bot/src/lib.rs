@@ -26,6 +26,7 @@
 #[global_allocator]
 static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+pub mod accounting;
 pub mod agent;
 pub mod analysis;
 pub mod belief;
@@ -34,36 +35,50 @@ pub mod bounds;
 pub mod corpus;
 pub mod compiled_preview;
 pub mod damage_search;
+pub mod decision;
 pub mod duel;
 pub mod eval;
+pub mod endgame;
 pub mod exact;
 pub mod exploit;
 pub mod fork;
 pub mod frozen;
+pub mod first_continuation;
+pub mod history_continuation;
+pub mod horizon_pp;
+pub mod hp_transition;
+pub mod hp_attack_kernel;
 pub mod import;
 pub mod learning;
 pub mod learned;
 pub mod linear;
 pub mod mcts;
 pub mod m17e_artifact;
+mod hp_evidence;
 pub mod observe;
+pub mod oracle;
 pub mod position;
 pub mod player;
 pub mod pick_prior;
 pub mod preview;
 pub mod prior;
 pub mod regret;
+mod exp3;
 pub mod rng;
+pub mod root_policy;
 pub mod runner;
 pub mod smmcts;
 pub mod shared_search;
 pub mod stall;
 pub mod teamgen;
+pub mod value;
 
+pub use accounting::{AcctModel, LeafSettlementMode};
 pub use agent::{Agent, MaxDamageAgent, RandomAgent};
 pub use belief::{Belief, FallbackPolicy, FallbackSource};
-pub use blind::{baked_preview_pick, open_preview_pick, BlindAgent, BlindSearch, OpenAgent, team_has_order_sensitive_bench_effect};
+pub use blind::{baked_preview_pick, open_preview_pick, BlindAgent, BlindSearch, OpenAgent};
 pub use observe::{ItemObs, MonObs, Observer};
+pub use oracle::OracleMode;
 pub use duel::{run_duel, DuelSpec, DuelStats};
 pub use eval::EvalWeights;
 pub use exploit::BrAgent;
@@ -75,4 +90,7 @@ pub use prior::{BeliefPrior, SpeciesPrior};
 pub use rng::SplitMix64;
 pub use runner::{play_game, GameResult};
 pub use smmcts::{RmAgent, RmConfig, SkuctSearch};
-pub use teamgen::{gauntlet_eval, to_sets, EvalCfg, EvalResult, MutOp, Proposal, TeamGen};
+pub use teamgen::{
+    gauntlet_eval, gauntlet_eval_weighted, to_sets, EvalCfg, EvalResult, MutOp, NicheConstraint,
+    Proposal, TeamGen, WeightedEvalCfg,
+};

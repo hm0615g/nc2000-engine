@@ -39,6 +39,7 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 
 use nc2000_bot::fork::{Arena, ForkSpec, Info, Policy};
+use nc2000_bot::decision::{DecisionPolicy, DecisionSampler, PolicyMode};
 use nc2000_bot::player::PlayerChannel;
 use nc2000_bot::preview::{MetaPool, TableSet};
 use nc2000_bot::position::PositionSpec;
@@ -473,6 +474,7 @@ pub struct WasmBlindSearcher {
     rng: SplitMix64,
     search: Option<BlindSearch>,
     baked: Option<SearchChoice>,
+    decision: DecisionSampler<String>,
 }
 
 #[wasm_bindgen(js_class = BlindSearcher)]
@@ -513,6 +515,7 @@ impl WasmBlindSearcher {
             rng: SplitMix64::new(seed as u64),
             search: None,
             baked: None,
+            decision: DecisionSampler::new(seed as u64),
         })
     }
 
@@ -572,6 +575,7 @@ impl WasmBlindSearcher {
     /// M8 mixed table plays instead: `bakedPreview()`/`best()` return the
     /// table pick immediately and `step` is a no-op.
     pub fn observe(&mut self, battle: &WasmBattle) -> Result<(), JsError> {
+        self.decision.reset();
         self.preview_cache_info = None;
         self.observed = true;
         self.observer.observe(&battle.battle, &self.dex);
@@ -580,10 +584,9 @@ impl WasmBlindSearcher {
             .map_err(js_err)?;
         self.baked = None;
         let seed = self.rng.next();
-        let mut search =
+        let search =
             BlindSearch::new(&battle.battle, &self.dex, self.cfg.clone(), self.side, seed);
         if search.is_preview() {
-            search.prune_preview_aliases(&self.dex);
             // Pinned (open sheet): both sheets public — resolve the pair
             // directly by signature, no identification condition. Else the
             // M10 belief-mediated lookup (singleton identification only).
@@ -642,6 +645,29 @@ impl WasmBlindSearcher {
             return Some(c.to_input(&self.dex));
         }
         self.search.as_ref()?.best().map(|c| c.to_input(&self.dex))
+    }
+
+    /// JSON execution probabilities (or null), independent of visit diagnostics.
+    /// Before commit this follows current evidence; afterwards it is frozen.
+    #[wasm_bindgen(js_name = playPolicy)]
+    pub fn play_policy(&self, mode: &str) -> Result<String, JsError> {
+        let mode = PolicyMode::parse(mode).map_err(|e| JsError::new(e))?;
+        let policy = self.decision.committed().map(|d| d.policy.clone())
+            .or_else(|| self.execution_policy(mode));
+        Ok(serde_json::to_string(&policy).expect("valid policy"))
+    }
+
+    /// Finish this decision: return JSON {input, policy}, drawing once from
+    /// the execution distribution. Repeated calls return the same snapshot,
+    /// even if search continues or a different mode is supplied. Next
+    /// observe/onRequest starts a new decision. Null means nothing is owed.
+    #[wasm_bindgen(js_name = commitDecision)]
+    pub fn commit_decision(&mut self, mode: &str) -> Result<String, JsError> {
+        let mode = PolicyMode::parse(mode).map_err(|e| JsError::new(e))?;
+        if self.decision.committed().is_none() {
+            if let Some(policy) = self.execution_policy(mode) { self.decision.commit(policy); }
+        }
+        Ok(serde_json::to_string(&self.decision.committed()).expect("valid decision"))
     }
 
     /// JSON: `{iterations, preview, baked, actions: [...]}` — same row
@@ -781,6 +807,21 @@ impl WasmBlindSearcher {
     }
 }
 
+impl WasmBlindSearcher {
+    fn execution_policy(&self, mode: PolicyMode) -> Option<DecisionPolicy<String>> {
+        if let Some(action) = self.baked {
+            return Some(DecisionPolicy::pure("preview-sampled", action.to_input(&self.dex)));
+        }
+        self.search.as_ref()?.decision_policy(mode).map(|p| p.map(|action| action.to_input(&self.dex)))
+    }
+}
+
+impl WasmProtocolSearcher {
+    fn execution_policy(&self, mode: PolicyMode) -> Option<DecisionPolicy<String>> {
+        self.agent.decision_policy(&self.dex, mode)
+    }
+}
+
 // ------------------------------------------------------- ProtocolSearcher
 
 /// M15a: the imperfect-info agent driven by PLAYER-VISIBLE information only
@@ -801,6 +842,21 @@ pub struct WasmProtocolSearcher {
     /// `setBeliefPrior` can refuse out loud instead of relying on the agent's
     /// internal "never onto a pinned belief" guard.
     pinned: bool,
+    endgame: Option<nc2000_bot::endgame::EndgameSession>,
+    decision: DecisionSampler<String>,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = ["globalThis", "performance"], js_name = now)]
+    fn endgame_now_ms() -> f64;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn endgame_now_ms() -> f64 {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    START.get_or_init(std::time::Instant::now).elapsed().as_secs_f64() * 1000.0
 }
 
 /// M18 `setBeliefPrior` report: `{applied, species, meanMoveSum, skipped,
@@ -841,7 +897,7 @@ impl WasmProtocolSearcher {
         let cfg = skuct_config(c.unwrap_or_else(|| profile_c("blind")), hp_buckets);
         let preview_cache_identity = Some(preview_cache::Identity::new("protocol", &cfg, pool_json));
         let agent = ProtocolAgent::new(&dex.dex, side, pool, cfg, seed as u64);
-        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, preview_cache_identity, pinned: false })
+        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, preview_cache_identity, pinned: false, endgame: None, decision: DecisionSampler::new(seed as u64) })
     }
 
     /// `c` defaults to the profile of the information policy the fork was
@@ -859,7 +915,7 @@ impl WasmProtocolSearcher {
         } else {
             fork.opponent_agent(&dex.dex, pool, skuct_config(c, None), seed as u64)
         }.map_err(|e| JsError::new(&e))?;
-        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, preview_cache_identity: None, pinned: fork.info == nc2000_bot::fork::Info::Open })
+        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, preview_cache_identity: None, pinned: fork.info == nc2000_bot::fork::Info::Open, endgame: None, decision: DecisionSampler::new(seed as u64) })
     }
 
     /// Our exact team, as submitted to PS (same JSON array shape as the
@@ -979,6 +1035,8 @@ impl WasmProtocolSearcher {
     /// (the searcher is then ready to `step`/`best`).
     #[wasm_bindgen(js_name = onRequest)]
     pub fn on_request(&mut self, request_json: &str) -> Result<bool, JsError> {
+        self.decision.reset();
+        self.endgame = None;
         self.agent.on_request(&self.dex, request_json).map_err(|e| JsError::new(&e))
     }
 
@@ -987,7 +1045,7 @@ impl WasmProtocolSearcher {
     /// excluded from the shared preview-cache interface.
     #[wasm_bindgen(js_name = previewCacheInfo)]
     pub fn preview_cache_info(&self) -> Option<String> {
-        if self.pinned || !self.agent.search()?.is_preview() { return None; }
+        if self.pinned || self.endgame.is_some() || !self.agent.search()?.is_preview() { return None; }
         self.preview_cache_identity.as_ref()?.info(self.agent.battle()?, self.agent.observer()?)
     }
 
@@ -997,11 +1055,39 @@ impl WasmProtocolSearcher {
         self.agent.baked_preview(&self.dex)
     }
 
-    /// Pump `n` blind iterations (fresh belief determinization each) on the
-    /// synthesized battle. No-op when a baked preview / forced choice
-    /// already decided.
+    /// Pump at most `n` blind iterations. An enabled endgame session yields
+    /// after one iteration; callers use the returned cumulative count.
     pub fn step(&mut self, n: u32) -> Result<u32, JsError> {
+        if let Some(session) = self.endgame.as_mut() {
+            return self.agent.step_with_endgame(&self.dex, n.min(1), session, &mut endgame_now_ms).map_err(|e| JsError::new(&e));
+        }
         self.agent.step(&self.dex, n).map_err(|e| JsError::new(&e))
+    }
+
+    #[wasm_bindgen(js_name = beginEndgame)]
+    pub fn begin_endgame(&mut self, config_json: Option<String>, milliseconds: f64) -> Result<(), JsError> {
+        let started = endgame_now_ms();
+        self.endgame = None;
+        if let Some(json) = config_json {
+            if self.agent.search().is_none() { return Err(JsError::new("beginEndgame requires a decision")); }
+            let cfg = serde_json::from_str(&json).map_err(js_err)?;
+            self.endgame = Some(nc2000_bot::endgame::EndgameSession::new(cfg, started, milliseconds).map_err(|e| JsError::new(&e))?);
+        }
+        Ok(())
+    }
+
+    #[wasm_bindgen(js_name = endgameStats)]
+    pub fn endgame_stats(&self) -> String {
+        self.endgame.as_ref().map_or_else(|| "null".into(), |session| serde_json::json!({
+            "scope": "conditional-determinized", "stats": session.stats,
+            "expired": session.expired(endgame_now_ms()),
+        }).to_string())
+    }
+
+    #[wasm_bindgen(js_name = extendEndgame)]
+    pub fn extend_endgame(&mut self, milliseconds: f64) -> Result<(), JsError> {
+        self.endgame.as_mut().ok_or_else(|| JsError::new("extendEndgame before beginEndgame"))?
+            .extend_budget(milliseconds).map_err(|e| JsError::new(&e))
     }
 
     pub fn iterations(&self) -> u32 {
@@ -1012,6 +1098,32 @@ impl WasmProtocolSearcher {
     /// onto the request-legal set.
     pub fn best(&mut self) -> Option<String> {
         self.agent.best(&self.dex)
+    }
+
+    /// JSON execution probabilities (or null), independent of visit diagnostics.
+    /// Before commit this follows current evidence; afterwards it is frozen.
+    #[wasm_bindgen(js_name = playPolicy)]
+    pub fn play_policy(&self, mode: &str) -> Result<String, JsError> {
+        let mode = PolicyMode::parse(mode).map_err(|e| JsError::new(e))?;
+        let policy = self.decision.committed().map(|d| d.policy.clone())
+            .or_else(|| self.execution_policy(mode));
+        Ok(serde_json::to_string(&policy).expect("valid policy"))
+    }
+
+    /// Finish this decision: return JSON {input, policy}, drawing once from
+    /// the execution distribution. Repeated calls return the same snapshot,
+    /// even if search continues or a different mode is supplied. Next
+    /// observe/onRequest starts a new decision. Null means nothing is owed.
+    #[wasm_bindgen(js_name = commitDecision)]
+    pub fn commit_decision(&mut self, mode: &str) -> Result<String, JsError> {
+        let mode = PolicyMode::parse(mode).map_err(|e| JsError::new(e))?;
+        if self.decision.committed().is_none() {
+            if let Some(policy) = self.execution_policy(mode) {
+                if policy.source() == "request-projected" { self.agent.projections += 1; }
+                self.decision.commit(policy);
+            }
+        }
+        Ok(serde_json::to_string(&self.decision.committed()).expect("valid decision"))
     }
 
     /// JSON `{iterations, baked, forced, actions: [...]}`.
@@ -1048,6 +1160,8 @@ impl WasmProtocolSearcher {
     /// failure this feature cannot afford.
     #[wasm_bindgen(js_name = setPosition)]
     pub fn set_position(&mut self, spec_json: &str) -> Result<(), JsError> {
+        self.decision.reset();
+        self.endgame = None;
         let spec = PositionSpec::parse(spec_json).map_err(|e| JsError::new(&e))?;
         self.preview_cache_identity = None;
         self.agent.set_position(&self.dex, &spec).map_err(|e| JsError::new(&e))
@@ -1215,14 +1329,23 @@ fn choice_json(battle: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> serd
                         .map(|s| (s.pp, s.maxpp))
                 })
                 .unwrap_or((-1, -1));
+            let (move_type, category, base_power) = battle.active_id(side)
+                .filter(|_| dex.moves.key(id) == "hiddenpower")
+                .map(|aid| {
+                    let p = battle.poke(aid);
+                    let special = matches!(dex.type_name(p.hp_type),
+                        "Fire" | "Water" | "Grass" | "Ice" | "Electric" | "Dark" | "Psychic" | "Dragon");
+                    (p.hp_type, if special { Category::Special } else { Category::Physical }, p.hp_power)
+                })
+                .unwrap_or((ms.move_type, ms.category, ms.base_power));
             serde_json::json!({
                 "kind": "move",
                 "input": input,
                 "id": dex.moves.key(id),
                 "name": ms.name,
-                "type": dex.type_name(ms.move_type),
-                "category": category_str(ms.category),
-                "basePower": ms.base_power,
+                "type": dex.type_name(move_type),
+                "category": category_str(category),
+                "basePower": base_power,
                 "pp": pp,
                 "maxpp": maxpp,
                 "target": ms.target,
@@ -1512,14 +1635,73 @@ pub fn probe_belief_prior(json: &str) -> String {
 mod tests {
     use super::*;
 
-    /// Raw team JSON straight from a fixture file (PokemonSet is
-    /// deserialize-only; the wasm API consumes team JSON as text anyway).
     fn fixture_teams() -> (String, String) {
         let path = conformance::fixture::repo_root()
             .join("fixtures/corpus-v1/full/battle-001.json");
         let text = std::fs::read_to_string(&path).unwrap();
         let v: serde_json::Value = serde_json::from_str(&text).unwrap();
         (v["p1team"].to_string(), v["p2team"].to_string())
+    }
+
+    #[test]
+    fn execution_policy_is_separate_from_search_and_commits_once() {
+        let dex = WasmDex::new().unwrap();
+        let (a, b) = fixture_teams();
+        let mut battle = WasmBattle::new(&dex, &a, &b, "1,2,3,4").unwrap();
+        let pool = std::fs::read_to_string(conformance::fixture::repo_root().join("data/meta-pool-v0/meta-pool.json")).unwrap();
+        let mut candidate = WasmBlindSearcher::new(&battle, 1, &pool, 321, None, None).unwrap();
+        let mut reference = WasmBlindSearcher::new(&battle, 1, &pool, 321, None, None).unwrap();
+        assert_eq!(candidate.play_policy("visit-sample").unwrap(), "null");
+        for _ in 0..3 {
+            candidate.observe(&battle).unwrap();
+            reference.observe(&battle).unwrap();
+            candidate.step(100).unwrap(); reference.step(100).unwrap();
+            let policy: serde_json::Value = serde_json::from_str(&candidate.play_policy("visit-sample").unwrap()).unwrap();
+            let legal: Vec<serde_json::Value> = serde_json::from_str(&battle.legal_choices(1)).unwrap();
+            let rows = policy["actions"].as_array().unwrap();
+            assert!((rows.iter().map(|r| r["probability"].as_f64().unwrap()).sum::<f64>() - 1.).abs() < 1e-12);
+            assert!(rows.iter().all(|r| legal.iter().any(|c| c["input"] == r["input"])));
+            let committed = candidate.commit_decision("visit-sample").unwrap();
+            let decision: serde_json::Value = serde_json::from_str(&committed).unwrap();
+            assert_eq!(decision["policy"], policy);
+            assert!(rows.iter().any(|r| r["input"] == decision["input"]));
+            candidate.step(20).unwrap(); reference.step(20).unwrap();
+            assert_eq!(candidate.commit_decision("legacy").unwrap(), committed);
+            assert_eq!(serde_json::from_str::<serde_json::Value>(&candidate.play_policy("estimated-mix").unwrap()).unwrap(), policy);
+            // Queries/draws do not alter subsequent search iterations or seeds.
+            assert_eq!(candidate.root_policy(), reference.root_policy());
+            assert_eq!(candidate.best(), reference.best());
+            let legacy: serde_json::Value = serde_json::from_str(&reference.commit_decision("legacy").unwrap()).unwrap();
+            assert_eq!(legacy["input"], reference.best().unwrap());
+            let own: Vec<serde_json::Value> = serde_json::from_str(&battle.legal_choices(0)).unwrap();
+            if let Some(action) = own.first() { battle.apply_choice(0, action["input"].as_str().unwrap()).unwrap(); }
+            battle.apply_choice(1, legacy["input"].as_str().unwrap()).unwrap();
+        }
+    }
+
+    #[test]
+    fn hidden_power_choice_uses_the_active_pokemon_type_category_and_power() {
+        let dex = conformance::load_dex();
+        for (name, ivs, expected_type, expected_category, expected_power) in [
+            ("Hidden Power Ice", [30, 6, 2, 30, 30, 2], "Ice", "Special", 35),
+            ("Hidden Power Flying", [14, 24, 26, 30, 30, 30], "Flying", "Physical", 70),
+        ] {
+            let set: PokemonSet = serde_json::from_value(serde_json::json!({
+                "name":"Zapdos", "species":"Zapdos", "level":50, "moves":[name],
+                "ivs":{"hp":ivs[0], "atk":ivs[1], "def":ivs[2], "spa":ivs[3], "spd":ivs[4], "spe":ivs[5]}
+            })).unwrap();
+            let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &[set.clone()], &[set]).unwrap();
+            let choices = [0,1].map(|side| Some(battle.legal_choices(&dex,side)[0]));
+            battle.apply_choices(&dex, choices).unwrap();
+            let choice = battle.legal_choices(&dex,0)[0];
+            let value = choice_json(&battle,&dex,0,choice);
+            assert_eq!(value["input"], "move hiddenpower");
+            assert_eq!(value["name"], "Hidden Power");
+            assert_eq!(value["type"], expected_type);
+            assert_eq!(value["category"], expected_category);
+            assert_eq!(value["basePower"], expected_power);
+            assert_eq!(value["pp"], value["maxpp"]);
+        }
     }
 
     #[test]
