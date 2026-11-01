@@ -202,7 +202,7 @@ fn compute_tags(cb: &CompactBattle, table: &nc2000_engine::compact::MatchTable) 
         }
         let nm = table.mons[idx].num_moves as usize;
         for m in 0..nm {
-            if mon.pp[m] > 0 && table.move_specs[idx][m].self_switch {
+            if mon.pp[m] > 0 && table.move_specs[idx][m].special_kind == 18 {
                 any_bp = true;
             }
         }

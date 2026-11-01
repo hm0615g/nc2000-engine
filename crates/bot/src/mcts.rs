@@ -275,7 +275,6 @@ pub struct RolloutRules {
     pub capped_damage: bool,
     pub rollout_residual: bool,
     pub baton_pass: bool,
-    pub oracle: crate::oracle::OracleMode,
     pub settlement: crate::accounting::LeafSettlementMode,
 }
 
@@ -289,7 +288,6 @@ impl Default for RolloutRules {
             capped_damage: false,
             rollout_residual: false,
             baton_pass: true,
-            oracle: crate::oracle::OracleMode::Off,
             settlement: crate::accounting::LeafSettlementMode::LegacyRollout,
         }
     }
@@ -343,23 +341,6 @@ pub fn playout_value(
     if !rules.baton_pass {
         cb.sides[0].side_flags |= 0x80;
     }
-    if let crate::oracle::OracleMode::TreeLeaf { leaf_iters } = rules.oracle {
-        set_last_sim_end(SimEndInfo::from_compact(&cb));
-        return crate::oracle::oracle_equity(&cb, &table, leaf_iters);
-    }
-    if matches!(playout, Playout::Heavy { .. })
-        && rules.oracle == crate::oracle::OracleMode::Off
-        && !rules.settlement.uses_legacy_playout_loop()
-    {
-        if let crate::accounting::LeafSettlementMode::StochAcctRollout { turns } = rules.settlement
-        {
-            let v = crate::accounting::stoch_accounting_rollout(&mut cb, &table, turns, rng);
-            set_last_sim_end(SimEndInfo::from_compact(&cb));
-            return v;
-        }
-        set_last_sim_end(SimEndInfo::from_compact(&cb));
-        return crate::accounting::evaluate_settled_leaf(&cb, &table, rules.settlement);
-    }
     compact_playout_value(&mut cb, &table, playout, cutoff, rng, rules)
 }
 
@@ -393,28 +374,13 @@ pub fn compact_playout_value(
             set_last_sim_end(SimEndInfo::from_compact(cb));
             return match playout {
                 Playout::Uniform => compact_hp_eval(cb, table),
-                Playout::Heavy { weights, .. } => match rules.oracle {
-                    crate::oracle::OracleMode::Off | crate::oracle::OracleMode::TreeLeaf { .. } => {
-                        if rules.settlement == crate::accounting::LeafSettlementMode::RolloutAcct0 {
-                            crate::accounting::evaluate_settled_leaf(
-                                cb,
-                                table,
-                                crate::accounting::LeafSettlementMode::Accounting0,
-                            )
-                        } else if rules.settlement.uses_blindspot_leaf() {
-                            eval::compact_eval_leaf_blindspot(cb, table, weights)
-                        } else {
-                            eval::compact_eval_leaf(cb, table, weights)
-                        }
+                Playout::Heavy { weights, .. } => {
+                    if rules.settlement.uses_blindspot_leaf() {
+                        eval::compact_eval_leaf_blindspot(cb, table, weights)
+                    } else {
+                        eval::compact_eval_leaf(cb, table, weights)
                     }
-                    crate::oracle::OracleMode::EchoBase => {
-                        crate::oracle::echo_base_leaf(cb, table, weights)
-                    }
-                    crate::oracle::OracleMode::Cutoff { leaf_iters }
-                    | crate::oracle::OracleMode::Coupled { leaf_iters, .. } => {
-                        crate::oracle::oracle_equity(cb, table, leaf_iters)
-                    }
-                },
+                }
             };
         }
         let mut picks = [7u8; 2];
@@ -905,9 +871,6 @@ fn compact_greedy_pick(
     rng: &mut SplitMix64,
     rules: RolloutRules,
 ) -> u8 {
-    if let crate::oracle::OracleMode::Coupled { rollout_iters, .. } = rules.oracle {
-        return crate::oracle::oracle_rollout_pick(cb, table, side, cs, rollout_iters, rng);
-    }
     let att_slot = cb.sides[side].active_idx as usize;
     let att_idx = side * 3 + att_slot;
     let def_side = 1 - side;
@@ -1058,6 +1021,78 @@ fn compact_greedy_pick(
                 return tac_act;
             }
         }
+        if rules.baton_pass && (cb.sides[side].side_flags & 0x80) == 0 {
+            use nc2000_engine::compact::vol_bit;
+            use nc2000_engine::state::Status;
+            let stay_score = best.map_or(0.0, |(_, s, _)| s);
+            let me = &cb.mons[att_idx];
+            let foe_idx = def_side * 3 + def_slot;
+            let foe = &cb.mons[foe_idx];
+            if stay_score < 0.85 {
+                let has_sub = (me.vol_flags & vol_bit::SUBSTITUTE) != 0;
+                let has_pos_boost =
+                    me.boosts[0] > 0 || me.boosts[2] > 0 || me.boosts[4] > 0;
+                let me_faster = cb.mon_action_speed(table, side, att_slot)
+                    > cb.mon_action_speed(table, def_side, def_slot);
+                let foe_asleep = foe.status_raw() == Status::Slp as u8 && foe.status_counter() >= 2;
+                // 1. If we already have a Substitute or boosts and a legal Baton Pass move, pass to a stronger bench threat.
+                if (has_sub || has_pos_boost) && (me_faster || foe_asleep || has_sub) {
+                    if let Some(&bp_c) = cs
+                        .iter()
+                        .find(|&&c| c < 4 && table.move_specs[att_idx][c as usize].special_kind == 18)
+                    {
+                        let mut best_recv_hit = 0.0f64;
+                        for slot in 0..3usize {
+                            if slot == att_slot || (cb.sides[side].alive_mask & (1 << slot)) == 0 {
+                                continue;
+                            }
+                            let r_idx = side * 3 + slot;
+                            let r_mon = &cb.mons[r_idx];
+                            let r_st = r_mon.status_raw();
+                            if r_mon.hp() * 2 <= table.mons[r_idx].maxhp.max(1)
+                                || r_st == Status::Slp as u8
+                                || r_st == Status::Frz as u8
+                            {
+                                continue;
+                            }
+                            let mut tmp = *cb;
+                            tmp.mons[r_idx].boosts = me.boosts;
+                            let rh = tmp.best_hit_fraction(table, side, slot, def_side, def_slot, true);
+                            if rh > best_recv_hit {
+                                best_recv_hit = rh;
+                            }
+                        }
+                        if best_recv_hit > stay_score + 0.15 && best_recv_hit >= 0.42 {
+                            return bp_c;
+                        }
+                    }
+                }
+                // 2. SwagSub: if faster against a confused foe (`timers[0] >= 2`) and we carry both
+                //    Substitute and Swagger, put up Substitute while the foe is confused.
+                if !has_sub
+                    && me_faster
+                    && (foe.vol_flags & vol_bit::CONFUSION) != 0
+                    && foe.timers[0] >= 2
+                    && me.hp() * 2 > table.mons[att_idx].maxhp.max(1)
+                {
+                    let has_swagger = (0..table.mons[att_idx].num_moves as usize).any(|m| {
+                        let ms = &table.move_specs[att_idx][m];
+                        !ms.boosts_self
+                            && ms.boosts[0].0 == 0
+                            && ms.boosts[0].1 > 0
+                            && (ms.primary_vol & vol_bit::CONFUSION) != 0
+                    });
+                    if has_swagger {
+                        if let Some(&sub_c) = cs
+                            .iter()
+                            .find(|&&c| c < 4 && table.move_specs[att_idx][c as usize].is_substitute)
+                        {
+                            return sub_c;
+                        }
+                    }
+                }
+            }
+        }
         if let Some((c, score, _)) = best {
             if score > 0.0 {
                 return c;
@@ -1068,15 +1103,19 @@ fn compact_greedy_pick(
 
     // Forced or self-switch target selection:
     // When the outgoing active Pokemon is alive (`hp > 0`, i.e. `self_switch` / Baton Pass),
-    // score receivers by HP fraction + offensive effectiveness with passed boosts;
+    // score receivers by HP fraction + offensive effectiveness with passed boosts/Substitute;
     // when fainted (`hp <= 0`), keep exact healthiest-bench selection.
     let mut best_sw = None;
     let mut best_score = -1.0f64;
+    let has_sub_or_spe = cb.mons[att_idx].boosts[4] > 0
+        || (cb.mons[att_idx].vol_flags & nc2000_engine::compact::vol_bit::SUBSTITUTE) != 0;
     let passing_alive = rules.baton_pass
         && cb.sides[side].request == 2
         && att_slot < 3
         && cb.mons[att_idx].hp() > 0
-        && (cb.mons[att_idx].boosts[0] > 0 || cb.mons[att_idx].boosts[2] > 0)
+        && (cb.mons[att_idx].boosts[0] > 0
+            || cb.mons[att_idx].boosts[2] > 0
+            || has_sub_or_spe)
         && (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
         && cb.mons[def_side * 3 + def_slot].hp() > 0;
     for &c in cs {
@@ -1088,8 +1127,13 @@ fn compact_greedy_pick(
                 let base_h = cb.best_hit_fraction(table, side, slot, def_side, def_slot, true);
                 let mut tmp = *cb;
                 tmp.mons[idx].boosts = cb.mons[att_idx].boosts;
+                tmp.mons[idx].vol_flags |=
+                    cb.mons[att_idx].vol_flags & nc2000_engine::compact::vol_bit::SUBSTITUTE;
                 let boosted_h = tmp.best_hit_fraction(table, side, slot, def_side, def_slot, true);
                 score += (boosted_h - base_h).clamp(0.0, 1.0);
+                if has_sub_or_spe {
+                    score += 0.65 * boosted_h.clamp(0.0, 1.2);
+                }
             }
             if best_sw.is_none() || score >= best_score {
                 best_score = score;

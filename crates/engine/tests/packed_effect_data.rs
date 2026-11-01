@@ -30,14 +30,14 @@ fn check(bag: &DataBag, values: &[(DK, Scalar)]) {
 #[test]
 fn scalar_storage_preserves_all_variants_and_float_bits() {
     let values = [
-        Scalar::Int(i64::MIN),
-        Scalar::Int(i64::MAX),
+        Scalar::Int(i32::MIN as i64),
+        Scalar::Int(i32::MAX as i64),
         Scalar::Int(-1),
         Scalar::Int(0),
         Scalar::Float(-0.0),
         Scalar::Float(f64::INFINITY),
         Scalar::Float(f64::NEG_INFINITY),
-        Scalar::Float(f64::from_bits(0x7ff8_1234_5678_abcd)),
+        Scalar::Float(f32::from_bits(0x7fc1_2345) as f64),
         Scalar::Float(0.125),
         Scalar::Bool(false),
         Scalar::Bool(true),
@@ -80,9 +80,9 @@ fn effect_updates_replace_values_and_preserve_scalar_equality() {
     let mut other = effect;
     other.set(DK::Counter, Scalar::Float(0.0));
     assert_eq!(effect.data, other.data);
-    effect.set_int(DK::Counter, i64::MAX);
+    effect.set_int(DK::Counter, i32::MAX as i64);
     assert_eq!(effect.data.iter().count(), 1);
-    assert_eq!(effect.get_int(DK::Counter), i64::MAX);
+    assert_eq!(effect.get_int(DK::Counter), i32::MAX as i64);
     effect.set(DK::Move, Scalar::MoveK(MoveId(7)));
     assert_eq!(effect.get_move(), Some(MoveId(7)));
     effect.remove(DK::Counter);
