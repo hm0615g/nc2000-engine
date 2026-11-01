@@ -275,6 +275,19 @@ dialog.modal::backdrop {
   padding: 10px 12px;
   border-radius: 12px;
   background: var(--panel);
+  border: 1px solid var(--line);
+}
+.team-card-select {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  min-height: 0;
 }
 .team-card.selected {
   border-color: var(--accent);
@@ -296,8 +309,19 @@ dialog.modal::backdrop {
   color: var(--text-dim);
   font-size: 0.85rem;
 }
+.team-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
 .team-id {
   font-weight: 700;
+}
+.team-card-select .team-id {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-left: auto;
+  font-family: monospace;
 }
 .team-tier {
   margin-left: auto;
@@ -324,6 +348,52 @@ dialog.modal::backdrop {
   padding: 3px 8px;
   font-size: 0.85rem;
   white-space: nowrap;
+}
+
+.team-sets-details {
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+  padding-top: 6px;
+}
+.team-sets-summary {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+}
+.team-sets-summary:hover {
+  color: var(--accent);
+}
+.team-sets-content {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+.team-set-row {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+}
+.team-set-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+.team-set-mon strong {
+  font-weight: 600;
+}
+.team-set-item {
+  color: var(--accent);
+  font-size: 0.75rem;
+}
+.team-set-moves {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  margin-top: 2px;
 }
 
 /* ------------------------------------------- custom teams + import (M14) */

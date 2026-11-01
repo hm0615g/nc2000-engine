@@ -397,7 +397,8 @@ test("the play door's Nash draw choice draws a mixture arm and persists", async 
   expect(await page.evaluate(() => localStorage.getItem("nc2000-bot-draw"))).toBeNull();
 
   // Catalog party picker groups parties by category with subheadings,
-  // marks badges, and omits lengthy provenance lines from individual cards.
+  // gives parties readable names, omits redundant shoulder badges, and provides
+  // expandable set details so camouflage variants can be inspected.
   await page.locator('[data-party="human"]').click();
   const categoryHeadings = page.locator("dialog.modal .pool-category-title");
   await expect(categoryHeadings).toHaveText([
@@ -406,10 +407,27 @@ test("the play door's Nash draw choice draws a mixture arm and persists", async 
     "Classic & community",
   ]);
   await expect(page.locator("dialog.modal .team-prov")).toHaveCount(0);
+  await expect(page.locator("dialog.modal .team-tier")).toHaveCount(0);
   const pickerCards = page.locator("dialog.modal [data-team]");
-  await expect(pickerCards.filter({ hasText: "red-v10-s1105-r2-s0142" }).locator(".team-tier")).toHaveText("Nash · Evolved");
-  await expect(pickerCards.filter({ hasText: "sample-08" }).locator(".team-tier")).toHaveText("Nash");
-  await expect(pickerCards.filter({ hasText: "red-v5-r1-s0097" }).locator(".team-tier")).toHaveText("Evolved");
+  await expect(
+    pickerCards.filter({ hasText: "red-v10-s1105-r2-s0142" }).locator(".team-name"),
+  ).toHaveText("Rain Cloyster · EQ Heracross 55 Snorlax");
+  await expect(
+    pickerCards.filter({ hasText: "red-v10-s1105-r1-s0148" }).locator(".team-name"),
+  ).toHaveText("Explosion Cloyster · HP-Fight 55 Snorlax");
+  await expect(
+    pickerCards.filter({ hasText: "sample-08" }).locator(".team-name"),
+  ).toHaveText("Zapdos Tank (Boom Exeggutor / Sample 08)");
+  await expect(
+    pickerCards.filter({ hasText: "red-v5-r1-s0097" }).locator(".team-name"),
+  ).toHaveText("55 Tyranitar Heracross");
+
+  // Expand sets detail on a card to verify moves and items are visible.
+  const targetCard = pickerCards.filter({ hasText: "red-v10-s1105-r2-s0142" });
+  await targetCard.locator(".team-sets-summary").click();
+  await expect(targetCard.locator(".team-sets-content")).toBeVisible();
+  await expect(targetCard.locator(".team-set-row")).toHaveCount(6);
+  await expect(targetCard.locator(".team-sets-content")).toContainText("Rain Dance");
   await page.locator("dialog.modal .modal-head button").click();
 
   expect(errors).toEqual([]);

@@ -52,8 +52,16 @@ import {
   saveCustomTeam,
   type CustomTeam,
 } from "./custom-teams";
-import { speciesName, ui, type Locale } from "./i18n";
+import { itemName, moveName, speciesName, ui, type Locale } from "./i18n";
 import { Lvl } from "./battle-ui";
+import { teamDisplayName } from "./team-names";
+
+interface MonSetLike {
+  species?: string;
+  level?: number;
+  item?: string;
+  moves?: string[];
+}
 
 function TeamCard(props: {
   team: PoolTeam;
@@ -62,34 +70,69 @@ function TeamCard(props: {
   onTap: () => void;
 }) {
   const { team, index, selected } = props;
-  const badges: string[] = [];
-  if (team.nash) badges.push(ui().nashBadge);
-  if (team.evolved) badges.push(ui().evolvedBadge);
-  if (badges.length === 0 && team.tier) badges.push(team.tier);
-  const tierText = badges.join(" · ");
+  const name = teamDisplayName(team.id);
+  const sets = Array.isArray(team.sets) ? (team.sets as MonSetLike[]) : [];
+
   return (
-    <button
+    <div
       class={`team-card ${selected ? "selected" : ""}`}
-      onClick={props.onTap}
-      aria-pressed={selected}
       data-team={index}
     >
-      <div class="team-card-head">
-        <span class="team-rank">#{index + 1}</span>
-        <span class="team-id">{team.id}</span>
-        {tierText && <span class="team-tier">{tierText}</span>}
-      </div>
-      <div class="team-species">
-        {team.species.map((sp, i) => (
-          <span class="species-chip" key={i}>
-            {speciesName(sp)}{" "}
-            <small>
-              <Lvl n={team.levels[i]} />
-            </small>
-          </span>
-        ))}
-      </div>
-    </button>
+      <button
+        class="team-card-select"
+        onClick={props.onTap}
+        aria-pressed={selected}
+      >
+        <div class="team-card-head">
+          <span class="team-rank">#{index + 1}</span>
+          {name ? (
+            <>
+              <span class="team-name">{name}</span>
+              <span class="team-id">{team.id}</span>
+            </>
+          ) : (
+            <span class="team-id">{team.id}</span>
+          )}
+        </div>
+        <div class="team-species">
+          {team.species.map((sp, i) => (
+            <span class="species-chip" key={i}>
+              {speciesName(sp)}{" "}
+              <small>
+                <Lvl n={team.levels[i]} />
+              </small>
+            </span>
+          ))}
+        </div>
+      </button>
+      {sets.length > 0 && (
+        <details class="team-sets-details">
+          <summary class="team-sets-summary">{ui().viewSets}</summary>
+          <div class="team-sets-content">
+            {sets.map((s, i) => (
+              <div class="team-set-row" key={i}>
+                <div class="team-set-header">
+                  <span class="team-set-mon">
+                    <strong>{speciesName(s.species ?? team.species[i])}</strong>{" "}
+                    <small>
+                      <Lvl n={s.level ?? team.levels[i]} />
+                    </small>
+                  </span>
+                  {s.item && (
+                    <span class="team-set-item">@{itemName(s.item)}</span>
+                  )}
+                </div>
+                {Array.isArray(s.moves) && s.moves.length > 0 && (
+                  <div class="team-set-moves">
+                    {s.moves.map((mv) => moveName(mv)).join(" · ")}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
   );
 }
 

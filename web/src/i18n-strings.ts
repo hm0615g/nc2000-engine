@@ -27,6 +27,7 @@ export interface UIStrings {
   poolNashCategory: string;
   poolEvolvedCategory: string;
   poolClassicCategory: string;
+  viewSets: string;
   customSection: string;
   addCustom: string;
   importTitle: string;
@@ -346,6 +347,7 @@ const EN: UIStrings = {
   poolNashCategory: "Nash equilibrium",
   poolEvolvedCategory: "Evolved",
   poolClassicCategory: "Classic & community",
+  viewSets: "View sets",
   customSection: "Saved custom teams",
   addCustom: "+ Import a custom team",
   importTitle: "Import a custom team",
@@ -642,6 +644,7 @@ const JA: UIStrings = {
   poolNashCategory: "Nash均衡",
   poolEvolvedCategory: "進化論生まれ",
   poolClassicCategory: "既存・コミュニティ",
+  viewSets: "構成を表示",
   customSection: "保存済みカスタムチーム",
   addCustom: "+ カスタムチームを取り込む",
   importTitle: "カスタムチームの取り込み",
