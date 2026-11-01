@@ -163,7 +163,8 @@ function NashCard(props: { team: NashTeam; index: number }) {
   const isEvolved =
     team.id.startsWith("red-") ||
     team.id.startsWith("deme-") ||
-    team.id.startsWith("sib-");
+    team.id.startsWith("sib-") ||
+    team.id.startsWith("apex-");
   return (
     <div class="team-card nash-card" data-team={index} data-nash={team.id}>
       <div class="team-card-head">

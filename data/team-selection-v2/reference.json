@@ -3,14 +3,14 @@
  "generator": "tools/build-team-products-v2.js",
  "protocol": "data/team-selection-v2/PROTOCOL.md",
  "counts": {
-  "records": 139,
-  "eligible": 121,
-  "measured": 109,
-  "selected": 24,
+  "records": 141,
+  "eligible": 123,
+  "measured": 111,
+  "selected": 26,
   "pending": 9,
   "notSelected": 76,
   "prior": 103,
-  "nashSupport": 5,
+  "nashSupport": 4,
   "legacyNashV3Support": 5
  },
  "teams": [
@@ -135,7 +135,7 @@
    "catalog": true,
    "drawWeight": 0.015873,
    "priorWeight": 0.333333,
-   "nashWeight": 0.07494185468640105,
+   "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc06",
    "species": [
@@ -276,7 +276,7 @@
    "catalog": true,
    "drawWeight": 0.015873,
    "priorWeight": 0.333333,
-   "nashWeight": 0.03619534677183296,
+   "nashWeight": 0,
    "legacyNashV3Weight": 0.186817,
    "variantCluster": "vc06",
    "species": [
@@ -3530,7 +3530,7 @@
    "catalog": true,
    "drawWeight": 0.015873,
    "priorWeight": 0.333333,
-   "nashWeight": 0.07685529715179017,
+   "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc06",
    "species": [
@@ -6331,6 +6331,50 @@
    ]
   },
   {
+   "id": "apex-c08-surgical-142",
+   "family": "kodoku-nash-v14",
+   "origin": "evolved",
+   "source": {
+    "name": "Kodoku v14 Deployed Nash Equilibrium (Shell A · Rain Cloyster + HP-Bug Marowak + Ice Beam Starmie)",
+    "url": "data/kodoku-r3/conclusion-equilibrium-deme.json",
+    "version": "v14-apex4-w0.3000"
+   },
+   "eligibility": {
+    "status": "eligible"
+   },
+   "measuredAs": "apex-c08-surgical-142",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.637672,
+    "se": 0,
+    "stage": "kodoku-v14-nash"
+   },
+   "catalog": true,
+   "drawWeight": 0.011905,
+   "priorWeight": 0,
+   "nashWeight": 0.3,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-kodoku-nash-a",
+   "species": [
+    "Snorlax",
+    "Cloyster",
+    "Gengar",
+    "Heracross",
+    "Marowak",
+    "Starmie"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
    "id": "red-v10-s1105-r2-s0142",
    "family": "kodoku-nash-v13",
    "origin": "evolved",
@@ -6352,9 +6396,53 @@
     "stage": "kodoku-v13-nash"
    },
    "catalog": true,
-   "drawWeight": 0.02381,
+   "drawWeight": 0.011905,
    "priorWeight": 0,
-   "nashWeight": 0.5586919930990222,
+   "nashWeight": 0.25,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-kodoku-nash-a",
+   "species": [
+    "Snorlax",
+    "Cloyster",
+    "Gengar",
+    "Heracross",
+    "Marowak",
+    "Starmie"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "apex-c04-bug-3atkstar-boomgen",
+   "family": "kodoku-nash-v14",
+   "origin": "evolved",
+   "source": {
+    "name": "Kodoku v14 Deployed Nash Equilibrium (Shell A · Explosion Cloyster + Boom 3-Punch Gengar + Surf Starmie)",
+    "url": "data/kodoku-r3/conclusion-equilibrium-deme.json",
+    "version": "v14-apex4-w0.2500"
+   },
+   "eligibility": {
+    "status": "eligible"
+   },
+   "measuredAs": "apex-c04-bug-3atkstar-boomgen",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.628572,
+    "se": 0,
+    "stage": "kodoku-v14-nash"
+   },
+   "catalog": true,
+   "drawWeight": 0.011905,
+   "priorWeight": 0,
+   "nashWeight": 0.25,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
    "species": [
@@ -6440,9 +6528,9 @@
     "stage": "kodoku-v13-nash"
    },
    "catalog": true,
-   "drawWeight": 0.02381,
+   "drawWeight": 0.011905,
    "priorWeight": 0,
-   "nashWeight": 0.2533155082909537,
+   "nashWeight": 0.2,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
    "species": [

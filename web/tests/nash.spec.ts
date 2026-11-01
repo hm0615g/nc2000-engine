@@ -410,8 +410,14 @@ test("the play door's Nash draw choice draws a mixture arm and persists", async 
   await expect(page.locator("dialog.modal .team-tier")).toHaveCount(0);
   const pickerCards = page.locator("dialog.modal [data-team]");
   await expect(
+    pickerCards.filter({ hasText: "apex-c08-surgical-142" }).locator(".team-name"),
+  ).toHaveText("Rain Cloyster · HP-Bug Marowak 55 Snorlax");
+  await expect(
     pickerCards.filter({ hasText: "red-v10-s1105-r2-s0142" }).locator(".team-name"),
   ).toHaveText("Rain Cloyster · EQ Heracross 55 Snorlax");
+  await expect(
+    pickerCards.filter({ hasText: "apex-c04-bug-3atkstar-boomgen" }).locator(".team-name"),
+  ).toHaveText("Explosion Cloyster · Boom Gengar 55 Snorlax");
   await expect(
     pickerCards.filter({ hasText: "red-v10-s1105-r1-s0148" }).locator(".team-name"),
   ).toHaveText("Explosion Cloyster · HP-Fight 55 Snorlax");

@@ -131,15 +131,15 @@ test('generated catalog matches the independently audited adjustments and cluste
 	const audit = require('../findings/low-attack-catalog-v1/audit.json');
 	const genderAudit = require('../findings/attract-gender-v1/mechanics.json');
 	const original = new Map([...inventory.teams, ...evolved.teams].map(team => [team.id, team]));
-	assert.equal(catalog.teams.length, 24);
-	assert.equal(catalog.setOptimization.changedTeams, 16);
-	assert.equal(catalog.setOptimization.changedSets, 29);
+	assert.equal(catalog.teams.length, 26);
+	assert.equal(catalog.setOptimization.changedTeams, 18);
+	assert.equal(catalog.setOptimization.changedSets, 32);
 	assert.equal(catalog.setOptimization.changedGenders, 7);
 	assert.equal(audit.rows.length, 27);
 	for (const team of catalog.teams) {
 		const src = original.get(team.id);
 		assert(src, `missing source for ${team.id}`);
-		const preserveGenderSpecies = team.id === 'red-v10-s1105-r2-s0142' ? ['cloyster'] : null;
+		const preserveGenderSpecies = (team.id === 'red-v10-s1105-r2-s0142' || team.id === 'apex-c08-surgical-142') ? ['cloyster'] : null;
 		const opt = optimizeLowAttack(src.sets, dex, { preferFemale: true, preserveGenderSpecies });
 		assert.deepEqual(team.sets, opt.sets, team.id);
 		if (audit.rows.some(row => row.baseId === team.id) || genderAudit.rows.some(row => row.baseId === team.id)) {

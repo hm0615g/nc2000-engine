@@ -20,7 +20,7 @@
   "fingerprint": "fnv1a64:ffa73c4245fe3774"
  },
  "drawRule": "each variant cluster among the selected parties carries equal mass, split equally among its members",
- "size": 24,
+ "size": 26,
  "sizeTarget": [
   15,
   30
@@ -998,6 +998,20 @@
   "sib-r1-n4-red-v6-r1-s0064-s07": {
    "stage": "kodoku-v11-nash",
    "score": 0.55532,
+   "se": 0,
+   "games": 0,
+   "label": "selected"
+  },
+  "apex-c08-surgical-142": {
+   "stage": "kodoku-v14-nash",
+   "score": 0.637672,
+   "se": 0,
+   "games": 0,
+   "label": "selected"
+  },
+  "apex-c04-bug-3atkstar-boomgen": {
+   "stage": "kodoku-v14-nash",
+   "score": 0.628572,
    "se": 0,
    "games": 0,
    "label": "selected"

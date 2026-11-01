@@ -946,12 +946,12 @@
           },
           "gender": "M",
           "ivs": {
-            "hp": 31,
-            "atk": 31,
-            "def": 31,
-            "spa": 31,
-            "spd": 31,
-            "spe": 31
+            "hp": 30,
+            "atk": 26,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
           },
           "level": 50,
           "happiness": 255
@@ -1144,12 +1144,12 @@
           },
           "gender": "M",
           "ivs": {
-            "hp": 31,
-            "atk": 31,
-            "def": 31,
-            "spa": 31,
-            "spd": 31,
-            "spe": 31
+            "hp": 30,
+            "atk": 26,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
           },
           "level": 50,
           "happiness": 255
@@ -1342,12 +1342,12 @@
           },
           "gender": "M",
           "ivs": {
-            "hp": 31,
-            "atk": 31,
-            "def": 31,
-            "spa": 31,
-            "spd": 31,
-            "spe": 31
+            "hp": 30,
+            "atk": 26,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
           },
           "level": 50,
           "happiness": 255
@@ -1436,7 +1436,7 @@
           "nature": "Serious",
           "evs": {
             "hp": 255,
-            "atk": 0,
+            "atk": 255,
             "def": 255,
             "spa": 255,
             "spd": 255,
@@ -1540,12 +1540,12 @@
           },
           "gender": "M",
           "ivs": {
-            "hp": 31,
-            "atk": 31,
-            "def": 31,
-            "spa": 31,
-            "spd": 31,
-            "spe": 31
+            "hp": 30,
+            "atk": 26,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
           },
           "level": 50,
           "happiness": 255
@@ -1738,12 +1738,12 @@
           },
           "gender": "M",
           "ivs": {
-            "hp": 31,
-            "atk": 31,
-            "def": 31,
-            "spa": 31,
-            "spd": 31,
-            "spe": 31
+            "hp": 14,
+            "atk": 24,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
           },
           "level": 50,
           "happiness": 255
@@ -1936,12 +1936,12 @@
           },
           "gender": "M",
           "ivs": {
-            "hp": 31,
-            "atk": 31,
-            "def": 31,
-            "spa": 31,
-            "spd": 31,
-            "spe": 31
+            "hp": 30,
+            "atk": 26,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
           },
           "level": 50,
           "happiness": 255
@@ -2134,12 +2134,12 @@
           },
           "gender": "M",
           "ivs": {
-            "hp": 31,
-            "atk": 31,
-            "def": 31,
-            "spa": 31,
-            "spd": 31,
-            "spe": 31
+            "hp": 30,
+            "atk": 26,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
           },
           "level": 50,
           "happiness": 255
@@ -2332,12 +2332,12 @@
           },
           "gender": "M",
           "ivs": {
-            "hp": 31,
-            "atk": 31,
-            "def": 31,
-            "spa": 31,
-            "spd": 31,
-            "spe": 31
+            "hp": 30,
+            "atk": 26,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
           },
           "level": 50,
           "happiness": 255
@@ -2530,12 +2530,12 @@
           },
           "gender": "M",
           "ivs": {
-            "hp": 31,
-            "atk": 31,
-            "def": 31,
-            "spa": 31,
-            "spd": 31,
-            "spe": 31
+            "hp": 30,
+            "atk": 26,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
           },
           "level": 50,
           "happiness": 255
@@ -2728,12 +2728,12 @@
           },
           "gender": "M",
           "ivs": {
-            "hp": 31,
-            "atk": 31,
-            "def": 31,
-            "spa": 31,
-            "spd": 31,
-            "spe": 31
+            "hp": 30,
+            "atk": 26,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
           },
           "level": 50,
           "happiness": 255
@@ -2926,12 +2926,12 @@
           },
           "gender": "M",
           "ivs": {
-            "hp": 31,
-            "atk": 31,
-            "def": 31,
-            "spa": 31,
-            "spd": 31,
-            "spe": 31
+            "hp": 30,
+            "atk": 26,
+            "def": 26,
+            "spa": 30,
+            "spd": 30,
+            "spe": 30
           },
           "level": 50,
           "happiness": 255

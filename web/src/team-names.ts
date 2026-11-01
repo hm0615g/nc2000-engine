@@ -7,9 +7,17 @@ export interface TeamNameEntry {
 
 export const CATALOG_TEAM_NAMES: Record<string, TeamNameEntry> = {
   // Nash equilibrium
+  "apex-c08-surgical-142": {
+    ja: "雨パル・めざ虫ガラ・冷ビスタ55カビ",
+    en: "Rain Cloyster · HP-Bug Marowak 55 Snorlax",
+  },
   "red-v10-s1105-r2-s0142": {
     ja: "雨パル・地震ヘラ55カビ",
     en: "Rain Cloyster · EQ Heracross 55 Snorlax",
+  },
+  "apex-c04-bug-3atkstar-boomgen": {
+    ja: "爆破パル・爆破ゲン・波乗りスタ55カビ",
+    en: "Explosion Cloyster · Boom Gengar 55 Snorlax",
   },
   "red-v10-s1105-r1-s0148": {
     ja: "爆破パル・めざ闘ヘラ55カビ",
