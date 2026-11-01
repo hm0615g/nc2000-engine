@@ -6511,7 +6511,7 @@
    "family": "kodoku-evolved",
    "origin": "evolved",
    "source": {
-    "name": "Kodoku R1 Equilibrium #1 Shell (Dual-55 Snorlax/Miltank + Heal Bell Blissey + Skarmory/Suicune)",
+    "name": "Kodoku Evolved Archetype (Dual-55 Snorlax/Miltank + Heal Bell Blissey + Skarmory/Suicune)",
     "url": "data/kodoku-r3/conclusion-equilibrium-r1.json",
     "version": "r1-shell-w0.343"
    },
@@ -6555,7 +6555,7 @@
    "family": "kodoku-evolved",
    "origin": "evolved",
    "source": {
-    "name": "Kodoku v11 Equilibrium Shell (Wobbuffet + Sunny Day Moltres + Haze/Perish Gengar)",
+    "name": "Kodoku Evolved Archetype (Wobbuffet + Sunny Day Moltres + Haze/Perish Gengar)",
     "url": "data/dominance-audit-v11-fullnash/converged-report.json",
     "version": "v11-shell-w0.126"
    },
