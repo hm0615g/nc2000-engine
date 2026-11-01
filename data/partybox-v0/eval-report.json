@@ -1,0 +1,2847 @@
+{
+  "summary": {
+    "total_tested": 123,
+    "min_payoff": 0.5486566182883974,
+    "mean_payoff": 0.7345096580203265,
+    "max_payoff": 0.9999999999688369,
+    "sub_50_count": 0,
+    "apex_weights": [
+      0.3,
+      0.25,
+      0.25,
+      0.2
+    ],
+    "apex_ids": [
+      "apex-c08-surgical-142",
+      "red-v10-s1105-r2-s0142",
+      "apex-c04-bug-3atkstar-boomgen",
+      "red-v10-s1105-r1-s0148"
+    ]
+  },
+  "hardest_challengers": [
+    {
+      "id": "pb-100",
+      "source": "PartyBox",
+      "title": "カビゴンSA+フォレトス",
+      "author": "わんおー",
+      "points": 9,
+      "payoff": 0.5486566182883974,
+      "variant_payoffs": [
+        0.5332615048761432,
+        0.5184061379861699,
+        0.5593503693621203,
+        0.5961951999424099
+      ],
+      "species": [
+        "SnorlaxL55",
+        "CloysterL50",
+        "ForretressL50",
+        "MachampL50",
+        "StarmieL50",
+        "VenusaurL50"
+      ]
+    },
+    {
+      "id": "pb-85",
+      "source": "PartyBox",
+      "title": "寝言カビSA最終バージョン",
+      "author": "はまっちゃった人",
+      "points": 8,
+      "payoff": 0.5597988540884107,
+      "variant_payoffs": [
+        0.5425143728841691,
+        0.5608358576967212,
+        0.5746086999685502,
+        0.5659170140342106
+      ],
+      "species": [
+        "SnorlaxL55",
+        "CloysterL50",
+        "MachampL50",
+        "SteelixL50",
+        "UmbreonL50",
+        "ZapdosL50"
+      ]
+    },
+    {
+      "id": "pb-62",
+      "source": "PartyBox",
+      "title": "55地震寝言ピント♀カビSA",
+      "author": "はまっちゃった人",
+      "points": 40,
+      "payoff": 0.574727949109248,
+      "variant_payoffs": [
+        0.5711256659086698,
+        0.5666457620816426,
+        0.5935523702604194,
+        0.5667035812556577
+      ],
+      "species": [
+        "SnorlaxL55",
+        "ExeggutorL50",
+        "MachampL50",
+        "StarmieL50",
+        "SteelixL50",
+        "ZapdosL50"
+      ]
+    },
+    {
+      "id": "pb-74",
+      "source": "PartyBox",
+      "title": "サンダータンク2017",
+      "author": "stoic",
+      "points": 78,
+      "payoff": 0.5818831207577653,
+      "variant_payoffs": [
+        0.5898844022930589,
+        0.5643614418319342,
+        0.6062296748722025,
+        0.561350104469067
+      ],
+      "species": [
+        "MiltankL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "ExeggutorL50",
+        "GolemL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "rental-cban-6",
+      "source": "psense",
+      "title": "サンダータンク",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.5857809987417644,
+      "variant_payoffs": [
+        0.5964996266648308,
+        0.58365868066119,
+        0.5760083190267906,
+        0.5845718041015996
+      ],
+      "species": [
+        "MiltankL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "ExeggutorL50",
+        "MachampL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "pb-76",
+      "source": "PartyBox",
+      "title": "寝言カビゴンライコウWA(キチカビ３)",
+      "author": "117",
+      "points": 102,
+      "payoff": 0.5914316543381739,
+      "variant_payoffs": [
+        0.5917448047548605,
+        0.5994424864714184,
+        0.5934079557835453,
+        0.5784780117398742
+      ],
+      "species": [
+        "RaikouL55",
+        "SnorlaxL55",
+        "MarowakL50",
+        "SkarmoryL50",
+        "SuicuneL50",
+        "UmbreonL50"
+      ]
+    },
+    {
+      "id": "rental-cban-5",
+      "source": "psense",
+      "title": "【オススメレンタル】キチカビ３",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.5914316543381739,
+      "variant_payoffs": [
+        0.5917448047548605,
+        0.5994424864714184,
+        0.5934079557835453,
+        0.5784780117398742
+      ],
+      "species": [
+        "RaikouL55",
+        "SnorlaxL55",
+        "MarowakL50",
+        "SkarmoryL50",
+        "SuicuneL50",
+        "UmbreonL50"
+      ]
+    },
+    {
+      "id": "pb-132",
+      "source": "PartyBox",
+      "title": "サンダーバンギ feat変態ヘラクロス",
+      "author": "しゃわ",
+      "points": 12,
+      "payoff": 0.594204357808301,
+      "variant_payoffs": [
+        0.5899521507260442,
+        0.6050514579548277,
+        0.5797439450207239,
+        0.6050993092329994
+      ],
+      "species": [
+        "TyranitarL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "HeracrossL50",
+        "SnorlaxL50",
+        "SteelixL50"
+      ]
+    },
+    {
+      "id": "pb-67",
+      "source": "PartyBox",
+      "title": "リフライコウガラWA",
+      "author": "117",
+      "points": 67,
+      "payoff": 0.6034298153354063,
+      "variant_payoffs": [
+        0.6235113772880659,
+        0.6286888852382582,
+        0.5801715831383693,
+        0.5708064252741486
+      ],
+      "species": [
+        "MarowakL55",
+        "RaikouL55",
+        "CloysterL50",
+        "ExeggutorL50",
+        "HeracrossL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "rental-cban-3",
+      "source": "psense",
+      "title": "【オススメレンタル】爆破速攻TA",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.6108370626853092,
+      "variant_payoffs": [
+        0.6159977885365764,
+        0.6088112829229999,
+        0.6111703395819502,
+        0.6052116024904939
+      ],
+      "species": [
+        "MarowakL55",
+        "TaurosL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "ElectrodeL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "pb-6",
+      "source": "PartyBox",
+      "title": "サンダーリキーWA＠しゃわさん作",
+      "author": "レンタルマン",
+      "points": 7,
+      "payoff": 0.6199468786096842,
+      "variant_payoffs": [
+        0.5900852870634016,
+        0.6170014452707255,
+        0.6590448681790357,
+        0.6195485706411171
+      ],
+      "species": [
+        "MachampL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "GengarL50",
+        "SnorlaxL50",
+        "UmbreonL50"
+      ]
+    },
+    {
+      "id": "pb-52",
+      "source": "PartyBox",
+      "title": "古典サンダーリキーWA",
+      "author": "クラヴハンマー",
+      "points": 13,
+      "payoff": 0.6219873871849275,
+      "variant_payoffs": [
+        0.616411551090092,
+        0.5990053399646411,
+        0.6730568749621615,
+        0.5952418406309966
+      ],
+      "species": [
+        "MachampL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "ExeggutorL50",
+        "ForretressL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "pb-15",
+      "source": "PartyBox",
+      "title": "爆破速攻TA",
+      "author": "レンタルマン",
+      "points": 77,
+      "payoff": 0.6253714529287026,
+      "variant_payoffs": [
+        0.6192396081279422,
+        0.6197736398727997,
+        0.6240299943222577,
+        0.6432433097077777
+      ],
+      "species": [
+        "MarowakL55",
+        "TaurosL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "ElectrodeL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "rental-cban-2",
+      "source": "psense",
+      "title": "【オススメレンタル】サンダーバンギWA",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.6310160878115518,
+      "variant_payoffs": [
+        0.6414653111858941,
+        0.5675658851587103,
+        0.7144144357585371,
+        0.5904070711323581
+      ],
+      "species": [
+        "TyranitarL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "ExeggutorL50",
+        "MachampL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "pb-96",
+      "source": "PartyBox",
+      "title": "ヘラクロス+エレブーWA",
+      "author": "わんおー",
+      "points": 7,
+      "payoff": 0.6334842193829044,
+      "variant_payoffs": [
+        0.627268677047713,
+        0.5986203100281565,
+        0.6690791913588225,
+        0.6418937046092287
+      ],
+      "species": [
+        "ElectabuzzL55",
+        "HeracrossL55",
+        "CloysterL50",
+        "MisdreavusL50",
+        "SnorlaxL50",
+        "VenusaurL50"
+      ]
+    },
+    {
+      "id": "pb-64",
+      "source": "PartyBox",
+      "title": "キチカビ＠117さん作",
+      "author": "レンタルマン",
+      "points": 84,
+      "payoff": 0.6342938971855208,
+      "variant_payoffs": [
+        0.6328202392256983,
+        0.6266462277451438,
+        0.6326136443090555,
+        0.6481642870213069
+      ],
+      "species": [
+        "SnorlaxL55",
+        "CloysterL50",
+        "GengarL50",
+        "MarowakL50",
+        "StarmieL50",
+        "UmbreonL50"
+      ]
+    },
+    {
+      "id": "pb-147",
+      "source": "PartyBox",
+      "title": "サンダーバンギラスガラガラTA",
+      "author": "スナノケガワ",
+      "points": 11,
+      "payoff": 0.6352123134433489,
+      "variant_payoffs": [
+        0.632517832227579,
+        0.6340455082838151,
+        0.666531954847799,
+        0.6015629899608586
+      ],
+      "species": [
+        "MarowakL55",
+        "TyranitarL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "SnorlaxL50",
+        "VenusaurL50"
+      ]
+    },
+    {
+      "id": "rental-cban-1",
+      "source": "psense",
+      "title": "【オススメレンタル】キチカビ１",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.635412663491804,
+      "variant_payoffs": [
+        0.6502468260221536,
+        0.6159597613143686,
+        0.6475219219834294,
+        0.6223409743035424
+      ],
+      "species": [
+        "SnorlaxL55",
+        "CloysterL50",
+        "GengarL50",
+        "MarowakL50",
+        "StarmieL50",
+        "UmbreonL50"
+      ]
+    },
+    {
+      "id": "pb-131",
+      "source": "PartyBox",
+      "title": "Pokemon Battle Simulator Saved Party",
+      "author": "syawa",
+      "points": 3,
+      "payoff": 0.6365970332539321,
+      "variant_payoffs": [
+        0.6234499686354408,
+        0.6502557979450881,
+        0.6276944004443776,
+        0.6503724653296674
+      ],
+      "species": [
+        "TyranitarL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "HeracrossL50",
+        "SnorlaxL50",
+        "SteelixL50"
+      ]
+    },
+    {
+      "id": "pb-3",
+      "source": "PartyBox",
+      "title": "カビパルサンダー＠朽さん作",
+      "author": "レンタルマン",
+      "points": 19,
+      "payoff": 0.6415548354310392,
+      "variant_payoffs": [
+        0.6419561856080153,
+        0.6358113631768024,
+        0.6375619218490804,
+        0.6531232924608193
+      ],
+      "species": [
+        "SnorlaxL55",
+        "CloysterL50",
+        "GengarL50",
+        "StarmieL50",
+        "SteelixL50",
+        "ZapdosL50"
+      ]
+    },
+    {
+      "id": "rental-cban-9",
+      "source": "psense",
+      "title": "55カビゴン 〜地震カビ〜",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.6415548354310392,
+      "variant_payoffs": [
+        0.6419561856080153,
+        0.6358113631768024,
+        0.6375619218490804,
+        0.6531232924608193
+      ],
+      "species": [
+        "SnorlaxL55",
+        "CloysterL50",
+        "GengarL50",
+        "StarmieL50",
+        "SteelixL50",
+        "ZapdosL50"
+      ]
+    },
+    {
+      "id": "pb-124",
+      "source": "PartyBox",
+      "title": "バンギラス+サンダーWA",
+      "author": "わんおー",
+      "points": 3,
+      "payoff": 0.6415556250807799,
+      "variant_payoffs": [
+        0.6179010416563838,
+        0.6139108536663941,
+        0.6867551900384338,
+        0.6550940082882887
+      ],
+      "species": [
+        "TyranitarL55",
+        "ZapdosL55",
+        "BlisseyL50",
+        "CloysterL50",
+        "MachampL50",
+        "MisdreavusL50"
+      ]
+    },
+    {
+      "id": "pb-91",
+      "source": "PartyBox",
+      "title": "～芸術はピーナッツ～",
+      "author": "ドラゴンサマー",
+      "points": 4,
+      "payoff": 0.6426979464772707,
+      "variant_payoffs": [
+        0.617276344270731,
+        0.6651184740722678,
+        0.618027100676592,
+        0.6836432475441828
+      ],
+      "species": [
+        "Porygon2L55",
+        "GolemL50",
+        "SnorlaxL50",
+        "SuicuneL50",
+        "VenusaurL50",
+        "ZapdosL50"
+      ]
+    },
+    {
+      "id": "pb-78",
+      "source": "PartyBox",
+      "title": "モーダルバンギタンクWA",
+      "author": "yasu",
+      "points": 87,
+      "payoff": 0.6441326417698241,
+      "variant_payoffs": [
+        0.6512611668342082,
+        0.673204353726021,
+        0.6033616201915434,
+        0.6480639912008523
+      ],
+      "species": [
+        "MiltankL55",
+        "TyranitarL55",
+        "ExeggutorL50",
+        "GolemL50",
+        "SnorlaxL50",
+        "VenusaurL50"
+      ]
+    },
+    {
+      "id": "rental-cban-8",
+      "source": "psense",
+      "title": "モーダルバンギ",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.6441326417698241,
+      "variant_payoffs": [
+        0.6512611668342082,
+        0.673204353726021,
+        0.6033616201915434,
+        0.6480639912008523
+      ],
+      "species": [
+        "MiltankL55",
+        "TyranitarL55",
+        "ExeggutorL50",
+        "GolemL50",
+        "SnorlaxL50",
+        "VenusaurL50"
+      ]
+    },
+    {
+      "id": "pb-87",
+      "source": "PartyBox",
+      "title": "サンダーバンギWA feat.まるころタンク",
+      "author": "stoic",
+      "points": 6,
+      "payoff": 0.6462372454053403,
+      "variant_payoffs": [
+        0.6518972764213342,
+        0.6423651634391362,
+        0.6360207004002923,
+        0.6553579825954149
+      ],
+      "species": [
+        "TyranitarL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "MarowakL50",
+        "MiltankL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "pb-89",
+      "source": "PartyBox",
+      "title": "サイドンタンクWA",
+      "author": "stoic",
+      "points": 10,
+      "payoff": 0.6528224758529472,
+      "variant_payoffs": [
+        0.671425742459921,
+        0.6814367055884649,
+        0.5805257552667638,
+        0.6795206895058186
+      ],
+      "species": [
+        "MiltankL55",
+        "RhydonL55",
+        "CloysterL50",
+        "SnorlaxL50",
+        "UmbreonL50",
+        "ZapdosL50"
+      ]
+    },
+    {
+      "id": "pb-129",
+      "source": "PartyBox",
+      "title": "テンプレサンダーバンギ",
+      "author": "しゃわ",
+      "points": 33,
+      "payoff": 0.6544175630156335,
+      "variant_payoffs": [
+        0.654314059121315,
+        0.6562829246750093,
+        0.6561691155142064,
+        0.650051676159675
+      ],
+      "species": [
+        "TyranitarL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "SnorlaxL50",
+        "SteelixL50",
+        "VenusaurL50"
+      ]
+    },
+    {
+      "id": "pb-123",
+      "source": "PartyBox",
+      "title": "ハガネール+サンダーWA",
+      "author": "わんおー",
+      "points": 8,
+      "payoff": 0.654595173084236,
+      "variant_payoffs": [
+        0.6527712202053663,
+        0.641642336609441,
+        0.6703790949604509,
+        0.6537922456507655
+      ],
+      "species": [
+        "SteelixL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "ExeggutorL50",
+        "SnorlaxL50",
+        "SuicuneL50"
+      ]
+    },
+    {
+      "id": "pb-90",
+      "source": "PartyBox",
+      "title": "ジョンダーファミリーズ",
+      "author": "マシュマロン",
+      "points": 19,
+      "payoff": 0.6554753394143,
+      "variant_payoffs": [
+        0.670666984222555,
+        0.6431487242721708,
+        0.6569777327991442,
+        0.646218149398524
+      ],
+      "species": [
+        "ZapdosL55",
+        "CloysterL50",
+        "GengarL50",
+        "MarowakL50",
+        "MiltankL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "pb-43",
+      "source": "PartyBox",
+      "title": "エースを餌にして。。",
+      "author": "Milkily",
+      "points": 15,
+      "payoff": 0.6583684355565489,
+      "variant_payoffs": [
+        0.6502222504860925,
+        0.6605141473762315,
+        0.6487267801979564,
+        0.6799576425858712
+      ],
+      "species": [
+        "SnorlaxL55",
+        "TyranitarL55",
+        "ExeggutorL50",
+        "GengarL50",
+        "HeracrossL50",
+        "ZapdosL50"
+      ]
+    },
+    {
+      "id": "pb-108",
+      "source": "PartyBox",
+      "title": "おぢいちゃんⅡ＜2020ver.＞",
+      "author": "クラヴハンマー",
+      "points": 12,
+      "payoff": 0.6649952650337143,
+      "variant_payoffs": [
+        0.6477667372655043,
+        0.655719156798917,
+        0.7304451496959415,
+        0.6206208361517418
+      ],
+      "species": [
+        "AlakazamL55",
+        "HeracrossL55",
+        "CharizardL50",
+        "CloysterL50",
+        "RhydonL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "pb-66",
+      "source": "PartyBox",
+      "title": "カビパルサンダー自分用",
+      "author": "しゃわ",
+      "points": 63,
+      "payoff": 0.6664912862151856,
+      "variant_payoffs": [
+        0.6468206227048342,
+        0.6543143007753875,
+        0.6832608017924037,
+        0.6902566188089376
+      ],
+      "species": [
+        "SnorlaxL55",
+        "CloysterL50",
+        "GengarL50",
+        "StarmieL50",
+        "SteelixL50",
+        "ZapdosL50"
+      ]
+    },
+    {
+      "id": "pb-12",
+      "source": "PartyBox",
+      "title": "カビガラポリ",
+      "author": "レンタルマン",
+      "points": 10,
+      "payoff": 0.6737901302296102,
+      "variant_payoffs": [
+        0.6822686098215873,
+        0.6795024980355775,
+        0.6500553937074114,
+        0.6836003717369337
+      ],
+      "species": [
+        "SnorlaxL55",
+        "CloysterL50",
+        "GengarL50",
+        "MarowakL50",
+        "Porygon2L50",
+        "ZapdosL50"
+      ]
+    },
+    {
+      "id": "pb-84",
+      "source": "PartyBox",
+      "title": "カジュアル寝言カビA",
+      "author": "はまっちゃった人",
+      "points": 11,
+      "payoff": 0.6741220814625821,
+      "variant_payoffs": [
+        0.6823490141267972,
+        0.6693188936581239,
+        0.6734364487864494,
+        0.6686427080669984
+      ],
+      "species": [
+        "RaikouL55",
+        "SnorlaxL55",
+        "CloysterL50",
+        "GligarL50",
+        "MachampL50",
+        "UmbreonL50"
+      ]
+    },
+    {
+      "id": "pb-31",
+      "source": "PartyBox",
+      "title": "おばあちゃん",
+      "author": "マシュマロン",
+      "points": 40,
+      "payoff": 0.6753828886884516,
+      "variant_payoffs": [
+        0.6723393261438219,
+        0.6772672232897773,
+        0.6586750038778455,
+        0.698477670266997
+      ],
+      "species": [
+        "AlakazamL55",
+        "TaurosL55",
+        "ElectrodeL50",
+        "GolemL50",
+        "SnorlaxL50",
+        "VenusaurL50"
+      ]
+    },
+    {
+      "id": "pb-63",
+      "source": "PartyBox",
+      "title": "Who is ace?",
+      "author": "マシュマロン",
+      "points": 16,
+      "payoff": 0.6757488850797346,
+      "variant_payoffs": [
+        0.6824522190024611,
+        0.6504923044300575,
+        0.68565615346181,
+        0.6848805245301469
+      ],
+      "species": [
+        "SnorlaxL55",
+        "VenusaurL55",
+        "BlisseyL50",
+        "HeracrossL50",
+        "MarowakL50",
+        "ZapdosL50"
+      ]
+    },
+    {
+      "id": "pb-83",
+      "source": "PartyBox",
+      "title": "爆PカビSA最終バージョン",
+      "author": "はまっちゃった人",
+      "points": 10,
+      "payoff": 0.6763748146199345,
+      "variant_payoffs": [
+        0.6782247494257109,
+        0.6649656663148379,
+        0.668575659218015,
+        0.6976102920450403
+      ],
+      "species": [
+        "SnorlaxL55",
+        "ExeggutorL50",
+        "JolteonL50",
+        "MachampL50",
+        "MisdreavusL50",
+        "MoltresL50"
+      ]
+    },
+    {
+      "id": "pb-170",
+      "source": "PartyBox",
+      "title": "サンダーエンテイガラガラＴＡ試作",
+      "author": "chio",
+      "points": 0,
+      "payoff": 0.6825007136196235,
+      "variant_payoffs": [
+        0.745370940535327,
+        0.6394573043108004,
+        0.6752697883407879,
+        0.6510382914806415
+      ],
+      "species": [
+        "EnteiL55",
+        "MarowakL55",
+        "ZapdosL55",
+        "ExeggutorL50",
+        "GengarL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "pb-136",
+      "source": "PartyBox",
+      "title": "受けンタ",
+      "author": "クラヴハンマー",
+      "points": 14,
+      "payoff": 0.6861624035898938,
+      "variant_payoffs": [
+        0.6963422961765713,
+        0.694714405583783,
+        0.6652393380455428,
+        0.6863563941479551
+      ],
+      "species": [
+        "TaurosL55",
+        "BlisseyL50",
+        "CloysterL50",
+        "JumpluffL50",
+        "MisdreavusL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "rental-cban-12",
+      "source": "psense",
+      "title": "カビガラポリ",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.6891744855321656,
+      "variant_payoffs": [
+        0.6823759484419029,
+        0.6896840998154838,
+        0.6963726968915563,
+        0.6897375091141736
+      ],
+      "species": [
+        "GengarL53",
+        "MarowakL53",
+        "HeracrossL51",
+        "Porygon2L51",
+        "SkarmoryL51",
+        "SnorlaxL51"
+      ]
+    },
+    {
+      "id": "pb-169",
+      "source": "PartyBox",
+      "title": "例のＴＡ2026_chioサンプル",
+      "author": "chio",
+      "points": 0,
+      "payoff": 0.6913246855695419,
+      "variant_payoffs": [
+        0.6871383693631872,
+        0.6656619014985575,
+        0.7196080622848657,
+        0.6943284190736494
+      ],
+      "species": [
+        "MarowakL55",
+        "TyranitarL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "SnorlaxL50",
+        "VenusaurL50"
+      ]
+    },
+    {
+      "id": "pb-106",
+      "source": "PartyBox",
+      "title": "プレゼント",
+      "author": "わるいマシュマロン",
+      "points": 43,
+      "payoff": 0.6924915801615571,
+      "variant_payoffs": [
+        0.7135811111971038,
+        0.700602761389803,
+        0.6540907128868064,
+        0.6987193911663678
+      ],
+      "species": [
+        "MiltankL55",
+        "SteelixL55",
+        "BlisseyL50",
+        "CloysterL50",
+        "HeracrossL50",
+        "StarmieL50"
+      ]
+    },
+    {
+      "id": "pb-65",
+      "source": "PartyBox",
+      "title": "サンダータンクWA",
+      "author": "stoic",
+      "points": 29,
+      "payoff": 0.695695807672686,
+      "variant_payoffs": [
+        0.7075338510740402,
+        0.7001805609752236,
+        0.6680941924740544,
+        0.7068348199407717
+      ],
+      "species": [
+        "MiltankL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "ExeggutorL50",
+        "SnorlaxL50",
+        "SteelixL50"
+      ]
+    },
+    {
+      "id": "pb-35",
+      "source": "PartyBox",
+      "title": "凸",
+      "author": "旧レンタルで遊ぼうの会",
+      "points": 6,
+      "payoff": 0.6975978405765846,
+      "variant_payoffs": [
+        0.6849299450533336,
+        0.6992591453284295,
+        0.6682661163737796,
+        0.7511877081751613
+      ],
+      "species": [
+        "SnorlaxL53",
+        "MachampL52",
+        "RaikouL52",
+        "StarmieL52",
+        "ForretressL50",
+        "SkarmoryL50"
+      ]
+    },
+    {
+      "id": "pb-98",
+      "source": "PartyBox",
+      "title": "ミルタンク+ライコウWA",
+      "author": "わんおー",
+      "points": 10,
+      "payoff": 0.6989341967917733,
+      "variant_payoffs": [
+        0.7051104088829413,
+        0.7056600863535866,
+        0.6590539818870177,
+        0.731112785333699
+      ],
+      "species": [
+        "MiltankL55",
+        "RaikouL55",
+        "CloysterL50",
+        "MisdreavusL50",
+        "SnorlaxL50",
+        "VenusaurL50"
+      ]
+    },
+    {
+      "id": "pb-61",
+      "source": "PartyBox",
+      "title": "あやみガーラ&ロック戦術",
+      "author": "ドラゴンサマー",
+      "points": 18,
+      "payoff": 0.699866219977807,
+      "variant_payoffs": [
+        0.7444601676329283,
+        0.687937213851247,
+        0.6670308193364197,
+        0.6889308069550593
+      ],
+      "species": [
+        "MarowakL53",
+        "AlakazamL52",
+        "UmbreonL52",
+        "SnorlaxL51",
+        "StarmieL51",
+        "MisdreavusL50"
+      ]
+    },
+    {
+      "id": "pb-130",
+      "source": "PartyBox",
+      "title": "しゃわポリ亜種",
+      "author": "しゃわ",
+      "points": 2,
+      "payoff": 0.7035329721196826,
+      "variant_payoffs": [
+        0.7164639096250489,
+        0.6801384213013014,
+        0.7208797852041978,
+        0.6916962380289652
+      ],
+      "species": [
+        "Porygon2L55",
+        "VaporeonL55",
+        "ExeggutorL50",
+        "SnorlaxL50",
+        "SteelixL50",
+        "ZapdosL50"
+      ]
+    },
+    {
+      "id": "pb-127",
+      "source": "PartyBox",
+      "title": "カビガラポリ当時物",
+      "author": "chio",
+      "points": 5,
+      "payoff": 0.704124492989353,
+      "variant_payoffs": [
+        0.7037414473580417,
+        0.7070330715503481,
+        0.7061743882392268,
+        0.6985009691727334
+      ],
+      "species": [
+        "SnorlaxL53",
+        "GengarL51",
+        "MarowakL51",
+        "Porygon2L51",
+        "StarmieL51",
+        "ZapdosL51"
+      ]
+    },
+    {
+      "id": "pb-9",
+      "source": "PartyBox",
+      "title": "地震電磁砲カビ＠わんおーさん作",
+      "author": "レンタルマン",
+      "points": 6,
+      "payoff": 0.7059339258148072,
+      "variant_payoffs": [
+        0.722906359848666,
+        0.6898968392897251,
+        0.6856378841803216,
+        0.7258916849634782
+      ],
+      "species": [
+        "SnorlaxL55",
+        "CloysterL50",
+        "MachampL50",
+        "MisdreavusL50",
+        "SkarmoryL50",
+        "StarmieL50"
+      ]
+    }
+  ],
+  "all_results": [
+    {
+      "id": "pb-100",
+      "source": "PartyBox",
+      "title": "カビゴンSA+フォレトス",
+      "author": "わんおー",
+      "points": 9,
+      "payoff": 0.5486566182883974,
+      "variant_payoffs": [
+        0.5332615048761432,
+        0.5184061379861699,
+        0.5593503693621203,
+        0.5961951999424099
+      ]
+    },
+    {
+      "id": "pb-85",
+      "source": "PartyBox",
+      "title": "寝言カビSA最終バージョン",
+      "author": "はまっちゃった人",
+      "points": 8,
+      "payoff": 0.5597988540884107,
+      "variant_payoffs": [
+        0.5425143728841691,
+        0.5608358576967212,
+        0.5746086999685502,
+        0.5659170140342106
+      ]
+    },
+    {
+      "id": "pb-62",
+      "source": "PartyBox",
+      "title": "55地震寝言ピント♀カビSA",
+      "author": "はまっちゃった人",
+      "points": 40,
+      "payoff": 0.574727949109248,
+      "variant_payoffs": [
+        0.5711256659086698,
+        0.5666457620816426,
+        0.5935523702604194,
+        0.5667035812556577
+      ]
+    },
+    {
+      "id": "pb-74",
+      "source": "PartyBox",
+      "title": "サンダータンク2017",
+      "author": "stoic",
+      "points": 78,
+      "payoff": 0.5818831207577653,
+      "variant_payoffs": [
+        0.5898844022930589,
+        0.5643614418319342,
+        0.6062296748722025,
+        0.561350104469067
+      ]
+    },
+    {
+      "id": "rental-cban-6",
+      "source": "psense",
+      "title": "サンダータンク",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.5857809987417644,
+      "variant_payoffs": [
+        0.5964996266648308,
+        0.58365868066119,
+        0.5760083190267906,
+        0.5845718041015996
+      ]
+    },
+    {
+      "id": "pb-76",
+      "source": "PartyBox",
+      "title": "寝言カビゴンライコウWA(キチカビ３)",
+      "author": "117",
+      "points": 102,
+      "payoff": 0.5914316543381739,
+      "variant_payoffs": [
+        0.5917448047548605,
+        0.5994424864714184,
+        0.5934079557835453,
+        0.5784780117398742
+      ]
+    },
+    {
+      "id": "rental-cban-5",
+      "source": "psense",
+      "title": "【オススメレンタル】キチカビ３",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.5914316543381739,
+      "variant_payoffs": [
+        0.5917448047548605,
+        0.5994424864714184,
+        0.5934079557835453,
+        0.5784780117398742
+      ]
+    },
+    {
+      "id": "pb-132",
+      "source": "PartyBox",
+      "title": "サンダーバンギ feat変態ヘラクロス",
+      "author": "しゃわ",
+      "points": 12,
+      "payoff": 0.594204357808301,
+      "variant_payoffs": [
+        0.5899521507260442,
+        0.6050514579548277,
+        0.5797439450207239,
+        0.6050993092329994
+      ]
+    },
+    {
+      "id": "pb-67",
+      "source": "PartyBox",
+      "title": "リフライコウガラWA",
+      "author": "117",
+      "points": 67,
+      "payoff": 0.6034298153354063,
+      "variant_payoffs": [
+        0.6235113772880659,
+        0.6286888852382582,
+        0.5801715831383693,
+        0.5708064252741486
+      ]
+    },
+    {
+      "id": "rental-cban-3",
+      "source": "psense",
+      "title": "【オススメレンタル】爆破速攻TA",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.6108370626853092,
+      "variant_payoffs": [
+        0.6159977885365764,
+        0.6088112829229999,
+        0.6111703395819502,
+        0.6052116024904939
+      ]
+    },
+    {
+      "id": "pb-6",
+      "source": "PartyBox",
+      "title": "サンダーリキーWA＠しゃわさん作",
+      "author": "レンタルマン",
+      "points": 7,
+      "payoff": 0.6199468786096842,
+      "variant_payoffs": [
+        0.5900852870634016,
+        0.6170014452707255,
+        0.6590448681790357,
+        0.6195485706411171
+      ]
+    },
+    {
+      "id": "pb-52",
+      "source": "PartyBox",
+      "title": "古典サンダーリキーWA",
+      "author": "クラヴハンマー",
+      "points": 13,
+      "payoff": 0.6219873871849275,
+      "variant_payoffs": [
+        0.616411551090092,
+        0.5990053399646411,
+        0.6730568749621615,
+        0.5952418406309966
+      ]
+    },
+    {
+      "id": "pb-15",
+      "source": "PartyBox",
+      "title": "爆破速攻TA",
+      "author": "レンタルマン",
+      "points": 77,
+      "payoff": 0.6253714529287026,
+      "variant_payoffs": [
+        0.6192396081279422,
+        0.6197736398727997,
+        0.6240299943222577,
+        0.6432433097077777
+      ]
+    },
+    {
+      "id": "rental-cban-2",
+      "source": "psense",
+      "title": "【オススメレンタル】サンダーバンギWA",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.6310160878115518,
+      "variant_payoffs": [
+        0.6414653111858941,
+        0.5675658851587103,
+        0.7144144357585371,
+        0.5904070711323581
+      ]
+    },
+    {
+      "id": "pb-96",
+      "source": "PartyBox",
+      "title": "ヘラクロス+エレブーWA",
+      "author": "わんおー",
+      "points": 7,
+      "payoff": 0.6334842193829044,
+      "variant_payoffs": [
+        0.627268677047713,
+        0.5986203100281565,
+        0.6690791913588225,
+        0.6418937046092287
+      ]
+    },
+    {
+      "id": "pb-64",
+      "source": "PartyBox",
+      "title": "キチカビ＠117さん作",
+      "author": "レンタルマン",
+      "points": 84,
+      "payoff": 0.6342938971855208,
+      "variant_payoffs": [
+        0.6328202392256983,
+        0.6266462277451438,
+        0.6326136443090555,
+        0.6481642870213069
+      ]
+    },
+    {
+      "id": "pb-147",
+      "source": "PartyBox",
+      "title": "サンダーバンギラスガラガラTA",
+      "author": "スナノケガワ",
+      "points": 11,
+      "payoff": 0.6352123134433489,
+      "variant_payoffs": [
+        0.632517832227579,
+        0.6340455082838151,
+        0.666531954847799,
+        0.6015629899608586
+      ]
+    },
+    {
+      "id": "rental-cban-1",
+      "source": "psense",
+      "title": "【オススメレンタル】キチカビ１",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.635412663491804,
+      "variant_payoffs": [
+        0.6502468260221536,
+        0.6159597613143686,
+        0.6475219219834294,
+        0.6223409743035424
+      ]
+    },
+    {
+      "id": "pb-131",
+      "source": "PartyBox",
+      "title": "Pokemon Battle Simulator Saved Party",
+      "author": "syawa",
+      "points": 3,
+      "payoff": 0.6365970332539321,
+      "variant_payoffs": [
+        0.6234499686354408,
+        0.6502557979450881,
+        0.6276944004443776,
+        0.6503724653296674
+      ]
+    },
+    {
+      "id": "pb-3",
+      "source": "PartyBox",
+      "title": "カビパルサンダー＠朽さん作",
+      "author": "レンタルマン",
+      "points": 19,
+      "payoff": 0.6415548354310392,
+      "variant_payoffs": [
+        0.6419561856080153,
+        0.6358113631768024,
+        0.6375619218490804,
+        0.6531232924608193
+      ]
+    },
+    {
+      "id": "rental-cban-9",
+      "source": "psense",
+      "title": "55カビゴン 〜地震カビ〜",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.6415548354310392,
+      "variant_payoffs": [
+        0.6419561856080153,
+        0.6358113631768024,
+        0.6375619218490804,
+        0.6531232924608193
+      ]
+    },
+    {
+      "id": "pb-124",
+      "source": "PartyBox",
+      "title": "バンギラス+サンダーWA",
+      "author": "わんおー",
+      "points": 3,
+      "payoff": 0.6415556250807799,
+      "variant_payoffs": [
+        0.6179010416563838,
+        0.6139108536663941,
+        0.6867551900384338,
+        0.6550940082882887
+      ]
+    },
+    {
+      "id": "pb-91",
+      "source": "PartyBox",
+      "title": "～芸術はピーナッツ～",
+      "author": "ドラゴンサマー",
+      "points": 4,
+      "payoff": 0.6426979464772707,
+      "variant_payoffs": [
+        0.617276344270731,
+        0.6651184740722678,
+        0.618027100676592,
+        0.6836432475441828
+      ]
+    },
+    {
+      "id": "pb-78",
+      "source": "PartyBox",
+      "title": "モーダルバンギタンクWA",
+      "author": "yasu",
+      "points": 87,
+      "payoff": 0.6441326417698241,
+      "variant_payoffs": [
+        0.6512611668342082,
+        0.673204353726021,
+        0.6033616201915434,
+        0.6480639912008523
+      ]
+    },
+    {
+      "id": "rental-cban-8",
+      "source": "psense",
+      "title": "モーダルバンギ",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.6441326417698241,
+      "variant_payoffs": [
+        0.6512611668342082,
+        0.673204353726021,
+        0.6033616201915434,
+        0.6480639912008523
+      ]
+    },
+    {
+      "id": "pb-87",
+      "source": "PartyBox",
+      "title": "サンダーバンギWA feat.まるころタンク",
+      "author": "stoic",
+      "points": 6,
+      "payoff": 0.6462372454053403,
+      "variant_payoffs": [
+        0.6518972764213342,
+        0.6423651634391362,
+        0.6360207004002923,
+        0.6553579825954149
+      ]
+    },
+    {
+      "id": "pb-89",
+      "source": "PartyBox",
+      "title": "サイドンタンクWA",
+      "author": "stoic",
+      "points": 10,
+      "payoff": 0.6528224758529472,
+      "variant_payoffs": [
+        0.671425742459921,
+        0.6814367055884649,
+        0.5805257552667638,
+        0.6795206895058186
+      ]
+    },
+    {
+      "id": "pb-129",
+      "source": "PartyBox",
+      "title": "テンプレサンダーバンギ",
+      "author": "しゃわ",
+      "points": 33,
+      "payoff": 0.6544175630156335,
+      "variant_payoffs": [
+        0.654314059121315,
+        0.6562829246750093,
+        0.6561691155142064,
+        0.650051676159675
+      ]
+    },
+    {
+      "id": "pb-123",
+      "source": "PartyBox",
+      "title": "ハガネール+サンダーWA",
+      "author": "わんおー",
+      "points": 8,
+      "payoff": 0.654595173084236,
+      "variant_payoffs": [
+        0.6527712202053663,
+        0.641642336609441,
+        0.6703790949604509,
+        0.6537922456507655
+      ]
+    },
+    {
+      "id": "pb-90",
+      "source": "PartyBox",
+      "title": "ジョンダーファミリーズ",
+      "author": "マシュマロン",
+      "points": 19,
+      "payoff": 0.6554753394143,
+      "variant_payoffs": [
+        0.670666984222555,
+        0.6431487242721708,
+        0.6569777327991442,
+        0.646218149398524
+      ]
+    },
+    {
+      "id": "pb-43",
+      "source": "PartyBox",
+      "title": "エースを餌にして。。",
+      "author": "Milkily",
+      "points": 15,
+      "payoff": 0.6583684355565489,
+      "variant_payoffs": [
+        0.6502222504860925,
+        0.6605141473762315,
+        0.6487267801979564,
+        0.6799576425858712
+      ]
+    },
+    {
+      "id": "pb-108",
+      "source": "PartyBox",
+      "title": "おぢいちゃんⅡ＜2020ver.＞",
+      "author": "クラヴハンマー",
+      "points": 12,
+      "payoff": 0.6649952650337143,
+      "variant_payoffs": [
+        0.6477667372655043,
+        0.655719156798917,
+        0.7304451496959415,
+        0.6206208361517418
+      ]
+    },
+    {
+      "id": "pb-66",
+      "source": "PartyBox",
+      "title": "カビパルサンダー自分用",
+      "author": "しゃわ",
+      "points": 63,
+      "payoff": 0.6664912862151856,
+      "variant_payoffs": [
+        0.6468206227048342,
+        0.6543143007753875,
+        0.6832608017924037,
+        0.6902566188089376
+      ]
+    },
+    {
+      "id": "pb-12",
+      "source": "PartyBox",
+      "title": "カビガラポリ",
+      "author": "レンタルマン",
+      "points": 10,
+      "payoff": 0.6737901302296102,
+      "variant_payoffs": [
+        0.6822686098215873,
+        0.6795024980355775,
+        0.6500553937074114,
+        0.6836003717369337
+      ]
+    },
+    {
+      "id": "pb-84",
+      "source": "PartyBox",
+      "title": "カジュアル寝言カビA",
+      "author": "はまっちゃった人",
+      "points": 11,
+      "payoff": 0.6741220814625821,
+      "variant_payoffs": [
+        0.6823490141267972,
+        0.6693188936581239,
+        0.6734364487864494,
+        0.6686427080669984
+      ]
+    },
+    {
+      "id": "pb-31",
+      "source": "PartyBox",
+      "title": "おばあちゃん",
+      "author": "マシュマロン",
+      "points": 40,
+      "payoff": 0.6753828886884516,
+      "variant_payoffs": [
+        0.6723393261438219,
+        0.6772672232897773,
+        0.6586750038778455,
+        0.698477670266997
+      ]
+    },
+    {
+      "id": "pb-63",
+      "source": "PartyBox",
+      "title": "Who is ace?",
+      "author": "マシュマロン",
+      "points": 16,
+      "payoff": 0.6757488850797346,
+      "variant_payoffs": [
+        0.6824522190024611,
+        0.6504923044300575,
+        0.68565615346181,
+        0.6848805245301469
+      ]
+    },
+    {
+      "id": "pb-83",
+      "source": "PartyBox",
+      "title": "爆PカビSA最終バージョン",
+      "author": "はまっちゃった人",
+      "points": 10,
+      "payoff": 0.6763748146199345,
+      "variant_payoffs": [
+        0.6782247494257109,
+        0.6649656663148379,
+        0.668575659218015,
+        0.6976102920450403
+      ]
+    },
+    {
+      "id": "pb-170",
+      "source": "PartyBox",
+      "title": "サンダーエンテイガラガラＴＡ試作",
+      "author": "chio",
+      "points": 0,
+      "payoff": 0.6825007136196235,
+      "variant_payoffs": [
+        0.745370940535327,
+        0.6394573043108004,
+        0.6752697883407879,
+        0.6510382914806415
+      ]
+    },
+    {
+      "id": "pb-136",
+      "source": "PartyBox",
+      "title": "受けンタ",
+      "author": "クラヴハンマー",
+      "points": 14,
+      "payoff": 0.6861624035898938,
+      "variant_payoffs": [
+        0.6963422961765713,
+        0.694714405583783,
+        0.6652393380455428,
+        0.6863563941479551
+      ]
+    },
+    {
+      "id": "rental-cban-12",
+      "source": "psense",
+      "title": "カビガラポリ",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.6891744855321656,
+      "variant_payoffs": [
+        0.6823759484419029,
+        0.6896840998154838,
+        0.6963726968915563,
+        0.6897375091141736
+      ]
+    },
+    {
+      "id": "pb-169",
+      "source": "PartyBox",
+      "title": "例のＴＡ2026_chioサンプル",
+      "author": "chio",
+      "points": 0,
+      "payoff": 0.6913246855695419,
+      "variant_payoffs": [
+        0.6871383693631872,
+        0.6656619014985575,
+        0.7196080622848657,
+        0.6943284190736494
+      ]
+    },
+    {
+      "id": "pb-106",
+      "source": "PartyBox",
+      "title": "プレゼント",
+      "author": "わるいマシュマロン",
+      "points": 43,
+      "payoff": 0.6924915801615571,
+      "variant_payoffs": [
+        0.7135811111971038,
+        0.700602761389803,
+        0.6540907128868064,
+        0.6987193911663678
+      ]
+    },
+    {
+      "id": "pb-65",
+      "source": "PartyBox",
+      "title": "サンダータンクWA",
+      "author": "stoic",
+      "points": 29,
+      "payoff": 0.695695807672686,
+      "variant_payoffs": [
+        0.7075338510740402,
+        0.7001805609752236,
+        0.6680941924740544,
+        0.7068348199407717
+      ]
+    },
+    {
+      "id": "pb-35",
+      "source": "PartyBox",
+      "title": "凸",
+      "author": "旧レンタルで遊ぼうの会",
+      "points": 6,
+      "payoff": 0.6975978405765846,
+      "variant_payoffs": [
+        0.6849299450533336,
+        0.6992591453284295,
+        0.6682661163737796,
+        0.7511877081751613
+      ]
+    },
+    {
+      "id": "pb-98",
+      "source": "PartyBox",
+      "title": "ミルタンク+ライコウWA",
+      "author": "わんおー",
+      "points": 10,
+      "payoff": 0.6989341967917733,
+      "variant_payoffs": [
+        0.7051104088829413,
+        0.7056600863535866,
+        0.6590539818870177,
+        0.731112785333699
+      ]
+    },
+    {
+      "id": "pb-61",
+      "source": "PartyBox",
+      "title": "あやみガーラ&ロック戦術",
+      "author": "ドラゴンサマー",
+      "points": 18,
+      "payoff": 0.699866219977807,
+      "variant_payoffs": [
+        0.7444601676329283,
+        0.687937213851247,
+        0.6670308193364197,
+        0.6889308069550593
+      ]
+    },
+    {
+      "id": "pb-130",
+      "source": "PartyBox",
+      "title": "しゃわポリ亜種",
+      "author": "しゃわ",
+      "points": 2,
+      "payoff": 0.7035329721196826,
+      "variant_payoffs": [
+        0.7164639096250489,
+        0.6801384213013014,
+        0.7208797852041978,
+        0.6916962380289652
+      ]
+    },
+    {
+      "id": "pb-127",
+      "source": "PartyBox",
+      "title": "カビガラポリ当時物",
+      "author": "chio",
+      "points": 5,
+      "payoff": 0.704124492989353,
+      "variant_payoffs": [
+        0.7037414473580417,
+        0.7070330715503481,
+        0.7061743882392268,
+        0.6985009691727334
+      ]
+    },
+    {
+      "id": "pb-9",
+      "source": "PartyBox",
+      "title": "地震電磁砲カビ＠わんおーさん作",
+      "author": "レンタルマン",
+      "points": 6,
+      "payoff": 0.7059339258148072,
+      "variant_payoffs": [
+        0.722906359848666,
+        0.6898968392897251,
+        0.6856378841803216,
+        0.7258916849634782
+      ]
+    },
+    {
+      "id": "pb-8",
+      "source": "PartyBox",
+      "title": "地震電磁砲カビ",
+      "author": "レンタルマン",
+      "points": 6,
+      "payoff": 0.7059339258148072,
+      "variant_payoffs": [
+        0.722906359848666,
+        0.6898968392897251,
+        0.6856378841803216,
+        0.7258916849634782
+      ]
+    },
+    {
+      "id": "pb-111",
+      "source": "PartyBox",
+      "title": "ソーナンス最終結論",
+      "author": "わるいマシュマロン",
+      "points": 27,
+      "payoff": 0.707554897916987,
+      "variant_payoffs": [
+        0.6981895785184059,
+        0.6978093505660413,
+        0.7235955618818202,
+        0.7137339812474996
+      ]
+    },
+    {
+      "id": "pb-93",
+      "source": "PartyBox",
+      "title": "ＴＯＤ",
+      "author": "わるいマシュマロン",
+      "points": 7,
+      "payoff": 0.7106672260957855,
+      "variant_payoffs": [
+        0.6796224115874404,
+        0.7145786911376565,
+        0.740576176265268,
+        0.7149589288441112
+      ]
+    },
+    {
+      "id": "pb-4",
+      "source": "PartyBox",
+      "title": "カビパルクイン＠朽さん作",
+      "author": "レンタルマン",
+      "points": 11,
+      "payoff": 0.7138594795778151,
+      "variant_payoffs": [
+        0.7031470385664577,
+        0.7262989474526758,
+        0.7026871651640878,
+        0.7283441992684347
+      ]
+    },
+    {
+      "id": "rental-cban-14",
+      "source": "psense",
+      "title": "しゃわポリWA",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.7175291106229001,
+      "variant_payoffs": [
+        0.6980774939691752,
+        0.6942027045965302,
+        0.7343145278052459,
+        0.7548827716585177
+      ]
+    },
+    {
+      "id": "pb-1",
+      "source": "PartyBox",
+      "title": "2000最終結論",
+      "author": "ハンゲン狂",
+      "points": 70,
+      "payoff": 0.718748998077758,
+      "variant_payoffs": [
+        0.709005229902365,
+        0.7107596211740606,
+        0.74337099819453,
+        0.7125738713245051
+      ]
+    },
+    {
+      "id": "pb-20",
+      "source": "PartyBox",
+      "title": "ポニョ",
+      "author": "stoic",
+      "points": 64,
+      "payoff": 0.7246187164124522,
+      "variant_payoffs": [
+        0.7137330050256437,
+        0.7136752534718624,
+        0.6977916651084324,
+        0.7881604262984269
+      ]
+    },
+    {
+      "id": "rental-cban-13",
+      "source": "psense",
+      "title": "ポニョ",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.7246187164124522,
+      "variant_payoffs": [
+        0.7137330050256437,
+        0.7136752534718624,
+        0.6977916651084324,
+        0.7881604262984269
+      ]
+    },
+    {
+      "id": "pb-150",
+      "source": "PartyBox",
+      "title": "ガラガラ + パルシェンWA",
+      "author": "わんおー",
+      "points": 2,
+      "payoff": 0.725492950279344,
+      "variant_payoffs": [
+        0.7245169212856564,
+        0.7419694284763947,
+        0.7159142766253328,
+        0.7183347380910757
+      ]
+    },
+    {
+      "id": "pb-86",
+      "source": "PartyBox",
+      "title": "キチカビ＠事故アレンジ",
+      "author": "わるいマシュマロン",
+      "points": 6,
+      "payoff": 0.7274292454934843,
+      "variant_payoffs": [
+        0.7174316264292167,
+        0.7201167719653414,
+        0.7331512399664188,
+        0.7444137729088959
+      ]
+    },
+    {
+      "id": "pb-168",
+      "source": "PartyBox",
+      "title": "55カビ＋ガラエアムウマ＋岩地面格闘炎追加対策２枚",
+      "author": "chio",
+      "points": 54,
+      "payoff": 0.7281420364030226,
+      "variant_payoffs": [
+        0.7493710451192072,
+        0.7327157707299042,
+        0.6935085612051146,
+        0.7338731994175283
+      ]
+    },
+    {
+      "id": "pb-105",
+      "source": "PartyBox",
+      "title": "ＴＯＤ（改）",
+      "author": "わるいマシュマロン",
+      "points": 5,
+      "payoff": 0.7296677426938907,
+      "variant_payoffs": [
+        0.734226103627626,
+        0.7269315797933806,
+        0.7331823012655969,
+        0.7218572067042929
+      ]
+    },
+    {
+      "id": "pb-121",
+      "source": "PartyBox",
+      "title": "リザードン+カビゴンWA",
+      "author": "わんおー",
+      "points": 2,
+      "payoff": 0.7313373099277154,
+      "variant_payoffs": [
+        0.7410905508556216,
+        0.7316859633111132,
+        0.7207461869996684,
+        0.7295105354666676
+      ]
+    },
+    {
+      "id": "pb-137",
+      "source": "PartyBox",
+      "title": "病ンダー",
+      "author": "悪かったよ俺がマシュマロンだ",
+      "points": 8,
+      "payoff": 0.7320636485430909,
+      "variant_payoffs": [
+        0.7503773325284335,
+        0.7042396446887823,
+        0.7462532670451979,
+        0.7216361042553293
+      ]
+    },
+    {
+      "id": "pb-13",
+      "source": "PartyBox",
+      "title": "芸術は爆発だ！＠hidakaさん作",
+      "author": "レンタルマン",
+      "points": 22,
+      "payoff": 0.7372566388191282,
+      "variant_payoffs": [
+        0.7153703705856376,
+        0.7134918064804143,
+        0.739731172015548,
+        0.7966989150972311
+      ]
+    },
+    {
+      "id": "pb-14",
+      "source": "PartyBox",
+      "title": "王パ＠Venomさん作",
+      "author": "レンタルマン",
+      "points": 21,
+      "payoff": 0.7373651042794636,
+      "variant_payoffs": [
+        0.7224618006232556,
+        0.7123543402400959,
+        0.7417691420929231,
+        0.7854784675461607
+      ]
+    },
+    {
+      "id": "pb-103",
+      "source": "PartyBox",
+      "title": "藝術道場",
+      "author": "クラヴハンマー",
+      "points": 19,
+      "payoff": 0.7388570937687907,
+      "variant_payoffs": [
+        0.7315082169560537,
+        0.7345252403881046,
+        0.7386405736004827,
+        0.7555658759241386
+      ]
+    },
+    {
+      "id": "pb-82",
+      "source": "PartyBox",
+      "title": "ドラサマ爆パンカビ",
+      "author": "ドラゴンサマー",
+      "points": 8,
+      "payoff": 0.7436851232633793,
+      "variant_payoffs": [
+        0.741647246351815,
+        0.7435533178077997,
+        0.7417937418636938,
+        0.7492709221998074
+      ]
+    },
+    {
+      "id": "rental-cban-11",
+      "source": "psense",
+      "title": "55カビゴン 〜爆パンカビ〜",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.7436851232633793,
+      "variant_payoffs": [
+        0.741647246351815,
+        0.7435533178077997,
+        0.7417937418636938,
+        0.7492709221998074
+      ]
+    },
+    {
+      "id": "pb-19",
+      "source": "PartyBox",
+      "title": "いばみがハピ",
+      "author": "マシュマロン",
+      "points": 52,
+      "payoff": 0.7470289324903738,
+      "variant_payoffs": [
+        0.7442794048691058,
+        0.7440740412765762,
+        0.7489988309445436,
+        0.7523844648718111
+      ]
+    },
+    {
+      "id": "pb-134",
+      "source": "PartyBox",
+      "title": "ヒストリアスタン2000@ゴールドさん作（シロガネリーグ版）",
+      "author": "chio",
+      "points": 12,
+      "payoff": 0.7474460355737585,
+      "variant_payoffs": [
+        0.7294088544644648,
+        0.7218055590498257,
+        0.778290287924251,
+        0.7679970874544999
+      ]
+    },
+    {
+      "id": "pb-46",
+      "source": "PartyBox",
+      "title": "エンテイ メガニウムTA",
+      "author": "わんおー",
+      "points": 293,
+      "payoff": 0.74792514302308,
+      "variant_payoffs": [
+        0.7551068317161252,
+        0.7214542818240681,
+        0.7776632410459101,
+        0.733068563953739
+      ]
+    },
+    {
+      "id": "pb-79",
+      "source": "PartyBox",
+      "title": "カビピク（太鼓カビ+サポートピクシー）",
+      "author": "アウオオ",
+      "points": 10,
+      "payoff": 0.750771633100328,
+      "variant_payoffs": [
+        0.7498799478667848,
+        0.7657058694678182,
+        0.7231451428089368,
+        0.7679744783555194
+      ]
+    },
+    {
+      "id": "pb-18",
+      "source": "PartyBox",
+      "title": "CH流トキワジム",
+      "author": "クラヴハンマー",
+      "points": 60,
+      "payoff": 0.7519810176333778,
+      "variant_payoffs": [
+        0.774082013073008,
+        0.7376673269667473,
+        0.757618711014767,
+        0.7296745210804839
+      ]
+    },
+    {
+      "id": "pb-32",
+      "source": "PartyBox",
+      "title": "カビパ",
+      "author": "匿名",
+      "points": 6,
+      "payoff": 0.7537362794296333,
+      "variant_payoffs": [
+        0.7440148860564498,
+        0.7660709030101501,
+        0.7407554285933621,
+        0.7691261535591013
+      ]
+    },
+    {
+      "id": "rental-cban-18",
+      "source": "psense",
+      "title": "ライコウ昆布",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.756529481837468,
+      "variant_payoffs": [
+        0.7531324964590141,
+        0.7496348002870735,
+        0.7913907158279382,
+        0.7266667693550543
+      ]
+    },
+    {
+      "id": "pb-99",
+      "source": "PartyBox",
+      "title": "ライコウSA というより50ナッシーパーティ",
+      "author": "わんおー",
+      "points": 4,
+      "payoff": 0.7590346267275402,
+      "variant_payoffs": [
+        0.7676759617771428,
+        0.7669954040943735,
+        0.7491581826598717,
+        0.7484672075291805
+      ]
+    },
+    {
+      "id": "rental-cban-7",
+      "source": "psense",
+      "title": "トキワジム",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.7611622734259196,
+      "variant_payoffs": [
+        0.766027695329777,
+        0.7630501461149878,
+        0.7749091859245285,
+        0.7343206590855366
+      ]
+    },
+    {
+      "id": "pb-2",
+      "source": "PartyBox",
+      "title": "Evil noise",
+      "author": "マシュマロン",
+      "points": 8,
+      "payoff": 0.7624488476178719,
+      "variant_payoffs": [
+        0.7515128617094342,
+        0.7444609628825193,
+        0.7529292783632557,
+        0.8132371439679896
+      ]
+    },
+    {
+      "id": "pb-21",
+      "source": "PartyBox",
+      "title": "カイリューグドラWA",
+      "author": "stoic",
+      "points": 9,
+      "payoff": 0.7642486567152286,
+      "variant_payoffs": [
+        0.7493489870610681,
+        0.7340035913629133,
+        0.788194474399203,
+        0.7944722207818953
+      ]
+    },
+    {
+      "id": "rental-cban-19",
+      "source": "psense",
+      "title": "ドラゴンエース",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.7642486567152286,
+      "variant_payoffs": [
+        0.7493489870610681,
+        0.7340035913629133,
+        0.788194474399203,
+        0.7944722207818953
+      ]
+    },
+    {
+      "id": "pb-135",
+      "source": "PartyBox",
+      "title": "Destroyer",
+      "author": "マシュマロン",
+      "points": 8,
+      "payoff": 0.7689496500984219,
+      "variant_payoffs": [
+        0.7816954579843203,
+        0.7449928861881288,
+        0.7947853690339641,
+        0.7474822444880126
+      ]
+    },
+    {
+      "id": "pb-69",
+      "source": "PartyBox",
+      "title": "可変爆破速攻ライコウバンギ",
+      "author": "yasu",
+      "points": 19,
+      "payoff": 0.7747516492831307,
+      "variant_payoffs": [
+        0.7613857516553453,
+        0.7821606691786204,
+        0.7714485303940442,
+        0.7896681194668049
+      ]
+    },
+    {
+      "id": "pb-92",
+      "source": "PartyBox",
+      "title": "毒入りモーモーミルク",
+      "author": "マシュマロン",
+      "points": 7,
+      "payoff": 0.7778687902121809,
+      "variant_payoffs": [
+        0.7915288583227592,
+        0.7997842794619521,
+        0.7200742438550647,
+        0.8022275094304946
+      ]
+    },
+    {
+      "id": "pb-146",
+      "source": "PartyBox",
+      "title": "セミフルカビ'23版",
+      "author": "クラヴハンマー",
+      "points": 18,
+      "payoff": 0.7781756649106013,
+      "variant_payoffs": [
+        0.7547022985199637,
+        0.8041019028174461,
+        0.7594067412066209,
+        0.8044390717429772
+      ]
+    },
+    {
+      "id": "rental-cban-10",
+      "source": "psense",
+      "title": "55カビゴン 〜セミフルカビ〜",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.7781756649106013,
+      "variant_payoffs": [
+        0.7547022985199637,
+        0.8041019028174461,
+        0.7594067412066209,
+        0.8044390717429772
+      ]
+    },
+    {
+      "id": "pb-81",
+      "source": "PartyBox",
+      "title": "ただのウケ狙い",
+      "author": "マシュマロン",
+      "points": 8,
+      "payoff": 0.7805663298597285,
+      "variant_payoffs": [
+        0.7804699065178585,
+        0.7617802481717479,
+        0.8167190378159461,
+        0.7590026820372375
+      ]
+    },
+    {
+      "id": "pb-5",
+      "source": "PartyBox",
+      "title": "あやみが＋ガラ＠文鳥さん作",
+      "author": "レンタルマン",
+      "points": 8,
+      "payoff": 0.7814427694717149,
+      "variant_payoffs": [
+        0.7797631619366576,
+        0.7646679287091016,
+        0.8195324493855084,
+        0.7573186318353254
+      ]
+    },
+    {
+      "id": "rental-cban-17",
+      "source": "psense",
+      "title": "あやみが＋太鼓ガラ",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.7814427694717149,
+      "variant_payoffs": [
+        0.7797631619366576,
+        0.7646679287091016,
+        0.8195324493855084,
+        0.7573186318353254
+      ]
+    },
+    {
+      "id": "pb-122",
+      "source": "PartyBox",
+      "title": "ガラガラAに55ライコウを入れてみた",
+      "author": "わんおー",
+      "points": 3,
+      "payoff": 0.7856263483594743,
+      "variant_payoffs": [
+        0.7953137019857626,
+        0.7970552849422573,
+        0.7922261730660765,
+        0.7485593663083107
+      ]
+    },
+    {
+      "id": "pb-77",
+      "source": "PartyBox",
+      "title": "カビバンギ",
+      "author": "stoic",
+      "points": 13,
+      "payoff": 0.7904915744821097,
+      "variant_payoffs": [
+        0.7626866431786082,
+        0.7929448351545498,
+        0.7940187207534807,
+        0.8247234627575986
+      ]
+    },
+    {
+      "id": "rental-cban-20",
+      "source": "psense",
+      "title": "あかりちゃん司令塔エース",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.7946363728134663,
+      "variant_payoffs": [
+        0.7843874687023523,
+        0.7987849803561938,
+        0.7983954462150509,
+        0.8001251277997471
+      ]
+    },
+    {
+      "id": "pb-23",
+      "source": "PartyBox",
+      "title": "力こそパワーだ",
+      "author": "stoic",
+      "points": 4,
+      "payoff": 0.7963910129207012,
+      "variant_payoffs": [
+        0.7973318505107527,
+        0.7922054270699708,
+        0.8124282564603699,
+        0.7801651844244514
+      ]
+    },
+    {
+      "id": "pb-88",
+      "source": "PartyBox",
+      "title": "特攻種族値上位縛り",
+      "author": "stoic",
+      "points": 2,
+      "payoff": 0.7991321054639094,
+      "variant_payoffs": [
+        0.8020493796962647,
+        0.7828043965704244,
+        0.8086447018537051,
+        0.8032750847449881
+      ]
+    },
+    {
+      "id": "pb-7",
+      "source": "PartyBox",
+      "title": "カビブラウツボ＠わんおーさん＆しゃわさん作",
+      "author": "レンタルマン",
+      "points": 4,
+      "payoff": 0.7997088186207288,
+      "variant_payoffs": [
+        0.8086918111563272,
+        0.7710002223210282,
+        0.7965923796667633,
+        0.8260156238844143
+      ]
+    },
+    {
+      "id": "pb-10",
+      "source": "PartyBox",
+      "title": "神パ",
+      "author": "レンタルマン",
+      "points": 6,
+      "payoff": 0.8000199278889557,
+      "variant_payoffs": [
+        0.806683558161752,
+        0.7872790752428458,
+        0.8300398212740099,
+        0.7684256815560808
+      ]
+    },
+    {
+      "id": "pb-34",
+      "source": "PartyBox",
+      "title": "トモダチをつくろう",
+      "author": "マシュマロン",
+      "points": 6,
+      "payoff": 0.8000783786979793,
+      "variant_payoffs": [
+        0.794400948094473,
+        0.7812718722234063,
+        0.8158037307715418,
+        0.8124459676045013
+      ]
+    },
+    {
+      "id": "pb-53",
+      "source": "PartyBox",
+      "title": "ライコウ昆布（ちょっぴり今風）",
+      "author": "クラヴハンマー",
+      "points": 7,
+      "payoff": 0.8006538037092135,
+      "variant_payoffs": [
+        0.8072965561987234,
+        0.7795643450533583,
+        0.8389790997909932,
+        0.7691448781925422
+      ]
+    },
+    {
+      "id": "pb-153",
+      "source": "PartyBox",
+      "title": "ライコウ軸バランス",
+      "author": "けつばん",
+      "points": 5,
+      "payoff": 0.8042615373296718,
+      "variant_payoffs": [
+        0.7988466119516267,
+        0.8045919889492542,
+        0.8101694568329808,
+        0.804585961493125
+      ]
+    },
+    {
+      "id": "pb-80",
+      "source": "PartyBox",
+      "title": "エレブーSA 完受けループに爆破速攻のニュアンスを添えて・・・",
+      "author": "わんおー",
+      "points": 11,
+      "payoff": 0.8082186996936138,
+      "variant_payoffs": [
+        0.8076613444256164,
+        0.8109851418702526,
+        0.8068453926850775,
+        0.8073133136354822
+      ]
+    },
+    {
+      "id": "pb-33",
+      "source": "PartyBox",
+      "title": "フーディンエースパ",
+      "author": "ココア",
+      "points": 9,
+      "payoff": 0.8128451628974261,
+      "variant_payoffs": [
+        0.8304343051934747,
+        0.7922340123880232,
+        0.8293417317412678,
+        0.7916046765353052
+      ]
+    },
+    {
+      "id": "rental-cban-4",
+      "source": "psense",
+      "title": "【オススメレンタル】王パ",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.8170798110458184,
+      "variant_payoffs": [
+        0.8010596692730589,
+        0.8250869770087516,
+        0.8169748048179759,
+        0.8312323240360942
+      ]
+    },
+    {
+      "id": "pb-114",
+      "source": "PartyBox",
+      "title": "闇",
+      "author": "わんおー",
+      "points": 0,
+      "payoff": 0.8170942740525126,
+      "variant_payoffs": [
+        0.8304751531076178,
+        0.8281971511622311,
+        0.7961980446547825,
+        0.8092646458298689
+      ]
+    },
+    {
+      "id": "pb-58",
+      "source": "PartyBox",
+      "title": "CH流セキチクジム2015",
+      "author": "クラヴハンマー",
+      "points": 13,
+      "payoff": 0.8230402237795307,
+      "variant_payoffs": [
+        0.8397090514723504,
+        0.8327876472607769,
+        0.8322567636927406,
+        0.7743320279972312
+      ]
+    },
+    {
+      "id": "pb-16",
+      "source": "PartyBox",
+      "title": "グレン風",
+      "author": "レンタルマン",
+      "points": 9,
+      "payoff": 0.8267316130848976,
+      "variant_payoffs": [
+        0.820769326217684,
+        0.8192761861335714,
+        0.8464448369031768,
+        0.820352797302027
+      ]
+    },
+    {
+      "id": "pb-57",
+      "source": "PartyBox",
+      "title": "ガルーラパ",
+      "author": "わんおー",
+      "points": 9,
+      "payoff": 0.8321603541021299,
+      "variant_payoffs": [
+        0.8304646139521726,
+        0.8295632144076065,
+        0.7942970434300515,
+        0.8852795272853178
+      ]
+    },
+    {
+      "id": "pb-110",
+      "source": "PartyBox",
+      "title": "一ケ月前に死んだワニ",
+      "author": "マシュマロン",
+      "points": 5,
+      "payoff": 0.8400779233053518,
+      "variant_payoffs": [
+        0.8193716974660487,
+        0.8411734588534879,
+        0.8513158237029529,
+        0.8557204671321349
+      ]
+    },
+    {
+      "id": "pb-68",
+      "source": "PartyBox",
+      "title": "ヌウコン",
+      "author": "Rili",
+      "points": 4,
+      "payoff": 0.8418957838766284,
+      "variant_payoffs": [
+        0.86122805866894,
+        0.8244204191410834,
+        0.8502351248415825,
+        0.8243174014013996
+      ]
+    },
+    {
+      "id": "pb-109",
+      "source": "PartyBox",
+      "title": "バカルテット",
+      "author": "マシュマロン",
+      "points": 11,
+      "payoff": 0.842922797478556,
+      "variant_payoffs": [
+        0.8319078508903394,
+        0.8379397223049607,
+        0.8601504193671943,
+        0.8441395339670775
+      ]
+    },
+    {
+      "id": "pb-101",
+      "source": "PartyBox",
+      "title": "ブラッキーHA+ジュゴン",
+      "author": "わんおー",
+      "points": 4,
+      "payoff": 0.8475932365398983,
+      "variant_payoffs": [
+        0.8508661721204142,
+        0.8246816779489018,
+        0.874196843886461,
+        0.8380687722246664
+      ]
+    },
+    {
+      "id": "pb-112",
+      "source": "PartyBox",
+      "title": "ピヨメロ",
+      "author": "わるいマシュマロン",
+      "points": 4,
+      "payoff": 0.8591922751648216,
+      "variant_payoffs": [
+        0.8497498869735041,
+        0.8547529784782247,
+        0.8467779098227566,
+        0.894422934987625
+      ]
+    },
+    {
+      "id": "rental-cban-15",
+      "source": "psense",
+      "title": "バランスダブルロック",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.8597334423325724,
+      "variant_payoffs": [
+        0.8586005250368361,
+        0.8558915308664056,
+        0.8677540172175352,
+        0.8562094890026819
+      ]
+    },
+    {
+      "id": "pb-117",
+      "source": "PartyBox",
+      "title": "おばあちゃんⅡ",
+      "author": "わるいマシュマロン",
+      "points": 28,
+      "payoff": 0.8805708448245513,
+      "variant_payoffs": [
+        0.8792007933259558,
+        0.8783072445447557,
+        0.8865955534688272,
+        0.8779245366168439
+      ]
+    },
+    {
+      "id": "pb-42",
+      "source": "PartyBox",
+      "title": "やりたいことやりすぎたら物凄くコスパが悪くなったパーティ",
+      "author": "マシュマロンのタマゴ",
+      "points": 11,
+      "payoff": 0.8954181828389236,
+      "variant_payoffs": [
+        0.9031417018739596,
+        0.9030276857014027,
+        0.8914511685894742,
+        0.8792797935200827
+      ]
+    },
+    {
+      "id": "pb-22",
+      "source": "PartyBox",
+      "title": "特殊耐久の鬼",
+      "author": "stoic",
+      "points": 5,
+      "payoff": 0.8981199116691723,
+      "variant_payoffs": [
+        0.8793695015546186,
+        0.8979718200256359,
+        0.9145333509152374,
+        0.9059138423378423
+      ]
+    },
+    {
+      "id": "pb-113",
+      "source": "PartyBox",
+      "title": "キマワドス",
+      "author": "わるいマシュマロン",
+      "points": 12,
+      "payoff": 0.898750052249788,
+      "variant_payoffs": [
+        0.9011746053639205,
+        0.8845498081523401,
+        0.9134040250168926,
+        0.8945460617415185
+      ]
+    },
+    {
+      "id": "pb-95",
+      "source": "PartyBox",
+      "title": "ヌオーHA",
+      "author": "わんおー",
+      "points": 4,
+      "payoff": 0.9052163171897467,
+      "variant_payoffs": [
+        0.8923174624911597,
+        0.9099420379311876,
+        0.9007545968324647,
+        0.9242345987574286
+      ]
+    },
+    {
+      "id": "pb-158",
+      "source": "PartyBox",
+      "title": "粘着ベトベトンバランス",
+      "author": "わるいマシュマロン",
+      "points": 6,
+      "payoff": 0.9096343566239918,
+      "variant_payoffs": [
+        0.9099706076463259,
+        0.9101787358620428,
+        0.908686704595145,
+        0.9096340710789855
+      ]
+    },
+    {
+      "id": "pb-102",
+      "source": "PartyBox",
+      "title": "ブラッキー+バンギラスWA+ムウマ",
+      "author": "わんおー",
+      "points": 35,
+      "payoff": 0.9170896143302097,
+      "variant_payoffs": [
+        0.9147399467320007,
+        0.9202766239948602,
+        0.9139708892867888,
+        0.9205287599509863
+      ]
+    },
+    {
+      "id": "pb-119",
+      "source": "PartyBox",
+      "title": "マグカルゴSA",
+      "author": "わんおー",
+      "points": 1,
+      "payoff": 0.9286543434197742,
+      "variant_payoffs": [
+        0.9226567714442586,
+        0.9267198098372817,
+        0.9316182216485026,
+        0.9363640205752525
+      ]
+    },
+    {
+      "id": "pb-44",
+      "source": "PartyBox",
+      "title": "丸亀市に住む亀",
+      "author": "わるいマシュマロン",
+      "points": 17,
+      "payoff": 0.9376110778829947,
+      "variant_payoffs": [
+        0.9172287327861686,
+        0.9171856089773908,
+        0.9989986864190673,
+        0.9169819209901477
+      ]
+    },
+    {
+      "id": "pb-107",
+      "source": "PartyBox",
+      "title": "真の三十士",
+      "author": "マシュマロン",
+      "points": 1,
+      "payoff": 0.940296344871924,
+      "variant_payoffs": [
+        0.9323931264236205,
+        0.9316701462445289,
+        0.9313360244462576,
+        0.9741343213607061
+      ]
+    },
+    {
+      "id": "rental-cban-27",
+      "source": "psense",
+      "title": "【指振りルール専用】",
+      "author": "psense",
+      "points": 0,
+      "payoff": 0.9999999999688369,
+      "variant_payoffs": [
+        1.0000000000000016,
+        1.0000000000000016,
+        0.9999999998940343,
+        0.9999999999766371
+      ]
+    }
+  ]
+}

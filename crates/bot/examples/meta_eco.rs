@@ -8155,8 +8155,9 @@ fn main() {
         "converge-conclusion" => cmd_converge_conclusion(&args[1..]),
         "stress-falsify" => cmd_stress_falsify(&args[1..]),
         "apex-experiment" => cmd_apex_experiment(&args[1..]),
+        "eval-partybox" => cmd_eval_partybox(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit | falsify-conclusion | converge-conclusion | stress-falsify | apex-experiment)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit | falsify-conclusion | converge-conclusion | stress-falsify | apex-experiment | eval-partybox)"
         ),
     }
 }
@@ -16602,4 +16603,299 @@ fn cmd_apex_experiment(args: &[String]) {
             );
         }
     }
+}
+
+fn cmd_eval_partybox(args: &[String]) {
+    let t_start = std::time::Instant::now();
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let max_turns: u16 = num(args, "--max-turns", 250);
+    let ns: u32 = num(args, "--ns", 3);
+    let seed: u64 = num(args, "--seed", 20261111);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(8)
+        });
+
+    // 1. Load APEX4
+    let eq_txt = std::fs::read_to_string(root.join("data/kodoku-r3/conclusion-equilibrium-deme.json"))
+        .expect("read conclusion-equilibrium-deme.json");
+    let eq_v: Value = serde_json::from_str(&eq_txt).unwrap();
+    let mut apex_ids: Vec<String> = Vec::new();
+    let mut apex_weights: Vec<f64> = Vec::new();
+    let mut apex_rosters: Vec<CompiledRoster6> = Vec::new();
+
+    for t in eq_v["teams"].as_array().unwrap() {
+        let id = t["id"].as_str().unwrap().to_string();
+        let w = t["weight"].as_f64().unwrap();
+        let raw = t["sets"].as_array().unwrap();
+        let upgraded = normalize_team_dvs_evs(&dex, raw);
+        let canon = gen.canonize(&dex, &upgraded).unwrap();
+        let sets = to_sets(&canon).unwrap();
+        apex_ids.push(id);
+        apex_weights.push(w);
+        apex_rosters.push(CompiledRoster6::compile(&dex, &sets));
+    }
+    let ka = apex_rosters[0].legal.len();
+
+    // 2. Load PartyBox teams from data/partybox-v0/teams.json
+    // and psense teams from data/community-rentals-v0/teams.json
+    struct Challenger {
+        id: String,
+        source: String,
+        title: String,
+        author: String,
+        points: i64,
+        roster: CompiledRoster6,
+    }
+
+    let mut challengers: Vec<Challenger> = Vec::new();
+
+    if let Ok(txt) = std::fs::read_to_string(root.join("data/partybox-v0/teams.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["teams"].as_array() {
+                for t in arr {
+                    let id = t["id"].as_str().unwrap().to_string();
+                    let title = t["title"].as_str().unwrap_or("").to_string();
+                    let author = t["author"].as_str().unwrap_or("").to_string();
+                    let pts = t["points"].as_i64().unwrap_or(0);
+                    let raw = t["sets"].as_array().unwrap();
+                    let upgraded = normalize_team_dvs_evs(&dex, raw);
+                    if let Some(canon) = gen.canonize(&dex, &upgraded) {
+                        if let Ok(sets) = to_sets(&canon) {
+                            let r = CompiledRoster6::compile(&dex, &sets);
+                            challengers.push(Challenger {
+                                id,
+                                source: "PartyBox".to_string(),
+                                title,
+                                author,
+                                points: pts,
+                                roster: r,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Ok(txt) = std::fs::read_to_string(root.join("data/community-rentals-v0/teams.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["teams"].as_array() {
+                for (idx, t) in arr.iter().enumerate() {
+                    let cban = t["cban"].as_i64().unwrap_or((idx + 1) as i64);
+                    let id = format!("rental-cban-{}", cban);
+                    let title = t["archetype"].as_str().unwrap_or("").to_string();
+                    if let Some(raw) = t["sets"].as_array() {
+                        let upgraded = normalize_team_dvs_evs(&dex, raw);
+                        if let Some(canon) = gen.canonize(&dex, &upgraded) {
+                            if let Ok(sets) = to_sets(&canon) {
+                                let r = CompiledRoster6::compile(&dex, &sets);
+                                challengers.push(Challenger {
+                                    id,
+                                    source: "psense".to_string(),
+                                    title,
+                                    author: "psense".to_string(),
+                                    points: 0,
+                                    roster: r,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    println!(
+        "[eval-partybox] Loaded {} APEX4 variants, {} challengers (PartyBox + psense)",
+        apex_rosters.len(),
+        challengers.len()
+    );
+
+    // 3. Parallel evaluation of all (APEX4 variant, challenger) pairs
+    struct PairJob {
+        u_idx: usize,
+        c_idx: usize,
+    }
+    let mut jobs = Vec::new();
+    for u_idx in 0..apex_rosters.len() {
+        for c_idx in 0..challengers.len() {
+            jobs.push(PairJob { u_idx, c_idx });
+        }
+    }
+
+    let cursor = std::sync::atomic::AtomicUsize::new(0);
+    let mut mats: Vec<Vec<f64>> = vec![Vec::new(); jobs.len()];
+
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for _ in 0..threads.max(1) {
+            let cursor_ref = &cursor;
+            let jobs_ref = &jobs;
+            let apex_ref = &apex_rosters;
+            let chall_ref = &challengers;
+            handles.push(scope.spawn(move || {
+                let mut local = Vec::new();
+                loop {
+                    let k = cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if k >= jobs_ref.len() {
+                        break;
+                    }
+                    let job = &jobs_ref[k];
+                    let r_a = &apex_ref[job.u_idx];
+                    let r_b = &chall_ref[job.c_idx].roster;
+                    let sig_a = preview_sig_sets(&r_a.sets);
+                    let sig_b = preview_sig_sets(&r_b.sets);
+                    let p_seed = shell_pair_crn_seed(seed, &sig_a, &sig_b, 1);
+                    let mat = eval_full_preview_matrix_compact(r_a, r_b, ns, max_turns, p_seed);
+                    local.push((k, mat));
+                }
+                local
+            }));
+        }
+        for h in handles {
+            for (k, mat) in h.join().unwrap() {
+                mats[k] = mat;
+            }
+        }
+    });
+
+    // 4. Solve Bayesian preview game for each challenger vs APEX4
+    struct EvalResult {
+        id: String,
+        source: String,
+        title: String,
+        author: String,
+        points: i64,
+        payoff: f64,
+        variant_payoffs: Vec<f64>,
+        species_list: Vec<String>,
+    }
+
+    let mut results: Vec<EvalResult> = Vec::new();
+
+    for (c_idx, c) in challengers.iter().enumerate() {
+        let kb = c.roster.legal.len();
+        let mut u_mats = Vec::with_capacity(apex_rosters.len());
+        for u_idx in 0..apex_rosters.len() {
+            let job_idx = u_idx * challengers.len() + c_idx;
+            u_mats.push(mats[job_idx].as_slice());
+        }
+
+        let (payoff, per_u, _, _, _) = solve_bayesian_shell_preview_nash(
+            &u_mats,
+            ka,
+            kb,
+            &apex_weights,
+            &[1.0],
+            500,
+        );
+
+        let mons: Vec<String> = c
+            .roster
+            .sets
+            .iter()
+            .map(|s| format!("{}L{}", s.species, s.level))
+            .collect();
+
+        results.push(EvalResult {
+            id: c.id.clone(),
+            source: c.source.clone(),
+            title: c.title.clone(),
+            author: c.author.clone(),
+            points: c.points,
+            payoff,
+            variant_payoffs: per_u,
+            species_list: mons,
+        });
+    }
+
+    // Sort by payoff ascending (lowest payoff for APEX4 first = hardest challengers)
+    results.sort_by(|a, b| a.payoff.partial_cmp(&b.payoff).unwrap());
+
+    // Print results
+    let min_payoff = results.first().map(|r| r.payoff).unwrap_or(0.5);
+    let max_payoff = results.last().map(|r| r.payoff).unwrap_or(0.5);
+    let avg_payoff: f64 = results.iter().map(|r| r.payoff).sum::<f64>() / (results.len() as f64);
+    let sub_50_count = results.iter().filter(|r| r.payoff < 0.50).count();
+
+    println!("\n==================================================================================");
+    println!("APEX4 vs PARTYBOX & PSENSE GAUNTLET EVALUATION REPORT (ns={})", ns);
+    println!("==================================================================================");
+    println!("Total Challengers Tested : {}", results.len());
+    println!("APEX4 Min Payoff         : {:.4} ({})", min_payoff, if results.is_empty() { "none" } else { &results[0].id });
+    println!("APEX4 Mean Payoff        : {:.4}", avg_payoff);
+    println!("APEX4 Max Payoff         : {:.4}", max_payoff);
+    println!("Challengers with Payoff < 0.50: {}", sub_50_count);
+
+    println!("\n--- TOP 30 HARDEST CHALLENGERS (Lowest Payoff for APEX4) ---");
+    for (rk, r) in results.iter().take(30).enumerate() {
+        let flag = if r.payoff < 0.50 { " [BREAKS APEX4!]" } else { "" };
+        println!(
+            "#{:02} {:18} | {:8} | Payoff={:.4}{} | pts={:>3} | [{}] {} | {}",
+            rk + 1,
+            r.id,
+            r.source,
+            r.payoff,
+            flag,
+            r.points,
+            r.author,
+            r.title,
+            r.species_list.join(" ")
+        );
+        println!(
+            "     per-variant: [c08_142={:.4}, r2_142={:.4}, c04_bug={:.4}, r1_148={:.4}]",
+            r.variant_payoffs[0],
+            r.variant_payoffs[1],
+            r.variant_payoffs[2],
+            r.variant_payoffs[3]
+        );
+    }
+
+    // Save JSON report
+    let out_json = json!({
+        "summary": {
+            "total_tested": results.len(),
+            "min_payoff": min_payoff,
+            "mean_payoff": avg_payoff,
+            "max_payoff": max_payoff,
+            "sub_50_count": sub_50_count,
+            "apex_weights": apex_weights,
+            "apex_ids": apex_ids,
+        },
+        "hardest_challengers": results.iter().take(50).map(|r| {
+            json!({
+                "id": r.id,
+                "source": r.source,
+                "title": r.title,
+                "author": r.author,
+                "points": r.points,
+                "payoff": r.payoff,
+                "variant_payoffs": r.variant_payoffs,
+                "species": r.species_list,
+            })
+        }).collect::<Vec<_>>(),
+        "all_results": results.iter().map(|r| {
+            json!({
+                "id": r.id,
+                "source": r.source,
+                "title": r.title,
+                "author": r.author,
+                "points": r.points,
+                "payoff": r.payoff,
+                "variant_payoffs": r.variant_payoffs,
+            })
+        }).collect::<Vec<_>>(),
+    });
+
+    write_json_atomic(&root.join("data/partybox-v0/eval-report.json"), &out_json);
+    println!("\nReport saved to data/partybox-v0/eval-report.json (elapsed: {:.1}s)", t_start.elapsed().as_secs_f64());
 }
