@@ -8189,8 +8189,8 @@ fn normalize_team_dvs_evs(dex: &Dex, raw: &[Value]) -> Vec<Value> {
         if !has_hp && !has_caller && !has_physical && sp != "unown" {
             set["evs"] =
                 json!({"hp": 255, "atk": 0, "def": 255, "spa": 255, "spd": 255, "spe": 255});
-            set["ivs"] = json!({"hp": 31, "atk": 3, "def": 31, "spa": 31, "spd": 31, "spe": 31});
             if let Some(obj) = set.as_object_mut() {
+                obj.remove("ivs");
                 obj.remove("gender");
                 obj.remove("shiny");
             }
@@ -10238,6 +10238,63 @@ fn assemble_3v3_compact(
     (table, cb)
 }
 
+#[inline]
+fn eval_crn_cell_pair_compact(
+    r_a: &CompiledRoster6,
+    ia: usize,
+    ta: [usize; 3],
+    r_b: &CompiledRoster6,
+    ib: usize,
+    tb: [usize; 3],
+    s: u32,
+    base_seed: u64,
+    sig_a_le_b: bool,
+    playout: &nc2000_bot::Playout,
+    max_turns: u16,
+    rules: nc2000_bot::mcts::RolloutRules,
+) -> f64 {
+    let (c1, c2) = if sig_a_le_b { (ia, ib) } else { (ib, ia) };
+    let cell_seed = base_seed
+        ^ ((s as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+        ^ (((c1 * 64 + c2) as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9));
+    let prng = cell_seed | 1;
+    let (rng_ab_seed, rng_ba_seed) = if sig_a_le_b {
+        (
+            cell_seed ^ 0xA5A5_5A5A_F0F0_0F0F,
+            cell_seed ^ 0x5A5A_A5A5_0F0F_F0F0,
+        )
+    } else {
+        (
+            cell_seed ^ 0x5A5A_A5A5_0F0F_F0F0,
+            cell_seed ^ 0xA5A5_5A5A_F0F0_0F0F,
+        )
+    };
+    let (tab_ab, mut cb_ab) = assemble_3v3_compact(r_a, ta, r_b, tb, prng);
+    let mut rng_ab = SplitMix64::new(rng_ab_seed);
+    let v_ab = nc2000_bot::mcts::compact_playout_value(
+        &mut cb_ab,
+        &tab_ab,
+        playout,
+        max_turns,
+        &mut rng_ab,
+        rules,
+    );
+
+    let (tab_ba, mut cb_ba) = assemble_3v3_compact(r_b, tb, r_a, ta, prng);
+    let mut rng_ba = SplitMix64::new(rng_ba_seed);
+    let v_ba = 1.0
+        - nc2000_bot::mcts::compact_playout_value(
+            &mut cb_ba,
+            &tab_ba,
+            playout,
+            max_turns,
+            &mut rng_ba,
+            rules,
+        );
+
+    0.5 * (v_ab + v_ba)
+}
+
 fn eval_full_preview_matrix_compact(
     r_a: &CompiledRoster6,
     r_b: &CompiledRoster6,
@@ -10252,207 +10309,27 @@ fn eval_full_preview_matrix_compact(
         return mat;
     }
     let ns = n_seeds.max(1);
-    if ns > 1 {
-        return eval_adaptive_preview_matrix_compact(r_a, r_b, ns, max_turns, base_seed);
-    }
-    let denom = (2 * ns) as f64;
+    let sig_a_le_b = preview_sig_sets(&r_a.sets) <= preview_sig_sets(&r_b.sets);
+    let inv_ns = 1.0 / (ns as f64);
     let playout = nc2000_bot::Playout::heavy();
     let rules = nc2000_bot::mcts::RolloutRules::default();
     for (ia, &ta) in r_a.legal.iter().enumerate() {
         for (ib, &tb) in r_b.legal.iter().enumerate() {
             let mut sum = 0.0f64;
             for s in 0..ns {
-                let cell_seed = base_seed
-                    ^ ((s as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
-                    ^ (((ia * 64 + ib) as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9));
-                let prng = cell_seed | 1;
-                let (tab_ab, mut cb_ab) = assemble_3v3_compact(r_a, ta, r_b, tb, prng);
-                let mut rng_ab = SplitMix64::new(cell_seed ^ 0xA5A5_5A5A_F0F0_0F0F);
-                let v_ab = nc2000_bot::mcts::compact_playout_value(
-                    &mut cb_ab,
-                    &tab_ab,
-                    &playout,
-                    max_turns,
-                    &mut rng_ab,
-                    rules,
+                sum += eval_crn_cell_pair_compact(
+                    r_a, ia, ta, r_b, ib, tb, s, base_seed, sig_a_le_b, &playout, max_turns, rules,
                 );
-
-                let (tab_ba, mut cb_ba) = assemble_3v3_compact(r_b, tb, r_a, ta, prng);
-                let mut rng_ba = SplitMix64::new(cell_seed ^ 0x5A5A_A5A5_0F0F_F0F0);
-                let v_ba = 1.0
-                    - nc2000_bot::mcts::compact_playout_value(
-                        &mut cb_ba,
-                        &tab_ba,
-                        &playout,
-                        max_turns,
-                        &mut rng_ba,
-                        rules,
-                    );
-
-                sum += v_ab + v_ba;
             }
-            mat[ia * kb + ib] = sum / denom;
+            mat[ia * kb + ib] = sum * inv_ns;
         }
     }
     mat
 }
 
-/// Sequential Bayesian Election-Call (`選挙当確速報`) 3v3 Preview Matrix Evaluator:
-/// - Evaluates Wave `s = 0` across 100% of `ka x kb` legal 60-action cells (never dropping a cell unseen).
-/// - On subsequent seeds `s = 1..max_seeds`, maintains Beta-Binomial / Empirical-Bernstein credible bounds
-///   `[LCB(ia, ib), UCB(ia, ib)]` for each cell and solves the current Preview Nash equilibrium `(p_hat, q_hat, v_hat)`:
-///   1. One-sided blowout cells (`n >= 2` and `r_n <= 0.065`) are called early (`当確`).
-///   2. Rows `ia` whose optimistic best-response `sum_ib UCB(ia, ib) * q_hat[ib] < V_pess_A - 0.015` (and `p_hat[ia] < 1e-3`)
-///      and columns `ib` whose pessimistic loss `sum_ia p_hat[ia] * LCB(ia, ib) > V_opt_B + 0.015` (and `q_hat[ib] < 1e-3`)
-///      are Bayesian-certified sub-optimal (`落選当確`) and stop consuming rollouts, while any unlucky cell with wide
-///      uncertainty keeps a high `UCB` and automatically stays open (`開票継続`)!
-fn eval_adaptive_preview_matrix_compact(
-    r_a: &CompiledRoster6,
-    r_b: &CompiledRoster6,
-    max_seeds: u32,
-    max_turns: u16,
-    base_seed: u64,
-) -> Vec<f64> {
-    let ka = r_a.legal.len();
-    let kb = r_b.legal.len();
-    let n_cells = ka * kb;
-    let mut sum_mat = vec![0.0f64; n_cells];
-    let mut sq_mat = vec![0.0f64; n_cells];
-    let mut cnt_mat = vec![0u32; n_cells];
-    let mut mean_mat = vec![0.5f64; n_cells];
-    if ka == 0 || kb == 0 {
-        return mean_mat;
-    }
-    let ns = max_seeds.max(1);
-    let playout = nc2000_bot::Playout::heavy();
-    let rules = nc2000_bot::mcts::RolloutRules::default();
-
-    let mut active_row = vec![true; ka];
-    let mut active_col = vec![true; kb];
-    let mut cell_called = vec![false; n_cells];
-
-    for s in 0..ns {
-        for (ia, &ta) in r_a.legal.iter().enumerate() {
-            if !active_row[ia] {
-                continue;
-            }
-            for (ib, &tb) in r_b.legal.iter().enumerate() {
-                if !active_col[ib] || cell_called[ia * kb + ib] {
-                    continue;
-                }
-                let cell_seed = base_seed
-                    ^ ((s as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
-                    ^ (((ia * 64 + ib) as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9));
-                let prng = cell_seed | 1;
-                let (tab_ab, mut cb_ab) = assemble_3v3_compact(r_a, ta, r_b, tb, prng);
-                let mut rng_ab = SplitMix64::new(cell_seed ^ 0xA5A5_5A5A_F0F0_0F0F);
-                let v_ab = nc2000_bot::mcts::compact_playout_value(
-                    &mut cb_ab,
-                    &tab_ab,
-                    &playout,
-                    max_turns,
-                    &mut rng_ab,
-                    rules,
-                );
-
-                let (tab_ba, mut cb_ba) = assemble_3v3_compact(r_b, tb, r_a, ta, prng);
-                let mut rng_ba = SplitMix64::new(cell_seed ^ 0x5A5A_A5A5_0F0F_F0F0);
-                let v_ba = 1.0
-                    - nc2000_bot::mcts::compact_playout_value(
-                        &mut cb_ba,
-                        &tab_ba,
-                        &playout,
-                        max_turns,
-                        &mut rng_ba,
-                        rules,
-                    );
-
-                let pair_val = 0.5 * (v_ab + v_ba);
-                let idx = ia * kb + ib;
-                sum_mat[idx] += pair_val;
-                sq_mat[idx] += pair_val * pair_val;
-                cnt_mat[idx] += 1;
-                mean_mat[idx] = sum_mat[idx] / (cnt_mat[idx] as f64);
-            }
-        }
-
-        if s + 1 >= ns {
-            break;
-        }
-
-        // Update cell credible intervals `[lcb, ucb]` and check Election-Call conditions
-        let mut lcb_mat = vec![0.0f64; n_cells];
-        let mut ucb_mat = vec![1.0f64; n_cells];
-        for idx in 0..n_cells {
-            let n = cnt_mat[idx].max(1) as f64;
-            let mu = mean_mat[idx];
-            // Empirical variance + Beta(0.5, 0.5) prior variance smoothing so n=1 never collapses to 0 radius
-            let emp_var = ((sq_mat[idx] / n) - mu * mu).max(0.0);
-            let beta_var = (mu * (1.0 - mu) + 0.02 / (n + 1.0)) / n;
-            let rad = 1.96 * (0.5 * (emp_var / n) + 0.5 * beta_var).sqrt()
-                + (0.04 + 0.24 * mu * (1.0 - mu)) / (n + 1.0);
-            lcb_mat[idx] = (mu - rad).max(0.0);
-            ucb_mat[idx] = (mu + rad).min(1.0);
-            if cnt_mat[idx] >= 2 && rad <= 0.065 {
-                cell_called[idx] = true;
-            }
-        }
-
-        let (p_hat, q_hat, _v_hat) = solve_preview_nash(&mean_mat, ka, kb, 250);
-        // Pessimistic security floor for Row Player A (`min_ib sum_ia p_hat[ia] * LCB[ia, ib]`)
-        let mut v_pess_a = f64::INFINITY;
-        for ib in 0..kb {
-            let mut col_lcb = 0.0f64;
-            for ia in 0..ka {
-                col_lcb += p_hat[ia] * lcb_mat[ia * kb + ib];
-            }
-            v_pess_a = v_pess_a.min(col_lcb);
-        }
-        // Optimistic security ceiling for Col Player B (`max_ia sum_ib UCB[ia, ib] * q_hat[ib]`)
-        let mut v_opt_b = f64::NEG_INFINITY;
-        for ia in 0..ka {
-            let mut row_ucb = 0.0f64;
-            for ib in 0..kb {
-                row_ucb += ucb_mat[ia * kb + ib] * q_hat[ib];
-            }
-            v_opt_b = v_opt_b.max(row_ucb);
-        }
-
-        for ia in 0..ka {
-            if !active_row[ia] {
-                continue;
-            }
-            let mut row_ucb = 0.0f64;
-            for ib in 0..kb {
-                row_ucb += ucb_mat[ia * kb + ib] * q_hat[ib];
-            }
-            if p_hat[ia] < 1e-3 && row_ucb + 0.015 < v_pess_a {
-                active_row[ia] = false;
-            }
-        }
-        for ib in 0..kb {
-            if !active_col[ib] {
-                continue;
-            }
-            let mut col_lcb = 0.0f64;
-            for ia in 0..ka {
-                col_lcb += p_hat[ia] * lcb_mat[ia * kb + ib];
-            }
-            if q_hat[ib] < 1e-3 && col_lcb - 0.015 > v_opt_b {
-                active_col[ib] = false;
-            }
-        }
-        if !active_row.iter().any(|&x| x) || !active_col.iter().any(|&x| x) {
-            break;
-        }
-    }
-    mean_mat
-}
-
-/// Incremental Sequential Bayesian Election-Call (`選挙当確速報`) Matrix Refiner for Phase 2 Cutting-Plane:
-/// Starting from an already-evaluated `old_mat` (`old_seeds >= 1` across all 3600 cells), solves the current
-/// Preview Nash `(p_hat, q_hat, v_hat)`, prunes sub-optimal rows/columns (`落選当確`), and evaluates `add_seeds`
-/// new CRN seed waves strictly on the open (`開票継続`) equilibrium-relevant cells!
+/// Incremental CRN-Synchronized Full-Combination Matrix Refiner for Phase 2 Cutting-Plane:
+/// Evaluates `add_seeds` new CRN seed waves (`s = old_seeds .. old_seeds + add_seeds`) across all `ka * kb`
+/// cells with canonical orientation (`sig_a <= sig_b`), keeping all shell variants 100% seed-synchronized.
 fn eval_incremental_adaptive_preview_matrix_compact(
     r_a: &CompiledRoster6,
     r_b: &CompiledRoster6,
@@ -10469,133 +10346,26 @@ fn eval_incremental_adaptive_preview_matrix_compact(
         return (old_mat.to_vec(), old_seeds.max(1));
     }
     let init_n = old_seeds.max(1);
+    let tot_n = init_n + add_seeds;
+    let inv_tot = 1.0 / (tot_n as f64);
     let mut sum_mat: Vec<f64> = old_mat.iter().map(|&mu| mu * (init_n as f64)).collect();
-    let mut sq_mat: Vec<f64> = old_mat
-        .iter()
-        .map(|&mu| {
-            let prior_var = 0.5 * mu * (1.0 - mu);
-            (mu * mu + prior_var) * (init_n as f64)
-        })
-        .collect();
-    let mut cnt_mat = vec![init_n; n_cells];
-    let mut mean_mat = old_mat.to_vec();
-
+    let sig_a_le_b = preview_sig_sets(&r_a.sets) <= preview_sig_sets(&r_b.sets);
     let playout = nc2000_bot::Playout::heavy();
     let rules = nc2000_bot::mcts::RolloutRules::default();
-    let mut active_row = vec![true; ka];
-    let mut active_col = vec![true; kb];
-    let mut cell_called = vec![false; n_cells];
 
     for step in 0..add_seeds {
-        // Update cell credible intervals `[lcb, ucb]` and check Election-Call conditions BEFORE each incremental wave
-        let mut lcb_mat = vec![0.0f64; n_cells];
-        let mut ucb_mat = vec![1.0f64; n_cells];
-        for idx in 0..n_cells {
-            let n = cnt_mat[idx].max(1) as f64;
-            let mu = mean_mat[idx];
-            let emp_var = ((sq_mat[idx] / n) - mu * mu).max(0.0);
-            let beta_var = (mu * (1.0 - mu) + 0.02 / (n + 1.0)) / n;
-            let rad = 1.96 * (0.5 * (emp_var / n) + 0.5 * beta_var).sqrt()
-                + (0.04 + 0.24 * mu * (1.0 - mu)) / (n + 1.0);
-            lcb_mat[idx] = (mu - rad).max(0.0);
-            ucb_mat[idx] = (mu + rad).min(1.0);
-            if cnt_mat[idx] >= 2 && rad <= 0.065 {
-                cell_called[idx] = true;
-            }
-        }
-
-        let (p_hat, q_hat, _v_hat) = solve_preview_nash(&mean_mat, ka, kb, 250);
-        let mut v_pess_a = f64::INFINITY;
-        for ib in 0..kb {
-            let mut col_lcb = 0.0f64;
-            for ia in 0..ka {
-                col_lcb += p_hat[ia] * lcb_mat[ia * kb + ib];
-            }
-            v_pess_a = v_pess_a.min(col_lcb);
-        }
-        let mut v_opt_b = f64::NEG_INFINITY;
-        for ia in 0..ka {
-            let mut row_ucb = 0.0f64;
-            for ib in 0..kb {
-                row_ucb += ucb_mat[ia * kb + ib] * q_hat[ib];
-            }
-            v_opt_b = v_opt_b.max(row_ucb);
-        }
-
-        for ia in 0..ka {
-            if !active_row[ia] {
-                continue;
-            }
-            let mut row_ucb = 0.0f64;
-            for ib in 0..kb {
-                row_ucb += ucb_mat[ia * kb + ib] * q_hat[ib];
-            }
-            if p_hat[ia] < 1e-3 && row_ucb + 0.015 < v_pess_a {
-                active_row[ia] = false;
-            }
-        }
-        for ib in 0..kb {
-            if !active_col[ib] {
-                continue;
-            }
-            let mut col_lcb = 0.0f64;
-            for ia in 0..ka {
-                col_lcb += p_hat[ia] * lcb_mat[ia * kb + ib];
-            }
-            if q_hat[ib] < 1e-3 && col_lcb - 0.015 > v_opt_b {
-                active_col[ib] = false;
-            }
-        }
-        if !active_row.iter().any(|&x| x) || !active_col.iter().any(|&x| x) {
-            break;
-        }
-
         let s = init_n + step;
         for (ia, &ta) in r_a.legal.iter().enumerate() {
-            if !active_row[ia] {
-                continue;
-            }
             for (ib, &tb) in r_b.legal.iter().enumerate() {
                 let idx = ia * kb + ib;
-                if !active_col[ib] || cell_called[idx] {
-                    continue;
-                }
-                let cell_seed = base_seed
-                    ^ ((s as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
-                    ^ (((ia * 64 + ib) as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9));
-                let prng = cell_seed | 1;
-                let (tab_ab, mut cb_ab) = assemble_3v3_compact(r_a, ta, r_b, tb, prng);
-                let mut rng_ab = SplitMix64::new(cell_seed ^ 0xA5A5_5A5A_F0F0_0F0F);
-                let v_ab = nc2000_bot::mcts::compact_playout_value(
-                    &mut cb_ab,
-                    &tab_ab,
-                    &playout,
-                    max_turns,
-                    &mut rng_ab,
-                    rules,
+                sum_mat[idx] += eval_crn_cell_pair_compact(
+                    r_a, ia, ta, r_b, ib, tb, s, base_seed, sig_a_le_b, &playout, max_turns, rules,
                 );
-
-                let (tab_ba, mut cb_ba) = assemble_3v3_compact(r_b, tb, r_a, ta, prng);
-                let mut rng_ba = SplitMix64::new(cell_seed ^ 0x5A5A_A5A5_0F0F_F0F0);
-                let v_ba = 1.0
-                    - nc2000_bot::mcts::compact_playout_value(
-                        &mut cb_ba,
-                        &tab_ba,
-                        &playout,
-                        max_turns,
-                        &mut rng_ba,
-                        rules,
-                    );
-
-                let pair_val = 0.5 * (v_ab + v_ba);
-                sum_mat[idx] += pair_val;
-                sq_mat[idx] += pair_val * pair_val;
-                cnt_mat[idx] += 1;
-                mean_mat[idx] = sum_mat[idx] / (cnt_mat[idx] as f64);
             }
         }
     }
-    (mean_mat, init_n + add_seeds)
+    let mean_mat: Vec<f64> = sum_mat.into_iter().map(|sum| sum * inv_tot).collect();
+    (mean_mat, tot_n)
 }
 
 fn transpose_preview_matrix(mat: &[f64], ka: usize, kb: usize) -> Vec<f64> {
@@ -10862,6 +10632,27 @@ fn mon_set_fingerprint(m: &PokemonSet) -> u64 {
     for b in toid(&m.item).as_bytes() {
         h = (h ^ (*b as u64)).wrapping_mul(0x0100_0000_01b3);
     }
+    if let Some(ref g) = m.gender {
+        for b in g.as_bytes() {
+            h = (h ^ (*b as u64)).wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    if let Some(ref ivs) = m.ivs {
+        for (k, &v) in ivs {
+            for b in k.as_bytes() {
+                h = (h ^ (*b as u64)).wrapping_mul(0x0100_0000_01b3);
+            }
+            h = (h ^ (v as u64)).wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    if let Some(ref evs) = m.evs {
+        for (k, &v) in evs {
+            for b in k.as_bytes() {
+                h = (h ^ (*b as u64)).wrapping_mul(0x0100_0000_01b3);
+            }
+            h = (h ^ (v as u64)).wrapping_mul(0x0100_0000_01b3);
+        }
+    }
     let mut mvs: Vec<String> = m.moves.iter().map(|x| toid(x)).collect();
     mvs.sort();
     for mv in &mvs {
@@ -10877,14 +10668,15 @@ fn mon_set_fingerprint(m: &PokemonSet) -> u64 {
 /// 1. Exact Physical 3v3 Subteam Equivalence Pooling (Rao-Blackwellization):
 ///    When multiple variants `k in 0..n_u` of Shell U field the exact same 3 Pokemon sets on action `ia`
 ///    (and/or multiple variants `m in 0..n_v` of Shell V field the exact same 3 Pokemon sets on action `ib`),
-///    their true infinite-sample 3v3 battle payoff `M*(k, m)[ia, ib]` is physically identical.
-///    Pooling their sample matrices `mats_km[k * n_v + m][ia * kb + ib]` weighted by `ns_km` eliminates
-///    spurious Monte Carlo divergence on unmutated 3v3 lineups (`56.25%` of all rows for 1-slot siblings).
+///    their true infinite-sample 3v3 battle payoff `M*(k, m)[ia, ib]` is physically identical and evaluated
+///    on the exact same CRN seed stream. Pooling across the maximum-seed members of each equivalence class
+///    transfers high-seed refinements across unmutated 3v3 lineups without double-counting seed 0 or
+///    inflating effective sample size `pooled_ns`.
 /// 2. Zero-Cardinality-Bias 1v1 Base Payoff + Empirical-Bayes Regularized Camouflage Bonus:
 ///    Separates the exact prior-weighted 1v1 Preview Nash base payoff `\bar{v}_{1v1}(\tilde{M})`
 ///    (which has exact zero cardinality bias for any `(n_u, n_v)`) from the multi-variant camouflage
 ///    bonus `\Delta V_{camo}(M^{EB})` evaluated on Empirical-Bayes shrunk matrices
-///    `M^{EB}(k, m) = \bar{M} + \lambda(ns) * (\tilde{M}(k, m) - \bar{M})` (`\lambda = ns / (ns + 8.0)`).
+///    `M^{EB}(k, m) = \bar{M} + \lambda(ns) * (\tilde{M}(k, m) - \bar{M})`.
 fn solve_debiased_bayesian_shell_preview_nash(
     u_rosters: &[&CompiledRoster6],
     v_rosters: &[&CompiledRoster6],
@@ -10956,6 +10748,7 @@ fn solve_debiased_bayesian_shell_preview_nash(
     }
 
     // 2. Pool matrices across identical `(sub_u[k][ia], sub_v[m][ib])` physical 3v3 subteams
+    //    without inflating effective CRN sample size `pooled_ns` or double-counting prefix seeds.
     let n_cells = ka * kb;
     let mut pooled_mats: Vec<Vec<f64>> = mats_km.iter().map(|m| m.to_vec()).collect();
     let mut pooled_ns: Vec<Vec<f64>> = ns_km
@@ -10980,41 +10773,27 @@ fn solve_debiased_bayesian_shell_preview_nash(
                         }
                     }
                     if group.len() > 1 {
-                        let any_pos = group.iter().any(|&k| ns_km[k * n_v + m] >= 1);
-                        let mut w_sum = 0.0f64;
-                        for &k in &group {
-                            let ns_val = ns_km[k * n_v + m];
-                            let w = if any_pos {
-                                if ns_val >= 1 {
-                                    ns_val as f64
-                                } else {
-                                    0.0
-                                }
-                            } else {
-                                0.25
-                            };
-                            w_sum += w;
-                        }
+                        let max_ns = group
+                            .iter()
+                            .map(|&k| ns_km[k * n_v + m].max(1))
+                            .max()
+                            .unwrap_or(1);
+                        let top_k: Vec<usize> = group
+                            .iter()
+                            .copied()
+                            .filter(|&k| ns_km[k * n_v + m].max(1) == max_ns)
+                            .collect();
+                        let inv_top = 1.0 / (top_k.len().max(1) as f64);
                         for ib in 0..kb {
                             let idx = ia * kb + ib;
                             let mut cell_acc = 0.0f64;
-                            for &k in &group {
-                                let ns_val = ns_km[k * n_v + m];
-                                let w = if any_pos {
-                                    if ns_val >= 1 {
-                                        ns_val as f64
-                                    } else {
-                                        0.0
-                                    }
-                                } else {
-                                    0.25
-                                };
-                                cell_acc += w * mats_km[k * n_v + m][idx];
+                            for &k in &top_k {
+                                cell_acc += mats_km[k * n_v + m][idx];
                             }
-                            let avg_val = cell_acc / w_sum.max(1e-9);
+                            let avg_val = cell_acc * inv_top;
                             for &k in &group {
                                 pooled_mats[k * n_v + m][idx] = avg_val;
-                                pooled_ns[k * n_v + m][idx] = w_sum;
+                                pooled_ns[k * n_v + m][idx] = max_ns as f64;
                             }
                         }
                     }
@@ -11039,26 +10818,26 @@ fn solve_debiased_bayesian_shell_preview_nash(
                         }
                     }
                     if group.len() > 1 {
-                        let mut w_sum = 0.0f64;
-                        for &m in &group {
-                            w_sum += pooled_ns[k * n_v + m][ib];
-                        }
                         for ia in 0..ka {
                             let idx = ia * kb + ib;
+                            let max_ns = group
+                                .iter()
+                                .map(|&m| pooled_ns[k * n_v + m][idx])
+                                .fold(1.0f64, f64::max);
                             let mut cell_acc = 0.0f64;
-                            let mut row_w_sum = 0.0f64;
+                            let mut top_cnt = 0.0f64;
                             for &m in &group {
-                                let w = pooled_ns[k * n_v + m][idx];
-                                cell_acc += w * pooled_mats[k * n_v + m][idx];
-                                row_w_sum += w;
+                                if (pooled_ns[k * n_v + m][idx] - max_ns).abs() <= 1e-6 {
+                                    cell_acc += pooled_mats[k * n_v + m][idx];
+                                    top_cnt += 1.0;
+                                }
                             }
-                            let avg_val = cell_acc / row_w_sum.max(1e-9);
+                            let avg_val = cell_acc / top_cnt.max(1.0);
                             for &m in &group {
                                 pooled_mats[k * n_v + m][idx] = avg_val;
-                                pooled_ns[k * n_v + m][idx] = row_w_sum;
+                                pooled_ns[k * n_v + m][idx] = max_ns;
                             }
                         }
-                        let _ = w_sum;
                     }
                 }
             }
@@ -11538,10 +11317,12 @@ fn cmd_converge_conclusion(args: &[String]) {
     let mut persisted_nemeses: Vec<String> = Vec::new();
     let mut persisted_member_weights: BTreeMap<String, Vec<f64>> = BTreeMap::new();
     for prev_path in [
+        root.join("data/dominance-audit-v12-debiased/converged-report.json"),
         root.join("data/dominance-audit-v11-fullnash/converged-report.json"),
         root.join("data/dominance-audit-v10-fullnash/converged-report.json"),
         out_file.clone(),
     ] {
+        let is_current_out = prev_path == out_file;
         let prev_tag = prev_path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -11551,18 +11332,20 @@ fn cmd_converge_conclusion(args: &[String]) {
             if let Ok(v) = serde_json::from_str::<Value>(&txt) {
                 if let Some(rounds_arr) = v["rounds"].as_array() {
                     for r_val in rounds_arr {
-                        if let Some(ash_arr) = r_val["active_shells"].as_array() {
-                            for sh_val in ash_arr {
-                                if let (Some(uid), Some(mw_arr)) = (
-                                    sh_val["unit_id"].as_str(),
-                                    sh_val["member_weights"].as_array(),
-                                ) {
-                                    let mws: Vec<f64> =
-                                        mw_arr.iter().filter_map(|x| x.as_f64()).collect();
-                                    if !mws.is_empty()
-                                        && !persisted_member_weights.contains_key(uid)
-                                    {
-                                        persisted_member_weights.insert(uid.to_string(), mws);
+                        if is_current_out {
+                            if let Some(ash_arr) = r_val["active_shells"].as_array() {
+                                for sh_val in ash_arr {
+                                    if let (Some(uid), Some(mw_arr)) = (
+                                        sh_val["unit_id"].as_str(),
+                                        sh_val["member_weights"].as_array(),
+                                    ) {
+                                        let mws: Vec<f64> =
+                                            mw_arr.iter().filter_map(|x| x.as_f64()).collect();
+                                        if !mws.is_empty()
+                                            && !persisted_member_weights.contains_key(uid)
+                                        {
+                                            persisted_member_weights.insert(uid.to_string(), mws);
+                                        }
                                     }
                                 }
                             }
@@ -11835,7 +11618,9 @@ fn cmd_converge_conclusion(args: &[String]) {
             for u in units_vec.iter_mut() {
                 if u.sig == sig {
                     for (k, mid) in resolved_ids.into_iter().enumerate() {
-                        if u.member_ids.len() < max_shell_variants && !u.member_ids.contains(&mid) {
+                        if u.member_ids.len() < max_shell_variants + 6
+                            && !u.member_ids.contains(&mid)
+                        {
                             u.member_ids.push(mid);
                             u.member_sets.push(resolved_sets[k].clone());
                             u.member_raw.push(resolved_raw[k].clone());
@@ -11966,7 +11751,8 @@ fn cmd_converge_conclusion(args: &[String]) {
         promote_or_upgrade_shell_unit(&mut units, &mut seen_unit_sigs, &team_db, nem_id);
     }
 
-    // Build Red Challenger List `q_ids`: all members of `units`
+    // Build Red Challenger List `q_ids`: all members of `units` PLUS all clean non-synthetic base teams in `team_db`
+    // (covering 100% of the 89 distinct outer shells in `team_db`, including neglected tournament/archetype shells)
     let mut q_ids: Vec<String> = Vec::new();
     let mut q_seen: BTreeSet<String> = BTreeSet::new();
     for u in &units {
@@ -11974,6 +11760,16 @@ fn cmd_converge_conclusion(args: &[String]) {
             if q_seen.insert(mid.clone()) {
                 q_ids.push(mid.clone());
             }
+        }
+    }
+    for tid in team_db.keys() {
+        if !tid.starts_with("red-")
+            && !tid.starts_with("rp")
+            && !tid.starts_with("sib-")
+            && !tid.starts_with("sibling-")
+            && q_seen.insert(tid.clone())
+        {
+            q_ids.push(tid.clone());
         }
     }
 
@@ -12261,7 +12057,10 @@ fn cmd_converge_conclusion(args: &[String]) {
             save_pair_mat_cache(&pair_mat_cache);
         }
 
-        // Map `q_ids` to unit indices so we know which `q_ids` belong to which `ShellUnit`
+        // Map `q_ids` to unit indices so we know which `q_ids` belong to which `ShellUnit`,
+        // AND keep ALL individual `q_ids` (`0..n_q`) as pure-strategy opponent columns (`nu + 0..nq`)
+        // alongside the `nu` multi-variant shell columns (`0..nu`) so an opponent can always deviate
+        // to any single member `q` of a multi-variant shell `v`!
         let mut id_to_qidx: BTreeMap<String, usize> = BTreeMap::new();
         for (j, qid) in q_ids.iter().enumerate() {
             id_to_qidx.insert(qid.clone(), j);
@@ -12278,9 +12077,7 @@ fn cmd_converge_conclusion(args: &[String]) {
             }
             unit_q_indices.push(idxs);
         }
-        let mut outside_q_indices: Vec<usize> = (0..n_q)
-            .filter(|&j| !unit_member_set.contains(&q_ids[j]))
-            .collect();
+        let mut outside_q_indices: Vec<usize> = (0..n_q).collect();
         let mut n_cols = n_u + outside_q_indices.len();
 
         // Helper: solve all Bayesian Shell-vs-Shell Preview Nash games from `pair_mat_cache` in parallel
@@ -12481,6 +12278,17 @@ fn cmd_converge_conclusion(args: &[String]) {
                     }
                     m_solve_out[u_idx][nu + k_out] = val_uq;
                 }
+                for &ju in &u_q_idxs[u_idx] {
+                    payoff_mat[u_idx][ju] = 0.5;
+                    for m_i in 0..mu_len {
+                        mem_pay[u_idx][m_i][ju] = self_per_u[m_i];
+                    }
+                }
+                for (k_out, &j_out) in out_q_idxs.iter().enumerate() {
+                    if u_q_idxs[u_idx].contains(&j_out) {
+                        m_solve_out[u_idx][nu + k_out] = 0.5;
+                    }
+                }
             }
             (payoff_mat, games_mat, mem_pay, mem_gms, m_solve_out)
         };
@@ -12661,7 +12469,7 @@ fn cmd_converge_conclusion(args: &[String]) {
 
         // Solve the Coupled-Shell Minimax Equilibrium on `m_solve` (`n_u x n_cols`) and `m_in` (`n_u x n_u`)
         let m_in: Vec<Vec<f64>> = (0..n_u).map(|u| m_solve[u][0..n_u].to_vec()).collect();
-        let (w_u_in, _, min_in_val) = solve_rectangular_minimax(&m_in, 100_000);
+        let (w_u_in, _, _) = solve_rectangular_minimax(&m_in, 100_000);
         let (w_u_rect, _, _min_rect_val) = solve_rectangular_minimax(&m_solve, 100_000);
 
         let mut active_indices: Vec<usize> = (0..n_u)
@@ -12672,6 +12480,7 @@ fn cmd_converge_conclusion(args: &[String]) {
         }
         let m_polish: Vec<Vec<f64>> = active_indices.iter().map(|&u| m_solve[u].clone()).collect();
         let (w_pol, _, _min_pol_rect) = solve_rectangular_minimax(&m_polish, 80_000);
+        let min_in_val: f64;
         let min_val: f64;
         let mut active_units: Vec<(usize, f64)> = active_indices
             .into_iter()
@@ -13194,9 +13003,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                     }
                     unit_q_indices.push(idxs);
                 }
-                outside_q_indices = (0..q_ids.len())
-                    .filter(|&j| !unit_member_set.contains(&q_ids[j]))
-                    .collect();
+                outside_q_indices = (0..q_ids.len()).collect();
                 n_cols = n_u + outside_q_indices.len();
                 let solved = solve_all_shell_cells(
                     &units,
@@ -13478,9 +13285,8 @@ fn cmd_converge_conclusion(args: &[String]) {
                         unit_member_set.insert(mid.clone());
                     }
                 }
-                outside_q_indices = (0..q_ids.len())
-                    .filter(|&j| !unit_member_set.contains(&q_ids[j]))
-                    .collect();
+                outside_q_indices = (0..q_ids.len()).collect();
+                n_cols = n_u + outside_q_indices.len();
                 let solved = solve_all_shell_cells(
                     &units,
                     &pair_mat_cache,
@@ -13498,7 +13304,7 @@ fn cmd_converge_conclusion(args: &[String]) {
             let _ = (&payoff, &cell_games, &mem_payoff, &mem_games);
 
             let m_in_opt: Vec<Vec<f64>> = (0..n_u).map(|u| m_solve[u][0..n_u].to_vec()).collect();
-            let (w_in_opt, _, min_in_opt) = solve_rectangular_minimax(&m_in_opt, 100_000);
+            let (w_in_opt, _, _min_in_opt) = solve_rectangular_minimax(&m_in_opt, 100_000);
             let (w_rect_opt, _, min_rect_opt) = solve_rectangular_minimax(&m_solve, 100_000);
             let mut act_idx_opt: Vec<usize> = (0..n_u)
                 .filter(|&u| w_in_opt[u] >= 0.002 || w_rect_opt[u] >= 0.002)
@@ -13508,8 +13314,7 @@ fn cmd_converge_conclusion(args: &[String]) {
             }
             let m_pol_opt: Vec<Vec<f64>> =
                 act_idx_opt.iter().map(|&u| m_solve[u].clone()).collect();
-            let (w_pol_opt, _, min_pol_opt) = solve_rectangular_minimax(&m_pol_opt, 80_000);
-            min_val = min_in_opt.min(min_pol_opt.max(min_rect_opt));
+            let (w_pol_opt, _, _min_pol_opt) = solve_rectangular_minimax(&m_pol_opt, 80_000);
             active_units = act_idx_opt
                 .into_iter()
                 .zip(w_pol_opt.into_iter())
@@ -13520,6 +13325,25 @@ fn cmd_converge_conclusion(args: &[String]) {
             for x in &mut active_units {
                 x.1 /= wu_sum_opt;
             }
+            // Compute exact worst-case payoff `min_in_val` (across all `0..n_u` shells)
+            // and `min_val` (across all `0..n_cols` shells + individual challenger teams)
+            // for the deployed `active_units` strategy!
+            min_in_val = (0..n_u)
+                .map(|c| {
+                    active_units
+                        .iter()
+                        .map(|&(u, w)| w * m_solve[u][c])
+                        .sum::<f64>()
+                })
+                .fold(f64::INFINITY, f64::min);
+            min_val = (0..n_cols)
+                .map(|c| {
+                    active_units
+                        .iter()
+                        .map(|&(u, w)| w * m_solve[u][c])
+                        .sum::<f64>()
+                })
+                .fold(min_rect_opt, f64::min);
         }
 
         // Expand `active_units` into individual deployed teams `(pi_ids, pi_weights, pi_sets, pi_raw)`
@@ -13584,7 +13408,7 @@ fn cmd_converge_conclusion(args: &[String]) {
             &root.join("data/kodoku-r3/conclusion-equilibrium-deme.json"),
             &json!({
                 "name": format!("conclusion-equilibrium-full-preview-nash-r{}", o_round),
-                "source_solution": "data/dominance-audit-v12-debiased/converged-report.json",
+                "source_solution": "data/dominance-audit-v13-verified/converged-report.json",
                 "active_shells": active_units.len(),
                 "support_size": pi_ids.len(),
                 "min_matrix_payoff": min_val,
@@ -14040,6 +13864,24 @@ fn cmd_converge_conclusion(args: &[String]) {
         // =========================================================================
         // Phase 3A: Allopatric Island Speciation (`地理的隔絶` — 4 Isolated Islands)
         // =========================================================================
+        let rogue_unknown_anchors: &[&[&str]] = &[
+            &["Zapdos", "Tauros", "Cloyster"],
+            &["Suicune", "Marowak", "Misdreavus"],
+            &["Starmie", "Snorlax", "Skarmory"],
+            &["Exeggutor", "Tyranitar", "Zapdos"],
+            &["Gengar", "Machamp", "Snorlax"],
+            &["Heracross", "Raikou", "Suicune"],
+            &["Alakazam", "Gengar", "Cloyster"],
+            &["Miltank", "Starmie", "Steelix"],
+            &["Porygon2", "Marowak", "Zapdos"],
+            &["Houndoom", "Exeggutor", "Skarmory"],
+            &["Dragonite", "Raikou", "Cloyster"],
+            &["Misdreavus", "Umbreon", "Skarmory"],
+            &["Entei", "Snorlax", "Starmie"],
+            &["Smeargle", "Marowak", "Espeon"],
+            &["Jolteon", "Vaporeon", "Marowak"],
+            &["Blissey", "Skarmory", "Misdreavus"],
+        ];
         let num_islands = 4usize;
         let island_pop_size = 8usize;
         let island_gens = 4usize;
@@ -14175,35 +14017,45 @@ fn cmd_converge_conclusion(args: &[String]) {
                             &cur_raw,
                         );
                     }
-                } else if let Some(mut team) =
-                    gen.random_team_constrained(&dex, &mut rng, &[], &free_constraint, 250)
-                {
-                    for _ in 0..2 {
-                        if let Some(prop) = gen.propose_marginal_targeted(
-                            &dex,
-                            &team,
-                            &[1.0; 6],
-                            &[0.4; 6],
-                            &[0.0; 6],
-                            None,
-                            Some(&global_endo_pool),
-                            &mut rng,
-                            &free_constraint,
-                            120,
-                        ) {
-                            team = prop.team;
+                } else {
+                    let anch_slice =
+                        rogue_unknown_anchors[(isl * 5 + f_tries) % rogue_unknown_anchors.len()];
+                    let anch_vec: Vec<String> =
+                        anch_slice.iter().map(|s| (*s).to_string()).collect();
+                    if let Some(mut team) = gen.random_team_constrained(
+                        &dex,
+                        &mut rng,
+                        &anch_vec,
+                        &free_constraint,
+                        250,
+                    ) {
+                        for _ in 0..2 {
+                            if let Some(prop) = gen.propose_marginal_targeted(
+                                &dex,
+                                &team,
+                                &[1.0; 6],
+                                &[0.4; 6],
+                                &[0.0; 6],
+                                None,
+                                None,
+                                &mut rng,
+                                &free_constraint,
+                                120,
+                            ) {
+                                team = prop.team;
+                            }
                         }
+                        push_red(
+                            &mut isl_pop,
+                            &mut seen_red_keys,
+                            &mut seq,
+                            &format!("rogue-{}", anch_slice[0]),
+                            &isl_origin,
+                            0,
+                            "unknown-ace-rogue",
+                            &team,
+                        );
                     }
-                    push_red(
-                        &mut isl_pop,
-                        &mut seen_red_keys,
-                        &mut seq,
-                        "wild-island",
-                        &isl_origin,
-                        0,
-                        "de-novo-2step",
-                        &team,
-                    );
                 }
             }
 
@@ -14402,6 +14254,28 @@ fn cmd_converge_conclusion(args: &[String]) {
                 }
             }
         }
+        // 4. Out-of-Distribution "Unknown Unknowns" / Unseen-L55-Ace Rogue Founders:
+        for (r_idx, &anch_slice) in rogue_unknown_anchors.iter().take(6).enumerate() {
+            let anch_vec: Vec<String> = anch_slice.iter().map(|s| (*s).to_string()).collect();
+            for _ in 0..8 {
+                if let Some(team) =
+                    gen.random_team_constrained(&dex, &mut rng, &anch_vec, &free_constraint, 250)
+                {
+                    if push_red(
+                        &mut population,
+                        &mut seen_red_keys,
+                        &mut seq,
+                        &format!("rogue-{}", anch_slice[0]),
+                        "unknown-unknown-rogue",
+                        0,
+                        &format!("rogue-ace-{}", r_idx),
+                        &team,
+                    ) {
+                        break;
+                    }
+                }
+            }
+        }
         let target_init = (carry + buds).max(population.len());
         let mut tries = 0usize;
         while population.len() < target_init && tries < 300 {
@@ -14439,8 +14313,14 @@ fn cmd_converge_conclusion(args: &[String]) {
                     }
                 }
             }
+            let anch_slice = rogue_unknown_anchors[tries % rogue_unknown_anchors.len()];
+            let anch_vec: Vec<String> = if tries % 3 == 0 {
+                anch_slice.iter().map(|s| (*s).to_string()).collect()
+            } else {
+                Vec::new()
+            };
             if let Some(team) =
-                gen.random_team_constrained(&dex, &mut rng, &[], &free_constraint, 300)
+                gen.random_team_constrained(&dex, &mut rng, &anch_vec, &free_constraint, 300)
             {
                 push_red(
                     &mut population,
@@ -14781,15 +14661,11 @@ fn cmd_converge_conclusion(args: &[String]) {
                 let roll = rng.below(100);
                 // If parent is a same-shell camouflage strain, keep evolving move/item mix-ups inside the shell 60% of the time!
                 if (parent_shares_pi_shell && roll < 60) || (!parent_shares_pi_shell && roll < 20) {
-                    let base_for_camo = if parent_shares_pi_shell {
-                        &parent.raw
+                    let (base_for_camo, p_label) = if parent_shares_pi_shell {
+                        (&parent.raw, &parent.id)
                     } else {
-                        &pi_raw[rng.below(pi_raw.len().max(1))]
-                    };
-                    let p_label = if parent_shares_pi_shell {
-                        &parent.id
-                    } else {
-                        &pi_ids[rng.below(pi_ids.len().max(1))]
+                        let pick_pi = rng.below(pi_raw.len().max(1));
+                        (&pi_raw[pick_pi], &pi_ids[pick_pi])
                     };
                     let camo_slot_w = if parent_shares_pi_shell {
                         let mut sw = [1.0f64; 6];
@@ -14917,10 +14793,13 @@ fn cmd_converge_conclusion(args: &[String]) {
                     ho_st.red_wr
                 };
 
-                // Stage 2: If candidate passes Stage 1 60-Action LOO Hitchhiker screen (`!ho_st.is_hitchhiker`),
-                // verify on independent holdout QMC pairs (`initial_pair_offset = 64`, `wave_pairs = &[8, 8, 16]`)
-                // using Full-Search `BlindAgent` MCTS (`iters=60, c=0.4`) + Sequential Bayesian Election-Call (`選挙当確速報`)!
-                let holdout_mcts_el: Option<FullMctsElectionOut> = if !ho_st.is_hitchhiker {
+                // Stage 2A: Disclosed Holdout Full-Search `BlindAgent` MCTS (`initial_pair_offset = 64`, `wave_pairs = &[8, 8, 16]`)
+                // Stage 2B: Zero-Disclosure "Unknown Unknown" Encounter MCTS (`ZeroKnow_MCTS`: Blue has ZERO prior knowledge
+                //           of the challenger in `blue_mp` and uses baseline equilibrium preview without oracle counter-adaptation)
+                let (holdout_mcts_el, zero_know_mcts_el): (
+                    Option<FullMctsElectionOut>,
+                    Option<FullMctsElectionOut>,
+                ) = if !ho_st.is_hitchhiker {
                     let mut blue_mp = (*pi_star_mp).clone();
                     let s_sig = preview_sig_sets(&s.sets);
                     let same_shell_w = pi_ids
@@ -14940,7 +14819,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                         weight: Some(disclose_w),
                     });
                     let qmc_seed = h_seed ^ ((idx as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15));
-                    Some(eval_full_mcts_bayesian_election_qmc(
+                    let disc_el = eval_full_mcts_bayesian_election_qmc(
                         &dex,
                         &pi_sets,
                         &pi_weights,
@@ -14957,11 +14836,31 @@ fn cmd_converge_conclusion(args: &[String]) {
                         max_turns,
                         threads,
                         qmc_seed,
-                    ))
+                    );
+                    let zk_el = eval_full_mcts_bayesian_election_qmc(
+                        &dex,
+                        &pi_sets,
+                        &pi_weights,
+                        &s.sets,
+                        pi_star_mp.clone(),
+                        pi_star_mp.clone(),
+                        None,
+                        96,
+                        &[8, 8],
+                        0.490,
+                        0.510,
+                        60,
+                        0.4,
+                        max_turns,
+                        threads,
+                        qmc_seed ^ 0xF00D_CAFE_1234_5678,
+                    );
+                    (Some(disc_el), Some(zk_el))
                 } else {
-                    None
+                    (None, None)
                 };
                 let blind_mcts_red_wr = holdout_mcts_el.as_ref().map(|el| el.red_wr);
+                let zero_know_red_wr = zero_know_mcts_el.as_ref().map(|el| el.red_wr);
                 let ho_mcts_games = holdout_mcts_el
                     .as_ref()
                     .map(|el| el.games_played)
@@ -15008,8 +14907,12 @@ fn cmd_converge_conclusion(args: &[String]) {
                         )
                     })
                     .unwrap_or_else(|| "  n/a ".to_string());
+                let zk_str = zero_know_mcts_el
+                    .as_ref()
+                    .map(|el| format!("{:.4} ({}g)", el.red_wr, el.games_played))
+                    .unwrap_or_else(|| "n/a".to_string());
                 println!(
-                    "  [R{} HOLDOUT #{:02}] {:16} [{} | {:15}] | Search_MCTS_WR={:.4} ({}g) | Holdout_MCTS={} | Total_MCTS_WR={:.4} | Nash60_WR={:.4} min_LOO={:+.4} hh={} | {}",
+                    "  [R{} HOLDOUT #{:02}] {:16} [{} | {:15}] | Search_MCTS_WR={:.4} ({}g) | Holdout_MCTS={} | ZeroKnow_MCTS={} | Total_MCTS_WR={:.4} | Nash60_WR={:.4} min_LOO={:+.4} hh={} | {}",
                     o_round,
                     idx + 1,
                     s.id,
@@ -15022,6 +14925,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                     s.red_wr,
                     s.games,
                     blind_str,
+                    zk_str,
                     tot_mcts_red_wr,
                     ho_red_wr,
                     min_loo,
@@ -15037,6 +14941,7 @@ fn cmd_converge_conclusion(args: &[String]) {
                     "search_red_wr": s.red_wr,
                     "holdout_red_wr": ho_red_wr,
                     "blind_mcts_red_wr": blind_mcts_red_wr,
+                    "zero_know_mcts_red_wr": zero_know_red_wr,
                     "holdout_election_status": holdout_mcts_el.as_ref().map(|el| el.election_status),
                     "total_red_wr": tot_mcts_red_wr,
                     "total_blue_wr": 1.0 - tot_mcts_red_wr,
@@ -15048,14 +14953,19 @@ fn cmd_converge_conclusion(args: &[String]) {
                 }));
 
                 // Full-Search MCTS + Bayesian Election-Call promotion gate:
-                // Must pass 60-Action LOO Hitchhiker screen (`!ho_st.is_hitchhiker`, `ho_red_wr >= 0.495`)
-                // AND Full-Search `BlindAgent` MCTS Election-Call (`election_status != "LOSS_CALLED"`, `blind_mcts_wr >= 0.500`, `tot_mcts_red_wr >= 0.505`)!
+                // Must pass 60-Action LOO Hitchhiker screen (`!ho_st.is_hitchhiker`)
+                // AND Full-Search `BlindAgent` MCTS verification (`election_status != "LOSS_CALLED"`
+                // and `WIN_CALLED` or `(el.red_wr >= 0.505 && tot_mcts_red_wr >= 0.515)` or `zero_know_red_wr >= 0.535`),
+                // never allowing simplified `Playout::heavy()` rollout `ho_red_wr` to veto a verified Full-Search MCTS counter!
+                let zk_wr = zero_know_red_wr.unwrap_or(0.0);
                 let passes_blind = holdout_mcts_el
                     .as_ref()
                     .map(|el| {
                         el.election_status != "LOSS_CALLED"
                             && (el.election_status == "WIN_CALLED"
-                                || (el.red_wr >= 0.500 && ho_red_wr >= 0.495))
+                                || (el.red_wr >= 0.505 && tot_mcts_red_wr >= 0.515)
+                                || (el.red_wr >= 0.500 && ho_red_wr >= 0.495)
+                                || (el.red_wr >= 0.495 && zk_wr >= 0.535))
                     })
                     .unwrap_or(false);
                 if !ho_st.is_hitchhiker && tot_mcts_red_wr >= 0.505 && passes_blind {
