@@ -190,6 +190,8 @@ export function parsePoolText(text: string): PoolParse {
       rank: typeof src.rank === "number" ? src.rank : i + 1,
       species: mons.map((m) => m.species ?? "?"),
       levels: mons.map((m) => m.level ?? 55),
+      ...(src.nash ? { nash: true } : {}),
+      ...(src.evolved ? { evolved: true } : {}),
       provenance:
         src.provenance && typeof src.provenance === "object"
           ? src.provenance

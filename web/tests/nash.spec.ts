@@ -395,6 +395,15 @@ test("the play door's Nash draw choice draws a mixture arm and persists", async 
   await page.locator("dialog.modal .modal-head button").click();
   await expect(setup).not.toContainText("Solved mixture");
   expect(await page.evaluate(() => localStorage.getItem("nc2000-bot-draw"))).toBeNull();
+
+  // Catalog party picker marks Nash and Evolved parties with .team-tier badges.
+  await page.locator('[data-party="human"]').click();
+  const pickerCards = page.locator("dialog.modal [data-team]");
+  await expect(pickerCards.filter({ hasText: "red-v10-s1105-r2-s0142" }).locator(".team-tier")).toHaveText("Nash · Evolved");
+  await expect(pickerCards.filter({ hasText: "sample-08" }).locator(".team-tier")).toHaveText("Nash");
+  await expect(pickerCards.filter({ hasText: "red-v5-r1-s0097" }).locator(".team-tier")).toHaveText("Evolved");
+  await page.locator("dialog.modal .modal-head button").click();
+
   expect(errors).toEqual([]);
 });
 

@@ -22,6 +22,8 @@ export interface UIStrings {
   languageLabel: string;
   // custom teams (M14)
   customBadge: string;
+  nashBadge: string;
+  evolvedBadge: string;
   customSection: string;
   addCustom: string;
   importTitle: string;
@@ -336,6 +338,8 @@ const EN: UIStrings = {
   close: "Close",
   languageLabel: "Language",
   customBadge: "custom",
+  nashBadge: "Nash",
+  evolvedBadge: "Evolved",
   customSection: "Saved custom teams",
   addCustom: "+ Import a custom team",
   importTitle: "Import a custom team",
@@ -627,6 +631,8 @@ const JA: UIStrings = {
   close: "閉じる",
   languageLabel: "言語",
   customBadge: "カスタム",
+  nashBadge: "Nash均衡",
+  evolvedBadge: "進化論生まれ",
   customSection: "保存済みカスタムチーム",
   addCustom: "+ カスタムチームを取り込む",
   importTitle: "カスタムチームの取り込み",

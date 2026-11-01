@@ -78,6 +78,11 @@ function TeamCard(props: {
   // dropped rather than rendered hollow — the catalog always fills
   // them, so this only shows on a swapped pool.
   const prov = provenanceLine(team);
+  const badges: string[] = [];
+  if (team.nash) badges.push(ui().nashBadge);
+  if (team.evolved) badges.push(ui().evolvedBadge);
+  if (badges.length === 0 && team.tier) badges.push(team.tier);
+  const tierText = badges.join(" · ");
   return (
     <button
       class={`team-card ${selected ? "selected" : ""}`}
@@ -88,7 +93,7 @@ function TeamCard(props: {
       <div class="team-card-head">
         <span class="team-rank">#{index + 1}</span>
         <span class="team-id">{team.id}</span>
-        {team.tier && <span class="team-tier">{team.tier}</span>}
+        {tierText && <span class="team-tier">{tierText}</span>}
       </div>
       {prov && <div class="team-prov">{prov}</div>}
       <div class="team-species">
@@ -129,11 +134,16 @@ function NashMixPanel(props: { mix: NashMix }) {
 
 function NashCard(props: { team: NashTeam; index: number }) {
   const { team, index } = props;
+  const isEvolved =
+    team.id.startsWith("red-") ||
+    team.id.startsWith("deme-") ||
+    team.id.startsWith("sib-");
   return (
     <div class="team-card nash-card" data-team={index} data-nash={team.id}>
       <div class="team-card-head">
         <span class="team-rank">{pct(team.weight)}</span>
         <span class="team-id">{team.id}</span>
+        {isEvolved && <span class="team-tier">{ui().evolvedBadge}</span>}
       </div>
       <div class="team-species">
         {team.species.map((sp, i) => (

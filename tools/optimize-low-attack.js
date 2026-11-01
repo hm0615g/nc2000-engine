@@ -11,8 +11,9 @@ const STATS = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'];
  * Gender is preserved by default. The catalog may opt into female preference
  * using the frozen prior's direct-Attract source mix; this is not universal.
  */
-function optimizeLowAttack(sets, dex, { preferFemale = false } = {}) {
+function optimizeLowAttack(sets, dex, { preferFemale = false, preserveGenderSpecies = null } = {}) {
 	const optimized = structuredClone(sets);
+	const preserve = preserveGenderSpecies ? new Set([...preserveGenderSpecies].map(toid)) : null;
 	let changedSets = 0;
 	let changedGenders = 0;
 	for (const set of optimized) {
@@ -23,7 +24,8 @@ function optimizeLowAttack(sets, dex, { preferFemale = false } = {}) {
 			return dex.moves[id];
 		});
 		if (moves.some(move => move.category === 'Physical') || ids.some(id => CALLERS.has(id))) continue;
-		const species = dex.species[toid(set.species)];
+		const speciesId = toid(set.species);
+		const species = dex.species[speciesId];
 		if (!species) throw new Error(`unknown species: ${set.species}`);
 		// This is a build step on validated inventory records, not an importer.
 		for (const stat of STATS) {
@@ -36,9 +38,10 @@ function optimizeLowAttack(sets, dex, { preferFemale = false } = {}) {
 		const old = dv('atk');
 		const gender = atk => species.gender || (atk < (species.genderRatio?.F ?? 0.5) * 16 ? 'F' : 'M');
 		const shiny = atk => ['def', 'spe', 'spa'].every(stat => dv(stat) === 10) && atk % 4 >= 2;
-		// Retain the source gender when this set itself uses Attract: changing
-		// it also changes which opponents its own Attract can target.
-		const allowFemale = preferFemale && gender(old) === 'M' && !ids.includes('attract');
+		// Retain the source gender when this set itself uses Attract (changing
+		// it changes which opponents its own Attract can target) or when a
+		// same-shell camouflage sibling requires Male for a Physical move.
+		const allowFemale = preferFemale && gender(old) === 'M' && !ids.includes('attract') && !preserve?.has(speciesId);
 		let minimum = old;
 		for (let candidate = 0; candidate <= old; candidate++) {
 			if (candidate % 2 === old % 2 &&

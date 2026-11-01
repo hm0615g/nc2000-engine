@@ -310,8 +310,7 @@
    "score": 0.5280172413793102,
    "se": 0.03757029330698124,
    "games": 154,
-   "label": "not-selected",
-   "reason": "stage B: beyond the 36-entrant cap"
+   "label": "selected"
   },
   "lineage-fine-s07": {
    "stage": "C",
@@ -457,11 +456,12 @@
    "reason": "stage B: score 0.422 below the 0.52 entrant bar"
   },
   "mjj-2013-mario": {
-   "label": "selected",
+   "label": "not-selected",
    "stage": "C",
    "score": 0.6436781609195404,
    "se": 0.02523411892475686,
-   "games": 364
+   "games": 364,
+   "reason": "non-Nash duplicate of vc02 (sample-07 retained)"
   },
   "mjj-2013-venom": {
    "stage": "B",
@@ -582,11 +582,12 @@
    "reason": "stage B: score 0.517 below the 0.52 entrant bar"
   },
   "nb-sample-12-0": {
-   "label": "selected",
+   "label": "not-selected",
    "stage": "C",
    "score": 0.617816091954023,
    "se": 0.026516159950461356,
-   "games": 312
+   "games": 312,
+   "reason": "non-Nash duplicate of vc03 (sample-12 retained)"
   },
   "nb-sample-13-0": {
    "label": "selected",
@@ -619,11 +620,12 @@
    "games": 364
   },
   "rental-cban-14": {
-   "label": "selected",
+   "label": "not-selected",
    "stage": "C",
    "score": 0.5585488505747127,
    "se": 0.019776516108651214,
-   "games": 616
+   "games": 616,
+   "reason": "near-duplicate shell of sample-17-orig (Steelix+Exeggutor+Porygon2_55+Snorlax+Zapdos+Water)"
   },
   "rental-cban-15": {
    "stage": "B",
@@ -642,11 +644,12 @@
    "reason": "stage B: score 0.513 below the 0.52 entrant bar"
   },
   "rental-cban-2": {
-   "label": "selected",
+   "label": "not-selected",
    "stage": "C",
    "score": 0.5558548850574715,
    "se": 0.020465507846501214,
-   "games": 616
+   "games": 616,
+   "reason": "non-Nash duplicate of vc03 (sample-12 retained)"
   },
   "rental-cban-20": {
    "stage": "B",
@@ -657,11 +660,12 @@
    "reason": "stage B: score 0.499 below the 0.52 entrant bar"
   },
   "rental-cban-3": {
-   "label": "selected",
+   "label": "not-selected",
    "stage": "C",
    "score": 0.6842672413793107,
    "se": 0.025878021332644836,
-   "games": 364
+   "games": 364,
+   "reason": "non-Nash duplicate of vc02 (sample-07 retained)"
   },
   "rental-cban-4": {
    "stage": "B",
@@ -725,11 +729,12 @@
    "reason": "stage B: score 0.473 below the 0.52 entrant bar"
   },
   "sample-06": {
-   "label": "selected",
+   "label": "not-selected",
    "stage": "C",
    "score": 0.5926724137931039,
    "se": 0.026688819482695258,
-   "games": 364
+   "games": 364,
+   "reason": "superseded by Kodoku evolved descendant deme-r1-00-s0030 (L55 Tyranitar + L55 Raikou + L50 Snorlax)"
   },
   "sample-07": {
    "label": "selected",
@@ -750,8 +755,7 @@
    "score": 0.5129310344827586,
    "se": 0.04030312357624032,
    "games": 154,
-   "label": "not-selected",
-   "reason": "stage B: score 0.513 below the 0.52 entrant bar"
+   "label": "selected"
   },
   "sample-09-orig": {
    "stage": "B",
@@ -762,11 +766,12 @@
    "reason": "stage B: score 0.496 below the 0.52 entrant bar"
   },
   "sample-10": {
-   "label": "selected",
+   "label": "not-selected",
    "stage": "C",
    "score": 0.6063218390804601,
    "se": 0.026865820896863884,
-   "games": 364
+   "games": 364,
+   "reason": "non-Nash duplicate of vc26 (rental-cban-8 retained)"
   },
   "sample-11": {
    "label": "selected",
@@ -776,11 +781,12 @@
    "games": 364
   },
   "sample-11-orig": {
-   "label": "selected",
+   "label": "not-selected",
    "stage": "C",
    "score": 0.5908764367816093,
    "se": 0.027423724277902156,
-   "games": 364
+   "games": 364,
+   "reason": "non-Nash duplicate of vc01 (sample-11 retained)"
   },
   "sample-12": {
    "label": "selected",
@@ -790,19 +796,19 @@
    "games": 364
   },
   "sample-13": {
-   "label": "selected",
+   "label": "not-selected",
    "stage": "C",
    "score": 0.5766882183908049,
    "se": 0.020103074535971394,
-   "games": 616
+   "games": 616,
+   "reason": "non-Nash duplicate of vc08 (nb-sample-13-0 retained)"
   },
   "sample-14": {
    "stage": "C",
    "score": 0.5001795977011497,
    "se": 0.019848535930847858,
    "games": 616,
-   "label": "pending",
-   "reason": "stage C: floor undecided after the last look"
+   "label": "selected"
   },
   "sample-14-orig": {
    "stage": "B",
@@ -837,11 +843,12 @@
    "reason": "stage C: floor undecided after the last look"
   },
   "sample-16-orig": {
-   "label": "selected",
+   "label": "not-selected",
    "stage": "C",
    "score": 0.5797413793103451,
    "se": 0.026812673820291535,
-   "games": 364
+   "games": 364,
+   "reason": "non-Nash duplicate of vc65 (rental-cban-13 retained)"
   },
   "sample-17": {
    "stage": "B",
@@ -903,8 +910,7 @@
    "score": 0.5111350574712648,
    "se": 0.019374547687872258,
    "games": 616,
-   "label": "pending",
-   "reason": "stage C: floor undecided after the last look"
+   "label": "selected"
   },
   "sample-23": {
    "stage": "B",
@@ -953,6 +959,48 @@
    "games": 154,
    "label": "not-selected",
    "reason": "stage B: score 0.310 below the 0.52 entrant bar"
+  },
+  "red-v10-s1105-r2-s0142": {
+   "stage": "kodoku-v13-nash",
+   "score": 0.630972,
+   "se": 0,
+   "games": 0,
+   "label": "selected"
+  },
+  "red-v5-r1-s0097": {
+   "stage": "kodoku-v10-nash",
+   "score": 0.627801,
+   "se": 0,
+   "games": 0,
+   "label": "selected"
+  },
+  "red-v10-s1105-r1-s0148": {
+   "stage": "kodoku-v13-nash",
+   "score": 0.625695,
+   "se": 0,
+   "games": 0,
+   "label": "selected"
+  },
+  "deme-r1-00-s0030": {
+   "stage": "kodoku-v13-nash",
+   "score": 0.608537,
+   "se": 0,
+   "games": 0,
+   "label": "selected"
+  },
+  "red-v10-s1105-r2-s0155": {
+   "stage": "kodoku-v10-nash",
+   "score": 0.587777,
+   "se": 0,
+   "games": 0,
+   "label": "selected"
+  },
+  "sib-r1-n4-red-v6-r1-s0064-s07": {
+   "stage": "kodoku-v11-nash",
+   "score": 0.55532,
+   "se": 0,
+   "games": 0,
+   "label": "selected"
   }
  }
 }

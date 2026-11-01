@@ -32,7 +32,14 @@ export type CatalogParse =
 interface CatalogEntry {
   id: string;
   label?: string;
-  provenance?: { source?: string; version?: string | null; family?: string };
+  nash?: boolean;
+  evolved?: boolean;
+  provenance?: {
+    source?: string;
+    version?: string | null;
+    family?: string;
+    origin?: string;
+  };
 }
 
 export function parseCatalog(text: string): CatalogParse {
@@ -40,13 +47,16 @@ export function parseCatalog(text: string): CatalogParse {
   if (!parsed.ok) return parsed;
   const entries = (parsed.raw.teams ?? []) as CatalogEntry[];
   const teams: PoolTeam[] = parsed.teams.map((t, i) => {
-    const p = entries[i]?.provenance ?? {};
+    const entry = entries[i];
+    const p = entry?.provenance ?? {};
     return {
       id: t.id,
       tier: "",
       rank: i + 1,
       species: t.species,
       levels: t.levels,
+      nash: Boolean(entry?.nash),
+      evolved: Boolean(entry?.evolved || p.origin === "evolved"),
       provenance: { source: [p.source, p.version].filter(Boolean).join(" · ") },
       sets: t.sets,
     };

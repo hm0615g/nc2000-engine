@@ -39,7 +39,8 @@ try {
   // path, including the six sets whose public gender changed.
   const {BotWorker}=await import('/src/bot.ts');
   const inventory=await(await fetch('/data/team-inventory-v1/inventory.json')).json();
-  const original=new Map(inventory.teams.map(t=>[t.id,t.sets]));
+  const evolved=await(await fetch('/data/team-selection-v2/evolved-teams.json')).json();
+  const original=new Map([...inventory.teams,...evolved.teams].map(t=>[t.id,t.sets]));
   const optimized=catalog.teams.find(t=>JSON.stringify(t.sets)!==JSON.stringify(original.get(t.id)));
   const unchanged=catalog.teams.find(t=>JSON.stringify(t.sets)===JSON.stringify(original.get(t.id)));
   const female=catalog.teams.find(t=>t.sets.some((p,i)=>p.gender!==original.get(t.id)[i].gender));
@@ -56,6 +57,6 @@ try {
   }
   return {matchups,uniqueKeys:keys.size,allLegal:true,worker};
  },wasmPath);
- assert.equal(result.matchups,576);assert.equal(result.uniqueKeys,504);
+ assert.equal(result.matchups,576);assert.equal(result.uniqueKeys,552);
  fs.writeFileSync(`${process.env.NC2000_CHECK_OUT ?? '../findings/fixed-budget-release-v1'}/compiled-coverage.json`,JSON.stringify(result,null,2)+'\n');console.log(result);
 }finally{await browser?.close();await vite?.close();server.close();}

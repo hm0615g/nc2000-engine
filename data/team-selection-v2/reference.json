@@ -3,14 +3,15 @@
  "generator": "tools/build-team-products-v2.js",
  "protocol": "data/team-selection-v2/PROTOCOL.md",
  "counts": {
-  "records": 133,
-  "eligible": 115,
-  "measured": 103,
+  "records": 139,
+  "eligible": 121,
+  "measured": 109,
   "selected": 24,
-  "pending": 11,
-  "notSelected": 68,
+  "pending": 9,
+  "notSelected": 76,
   "prior": 103,
-  "nashSupport": 5
+  "nashSupport": 5,
+  "legacyNashV3Support": 5
  },
  "teams": [
   {
@@ -41,6 +42,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc31",
    "species": [
     "Alakazam",
@@ -87,6 +89,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc32",
    "species": [
     "Zapdos",
@@ -130,9 +133,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.020833,
+   "drawWeight": 0.015873,
    "priorWeight": 0.333333,
-   "nashWeight": 0,
+   "nashWeight": 0.07494185468640105,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc06",
    "species": [
     "Zapdos",
@@ -179,6 +183,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc33",
    "species": [
     "Starmie",
@@ -214,17 +219,18 @@
    },
    "measuredAs": "hc75-top8-tsuru",
    "v1Label": "strong",
-   "label": "not-selected",
-   "reason": "stage B: beyond the 36-entrant cap",
+   "label": "selected",
+   "reason": null,
    "evidence": {
     "score": 0.5280172413793102,
     "se": 0.03757029330698124,
     "stage": "B"
    },
-   "catalog": false,
-   "drawWeight": 0,
+   "catalog": true,
+   "drawWeight": 0.047619,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc34",
    "species": [
     "Entei",
@@ -268,9 +274,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.020833,
+   "drawWeight": 0.015873,
    "priorWeight": 0.333333,
-   "nashWeight": 0.186817,
+   "nashWeight": 0.03619534677183296,
+   "legacyNashV3Weight": 0.186817,
    "variantCluster": "vc06",
    "species": [
     "Exeggutor",
@@ -317,6 +324,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc27",
    "species": [
     "Machamp",
@@ -363,6 +371,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc27",
    "species": [
     "Machamp",
@@ -409,6 +418,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc71",
    "species": [
     "Machamp",
@@ -444,17 +454,18 @@
    },
    "measuredAs": "sample-14",
    "v1Label": "strong",
-   "label": "pending",
-   "reason": "stage C: floor undecided after the last look",
+   "label": "selected",
+   "reason": null,
    "evidence": {
     "score": 0.5001795977011497,
     "se": 0.019848535930847858,
     "stage": "C"
    },
-   "catalog": false,
-   "drawWeight": 0,
+   "catalog": true,
+   "drawWeight": 0.047619,
    "priorWeight": 0.333333,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc04",
    "species": [
     "Starmie",
@@ -501,6 +512,7 @@
    "drawWeight": 0,
    "priorWeight": 0.333333,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc04",
    "species": [
     "Starmie",
@@ -536,17 +548,18 @@
    },
    "measuredAs": "sample-13",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "non-Nash duplicate of vc08 (nb-sample-13-0 retained)",
    "evidence": {
     "score": 0.5766882183908049,
     "se": 0.020103074535971394,
     "stage": "C"
    },
-   "catalog": true,
-   "drawWeight": 0.03125,
+   "catalog": false,
+   "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc08",
    "species": [
     "Gengar",
@@ -593,6 +606,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc70",
    "species": [
     "Gengar",
@@ -639,6 +653,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc29",
    "species": [
     "Steelix",
@@ -682,9 +697,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.0625,
+   "drawWeight": 0.047619,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc29",
    "species": [
     "Steelix",
@@ -720,17 +736,18 @@
    },
    "measuredAs": "sample-10",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "non-Nash duplicate of vc26 (rental-cban-8 retained)",
    "evidence": {
     "score": 0.6063218390804601,
     "se": 0.026865820896863884,
     "stage": "C"
    },
-   "catalog": true,
-   "drawWeight": 0.03125,
+   "catalog": false,
+   "drawWeight": 0,
    "priorWeight": 0.5,
-   "nashWeight": 0.159324,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0.159324,
    "variantCluster": "vc26",
    "species": [
     "Golem",
@@ -777,6 +794,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc24",
    "species": [
     "Ampharos",
@@ -820,9 +838,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.020833,
+   "drawWeight": 0.047619,
    "priorWeight": 0.333333,
-   "nashWeight": 0.261004,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0.261004,
    "variantCluster": "vc02",
    "species": [
     "Electrode",
@@ -858,17 +877,18 @@
    },
    "measuredAs": "sample-06",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "superseded by Kodoku evolved descendant deme-r1-00-s0030 (L55 Tyranitar + L55 Raikou + L50 Snorlax)",
    "evidence": {
     "score": 0.5926724137931039,
     "se": 0.026688819482695258,
     "stage": "C"
    },
-   "catalog": true,
-   "drawWeight": 0.0625,
+   "catalog": false,
+   "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc25",
    "species": [
     "Umbreon",
@@ -912,9 +932,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.03125,
+   "drawWeight": 0.047619,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc03",
    "species": [
     "Gengar",
@@ -961,6 +982,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc21",
    "species": [
     "Victreebel",
@@ -1007,6 +1029,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc22",
    "species": [
     "Gengar",
@@ -1053,6 +1076,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc72",
    "species": [
     "Gengar",
@@ -1099,6 +1123,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc68",
    "species": [
     "Exeggutor",
@@ -1145,6 +1170,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc73",
    "species": [
     "Gengar",
@@ -1191,6 +1217,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc75",
    "species": [
     "Steelix",
@@ -1234,9 +1261,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.0625,
+   "drawWeight": 0.047619,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc69",
    "species": [
     "Jynx",
@@ -1280,9 +1308,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.03125,
+   "drawWeight": 0.047619,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc01",
    "species": [
     "Alakazam",
@@ -1318,17 +1347,18 @@
    },
    "measuredAs": "sample-11-orig",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "non-Nash duplicate of vc01 (sample-11 retained)",
    "evidence": {
     "score": 0.5908764367816093,
     "se": 0.027423724277902156,
     "stage": "C"
    },
-   "catalog": true,
-   "drawWeight": 0.03125,
+   "catalog": false,
+   "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc01",
    "species": [
     "Alakazam",
@@ -1375,6 +1405,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc23",
    "species": [
     "Gengar",
@@ -1421,6 +1452,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc30",
    "species": [
     "Gengar",
@@ -1467,6 +1499,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc30",
    "species": [
     "Gengar",
@@ -1513,6 +1546,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc74",
    "species": [
     "Gengar",
@@ -1548,17 +1582,18 @@
    },
    "measuredAs": "sample-09",
    "v1Label": "strong",
-   "label": "not-selected",
-   "reason": "stage B: score 0.513 below the 0.52 entrant bar",
+   "label": "selected",
+   "reason": null,
    "evidence": {
     "score": 0.5129310344827586,
     "se": 0.04030312357624032,
     "stage": "B"
    },
-   "catalog": false,
-   "drawWeight": 0,
+   "catalog": true,
+   "drawWeight": 0.047619,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc07",
    "species": [
     "Nidoking",
@@ -1605,6 +1640,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc07",
    "species": [
     "Nidoking",
@@ -1651,6 +1687,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc28",
    "species": [
     "Golem",
@@ -1686,17 +1723,18 @@
    },
    "measuredAs": "sample-16-orig",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "non-Nash duplicate of vc65 (rental-cban-13 retained)",
    "evidence": {
     "score": 0.5797413793103451,
     "se": 0.026812673820291535,
     "stage": "C"
    },
-   "catalog": true,
-   "drawWeight": 0.0625,
+   "catalog": false,
+   "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc28",
    "species": [
     "Golem",
@@ -1743,6 +1781,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc05",
    "species": [
     "Forretress",
@@ -1778,17 +1817,18 @@
    },
    "measuredAs": "sample-22-orig",
    "v1Label": "strong",
-   "label": "pending",
-   "reason": "stage C: floor undecided after the last look",
+   "label": "selected",
+   "reason": null,
    "evidence": {
     "score": 0.5111350574712648,
     "se": 0.019374547687872258,
     "stage": "C"
    },
-   "catalog": false,
-   "drawWeight": 0,
+   "catalog": true,
+   "drawWeight": 0.047619,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc05",
    "species": [
     "Forretress",
@@ -1835,6 +1875,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc76",
    "species": [
     "Clefable",
@@ -1880,6 +1921,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc09",
    "species": [
     "Alakazam",
@@ -1925,6 +1967,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc09",
    "species": [
     "Alakazam",
@@ -1970,6 +2013,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc10",
    "species": [
     "Geodude",
@@ -2015,6 +2059,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc10",
    "species": [
     "Geodude",
@@ -2060,6 +2105,7 @@
    "drawWeight": 0,
    "priorWeight": 0.125,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc11",
    "species": [
     "Steelix",
@@ -2105,6 +2151,7 @@
    "drawWeight": 0,
    "priorWeight": 0.125,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc11",
    "species": [
     "Steelix",
@@ -2150,6 +2197,7 @@
    "drawWeight": 0,
    "priorWeight": 0.125,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc12",
    "species": [
     "Starmie",
@@ -2195,6 +2243,7 @@
    "drawWeight": 0,
    "priorWeight": 0.125,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc12",
    "species": [
     "Starmie",
@@ -2240,6 +2289,7 @@
    "drawWeight": 0,
    "priorWeight": 0.125,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc13",
    "species": [
     "Ditto",
@@ -2285,6 +2335,7 @@
    "drawWeight": 0,
    "priorWeight": 0.125,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc13",
    "species": [
     "Ditto",
@@ -2330,6 +2381,7 @@
    "drawWeight": 0,
    "priorWeight": 0.125,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc14",
    "species": [
     "Marowak",
@@ -2375,6 +2427,7 @@
    "drawWeight": 0,
    "priorWeight": 0.125,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc14",
    "species": [
     "Marowak",
@@ -2420,6 +2473,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc15",
    "species": [
     "Hoothoot",
@@ -2465,6 +2519,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc15",
    "species": [
     "Hoothoot",
@@ -2510,6 +2565,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc16",
    "species": [
     "Gloom",
@@ -2555,6 +2611,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc16",
    "species": [
     "Gloom",
@@ -2600,6 +2657,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc17",
    "species": [
     "Cloyster",
@@ -2645,6 +2703,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc17",
    "species": [
     "Cloyster",
@@ -2690,6 +2749,7 @@
    "drawWeight": 0,
    "priorWeight": 0.125,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc18",
    "species": [
     "Mantine",
@@ -2735,6 +2795,7 @@
    "drawWeight": 0,
    "priorWeight": 0.125,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc18",
    "species": [
     "Mantine",
@@ -2769,17 +2830,18 @@
    },
    "measuredAs": "nb-sample-12-0",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "non-Nash duplicate of vc03 (sample-12 retained)",
    "evidence": {
     "score": 0.617816091954023,
     "se": 0.026516159950461356,
     "stage": "C"
    },
-   "catalog": true,
-   "drawWeight": 0.03125,
+   "catalog": false,
+   "drawWeight": 0,
    "priorWeight": 0.125,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc03",
    "species": [
     "Gengar",
@@ -2822,9 +2884,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.03125,
+   "drawWeight": 0.047619,
    "priorWeight": 0.125,
-   "nashWeight": 0.233512,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0.233512,
    "variantCluster": "vc08",
    "species": [
     "Gengar",
@@ -2870,6 +2933,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc37",
    "species": [
     "Dugtrio",
@@ -2915,6 +2979,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc38",
    "species": [
     "Steelix",
@@ -2960,6 +3025,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc39",
    "species": [
     "Oddish",
@@ -3005,6 +3071,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc40",
    "species": [
     "Zapdos",
@@ -3050,6 +3117,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc41",
    "species": [
     "Electrode",
@@ -3095,6 +3163,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc42",
    "species": [
     "Gengar",
@@ -3140,6 +3209,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc35",
    "species": [
     "Electrode",
@@ -3185,6 +3255,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc36",
    "species": [
     "Gengar",
@@ -3230,6 +3301,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc03",
    "species": [
     "Snorlax",
@@ -3264,17 +3336,18 @@
    },
    "measuredAs": "rental-cban-2",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "non-Nash duplicate of vc03 (sample-12 retained)",
    "evidence": {
     "score": 0.5558548850574715,
     "se": 0.020465507846501214,
     "stage": "C"
    },
-   "catalog": true,
-   "drawWeight": 0.0625,
+   "catalog": false,
+   "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc67",
    "species": [
     "Zapdos",
@@ -3309,17 +3382,18 @@
    },
    "measuredAs": "rental-cban-3",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "non-Nash duplicate of vc02 (sample-07 retained)",
    "evidence": {
     "score": 0.6842672413793107,
     "se": 0.025878021332644836,
     "stage": "C"
    },
-   "catalog": true,
-   "drawWeight": 0.020833,
+   "catalog": false,
+   "drawWeight": 0,
    "priorWeight": 0.333333,
-   "nashWeight": 0.159343,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0.159343,
    "variantCluster": "vc02",
    "species": [
     "Tauros",
@@ -3365,6 +3439,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc01",
    "species": [
     "Tyranitar",
@@ -3399,8 +3474,8 @@
    },
    "measuredAs": "sample-06",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "superseded by Kodoku evolved descendant deme-r1-00-s0030 (L55 Tyranitar + L55 Raikou + L50 Snorlax)",
    "evidence": {
     "score": 0.5926724137931039,
     "se": 0.026688819482695258,
@@ -3410,6 +3485,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc25",
    "species": [
     "Snorlax",
@@ -3452,9 +3528,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.020833,
+   "drawWeight": 0.015873,
    "priorWeight": 0.333333,
-   "nashWeight": 0,
+   "nashWeight": 0.07685529715179017,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc06",
    "species": [
     "Zapdos",
@@ -3500,6 +3577,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc07",
    "species": [
     "Marowak",
@@ -3542,9 +3620,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.03125,
+   "drawWeight": 0.047619,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc26",
    "species": [
     "Tyranitar",
@@ -3579,8 +3658,8 @@
    },
    "measuredAs": "sample-13",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "non-Nash duplicate of vc08 (nb-sample-13-0 retained)",
    "evidence": {
     "score": 0.5766882183908049,
     "se": 0.020103074535971394,
@@ -3590,6 +3669,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc08",
    "species": [
     "Snorlax",
@@ -3635,6 +3715,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc20",
    "species": [
     "Snorlax",
@@ -3680,6 +3761,7 @@
    "drawWeight": 0,
    "priorWeight": 0.333333,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc04",
    "species": [
     "Snorlax",
@@ -3725,6 +3807,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc64",
    "species": [
     "Snorlax",
@@ -3767,9 +3850,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.0625,
+   "drawWeight": 0.047619,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc65",
    "species": [
     "Porygon2",
@@ -3804,17 +3888,18 @@
    },
    "measuredAs": "rental-cban-14",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "near-duplicate shell of sample-17-orig (Steelix+Exeggutor+Porygon2_55+Snorlax+Zapdos+Water)",
    "evidence": {
     "score": 0.5585488505747127,
     "se": 0.019776516108651214,
     "stage": "C"
    },
-   "catalog": true,
-   "drawWeight": 0.0625,
+   "catalog": false,
+   "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc66",
    "species": [
     "Vaporeon",
@@ -3860,6 +3945,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc21",
    "species": [
     "Umbreon",
@@ -3903,6 +3989,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Exeggutor",
@@ -3948,6 +4035,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc22",
    "species": [
     "Marowak",
@@ -3993,6 +4081,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc23",
    "species": [
     "Raikou",
@@ -4027,8 +4116,8 @@
    },
    "measuredAs": "sample-22-orig",
    "v1Label": "strong",
-   "label": "pending",
-   "reason": "stage C: floor undecided after the last look",
+   "label": "selected",
+   "reason": null,
    "evidence": {
     "score": 0.5111350574712648,
     "se": 0.019374547687872258,
@@ -4038,6 +4127,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc05",
    "species": [
     "Dragonite",
@@ -4083,6 +4173,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc24",
    "species": [
     "Ampharos",
@@ -4127,6 +4218,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Tauros",
@@ -4171,6 +4263,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Snorlax",
@@ -4215,6 +4308,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Dugtrio",
@@ -4259,6 +4353,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Scyther",
@@ -4302,6 +4397,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Gengar",
@@ -4346,6 +4442,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Snorlax",
@@ -4388,6 +4485,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Blissey",
@@ -4431,6 +4529,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Ditto"
@@ -4472,6 +4571,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc63",
    "species": [
     "Marowak",
@@ -4523,6 +4623,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc62",
    "species": [
     "Snorlax",
@@ -4573,6 +4674,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Dugtrio",
@@ -4623,6 +4725,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Snorlax",
@@ -4674,6 +4777,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc61",
    "species": [
     "Zapdos",
@@ -4725,6 +4829,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc20",
    "species": [
     "Snorlax",
@@ -4776,6 +4881,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc60",
    "species": [
     "Tauros",
@@ -4827,6 +4933,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc19",
    "species": [
     "Snorlax",
@@ -4878,6 +4985,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc58",
    "species": [
     "Tentacruel",
@@ -4929,6 +5037,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc59",
    "species": [
     "Ninetales",
@@ -4980,6 +5089,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc57",
    "species": [
     "Tauros",
@@ -5031,6 +5141,7 @@
    "drawWeight": 0,
    "priorWeight": 0.5,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc19",
    "species": [
     "Snorlax",
@@ -5082,6 +5193,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc50",
    "species": [
     "Alakazam",
@@ -5130,9 +5242,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.0625,
+   "drawWeight": 0.047619,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc56",
    "species": [
     "Raikou",
@@ -5184,6 +5297,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc55",
    "species": [
     "Porygon2",
@@ -5235,6 +5349,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc54",
    "species": [
     "Gengar",
@@ -5283,9 +5398,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.0625,
+   "drawWeight": 0.047619,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc53",
    "species": [
     "Zapdos",
@@ -5326,17 +5442,18 @@
    },
    "measuredAs": "mjj-2013-mario",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "non-Nash duplicate of vc02 (sample-07 retained)",
    "evidence": {
     "score": 0.6436781609195404,
     "se": 0.02523411892475686,
     "stage": "C"
    },
-   "catalog": true,
-   "drawWeight": 0.020833,
+   "catalog": false,
+   "drawWeight": 0,
    "priorWeight": 0.333333,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc02",
    "species": [
     "Tauros",
@@ -5388,6 +5505,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc52",
    "species": [
     "Snorlax",
@@ -5439,6 +5557,7 @@
    "drawWeight": 0,
    "priorWeight": 0.25,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc01",
    "species": [
     "Tyranitar",
@@ -5490,6 +5609,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc51",
    "species": [
     "Zapdos",
@@ -5539,6 +5659,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Raikou",
@@ -5590,6 +5711,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc49",
    "species": [
     "Alakazam",
@@ -5639,6 +5761,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Raikou",
@@ -5690,6 +5813,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc48",
    "species": [
     "Marowak",
@@ -5739,6 +5863,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Zapdos",
@@ -5790,6 +5915,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc46",
    "species": [
     "Starmie",
@@ -5838,9 +5964,10 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.0625,
+   "drawWeight": 0.047619,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc44",
    "species": [
     "Marowak",
@@ -5892,6 +6019,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc45",
    "species": [
     "Marowak",
@@ -5943,6 +6071,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc43",
    "species": [
     "Alakazam",
@@ -5994,6 +6123,7 @@
    "drawWeight": 0,
    "priorWeight": 1,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": "vc47",
    "species": [
     "Snorlax",
@@ -6040,6 +6170,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Alakazam",
@@ -6086,6 +6217,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Alakazam",
@@ -6132,6 +6264,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Zapdos",
@@ -6178,6 +6311,7 @@
    "drawWeight": 0,
    "priorWeight": 0,
    "nashWeight": 0,
+   "legacyNashV3Weight": 0,
    "variantCluster": null,
    "species": [
     "Houndoom",
@@ -6194,6 +6328,270 @@
     52,
     51,
     52
+   ]
+  },
+  {
+   "id": "red-v10-s1105-r2-s0142",
+   "family": "kodoku-nash-v13",
+   "origin": "evolved",
+   "source": {
+    "name": "Kodoku v13 Deployed Nash Equilibrium (Shell A · Rain Dance Cloyster + EQ Heracross)",
+    "url": "data/kodoku-r3/conclusion-equilibrium-deme.json",
+    "version": "v13-deme-w0.5587"
+   },
+   "eligibility": {
+    "status": "eligible"
+   },
+   "measuredAs": "red-v10-s1105-r2-s0142",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.630972,
+    "se": 0,
+    "stage": "kodoku-v13-nash"
+   },
+   "catalog": true,
+   "drawWeight": 0.02381,
+   "priorWeight": 0,
+   "nashWeight": 0.5586919930990222,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-kodoku-nash-a",
+   "species": [
+    "Snorlax",
+    "Cloyster",
+    "Gengar",
+    "Heracross",
+    "Marowak",
+    "Starmie"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "red-v5-r1-s0097",
+   "family": "kodoku-evolved",
+   "origin": "evolved",
+   "source": {
+    "name": "Kodoku Evolved Archetype (L50 Raikou + Dual-55 Tyranitar/Heracross + Cloyster/Machamp/Snorlax)",
+    "url": "data/kodoku-r3/conclusion-equilibrium-r1.json",
+    "version": "r1-shell-w0.280"
+   },
+   "eligibility": {
+    "status": "eligible"
+   },
+   "measuredAs": "red-v5-r1-s0097",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.627801,
+    "se": 0,
+    "stage": "kodoku-v10-nash"
+   },
+   "catalog": true,
+   "drawWeight": 0.047619,
+   "priorWeight": 0,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-kodoku-red-v5-r1-s0097",
+   "species": [
+    "Raikou",
+    "Cloyster",
+    "Snorlax",
+    "Tyranitar",
+    "Heracross",
+    "Machamp"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    55,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "red-v10-s1105-r1-s0148",
+   "family": "kodoku-nash-v13",
+   "origin": "evolved",
+   "source": {
+    "name": "Kodoku v13 Deployed Nash Equilibrium (Shell A · Explosion Cloyster + HP-Fighting Heracross)",
+    "url": "data/kodoku-r3/conclusion-equilibrium-deme.json",
+    "version": "v13-deme-w0.2533"
+   },
+   "eligibility": {
+    "status": "eligible"
+   },
+   "measuredAs": "red-v10-s1105-r1-s0148",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.625695,
+    "se": 0,
+    "stage": "kodoku-v13-nash"
+   },
+   "catalog": true,
+   "drawWeight": 0.02381,
+   "priorWeight": 0,
+   "nashWeight": 0.2533155082909537,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-kodoku-nash-a",
+   "species": [
+    "Snorlax",
+    "Cloyster",
+    "Gengar",
+    "Heracross",
+    "Marowak",
+    "Starmie"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "deme-r1-00-s0030",
+   "family": "kodoku-evolved",
+   "origin": "evolved",
+   "source": {
+    "name": "Kodoku Evolved Archetype (L55 Tyranitar + L55 Raikou + L50 Sleep Talk Snorlax + Skarmory/Suicune)",
+    "url": "data/dominance-audit-v13-verified/converged-report.json",
+    "version": "v13-rank4"
+   },
+   "eligibility": {
+    "status": "eligible"
+   },
+   "measuredAs": "deme-r1-00-s0030",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.608537,
+    "se": 0,
+    "stage": "kodoku-v13-nash"
+   },
+   "catalog": true,
+   "drawWeight": 0.047619,
+   "priorWeight": 0,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-kodoku-deme-r1-00-s0030",
+   "species": [
+    "Tyranitar",
+    "Skarmory",
+    "Marowak",
+    "Snorlax",
+    "Raikou",
+    "Suicune"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "red-v10-s1105-r2-s0155",
+   "family": "kodoku-evolved",
+   "origin": "evolved",
+   "source": {
+    "name": "Kodoku R1 Equilibrium #1 Shell (Dual-55 Snorlax/Miltank + Heal Bell Blissey + Skarmory/Suicune)",
+    "url": "data/kodoku-r3/conclusion-equilibrium-r1.json",
+    "version": "r1-shell-w0.343"
+   },
+   "eligibility": {
+    "status": "eligible"
+   },
+   "measuredAs": "red-v10-s1105-r2-s0155",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.587777,
+    "se": 0,
+    "stage": "kodoku-v10-nash"
+   },
+   "catalog": true,
+   "drawWeight": 0.047619,
+   "priorWeight": 0,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-kodoku-red-v10-r2-s0155",
+   "species": [
+    "Blissey",
+    "Skarmory",
+    "Marowak",
+    "Snorlax",
+    "Miltank",
+    "Suicune"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    55,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "sib-r1-n4-red-v6-r1-s0064-s07",
+   "family": "kodoku-evolved",
+   "origin": "evolved",
+   "source": {
+    "name": "Kodoku v11 Equilibrium Shell (Wobbuffet + Sunny Day Moltres + Haze/Perish Gengar)",
+    "url": "data/dominance-audit-v11-fullnash/converged-report.json",
+    "version": "v11-shell-w0.126"
+   },
+   "eligibility": {
+    "status": "eligible"
+   },
+   "measuredAs": "sib-r1-n4-red-v6-r1-s0064-s07",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.55532,
+    "se": 0,
+    "stage": "kodoku-v11-nash"
+   },
+   "catalog": true,
+   "drawWeight": 0.047619,
+   "priorWeight": 0,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-kodoku-red-v6-r1-s0064",
+   "species": [
+    "Gengar",
+    "Wobbuffet",
+    "Moltres",
+    "Cloyster",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    55,
+    50
    ]
   }
  ]
