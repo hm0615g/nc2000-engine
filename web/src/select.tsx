@@ -26,7 +26,7 @@
 // source to the solved Nash mixture, and the mixture details are viewable
 // inside Opponent & Setup.
 
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { MetaPool, PoolTeam, PriorReport } from "./types";
 import type { SelectedTeam } from "./app";
 import type { NashMix, NashTeam } from "./nash-mix";
@@ -55,15 +55,6 @@ import {
 import { speciesName, ui, type Locale } from "./i18n";
 import { Lvl } from "./battle-ui";
 
-function provenanceLine(t: PoolTeam): string {
-  const p = t.provenance;
-  const bits: string[] = [];
-  if (p.player) bits.push(p.player);
-  if (p.placement) bits.push(p.placement);
-  if (p.event) bits.push(p.event);
-  return bits.join(" · ") || p.source || "";
-}
-
 function TeamCard(props: {
   team: PoolTeam;
   index: number;
@@ -71,13 +62,6 @@ function TeamCard(props: {
   onTap: () => void;
 }) {
   const { team, index, selected } = props;
-  // Tier and provenance are optional metadata, and a loaded pool file
-  // usually carries neither (team-pool.ts defaults them to "" and {}). The
-  // tier pill is a bordered box, so rendering it empty draws a stray blank
-  // chip on every card; the provenance line just eats its margins. Both are
-  // dropped rather than rendered hollow — the catalog always fills
-  // them, so this only shows on a swapped pool.
-  const prov = provenanceLine(team);
   const badges: string[] = [];
   if (team.nash) badges.push(ui().nashBadge);
   if (team.evolved) badges.push(ui().evolvedBadge);
@@ -95,7 +79,6 @@ function TeamCard(props: {
         <span class="team-id">{team.id}</span>
         {tierText && <span class="team-tier">{tierText}</span>}
       </div>
-      {prov && <div class="team-prov">{prov}</div>}
       <div class="team-species">
         {team.species.map((sp, i) => (
           <span class="species-chip" key={i}>
@@ -434,6 +417,21 @@ function HumanPicker(props: {
   onCustomsChange: (list: CustomTeam[], picked?: CustomTeam) => void;
 }) {
   const { teams, choice, customs } = props;
+  const categories = useMemo(() => {
+    const hasSpecial = teams.some((t) => t.nash || t.evolved);
+    if (!hasSpecial) {
+      return [{ title: null, items: teams }];
+    }
+    const nash = teams.filter((t) => t.nash);
+    const evolved = teams.filter((t) => !t.nash && t.evolved);
+    const classic = teams.filter((t) => !t.nash && !t.evolved);
+    return [
+      { title: ui().poolNashCategory, items: nash },
+      { title: ui().poolEvolvedCategory, items: evolved },
+      { title: ui().poolClassicCategory, items: classic },
+    ].filter((cat) => cat.items.length > 0);
+  }, [teams]);
+
   return (
     <>
       <p class="modal-note">{ui().blindSheetNote}</p>
@@ -451,17 +449,25 @@ function HumanPicker(props: {
         onCustomsChange={props.onCustomsChange}
       />
       <h3>{ui().poolSection}</h3>
-      <div class="team-list">
-        {teams.map((t, i) => (
-          <TeamCard
-            key={t.id}
-            team={t}
-            index={i}
-            selected={choice.kind === "pool" && choice.id === t.id}
-            onTap={() => props.onPick({ kind: "pool", id: t.id })}
-          />
-        ))}
-      </div>
+      {categories.map((cat, catIdx) => (
+        <div class="pool-category" key={catIdx}>
+          {cat.title && <h4 class="pool-category-title">{cat.title}</h4>}
+          <div class="team-list">
+            {cat.items.map((t) => {
+              const originalIndex = teams.indexOf(t);
+              return (
+                <TeamCard
+                  key={t.id}
+                  team={t}
+                  index={originalIndex >= 0 ? originalIndex : 0}
+                  selected={choice.kind === "pool" && choice.id === t.id}
+                  onTap={() => props.onPick({ kind: "pool", id: t.id })}
+                />
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </>
   );
 }

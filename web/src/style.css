@@ -251,6 +251,18 @@ dialog.modal::backdrop {
   margin: 0 0 10px;
 }
 
+.pool-category {
+  margin-top: 16px;
+}
+.pool-category-title {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .team-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr));

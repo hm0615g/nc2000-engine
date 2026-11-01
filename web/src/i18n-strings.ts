@@ -24,6 +24,9 @@ export interface UIStrings {
   customBadge: string;
   nashBadge: string;
   evolvedBadge: string;
+  poolNashCategory: string;
+  poolEvolvedCategory: string;
+  poolClassicCategory: string;
   customSection: string;
   addCustom: string;
   importTitle: string;
@@ -340,6 +343,9 @@ const EN: UIStrings = {
   customBadge: "custom",
   nashBadge: "Nash",
   evolvedBadge: "Evolved",
+  poolNashCategory: "Nash equilibrium",
+  poolEvolvedCategory: "Evolved",
+  poolClassicCategory: "Classic & community",
   customSection: "Saved custom teams",
   addCustom: "+ Import a custom team",
   importTitle: "Import a custom team",
@@ -633,6 +639,9 @@ const JA: UIStrings = {
   customBadge: "カスタム",
   nashBadge: "Nash均衡",
   evolvedBadge: "進化論生まれ",
+  poolNashCategory: "Nash均衡",
+  poolEvolvedCategory: "進化論生まれ",
+  poolClassicCategory: "既存・コミュニティ",
   customSection: "保存済みカスタムチーム",
   addCustom: "+ カスタムチームを取り込む",
   importTitle: "カスタムチームの取り込み",
