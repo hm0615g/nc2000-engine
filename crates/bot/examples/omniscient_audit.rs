@@ -529,7 +529,9 @@ impl PrecomputedMatchupOracle {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AttackerTier {
     T0BaselineBlind400,
-    T1aBlind400AdaptiveMix,
+    T1aRootPruningOnly,
+    T1bAdaptiveMixOnly,
+    T1cBlind400AdaptiveMix,
     T1SuperCompute3200Mix,
     T2RulesBayesianOracleBr,
     T3ClairvoyantOpenSheet,
@@ -541,9 +543,11 @@ enum AttackerTier {
 impl AttackerTier {
     fn id(self) -> &'static str {
         match self {
-            Self::T0BaselineBlind400 => "T0_Baseline_Blind400",
-            Self::T1aBlind400AdaptiveMix => "T1a_Blind400_AdaptiveMix",
-            Self::T1SuperCompute3200Mix => "T1b_SuperCompute_3200_Mix",
+            Self::T0BaselineBlind400 => "T0_Baseline_Blind",
+            Self::T1aRootPruningOnly => "T1a_RootPruning_Only",
+            Self::T1bAdaptiveMixOnly => "T1b_AdaptiveMix_Only",
+            Self::T1cBlind400AdaptiveMix => "T1c_AdaptiveMix_And_Pruning",
+            Self::T1SuperCompute3200Mix => "T1d_SuperCompute_8x_Mix",
             Self::T2RulesBayesianOracleBr => "T2_Rules_Bayesian_Oracle_BR",
             Self::T3ClairvoyantOpenSheet => "T3_Clairvoyant_OpenSheet",
             Self::T4Clairvoyant3v3FullInfo => "T4_Clairvoyant_3v3_FullInfo",
@@ -554,13 +558,15 @@ impl AttackerTier {
 
     fn description(self) -> &'static str {
         match self {
-            Self::T0BaselineBlind400 => "Shipped Bot (BlindAgent 400 iters + Bayesian Shell-Nash Preview)",
-            Self::T1aBlind400AdaptiveMix => "Rules-Compliant 1x Compute + Root Mixing (BlindAgent 400 iters + Bayesian Root Mixing + Pruning)",
-            Self::T1SuperCompute3200Mix => "Rules-Compliant 8x Compute + Root Mixing (BlindAgent 3200 iters + Bayesian Root Mixing + Pruning)",
-            Self::T2RulesBayesianOracleBr => "Rules-Compliant Bayesian Best-Response (Public Info Only + K=6 Determinized Policy Oracle + 3200-iter BR)",
+            Self::T0BaselineBlind400 => "Shipped Bot (BlindAgent 1x iters, c=0.4 + Bayesian Shell-Nash Preview)",
+            Self::T1aRootPruningOnly => "Rules-Compliant 1x Compute + Root Pruning Only (prune_dominated before UCB)",
+            Self::T1bAdaptiveMixOnly => "Rules-Compliant 1x Compute + Bayesian Adaptive Mixture Only (2/5 probe reserve)",
+            Self::T1cBlind400AdaptiveMix => "Rules-Compliant 1x Compute + Bayesian Adaptive Mixture (1/5 reserve) + Root Pruning",
+            Self::T1SuperCompute3200Mix => "Rules-Compliant 8x Compute + Root Mixing + Pruning",
+            Self::T2RulesBayesianOracleBr => "Rules-Compliant Bayesian Best-Response (Public Info Only + Determinized Policy Oracle + UCB-BR)",
             Self::T3ClairvoyantOpenSheet => "Cheating Set-Sheet Reader (Knows Exact Variant/Moves/Items + Variant-BR Preview + OpenAgent)",
             Self::T4Clairvoyant3v3FullInfo => "Cheating 3v3-Pick & Lead Reader (Counter-Picks Blue's Exact Turn-0 3v3 Selection + Pinned 3-Mon Bench)",
-            Self::T5OmniscientGodBr => "Omniscient God BR (Full State + K=6 Live-Policy Oracle + Certified BoundSolver Endgame + UCB-BR Search)",
+            Self::T5OmniscientGodBr => "Omniscient God BR (Full State + Live-Policy Oracle + Certified BoundSolver Endgame + UCB-BR Search)",
             Self::T6PsychicMoveReaderGod => "Psychic Move-Reader God (Reads Blue's Exact Realized Action on Every Simultaneous Turn + BoundSolver)",
         }
     }
@@ -569,7 +575,9 @@ impl AttackerTier {
         matches!(
             self,
             Self::T0BaselineBlind400
-                | Self::T1aBlind400AdaptiveMix
+                | Self::T1aRootPruningOnly
+                | Self::T1bAdaptiveMixOnly
+                | Self::T1cBlind400AdaptiveMix
                 | Self::T1SuperCompute3200Mix
                 | Self::T2RulesBayesianOracleBr
         )
@@ -680,8 +688,10 @@ fn play_omniscient_duel_game(
     oracle: &PrecomputedMatchupOracle,
     tier: AttackerTier,
     base_iters: u32,
+    same_budget: bool,
+    k_oracle: usize,
     max_turns: u16,
-) -> (f64, u16, usize) {
+) -> (f64, u16, usize, nc2000_bot::agent::RootSearchStats) {
     let (side_blue, side_red) = if blue_is_p1 { (0, 1) } else { (1, 0) };
     let (t1, t2) = if blue_is_p1 {
         (blue_sets, red_sets)
@@ -711,7 +721,21 @@ fn play_omniscient_duel_game(
                 .with_own_preview_policy(oracle.red_nash_pol60.clone())
                 .with_opponent_pick_policy(oracle.red_opp_shell_pol60.clone(), 0.10),
         ),
-        AttackerTier::T1aBlind400AdaptiveMix => Some(
+        AttackerTier::T1aRootPruningOnly => Some(
+            BlindAgent::new(base_cfg.clone(), red_prior.clone(), None, red_seed)
+                .with_preview_iterations(base_iters.max(240))
+                .with_own_preview_policy(oracle.red_nash_pol60.clone())
+                .with_opponent_pick_policy(oracle.red_opp_shell_pol60.clone(), 0.10)
+                .with_root_pruning(),
+        ),
+        AttackerTier::T1bAdaptiveMixOnly => Some(
+            BlindAgent::new(base_cfg.clone(), red_prior.clone(), None, red_seed)
+                .with_preview_iterations(base_iters.max(240))
+                .with_own_preview_policy(oracle.red_nash_pol60.clone())
+                .with_opponent_pick_policy(oracle.red_opp_shell_pol60.clone(), 0.10)
+                .with_adaptive_mixture((base_iters * 2 / 5).max(40)),
+        ),
+        AttackerTier::T1cBlind400AdaptiveMix => Some(
             BlindAgent::new(base_cfg.clone(), red_prior.clone(), None, red_seed)
                 .with_preview_iterations(base_iters.max(240))
                 .with_own_preview_policy(oracle.red_nash_pol60.clone())
@@ -752,10 +776,18 @@ fn play_omniscient_duel_game(
                 Outcome::Tie => 0.5,
             };
             let blue_pts = if blue_is_p1 { p1_pts } else { 1.0 - p1_pts };
-            return (blue_pts, battle.turn, solver_interventions);
+            let r_stats = red_std_agent
+                .as_ref()
+                .and_then(|a| a.root_search_stats())
+                .unwrap_or_default();
+            return (blue_pts, battle.turn, solver_interventions, r_stats);
         }
         if battle.turn >= max_turns && !matches!(battle.request_state, RequestState::TeamPreview) {
-            return (0.5, battle.turn, solver_interventions);
+            let r_stats = red_std_agent
+                .as_ref()
+                .and_then(|a| a.root_search_stats())
+                .unwrap_or_default();
+            return (0.5, battle.turn, solver_interventions, r_stats);
         }
 
         let choices_blue = battle.legal_choices(dex, side_blue);
@@ -853,7 +885,7 @@ fn play_omniscient_duel_game(
                         AttackerTier::T3ClairvoyantOpenSheet
                         | AttackerTier::T4Clairvoyant3v3FullInfo => {
                             let mut cfg = base_cfg.clone();
-                            cfg.iterations = base_iters * 2;
+                            cfg.iterations = if same_budget { base_iters } else { base_iters * 2 };
                             let mut bs = BlindSearch::new(
                                 &battle,
                                 dex,
@@ -872,7 +904,6 @@ fn play_omniscient_duel_game(
                         }
                         AttackerTier::T2RulesBayesianOracleBr => {
                             // Rules-compliant Bayesian Best Response
-                            let k_oracle = 6usize;
                             let mut sampled_replies = Vec::with_capacity(k_oracle);
                             if !choices_blue.is_empty() {
                                 for _ in 0..k_oracle {
@@ -909,6 +940,12 @@ fn play_omniscient_duel_game(
                                 side_red,
                                 red_rng.next(),
                             );
+                            let (w_it, br_it) = if same_budget {
+                                let w = (base_iters / 4).max(1);
+                                (w, base_iters.saturating_sub(w).max(1))
+                            } else {
+                                (base_iters * 2, base_iters * 6)
+                            };
                             run_ucb_best_response_search(
                                 &mut bs,
                                 dex,
@@ -916,14 +953,13 @@ fn play_omniscient_duel_game(
                                 obs,
                                 side_red,
                                 &sampled_replies,
-                                base_iters * 2,
-                                base_iters * 6,
+                                w_it,
+                                br_it,
                             )
                         }
                         AttackerTier::T5OmniscientGodBr => {
                             // Full-Info + True Live-Policy Oracle (`blue_agent.belief()` & `blue_agent.observer()`)
                             // + Certified `1v1` Endgame `BoundSolver`
-                            let k_oracle = 6usize;
                             let mut sampled_replies = Vec::with_capacity(k_oracle);
                             let mut reply_dist = vec![0.0f64; choices_blue.len()];
                             if !choices_blue.is_empty() {
@@ -1017,6 +1053,12 @@ fn play_omniscient_duel_game(
                                     side_red,
                                     red_rng.next(),
                                 );
+                                let (w_it, br_it) = if same_budget {
+                                    let w = (base_iters / 4).max(1);
+                                    (w, base_iters.saturating_sub(w).max(1))
+                                } else {
+                                    (base_iters * 2, base_iters * 6)
+                                };
                                 run_ucb_best_response_search(
                                     &mut bs,
                                     dex,
@@ -1024,8 +1066,8 @@ fn play_omniscient_duel_game(
                                     obs,
                                     side_red,
                                     &sampled_replies,
-                                    base_iters * 2,
-                                    base_iters * 6,
+                                    w_it,
+                                    br_it,
                                 )
                             }
                         }
@@ -1091,6 +1133,12 @@ fn play_omniscient_duel_game(
                                     red_rng.next(),
                                 );
                                 let rep_slice = blue_choice.map(|c| vec![c]).unwrap_or_default();
+                                let (w_it, br_it) = if same_budget {
+                                    let w = (base_iters / 4).max(1);
+                                    (w, base_iters.saturating_sub(w).max(1))
+                                } else {
+                                    (base_iters * 2, base_iters * 6)
+                                };
                                 run_ucb_best_response_search(
                                     &mut bs,
                                     dex,
@@ -1098,8 +1146,8 @@ fn play_omniscient_duel_game(
                                     obs,
                                     side_red,
                                     &rep_slice,
-                                    base_iters * 2,
-                                    base_iters * 6,
+                                    w_it,
+                                    br_it,
                                 )
                             }
                         }
@@ -1171,6 +1219,10 @@ fn main() {
     let endgame_states_target: usize = find_flag("--endgame-states")
         .and_then(|v| v.parse().ok())
         .unwrap_or(24);
+    let same_budget: bool = args.iter().any(|a| a == "--same-budget");
+    let k_oracle: usize = find_flag("--k-oracle")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(if same_budget { 2 } else { 6 });
     let max_turns: u16 = 250;
     let seed: u64 = 20261102;
     let threads: usize = std::thread::available_parallelism()
@@ -1470,26 +1522,42 @@ fn main() {
         });
     }
 
-    let tiers = [
-        AttackerTier::T0BaselineBlind400,
-        AttackerTier::T1aBlind400AdaptiveMix,
-        AttackerTier::T1SuperCompute3200Mix,
-        AttackerTier::T2RulesBayesianOracleBr,
-        AttackerTier::T3ClairvoyantOpenSheet,
-        AttackerTier::T4Clairvoyant3v3FullInfo,
-        AttackerTier::T5OmniscientGodBr,
-        AttackerTier::T6PsychicMoveReaderGod,
-    ];
+    let tiers: Vec<AttackerTier> = if same_budget {
+        vec![
+            AttackerTier::T1aRootPruningOnly,
+            AttackerTier::T1bAdaptiveMixOnly,
+            AttackerTier::T1cBlind400AdaptiveMix,
+            AttackerTier::T2RulesBayesianOracleBr,
+            AttackerTier::T5OmniscientGodBr,
+            AttackerTier::T6PsychicMoveReaderGod,
+        ]
+    } else {
+        vec![
+            AttackerTier::T0BaselineBlind400,
+            AttackerTier::T1aRootPruningOnly,
+            AttackerTier::T1bAdaptiveMixOnly,
+            AttackerTier::T1cBlind400AdaptiveMix,
+            AttackerTier::T1SuperCompute3200Mix,
+            AttackerTier::T2RulesBayesianOracleBr,
+            AttackerTier::T3ClairvoyantOpenSheet,
+            AttackerTier::T4Clairvoyant3v3FullInfo,
+            AttackerTier::T5OmniscientGodBr,
+            AttackerTier::T6PsychicMoveReaderGod,
+        ]
+    };
 
     println!(
-        "\n[Step 2] Running Full-Game Head-to-Head Escalating Omniscient Duels ({} games/tier)...",
-        jobs.len()
+        "\n[Step 2] Running Full-Game Head-to-Head Escalating Omniscient Duels ({} games/tier, same_budget={}, k_oracle={})...",
+        jobs.len(),
+        same_budget,
+        k_oracle
     );
     let mut tier_reports: Vec<Value> = Vec::new();
     for &tier in &tiers {
         let t_tier = Instant::now();
         let cursor = AtomicUsize::new(0);
-        let mut game_outs: Vec<(usize, f64, u16, usize)> = Vec::with_capacity(jobs.len());
+        let mut game_outs: Vec<(usize, f64, u16, usize, nc2000_bot::agent::RootSearchStats)> =
+            Vec::with_capacity(jobs.len());
         std::thread::scope(|scope| {
             let mut handles = Vec::new();
             for _ in 0..threads.min(jobs.len()).max(1) {
@@ -1510,7 +1578,7 @@ fn main() {
                         }
                         let job = &jobs_ref[k];
                         let oracle = &oracles_ref[job.red_idx * n_pi + job.blue_idx];
-                        let (blue_pts, turns, solv_hits) = play_omniscient_duel_game(
+                        let (blue_pts, turns, solv_hits, r_stats) = play_omniscient_duel_game(
                             dex_ref,
                             &job.battle_seed,
                             &pi_sets_ref[job.blue_idx],
@@ -1523,9 +1591,11 @@ fn main() {
                             oracle,
                             tier,
                             base_iters,
+                            same_budget,
+                            k_oracle,
                             max_turns,
                         );
-                        loc.push((k, blue_pts, turns, solv_hits));
+                        loc.push((k, blue_pts, turns, solv_hits, r_stats));
                     }
                     loc
                 }));
@@ -1543,6 +1613,9 @@ fn main() {
         let red_gain_over_50 = red_wr - 0.50;
         let avg_turns: f64 = game_outs.iter().map(|x| x.2 as f64).sum::<f64>() / n_g;
         let total_solver_hits: usize = game_outs.iter().map(|x| x.3).sum();
+        let tot_searches: u64 = game_outs.iter().map(|x| x.4.searches).sum();
+        let tot_probed: u64 = game_outs.iter().map(|x| x.4.probed_searches).sum();
+        let tot_mixed: u64 = game_outs.iter().map(|x| x.4.mixed_searches).sum();
 
         let mut pair_red_scores = Vec::with_capacity(num_pairs);
         for p in 0..num_pairs {
@@ -1558,14 +1631,16 @@ fn main() {
         let se_red = (var_pair / (num_pairs as f64)).sqrt();
 
         println!(
-            "  {:28} | RulesOK={:5} | Red_WR={:6.2}% (±{:4.2}%) | Blue_WR={:6.2}% | Gain_vs_Bot={:+6.2}% | AvgTurns={:5.1} | SolverHits={:4} ({:.1}s)",
+            "  {:28} | RulesOK={:5} | Red_WR={:6.2}% (±{:4.2}%) | Gain={:+6.2}% | Turns={:4.1} | Mix={}/{}/{} | Solv={:2} ({:.1}s)",
             tier.id(),
             tier.rules_compliant(),
             red_wr * 100.0,
             se_red * 100.0,
-            blue_wr * 100.0,
             red_gain_over_50 * 100.0,
             avg_turns,
+            tot_mixed,
+            tot_probed,
+            tot_searches,
             total_solver_hits,
             t_tier.elapsed().as_secs_f64()
         );
@@ -1580,6 +1655,9 @@ fn main() {
             "se_red_wr": se_red,
             "gain_over_shipped_bot": red_gain_over_50,
             "avg_turns": avg_turns,
+            "root_searches": tot_searches,
+            "probed_searches": tot_probed,
+            "mixed_searches": tot_mixed,
             "solver_interventions": total_solver_hits,
             "elapsed_secs": t_tier.elapsed().as_secs_f64(),
         }));
