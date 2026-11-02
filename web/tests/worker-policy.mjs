@@ -1,6 +1,7 @@
 // Exercise the rebuilt WASM through the real worker, including a protocol
 // fork. This tests execution semantics, not playing strength.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
@@ -106,7 +107,8 @@ try {
     dex.free();
     return rows;
   }, { wasmUrl: "/@fs" + fileURLToPath(new URL("../../crates/wasm/pkg-web/nc2000_wasm.js", import.meta.url)),
-    compiledDisabled: process.env.NC2000_DISABLE_COMPILED_PREVIEW === "1" });
+    compiledDisabled: process.env.NC2000_DISABLE_COMPILED_PREVIEW === "1" ||
+      JSON.parse(readFileSync(new URL("../../data/compiled-preview-v1.json", import.meta.url), "utf8")).status === "retired-training-v3" });
   assert.equal(result.length, 6);
   console.log(JSON.stringify(result, null, 2));
 } finally {

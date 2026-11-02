@@ -92,6 +92,16 @@ function verifyCompiledPreview(): Plugin {
       const artifact = JSON.parse(fs.readFileSync(path.join(dataDir, "compiled-preview-v1.json"), "utf8"));
       const catalog = JSON.parse(fs.readFileSync(path.join(dataDir, "team-pool-v2/team-pool.json"), "utf8"));
       const profiles = JSON.parse(fs.readFileSync(path.join(dataDir, "search-profiles.json"), "utf8"));
+      if (artifact.status === "retired-training-v3") {
+        for (const [relative, expected] of [
+          ["data/belief-pool-v3/belief-pool.json", artifact.retirement?.priorSha256],
+          ["data/team-pool-v2/team-pool.json", artifact.retirement?.catalogSha256],
+        ]) {
+          const actual = createHash("sha256").update(fs.readFileSync(path.join(repoRoot, relative))).digest("hex");
+          if (actual !== expected) throw new Error(`Stale training migration: ${relative}. Run tools/build-training-products.js.`);
+        }
+        return; // Explicitly retired policies; runtime always uses live search.
+      }
       const publicRosters = new Set(catalog.teams.map((t: { sets: { species: string; level: number }[] }) => JSON.stringify(t.sets.map(p => [p.species, p.level]))));
       if (artifact.matchups !== catalog.teams.length * publicRosters.size)
         throw new Error("Compiled previews do not cover the complete catalog matchup grid.");

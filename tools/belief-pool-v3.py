@@ -123,6 +123,16 @@ def prior(ids, v1_label, inv, w):
             for i in ids]
 
 
+def normalize_training(teams):
+    import subprocess
+    result = subprocess.run(
+        ['node', os.path.join(REPO, 'tools/normalize-training.js')],
+        input=json.dumps({t['id']: t['sets'] for t in teams}),
+        text=True, capture_output=True, check=True)
+    normalized = json.loads(result.stdout)
+    return [dict(t, sets=normalized[t['id']]) for t in teams]
+
+
 def build():
     ids, v1_label, inv = members()
     out = {
@@ -133,8 +143,14 @@ def build():
                 + ', '.join(RESTORED) + ', whose open-era dominated verdict is not reconfirmed under blind c = 0.4). '
                 + f'weight = 1/(members of its variant cluster in this prior), x{MACHINE_FACTOR} for machine-generated teams; '
                 + 'weighted identification and weighted-mode fallback (crates/bot/src/belief.rs). '
-                + 'v1Label is the historical open-era label, not the selection label. See data/belief-pool-v3/README.md.',
-        'teams': prior(ids, v1_label, inv, weights(ids, inv)),
+                + 'Sets use training-v3 normalization. v1Label is the historical open-era label, not the selection label. See data/belief-pool-v3/README.md.',
+        'trainingNormalization': {
+            'policy': 'training-v3',
+            'previousFingerprint': 'fnv1a64:957b746a94b97708',
+            'previousSha256': '7a48ddb0a69f66805f1c8a12b12bb8c8900655817729c90b3ea8b11a9d50b9a0',
+            'constraints': 'Preserve loadout, public gender, shiny status and Hidden Power type. Maximize HP/non-Attack stats and Hidden Power power; maximize usable Attack, otherwise minimize it. Maximize Return/Frustration power.',
+        },
+        'teams': normalize_training(prior(ids, v1_label, inv, weights(ids, inv))),
     }
     os.makedirs(os.path.dirname(V3), exist_ok=True)
     with open(V3, 'w') as f:
@@ -148,7 +164,7 @@ def arms(out_dir):
     strong = [i for i in ids if v1_label[i] == 'strong']
 
     def dump(name, teams):
-        json.dump({'teams': teams}, open(os.path.join(out_dir, f'prior-{name}.json'), 'w'))
+        json.dump({'teams': normalize_training(teams)}, open(os.path.join(out_dir, f'prior-{name}.json'), 'w'))
 
     dump('strongonly', prior(strong, v1_label, inv, weights(strong, inv)))
     dump('mf1', prior(ids, v1_label, inv, weights(ids, inv, machine_factor=1.0)))

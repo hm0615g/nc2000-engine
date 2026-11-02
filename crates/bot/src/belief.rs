@@ -94,13 +94,13 @@ use crate::pick_prior::{PickDistribution, PickPrior, PreviewMon};
 use crate::prior::BeliefPrior;
 use crate::rng::SplitMix64;
 
-/// Canonicalized no-OHKO community rentals, baked into the bot so the live
+/// Training-normalized no-OHKO community rentals, baked into the bot so the live
 /// protocol/WASM paths get the prior without runtime filesystem plumbing.
 /// Parsing is paid once per process; source order is the deterministic
 /// pedigree order.
 const COMMUNITY_RENTALS_JSON: &str =
-    include_str!("../../../data/community-rentals-v0/teams.json");
-const SUPPLEMENTAL_PRIOR_JSON: &str = include_str!("belief_supplement_v1.json");
+    include_str!("../../../data/training-v3/rentals.json");
+const SUPPLEMENTAL_PRIOR_JSON: &str = include_str!("../../../data/training-v3/supplemental.json");
 const FORMAT_LEARNSETS_JSON: &str = include_str!("../../../data/learnsets-gen2.json");
 
 #[derive(serde::Deserialize)]

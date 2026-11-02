@@ -39,6 +39,7 @@ assert build == current_build, 'Stale preview computation; recompute with curren
 
 sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()
 inputs = ['data/search-profiles.json', 'tools/compile-preview-artifact.py', 'data/learnsets-gen2.json', 'data/community-rentals-v0/teams.json', 'Cargo.toml', 'Cargo.lock', 'crates/bot/Cargo.toml', 'crates/bot/build.rs', 'crates/engine/Cargo.toml', 'crates/engine/build.rs', 'crates/conformance/Cargo.toml', 'crates/bot/examples/compile_preview.rs', 'crates/bot/examples/anchor_gate.rs', 'crates/bot/examples/endgame_exactness_corpus.rs', 'data/gen2stadium2.json', 'data/belief-pool-v3/belief-pool.json', 'data/team-pool-v2/team-pool.json']
+inputs.extend(['data/training-v3/rentals.json', 'data/training-v3/supplemental.json'])
 for folder in ['crates/bot/src', 'crates/engine/src', 'crates/conformance/src']:
     inputs.extend(str(p) for p in sorted(Path(folder).rglob('*.rs')))
 artifact = dict(format='nc2000-compiled-preview-v1', build=build, c=0.4,

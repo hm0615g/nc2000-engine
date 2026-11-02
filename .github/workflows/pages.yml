@@ -21,6 +21,11 @@ on:
       - "tools/preview-cache.js"
       - "tools/render-preview-cache-doc.py"
       - "tools/render-native-handoff.py"
+      - "tools/normalize-training*"
+      - "tools/build-training-products.js"
+      - "tools/belief-pool-v3.py"
+      - "tools/build-team-products-v2.js"
+      - "tools/optimize-low-attack*"
       - "docs/PREVIEW-CACHE.md"
       - "docs/NATIVE-FORK-HANDOFF.md"
       - "README.md"
@@ -67,6 +72,14 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
+
+      - name: Verify normalized training and exact prior coverage
+        run: |
+          node tools/build-training-products.js
+          git diff --exit-code -- data/belief-pool-v3/belief-pool.json data/team-pool-v2/team-pool.json data/team-selection-v2/reference.json data/meta-nash-v3/pool-artifact.json data/kodoku-r3/conclusion-equilibrium-deme.json data/kodoku-r3/conclusion-equilibrium-r1.json data/training-v3/supplemental.json data/training-v3/rentals.json data/compiled-preview-v1.json data/team-pool-v2/preview-nash-matrix.json
+          cargo run --quiet -p nc2000-bot --example verify_training -- target/training-verification.json
+          cmp data/training-v3/verification.json target/training-verification.json
+          node --test tools/normalize-training.test.js tools/optimize-low-attack.test.js
 
       - name: Build web (project-pages base)
         working-directory: web

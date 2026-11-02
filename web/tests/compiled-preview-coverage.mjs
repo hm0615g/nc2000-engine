@@ -16,8 +16,10 @@ try {
   await init();const dex=new Dex();
   const catalog=await(await fetch('/data/team-pool-v2/team-pool.json')).json();
   const poolJson=await(await fetch('/data/belief-pool-v3/belief-pool.json')).text();
+  const artifact=await(await fetch('/data/compiled-preview-v1.json')).json();
+  const retired=artifact.status==='retired-training-v3';
   const {compiledPreviewMatches,compiledPreviewPick}=await import('/src/compiled-preview.ts');
-  if(!await compiledPreviewMatches(poolJson,embeddedDexJson()))throw Error('shipped prior rejected');
+  if(await compiledPreviewMatches(poolJson,embeddedDexJson())===retired)throw Error('preview retirement/compatibility mismatch');
   const keys=new Set();let matchups=0;
   try{
    for(const own of catalog.teams)for(const foe of catalog.teams){
@@ -29,12 +31,24 @@ try {
      const legal=JSON.parse(b.legalChoices(1));
      for(const seed of [0,1]){
       const choice=compiledPreviewPick(s.compiledPreviewBuild(),key,seed,.4,s.previewCacheInfo());
-      if(!choice||!legal.some(c=>c.input===choice))throw Error(`missing/illegal ${own.id} vs ${foe.id}`);
+      if(retired ? choice!==undefined : !choice||!legal.some(c=>c.input===choice))throw Error(`invalid preview use ${own.id} vs ${foe.id}`);
      }
      matchups++;
     }finally{s.free();b.free();}
    }
   }finally{dex.free();}
+  if(retired){
+   const {BotWorker}=await import('/src/bot.ts');const worker=[];
+   for(const [own,foe] of [[catalog.teams[0],catalog.teams[1]],[catalog.teams[3],catalog.teams[6]]]){
+    const bot=new BotWorker();try{
+     await bot.newBattle(JSON.stringify(foe.sets),JSON.stringify(own.sets),'1,2,3,4',{poolJson,side:1,seed:7});
+     const r=await bot.search(1,32,99,true);
+     if(r.src!=='search'||r.policy.iterations!==32||!r.best)throw Error('retired preview did not use live search');
+     worker.push({own:own.id,foe:foe.id,source:r.src,iterations:r.policy.iterations});
+    }finally{bot.terminate();}
+   }
+   return {matchups,uniqueKeys:keys.size,allLegal:true,retired,worker};
+  }
   // The approved optimization must retain the worker's zero-search table
   // path, including the six sets whose public gender changed.
   const {BotWorker}=await import('/src/bot.ts');

@@ -9,7 +9,9 @@ the membership and order of the frozen `data/belief-pool-v2` file plus the
 records in `RESTORED`, with sets from `data/team-inventory-v1`. Selection
 labels (`data/team-selection-v2`) are never read, so relabelling the own pool
 cannot move this file. Fingerprint (the one `team_eval` stamps into
-`cond.belief_*`): `fnv1a64:957b746a94b97708`.
+`cond.belief_*`): `fnv1a64:7d23346d1218e317` after the owner-requested
+[training-v3 repair](../training-v3/README.md). Historical measurements retain
+the previous `fnv1a64:957b746a94b97708` fingerprint.
 
 ## Support
 
@@ -17,11 +19,11 @@ Every eligible measured team across `data/team-inventory-v1` (103 records),
 `data/team-selection-v2/evolved-teams.json` (8 records), and
 `data/partybox-v0/teams.json` (101 unique measured records), plus 9
 `<id>-lowatk` Female-optimized twins for catalog teams whose `low-attack-v2`
-optimization changes a Pokémon's gender (`221` records total). All 33 current
-catalog public rosters are recognized without fallback. This does not establish
-coverage of their hidden training spreads: the [training audit](../prior-training-audit-v1/README.md)
-finds absent maximum-training variants and 28 catalog set occurrences whose
-actual Attack stat is absent from every preview-consistent candidate.
+optimization changes a Pokémon's gender (`221` records total). Sets now pass
+the shared training-v3 normalization. Independent native verification confirms
+exact full-set/stat support for all 33 current catalog parties. The
+[pre-repair audit](../prior-training-audit-v1/README.md) records the historical
+maximum-training and low-Attack support defects that motivated the repair.
 
 ## Allocation
 
@@ -35,3 +37,5 @@ spectator corpus (`data/team-inventory-v1/allocation.json`).
 ## Evidence (plan step 2, blind c = 0.4)
 
 Screen at blind:3000:0.4: `measurements/prior-c04-b3000.json`; product-budget confirmation: `measurements/prior-c04-b27000.json`. Summary in `docs/TEAM-POOL-REBUILD-PLAN.md` §Progress.
+These are historical measurements of the previous spreads, not remeasurements
+of training-v3.

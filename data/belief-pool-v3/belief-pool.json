@@ -2,7 +2,13 @@
  "format": "nc2000-belief-pool",
  "version": 3,
  "generator": "tools/belief-pool-v3.py build",
- "note": "Opponent prior: every eligible measured team of data/team-inventory-v1 (belief-pool-v2 plus mjj-2020-kb-2020, whose open-era dominated verdict is not reconfirmed under blind c = 0.4). weight = 1/(members of its variant cluster in this prior), x0.25 for machine-generated teams; weighted identification and weighted-mode fallback (crates/bot/src/belief.rs). v1Label is the historical open-era label, not the selection label. See data/belief-pool-v3/README.md.",
+ "note": "Opponent prior: every eligible measured team of data/team-inventory-v1 (belief-pool-v2 plus mjj-2020-kb-2020, whose open-era dominated verdict is not reconfirmed under blind c = 0.4). weight = 1/(members of its variant cluster in this prior), x0.25 for machine-generated teams; weighted identification and weighted-mode fallback (crates/bot/src/belief.rs). Sets use training-v3 normalization. v1Label is the historical open-era label, not the selection label. See data/belief-pool-v3/README.md.",
+ "trainingNormalization": {
+  "policy": "training-v3",
+  "previousFingerprint": "fnv1a64:957b746a94b97708",
+  "previousSha256": "7a48ddb0a69f66805f1c8a12b12bb8c8900655817729c90b3ea8b11a9d50b9a0",
+  "constraints": "Preserve loadout, public gender, shiny status and Hidden Power type. Maximize HP/non-Attack stats and Hidden Power power; maximize usable Attack, otherwise minimize it. Maximize Return/Frustration power."
+ },
  "teams": [
   {
    "id": "sample-12",
@@ -30,7 +36,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -62,7 +68,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -126,7 +132,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -396,7 +402,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -405,7 +411,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -442,7 +448,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -506,7 +512,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -602,7 +608,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -611,7 +617,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -688,12 +694,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 30,
+      "hp": 31,
       "atk": 26,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -712,7 +718,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -720,12 +726,12 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 30,
-      "atk": 30,
+      "hp": 31,
+      "atk": 22,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -854,7 +860,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -918,7 +924,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -1014,7 +1020,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -1023,7 +1029,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -1060,7 +1066,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -1092,7 +1098,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -1156,7 +1162,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -1265,7 +1271,7 @@
      ],
      "nature": "Serious",
      "evs": {
-      "hp": 192,
+      "hp": 255,
       "atk": 255,
       "def": 255,
       "spa": 255,
@@ -1331,18 +1337,18 @@
      "evs": {
       "hp": 255,
       "atk": 255,
-      "def": 128,
-      "spa": 192,
-      "spd": 192,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
       "spe": 255
      },
      "gender": "M",
      "ivs": {
-      "hp": 28,
-      "atk": 18,
+      "hp": 31,
+      "atk": 31,
       "def": 31,
-      "spa": 24,
-      "spd": 24,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 51,
@@ -1402,9 +1408,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 22,
+      "hp": 31,
       "atk": 31,
-      "def": 8,
+      "def": 31,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -1426,7 +1432,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -1435,7 +1441,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -1472,8 +1478,8 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
-      "def": 0,
+      "atk": 0,
+      "def": 255,
       "spa": 255,
       "spd": 255,
       "spe": 255
@@ -1536,7 +1542,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -1545,7 +1551,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -1632,7 +1638,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -1641,7 +1647,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -2044,7 +2050,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2053,7 +2059,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -2090,7 +2096,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2122,7 +2128,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2154,7 +2160,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2218,7 +2224,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2250,7 +2256,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2296,7 +2302,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2305,7 +2311,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -2392,7 +2398,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2401,7 +2407,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -2534,7 +2540,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 0,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2543,7 +2549,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 2,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -2708,7 +2714,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2717,7 +2723,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -2772,7 +2778,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2781,7 +2787,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -2868,7 +2874,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2877,7 +2883,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -2914,7 +2920,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2946,7 +2952,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -2978,7 +2984,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -3042,7 +3048,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -3074,7 +3080,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -3152,7 +3158,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -3161,7 +3167,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -3227,9 +3233,9 @@
       "hp": 14,
       "atk": 24,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -3280,7 +3286,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -3289,7 +3295,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -3534,8 +3540,8 @@
       "hp": 255,
       "atk": 0,
       "def": 255,
-      "spa": 236,
-      "spd": 236,
+      "spa": 255,
+      "spd": 255,
       "spe": 255
      },
      "gender": "F",
@@ -3770,7 +3776,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 128,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -3778,11 +3784,11 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 28,
+      "hp": 31,
       "atk": 26,
       "def": 26,
-      "spa": 16,
-      "spd": 16,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 50,
@@ -3801,8 +3807,8 @@
      ],
      "nature": "Serious",
      "evs": {
-      "hp": 64,
-      "atk": 255,
+      "hp": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -3874,12 +3880,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 26,
+      "hp": 31,
       "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
-      "spe": 8
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -3895,7 +3901,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -3904,7 +3910,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -3941,7 +3947,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -3950,7 +3956,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -4069,7 +4075,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -4078,7 +4084,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -4101,7 +4107,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -4110,7 +4116,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -4156,7 +4162,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 2,
+      "atk": 14,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -4211,7 +4217,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 0,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -4251,12 +4257,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 26,
+      "hp": 31,
       "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
-      "spe": 16
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -4275,7 +4281,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -4307,7 +4313,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -4316,7 +4322,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -4385,7 +4391,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -4394,7 +4400,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -4481,7 +4487,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -4490,7 +4496,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -4513,7 +4519,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -4522,7 +4528,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -4591,7 +4597,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 0,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -4600,7 +4606,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 2,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -4797,7 +4803,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -4806,7 +4812,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -4893,7 +4899,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -4902,7 +4908,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -5035,7 +5041,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -5177,7 +5183,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -5186,7 +5192,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -5795,7 +5801,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -5804,7 +5810,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -5891,7 +5897,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -5899,12 +5905,12 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 30,
-      "atk": 30,
+      "hp": 31,
+      "atk": 22,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -6413,7 +6419,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -6421,12 +6427,12 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 30,
-      "atk": 30,
+      "hp": 31,
+      "atk": 22,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -6549,12 +6555,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 30,
+      "hp": 31,
       "atk": 26,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -6581,12 +6587,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 30,
+      "hp": 31,
       "atk": 26,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -6660,7 +6666,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 10,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -6687,7 +6693,7 @@
       "def": 255,
       "spa": 255,
       "spd": 255,
-      "spe": 192
+      "spe": 255
      },
      "gender": "M",
      "ivs": {
@@ -6778,8 +6784,8 @@
      ],
      "nature": "Serious",
      "evs": {
-      "hp": 192,
-      "atk": 255,
+      "hp": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -6788,7 +6794,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -6889,7 +6895,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -6898,7 +6904,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -7063,7 +7069,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -7095,7 +7101,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -7127,7 +7133,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -7237,7 +7243,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -7246,7 +7252,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -7269,7 +7275,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -7278,7 +7284,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -7397,7 +7403,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -7406,7 +7412,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -7571,7 +7577,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -7580,7 +7586,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -7681,7 +7687,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -7690,7 +7696,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -7713,7 +7719,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -7722,7 +7728,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -7745,7 +7751,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -7754,7 +7760,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -7777,7 +7783,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -7785,12 +7791,12 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 30,
-      "atk": 30,
+      "hp": 31,
+      "atk": 22,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -7809,7 +7815,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -7818,7 +7824,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -8061,7 +8067,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -8070,11 +8076,11 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
-      "spe": 18
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -8124,7 +8130,7 @@
      ],
      "nature": "Serious",
      "evs": {
-      "hp": 64,
+      "hp": 255,
       "atk": 255,
       "def": 255,
       "spa": 255,
@@ -8157,7 +8163,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -8166,7 +8172,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -8363,7 +8369,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -8372,7 +8378,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -8633,7 +8639,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -8642,7 +8648,7 @@
      "gender": "N",
      "ivs": {
       "hp": 6,
-      "atk": 28,
+      "atk": 20,
       "def": 28,
       "spa": 31,
       "spd": 31,
@@ -8807,7 +8813,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -8839,7 +8845,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -8848,7 +8854,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -8885,7 +8891,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -8894,7 +8900,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -8981,7 +8987,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -8990,7 +8996,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -9013,7 +9019,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -9022,7 +9028,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -9219,7 +9225,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -9228,7 +9234,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -9503,7 +9509,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -9511,12 +9517,12 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 30,
-      "atk": 30,
+      "hp": 31,
+      "atk": 22,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -9642,9 +9648,9 @@
       "hp": 6,
       "atk": 28,
       "def": 28,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -9674,9 +9680,9 @@
       "hp": 22,
       "atk": 26,
       "def": 28,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -9773,7 +9779,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -9782,7 +9788,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -9805,7 +9811,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -9814,7 +9820,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -9869,7 +9875,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -9878,7 +9884,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 10,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -9915,7 +9921,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -9924,11 +9930,11 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
-      "spe": 18
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -9978,7 +9984,7 @@
      ],
      "nature": "Serious",
      "evs": {
-      "hp": 64,
+      "hp": 255,
       "atk": 255,
       "def": 255,
       "spa": 255,
@@ -10011,7 +10017,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -10020,7 +10026,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -10162,10 +10168,10 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 10,
+      "atk": 31,
       "def": 31,
-      "spa": 26,
-      "spd": 26,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 55,
@@ -10253,7 +10259,7 @@
       "def": 255,
       "spa": 255,
       "spd": 255,
-      "spe": 192
+      "spe": 255
      },
      "gender": "M",
      "ivs": {
@@ -10281,7 +10287,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -10290,7 +10296,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -10327,7 +10333,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -10391,7 +10397,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -10423,7 +10429,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -10455,7 +10461,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -10629,7 +10635,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -10638,7 +10644,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -10739,7 +10745,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -10748,7 +10754,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -10771,7 +10777,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -10780,7 +10786,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -10803,7 +10809,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -10812,7 +10818,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -10977,7 +10983,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 0,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -10986,7 +10992,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 2,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -11247,7 +11253,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 0,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -11256,7 +11262,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 2,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -11357,7 +11363,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 0,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -11417,9 +11423,9 @@
      ],
      "nature": "Serious",
      "evs": {
-      "hp": 128,
-      "atk": 255,
-      "def": 192,
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
       "spa": 255,
       "spd": 255,
       "spe": 255
@@ -11427,7 +11433,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -11460,7 +11466,7 @@
      "ivs": {
       "hp": 31,
       "atk": 31,
-      "def": 2,
+      "def": 31,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -11560,7 +11566,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -11569,7 +11575,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 10,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -11592,7 +11598,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -11601,7 +11607,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -11688,7 +11694,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -11697,7 +11703,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -11720,7 +11726,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -11729,7 +11735,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -11766,7 +11772,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -11830,7 +11836,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -11862,7 +11868,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -11894,7 +11900,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -11972,7 +11978,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -11981,7 +11987,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -12036,7 +12042,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -12045,7 +12051,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 10,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -12100,7 +12106,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -12109,7 +12115,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -12718,7 +12724,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -12727,7 +12733,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -13130,7 +13136,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -13162,7 +13168,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -13171,7 +13177,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -13208,7 +13214,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -13217,7 +13223,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -13304,7 +13310,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -13313,7 +13319,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -13336,7 +13342,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -13345,7 +13351,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -13455,10 +13461,10 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 10,
+      "atk": 31,
       "def": 31,
-      "spa": 26,
-      "spd": 26,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 55,
@@ -13546,7 +13552,7 @@
       "def": 255,
       "spa": 255,
       "spd": 255,
-      "spe": 192
+      "spe": 255
      },
      "gender": "M",
      "ivs": {
@@ -13574,7 +13580,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -13583,7 +13589,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -13629,10 +13635,10 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 22,
-      "def": 26,
-      "spa": 18,
-      "spd": 18,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 55,
@@ -13652,7 +13658,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -13661,7 +13667,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -13834,9 +13840,9 @@
       "hp": 14,
       "atk": 24,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 53,
      "happiness": 255
@@ -13919,7 +13925,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -13928,7 +13934,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -13951,7 +13957,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -13960,7 +13966,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -13983,7 +13989,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -13992,7 +13998,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -14029,7 +14035,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -14038,7 +14044,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -14061,7 +14067,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -14070,7 +14076,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -14189,7 +14195,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -14198,7 +14204,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -14235,7 +14241,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -14331,7 +14337,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -14363,7 +14369,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -14441,7 +14447,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -14885,7 +14891,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -14894,7 +14900,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -14949,7 +14955,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -14958,7 +14964,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -15067,11 +15073,11 @@
      },
      "gender": "F",
      "ivs": {
-      "hp": 28,
-      "atk": 10,
+      "hp": 31,
+      "atk": 14,
       "def": 31,
-      "spa": 4,
-      "spd": 4,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 51,
@@ -15123,7 +15129,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -15131,12 +15137,12 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 26,
-      "atk": 31,
+      "hp": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
-      "spe": 8
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -15157,9 +15163,9 @@
       "hp": 255,
       "atk": 255,
       "def": 255,
-      "spa": 192,
-      "spd": 192,
-      "spe": 0
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
      },
      "gender": "F",
      "ivs": {
@@ -15198,8 +15204,8 @@
       "hp": 31,
       "atk": 31,
       "def": 31,
-      "spa": 22,
-      "spd": 22,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 51,
@@ -15297,7 +15303,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -15306,7 +15312,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -15361,7 +15367,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -15370,7 +15376,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -15947,7 +15953,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -15956,7 +15962,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -16011,7 +16017,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -16020,7 +16026,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -16043,7 +16049,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -16052,7 +16058,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -16089,7 +16095,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -16370,9 +16376,9 @@
       "hp": 14,
       "atk": 24,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 53,
      "happiness": 255
@@ -16391,7 +16397,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -16400,7 +16406,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -16455,7 +16461,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -16464,7 +16470,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -16533,7 +16539,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -16565,7 +16571,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -16597,7 +16603,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -16661,7 +16667,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -16709,18 +16715,18 @@
       "hp": 255,
       "atk": 255,
       "def": 255,
-      "spa": 64,
-      "spd": 64,
+      "spa": 255,
+      "spd": 255,
       "spe": 255
      },
      "gender": "F",
      "ivs": {
-      "hp": 14,
-      "atk": 0,
+      "hp": 31,
+      "atk": 14,
       "def": 31,
       "spa": 31,
       "spd": 31,
-      "spe": 18
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -16771,7 +16777,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -16803,20 +16809,20 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 192,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
-      "spe": 192
+      "spe": 255
      },
      "gender": "M",
      "ivs": {
-      "hp": 30,
+      "hp": 31,
       "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
-      "spe": 2
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -16834,7 +16840,7 @@
      ],
      "nature": "Serious",
      "evs": {
-      "hp": 64,
+      "hp": 255,
       "atk": 255,
       "def": 255,
       "spa": 255,
@@ -16871,7 +16877,7 @@
       "def": 255,
       "spa": 255,
       "spd": 255,
-      "spe": 128
+      "spe": 255
      },
      "gender": "N",
      "ivs": {
@@ -16945,7 +16951,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -16954,7 +16960,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -17041,7 +17047,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -17050,7 +17056,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -17073,7 +17079,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -17082,7 +17088,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -17247,7 +17253,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -17256,7 +17262,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -17357,7 +17363,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 0,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -17366,7 +17372,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 2,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -17737,7 +17743,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -17746,7 +17752,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -17769,7 +17775,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -17778,7 +17784,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -17833,7 +17839,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -17842,7 +17848,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -17865,7 +17871,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -17873,12 +17879,12 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 30,
-      "atk": 30,
+      "hp": 31,
+      "atk": 22,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 52,
      "happiness": 255
@@ -17908,9 +17914,9 @@
       "hp": 6,
       "atk": 28,
       "def": 28,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 51,
      "happiness": 255
@@ -17943,7 +17949,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -18007,7 +18013,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -18112,7 +18118,7 @@
      "gender": "M",
      "ivs": {
       "hp": 6,
-      "atk": 20,
+      "atk": 28,
       "def": 24,
       "spa": 31,
       "spd": 31,
@@ -18181,7 +18187,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -18213,7 +18219,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -18309,7 +18315,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -18355,7 +18361,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -18364,7 +18370,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -18419,7 +18425,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -18428,7 +18434,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -18451,7 +18457,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -18459,11 +18465,11 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 28,
-      "atk": 31,
+      "hp": 31,
+      "atk": 18,
       "def": 31,
-      "spa": 0,
-      "spd": 0,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 51,
@@ -18516,7 +18522,7 @@
      "evs": {
       "hp": 255,
       "atk": 255,
-      "def": 64,
+      "def": 255,
       "spa": 255,
       "spd": 255,
       "spe": 255
@@ -18592,7 +18598,7 @@
      ],
      "nature": "Serious",
      "evs": {
-      "hp": 236,
+      "hp": 255,
       "atk": 0,
       "def": 255,
       "spa": 255,
@@ -18799,7 +18805,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -18808,7 +18814,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -18927,16 +18933,16 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
-      "spa": 128,
-      "spd": 128,
+      "spa": 255,
+      "spd": 255,
       "spe": 255
      },
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -19037,7 +19043,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -19110,7 +19116,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 2,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -19133,7 +19139,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -19187,11 +19193,11 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 28,
+      "hp": 31,
       "atk": 31,
-      "def": 18,
-      "spa": 4,
-      "spd": 4,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 53,
@@ -19315,12 +19321,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 26,
+      "hp": 31,
       "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
-      "spe": 0
+      "spe": 31
      },
      "level": 53,
      "happiness": 255
@@ -19385,7 +19391,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -19393,9 +19399,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 22,
-      "atk": 31,
-      "def": 4,
+      "hp": 31,
+      "atk": 10,
+      "def": 31,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -19481,7 +19487,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -19490,10 +19496,10 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
-      "spa": 2,
-      "spd": 2,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 50,
@@ -19513,7 +19519,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -19554,7 +19560,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 6,
+      "atk": 14,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -19599,11 +19605,11 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 28,
+      "hp": 31,
       "atk": 31,
-      "def": 18,
-      "spa": 4,
-      "spd": 4,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 53,
@@ -19727,12 +19733,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 26,
+      "hp": 31,
       "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
-      "spe": 0
+      "spe": 31
      },
      "level": 53,
      "happiness": 255
@@ -19871,7 +19877,7 @@
      "ivs": {
       "hp": 31,
       "atk": 31,
-      "def": 18,
+      "def": 31,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -19967,7 +19973,7 @@
      "ivs": {
       "hp": 31,
       "atk": 31,
-      "def": 10,
+      "def": 31,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -20043,12 +20049,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 30,
+      "hp": 31,
       "atk": 26,
-      "def": 30,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -20078,8 +20084,8 @@
       "hp": 31,
       "atk": 31,
       "def": 31,
-      "spa": 6,
-      "spd": 6,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 50,
@@ -20163,7 +20169,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -20249,12 +20255,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 30,
+      "hp": 31,
       "atk": 26,
-      "def": 30,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -20284,8 +20290,8 @@
       "hp": 31,
       "atk": 31,
       "def": 31,
-      "spa": 6,
-      "spd": 6,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 50,
@@ -20378,7 +20384,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 2,
+      "atk": 14,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -20511,7 +20517,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -20520,7 +20526,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -20575,7 +20581,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -20584,7 +20590,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -20618,7 +20624,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -20627,7 +20633,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -20654,7 +20660,7 @@
       "def": 255,
       "spa": 255,
       "spd": 255,
-      "spe": 0
+      "spe": 255
      },
      "gender": "M",
      "ivs": {
@@ -20716,8 +20722,8 @@
       "hp": 255,
       "atk": 255,
       "def": 255,
-      "spa": 192,
-      "spd": 192,
+      "spa": 255,
+      "spd": 255,
       "spe": 255
      },
      "gender": "M",
@@ -20725,8 +20731,8 @@
       "hp": 31,
       "atk": 31,
       "def": 31,
-      "spa": 10,
-      "spd": 10,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 50,
@@ -20746,7 +20752,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 0,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -20778,7 +20784,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 128,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -20821,7 +20827,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -20830,7 +20836,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -20857,7 +20863,7 @@
       "def": 255,
       "spa": 255,
       "spd": 255,
-      "spe": 0
+      "spe": 255
      },
      "gender": "M",
      "ivs": {
@@ -20919,8 +20925,8 @@
       "hp": 255,
       "atk": 255,
       "def": 255,
-      "spa": 192,
-      "spd": 192,
+      "spa": 255,
+      "spd": 255,
       "spe": 255
      },
      "gender": "M",
@@ -20928,8 +20934,8 @@
       "hp": 31,
       "atk": 31,
       "def": 31,
-      "spa": 10,
-      "spd": 10,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 50,
@@ -20949,7 +20955,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 0,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -21123,7 +21129,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 0,
+      "atk": 255,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -21132,7 +21138,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 2,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -21265,7 +21271,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -21274,7 +21280,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -21369,12 +21375,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 30,
+      "hp": 31,
       "atk": 26,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -21393,7 +21399,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -21402,7 +21408,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -21471,7 +21477,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -21480,7 +21486,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -21599,7 +21605,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -21608,7 +21614,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -21781,12 +21787,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 30,
+      "hp": 31,
       "atk": 26,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -21805,7 +21811,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -21814,7 +21820,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -21859,12 +21865,12 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 30,
-      "atk": 30,
+      "hp": 31,
+      "atk": 31,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -21990,9 +21996,9 @@
       "hp": 6,
       "atk": 24,
       "def": 24,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -22022,9 +22028,9 @@
       "hp": 22,
       "atk": 26,
       "def": 24,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -22164,9 +22170,9 @@
       "hp": 6,
       "atk": 24,
       "def": 24,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -22217,7 +22223,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -22226,7 +22232,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -22391,7 +22397,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -22399,12 +22405,12 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 30,
-      "atk": 30,
+      "hp": 31,
+      "atk": 22,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -22423,7 +22429,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -22432,7 +22438,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -22509,12 +22515,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 30,
+      "hp": 31,
       "atk": 26,
-      "def": 30,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -22629,7 +22635,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -22638,7 +22644,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -22675,7 +22681,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -22684,7 +22690,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -22707,7 +22713,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -22716,7 +22722,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -22739,7 +22745,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -22748,7 +22754,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -22835,7 +22841,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -22843,12 +22849,12 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 30,
-      "atk": 30,
+      "hp": 31,
+      "atk": 22,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -22889,9 +22895,9 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 7,
-      "atk": 25,
-      "def": 25,
+      "hp": 6,
+      "atk": 24,
+      "def": 24,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -22921,9 +22927,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 25,
-      "def": 25,
+      "hp": 6,
+      "atk": 24,
+      "def": 24,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -22953,9 +22959,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 25,
-      "def": 25,
+      "hp": 6,
+      "atk": 24,
+      "def": 24,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -23119,7 +23125,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -23128,8 +23134,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -23151,7 +23157,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -23160,7 +23166,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -23183,7 +23189,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -23192,7 +23198,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -23357,7 +23363,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -23366,7 +23372,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -23531,7 +23537,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -23540,7 +23546,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -23563,7 +23569,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -23572,7 +23578,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -23627,7 +23633,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -23636,7 +23642,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -23705,7 +23711,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -23714,8 +23720,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -23778,8 +23784,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -23984,8 +23990,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -24039,7 +24045,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -24048,8 +24054,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -24253,9 +24259,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -24277,7 +24283,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -24286,8 +24292,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -24323,7 +24329,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -24332,7 +24338,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -24364,8 +24370,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -24427,9 +24433,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -24593,7 +24599,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -24602,8 +24608,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -24625,7 +24631,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -24634,7 +24640,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -24689,7 +24695,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -24698,7 +24704,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -24744,8 +24750,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -24807,9 +24813,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 29,
-      "def": 29,
+      "hp": 6,
+      "atk": 28,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -24863,7 +24869,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -24872,7 +24878,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -25037,7 +25043,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -25046,7 +25052,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -25069,7 +25075,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -25078,7 +25084,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -25101,7 +25107,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -25110,8 +25116,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -25147,7 +25153,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -25156,7 +25162,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -25220,8 +25226,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -25275,7 +25281,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -25284,7 +25290,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -25315,9 +25321,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 23,
-      "atk": 27,
-      "def": 25,
+      "hp": 22,
+      "atk": 26,
+      "def": 24,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -25362,7 +25368,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -25449,7 +25455,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -25458,7 +25464,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -25568,7 +25574,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 7,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -25719,7 +25725,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -25727,9 +25733,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 21,
-      "def": 29,
+      "hp": 6,
+      "atk": 20,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -25774,7 +25780,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -25806,8 +25812,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -25829,7 +25835,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -25838,7 +25844,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -25971,7 +25977,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -25980,7 +25986,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -26011,9 +26017,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -26035,7 +26041,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -26044,7 +26050,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -26076,7 +26082,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -26131,7 +26137,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -26140,7 +26146,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 10,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -26177,7 +26183,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -26186,8 +26192,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -26337,7 +26343,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -26346,7 +26352,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -26383,7 +26389,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -26392,8 +26398,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -26447,7 +26453,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -26455,9 +26461,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 21,
-      "def": 29,
+      "hp": 6,
+      "atk": 20,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -26598,7 +26604,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 7,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -26662,8 +26668,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -26685,7 +26691,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -26694,7 +26700,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -26749,7 +26755,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -26757,9 +26763,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 21,
-      "def": 29,
+      "hp": 6,
+      "atk": 20,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -26803,9 +26809,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 25,
-      "def": 25,
+      "hp": 6,
+      "atk": 24,
+      "def": 24,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -26923,7 +26929,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -26932,10 +26938,10 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
-      "spa": 3,
-      "spd": 3,
+      "spa": 31,
+      "spd": 31,
       "spe": 31
      },
      "level": 55,
@@ -27137,9 +27143,9 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 15,
-      "atk": 29,
-      "def": 27,
+      "hp": 14,
+      "atk": 28,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -27177,7 +27183,7 @@
       "spe": 31
      },
      "level": 55,
-     "happiness": 255
+     "happiness": 0
     }
    ]
   },
@@ -27239,7 +27245,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -27248,7 +27254,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 7,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -27303,7 +27309,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -27312,7 +27318,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -27335,7 +27341,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -27344,7 +27350,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -27367,7 +27373,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -27376,7 +27382,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -27453,9 +27459,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -27541,7 +27547,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -27550,8 +27556,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -27582,8 +27588,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -27683,7 +27689,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -27692,8 +27698,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -27715,7 +27721,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -27724,7 +27730,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -27779,7 +27785,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -27788,7 +27794,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -27834,8 +27840,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -27953,7 +27959,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -27962,7 +27968,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -27985,7 +27991,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -27994,8 +28000,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -28031,7 +28037,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -28040,8 +28046,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -28095,7 +28101,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -28104,7 +28110,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -28301,7 +28307,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -28310,7 +28316,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -28333,7 +28339,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -28342,7 +28348,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -28374,8 +28380,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -28413,7 +28419,7 @@
       "spe": 31
      },
      "level": 55,
-     "happiness": 255
+     "happiness": 0
     }
    ]
   },
@@ -28451,9 +28457,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -28475,7 +28481,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -28484,7 +28490,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -28507,7 +28513,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -28516,7 +28522,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 11,
+      "atk": 10,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -28571,7 +28577,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -28580,7 +28586,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -28603,7 +28609,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -28612,7 +28618,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -28713,7 +28719,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -28722,7 +28728,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -28809,7 +28815,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -28818,7 +28824,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -28887,7 +28893,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -28896,7 +28902,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -28960,8 +28966,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -29015,7 +29021,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -29024,8 +29030,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -29093,7 +29099,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -29102,8 +29108,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -29198,7 +29204,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 15,
+      "atk": 14,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -29308,7 +29314,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -29331,7 +29337,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -29340,7 +29346,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -29427,7 +29433,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -29436,7 +29442,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -29601,7 +29607,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -29610,7 +29616,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -29633,7 +29639,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -29642,7 +29648,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -29679,7 +29685,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -29688,8 +29694,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -29719,9 +29725,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 23,
-      "atk": 27,
-      "def": 29,
+      "hp": 22,
+      "atk": 26,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -29784,8 +29790,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -29839,7 +29845,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -29848,7 +29854,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -29949,7 +29955,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -29958,7 +29964,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -30045,7 +30051,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -30054,7 +30060,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 7,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -30091,7 +30097,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -30100,8 +30106,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -30297,7 +30303,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -30306,7 +30312,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -30338,8 +30344,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -30393,7 +30399,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -30402,7 +30408,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -30457,7 +30463,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -30466,7 +30472,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -30535,7 +30541,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -30544,8 +30550,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -30567,7 +30573,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -30576,7 +30582,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -30663,7 +30669,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -30672,7 +30678,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -30709,7 +30715,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -30718,7 +30724,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -30923,9 +30929,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 23,
-      "atk": 27,
-      "def": 29,
+      "hp": 22,
+      "atk": 26,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -30947,7 +30953,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -30956,7 +30962,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -30987,9 +30993,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -31019,8 +31025,8 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 29,
+      "hp": 14,
+      "atk": 28,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -31075,7 +31081,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -31084,7 +31090,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -31121,7 +31127,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -31130,8 +31136,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -31290,8 +31296,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -31391,7 +31397,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -31400,8 +31406,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -31423,7 +31429,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -31432,7 +31438,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -31487,7 +31493,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -31496,7 +31502,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -31629,7 +31635,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -31638,7 +31644,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -31661,7 +31667,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -31670,7 +31676,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -31747,9 +31753,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 23,
-      "atk": 27,
-      "def": 29,
+      "hp": 22,
+      "atk": 26,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -31811,9 +31817,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 29,
-      "def": 29,
+      "hp": 6,
+      "atk": 28,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -31835,7 +31841,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -31844,7 +31850,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -31867,7 +31873,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -31876,7 +31882,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -31977,7 +31983,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -31986,8 +31992,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -32105,7 +32111,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -32114,7 +32120,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -32279,7 +32285,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -32288,7 +32294,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -32397,9 +32403,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -32421,7 +32427,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -32430,7 +32436,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -32453,7 +32459,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -32462,8 +32468,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -32517,7 +32523,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -32526,7 +32532,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -32595,7 +32601,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -32604,8 +32610,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -32691,7 +32697,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -32700,7 +32706,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -32723,7 +32729,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -32732,7 +32738,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -32801,7 +32807,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -32810,8 +32816,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -32833,7 +32839,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -32842,7 +32848,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -32897,7 +32903,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -32906,7 +32912,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -32937,9 +32943,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 23,
-      "atk": 27,
-      "def": 29,
+      "hp": 22,
+      "atk": 26,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -33007,7 +33013,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -33016,7 +33022,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -33071,7 +33077,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -33080,7 +33086,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -33135,7 +33141,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -33144,7 +33150,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 7,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -33181,7 +33187,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -33189,9 +33195,9 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 7,
-      "atk": 21,
-      "def": 29,
+      "hp": 6,
+      "atk": 20,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -33285,9 +33291,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 29,
-      "def": 29,
+      "hp": 6,
+      "atk": 28,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -33483,7 +33489,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -33492,7 +33498,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -33524,8 +33530,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -33547,7 +33553,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -33556,7 +33562,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -33593,7 +33599,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -33602,7 +33608,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -33657,7 +33663,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -33666,7 +33672,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -33761,9 +33767,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 23,
-      "atk": 27,
-      "def": 25,
+      "hp": 22,
+      "atk": 26,
+      "def": 24,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -33895,7 +33901,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -33904,7 +33910,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -34037,7 +34043,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -34046,7 +34052,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -34109,9 +34115,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -34133,7 +34139,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -34142,7 +34148,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -34174,7 +34180,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -34371,7 +34377,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -34380,7 +34386,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -34417,7 +34423,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -34426,7 +34432,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -34521,9 +34527,9 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 15,
-      "atk": 29,
-      "def": 27,
+      "hp": 14,
+      "atk": 28,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -34585,9 +34591,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -34623,7 +34629,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -34632,8 +34638,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -34655,7 +34661,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -34664,7 +34670,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -34687,7 +34693,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -34696,7 +34702,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -34719,7 +34725,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -34728,7 +34734,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -34751,7 +34757,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -34760,7 +34766,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -34837,9 +34843,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -34925,7 +34931,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -34934,7 +34940,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -34957,7 +34963,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -34966,7 +34972,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -34989,7 +34995,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -34998,7 +35004,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -35075,9 +35081,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 23,
-      "atk": 27,
-      "def": 29,
+      "hp": 22,
+      "atk": 26,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -35139,9 +35145,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 29,
-      "def": 25,
+      "hp": 6,
+      "atk": 28,
+      "def": 24,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -35195,7 +35201,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -35204,7 +35210,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -35314,7 +35320,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 15,
+      "atk": 14,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -35409,9 +35415,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 29,
-      "def": 27,
+      "hp": 14,
+      "atk": 28,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -35479,7 +35485,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -35488,8 +35494,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -35575,7 +35581,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -35584,7 +35590,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -35685,7 +35691,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -35694,7 +35700,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -35717,7 +35723,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -35726,7 +35732,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -35749,7 +35755,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -35758,7 +35764,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -35781,7 +35787,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -35790,8 +35796,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -35813,7 +35819,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -35822,7 +35828,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -35859,7 +35865,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -35868,8 +35874,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -35899,9 +35905,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 23,
-      "atk": 27,
-      "def": 29,
+      "hp": 22,
+      "atk": 26,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -35955,7 +35961,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -35964,7 +35970,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -36019,7 +36025,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -36028,7 +36034,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -36065,7 +36071,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -36074,8 +36080,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -36193,7 +36199,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -36202,7 +36208,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -36344,8 +36350,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -36367,7 +36373,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -36376,7 +36382,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -36439,9 +36445,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 23,
-      "atk": 27,
-      "def": 29,
+      "hp": 22,
+      "atk": 26,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -36605,7 +36611,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -36614,7 +36620,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -36637,7 +36643,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -36646,8 +36652,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -36691,9 +36697,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 25,
-      "def": 25,
+      "hp": 6,
+      "atk": 24,
+      "def": 24,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -36811,7 +36817,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -36820,7 +36826,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -36843,7 +36849,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -36852,7 +36858,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -36921,7 +36927,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -36930,8 +36936,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -36953,7 +36959,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -36962,7 +36968,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -37017,7 +37023,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -37026,7 +37032,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -37049,7 +37055,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -37058,7 +37064,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -37095,7 +37101,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -37104,8 +37110,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -37264,8 +37270,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -37397,7 +37403,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -37406,7 +37412,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -37438,8 +37444,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -37571,7 +37577,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -37580,7 +37586,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -37603,7 +37609,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -37612,8 +37618,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -37643,9 +37649,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 23,
-      "atk": 27,
-      "def": 29,
+      "hp": 22,
+      "atk": 26,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -37713,7 +37719,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -37722,8 +37728,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -37777,7 +37783,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -37786,7 +37792,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 15,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -37818,8 +37824,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -37919,7 +37925,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -37928,8 +37934,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -37951,7 +37957,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -37960,7 +37966,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -38023,9 +38029,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -38047,7 +38053,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -38056,7 +38062,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -38157,7 +38163,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -38166,7 +38172,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -38371,9 +38377,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -38436,7 +38442,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -38491,7 +38497,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -38500,8 +38506,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -38537,7 +38543,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -38546,8 +38552,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -38705,9 +38711,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 23,
-      "atk": 27,
-      "def": 25,
+      "hp": 22,
+      "atk": 26,
+      "def": 24,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -38839,7 +38845,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -38848,7 +38854,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -38989,9 +38995,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -39013,7 +39019,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -39022,7 +39028,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -39045,7 +39051,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -39054,8 +39060,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -39077,7 +39083,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -39086,7 +39092,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -39109,7 +39115,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -39118,7 +39124,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -39227,9 +39233,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 29,
-      "def": 29,
+      "hp": 6,
+      "atk": 28,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -39251,7 +39257,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -39260,7 +39266,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -39393,7 +39399,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -39402,7 +39408,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -39425,7 +39431,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -39434,7 +39440,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -39457,7 +39463,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -39466,7 +39472,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -39704,8 +39710,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -39805,7 +39811,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -39814,8 +39820,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -39901,7 +39907,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -39910,7 +39916,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -39933,7 +39939,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -39942,7 +39948,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -40075,7 +40081,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -40084,7 +40090,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -40116,7 +40122,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -40217,7 +40223,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -40226,7 +40232,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -40257,9 +40263,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 29,
-      "def": 29,
+      "hp": 6,
+      "atk": 28,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -40290,7 +40296,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -40321,9 +40327,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 23,
-      "atk": 27,
-      "def": 29,
+      "hp": 22,
+      "atk": 26,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -40391,7 +40397,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -40400,8 +40406,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -40463,9 +40469,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -40487,7 +40493,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -40496,7 +40502,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -40560,7 +40566,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -40597,7 +40603,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -40606,7 +40612,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -40629,7 +40635,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -40638,7 +40644,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -40670,7 +40676,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -40701,9 +40707,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -40725,7 +40731,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -40734,7 +40740,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -40766,7 +40772,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -40867,7 +40873,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -40876,8 +40882,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -40963,7 +40969,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -40972,7 +40978,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -41114,8 +41120,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -41137,7 +41143,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -41146,8 +41152,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -41169,7 +41175,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -41178,7 +41184,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -41247,7 +41253,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -41256,8 +41262,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -41343,7 +41349,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -41352,7 +41358,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -41421,7 +41427,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -41430,8 +41436,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -41636,8 +41642,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -41659,7 +41665,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -41667,9 +41673,9 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 15,
-      "atk": 21,
-      "def": 27,
+      "hp": 14,
+      "atk": 20,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -41699,9 +41705,9 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 15,
-      "atk": 21,
-      "def": 27,
+      "hp": 14,
+      "atk": 28,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -41723,7 +41729,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -41732,7 +41738,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -41842,8 +41848,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -41865,7 +41871,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -41874,7 +41880,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 7,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -41929,7 +41935,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -41938,7 +41944,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -41993,7 +41999,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -42002,7 +42008,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -42039,7 +42045,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -42048,7 +42054,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -42175,9 +42181,9 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 15,
-      "atk": 21,
-      "def": 27,
+      "hp": 14,
+      "atk": 28,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -42373,7 +42379,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -42382,7 +42388,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -42451,7 +42457,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -42460,7 +42466,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -42483,7 +42489,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -42492,7 +42498,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 19,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -42523,9 +42529,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 25,
-      "def": 25,
+      "hp": 6,
+      "atk": 24,
+      "def": 24,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -42555,9 +42561,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 29,
-      "def": 29,
+      "hp": 6,
+      "atk": 28,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -42579,7 +42585,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -42588,8 +42594,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -42611,7 +42617,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -42620,7 +42626,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -42657,7 +42663,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -42666,7 +42672,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -42753,7 +42759,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -42762,7 +42768,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -42872,8 +42878,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -43069,7 +43075,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -43078,7 +43084,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -43101,7 +43107,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -43110,7 +43116,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -43197,7 +43203,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -43206,7 +43212,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -43275,7 +43281,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -43284,8 +43290,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -43348,8 +43354,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -43435,7 +43441,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -43444,8 +43450,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -43481,7 +43487,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -43490,8 +43496,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -43521,9 +43527,9 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 7,
-      "atk": 25,
-      "def": 25,
+      "hp": 6,
+      "atk": 24,
+      "def": 24,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -43554,8 +43560,8 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 27,
-      "def": 27,
+      "atk": 26,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -43617,9 +43623,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 7,
-      "atk": 29,
-      "def": 29,
+      "hp": 6,
+      "atk": 28,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -43641,7 +43647,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -43650,7 +43656,7 @@
      "gender": "F",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 2,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -44227,7 +44233,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -44236,7 +44242,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -44369,7 +44375,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -44543,7 +44549,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -44552,7 +44558,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 18,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -44671,7 +44677,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -44679,12 +44685,12 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 30,
-      "atk": 30,
+      "hp": 31,
+      "atk": 22,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -45233,9 +45239,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 15,
-      "atk": 25,
-      "def": 27,
+      "hp": 14,
+      "atk": 24,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -45298,7 +45304,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 3,
+      "atk": 31,
       "def": 31,
       "spa": 31,
       "spd": 31,
@@ -45335,7 +45341,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -45344,8 +45350,8 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 23,
-      "def": 27,
+      "atk": 22,
+      "def": 26,
       "spa": 31,
       "spd": 31,
       "spe": 31
@@ -45375,9 +45381,9 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 23,
-      "atk": 27,
-      "def": 29,
+      "hp": 22,
+      "atk": 26,
+      "def": 28,
       "spa": 31,
       "spd": 31,
       "spe": 31

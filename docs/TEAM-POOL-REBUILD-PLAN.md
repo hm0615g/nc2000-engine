@@ -1,5 +1,11 @@
 # Blind product and team-pool rebuild
 
+2026-11-03 local follow-up: the owner-requested [training-v3 repair](../data/training-v3/README.md)
+normalizes playable and prior spreads, including constrained minimum Attack.
+Previous performance measurements below remain historical; preview artifacts
+are retired and selection uses live search until recomputation. This follow-up
+has not been published or deployed.
+
 Status: **implemented, validated and deployed (2026-10-02, owner-approved
 push of 157a556)** — see [§Progress](#progress). Owner
 direction updated 2026-09-30. This is the authoritative plan and handoff; update it in place.

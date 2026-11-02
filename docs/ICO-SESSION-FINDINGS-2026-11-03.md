@@ -50,3 +50,8 @@ reveal that leaves only a deficient spread, and catalog/prior Attack mismatches.
 It also checks the catalog's maximum-training and male-camouflage policy.
 It establishes no action-quality or win-rate gap and does not reinstate the
 withdrawn ICO implementation or HP fix.
+
+The subsequent owner-authorized [training-v3 repair](../data/training-v3/README.md)
+normalizes the catalog and all shipped prior sources, verifies exact catalog
+support, and retires old preview computations. Its exhaustive stat verification
+is distinct from the withdrawn ICO action/win-rate investigation.

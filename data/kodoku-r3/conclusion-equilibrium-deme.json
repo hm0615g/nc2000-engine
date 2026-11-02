@@ -160,12 +160,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 30,
+      "hp": 31,
       "atk": 26,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -556,12 +556,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 30,
+      "hp": 31,
       "atk": 26,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -725,9 +725,9 @@
       "hp": 6,
       "atk": 24,
       "def": 24,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 50,
      "happiness": 255
@@ -798,5 +798,7 @@
     }
    ]
   }
- ]
+ ],
+ "trainingPolicy": "training-v3",
+ "measurementStatus": "Historical mixture weights/payoffs; normalized training and opponent prior have not been remeasured."
 }

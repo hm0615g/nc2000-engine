@@ -2,6 +2,7 @@ import artifactJson from "../../data/compiled-preview-v1.json?raw";
 
 interface CompiledPreview {
   format: string;
+  status?: string;
   build: string;
   c: number;
   priorSha256: string;
@@ -23,6 +24,7 @@ for (const key of Object.keys(artifact.policies)) {
 
 export async function compiledPreviewMatches(poolJson: string, dexJson: string): Promise<boolean> {
   if (!__COMPILED_PREVIEW_ENABLED__) return false;
+  if (artifact.status === "retired-training-v3") return false;
   if (artifact.format !== "nc2000-compiled-preview-v1") return false;
   const digest = async (text: string) => {
     const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -37,6 +39,7 @@ export async function compiledPreviewMatches(poolJson: string, dexJson: string):
  * Sampling the precomputed seeds preserves search-seed diversity. */
 export function compiledPreviewPick(build: string, key: string | undefined, seed: number, c: number, cacheInfo?: string): string | undefined {
   if (!__COMPILED_PREVIEW_ENABLED__) return undefined;
+  if (artifact.status === "retired-training-v3") return undefined;
   if (build !== artifact.build || c !== artifact.c || key === undefined || !cacheInfo) return undefined;
   const [, foe] = JSON.parse(key);
   const observed = JSON.parse(cacheInfo).opponentPublic as unknown[][];
