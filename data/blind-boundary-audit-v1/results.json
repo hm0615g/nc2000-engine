@@ -1,0 +1,1273 @@
+{
+  "schema": "nc2000-blind-boundary-audit-v1",
+  "source_sha256": {
+    "crates/bot/examples/audit_blind_boundary.rs": "a0e973830073d6b4be0e01c1602e75dc5a43ac9290d69a9e91efbf7daa2192fd",
+    "crates/bot/src/belief.rs": "d485a66c579f7a17d69c327d19eb3838db9fc049cb2f39f6d8cee4a185dde76f",
+    "crates/bot/src/blind.rs": "4053b60270b82f4b1c3b32e902f3f1b9f3a9185f410c3b6f7ffeefe670d6138d",
+    "crates/bot/src/import.rs": "6ab4df3c4c7cc11db01bfadb2b447fdc52d9bc2b0fc089872ddc01d7c238f25e",
+    "crates/bot/src/player.rs": "9ac63d10430ab6514e6b6a5ee957ecc141a2dddb62a8fcf3477a4ede20bc370d",
+    "crates/bot/src/smmcts.rs": "046398bbce36e1eb7ceac689c1688acfce44346087390aedd8a647e349198158",
+    "crates/wasm/src/lib.rs": "262550d9a1d65fc449da1a15c1ced287b676f5a629fcb6bafd800ddcd527bc4e",
+    "data/belief-pool-v3/belief-pool.json": "1c0a1d544be667282ed94f891f7fd1d533c324fd7c18c85d530a1cd9d47da6d5",
+    "data/live-search.json": "bcd72c90aff04fb6e8c2ce7fb6551e03d2aafc318a416a153194b0abf4dcebed",
+    "data/search-profiles.json": "157d49892b62fe4bb310e0a0d7f985ecabe6084ddcd5cad2e65ded65a2d9b862",
+    "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
+    "web/src/bot-worker.ts": "edcbaff3bc3b8b2fc8760450da396b4ced017f7328fbb8b39916e0f3d125e8e4"
+  },
+  "config": {
+    "budgets": [
+      27000,
+      81000
+    ],
+    "c": 0.4,
+    "rule": "Ucb",
+    "hp_buckets": 16,
+    "other_fields": "RmConfig::default"
+  },
+  "hp": [
+    {
+      "side": 0,
+      "own_team": "sample-07",
+      "foe_team": "sample-12",
+      "truth_hp": [
+        164,
+        165
+      ],
+      "maxhp": 166,
+      "public_hp": 99,
+      "public_frames_equal": true,
+      "frame": {
+        "lines": [
+          "|gametype|singles",
+          "|player|p1|P1||",
+          "|player|p2|P2||",
+          "|gen|2",
+          "|tier|[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict",
+          "|rule|Species Clause: Limit one of each Pokémon",
+          "|rule|Item Clause: Limit 1 of each item",
+          "|rule|Stadium Sleep Clause: Putting another foe to sleep while any teammate sleeps forfeits the battle",
+          "|rule|Freeze Clause Mod: Limit one foe frozen",
+          "|rule|OHKO Clause: OHKO moves are banned",
+          "|rule|HP Percentage Mod: HP is shown in percentages",
+          "|clearpoke",
+          "|poke|p1|Electrode, L50|item",
+          "|poke|p1|Tauros, L55, M|item",
+          "|poke|p1|Cloyster, L50, M|item",
+          "|poke|p1|Marowak, L55, M|item",
+          "|poke|p1|Snorlax, L50, M|item",
+          "|poke|p1|Zapdos, L55|item",
+          "|poke|p2|Gengar, L50, F|item",
+          "|poke|p2|Starmie, L50|item",
+          "|poke|p2|Cloyster, L50, M|item",
+          "|poke|p2|Umbreon, L50, F|item",
+          "|poke|p2|Marowak, L50, M|item",
+          "|poke|p2|Snorlax, L55, M|item",
+          "|teampreview|3",
+          "|",
+          "|teamsize|p1|3",
+          "|teamsize|p2|3",
+          "|start",
+          "|switch|p1a: Electrode|Electrode, L50|166/166",
+          "|switch|p2a: Gengar|Gengar, L50, F|100/100",
+          "|turn|1",
+          "|-damage|p2a: Gengar|99/100"
+        ],
+        "request": {
+          "active": [
+            {
+              "moves": [
+                {
+                  "id": "thunderbolt",
+                  "pp": 24,
+                  "maxpp": 24,
+                  "disabled": false
+                },
+                {
+                  "id": "explosion",
+                  "pp": 8,
+                  "maxpp": 8,
+                  "disabled": false
+                },
+                {
+                  "id": "reflect",
+                  "pp": 32,
+                  "maxpp": 32,
+                  "disabled": false
+                },
+                {
+                  "id": "thunderwave",
+                  "pp": 32,
+                  "maxpp": 32,
+                  "disabled": false
+                }
+              ],
+              "trapped": false
+            }
+          ],
+          "side": {
+            "pokemon": [
+              {
+                "ident": "p1: Electrode",
+                "details": "Electrode, L50, ",
+                "condition": "166/166",
+                "active": true,
+                "moves": [
+                  "thunderbolt",
+                  "explosion",
+                  "reflect",
+                  "thunderwave"
+                ],
+                "item": "miracleberry"
+              },
+              {
+                "ident": "p1: Tauros",
+                "details": "Tauros, L55, M",
+                "condition": "198/198",
+                "active": false,
+                "moves": [
+                  "doubleedge",
+                  "fireblast",
+                  "earthquake",
+                  "hyperbeam"
+                ],
+                "item": "berserkgene"
+              },
+              {
+                "ident": "p1: Cloyster",
+                "details": "Cloyster, L50, M",
+                "condition": "156/156",
+                "active": false,
+                "moves": [
+                  "icebeam",
+                  "explosion",
+                  "curse",
+                  "spikes"
+                ],
+                "item": "goldberry"
+              }
+            ]
+          }
+        },
+        "legal_actions": [
+          "move thunderbolt",
+          "move explosion",
+          "move reflect",
+          "move thunderwave",
+          "switch 2",
+          "switch 3"
+        ]
+      },
+      "runs": [
+        {
+          "budget": 27000,
+          "direct": [
+            {
+              "modeled_foe": {
+                "hp": 164,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "modeled_foe_item": "berryjuice",
+              "candidates": 2,
+              "actions": [
+                "move thunderbolt",
+                "move explosion",
+                "move reflect",
+                "move thunderwave",
+                "switch 2",
+                "switch 3"
+              ],
+              "masked": [
+                false,
+                false,
+                false,
+                false,
+                false,
+                false
+              ],
+              "visits": [
+                15505,
+                75,
+                9898,
+                88,
+                706,
+                728
+              ],
+              "means": [
+                0.751457180386726,
+                0.611972738082567,
+                0.7485279075759138,
+                0.6173416798098323,
+                0.7126370601699036,
+                0.7137578300382568
+              ],
+              "best": "move thunderbolt",
+              "iterations": 27000
+            },
+            {
+              "modeled_foe": {
+                "hp": 165,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "modeled_foe_item": "berryjuice",
+              "candidates": 2,
+              "actions": [
+                "move thunderbolt",
+                "move explosion",
+                "move reflect",
+                "move thunderwave",
+                "switch 2",
+                "switch 3"
+              ],
+              "masked": [
+                false,
+                false,
+                false,
+                false,
+                false,
+                false
+              ],
+              "visits": [
+                18924,
+                50,
+                3228,
+                2096,
+                650,
+                2052
+              ],
+              "means": [
+                0.7399494487467809,
+                0.5587053863667787,
+                0.7267281914412161,
+                0.7213142172672256,
+                0.6990669147406102,
+                0.7209242989192861
+              ],
+              "best": "move thunderbolt",
+              "iterations": 27000
+            }
+          ],
+          "protocol": [
+            {
+              "modeled_foe": {
+                "hp": 164,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "visits": [
+                17569,
+                40,
+                5568,
+                2542,
+                508,
+                773
+              ],
+              "means": [
+                0.7454886477454198,
+                0.5448875807407136,
+                0.7377997688945696,
+                0.7296076663699667,
+                0.6975966877844244,
+                0.7084050445241183
+              ],
+              "best": "move thunderbolt",
+              "iterations": 27000
+            },
+            {
+              "modeled_foe": {
+                "hp": 164,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "visits": [
+                17569,
+                40,
+                5568,
+                2542,
+                508,
+                773
+              ],
+              "means": [
+                0.7454886477454198,
+                0.5448875807407136,
+                0.7377997688945696,
+                0.7296076663699667,
+                0.6975966877844244,
+                0.7084050445241183
+              ],
+              "best": "move thunderbolt",
+              "iterations": 27000
+            }
+          ]
+        },
+        {
+          "budget": 81000,
+          "direct": [
+            {
+              "modeled_foe": {
+                "hp": 164,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "modeled_foe_item": "berryjuice",
+              "candidates": 2,
+              "actions": [
+                "move thunderbolt",
+                "move explosion",
+                "move reflect",
+                "move thunderwave",
+                "switch 2",
+                "switch 3"
+              ],
+              "masked": [
+                false,
+                false,
+                false,
+                false,
+                false,
+                false
+              ],
+              "visits": [
+                36711,
+                84,
+                40542,
+                513,
+                1013,
+                2137
+              ],
+              "means": [
+                0.7391858317253779,
+                0.5939934806684625,
+                0.7395385159763707,
+                0.7092737874289556,
+                0.7037833792271284,
+                0.7170685577103023
+              ],
+              "best": "move reflect",
+              "iterations": 81000
+            },
+            {
+              "modeled_foe": {
+                "hp": 165,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "modeled_foe_item": "berryjuice",
+              "candidates": 2,
+              "actions": [
+                "move thunderbolt",
+                "move explosion",
+                "move reflect",
+                "move thunderwave",
+                "switch 2",
+                "switch 3"
+              ],
+              "masked": [
+                false,
+                false,
+                false,
+                false,
+                false,
+                false
+              ],
+              "visits": [
+                47739,
+                61,
+                23609,
+                4432,
+                812,
+                4347
+              ],
+              "means": [
+                0.736597048843786,
+                0.5698565991967184,
+                0.7331730178744912,
+                0.7216974108023303,
+                0.6942030209306699,
+                0.7214926044534604
+              ],
+              "best": "move thunderbolt",
+              "iterations": 81000
+            }
+          ],
+          "protocol": [
+            {
+              "modeled_foe": {
+                "hp": 164,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "visits": [
+                40814,
+                41,
+                29176,
+                8228,
+                1730,
+                1011
+              ],
+              "means": [
+                0.7369898339524585,
+                0.5315976397470377,
+                0.7359242481847139,
+                0.7288302818397694,
+                0.711129451564175,
+                0.7010518624197221
+              ],
+              "best": "move thunderbolt",
+              "iterations": 81000
+            },
+            {
+              "modeled_foe": {
+                "hp": 164,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "visits": [
+                40814,
+                41,
+                29176,
+                8228,
+                1730,
+                1011
+              ],
+              "means": [
+                0.7369898339524585,
+                0.5315976397470377,
+                0.7359242481847139,
+                0.7288302818397694,
+                0.711129451564175,
+                0.7010518624197221
+              ],
+              "best": "move thunderbolt",
+              "iterations": 81000
+            }
+          ]
+        }
+      ],
+      "public_change_control": {
+        "modeled_foe": {
+          "hp": 83,
+          "maxhp": 166,
+          "status": "",
+          "sleep_time": 0,
+          "sleep_start_time": 0
+        },
+        "visits": [
+          5789,
+          26,
+          14209,
+          6258,
+          173,
+          545
+        ],
+        "means": [
+          0.8024707561067117,
+          0.564631292664734,
+          0.8088219905946687,
+          0.8030739342627494,
+          0.7208693126299612,
+          0.7636000417158048
+        ],
+        "best": "move reflect",
+        "iterations": 27000
+      }
+    },
+    {
+      "side": 1,
+      "own_team": "sample-07",
+      "foe_team": "sample-12",
+      "truth_hp": [
+        164,
+        165
+      ],
+      "maxhp": 166,
+      "public_hp": 99,
+      "public_frames_equal": true,
+      "frame": {
+        "lines": [
+          "|gametype|singles",
+          "|player|p1|P1||",
+          "|player|p2|P2||",
+          "|gen|2",
+          "|tier|[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict",
+          "|rule|Species Clause: Limit one of each Pokémon",
+          "|rule|Item Clause: Limit 1 of each item",
+          "|rule|Stadium Sleep Clause: Putting another foe to sleep while any teammate sleeps forfeits the battle",
+          "|rule|Freeze Clause Mod: Limit one foe frozen",
+          "|rule|OHKO Clause: OHKO moves are banned",
+          "|rule|HP Percentage Mod: HP is shown in percentages",
+          "|clearpoke",
+          "|poke|p1|Gengar, L50, F|item",
+          "|poke|p1|Starmie, L50|item",
+          "|poke|p1|Cloyster, L50, M|item",
+          "|poke|p1|Umbreon, L50, F|item",
+          "|poke|p1|Marowak, L50, M|item",
+          "|poke|p1|Snorlax, L55, M|item",
+          "|poke|p2|Electrode, L50|item",
+          "|poke|p2|Tauros, L55, M|item",
+          "|poke|p2|Cloyster, L50, M|item",
+          "|poke|p2|Marowak, L55, M|item",
+          "|poke|p2|Snorlax, L50, M|item",
+          "|poke|p2|Zapdos, L55|item",
+          "|teampreview|3",
+          "|",
+          "|teamsize|p1|3",
+          "|teamsize|p2|3",
+          "|start",
+          "|switch|p1a: Gengar|Gengar, L50, F|100/100",
+          "|switch|p2a: Electrode|Electrode, L50|166/166",
+          "|turn|1",
+          "|-damage|p1a: Gengar|99/100"
+        ],
+        "request": {
+          "active": [
+            {
+              "moves": [
+                {
+                  "id": "thunderbolt",
+                  "pp": 24,
+                  "maxpp": 24,
+                  "disabled": false
+                },
+                {
+                  "id": "explosion",
+                  "pp": 8,
+                  "maxpp": 8,
+                  "disabled": false
+                },
+                {
+                  "id": "reflect",
+                  "pp": 32,
+                  "maxpp": 32,
+                  "disabled": false
+                },
+                {
+                  "id": "thunderwave",
+                  "pp": 32,
+                  "maxpp": 32,
+                  "disabled": false
+                }
+              ],
+              "trapped": false
+            }
+          ],
+          "side": {
+            "pokemon": [
+              {
+                "ident": "p2: Electrode",
+                "details": "Electrode, L50, ",
+                "condition": "166/166",
+                "active": true,
+                "moves": [
+                  "thunderbolt",
+                  "explosion",
+                  "reflect",
+                  "thunderwave"
+                ],
+                "item": "miracleberry"
+              },
+              {
+                "ident": "p2: Tauros",
+                "details": "Tauros, L55, M",
+                "condition": "198/198",
+                "active": false,
+                "moves": [
+                  "doubleedge",
+                  "fireblast",
+                  "earthquake",
+                  "hyperbeam"
+                ],
+                "item": "berserkgene"
+              },
+              {
+                "ident": "p2: Cloyster",
+                "details": "Cloyster, L50, M",
+                "condition": "156/156",
+                "active": false,
+                "moves": [
+                  "icebeam",
+                  "explosion",
+                  "curse",
+                  "spikes"
+                ],
+                "item": "goldberry"
+              }
+            ]
+          }
+        },
+        "legal_actions": [
+          "move thunderbolt",
+          "move explosion",
+          "move reflect",
+          "move thunderwave",
+          "switch 2",
+          "switch 3"
+        ]
+      },
+      "runs": [
+        {
+          "budget": 27000,
+          "direct": [
+            {
+              "modeled_foe": {
+                "hp": 164,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "modeled_foe_item": "berryjuice",
+              "candidates": 2,
+              "actions": [
+                "move thunderbolt",
+                "move explosion",
+                "move reflect",
+                "move thunderwave",
+                "switch 2",
+                "switch 3"
+              ],
+              "masked": [
+                false,
+                false,
+                false,
+                false,
+                false,
+                false
+              ],
+              "visits": [
+                12237,
+                27,
+                12728,
+                1646,
+                67,
+                295
+              ],
+              "means": [
+                0.7464953928584448,
+                0.503084426243573,
+                0.7461659146890153,
+                0.7258159512204216,
+                0.601183283576123,
+                0.6820506411153308
+              ],
+              "best": "move reflect",
+              "iterations": 27000
+            },
+            {
+              "modeled_foe": {
+                "hp": 165,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "modeled_foe_item": "berryjuice",
+              "candidates": 2,
+              "actions": [
+                "move thunderbolt",
+                "move explosion",
+                "move reflect",
+                "move thunderwave",
+                "switch 2",
+                "switch 3"
+              ],
+              "masked": [
+                false,
+                false,
+                false,
+                false,
+                false,
+                false
+              ],
+              "visits": [
+                14999,
+                28,
+                7289,
+                2879,
+                822,
+                983
+              ],
+              "means": [
+                0.7432942988850573,
+                0.49873783053289655,
+                0.7382541933815207,
+                0.7292583546224531,
+                0.708333864401583,
+                0.712033468799241
+              ],
+              "best": "move thunderbolt",
+              "iterations": 27000
+            }
+          ],
+          "protocol": [
+            {
+              "modeled_foe": {
+                "hp": 164,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "visits": [
+                11852,
+                92,
+                13246,
+                1687,
+                120,
+                3
+              ],
+              "means": [
+                0.7457978715283614,
+                0.6231989780976618,
+                0.7464590340201791,
+                0.7278197639817794,
+                0.6406888751617631,
+                0.0
+              ],
+              "best": "move reflect",
+              "iterations": 27000
+            },
+            {
+              "modeled_foe": {
+                "hp": 164,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "visits": [
+                11852,
+                92,
+                13246,
+                1687,
+                120,
+                3
+              ],
+              "means": [
+                0.7457978715283614,
+                0.6231989780976618,
+                0.7464590340201791,
+                0.7278197639817794,
+                0.6406888751617631,
+                0.0
+              ],
+              "best": "move reflect",
+              "iterations": 27000
+            }
+          ]
+        },
+        {
+          "budget": 81000,
+          "direct": [
+            {
+              "modeled_foe": {
+                "hp": 164,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "modeled_foe_item": "berryjuice",
+              "candidates": 2,
+              "actions": [
+                "move thunderbolt",
+                "move explosion",
+                "move reflect",
+                "move thunderwave",
+                "switch 2",
+                "switch 3"
+              ],
+              "masked": [
+                false,
+                false,
+                false,
+                false,
+                false,
+                false
+              ],
+              "visits": [
+                30318,
+                28,
+                47206,
+                2993,
+                126,
+                329
+              ],
+              "means": [
+                0.7384455183233071,
+                0.48511712530630247,
+                0.740164215924847,
+                0.7214873137104784,
+                0.6232333393372614,
+                0.6712120581186699
+              ],
+              "best": "move reflect",
+              "iterations": 81000
+            },
+            {
+              "modeled_foe": {
+                "hp": 165,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "modeled_foe_item": "berryjuice",
+              "candidates": 2,
+              "actions": [
+                "move thunderbolt",
+                "move explosion",
+                "move reflect",
+                "move thunderwave",
+                "switch 2",
+                "switch 3"
+              ],
+              "masked": [
+                false,
+                false,
+                false,
+                false,
+                false,
+                false
+              ],
+              "visits": [
+                39189,
+                29,
+                35517,
+                3488,
+                1244,
+                1533
+              ],
+              "means": [
+                0.7415269632154825,
+                0.4815399743076243,
+                0.741295770049456,
+                0.725481516774346,
+                0.710115195841408,
+                0.7137716785972906
+              ],
+              "best": "move thunderbolt",
+              "iterations": 81000
+            }
+          ],
+          "protocol": [
+            {
+              "modeled_foe": {
+                "hp": 164,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "visits": [
+                31618,
+                146,
+                45019,
+                2853,
+                125,
+                1239
+              ],
+              "means": [
+                0.7377690515842306,
+                0.6321912358356225,
+                0.7388373986112864,
+                0.719891189634956,
+                0.6232198884401838,
+                0.7069149640441483
+              ],
+              "best": "move reflect",
+              "iterations": 81000
+            },
+            {
+              "modeled_foe": {
+                "hp": 164,
+                "maxhp": 166,
+                "status": "",
+                "sleep_time": 0,
+                "sleep_start_time": 0
+              },
+              "visits": [
+                31618,
+                146,
+                45019,
+                2853,
+                125,
+                1239
+              ],
+              "means": [
+                0.7377690515842306,
+                0.6321912358356225,
+                0.7388373986112864,
+                0.719891189634956,
+                0.6232198884401838,
+                0.7069149640441483
+              ],
+              "best": "move reflect",
+              "iterations": 81000
+            }
+          ]
+        }
+      ],
+      "public_change_control": {
+        "modeled_foe": {
+          "hp": 83,
+          "maxhp": 166,
+          "status": "",
+          "sleep_time": 0,
+          "sleep_start_time": 0
+        },
+        "visits": [
+          8874,
+          198,
+          14458,
+          2879,
+          67,
+          524
+        ],
+        "means": [
+          0.8044989043815658,
+          0.7253762644624587,
+          0.8070666622721117,
+          0.7937975171777867,
+          0.6537232989416141,
+          0.7607002100623296
+        ],
+        "best": "move reflect",
+        "iterations": 27000
+      }
+    }
+  ],
+  "maxhp": {
+    "checks": 50465,
+    "percent_contradictions": 46498,
+    "example": {
+      "source": "catalog",
+      "team": "sample-07",
+      "truth": {
+        "hp": 8,
+        "maxhp": 151,
+        "status": "",
+        "sleep_time": 0,
+        "sleep_start_time": 0
+      },
+      "model": {
+        "hp": 8,
+        "maxhp": 166,
+        "status": "",
+        "sleep_time": 0,
+        "sleep_start_time": 0
+      },
+      "public_percent": 6,
+      "modeled_percent": 5
+    },
+    "full_hp_checks": 254,
+    "full_hp_contradictions": 254,
+    "full_hp_example": {
+      "source": "catalog",
+      "team": "sample-07",
+      "truth": {
+        "hp": 151,
+        "maxhp": 151,
+        "status": "",
+        "sleep_time": 0,
+        "sleep_start_time": 0
+      },
+      "model": {
+        "hp": 151,
+        "maxhp": 166,
+        "status": "",
+        "sleep_time": 0,
+        "sleep_start_time": 0
+      },
+      "public_percent": 100,
+      "modeled_percent": 91
+    }
+  },
+  "sleep": {
+    "public_frames_equal": true,
+    "direct": [
+      {
+        "modeled_foe": {
+          "hp": 235,
+          "maxhp": 266,
+          "status": "slp",
+          "sleep_time": 1,
+          "sleep_start_time": 0
+        },
+        "modeled_foe_item": null,
+        "candidates": 0,
+        "actions": [
+          "move thunderbolt",
+          "move rest"
+        ],
+        "masked": [
+          false,
+          true
+        ],
+        "visits": [
+          54685,
+          26315
+        ],
+        "means": [
+          0.0074791990490993875,
+          0.004940148204446134
+        ],
+        "best": "move thunderbolt",
+        "iterations": 81000
+      },
+      {
+        "modeled_foe": {
+          "hp": 235,
+          "maxhp": 266,
+          "status": "slp",
+          "sleep_time": 3,
+          "sleep_start_time": 0
+        },
+        "modeled_foe_item": null,
+        "candidates": 0,
+        "actions": [
+          "move thunderbolt",
+          "move rest"
+        ],
+        "masked": [
+          false,
+          true
+        ],
+        "visits": [
+          80538,
+          462
+        ],
+        "means": [
+          0.19020834885395713,
+          0.13203463203463203
+        ],
+        "best": "move thunderbolt",
+        "iterations": 81000
+      }
+    ],
+    "protocol": [
+      {
+        "modeled_foe": {
+          "hp": 266,
+          "maxhp": 266,
+          "status": "slp",
+          "sleep_time": 3,
+          "sleep_start_time": 0
+        },
+        "visits": [
+          68623,
+          12377
+        ],
+        "means": [
+          0.042449324570479285,
+          0.03546901510866931
+        ],
+        "best": "move thunderbolt",
+        "iterations": 81000
+      },
+      {
+        "modeled_foe": {
+          "hp": 266,
+          "maxhp": 266,
+          "status": "slp",
+          "sleep_time": 3,
+          "sleep_start_time": 0
+        },
+        "visits": [
+          68623,
+          12377
+        ],
+        "means": [
+          0.042449324570479285,
+          0.03546901510866931
+        ],
+        "best": "move thunderbolt",
+        "iterations": 81000
+      }
+    ]
+  },
+  "quick_claw": {
+    "public_frames_equal": true,
+    "direct": [
+      {
+        "modeled_foe": {
+          "hp": 235,
+          "maxhp": 266,
+          "status": "",
+          "sleep_time": 0,
+          "sleep_start_time": 0
+        },
+        "modeled_foe_item": null,
+        "candidates": 0,
+        "actions": [
+          "move rest",
+          "move swagger"
+        ],
+        "masked": [
+          false,
+          false
+        ],
+        "visits": [
+          30565,
+          50435
+        ],
+        "means": [
+          0.05944707999345657,
+          0.06118766729453752
+        ],
+        "best": "move swagger",
+        "iterations": 81000
+      },
+      {
+        "modeled_foe": {
+          "hp": 235,
+          "maxhp": 266,
+          "status": "",
+          "sleep_time": 0,
+          "sleep_start_time": 0
+        },
+        "modeled_foe_item": null,
+        "candidates": 0,
+        "actions": [
+          "move rest",
+          "move swagger"
+        ],
+        "masked": [
+          true,
+          false
+        ],
+        "visits": [
+          30565,
+          50435
+        ],
+        "means": [
+          0.05944707999345657,
+          0.06118766729453752
+        ],
+        "best": "move swagger",
+        "iterations": 81000
+      }
+    ]
+  },
+  "unrevealed_item": {
+    "public_frames_equal": true,
+    "direct": [
+      {
+        "modeled_foe": {
+          "hp": 235,
+          "maxhp": 266,
+          "status": "",
+          "sleep_time": 0,
+          "sleep_start_time": 0
+        },
+        "modeled_foe_item": "leftovers",
+        "candidates": 0,
+        "actions": [
+          "move recover",
+          "move surf"
+        ],
+        "masked": [
+          true,
+          false
+        ],
+        "visits": [
+          28997,
+          52003
+        ],
+        "means": [
+          0.00951822602338173,
+          0.011518566236563275
+        ],
+        "best": "move surf",
+        "iterations": 81000
+      },
+      {
+        "modeled_foe": {
+          "hp": 235,
+          "maxhp": 266,
+          "status": "",
+          "sleep_time": 0,
+          "sleep_start_time": 0
+        },
+        "modeled_foe_item": "leftovers",
+        "candidates": 0,
+        "actions": [
+          "move recover",
+          "move surf"
+        ],
+        "masked": [
+          false,
+          false
+        ],
+        "visits": [
+          28997,
+          52003
+        ],
+        "means": [
+          0.00951822602338173,
+          0.011518566236563275
+        ],
+        "best": "move surf",
+        "iterations": 81000
+      }
+    ],
+    "protocol": [
+      {
+        "modeled_foe": {
+          "hp": 266,
+          "maxhp": 266,
+          "status": "",
+          "sleep_time": 0,
+          "sleep_start_time": 0
+        },
+        "visits": [
+          24363,
+          56637
+        ],
+        "means": [
+          0.010836103928087674,
+          0.01380722849020958
+        ],
+        "best": "move surf",
+        "iterations": 81000
+      },
+      {
+        "modeled_foe": {
+          "hp": 266,
+          "maxhp": 266,
+          "status": "",
+          "sleep_time": 0,
+          "sleep_start_time": 0
+        },
+        "visits": [
+          24363,
+          56637
+        ],
+        "means": [
+          0.010836103928087674,
+          0.01380722849020958
+        ],
+        "best": "move surf",
+        "iterations": 81000
+      }
+    ]
+  },
+  "scope": "Constructed differential snapshots; no production runtime change, deployment, prevalence or win-rate claim."
+}
