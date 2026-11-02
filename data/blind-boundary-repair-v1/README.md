@@ -132,7 +132,22 @@ a global Nash equilibrium or rule out untested parties/search policies.
 Two incomplete runs were discarded when integration/adversarial tests
 required source changes (relaxed parties, then the self-KO counterexample).
 The [restart record](challenger-restart.json) documents both technical restarts;
-the opponent, seed, budget and fixed count were unchanged. Results are recorded after the final fixed run completes.
+the opponent, seed, budget and fixed count were unchanged. The final fixed run completed in 1,921 seconds. T2 won **42 games to 22**,
+with no ties or turn caps (maximum 102 turns). Its win rate was **65.625%**;
+the paired standard error was 6.123 percentage points and the approximate
+normal 95% interval was **53.6–77.6%**. There were five solver interventions.
+[Independent aggregate checks](challenger-summary.json) validate all 32 mirrored
+pairs and confirm that every recorded source/data/executable hash stayed
+unchanged throughout the final run.
+
+This is evidence of a T2 advantage under the stated greater-compute setting.
+The normal interval is approximate; the conservative one-sided 95% Hoeffding
+upper bound on T2's mean is 87.3%, not a useful low-exploitability certificate.
+The broad full-game Nash claim is not supported. This experiment changes the
+opponent policy, so it does not by itself disprove an equilibrium of a game
+that fixes both players to the same search policy. That narrower claim would
+require fresh party-payoff measurement. We retain the historical weights and
+label them accordingly rather than replacing them with unmeasured weights.
 
 ## Reproduction
 

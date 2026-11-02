@@ -1,5 +1,5 @@
 {
-  "recorded_at_utc": "2026-11-02T21:55:27.013884+00:00",
+  "recorded_at_utc": "2026-11-02T22:21:36.074495+00:00",
   "build": "fnv1a64:5a574c1c5980add4:m17e-solver-build-v3",
   "artifact_sha256": "cc2a019e4a1c9459d6a18459291948ace770bce2ad4cce1bc6719eb89f29e90c",
   "checks": [
@@ -202,6 +202,15 @@
       "exit_code": 0,
       "status": "passed",
       "log_sha256": "85433a33b436d320f98d0b687573331f1996d532fc06d024592625e07c0ed1a4"
+    },
+    {
+      "check": "single selected public-information challenger",
+      "exit_code": 0,
+      "status": "completed; broad Nash claim not supported",
+      "games": 64,
+      "attacker_wins": 42,
+      "attacker_losses": 22,
+      "report_sha256": "0f47bda0b325e848af870a4a1b33722467944c1dc09580833d1d071b6c892751"
     }
   ],
   "baseline_unit_failures": {

@@ -1,0 +1,28 @@
+{
+  "completed_at_utc": "2026-11-02T22:21:36.074495+00:00",
+  "implementation_commit": "646a08be11ab62798fdafaa2cf8ad9ada6c9fbe8",
+  "challenger": "T2_Rules_Bayesian_Oracle_BR",
+  "games": 64,
+  "independent_mirrored_blocks": 32,
+  "attacker_wins": 42,
+  "attacker_losses": 22,
+  "ties_or_caps": 0,
+  "maximum_turns": 102,
+  "attacker_win_rate": 0.65625,
+  "paired_standard_error": 0.06122695418975893,
+  "approximate_95pct_interval": [
+    0.5362451697880725,
+    0.7762548302119275
+  ],
+  "one_sided_95pct_hoeffding_upper": 0.8726022978252856,
+  "blue_team_counts": {
+    "red-v10-s1105-r1-s0148": 15,
+    "red-v10-s1105-r2-s0142": 14,
+    "apex-c08-surgical-142": 19,
+    "apex-c04-bug-3atkstar-boomgen": 16
+  },
+  "solver_interventions": 5,
+  "report_sha256": "0f47bda0b325e848af870a4a1b33722467944c1dc09580833d1d071b6c892751",
+  "all_provenance_hashes_unchanged": true,
+  "interpretation": "T2 won 42 of 64 games with greater total compute. The approximate paired interval excludes 50%; this is evidence of an advantage in this setting, not a distribution-free certificate. The broad full-game Nash claim is not supported. A fixed-policy finite-party game would require separate payoff remeasurement; its equilibrium is not disproved by changing the opponent policy."
+}
