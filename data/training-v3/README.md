@@ -2,7 +2,8 @@
 
 Implemented locally on 2026-11-03 after the owner's request to normalize the
 playable pool, align the prior and adversarially check every distributed spread.
-No publication or deployment is part of this change.
+The original repair was local. The owner subsequently authorized deployment
+after [recomputing and verifying preview tables](../preview-training-v3/README.md).
 
 ## Policy
 
@@ -90,12 +91,12 @@ failures, and this change does not rewrite those expectations.
 
 ## Preview and measurement compatibility
 
-Old preview computations are explicitly marked `retired-training-v3`; their
-computation hashes, policies and payoffs remain historical. Runtime lookup
-refuses them and uses live selection search. Production builds verify the
-retirement receipt against the new prior/catalog hashes. Full grid verification
-covers all 1,089 catalog pairs / 990 unique keys and checks live worker use.
-Freshly baked artifacts can restore caching after recomputation.
+The original repair retired the old preview computations rather than relabeling
+their provenance. The [replacement bake](../preview-training-v3/README.md) now
+restores caching with freshly computed policies for the corrected sets and prior.
+It covers all 1,089 catalog pairs / 990 unique keys. Production worker verification
+checks both sides of every pair with zero online search, plus rejection controls
+for changed own sets, prior bytes and public opponent facts.
 
 Historical selection measurements and Nash weights retain their original
 fingerprints and are labelled not remeasured. Their numbers are not certified

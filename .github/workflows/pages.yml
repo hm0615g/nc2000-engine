@@ -80,6 +80,7 @@ jobs:
           cargo run --quiet -p nc2000-bot --example verify_training -- target/training-verification.json
           cmp data/training-v3/verification.json target/training-verification.json
           node --test tools/normalize-training.test.js tools/optimize-low-attack.test.js
+          cargo test -p nc2000-bot --example meta_eco catalog_preview::tests
 
       - name: Build web (project-pages base)
         working-directory: web
@@ -119,6 +120,16 @@ jobs:
           test -s web/dist/data/meta-nash-v3/pool-artifact.json
           test -s web/dist/data/kodoku-r3/conclusion-equilibrium-r1.json
           test -s web/dist/data/kodoku-r3/conclusion-equilibrium-deme.json
+
+      - name: Verify complete production preview lookup
+        working-directory: web
+        env:
+          NC2000_BASE: /nc2000-engine/
+          NC2000_PREVIEW_CHECK_OUT: ../target/production-preview-verification.json
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:preview-production
+          NC2000_BASE=/ NC2000_CHECK_OUT=../target node tests/compiled-preview-coverage.mjs
 
       - name: Build and verify server cache bindings
         run: |

@@ -36,6 +36,9 @@ use nc2000_engine::dex::{toid, Dex};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+#[path = "meta_eco/catalog_preview.rs"]
+mod catalog_preview;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct NicheSpec {
     name: String,
@@ -8156,7 +8159,7 @@ fn main() {
         "stress-falsify" => cmd_stress_falsify(&args[1..]),
         "apex-experiment" => cmd_apex_experiment(&args[1..]),
         "eval-partybox" => cmd_eval_partybox(&args[1..]),
-        "bake-catalog-preview" => cmd_bake_catalog_preview(&args[1..]),
+        "bake-catalog-preview" | "bake-prior-preview" => catalog_preview::run(&args[1..]),
         other => panic!(
             "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit | falsify-conclusion | converge-conclusion | stress-falsify | apex-experiment | eval-partybox | bake-catalog-preview)"
         ),
@@ -10629,6 +10632,7 @@ fn shell_pair_crn_seed(seed: u64, sig_a: &PreviewSig, sig_b: &PreviewSig, extra:
 
 fn mon_set_fingerprint(m: &PokemonSet) -> u64 {
     let mut h = 0xcbf2_9ce4_8422_2325_u64;
+    h = (h ^ u64::from(m.happiness.unwrap_or(255))).wrapping_mul(0x0100_0000_01b3);
     for b in toid(&m.species).as_bytes() {
         h = (h ^ (*b as u64)).wrapping_mul(0x0100_0000_01b3);
     }
@@ -10657,8 +10661,7 @@ fn mon_set_fingerprint(m: &PokemonSet) -> u64 {
             h = (h ^ (v as u64)).wrapping_mul(0x0100_0000_01b3);
         }
     }
-    let mut mvs: Vec<String> = m.moves.iter().map(|x| toid(x)).collect();
-    mvs.sort();
+    let mvs: Vec<String> = m.moves.iter().map(|x| toid(x)).collect();
     for mv in &mvs {
         for b in mv.as_bytes() {
             h = (h ^ (*b as u64)).wrapping_mul(0x0100_0000_01b3);
@@ -16907,6 +16910,7 @@ fn cmd_eval_partybox(args: &[String]) {
     println!("\nReport saved to data/partybox-v0/eval-report.json (elapsed: {:.1}s)", t_start.elapsed().as_secs_f64());
 }
 
+#[allow(dead_code)] // Historical pre-training-v3 bake; the command uses catalog_preview::run.
 fn cmd_bake_catalog_preview(args: &[String]) {
     let t_start = std::time::Instant::now();
     let dex = load_dex();

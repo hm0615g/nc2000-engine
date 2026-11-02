@@ -51,8 +51,8 @@ const retirement = {
 };
 for (const p of ['data/compiled-preview-v1.json', 'data/team-pool-v2/preview-nash-matrix.json']) {
 	const artifact = read(p);
-	if (p === 'data/compiled-preview-v1.json' && !artifact.status &&
-		artifact.priorSha256 === retirement.priorSha256 &&
+	if (!artifact.status &&
+		(artifact.priorSha256 || artifact.inputs?.['data/belief-pool-v3/belief-pool.json']) === retirement.priorSha256 &&
 		artifact.inputs?.['data/team-pool-v2/team-pool.json'] === retirement.catalogSha256) continue;
 	artifact.status = 'retired-training-v3';
 	artifact.retirement = retirement;
