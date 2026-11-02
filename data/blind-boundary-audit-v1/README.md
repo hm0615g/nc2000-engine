@@ -213,3 +213,5 @@ rolls. Keep observable-frame comparisons independent of determinization and
 require invariant decisions for fixed observations, settings and randomness.
 
 These are proposed repairs; no repair or publication is part of this audit.
+The [repair scope](../../docs/BLIND-BOUNDARY-REPAIR-SCOPE.md) separates runtime
+changes, required verification, preview compatibility and equilibrium remeasurement.
