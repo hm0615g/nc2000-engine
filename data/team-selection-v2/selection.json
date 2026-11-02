@@ -6,8 +6,8 @@
  "condition": {
   "agent": "blind:27000:0.4|blind:27000:0.4",
   "cond": {
-   "belief_col": "fnv1a64:ffa73c4245fe3774",
-   "belief_row": "fnv1a64:ffa73c4245fe3774",
+   "belief_col": "fnv1a64:957b746a94b97708",
+   "belief_row": "fnv1a64:957b746a94b97708",
    "bot": "fnv1a64:c31d5635eb296d9a:m17e-solver-build-v3",
    "max_turns": 500,
    "ponder": "none",
@@ -17,13 +17,13 @@
  },
  "prior": {
   "path": "data/belief-pool-v3/belief-pool.json",
-  "fingerprint": "fnv1a64:ffa73c4245fe3774"
+  "fingerprint": "fnv1a64:957b746a94b97708"
  },
  "drawRule": "each variant cluster among the selected parties carries equal mass, split equally among its members",
- "size": 27,
+ "size": 33,
  "sizeTarget": [
   15,
-  30
+  35
  ],
  "V": [
   0.60123510835728,
@@ -291,11 +291,12 @@
    "reason": "stage C: floor undecided after the last look"
   },
   "hc75-3rd-bean": {
-   "label": "selected",
+   "label": "not-selected",
    "stage": "C",
    "score": 0.5783045977011497,
    "se": 0.02802814220141486,
-   "games": 364
+   "games": 364,
+   "reason": "non-Nash duplicate of vc06 (sample-08 retained)"
   },
   "hc75-top8-tezan": {
    "stage": "B",
@@ -676,11 +677,12 @@
    "reason": "stage B: beyond the 36-entrant cap"
   },
   "rental-cban-6": {
-   "label": "selected",
+   "label": "not-selected",
    "stage": "C",
    "score": 0.6030890804597703,
    "se": 0.0270803999948985,
-   "games": 364
+   "games": 364,
+   "reason": "non-Nash duplicate of vc06 (sample-08 retained)"
   },
   "rental-cban-8": {
    "label": "selected",
@@ -1014,6 +1016,705 @@
    "se": 0,
    "games": 0,
    "label": "selected"
+  },
+  "pb-46": {
+   "label": "selected",
+   "score": 0.252075,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-76": {
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc25",
+   "score": 0.408568,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-78": {
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc26",
+   "score": 0.355867,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-64": {
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc03",
+   "score": 0.365706,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-74": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.418)",
+   "score": 0.418117,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-15": {
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc02",
+   "score": 0.374629,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-1": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.281)",
+   "score": 0.281251,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-67": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.397)",
+   "score": 0.39657,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-66": {
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc08",
+   "score": 0.333509,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-18": {
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc07",
+   "score": 0.248019,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-168": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.272)",
+   "score": 0.271858,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-19": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.253)",
+   "score": 0.252971,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-106": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.308)",
+   "score": 0.307508,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-31": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.325)",
+   "score": 0.324617,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-62": {
+   "label": "selected",
+   "score": 0.425272,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-102": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.083)",
+   "score": 0.08291,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-129": {
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc53",
+   "score": 0.345582,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-65": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.304)",
+   "score": 0.304304,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-117": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.119)",
+   "score": 0.119429,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-111": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.292)",
+   "score": 0.292445,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-13": {
+   "label": "selected",
+   "score": 0.262743,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-14": {
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc01",
+   "score": 0.262635,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-103": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.261)",
+   "score": 0.261143,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-3": {
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc08",
+   "score": 0.358445,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-90": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.345)",
+   "score": 0.344525,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-69": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.225)",
+   "score": 0.225248,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-146": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.222)",
+   "score": 0.221824,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-61": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.300)",
+   "score": 0.300134,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-44": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.062)",
+   "score": 0.062389,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-63": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.324)",
+   "score": 0.324251,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-43": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.342)",
+   "score": 0.341632,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-136": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.314)",
+   "score": 0.313838,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-77": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.210)",
+   "score": 0.209508,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-52": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.378)",
+   "score": 0.378013,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-58": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.177)",
+   "score": 0.17696,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-132": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.406)",
+   "score": 0.405796,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-113": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.101)",
+   "score": 0.10125,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-134": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.253)",
+   "score": 0.252554,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-108": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.335)",
+   "score": 0.335005,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-42": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.105)",
+   "score": 0.104582,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-147": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.365)",
+   "score": 0.364788,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-4": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.286)",
+   "score": 0.286141,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-80": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.192)",
+   "score": 0.191781,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-109": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.157)",
+   "score": 0.157077,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-84": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.326)",
+   "score": 0.325878,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-89": {
+   "label": "selected",
+   "score": 0.347178,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-12": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.326)",
+   "score": 0.32621,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-98": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.301)",
+   "score": 0.301066,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-83": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.324)",
+   "score": 0.323625,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-79": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.249)",
+   "score": 0.249228,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-16": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.173)",
+   "score": 0.173268,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-21": {
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc05",
+   "score": 0.235751,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-33": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.187)",
+   "score": 0.187155,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-57": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.168)",
+   "score": 0.16784,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-100": {
+   "label": "selected",
+   "score": 0.451343,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-85": {
+   "label": "selected",
+   "score": 0.440201,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-2": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.238)",
+   "score": 0.237551,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-81": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.219)",
+   "score": 0.219434,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-5": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.219)",
+   "score": 0.218557,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-137": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.268)",
+   "score": 0.267936,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-135": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.231)",
+   "score": 0.23105,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-123": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.345)",
+   "score": 0.345405,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-82": {
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc04",
+   "score": 0.256315,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-6": {
+   "label": "selected",
+   "score": 0.380053,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-53": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.199)",
+   "score": 0.199346,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-93": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.289)",
+   "score": 0.289333,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-92": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.222)",
+   "score": 0.222131,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-96": {
+   "label": "selected",
+   "score": 0.366516,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-32": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.246)",
+   "score": 0.246264,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-87": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.354)",
+   "score": 0.353763,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-34": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.200)",
+   "score": 0.199922,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-35": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.302)",
+   "score": 0.302402,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-158": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.090)",
+   "score": 0.090366,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-10": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.200)",
+   "score": 0.19998,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-86": {
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc03",
+   "score": 0.272571,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-8": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.294)",
+   "score": 0.294066,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-153": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.196)",
+   "score": 0.195738,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-110": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.160)",
+   "score": 0.159922,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-127": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.296)",
+   "score": 0.295876,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-105": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.270)",
+   "score": 0.270332,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-22": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.102)",
+   "score": 0.10188,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-23": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.204)",
+   "score": 0.203609,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-91": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.357)",
+   "score": 0.357302,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-95": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.095)",
+   "score": 0.094784,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-7": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.200)",
+   "score": 0.200291,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-99": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.241)",
+   "score": 0.240965,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-101": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.152)",
+   "score": 0.152407,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-112": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.141)",
+   "score": 0.140808,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-68": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.158)",
+   "score": 0.158104,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-124": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.358)",
+   "score": 0.358444,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-131": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.363)",
+   "score": 0.363403,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-122": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.214)",
+   "score": 0.214374,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-150": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.275)",
+   "score": 0.274507,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-130": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.296)",
+   "score": 0.296467,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-121": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.269)",
+   "score": 0.268663,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-88": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.201)",
+   "score": 0.200868,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-119": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.071)",
+   "score": 0.071346,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-107": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.060)",
+   "score": 0.059704,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-114": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.183)",
+   "score": 0.182906,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-169": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.309)",
+   "score": 0.308675,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
+  },
+  "pb-170": {
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.317)",
+   "score": 0.317499,
+   "se": 0.008,
+   "stage": "partybox-v0-gauntlet"
   }
  }
 }

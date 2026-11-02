@@ -44,13 +44,14 @@ const fail = msg => { throw new Error(msg); };
 
 const inv = read('data/team-inventory-v1/inventory.json');
 const evolved = read('data/team-selection-v2/evolved-teams.json');
+const partybox = read('data/partybox-v0/teams.json');
 const v1 = read('data/team-inventory-v1/classification.json');
 const sel = read(arg('--selection') || 'data/team-selection-v2/selection.json');
 const sol = read(arg('--solution') || 'data/meta-nash-v3/solution.json');
 const deployedNash = read('data/kodoku-r3/conclusion-equilibrium-deme.json');
 const PRIOR = 'data/belief-pool-v3/belief-pool.json';
 const prior = read(PRIOR);
-const allTeams = [...inv.teams, ...evolved.teams];
+const allTeams = [...inv.teams, ...evolved.teams, ...partybox.teams];
 const byId = new Map(allTeams.map(t => [t.id, t]));
 
 const priorFp = fnv1a64(PRIOR);
@@ -59,7 +60,8 @@ if (sol.prior.fingerprint !== priorFp) fail(`Nash solution was measured on anoth
 
 const LABELS = new Set(['selected', 'pending', 'not-selected']);
 const measured = inv.teams.filter(t => t.eligibility.status === 'eligible' && t.measuredAs === t.id);
-const candidates = [...measured, ...evolved.teams];
+const pbMeasured = partybox.teams.filter(t => t.eligibility.status === 'eligible' && t.measuredAs === t.id);
+const candidates = [...measured, ...evolved.teams, ...pbMeasured];
 for (const t of candidates) {
 	const l = sel.labels[t.id];
 	if (!l || !LABELS.has(l.label)) fail(`${t.id}: no selection label`);
@@ -69,7 +71,7 @@ for (const id of Object.keys(sel.labels)) {
 	if (!byId.has(id) || byId.get(id).measuredAs !== id) fail(`selection label for non-measured id ${id}`);
 }
 const priorIds = new Set(prior.teams.map(t => t.id));
-for (const t of measured) if (!priorIds.has(t.id)) fail(`${t.id}: measured but missing from the frozen prior`);
+for (const t of candidates) if (!priorIds.has(t.id)) fail(`${t.id}: measured but missing from the frozen prior`);
 
 // ------------------------------------------------------------ catalog
 const deployedNashW = new Map(deployedNash.teams.map(t => [t.id, t.weight]));

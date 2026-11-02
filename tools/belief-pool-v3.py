@@ -26,8 +26,21 @@ REPO = os.path.join(os.path.dirname(__file__), '..')
 V2 = os.path.join(REPO, 'data/belief-pool-v2/belief-pool.json')
 V3 = os.path.join(REPO, 'data/belief-pool-v3/belief-pool.json')
 INV = os.path.join(REPO, 'data/team-inventory-v1/inventory.json')
+EVO = os.path.join(REPO, 'data/team-selection-v2/evolved-teams.json')
+PB = os.path.join(REPO, 'data/partybox-v0/teams.json')
 MACHINE_FACTOR = 0.25
 RESTORED = ['mjj-2020-kb-2020']
+LOWATK_TWINS = [
+    'rental-cban-8',
+    'mjj-2014-thdrcomb',
+    'sample-06',
+    'mjj-2010-garap-a',
+    'sib-r1-n4-red-v6-r1-s0064-s07',
+    'sample-09',
+    'sample-22-orig',
+    'pb-100',
+    'pb-6',
+]
 X_TEAMS = ['sample-07', 'sample-13', 'mjj-2021-q10con', 'mjj-2023-ukethdr']
 
 
@@ -35,16 +48,63 @@ def load(path):
     return json.load(open(path))
 
 
+def lowatk_sets(sets_by_id):
+    import subprocess
+    script = """
+    const fs = require('fs');
+    const dex = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+    const { optimizeLowAttack } = require(process.argv[2]);
+    const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+    const out = {};
+    for (const [id, sets] of Object.entries(input)) {
+      out[id] = optimizeLowAttack(sets, dex, { preferFemale: true }).sets;
+    }
+    process.stdout.write(JSON.stringify(out));
+    """
+    res = subprocess.run(
+        ['node', '-e', script, os.path.join(REPO, 'data/gen2stadium2.json'), os.path.join(REPO, 'tools/optimize-low-attack.js')],
+        input=json.dumps(sets_by_id),
+         text=True,
+        capture_output=True,
+        check=True,
+    )
+    return json.loads(res.stdout)
+
+
 def members():
     v2 = load(V2)
     inv = {t['id']: t for t in load(INV)['teams']}
+    evo = {t['id']: t for t in load(EVO)['teams']}
+    pb = {t['id']: t for t in load(PB)['teams']}
+    all_records = {**inv, **evo, **pb}
     ids = [t['id'] for t in v2['teams']]
     v1_label = {t['id']: t['label'] for t in v2['teams']}
     for r in RESTORED:
         assert r not in ids and inv[r]['measuredAs'] == r and inv[r]['eligibility']['status'] == 'eligible'
         ids.append(r)
         v1_label[r] = 'dominated'
-    return ids, v1_label, inv
+    for t in load(EVO)['teams']:
+        i = t['id']
+        assert i not in ids and t['measuredAs'] == i and t['eligibility']['status'] == 'eligible'
+        ids.append(i)
+        v1_label[i] = 'evolved'
+    for t in load(PB)['teams']:
+        i = t['id']
+        if t['measuredAs'] != i or t['eligibility']['status'] != 'eligible':
+            continue
+        assert i not in ids
+        ids.append(i)
+        v1_label[i] = 'partybox'
+    opt_sets = lowatk_sets({b: all_records[b]['sets'] for b in LOWATK_TWINS})
+    for b in LOWATK_TWINS:
+        twin_id = f'{b}-lowatk'
+        base = dict(all_records[b])
+        base['id'] = twin_id
+        base['sets'] = opt_sets[b]
+        all_records[twin_id] = base
+        ids.append(twin_id)
+        v1_label[twin_id] = v1_label[b]
+    return ids, v1_label, all_records
 
 
 def weights(ids, inv, machine_factor=MACHINE_FACTOR):

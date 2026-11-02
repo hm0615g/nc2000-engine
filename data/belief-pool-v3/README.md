@@ -9,17 +9,17 @@ the membership and order of the frozen `data/belief-pool-v2` file plus the
 records in `RESTORED`, with sets from `data/team-inventory-v1`. Selection
 labels (`data/team-selection-v2`) are never read, so relabelling the own pool
 cannot move this file. Fingerprint (the one `team_eval` stamps into
-`cond.belief_*`): `fnv1a64:ffa73c4245fe3774`.
+`cond.belief_*`): `fnv1a64:957b746a94b97708`.
 
 ## Support
 
-Every eligible measured team of `data/team-inventory-v1` — 103 records:
-v1's strong, weak and pending teams, and カビバン 2020
-(`mjj-2020-kb-2020`), whose open-era dominated verdict (+0.063 at open:1000,
-+0.034 at blind:1000 with c = 1.0, below the 0.05 bar) was never reconfirmed
-under the blind c = 0.4 product. Restoring it is the plan's rule when the
-verdict is not reconfirmed. `v1Label` on each entry is that historical
-open-era label, not a selection label.
+Every eligible measured team across `data/team-inventory-v1` (103 records),
+`data/team-selection-v2/evolved-teams.json` (8 records), and
+`data/partybox-v0/teams.json` (101 unique measured records), plus 9
+`<id>-lowatk` Female-optimized twins for catalog teams whose `low-attack-v2`
+optimization changes a Pokémon's gender (`221` records total). This ensures
+100% coverage and zero fallback asymmetry across both raw human/evolved sets
+and `low-attack-v2` catalog sets.
 
 ## Allocation
 

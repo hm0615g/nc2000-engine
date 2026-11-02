@@ -5,8 +5,8 @@
  "condition": {
   "agent": "blind:27000:0.4|blind:27000:0.4",
   "cond": {
-   "belief_col": "fnv1a64:ffa73c4245fe3774",
-   "belief_row": "fnv1a64:ffa73c4245fe3774",
+   "belief_col": "fnv1a64:957b746a94b97708",
+   "belief_row": "fnv1a64:957b746a94b97708",
    "bot": "fnv1a64:c31d5635eb296d9a:m17e-solver-build-v3",
    "max_turns": 500,
    "ponder": "none",
@@ -16,18 +16,18 @@
  },
  "setOptimization": {
   "policy": "low-attack-v2: no Physical move, Hidden Power or external move access; minimum Attack DV preserving HP and shiny status; Attack EV 0; conditional female preference except own Attract users and multi-variant camouflage clusters",
-  "changedTeams": 19,
-  "changedSets": 34,
-  "changedGenders": 8,
+  "changedTeams": 25,
+  "changedSets": 43,
+  "changedGenders": 10,
   "femalePreference": {
    "enabled": true,
    "weightedDirectSources": {
-    "M": 0.25,
-    "F": 1,
+    "M": 1.25,
+    "F": 8,
     "N": 0
    },
    "basis": "female targets resist female sources and are susceptible to male sources; weighted direct-source-set mass is a proxy, not encounter or win probability",
-   "priorFingerprint": "fnv1a64:ffa73c4245fe3774"
+   "priorFingerprint": "fnv1a64:957b746a94b97708"
   },
   "scoreBasis": "confirmation scores refer to the original inventory/evolved sets, before low-attack-v2; optimized sets have not been remeasured"
  },
@@ -55,7 +55,7 @@
     50,
     55
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.688218,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -281,7 +281,7 @@
     50,
     55
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.66056,
    "provenance": {
     "family": "community-rentals",
@@ -507,7 +507,7 @@
     50,
     55
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.644397,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -733,7 +733,7 @@
     50,
     50
    ],
-   "drawWeight": 0.011364,
+   "drawWeight": 0.008333,
    "score": 0.637672,
    "provenance": {
     "family": "kodoku-nash-v14",
@@ -959,7 +959,7 @@
     50,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.636853,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -1185,7 +1185,7 @@
     55,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.636494,
    "provenance": {
     "family": "meta-nash-neighborhood",
@@ -1411,7 +1411,7 @@
     50,
     50
    ],
-   "drawWeight": 0.011364,
+   "drawWeight": 0.008333,
    "score": 0.630972,
    "provenance": {
     "family": "kodoku-nash-v13",
@@ -1637,7 +1637,7 @@
     50,
     50
    ],
-   "drawWeight": 0.011364,
+   "drawWeight": 0.008333,
    "score": 0.628572,
    "provenance": {
     "family": "kodoku-nash-v14",
@@ -1863,7 +1863,7 @@
     55,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.627801,
    "provenance": {
     "family": "kodoku-evolved",
@@ -2089,7 +2089,7 @@
     50,
     50
    ],
-   "drawWeight": 0.011364,
+   "drawWeight": 0.008333,
    "score": 0.625695,
    "provenance": {
     "family": "kodoku-nash-v13",
@@ -2315,7 +2315,7 @@
     50,
     55
    ],
-   "drawWeight": 0.015152,
+   "drawWeight": 0.033333,
    "score": 0.615661,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -2541,7 +2541,7 @@
     50,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.609195,
    "provenance": {
     "family": "community-rentals",
@@ -2767,7 +2767,7 @@
     55,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.608537,
    "provenance": {
     "family": "kodoku-evolved",
@@ -2993,7 +2993,7 @@
     50,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.604885,
    "provenance": {
     "family": "majinjima",
@@ -3198,234 +3198,8 @@
    ]
   },
   {
-   "id": "rental-cban-6",
-   "rank": 15,
-   "label": "selected",
-   "nash": false,
-   "evolved": false,
-   "species": [
-    "Zapdos",
-    "Miltank",
-    "Snorlax",
-    "Cloyster",
-    "Exeggutor",
-    "Machamp"
-   ],
-   "levels": [
-    55,
-    55,
-    50,
-    50,
-    50,
-    50
-   ],
-   "drawWeight": 0.015152,
-   "score": 0.603089,
-   "provenance": {
-    "family": "community-rentals",
-    "origin": "human",
-    "source": "psense rental-party DB (一撃無し2000)",
-    "url": "http://psense.lib.net/_/PDINPUT2.cgi?CBAN=6",
-    "version": "サンダータンク"
-   },
-   "sets": [
-    {
-     "name": "Zapdos",
-     "species": "Zapdos",
-     "item": "Leftovers",
-     "ability": "No Ability",
-     "moves": [
-      "Thunder",
-      "Hidden Power Ice",
-      "Swagger",
-      "Whirlwind"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "N",
-     "ivs": {
-      "hp": 30,
-      "atk": 30,
-      "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
-     },
-     "level": 55,
-     "happiness": 255
-    },
-    {
-     "name": "Miltank",
-     "species": "Miltank",
-     "item": "Pink Bow",
-     "ability": "No Ability",
-     "moves": [
-      "Return",
-      "Curse",
-      "Milk Drink",
-      "Zap Cannon"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "F",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 55,
-     "happiness": 255
-    },
-    {
-     "name": "Snorlax",
-     "species": "Snorlax",
-     "item": "Mint Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Body Slam",
-      "Earthquake",
-      "Rest",
-      "Self-Destruct"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Cloyster",
-     "species": "Cloyster",
-     "item": "Miracle Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Ice Beam",
-      "Surf",
-      "Spikes",
-      "Explosion"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Exeggutor",
-     "species": "Exeggutor",
-     "item": "Quick Claw",
-     "ability": "No Ability",
-     "moves": [
-      "Psychic",
-      "Leech Seed",
-      "Sleep Powder",
-      "Hidden Power Bug"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 30,
-      "atk": 26,
-      "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Machamp",
-     "species": "Machamp",
-     "item": "Gold Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Cross Chop",
-      "Hidden Power Bug",
-      "Earthquake",
-      "Rock Slide"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 30,
-      "atk": 26,
-      "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
-     },
-     "level": 50,
-     "happiness": 255
-    }
-   ]
-  },
-  {
    "id": "sample-11",
-   "rank": 16,
+   "rank": 15,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -3445,7 +3219,7 @@
     50,
     55
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.598779,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -3651,7 +3425,7 @@
   },
   {
    "id": "sample-06",
-   "rank": 17,
+   "rank": 16,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -3671,7 +3445,7 @@
     55,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.592672,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -3877,7 +3651,7 @@
   },
   {
    "id": "red-v10-s1105-r2-s0155",
-   "rank": 18,
+   "rank": 17,
    "label": "selected",
    "nash": false,
    "evolved": true,
@@ -3897,7 +3671,7 @@
     55,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.587777,
    "provenance": {
     "family": "kodoku-evolved",
@@ -4103,7 +3877,7 @@
   },
   {
    "id": "mjj-2010-garap-a",
-   "rank": 19,
+   "rank": 18,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -4123,7 +3897,7 @@
     50,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.586207,
    "provenance": {
     "family": "majinjima",
@@ -4329,7 +4103,7 @@
   },
   {
    "id": "mjj-2020-rraikou",
-   "rank": 20,
+   "rank": 19,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -4349,7 +4123,7 @@
     50,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.58477,
    "provenance": {
     "family": "majinjima",
@@ -4554,234 +4328,8 @@
    ]
   },
   {
-   "id": "hc75-3rd-bean",
-   "rank": 21,
-   "label": "selected",
-   "nash": false,
-   "evolved": false,
-   "species": [
-    "Zapdos",
-    "Miltank",
-    "Snorlax",
-    "Exeggutor",
-    "Cloyster",
-    "Machamp"
-   ],
-   "levels": [
-    55,
-    55,
-    50,
-    50,
-    50,
-    50
-   ],
-   "drawWeight": 0.015152,
-   "score": 0.578305,
-   "provenance": {
-    "family": "hc75-top8",
-    "origin": "human",
-    "source": "Historia Cup 7.5 (live NC2000 tournament, 27 players, 2022-05-03, hosted by Gold)",
-    "url": "https://gold.hatenadiary.jp/entry/2022/05/05/151859",
-    "version": "Historia Cup 7.5 3rd"
-   },
-   "sets": [
-    {
-     "name": "Zapdos",
-     "species": "Zapdos",
-     "item": "Leftovers",
-     "ability": "No Ability",
-     "moves": [
-      "Thunder",
-      "Hidden Power Ice",
-      "Swagger",
-      "Substitute"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "N",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 26,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 55,
-     "happiness": 255
-    },
-    {
-     "name": "Miltank",
-     "species": "Miltank",
-     "item": "Bright Powder",
-     "ability": "No Ability",
-     "moves": [
-      "Return",
-      "Curse",
-      "Double Team",
-      "Milk Drink"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "F",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 55,
-     "happiness": 255
-    },
-    {
-     "name": "Snorlax",
-     "species": "Snorlax",
-     "item": "Mint Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Body Slam",
-      "Earthquake",
-      "Self-Destruct",
-      "Rest"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Exeggutor",
-     "species": "Exeggutor",
-     "item": "Quick Claw",
-     "ability": "No Ability",
-     "moves": [
-      "Psychic",
-      "Hidden Power Bug",
-      "Leech Seed",
-      "Sleep Powder"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 26,
-      "def": 26,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Cloyster",
-     "species": "Cloyster",
-     "item": "Miracle Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Surf",
-      "Ice Beam",
-      "Spikes",
-      "Explosion"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Machamp",
-     "species": "Machamp",
-     "item": "Gold Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Cross Chop",
-      "Earthquake",
-      "Rock Slide",
-      "Hidden Power Bug"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 26,
-      "def": 26,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    }
-   ]
-  },
-  {
    "id": "sample-02",
-   "rank": 22,
+   "rank": 20,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -4801,7 +4349,7 @@
     50,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.573994,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -5007,7 +4555,7 @@
   },
   {
    "id": "sib-r1-n4-red-v6-r1-s0064-s07",
-   "rank": 23,
+   "rank": 21,
    "label": "selected",
    "nash": false,
    "evolved": true,
@@ -5027,7 +4575,7 @@
     55,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.55532,
    "provenance": {
     "family": "kodoku-evolved",
@@ -5233,7 +4781,7 @@
   },
   {
    "id": "hc75-top8-tsuru",
-   "rank": 24,
+   "rank": 22,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -5253,7 +4801,7 @@
     50,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.528017,
    "provenance": {
     "family": "hc75-top8",
@@ -5459,7 +5007,7 @@
   },
   {
    "id": "sample-09",
-   "rank": 25,
+   "rank": 23,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -5479,7 +5027,7 @@
     55,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.512931,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -5685,7 +5233,7 @@
   },
   {
    "id": "sample-22-orig",
-   "rank": 26,
+   "rank": 24,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -5705,7 +5253,7 @@
     50,
     55
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.511135,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -5911,7 +5459,7 @@
   },
   {
    "id": "sample-14",
-   "rank": 27,
+   "rank": 25,
    "label": "selected",
    "nash": false,
    "evolved": false,
@@ -5931,7 +5479,7 @@
     50,
     50
    ],
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "score": 0.50018,
    "provenance": {
     "family": "smogon-hub-samples",
@@ -6126,6 +5674,1814 @@
       "hp": 31,
       "atk": 22,
       "def": 26,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ]
+  },
+  {
+   "id": "pb-100",
+   "rank": 26,
+   "label": "selected",
+   "nash": false,
+   "evolved": false,
+   "species": [
+    "Snorlax",
+    "Forretress",
+    "Cloyster",
+    "Machamp",
+    "Venusaur",
+    "Starmie"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ],
+   "drawWeight": 0.033333,
+   "score": 0.451343,
+   "provenance": {
+    "family": "goldrush-partybox",
+    "origin": "human",
+    "source": "GoldRush PartyBox #100 「カビゴンSA+フォレトス」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=100",
+    "version": "2019/12/15(Sun)"
+   },
+   "sets": [
+    {
+     "name": "Snorlax",
+     "species": "Snorlax",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Double-Edge",
+      "Curse",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Forretress",
+     "species": "Forretress",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Spikes",
+      "Toxic",
+      "Defense Curl",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Cloyster",
+     "species": "Cloyster",
+     "item": "Gold Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Ice Beam",
+      "Spikes",
+      "Reflect",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Machamp",
+     "species": "Machamp",
+     "item": "Mint Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Cross Chop",
+      "Earthquake",
+      "Hidden Power Flying",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 15,
+      "atk": 25,
+      "def": 27,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Venusaur",
+     "species": "Venusaur",
+     "item": "PRZ Cure Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Giga Drain",
+      "Sleep Powder",
+      "Roar",
+      "Synthesis"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Starmie",
+     "species": "Starmie",
+     "item": "Burnt Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Hydro Pump",
+      "Thunder",
+      "Rapid Spin",
+      "Recover"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 3,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ]
+  },
+  {
+   "id": "pb-85",
+   "rank": 27,
+   "label": "selected",
+   "nash": false,
+   "evolved": false,
+   "species": [
+    "Snorlax",
+    "Steelix",
+    "Machamp",
+    "Cloyster",
+    "Zapdos",
+    "Umbreon"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ],
+   "drawWeight": 0.033333,
+   "score": 0.440201,
+   "provenance": {
+    "family": "goldrush-partybox",
+    "origin": "human",
+    "source": "GoldRush PartyBox #85 「寝言カビSA最終バージョン」 by はまっちゃった人",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=85",
+    "version": "2018/05/31(Thu)"
+   },
+   "sets": [
+    {
+     "name": "Snorlax",
+     "species": "Snorlax",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Double-Edge",
+      "Curse",
+      "Sleep Talk",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Steelix",
+     "species": "Steelix",
+     "item": "Polkadot Bow",
+     "ability": "No Ability",
+     "moves": [
+      "Earthquake",
+      "Toxic",
+      "Roar",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Machamp",
+     "species": "Machamp",
+     "item": "Scope Lens",
+     "ability": "No Ability",
+     "moves": [
+      "Cross Chop",
+      "Rock Slide",
+      "Sleep Talk",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Cloyster",
+     "species": "Cloyster",
+     "item": "Gold Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Spikes",
+      "Ice Beam",
+      "Reflect",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Zapdos",
+     "species": "Zapdos",
+     "item": "Mint Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Thunder",
+      "Drill Peck",
+      "Reflect",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Umbreon",
+     "species": "Umbreon",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Mean Look",
+      "Charm",
+      "Pursuit",
+      "Baton Pass"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ]
+  },
+  {
+   "id": "pb-62",
+   "rank": 28,
+   "label": "selected",
+   "nash": false,
+   "evolved": false,
+   "species": [
+    "Snorlax",
+    "Machamp",
+    "Starmie",
+    "Zapdos",
+    "Steelix",
+    "Exeggutor"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ],
+   "drawWeight": 0.033333,
+   "score": 0.425272,
+   "provenance": {
+    "family": "goldrush-partybox",
+    "origin": "human",
+    "source": "GoldRush PartyBox #62 「55地震寝言ピント♀カビSA」 by はまっちゃった人",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=62",
+    "version": "2015/09/22(Tue)"
+   },
+   "sets": [
+    {
+     "name": "Snorlax",
+     "species": "Snorlax",
+     "item": "Scope Lens",
+     "ability": "No Ability",
+     "moves": [
+      "Double-Edge",
+      "Earthquake",
+      "Sleep Talk",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "ivs": {
+      "hp": 31,
+      "atk": 3,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Machamp",
+     "species": "Machamp",
+     "item": "Gold Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Cross Chop",
+      "Rock Slide",
+      "Hidden Power Bug",
+      "Fire Blast"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 27,
+      "def": 27,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Starmie",
+     "species": "Starmie",
+     "item": "Bright Powder",
+     "ability": "No Ability",
+     "moves": [
+      "Hydro Pump",
+      "Psychic",
+      "Zap Cannon",
+      "Recover"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Zapdos",
+     "species": "Zapdos",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Thunder",
+      "Drill Peck",
+      "Swagger",
+      "Substitute"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Steelix",
+     "species": "Steelix",
+     "item": "Quick Claw",
+     "ability": "No Ability",
+     "moves": [
+      "Earthquake",
+      "Curse",
+      "Roar",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Exeggutor",
+     "species": "Exeggutor",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Sleep Powder",
+      "Leech Seed",
+      "Psychic",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ]
+  },
+  {
+   "id": "pb-6",
+   "rank": 29,
+   "label": "selected",
+   "nash": false,
+   "evolved": false,
+   "species": [
+    "Zapdos",
+    "Machamp",
+    "Snorlax",
+    "Umbreon",
+    "Cloyster",
+    "Gengar"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ],
+   "drawWeight": 0.033333,
+   "score": 0.380053,
+   "provenance": {
+    "family": "goldrush-partybox",
+    "origin": "human",
+    "source": "GoldRush PartyBox #6 「サンダーリキーWA＠しゃわさん作」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=6",
+    "version": "2014/08/30(Sat)"
+   },
+   "sets": [
+    {
+     "name": "Zapdos",
+     "species": "Zapdos",
+     "item": "Magnet",
+     "ability": "No Ability",
+     "moves": [
+      "Thunder",
+      "Hidden Power Ice",
+      "Sleep Talk",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 23,
+      "def": 27,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Machamp",
+     "species": "Machamp",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Cross Chop",
+      "Rock Slide",
+      "Hidden Power Ghost",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 23,
+      "atk": 27,
+      "def": 29,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Snorlax",
+     "species": "Snorlax",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Body Slam",
+      "Earthquake",
+      "Curse",
+      "Self-Destruct"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Umbreon",
+     "species": "Umbreon",
+     "item": "Mint Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Mean Look",
+      "Charm",
+      "Baton Pass",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Cloyster",
+     "species": "Cloyster",
+     "item": "Gold Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Surf",
+      "Spikes",
+      "Curse",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Gengar",
+     "species": "Gengar",
+     "item": "PRZ Cure Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Fire Punch",
+      "Mean Look",
+      "Perish Song",
+      "Destiny Bond"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ]
+  },
+  {
+   "id": "pb-96",
+   "rank": 30,
+   "label": "selected",
+   "nash": false,
+   "evolved": false,
+   "species": [
+    "Heracross",
+    "Electabuzz",
+    "Snorlax",
+    "Cloyster",
+    "Misdreavus",
+    "Venusaur"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ],
+   "drawWeight": 0.033333,
+   "score": 0.366516,
+   "provenance": {
+    "family": "goldrush-partybox",
+    "origin": "human",
+    "source": "GoldRush PartyBox #96 「ヘラクロス+エレブーWA」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=96",
+    "version": "2019/12/15(Sun)"
+   },
+   "sets": [
+    {
+     "name": "Heracross",
+     "species": "Heracross",
+     "item": "Black Belt",
+     "ability": "No Ability",
+     "moves": [
+      "Megahorn",
+      "Hidden Power Fighting",
+      "Earthquake",
+      "Curse"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 7,
+      "atk": 25,
+      "def": 25,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Electabuzz",
+     "species": "Electabuzz",
+     "item": "Mint Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Thunderbolt",
+      "Ice Punch",
+      "Cross Chop",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Snorlax",
+     "species": "Snorlax",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Body Slam",
+      "Fire Blast",
+      "Self-Destruct",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Cloyster",
+     "species": "Cloyster",
+     "item": "Gold Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Ice Beam",
+      "Spikes",
+      "Reflect",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Misdreavus",
+     "species": "Misdreavus",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Mean Look",
+      "Perish Song",
+      "Protect",
+      "Confuse Ray"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Venusaur",
+     "species": "Venusaur",
+     "item": "PRZ Cure Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Giga Drain",
+      "Sleep Powder",
+      "Roar",
+      "Synthesis"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ]
+  },
+  {
+   "id": "pb-89",
+   "rank": 31,
+   "label": "selected",
+   "nash": false,
+   "evolved": false,
+   "species": [
+    "Rhydon",
+    "Miltank",
+    "Zapdos",
+    "Snorlax",
+    "Umbreon",
+    "Cloyster"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ],
+   "drawWeight": 0.033333,
+   "score": 0.347178,
+   "provenance": {
+    "family": "goldrush-partybox",
+    "origin": "human",
+    "source": "GoldRush PartyBox #89 「サイドンタンクWA」 by stoic",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=89",
+    "version": "2018/08/10(Fri)"
+   },
+   "sets": [
+    {
+     "name": "Rhydon",
+     "species": "Rhydon",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Earthquake",
+      "Rock Slide",
+      "Zap Cannon",
+      "Curse"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Miltank",
+     "species": "Miltank",
+     "item": "Pink Bow",
+     "ability": "No Ability",
+     "moves": [
+      "Return",
+      "Earthquake",
+      "Curse",
+      "Milk Drink"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Zapdos",
+     "species": "Zapdos",
+     "item": "Scope Lens",
+     "ability": "No Ability",
+     "moves": [
+      "Thunder",
+      "Drill Peck",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Snorlax",
+     "species": "Snorlax",
+     "item": "Mint Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Body Slam",
+      "Fire Blast",
+      "Rest",
+      "Self-Destruct"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Umbreon",
+     "species": "Umbreon",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Toxic",
+      "Pursuit",
+      "Charm",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Cloyster",
+     "species": "Cloyster",
+     "item": "Gold Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Ice Beam",
+      "Spikes",
+      "Reflect",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ]
+  },
+  {
+   "id": "pb-13",
+   "rank": 32,
+   "label": "selected",
+   "nash": false,
+   "evolved": false,
+   "species": [
+    "Snorlax",
+    "Cloyster",
+    "Gengar",
+    "Exeggutor",
+    "Electrode",
+    "Porygon2"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    50,
+    55
+   ],
+   "drawWeight": 0.033333,
+   "score": 0.262743,
+   "provenance": {
+    "family": "goldrush-partybox",
+    "origin": "human",
+    "source": "GoldRush PartyBox #13 「芸術は爆発だ！＠hidakaさん作」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=13",
+    "version": "2014/08/30(Sat)"
+   },
+   "sets": [
+    {
+     "name": "Snorlax",
+     "species": "Snorlax",
+     "item": "Mint Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Return",
+      "Earthquake",
+      "Self-Destruct",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Cloyster",
+     "species": "Cloyster",
+     "item": "Quick Claw",
+     "ability": "No Ability",
+     "moves": [
+      "Ice Beam",
+      "Surf",
+      "Screech",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Gengar",
+     "species": "Gengar",
+     "item": "PRZ Cure Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Thunderbolt",
+      "Ice Punch",
+      "Shadow Ball",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Exeggutor",
+     "species": "Exeggutor",
+     "item": "Gold Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Psychic",
+      "Stun Spore",
+      "Giga Drain",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Electrode",
+     "species": "Electrode",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Thunderbolt",
+      "Thunder Wave",
+      "Hidden Power Water",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 15,
+      "atk": 29,
+      "def": 27,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Porygon2",
+     "species": "Porygon2",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Frustration",
+      "Curse",
+      "Ice Beam",
+      "Recover"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    }
+   ]
+  },
+  {
+   "id": "pb-46",
+   "rank": 33,
+   "label": "selected",
+   "nash": false,
+   "evolved": false,
+   "species": [
+    "Entei",
+    "Meganium",
+    "Tyranitar",
+    "Snorlax",
+    "Cloyster",
+    "Exeggutor"
+   ],
+   "levels": [
+    55,
+    55,
+    55,
+    50,
+    50,
+    50
+   ],
+   "drawWeight": 0.033333,
+   "score": 0.252075,
+   "provenance": {
+    "family": "goldrush-partybox",
+    "origin": "human",
+    "source": "GoldRush PartyBox #46 「エンテイ メガニウムTA」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=46",
+    "version": "2015/01/27(Tue)"
+   },
+   "sets": [
+    {
+     "name": "Entei",
+     "species": "Entei",
+     "item": "PRZ Cure Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Sunny Day",
+      "Solar Beam",
+      "Fire Blast",
+      "Hidden Power Fighting"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 7,
+      "atk": 25,
+      "def": 25,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Meganium",
+     "species": "Meganium",
+     "item": "Black Belt",
+     "ability": "No Ability",
+     "moves": [
+      "Hidden Power Fighting",
+      "Synthesis",
+      "Curse",
+      "Leech Seed"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 7,
+      "atk": 25,
+      "def": 25,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Tyranitar",
+     "species": "Tyranitar",
+     "item": "Mint Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Ice Beam",
+      "Hidden Power Fighting",
+      "Rock Slide",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 7,
+      "atk": 25,
+      "def": 25,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Snorlax",
+     "species": "Snorlax",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Body Slam",
+      "Fire Blast",
+      "Earthquake",
+      "Self-Destruct"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Cloyster",
+     "species": "Cloyster",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Ice Beam",
+      "Spikes",
+      "Reflect",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Exeggutor",
+     "species": "Exeggutor",
+     "item": "Gold Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Psychic",
+      "Leech Seed",
+      "Sleep Powder",
+      "Explosion"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
       "spa": 31,
       "spd": 31,
       "spe": 31

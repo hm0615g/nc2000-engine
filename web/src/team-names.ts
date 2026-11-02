@@ -119,6 +119,38 @@ export const CATALOG_TEAM_NAMES: Record<string, TeamNameEntry> = {
     ja: "55カビゴン滅び偽装",
     en: "55 Snorlax Perish Trap",
   },
+  "pb-100": {
+    ja: "カビゴンSA+フォレトス (わんおー)",
+    en: "55 Snorlax SA + Forretress (Wan-oh)",
+  },
+  "pb-85": {
+    ja: "寝言カビSA最終版 (甘えるバトンブラッキー)",
+    en: "55 Snorlax Sleep Talk SA (Charm BP Umbreon)",
+  },
+  "pb-62": {
+    ja: "55地震寝言ピント♀カビSA (いばみがサンダー)",
+    en: "55 Scope Lens EQ/DE Snorlax SA (SubSwagger Zapdos)",
+  },
+  "pb-6": {
+    ja: "55サンダーリキーWA (しゃわ)",
+    en: "55 Zapdos Machamp WA (Shawa)",
+  },
+  "pb-96": {
+    ja: "55ヘラクロス+エレブーWA",
+    en: "55 Heracross Electabuzz WA",
+  },
+  "pb-89": {
+    ja: "55サイドンタンクWA",
+    en: "55 Rhydon Miltank WA",
+  },
+  "pb-46": {
+    ja: "55エンテイ・メガニウム・バンギTA",
+    en: "55 Entei Meganium Tyranitar TA",
+  },
+  "pb-13": {
+    ja: "芸術は爆発だ！ (55ポリ2+5大爆発)",
+    en: "Art is an Explosion! (55 Porygon2 + 5 Boom)",
+  },
 };
 
 export function teamDisplayName(id: string): string | null {

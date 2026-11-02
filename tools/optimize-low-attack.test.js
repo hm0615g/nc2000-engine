@@ -112,12 +112,12 @@ test('female preference is supported only by the frozen prior source mix', () =>
 	const { attractGenderCensus } = require('./attract-gender-census');
 	const prior = require('../data/belief-pool-v3/belief-pool.json');
 	const result = attractGenderCensus(prior);
-	assert.deepEqual(result.weightedSources, { M: 0.25, F: 1, N: 0 });
+	assert.deepEqual(result.weightedSources, { M: 1.25, F: 8, N: 0 });
 	assert.equal(result.preferFemale, true);
-	assert.equal(result.sources.length, 2);
+	assert.equal(result.sources.length, 10);
 	const catalog = require('../data/team-pool-v2/team-pool.json');
 	assert.equal(attractGenderCensus(catalog, 'drawWeight').sources.length, 0);
-	const equal = { teams: result.sources.map(s => ({ id: s.team, weight: 1,
+	const equal = { teams: [result.sources[0], result.sources[1]].map(s => ({ id: s.team, weight: 1,
 		sets: [{ species: s.species, gender: s.gender, moves: ['Attract'] }] })) };
 	assert.equal(attractGenderCensus(equal).preferFemale, false);
 	equal.teams[0].weight = NaN;
@@ -128,13 +128,14 @@ test('generated catalog matches the independently audited adjustments and cluste
 	const catalog = require('../data/team-pool-v2/team-pool.json');
 	const inventory = require('../data/team-inventory-v1/inventory.json');
 	const evolved = require('../data/team-selection-v2/evolved-teams.json');
+	const partybox = require('../data/partybox-v0/teams.json');
 	const audit = require('../findings/low-attack-catalog-v1/audit.json');
 	const genderAudit = require('../findings/attract-gender-v1/mechanics.json');
-	const original = new Map([...inventory.teams, ...evolved.teams].map(team => [team.id, team]));
-	assert.equal(catalog.teams.length, 27);
-	assert.equal(catalog.setOptimization.changedTeams, 19);
-	assert.equal(catalog.setOptimization.changedSets, 34);
-	assert.equal(catalog.setOptimization.changedGenders, 8);
+	const original = new Map([...inventory.teams, ...evolved.teams, ...partybox.teams].map(team => [team.id, team]));
+	assert.equal(catalog.teams.length, 33);
+	assert.equal(catalog.setOptimization.changedTeams, 25);
+	assert.equal(catalog.setOptimization.changedSets, 43);
+	assert.equal(catalog.setOptimization.changedGenders, 10);
 	assert.equal(audit.rows.length, 27);
 	for (const team of catalog.teams) {
 		const src = original.get(team.id);

@@ -3,13 +3,13 @@
  "generator": "tools/build-team-products-v2.js",
  "protocol": "data/team-selection-v2/PROTOCOL.md",
  "counts": {
-  "records": 141,
-  "eligible": 123,
-  "measured": 111,
-  "selected": 27,
+  "records": 244,
+  "eligible": 226,
+  "measured": 212,
+  "selected": 33,
   "pending": 9,
-  "notSelected": 75,
-  "prior": 103,
+  "notSelected": 170,
+  "prior": 221,
   "nashSupport": 4,
   "legacyNashV3Support": 5
  },
@@ -125,15 +125,15 @@
    },
    "measuredAs": "hc75-3rd-bean",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "non-Nash duplicate of vc06 (sample-08 retained)",
    "evidence": {
     "score": 0.5783045977011497,
     "se": 0.02802814220141486,
     "stage": "C"
    },
-   "catalog": true,
-   "drawWeight": 0.015152,
+   "catalog": false,
+   "drawWeight": 0,
    "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -227,7 +227,7 @@
     "stage": "B"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -274,7 +274,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.015152,
+   "drawWeight": 0.033333,
    "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0.186817,
@@ -322,7 +322,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.5,
+   "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc27",
@@ -369,7 +369,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.5,
+   "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc27",
@@ -462,8 +462,8 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 0.333333,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc04",
@@ -510,7 +510,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.333333,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc04",
@@ -557,7 +557,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.5,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc08",
@@ -697,7 +697,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -745,7 +745,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.5,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0.159324,
    "variantCluster": "vc26",
@@ -838,8 +838,8 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 0.333333,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0.261004,
    "variantCluster": "vc02",
@@ -885,8 +885,8 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 1,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc25",
@@ -932,8 +932,8 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 0.5,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc03",
@@ -1027,7 +1027,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.5,
+   "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc22",
@@ -1261,7 +1261,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -1308,8 +1308,8 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 0.25,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.2,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc01",
@@ -1356,7 +1356,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.25,
+   "priorWeight": 0.2,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc01",
@@ -1590,8 +1590,8 @@
     "stage": "B"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 0.5,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc07",
@@ -1638,7 +1638,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.5,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc07",
@@ -1779,7 +1779,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.5,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc05",
@@ -1825,8 +1825,8 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 0.5,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc05",
@@ -2839,7 +2839,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.125,
+   "priorWeight": 0.0625,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc03",
@@ -2884,8 +2884,8 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 0.125,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.0625,
    "nashWeight": 0,
    "legacyNashV3Weight": 0.233512,
    "variantCluster": "vc08",
@@ -3345,7 +3345,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 1,
+   "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc67",
@@ -3391,7 +3391,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.333333,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0.159343,
    "variantCluster": "vc02",
@@ -3437,7 +3437,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.25,
+   "priorWeight": 0.2,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc01",
@@ -3520,15 +3520,15 @@
    },
    "measuredAs": "rental-cban-6",
    "v1Label": "strong",
-   "label": "selected",
-   "reason": null,
+   "label": "not-selected",
+   "reason": "non-Nash duplicate of vc06 (sample-08 retained)",
    "evidence": {
     "score": 0.6030890804597703,
     "se": 0.0270803999948985,
     "stage": "C"
    },
-   "catalog": true,
-   "drawWeight": 0.015152,
+   "catalog": false,
+   "drawWeight": 0,
    "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -3620,8 +3620,8 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 0.5,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc26",
@@ -3759,7 +3759,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.333333,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc04",
@@ -3850,7 +3850,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -3897,7 +3897,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 1,
+   "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc66",
@@ -4033,7 +4033,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.5,
+   "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc22",
@@ -4827,7 +4827,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 1,
+   "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc20",
@@ -5242,7 +5242,7 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
+   "drawWeight": 0.033333,
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
@@ -5295,7 +5295,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 1,
+   "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc55",
@@ -5398,8 +5398,8 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 1,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.333333,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc53",
@@ -5451,7 +5451,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.333333,
+   "priorWeight": 0.25,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc02",
@@ -5555,7 +5555,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 0.25,
+   "priorWeight": 0.2,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc01",
@@ -5709,7 +5709,7 @@
    },
    "catalog": false,
    "drawWeight": 0,
-   "priorWeight": 1,
+   "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc49",
@@ -5964,8 +5964,8 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 1,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc44",
@@ -6352,8 +6352,8 @@
     "stage": "kodoku-v14-nash"
    },
    "catalog": true,
-   "drawWeight": 0.011364,
-   "priorWeight": 0,
+   "drawWeight": 0.008333,
+   "priorWeight": 0.25,
    "nashWeight": 0.3,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
@@ -6396,8 +6396,8 @@
     "stage": "kodoku-v13-nash"
    },
    "catalog": true,
-   "drawWeight": 0.011364,
-   "priorWeight": 0,
+   "drawWeight": 0.008333,
+   "priorWeight": 0.25,
    "nashWeight": 0.25,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
@@ -6440,8 +6440,8 @@
     "stage": "kodoku-v14-nash"
    },
    "catalog": true,
-   "drawWeight": 0.011364,
-   "priorWeight": 0,
+   "drawWeight": 0.008333,
+   "priorWeight": 0.25,
    "nashWeight": 0.25,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
@@ -6484,8 +6484,8 @@
     "stage": "kodoku-v10-nash"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 0,
+   "drawWeight": 0.033333,
+   "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-red-v5-r1-s0097",
@@ -6528,8 +6528,8 @@
     "stage": "kodoku-v13-nash"
    },
    "catalog": true,
-   "drawWeight": 0.011364,
-   "priorWeight": 0,
+   "drawWeight": 0.008333,
+   "priorWeight": 0.25,
    "nashWeight": 0.2,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
@@ -6572,8 +6572,8 @@
     "stage": "kodoku-v13-nash"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 0,
+   "drawWeight": 0.033333,
+   "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-deme-r1-00-s0030",
@@ -6616,8 +6616,8 @@
     "stage": "kodoku-v10-nash"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 0,
+   "drawWeight": 0.033333,
+   "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-red-v10-r2-s0155",
@@ -6660,8 +6660,8 @@
     "stage": "kodoku-v11-nash"
    },
    "catalog": true,
-   "drawWeight": 0.045455,
-   "priorWeight": 0,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-red-v6-r1-s0064",
@@ -6679,6 +6679,4847 @@
     50,
     50,
     55,
+    50
+   ]
+  },
+  {
+   "id": "pb-46",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #46 「エンテイ メガニウムTA」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=46",
+    "authors": "わんおー",
+    "version": "2015/01/27(Tue)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-46",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.252075,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": true,
+   "drawWeight": 0.033333,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-46",
+   "species": [
+    "Entei",
+    "Meganium",
+    "Tyranitar",
+    "Snorlax",
+    "Cloyster",
+    "Exeggutor"
+   ],
+   "levels": [
+    55,
+    55,
+    55,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-76",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #76 「寝言カビゴンライコウWA(キチカビ３)」 by 117",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=76",
+    "authors": "117",
+    "version": "2017/04/08(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-76",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc25",
+   "evidence": {
+    "score": 0.408568,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.333333,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc25",
+   "species": [
+    "Snorlax",
+    "Raikou",
+    "Umbreon",
+    "Suicune",
+    "Skarmory",
+    "Marowak"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-78",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #78 「モーダルバンギタンクWA」 by yasu",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=78",
+    "authors": "yasu",
+    "version": "2017/09/16(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-78",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc26",
+   "evidence": {
+    "score": 0.355867,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.25,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc26",
+   "species": [
+    "Tyranitar",
+    "Exeggutor",
+    "Venusaur",
+    "Golem",
+    "Snorlax",
+    "Miltank"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-64",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #64 「キチカビ＠117さん作」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=64",
+    "authors": "レンタルマン",
+    "version": "2015/09/28(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-64",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc03",
+   "evidence": {
+    "score": 0.365706,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.25,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc03",
+   "species": [
+    "Snorlax",
+    "Umbreon",
+    "Starmie",
+    "Cloyster",
+    "Gengar",
+    "Marowak"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-74",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #74 「サンダータンク2017」 by stoic",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=74",
+    "authors": "stoic",
+    "version": "2017/03/17(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-74",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.418)",
+   "evidence": {
+    "score": 0.418117,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-74",
+   "species": [
+    "Zapdos",
+    "Miltank",
+    "Exeggutor",
+    "Golem",
+    "Cloyster",
+    "Snorlax"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-15",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #15 「爆破速攻TA」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=15",
+    "authors": "レンタルマン",
+    "version": "2014/08/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-15",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc02",
+   "evidence": {
+    "score": 0.374629,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.25,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc02",
+   "species": [
+    "Tauros",
+    "Electrode",
+    "Marowak",
+    "Cloyster",
+    "Zapdos",
+    "Snorlax"
+   ],
+   "levels": [
+    55,
+    50,
+    55,
+    50,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "pb-1",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #1 「2000最終結論」 by ハンゲン狂",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=1",
+    "authors": "ハンゲン狂",
+    "version": "2014/08/10(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-1",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.281)",
+   "evidence": {
+    "score": 0.281251,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-1",
+   "species": [
+    "Tauros",
+    "Marowak",
+    "Heracross",
+    "Typhlosion",
+    "Gyarados",
+    "Magneton"
+   ],
+   "levels": [
+    55,
+    55,
+    55,
+    55,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-67",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #67 「リフライコウガラWA」 by 117",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=67",
+    "authors": "117",
+    "version": "2015/12/21(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-67",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.397)",
+   "evidence": {
+    "score": 0.39657,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-67",
+   "species": [
+    "Raikou",
+    "Marowak",
+    "Snorlax",
+    "Heracross",
+    "Cloyster",
+    "Exeggutor"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-20",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #20 「ポニョ」 by stoic",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=20",
+    "authors": "stoic",
+    "version": "2014/10/25(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "rental-cban-13",
+   "v1Label": "strong",
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.6091954022988509,
+    "se": 0.026530740187990443,
+    "stage": "C"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc65",
+   "species": [
+    "Porygon2",
+    "Poliwrath",
+    "Gengar",
+    "Exeggutor",
+    "Snorlax",
+    "Golem"
+   ],
+   "levels": [
+    55,
+    55,
+    55,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-66",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #66 「カビパルサンダー自分用」 by しゃわ",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=66",
+    "authors": "しゃわ",
+    "version": "2015/11/25(Wed)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-66",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc08",
+   "evidence": {
+    "score": 0.333509,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.25,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc08",
+   "species": [
+    "Snorlax",
+    "Cloyster",
+    "Zapdos",
+    "Starmie",
+    "Steelix",
+    "Gengar"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-18",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #18 「CH流トキワジム」 by クラヴハンマー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=18",
+    "authors": "クラヴハンマー",
+    "version": "2014/09/05(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-18",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc07",
+   "evidence": {
+    "score": 0.248019,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.25,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc07",
+   "species": [
+    "Marowak",
+    "Electrode",
+    "Exeggutor",
+    "Snorlax",
+    "Smeargle",
+    "Nidoking"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-168",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #168 「55カビ＋ガラエアムウマ＋岩地面格闘炎追加対策２枚」 by chio",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=168",
+    "authors": "chio",
+    "version": "2025/12/02(Tue)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-168",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.272)",
+   "evidence": {
+    "score": 0.271858,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-168",
+   "species": [
+    "Snorlax",
+    "Marowak",
+    "Skarmory",
+    "Misdreavus",
+    "Starmie",
+    "Venusaur"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-19",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #19 「いばみがハピ」 by マシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=19",
+    "authors": "マシュマロン",
+    "version": "2014/09/07(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-19",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.253)",
+   "evidence": {
+    "score": 0.252971,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-19",
+   "species": [
+    "Blissey",
+    "Snorlax",
+    "Marowak",
+    "Charizard",
+    "Misdreavus",
+    "Heracross"
+   ],
+   "levels": [
+    53,
+    51,
+    51,
+    51,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "pb-106",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #106 「プレゼント」 by わるいマシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=106",
+    "authors": "わるいマシュマロン",
+    "version": "2020/03/10(Tue)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-106",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.308)",
+   "evidence": {
+    "score": 0.307508,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-106",
+   "species": [
+    "Blissey",
+    "Heracross",
+    "Cloyster",
+    "Starmie",
+    "Steelix",
+    "Miltank"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    55,
+    55
+   ]
+  },
+  {
+   "id": "pb-31",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #31 「おばあちゃん」 by マシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=31",
+    "authors": "マシュマロン",
+    "version": "2014/11/25(Tue)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-31",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.325)",
+   "evidence": {
+    "score": 0.324617,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-31",
+   "species": [
+    "Alakazam",
+    "Tauros",
+    "Golem",
+    "Electrode",
+    "Snorlax",
+    "Venusaur"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-62",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #62 「55地震寝言ピント♀カビSA」 by はまっちゃった人",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=62",
+    "authors": "はまっちゃった人",
+    "version": "2015/09/22(Tue)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-62",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.425272,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": true,
+   "drawWeight": 0.033333,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-62",
+   "species": [
+    "Snorlax",
+    "Machamp",
+    "Starmie",
+    "Zapdos",
+    "Steelix",
+    "Exeggutor"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-102",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #102 「ブラッキー+バンギラスWA+ムウマ」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=102",
+    "authors": "わんおー",
+    "version": "2019/12/15(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-102",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.083)",
+   "evidence": {
+    "score": 0.08291,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-102",
+   "species": [
+    "Umbreon",
+    "Tyranitar",
+    "Misdreavus",
+    "Blissey",
+    "Skarmory",
+    "Alakazam"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-129",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #129 「テンプレサンダーバンギ」 by しゃわ",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=129",
+    "authors": "しゃわ",
+    "version": "2020/12/28(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-129",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc53",
+   "evidence": {
+    "score": 0.345582,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.333333,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc53",
+   "species": [
+    "Zapdos",
+    "Tyranitar",
+    "Snorlax",
+    "Cloyster",
+    "Steelix",
+    "Venusaur"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-65",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #65 「サンダータンクWA」 by stoic",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=65",
+    "authors": "stoic",
+    "version": "2015/11/09(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-65",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.304)",
+   "evidence": {
+    "score": 0.304304,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-65",
+   "species": [
+    "Zapdos",
+    "Miltank",
+    "Exeggutor",
+    "Steelix",
+    "Cloyster",
+    "Snorlax"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-117",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #117 「おばあちゃんⅡ」 by わるいマシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=117",
+    "authors": "わるいマシュマロン",
+    "version": "2020/08/02(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-117",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.119)",
+   "evidence": {
+    "score": 0.119429,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-117",
+   "species": [
+    "Alakazam",
+    "Ampharos",
+    "Marowak",
+    "Umbreon",
+    "Snorlax",
+    "Venusaur"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-111",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #111 「ソーナンス最終結論」 by わるいマシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=111",
+    "authors": "わるいマシュマロン",
+    "version": "2020/04/23(Thu)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-111",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.292)",
+   "evidence": {
+    "score": 0.292445,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-111",
+   "species": [
+    "Tauros",
+    "Electrode",
+    "Marowak",
+    "Gengar",
+    "Wobbuffet",
+    "Snorlax"
+   ],
+   "levels": [
+    55,
+    50,
+    55,
+    50,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "pb-13",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #13 「芸術は爆発だ！＠hidakaさん作」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=13",
+    "authors": "レンタルマン",
+    "version": "2014/08/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-13",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.262743,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": true,
+   "drawWeight": 0.033333,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-13",
+   "species": [
+    "Snorlax",
+    "Cloyster",
+    "Gengar",
+    "Exeggutor",
+    "Electrode",
+    "Porygon2"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-14",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #14 「王パ＠Venomさん作」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=14",
+    "authors": "レンタルマン",
+    "version": "2014/08/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-14",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc01",
+   "evidence": {
+    "score": 0.262635,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.2,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc01",
+   "species": [
+    "Tyranitar",
+    "Venusaur",
+    "Skarmory",
+    "Suicune",
+    "Blissey",
+    "Alakazam"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-103",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #103 「藝術道場」 by クラヴハンマー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=103",
+    "authors": "クラヴハンマー",
+    "version": "2020/01/03(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-103",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.261)",
+   "evidence": {
+    "score": 0.261143,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.5,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc55",
+   "species": [
+    "Porygon2",
+    "Marowak",
+    "Snorlax",
+    "Cloyster",
+    "Raikou",
+    "Hitmonlee"
+   ],
+   "levels": [
+    53,
+    51,
+    51,
+    51,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "pb-3",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #3 「カビパルサンダー＠朽さん作」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=3",
+    "authors": "レンタルマン",
+    "version": "2014/08/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-3",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc08",
+   "evidence": {
+    "score": 0.358445,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.25,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc08",
+   "species": [
+    "Snorlax",
+    "Cloyster",
+    "Zapdos",
+    "Starmie",
+    "Steelix",
+    "Gengar"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-90",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #90 「ジョンダーファミリーズ」 by マシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=90",
+    "authors": "マシュマロン",
+    "version": "2018/08/17(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-90",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.345)",
+   "evidence": {
+    "score": 0.344525,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-90",
+   "species": [
+    "Marowak",
+    "Miltank",
+    "Cloyster",
+    "Snorlax",
+    "Gengar",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-69",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #69 「可変爆破速攻ライコウバンギ」 by yasu",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=69",
+    "authors": "yasu",
+    "version": "2016/05/28(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-69",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.225)",
+   "evidence": {
+    "score": 0.225248,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-69",
+   "species": [
+    "Raikou",
+    "Cloyster",
+    "Misdreavus",
+    "Snorlax",
+    "Heracross",
+    "Tyranitar"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-146",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #146 「セミフルカビ'23版」 by クラヴハンマー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=146",
+    "authors": "クラヴハンマー",
+    "version": "2023/03/17(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-146",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.222)",
+   "evidence": {
+    "score": 0.221824,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.5,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc20",
+   "species": [
+    "Snorlax",
+    "Skarmory",
+    "Misdreavus",
+    "Starmie",
+    "Marowak",
+    "Miltank"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-61",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #61 「あやみガーラ&ロック戦術」 by ドラゴンサマー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=61",
+    "authors": "ドラゴンサマー",
+    "version": "2015/09/21(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-61",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.300)",
+   "evidence": {
+    "score": 0.300134,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-61",
+   "species": [
+    "Marowak",
+    "Umbreon",
+    "Alakazam",
+    "Snorlax",
+    "Starmie",
+    "Misdreavus"
+   ],
+   "levels": [
+    53,
+    52,
+    52,
+    51,
+    51,
+    50
+   ]
+  },
+  {
+   "id": "pb-44",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #44 「丸亀市に住む亀」 by わるいマシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=44",
+    "authors": "わるいマシュマロン",
+    "version": "2015/01/26(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-44",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.062)",
+   "evidence": {
+    "score": 0.062389,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-44",
+   "species": [
+    "Blastoise",
+    "Tyranitar",
+    "Venusaur",
+    "Electrode",
+    "Snorlax",
+    "Umbreon"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-63",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #63 「Who is ace?」 by マシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=63",
+    "authors": "マシュマロン",
+    "version": "2015/09/25(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-63",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.324)",
+   "evidence": {
+    "score": 0.324251,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-63",
+   "species": [
+    "Snorlax",
+    "Venusaur",
+    "Blissey",
+    "Marowak",
+    "Heracross",
+    "Zapdos"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-43",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #43 「エースを餌にして。。」 by Milkily",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=43",
+    "authors": "Milkily",
+    "version": "2015/01/17(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-43",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.342)",
+   "evidence": {
+    "score": 0.341632,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-43",
+   "species": [
+    "Tyranitar",
+    "Zapdos",
+    "Heracross",
+    "Gengar",
+    "Exeggutor",
+    "Snorlax"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-136",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #136 「受けンタ」 by クラヴハンマー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=136",
+    "authors": "クラヴハンマー",
+    "version": "2021/05/13(Thu)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-136",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.314)",
+   "evidence": {
+    "score": 0.313838,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-136",
+   "species": [
+    "Tauros",
+    "Blissey",
+    "Misdreavus",
+    "Snorlax",
+    "Cloyster",
+    "Jumpluff"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-77",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #77 「カビバンギ」 by stoic",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=77",
+    "authors": "stoic",
+    "version": "2017/09/08(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-77",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.210)",
+   "evidence": {
+    "score": 0.209508,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-77",
+   "species": [
+    "Snorlax",
+    "Tyranitar",
+    "Skarmory",
+    "Exeggutor",
+    "Venusaur",
+    "Starmie"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-52",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #52 「古典サンダーリキーWA」 by クラヴハンマー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=52",
+    "authors": "クラヴハンマー",
+    "version": "2015/02/07(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-52",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.378)",
+   "evidence": {
+    "score": 0.378013,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-52",
+   "species": [
+    "Zapdos",
+    "Machamp",
+    "Cloyster",
+    "Forretress",
+    "Snorlax",
+    "Exeggutor"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-58",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #58 「CH流セキチクジム2015」 by クラヴハンマー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=58",
+    "authors": "クラヴハンマー",
+    "version": "2015/05/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-58",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.177)",
+   "evidence": {
+    "score": 0.17696,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-58",
+   "species": [
+    "Gengar",
+    "Golem",
+    "Suicune",
+    "Snorlax",
+    "Exeggutor",
+    "Venusaur"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-132",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #132 「サンダーバンギ feat変態ヘラクロス」 by しゃわ",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=132",
+    "authors": "しゃわ",
+    "version": "2020/12/28(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-132",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.406)",
+   "evidence": {
+    "score": 0.405796,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.5,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-132",
+   "species": [
+    "Zapdos",
+    "Tyranitar",
+    "Snorlax",
+    "Cloyster",
+    "Steelix",
+    "Heracross"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-113",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #113 「キマワドス」 by わるいマシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=113",
+    "authors": "わるいマシュマロン",
+    "version": "2020/06/28(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-113",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.101)",
+   "evidence": {
+    "score": 0.10125,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-113",
+   "species": [
+    "Sunflora",
+    "Marowak",
+    "Smeargle",
+    "Ariados",
+    "Snorlax",
+    "Starmie"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-134",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #134 「ヒストリアスタン2000@ゴールドさん作（シロガネリーグ版）」 by chio",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=134",
+    "authors": "chio",
+    "version": "2021/02/13(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-134",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.253)",
+   "evidence": {
+    "score": 0.252554,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-134",
+   "species": [
+    "Snorlax",
+    "Zapdos",
+    "Suicune",
+    "Steelix",
+    "Cloyster",
+    "Misdreavus"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-108",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #108 「おぢいちゃんⅡ＜2020ver.＞」 by クラヴハンマー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=108",
+    "authors": "クラヴハンマー",
+    "version": "2020/04/05(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-108",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.335)",
+   "evidence": {
+    "score": 0.335005,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.5,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc49",
+   "species": [
+    "Alakazam",
+    "Heracross",
+    "Snorlax",
+    "Rhydon",
+    "Cloyster",
+    "Charizard"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-42",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #42 「やりたいことやりすぎたら物凄くコスパが悪くなったパーティ」 by マシュマロンのタマゴ",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=42",
+    "authors": "マシュマロンのタマゴ",
+    "version": "2015/01/13(Tue)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-42",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.105)",
+   "evidence": {
+    "score": 0.104582,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-42",
+   "species": [
+    "Hitmonlee",
+    "Exeggcute",
+    "Marowak",
+    "Exeggutor",
+    "Snorlax",
+    "Umbreon"
+   ],
+   "levels": [
+    51,
+    50,
+    50,
+    50,
+    51,
+    54
+   ]
+  },
+  {
+   "id": "pb-147",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #147 「サンダーバンギラスガラガラTA」 by スナノケガワ",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=147",
+    "authors": "スナノケガワ",
+    "version": "2023/10/08(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-147",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.365)",
+   "evidence": {
+    "score": 0.364788,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.5,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-147",
+   "species": [
+    "Zapdos",
+    "Tyranitar",
+    "Marowak",
+    "Snorlax",
+    "Cloyster",
+    "Venusaur"
+   ],
+   "levels": [
+    55,
+    55,
+    55,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-4",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #4 「カビパルクイン＠朽さん作」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=4",
+    "authors": "レンタルマン",
+    "version": "2014/08/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-4",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.286)",
+   "evidence": {
+    "score": 0.286141,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-4",
+   "species": [
+    "Snorlax",
+    "Cloyster",
+    "Zapdos",
+    "Starmie",
+    "Nidoqueen",
+    "Gengar"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-80",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #80 「エレブーSA 完受けループに爆破速攻のニュアンスを添えて・・・」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=80",
+    "authors": "わんおー",
+    "version": "2017/11/02(Thu)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-80",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.192)",
+   "evidence": {
+    "score": 0.191781,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-80",
+   "species": [
+    "Electabuzz",
+    "Xatu",
+    "Snorlax",
+    "Suicune",
+    "Misdreavus",
+    "Steelix"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-109",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #109 「バカルテット」 by マシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=109",
+    "authors": "マシュマロン",
+    "version": "2020/04/10(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-109",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.157)",
+   "evidence": {
+    "score": 0.157077,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-109",
+   "species": [
+    "Machamp",
+    "Snorlax",
+    "Typhlosion",
+    "Butterfree",
+    "Mr. Mime",
+    "Tyranitar"
+   ],
+   "levels": [
+    50,
+    50,
+    55,
+    55,
+    55,
+    55
+   ]
+  },
+  {
+   "id": "pb-84",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #84 「カジュアル寝言カビA」 by はまっちゃった人",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=84",
+    "authors": "はまっちゃった人",
+    "version": "2018/03/31(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-84",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.326)",
+   "evidence": {
+    "score": 0.325878,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-84",
+   "species": [
+    "Snorlax",
+    "Raikou",
+    "Machamp",
+    "Cloyster",
+    "Gligar",
+    "Umbreon"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-89",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #89 「サイドンタンクWA」 by stoic",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=89",
+    "authors": "stoic",
+    "version": "2018/08/10(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-89",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.347178,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": true,
+   "drawWeight": 0.033333,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-89",
+   "species": [
+    "Rhydon",
+    "Miltank",
+    "Zapdos",
+    "Snorlax",
+    "Umbreon",
+    "Cloyster"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-12",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #12 「カビガラポリ」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=12",
+    "authors": "レンタルマン",
+    "version": "2014/08/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-12",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.326)",
+   "evidence": {
+    "score": 0.32621,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-12",
+   "species": [
+    "Snorlax",
+    "Marowak",
+    "Porygon2",
+    "Zapdos",
+    "Cloyster",
+    "Gengar"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-98",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #98 「ミルタンク+ライコウWA」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=98",
+    "authors": "わんおー",
+    "version": "2019/12/15(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-98",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.301)",
+   "evidence": {
+    "score": 0.301066,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-98",
+   "species": [
+    "Miltank",
+    "Raikou",
+    "Snorlax",
+    "Cloyster",
+    "Misdreavus",
+    "Venusaur"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-83",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #83 「爆PカビSA最終バージョン」 by はまっちゃった人",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=83",
+    "authors": "はまっちゃった人",
+    "version": "2018/03/18(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-83",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.324)",
+   "evidence": {
+    "score": 0.323625,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-83",
+   "species": [
+    "Snorlax",
+    "Jolteon",
+    "Misdreavus",
+    "Exeggutor",
+    "Moltres",
+    "Machamp"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-79",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #79 「カビピク（太鼓カビ+サポートピクシー）」 by アウオオ",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=79",
+    "authors": "アウオオ",
+    "version": "2017/11/02(Thu)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-79",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.249)",
+   "evidence": {
+    "score": 0.249228,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-79",
+   "species": [
+    "Snorlax",
+    "Clefable",
+    "Skarmory",
+    "Shuckle",
+    "Marowak",
+    "Venusaur"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-16",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #16 「グレン風」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=16",
+    "authors": "レンタルマン",
+    "version": "2014/08/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-16",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.173)",
+   "evidence": {
+    "score": 0.173268,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-16",
+   "species": [
+    "Moltres",
+    "Charizard",
+    "Electrode",
+    "Exeggutor",
+    "Snorlax",
+    "Steelix"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-21",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #21 「カイリューグドラWA」 by stoic",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=21",
+    "authors": "stoic",
+    "version": "2014/10/25(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-21",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc05",
+   "evidence": {
+    "score": 0.235751,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.25,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc05",
+   "species": [
+    "Dragonite",
+    "Kingdra",
+    "Snorlax",
+    "Houndoom",
+    "Forretress",
+    "Exeggutor"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-33",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #33 「フーディンエースパ」 by ココア",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=33",
+    "authors": "ココア",
+    "version": "2014/12/07(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-33",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.187)",
+   "evidence": {
+    "score": 0.187155,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-33",
+   "species": [
+    "Alakazam",
+    "Snorlax",
+    "Suicune",
+    "Rhydon",
+    "Charizard",
+    "Heracross"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-57",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #57 「ガルーラパ」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=57",
+    "authors": "わんおー",
+    "version": "2015/03/03(Tue)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-57",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.168)",
+   "evidence": {
+    "score": 0.16784,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-57",
+   "species": [
+    "Kangaskhan",
+    "Steelix",
+    "Cloyster",
+    "Umbreon",
+    "Exeggutor",
+    "Quagsire"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-100",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #100 「カビゴンSA+フォレトス」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=100",
+    "authors": "わんおー",
+    "version": "2019/12/15(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-100",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.451343,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": true,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.5,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-100",
+   "species": [
+    "Snorlax",
+    "Forretress",
+    "Cloyster",
+    "Machamp",
+    "Venusaur",
+    "Starmie"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-85",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #85 「寝言カビSA最終バージョン」 by はまっちゃった人",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=85",
+    "authors": "はまっちゃった人",
+    "version": "2018/05/31(Thu)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-85",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.440201,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": true,
+   "drawWeight": 0.033333,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-85",
+   "species": [
+    "Snorlax",
+    "Steelix",
+    "Machamp",
+    "Cloyster",
+    "Zapdos",
+    "Umbreon"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-2",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #2 「Evil noise」 by マシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=2",
+    "authors": "マシュマロン",
+    "version": "2014/08/18(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-2",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.238)",
+   "evidence": {
+    "score": 0.237551,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-2",
+   "species": [
+    "Alakazam",
+    "Snorlax",
+    "Cloyster",
+    "Zapdos",
+    "Umbreon",
+    "Tyranitar"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    55,
+    55
+   ]
+  },
+  {
+   "id": "pb-81",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #81 「ただのウケ狙い」 by マシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=81",
+    "authors": "マシュマロン",
+    "version": "2017/12/22(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-81",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.219)",
+   "evidence": {
+    "score": 0.219434,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-81",
+   "species": [
+    "Raikou",
+    "Suicune",
+    "Forretress",
+    "Umbreon",
+    "Blissey",
+    "Machamp"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-5",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #5 「あやみが＋ガラ＠文鳥さん作」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=5",
+    "authors": "レンタルマン",
+    "version": "2014/08/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-5",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.219)",
+   "evidence": {
+    "score": 0.218557,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.333333,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc22",
+   "species": [
+    "Marowak",
+    "Snorlax",
+    "Skarmory",
+    "Starmie",
+    "Exeggutor",
+    "Gengar"
+   ],
+   "levels": [
+    53,
+    51,
+    51,
+    51,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "pb-137",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #137 「病ンダー」 by 悪かったよ俺がマシュマロンだ",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=137",
+    "authors": "悪かったよ俺がマシュマロンだ",
+    "version": "2021/05/13(Thu)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-137",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.268)",
+   "evidence": {
+    "score": 0.267936,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.5,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc67",
+   "species": [
+    "Snorlax",
+    "Machamp",
+    "Cloyster",
+    "Exeggutor",
+    "Tyranitar",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    55,
+    55
+   ]
+  },
+  {
+   "id": "pb-135",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #135 「Destroyer」 by マシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=135",
+    "authors": "マシュマロン",
+    "version": "2021/02/20(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-135",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.231)",
+   "evidence": {
+    "score": 0.23105,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-135",
+   "species": [
+    "Cloyster",
+    "Snorlax",
+    "Dragonite",
+    "Marowak",
+    "Piloswine",
+    "Gengar"
+   ],
+   "levels": [
+    50,
+    50,
+    55,
+    50,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "pb-123",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #123 「ハガネール+サンダーWA」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=123",
+    "authors": "わんおー",
+    "version": "2020/08/02(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-123",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.345)",
+   "evidence": {
+    "score": 0.345405,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-123",
+   "species": [
+    "Steelix",
+    "Zapdos",
+    "Snorlax",
+    "Cloyster",
+    "Suicune",
+    "Exeggutor"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-82",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #82 「ドラサマ爆パンカビ」 by ドラゴンサマー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=82",
+    "authors": "ドラゴンサマー",
+    "version": "2018/02/14(Wed)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-82",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc04",
+   "evidence": {
+    "score": 0.256315,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.25,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc04",
+   "species": [
+    "Snorlax",
+    "Houndoom",
+    "Venusaur",
+    "Starmie",
+    "Zapdos",
+    "Misdreavus"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-6",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #6 「サンダーリキーWA＠しゃわさん作」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=6",
+    "authors": "レンタルマン",
+    "version": "2014/08/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-6",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.380053,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": true,
+   "drawWeight": 0.033333,
+   "priorWeight": 0.5,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-6",
+   "species": [
+    "Zapdos",
+    "Machamp",
+    "Snorlax",
+    "Umbreon",
+    "Cloyster",
+    "Gengar"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-53",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #53 「ライコウ昆布（ちょっぴり今風）」 by クラヴハンマー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=53",
+    "authors": "クラヴハンマー",
+    "version": "2015/02/07(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-53",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.199)",
+   "evidence": {
+    "score": 0.199346,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-53",
+   "species": [
+    "Raikou",
+    "Cloyster",
+    "Snorlax",
+    "Golem",
+    "Exeggutor",
+    "Magmar"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-93",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #93 「ＴＯＤ」 by わるいマシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=93",
+    "authors": "わるいマシュマロン",
+    "version": "2019/08/03(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-93",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.289)",
+   "evidence": {
+    "score": 0.289333,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-93",
+   "species": [
+    "Snorlax",
+    "Skarmory",
+    "Exeggutor",
+    "Umbreon",
+    "Tyranitar",
+    "Machamp"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    55,
+    55,
+    55
+   ]
+  },
+  {
+   "id": "pb-92",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #92 「毒入りモーモーミルク」 by マシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=92",
+    "authors": "マシュマロン",
+    "version": "2018/11/19(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-92",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.222)",
+   "evidence": {
+    "score": 0.222131,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-92",
+   "species": [
+    "Miltank",
+    "Snorlax",
+    "Cloyster",
+    "Nidoqueen",
+    "Umbreon",
+    "Raikou"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-96",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #96 「ヘラクロス+エレブーWA」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=96",
+    "authors": "わんおー",
+    "version": "2019/12/15(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-96",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.366516,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": true,
+   "drawWeight": 0.033333,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-96",
+   "species": [
+    "Heracross",
+    "Electabuzz",
+    "Snorlax",
+    "Cloyster",
+    "Misdreavus",
+    "Venusaur"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-32",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #32 「カビパ」 by 匿名",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=32",
+    "authors": "匿名",
+    "version": "2014/12/07(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-32",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.246)",
+   "evidence": {
+    "score": 0.246264,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-32",
+   "species": [
+    "Snorlax",
+    "Zapdos",
+    "Venusaur",
+    "Steelix",
+    "Gengar",
+    "Starmie"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-87",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #87 「サンダーバンギWA feat.まるころタンク」 by stoic",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=87",
+    "authors": "stoic",
+    "version": "2018/08/09(Thu)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-87",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.354)",
+   "evidence": {
+    "score": 0.353763,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-87",
+   "species": [
+    "Zapdos",
+    "Tyranitar",
+    "Miltank",
+    "Cloyster",
+    "Snorlax",
+    "Marowak"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-34",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #34 「トモダチをつくろう」 by マシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=34",
+    "authors": "マシュマロン",
+    "version": "2014/12/08(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-34",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.200)",
+   "evidence": {
+    "score": 0.199922,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-34",
+   "species": [
+    "Alakazam",
+    "Politoed",
+    "Porygon2",
+    "Gengar",
+    "Machamp",
+    "Golem"
+   ],
+   "levels": [
+    55,
+    55,
+    55,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-35",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #35 「凸」 by 旧レンタルで遊ぼうの会",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=35",
+    "authors": "旧レンタルで遊ぼうの会",
+    "version": "2014/12/27(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-35",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.302)",
+   "evidence": {
+    "score": 0.302402,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-35",
+   "species": [
+    "Forretress",
+    "Skarmory",
+    "Starmie",
+    "Raikou",
+    "Machamp",
+    "Snorlax"
+   ],
+   "levels": [
+    50,
+    50,
+    52,
+    52,
+    52,
+    53
+   ]
+  },
+  {
+   "id": "pb-158",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #158 「粘着ベトベトンバランス」 by わるいマシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=158",
+    "authors": "わるいマシュマロン",
+    "version": "2024/12/28(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-158",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.090)",
+   "evidence": {
+    "score": 0.090366,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-158",
+   "species": [
+    "Raikou",
+    "Cloyster",
+    "Muk",
+    "Exeggutor",
+    "Snorlax",
+    "Miltank"
+   ],
+   "levels": [
+    52,
+    52,
+    52,
+    51,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "pb-10",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #10 「神パ」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=10",
+    "authors": "レンタルマン",
+    "version": "2014/08/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-10",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.200)",
+   "evidence": {
+    "score": 0.19998,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-10",
+   "species": [
+    "Raikou",
+    "Cloyster",
+    "Forretress",
+    "Heracross",
+    "Exeggutor",
+    "Rhydon"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-9",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #9 「地震電磁砲カビ＠わんおーさん作」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=9",
+    "authors": "レンタルマン",
+    "version": "2014/08/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-8",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.294)",
+   "evidence": {
+    "score": 0.294066,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc27",
+   "species": [
+    "Snorlax",
+    "Machamp",
+    "Cloyster",
+    "Starmie",
+    "Skarmory",
+    "Misdreavus"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-86",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #86 「キチカビ＠事故アレンジ」 by わるいマシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=86",
+    "authors": "わるいマシュマロン",
+    "version": "2018/06/05(Tue)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-86",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "shell duplicate of retained cluster vc03",
+   "evidence": {
+    "score": 0.272571,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.25,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc03",
+   "species": [
+    "Snorlax",
+    "Umbreon",
+    "Starmie",
+    "Cloyster",
+    "Marowak",
+    "Gengar"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-8",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #8 「地震電磁砲カビ」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=8",
+    "authors": "レンタルマン",
+    "version": "2014/08/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-8",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.294)",
+   "evidence": {
+    "score": 0.294066,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.333333,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc27",
+   "species": [
+    "Snorlax",
+    "Machamp",
+    "Cloyster",
+    "Starmie",
+    "Skarmory",
+    "Misdreavus"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-153",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #153 「ライコウ軸バランス」 by けつばん",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=153",
+    "authors": "けつばん",
+    "version": "2023/10/13(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-153",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.196)",
+   "evidence": {
+    "score": 0.195738,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-153",
+   "species": [
+    "Raikou",
+    "Cloyster",
+    "Skarmory",
+    "Gengar",
+    "Snorlax",
+    "Heracross"
+   ],
+   "levels": [
+    51,
+    52,
+    52,
+    52,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "pb-110",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #110 「一ケ月前に死んだワニ」 by マシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=110",
+    "authors": "マシュマロン",
+    "version": "2020/04/20(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-110",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.160)",
+   "evidence": {
+    "score": 0.159922,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-110",
+   "species": [
+    "Feraligatr",
+    "Blastoise",
+    "Golem",
+    "Houndoom",
+    "Snorlax",
+    "Skarmory"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-127",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #127 「カビガラポリ当時物」 by chio",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=127",
+    "authors": "chio",
+    "version": "2020/10/15(Thu)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-127",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.296)",
+   "evidence": {
+    "score": 0.295876,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-127",
+   "species": [
+    "Snorlax",
+    "Marowak",
+    "Porygon2",
+    "Zapdos",
+    "Starmie",
+    "Gengar"
+   ],
+   "levels": [
+    53,
+    51,
+    51,
+    51,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "pb-105",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #105 「ＴＯＤ（改）」 by わるいマシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=105",
+    "authors": "わるいマシュマロン",
+    "version": "2020/02/16(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-105",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.270)",
+   "evidence": {
+    "score": 0.270332,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-105",
+   "species": [
+    "Snorlax",
+    "Electrode",
+    "Exeggutor",
+    "Umbreon",
+    "Charizard",
+    "Marowak"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    55,
+    55,
+    55
+   ]
+  },
+  {
+   "id": "pb-22",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #22 「特殊耐久の鬼」 by stoic",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=22",
+    "authors": "stoic",
+    "version": "2014/10/31(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-22",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.102)",
+   "evidence": {
+    "score": 0.10188,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-22",
+   "species": [
+    "Shuckle",
+    "Mantine",
+    "Blissey",
+    "Umbreon",
+    "Articuno",
+    "Tentacruel"
+   ],
+   "levels": [
+    50,
+    50,
+    50,
+    50,
+    55,
+    55
+   ]
+  },
+  {
+   "id": "pb-23",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #23 「力こそパワーだ」 by stoic",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=23",
+    "authors": "stoic",
+    "version": "2014/10/31(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-23",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.204)",
+   "evidence": {
+    "score": 0.203609,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-23",
+   "species": [
+    "Machamp",
+    "Kingler",
+    "Rhydon",
+    "Flareon",
+    "Scizor",
+    "Ursaring"
+   ],
+   "levels": [
+    50,
+    55,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-91",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #91 「～芸術はピーナッツ～」 by ドラゴンサマー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=91",
+    "authors": "ドラゴンサマー",
+    "version": "2018/08/17(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-91",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.357)",
+   "evidence": {
+    "score": 0.357302,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-91",
+   "species": [
+    "Porygon2",
+    "Zapdos",
+    "Golem",
+    "Snorlax",
+    "Suicune",
+    "Venusaur"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-95",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #95 「ヌオーHA」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=95",
+    "authors": "わんおー",
+    "version": "2019/12/15(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-95",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.095)",
+   "evidence": {
+    "score": 0.094784,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-95",
+   "species": [
+    "Quagsire",
+    "Snorlax",
+    "Cloyster",
+    "Misdreavus",
+    "Starmie",
+    "Skarmory"
+   ],
+   "levels": [
+    53,
+    51,
+    51,
+    51,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "pb-7",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #7 「カビブラウツボ＠わんおーさん＆しゃわさん作」 by レンタルマン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=7",
+    "authors": "レンタルマン",
+    "version": "2014/08/30(Sat)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-7",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.200)",
+   "evidence": {
+    "score": 0.200291,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-7",
+   "species": [
+    "Snorlax",
+    "Umbreon",
+    "Victreebel",
+    "Starmie",
+    "Machamp",
+    "Skarmory"
+   ],
+   "levels": [
+    53,
+    52,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-99",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #99 「ライコウSA というより50ナッシーパーティ」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=99",
+    "authors": "わんおー",
+    "version": "2019/12/15(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-99",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.241)",
+   "evidence": {
+    "score": 0.240965,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-99",
+   "species": [
+    "Raikou",
+    "Exeggutor",
+    "Machamp",
+    "Misdreavus",
+    "Cloyster",
+    "Starmie"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-101",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #101 「ブラッキーHA+ジュゴン」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=101",
+    "authors": "わんおー",
+    "version": "2019/12/15(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-101",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.152)",
+   "evidence": {
+    "score": 0.152407,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-101",
+   "species": [
+    "Umbreon",
+    "Dewgong",
+    "Blissey",
+    "Heracross",
+    "Houndoom",
+    "Starmie"
+   ],
+   "levels": [
+    53,
+    51,
+    51,
+    51,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "pb-112",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #112 「ピヨメロ」 by わるいマシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=112",
+    "authors": "わるいマシュマロン",
+    "version": "2020/05/22(Fri)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-112",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.141)",
+   "evidence": {
+    "score": 0.140808,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-112",
+   "species": [
+    "Snorlax",
+    "Kangaskhan",
+    "Raikou",
+    "Cloyster",
+    "Charizard",
+    "Misdreavus"
+   ],
+   "levels": [
+    55,
+    50,
+    55,
+    50,
+    55,
+    50
+   ]
+  },
+  {
+   "id": "pb-68",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #68 「ヌウコン」 by Rili",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=68",
+    "authors": "Rili",
+    "version": "2016/04/03(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-68",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.158)",
+   "evidence": {
+    "score": 0.158104,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-68",
+   "species": [
+    "Quagsire",
+    "Cloyster",
+    "Snorlax",
+    "Exeggutor",
+    "Zapdos",
+    "Ninetales"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-124",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #124 「バンギラス+サンダーWA」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=124",
+    "authors": "わんおー",
+    "version": "2020/08/02(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-124",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.358)",
+   "evidence": {
+    "score": 0.358444,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-124",
+   "species": [
+    "Tyranitar",
+    "Zapdos",
+    "Blissey",
+    "Cloyster",
+    "Misdreavus",
+    "Machamp"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-131",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #131 「Pokemon Battle Simulator Saved Party」 by syawa",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=131",
+    "authors": "syawa",
+    "version": "2020/12/28(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-131",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.363)",
+   "evidence": {
+    "score": 0.363403,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.5,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-132",
+   "species": [
+    "Zapdos",
+    "Tyranitar",
+    "Snorlax",
+    "Cloyster",
+    "Steelix",
+    "Heracross"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-122",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #122 「ガラガラAに55ライコウを入れてみた」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=122",
+    "authors": "わんおー",
+    "version": "2020/08/02(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-122",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.214)",
+   "evidence": {
+    "score": 0.214374,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-122",
+   "species": [
+    "Marowak",
+    "Raikou",
+    "Electrode",
+    "Jolteon",
+    "Exeggutor",
+    "Cloyster"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-150",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #150 「ガラガラ + パルシェンWA」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=150",
+    "authors": "わんおー",
+    "version": "2023/10/09(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-150",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.275)",
+   "evidence": {
+    "score": 0.274507,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-150",
+   "species": [
+    "Marowak",
+    "Jolteon",
+    "Golem",
+    "Gengar",
+    "Snorlax",
+    "Cloyster"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "pb-130",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #130 「しゃわポリ亜種」 by しゃわ",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=130",
+    "authors": "しゃわ",
+    "version": "2020/12/28(Mon)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-130",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.296)",
+   "evidence": {
+    "score": 0.296467,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.5,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc66",
+   "species": [
+    "Vaporeon",
+    "Porygon2",
+    "Snorlax",
+    "Exeggutor",
+    "Zapdos",
+    "Steelix"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-121",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #121 「リザードン+カビゴンWA」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=121",
+    "authors": "わんおー",
+    "version": "2020/08/02(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-121",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.269)",
+   "evidence": {
+    "score": 0.268663,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-121",
+   "species": [
+    "Charizard",
+    "Snorlax",
+    "Electrode",
+    "Machamp",
+    "Misdreavus",
+    "Cloyster"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-88",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #88 「特攻種族値上位縛り」 by stoic",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=88",
+    "authors": "stoic",
+    "version": "2018/08/09(Thu)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-88",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.201)",
+   "evidence": {
+    "score": 0.200868,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-88",
+   "species": [
+    "Alakazam",
+    "Gengar",
+    "Espeon",
+    "Exeggutor",
+    "Zapdos",
+    "Moltres"
+   ],
+   "levels": [
+    55,
+    50,
+    55,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-119",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #119 「マグカルゴSA」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=119",
+    "authors": "わんおー",
+    "version": "2020/08/02(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-119",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.071)",
+   "evidence": {
+    "score": 0.071346,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-119",
+   "species": [
+    "Magcargo",
+    "Blissey",
+    "Cloyster",
+    "Venusaur",
+    "Starmie",
+    "Skarmory"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-107",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #107 「真の三十士」 by マシュマロン",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=107",
+    "authors": "マシュマロン",
+    "version": "2020/03/15(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-107",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.060)",
+   "evidence": {
+    "score": 0.059704,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-107",
+   "species": [
+    "Parasect",
+    "Slowbro",
+    "Snorlax",
+    "Sudowoodo",
+    "Slowking",
+    "Steelix"
+   ],
+   "levels": [
+    51,
+    53,
+    53,
+    51,
+    51,
+    51
+   ]
+  },
+  {
+   "id": "pb-114",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #114 「闇」 by わんおー",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=114",
+    "authors": "わんおー",
+    "version": "2020/07/30(Thu)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-114",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.183)",
+   "evidence": {
+    "score": 0.182906,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-114",
+   "species": [
+    "Umbreon",
+    "Suicune",
+    "Snorlax",
+    "Skarmory",
+    "Venusaur",
+    "Marowak"
+   ],
+   "levels": [
+    55,
+    55,
+    50,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-169",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #169 「例のＴＡ2026_chioサンプル」 by chio",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=169",
+    "authors": "chio",
+    "version": "2026/08/09(Sun)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-169",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.309)",
+   "evidence": {
+    "score": 0.308675,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 0.5,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-147",
+   "species": [
+    "Zapdos",
+    "Tyranitar",
+    "Marowak",
+    "Snorlax",
+    "Cloyster",
+    "Venusaur"
+   ],
+   "levels": [
+    55,
+    55,
+    55,
+    50,
+    50,
+    50
+   ]
+  },
+  {
+   "id": "pb-170",
+   "family": "goldrush-partybox",
+   "origin": "human",
+   "source": {
+    "kind": "community-archive",
+    "name": "GoldRush PartyBox #170 「サンダーエンテイガラガラＴＡ試作」 by chio",
+    "url": "http://www.q9con.net/pokemon/PartyBox/index.php?mode=view&num=170",
+    "authors": "chio",
+    "version": "2026/08/11(Tue)"
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": "pb-170",
+   "v1Label": null,
+   "label": "not-selected",
+   "reason": "below PartyBox archetype selection bar (vs APEX4: 0.317)",
+   "evidence": {
+    "score": 0.317499,
+    "se": 0.008,
+    "stage": "partybox-v0-gauntlet"
+   },
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-pb-170",
+   "species": [
+    "Zapdos",
+    "Entei",
+    "Marowak",
+    "Snorlax",
+    "Exeggutor",
+    "Gengar"
+   ],
+   "levels": [
+    55,
+    55,
+    55,
+    50,
+    50,
     50
    ]
   }
