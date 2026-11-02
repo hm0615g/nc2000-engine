@@ -88,8 +88,8 @@ the candidate maximum after copying absolute HP cannot repair this.
 
 The protocol path avoids reading true opponent HP, but its synthesis chooses
 one reference maximum before the shared determinizer replaces candidates.
-This audit does not certify percentage consistency across every possible
-protocol-side candidate maximum.
+The follow-up below confirms that this can also contradict public HP on the
+PS path, without reading any true opponent secrets.
 
 ### 3. Hidden sleep counters survive into search
 
@@ -125,6 +125,56 @@ selection**, not an observed action flip in these two probes. `best()` uses
 these cached exclusions. Replacing private state later in each search
 iteration does not undo the earlier read. `unseen_claw_root` defaults to
 false; enabling it alone would not fix the unrevealed-item or HP problems.
+
+## PS follow-up: public inputs do not make every exclusion sound
+
+`ProtocolAgent::install` synthesizes the search root from the **first alive
+candidate**, then constructs the shared `BlindSearch`. Consequently its
+cached final-selection exclusions can rely on one candidate's item or speed,
+even while the belief retains another candidate under which the exclusion
+does not hold. PS request legality projection only prevents illegal
+submissions; it does not restore legal moves excluded by this heuristic.
+
+The additional [reproducer](../../crates/bot/examples/audit_protocol_exclusions.rs)
+uses the production configuration at 81,000 iterations. It runs two
+constructed one-mon fixtures with identical player frames and equal-weight
+two-candidate priors. Reversing candidate order preserves the distribution:
+
+| Hidden hypothesis | First candidate | Recover excluded? |
+| --- | --- | --- |
+| Snorlax item | Leftovers | Yes |
+| Snorlax item | Quick Claw | No |
+| Opposing Starmie speed | 135 (own speed 151) | Yes |
+| Opposing Starmie speed | 166 (own speed 151) | No |
+
+Both candidates remain alive in every run. Recover is a request-legal move.
+The final choice is Surf in all four runs, so these fixtures demonstrate
+unsupported hard exclusions, not a final-action flip or a measured loss.
+The unknown true world is never supplied to the protocol searcher. This is
+a modeling/decision problem, distinct from the Web path's private-truth
+exposure. These custom two-candidate priors are counterexamples to the generic
+exclusion rule, not a frequency estimate for the active production prior.
+
+A third probe supplies public opponent HP of `50/100` and two equally weighted
+Snorlax candidates. Synthesis uses the first candidate's 266 maximum HP and
+sets current HP to 132. Determinizing with the other candidate replaces the
+maximum with 235, retaining 132 current HP and announcing 57%, contradicting
+the observed 50%. The first projection is correct; the subsequent shared
+imputation is not. This confirms a PS-side model error without true-HP access.
+
+Run from the repository root:
+
+```sh
+cargo run --release -p nc2000-bot --example audit_protocol_exclusions -- target/protocol-exclusions.json
+cmp target/protocol-exclusions.json data/blind-boundary-audit-v1/protocol-exclusions.json
+cargo test --release -p nc2000-bot --test import
+```
+
+[protocol-exclusions.json](protocol-exclusions.json) records the source/data
+hashes, public frames, synthesized roots, exclusions, action counts and values.
+The `pinOpponent` and hand-entered-position APIs are not used in these probes.
+The complete follow-up ran twice with byte-identical JSON; both existing
+`import` tests passed. See [protocol-verification.json](protocol-verification.json).
 
 ## Affected paths and rejected overclaims
 

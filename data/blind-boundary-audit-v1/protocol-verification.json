@@ -1,0 +1,18 @@
+{
+  "schema": "nc2000-protocol-exclusions-verification-v1",
+  "baseline_commit": "0cacf5a9dbfa6b9d4aa4a4fc41c107f9638905ee",
+  "records_sha256": "c455338a9fdaac99a9023119d436ad9c159b3d684b05d8676ace74025bf4b6a3",
+  "native_binary_sha256": "77e21496c6149ba53a5e401675585514c46ff69cf3d7761812b620aff9eb0e76",
+  "repeat_byte_identical": true,
+  "source_hashes_match": true,
+  "production_runtime_changed": false,
+  "exclusion_counterexamples": 2,
+  "hp_public_percent": 50,
+  "hp_modeled_percents": [
+    50,
+    57
+  ],
+  "import_tests_passed": 2,
+  "test_command": "cargo test --release -p nc2000-bot --test import",
+  "interpretation": "Confirms model errors in the protocol path; does not demonstrate private-state exposure, natural prevalence, or a final-action flip."
+}

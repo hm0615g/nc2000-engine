@@ -1,0 +1,288 @@
+{
+  "schema": "nc2000-protocol-exclusions-audit-v1",
+  "source_sha256": {
+    "crates/bot/examples/audit_protocol_exclusions.rs": "a9854c5d078544f86d7c494873d9ef051e0f2ac6b96506b9bfc22a7a0630ba74",
+    "crates/bot/src/blind.rs": "4053b60270b82f4b1c3b32e902f3f1b9f3a9185f410c3b6f7ffeefe670d6138d",
+    "crates/bot/src/import.rs": "6ab4df3c4c7cc11db01bfadb2b447fdc52d9bc2b0fc089872ddc01d7c238f25e",
+    "crates/bot/src/smmcts.rs": "046398bbce36e1eb7ceac689c1688acfce44346087390aedd8a647e349198158",
+    "data/live-search.json": "bcd72c90aff04fb6e8c2ce7fb6551e03d2aafc318a416a153194b0abf4dcebed",
+    "data/search-profiles.json": "157d49892b62fe4bb310e0a0d7f985ecabe6084ddcd5cad2e65ded65a2d9b862"
+  },
+  "iterations": 81000,
+  "c": 0.4,
+  "rule": "Ucb",
+  "cases": [
+    {
+      "case": "unrevealed-item",
+      "same_player_frame": true,
+      "same_weighted_prior_up_to_order": true,
+      "frame": {
+        "lines": [
+          "|gametype|singles",
+          "|player|p1|P1||",
+          "|player|p2|P2||",
+          "|gen|2",
+          "|tier|[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict",
+          "|rule|Species Clause: Limit one of each Pokémon",
+          "|rule|Item Clause: Limit 1 of each item",
+          "|rule|Stadium Sleep Clause: Putting another foe to sleep while any teammate sleeps forfeits the battle",
+          "|rule|Freeze Clause Mod: Limit one foe frozen",
+          "|rule|OHKO Clause: OHKO moves are banned",
+          "|rule|HP Percentage Mod: HP is shown in percentages",
+          "|clearpoke",
+          "|poke|p1|Starmie, L50, M|",
+          "|poke|p2|Snorlax, L50, M|item",
+          "|teampreview|3",
+          "|",
+          "|teamsize|p1|1",
+          "|teamsize|p2|1",
+          "|start",
+          "|switch|p1a: Starmie|Starmie, L50, M|166/166",
+          "|switch|p2a: Snorlax|Snorlax, L50, M|100/100",
+          "|turn|1"
+        ],
+        "request": {
+          "active": [
+            {
+              "moves": [
+                {
+                  "id": "recover",
+                  "pp": 32,
+                  "maxpp": 32,
+                  "disabled": false
+                },
+                {
+                  "id": "surf",
+                  "pp": 24,
+                  "maxpp": 24,
+                  "disabled": false
+                }
+              ],
+              "trapped": true
+            }
+          ],
+          "side": {
+            "pokemon": [
+              {
+                "ident": "p1: Starmie",
+                "details": "Starmie, L50, M",
+                "condition": "166/166",
+                "active": true,
+                "moves": [
+                  "recover",
+                  "surf"
+                ],
+                "item": ""
+              }
+            ]
+          }
+        },
+        "legal_actions": [
+          "move recover",
+          "move surf"
+        ]
+      },
+      "runs": [
+        {
+          "reversed": false,
+          "candidates": 2,
+          "root": {
+            "own_speed": 166,
+            "foe_speed": 81,
+            "foe_item": "leftovers",
+            "quick_claw_roll": false
+          },
+          "actions": [
+            "move recover",
+            "move surf"
+          ],
+          "excluded": [
+            true,
+            false
+          ],
+          "visits": [
+            26025,
+            54975
+          ],
+          "means": [
+            0.009827772866102943,
+            0.01242835347084744
+          ],
+          "best": "move surf"
+        },
+        {
+          "reversed": true,
+          "candidates": 2,
+          "root": {
+            "own_speed": 166,
+            "foe_speed": 81,
+            "foe_item": "quickclaw",
+            "quick_claw_roll": false
+          },
+          "actions": [
+            "move recover",
+            "move surf"
+          ],
+          "excluded": [
+            false,
+            false
+          ],
+          "visits": [
+            24968,
+            56032
+          ],
+          "means": [
+            0.009575582733006599,
+            0.012344999070083854
+          ],
+          "best": "move surf"
+        }
+      ]
+    },
+    {
+      "case": "unrevealed-speed",
+      "same_player_frame": true,
+      "same_weighted_prior_up_to_order": true,
+      "frame": {
+        "lines": [
+          "|gametype|singles",
+          "|player|p1|P1||",
+          "|player|p2|P2||",
+          "|gen|2",
+          "|tier|[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict",
+          "|rule|Species Clause: Limit one of each Pokémon",
+          "|rule|Item Clause: Limit 1 of each item",
+          "|rule|Stadium Sleep Clause: Putting another foe to sleep while any teammate sleeps forfeits the battle",
+          "|rule|Freeze Clause Mod: Limit one foe frozen",
+          "|rule|OHKO Clause: OHKO moves are banned",
+          "|rule|HP Percentage Mod: HP is shown in percentages",
+          "|clearpoke",
+          "|poke|p1|Starmie, L50, M|",
+          "|poke|p2|Starmie, L50, M|item",
+          "|teampreview|3",
+          "|",
+          "|teamsize|p1|1",
+          "|teamsize|p2|1",
+          "|start",
+          "|switch|p1a: Starmie|Starmie, L50, M|166/166",
+          "|switch|p2a: Starmie|Starmie, L50, M|100/100",
+          "|turn|1"
+        ],
+        "request": {
+          "active": [
+            {
+              "moves": [
+                {
+                  "id": "recover",
+                  "pp": 32,
+                  "maxpp": 32,
+                  "disabled": false
+                },
+                {
+                  "id": "surf",
+                  "pp": 24,
+                  "maxpp": 24,
+                  "disabled": false
+                }
+              ],
+              "trapped": true
+            }
+          ],
+          "side": {
+            "pokemon": [
+              {
+                "ident": "p1: Starmie",
+                "details": "Starmie, L50, M",
+                "condition": "166/166",
+                "active": true,
+                "moves": [
+                  "recover",
+                  "surf"
+                ],
+                "item": ""
+              }
+            ]
+          }
+        },
+        "legal_actions": [
+          "move recover",
+          "move surf"
+        ]
+      },
+      "runs": [
+        {
+          "reversed": false,
+          "candidates": 2,
+          "root": {
+            "own_speed": 151,
+            "foe_speed": 135,
+            "foe_item": "leftovers",
+            "quick_claw_roll": false
+          },
+          "actions": [
+            "move recover",
+            "move surf"
+          ],
+          "excluded": [
+            true,
+            false
+          ],
+          "visits": [
+            8537,
+            72463
+          ],
+          "means": [
+            0.9266606897021769,
+            0.9384006351016365
+          ],
+          "best": "move surf"
+        },
+        {
+          "reversed": true,
+          "candidates": 2,
+          "root": {
+            "own_speed": 151,
+            "foe_speed": 166,
+            "foe_item": "leftovers",
+            "quick_claw_roll": false
+          },
+          "actions": [
+            "move recover",
+            "move surf"
+          ],
+          "excluded": [
+            false,
+            false
+          ],
+          "visits": [
+            1471,
+            79529
+          ],
+          "means": [
+            0.9086668654803687,
+            0.9395119231356517
+          ],
+          "best": "move surf"
+        }
+      ]
+    }
+  ],
+  "hp_consistency": {
+    "public_percent": 50,
+    "models": [
+      {
+        "candidate": "hp-0",
+        "hp": 132,
+        "maxhp": 266,
+        "announced_percent": 50
+      },
+      {
+        "candidate": "hp-1",
+        "hp": 132,
+        "maxhp": 235,
+        "announced_percent": 57
+      }
+    ]
+  },
+  "scope": "Constructed one-mon fixtures. Prior-order-dependent exclusions are model assumptions, not access to true opponent secrets. No production changes."
+}
