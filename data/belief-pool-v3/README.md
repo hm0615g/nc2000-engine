@@ -17,9 +17,11 @@ Every eligible measured team across `data/team-inventory-v1` (103 records),
 `data/team-selection-v2/evolved-teams.json` (8 records), and
 `data/partybox-v0/teams.json` (101 unique measured records), plus 9
 `<id>-lowatk` Female-optimized twins for catalog teams whose `low-attack-v2`
-optimization changes a Pokémon's gender (`221` records total). This ensures
-100% coverage and zero fallback asymmetry across both raw human/evolved sets
-and `low-attack-v2` catalog sets.
+optimization changes a Pokémon's gender (`221` records total). All 33 current
+catalog public rosters are recognized without fallback. This does not establish
+coverage of their hidden training spreads: the [training audit](../prior-training-audit-v1/README.md)
+finds absent maximum-training variants and 28 catalog set occurrences whose
+actual Attack stat is absent from every preview-consistent candidate.
 
 ## Allocation
 

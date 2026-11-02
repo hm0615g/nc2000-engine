@@ -1,0 +1,4767 @@
+{
+  "format": "nc2000-prior-training-audit-v1",
+  "prior": "data/belief-pool-v3/belief-pool.json",
+  "prior_sha256": "7a48ddb0a69f66805f1c8a12b12bb8c8900655817729c90b3ea8b11a9d50b9a0",
+  "stat_order": [
+    "hp",
+    "atk",
+    "def",
+    "spa",
+    "spd",
+    "spe"
+  ],
+  "method": "Native engine stats and Belief candidate filtering; EV=255 counterfactual at unchanged DVs, loadout, gender and level. Synthetic single-mon move evidence plus one played legal Rain Dance turn; no search or win-rate measurement.",
+  "summary": {
+    "teams": 221,
+    "origins": {
+      "evolved": 9,
+      "human": 187,
+      "machine": 25
+    },
+    "teams_with_any_training_deficit_by_origin": {
+      "evolved": 1,
+      "human": 27,
+      "machine": 16
+    },
+    "teams_with_non_attack_training_deficit_by_origin": {
+      "human": 2,
+      "machine": 15
+    },
+    "mons_with_any_training_deficit": 85,
+    "mons_with_non_attack_training_deficit": 24,
+    "deficient_stat_counts": {
+      "atk": 64,
+      "def": 4,
+      "hp": 8,
+      "spa": 7,
+      "spd": 7,
+      "spe": 8
+    }
+  },
+  "non_attack_details": [
+    {
+      "id": "lineage-gb-nash-s07",
+      "origin": "machine",
+      "weight": 0.25,
+      "mons": [
+        {
+          "species": "steelix",
+          "level": 50,
+          "evs": [
+            192,
+            255,
+            255,
+            255,
+            255,
+            255
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            174,
+            136,
+            251,
+            106,
+            116,
+            81
+          ],
+          "maximum_training_stats": [
+            181,
+            136,
+            251,
+            106,
+            116,
+            81
+          ],
+          "deficient_stats": [
+            "hp"
+          ],
+          "preview": [
+            {
+              "id": "lineage-gb-nash-s07",
+              "stats": [
+                174,
+                136,
+                251,
+                106,
+                116,
+                81
+              ],
+              "evs": [
+                192,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "lineage-gb-nash-s07",
+              "stats": [
+                174,
+                136,
+                251,
+                106,
+                116,
+                81
+              ],
+              "evs": [
+                192,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        },
+        {
+          "species": "phanpy",
+          "level": 51,
+          "evs": [
+            255,
+            255,
+            128,
+            192,
+            192,
+            255
+          ],
+          "ivs": [
+            28,
+            18,
+            30,
+            24,
+            24,
+            30
+          ],
+          "original_stats": [
+            199,
+            107,
+            97,
+            82,
+            82,
+            93
+          ],
+          "maximum_training_stats": [
+            199,
+            107,
+            113,
+            90,
+            90,
+            93
+          ],
+          "deficient_stats": [
+            "def",
+            "spa",
+            "spd"
+          ],
+          "preview": [
+            {
+              "id": "lineage-gb-nash-s07",
+              "stats": [
+                199,
+                107,
+                97,
+                82,
+                82,
+                93
+              ],
+              "evs": [
+                255,
+                255,
+                128,
+                192,
+                192,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "lineage-gb-nash-s07",
+              "stats": [
+                199,
+                107,
+                97,
+                82,
+                82,
+                93
+              ],
+              "evs": [
+                255,
+                255,
+                128,
+                192,
+                192,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "lineage-gb-uni-s13",
+      "origin": "machine",
+      "weight": 0.25,
+      "mons": [
+        {
+          "species": "gengar",
+          "level": 50,
+          "evs": [
+            255,
+            255,
+            0,
+            255,
+            255,
+            255
+          ],
+          "ivs": [
+            30,
+            2,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            166,
+            102,
+            80,
+            181,
+            126,
+            161
+          ],
+          "maximum_training_stats": [
+            166,
+            102,
+            111,
+            181,
+            126,
+            161
+          ],
+          "deficient_stats": [
+            "def"
+          ],
+          "preview": [
+            {
+              "id": "lineage-gb-uni-s13",
+              "stats": [
+                166,
+                102,
+                80,
+                181,
+                126,
+                161
+              ],
+              "evs": [
+                255,
+                255,
+                0,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "lineage-gb-uni-s13",
+              "stats": [
+                166,
+                102,
+                80,
+                181,
+                126,
+                161
+              ],
+              "evs": [
+                255,
+                255,
+                0,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "mjj-2021-q10con",
+      "origin": "human",
+      "weight": 1.0,
+      "mons": [
+        {
+          "species": "ninetales",
+          "level": 55,
+          "evs": [
+            255,
+            0,
+            255,
+            236,
+            236,
+            255
+          ],
+          "ivs": [
+            30,
+            2,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            196,
+            89,
+            138,
+            143,
+            163,
+            166
+          ],
+          "maximum_training_stats": [
+            196,
+            124,
+            138,
+            145,
+            166,
+            166
+          ],
+          "deficient_stats": [
+            "atk",
+            "spa",
+            "spd"
+          ],
+          "preview": [
+            {
+              "id": "mjj-2021-q10con",
+              "stats": [
+                196,
+                89,
+                138,
+                143,
+                163,
+                166
+              ],
+              "evs": [
+                255,
+                0,
+                255,
+                236,
+                236,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "mjj-2021-q10con",
+              "stats": [
+                196,
+                89,
+                138,
+                143,
+                163,
+                166
+              ],
+              "evs": [
+                255,
+                0,
+                255,
+                236,
+                236,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "lineage-gb-nash-s13",
+      "origin": "machine",
+      "weight": 0.25,
+      "mons": [
+        {
+          "species": "starmie",
+          "level": 50,
+          "evs": [
+            64,
+            255,
+            255,
+            255,
+            255,
+            255
+          ],
+          "ivs": [
+            30,
+            2,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            143,
+            112,
+            136,
+            151,
+            136,
+            166
+          ],
+          "maximum_training_stats": [
+            166,
+            112,
+            136,
+            151,
+            136,
+            166
+          ],
+          "deficient_stats": [
+            "hp"
+          ],
+          "preview": [
+            {
+              "id": "lineage-gb-nash-s13",
+              "stats": [
+                143,
+                112,
+                136,
+                151,
+                136,
+                166
+              ],
+              "evs": [
+                64,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "lineage-gb-nash-s13",
+              "stats": [
+                143,
+                112,
+                136,
+                151,
+                136,
+                166
+              ],
+              "evs": [
+                64,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "lineage-fine-s07",
+      "origin": "machine",
+      "weight": 0.25,
+      "mons": [
+        {
+          "species": "cloyster",
+          "level": 50,
+          "evs": [
+            255,
+            255,
+            255,
+            255,
+            255,
+            192
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            156,
+            146,
+            231,
+            136,
+            96,
+            114
+          ],
+          "maximum_training_stats": [
+            156,
+            146,
+            231,
+            136,
+            96,
+            121
+          ],
+          "deficient_stats": [
+            "spe"
+          ],
+          "preview": [
+            {
+              "id": "sample-07",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                121
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "rental-cban-3",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                121
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "mjj-2013-mario",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                121
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "lineage-fine-s07",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                114
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                192
+              ]
+            },
+            {
+              "id": "pb-15",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                121
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "sample-07",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                121
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "rental-cban-3",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                121
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "mjj-2013-mario",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                121
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "lineage-fine-s07",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                114
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                192
+              ]
+            },
+            {
+              "id": "pb-15",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                121
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": [
+            {
+              "species": "electrode",
+              "move": "raindance",
+              "lost_maximum_stats": [
+                "spe"
+              ],
+              "candidates": [
+                {
+                  "id": "lineage-fine-s07",
+                  "stats": [
+                    156,
+                    146,
+                    231,
+                    136,
+                    96,
+                    114
+                  ],
+                  "evs": [
+                    255,
+                    255,
+                    255,
+                    255,
+                    255,
+                    192
+                  ]
+                }
+              ]
+            },
+            {
+              "species": "tauros",
+              "move": "thrash",
+              "lost_maximum_stats": [
+                "spe"
+              ],
+              "candidates": [
+                {
+                  "id": "lineage-fine-s07",
+                  "stats": [
+                    156,
+                    146,
+                    231,
+                    136,
+                    96,
+                    114
+                  ],
+                  "evs": [
+                    255,
+                    255,
+                    255,
+                    255,
+                    255,
+                    192
+                  ]
+                }
+              ]
+            },
+            {
+              "species": "marowak",
+              "move": "furyattack",
+              "lost_maximum_stats": [
+                "spe"
+              ],
+              "candidates": [
+                {
+                  "id": "lineage-fine-s07",
+                  "stats": [
+                    156,
+                    146,
+                    231,
+                    136,
+                    96,
+                    114
+                  ],
+                  "evs": [
+                    255,
+                    255,
+                    255,
+                    255,
+                    255,
+                    192
+                  ]
+                }
+              ]
+            },
+            {
+              "species": "snorlax",
+              "move": "attract",
+              "lost_maximum_stats": [
+                "spe"
+              ],
+              "candidates": [
+                {
+                  "id": "lineage-fine-s07",
+                  "stats": [
+                    156,
+                    146,
+                    231,
+                    136,
+                    96,
+                    114
+                  ],
+                  "evs": [
+                    255,
+                    255,
+                    255,
+                    255,
+                    255,
+                    192
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "species": "zapdos",
+          "level": 55,
+          "evs": [
+            192,
+            255,
+            255,
+            255,
+            255,
+            255
+          ],
+          "ivs": [
+            30,
+            30,
+            26,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            206,
+            155,
+            147,
+            193,
+            155,
+            166
+          ],
+          "maximum_training_stats": [
+            215,
+            155,
+            147,
+            193,
+            155,
+            166
+          ],
+          "deficient_stats": [
+            "hp"
+          ],
+          "preview": [
+            {
+              "id": "sample-07",
+              "stats": [
+                215,
+                155,
+                147,
+                193,
+                155,
+                166
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "rental-cban-3",
+              "stats": [
+                215,
+                155,
+                147,
+                193,
+                155,
+                166
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "mjj-2013-mario",
+              "stats": [
+                215,
+                116,
+                147,
+                193,
+                155,
+                166
+              ],
+              "evs": [
+                255,
+                0,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "lineage-fine-s07",
+              "stats": [
+                206,
+                155,
+                147,
+                193,
+                155,
+                166
+              ],
+              "evs": [
+                192,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "pb-15",
+              "stats": [
+                215,
+                150,
+                147,
+                193,
+                155,
+                166
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "sample-07",
+              "stats": [
+                215,
+                155,
+                147,
+                193,
+                155,
+                166
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "rental-cban-3",
+              "stats": [
+                215,
+                155,
+                147,
+                193,
+                155,
+                166
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "mjj-2013-mario",
+              "stats": [
+                215,
+                116,
+                147,
+                193,
+                155,
+                166
+              ],
+              "evs": [
+                255,
+                0,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "lineage-fine-s07",
+              "stats": [
+                206,
+                155,
+                147,
+                193,
+                155,
+                166
+              ],
+              "evs": [
+                192,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "pb-15",
+              "stats": [
+                215,
+                150,
+                147,
+                193,
+                155,
+                166
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": [
+            {
+              "species": "electrode",
+              "move": "raindance",
+              "lost_maximum_stats": [
+                "hp"
+              ],
+              "candidates": [
+                {
+                  "id": "lineage-fine-s07",
+                  "stats": [
+                    206,
+                    155,
+                    147,
+                    193,
+                    155,
+                    166
+                  ],
+                  "evs": [
+                    192,
+                    255,
+                    255,
+                    255,
+                    255,
+                    255
+                  ]
+                }
+              ]
+            },
+            {
+              "species": "tauros",
+              "move": "thrash",
+              "lost_maximum_stats": [
+                "hp"
+              ],
+              "candidates": [
+                {
+                  "id": "lineage-fine-s07",
+                  "stats": [
+                    206,
+                    155,
+                    147,
+                    193,
+                    155,
+                    166
+                  ],
+                  "evs": [
+                    192,
+                    255,
+                    255,
+                    255,
+                    255,
+                    255
+                  ]
+                }
+              ]
+            },
+            {
+              "species": "marowak",
+              "move": "furyattack",
+              "lost_maximum_stats": [
+                "hp"
+              ],
+              "candidates": [
+                {
+                  "id": "lineage-fine-s07",
+                  "stats": [
+                    206,
+                    155,
+                    147,
+                    193,
+                    155,
+                    166
+                  ],
+                  "evs": [
+                    192,
+                    255,
+                    255,
+                    255,
+                    255,
+                    255
+                  ]
+                }
+              ]
+            },
+            {
+              "species": "snorlax",
+              "move": "attract",
+              "lost_maximum_stats": [
+                "hp"
+              ],
+              "candidates": [
+                {
+                  "id": "lineage-fine-s07",
+                  "stats": [
+                    206,
+                    155,
+                    147,
+                    193,
+                    155,
+                    166
+                  ],
+                  "evs": [
+                    192,
+                    255,
+                    255,
+                    255,
+                    255,
+                    255
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ev-r1-pool-hc75-top8-tezan-0",
+      "origin": "machine",
+      "weight": 0.125,
+      "mons": [
+        {
+          "species": "snorlax",
+          "level": 50,
+          "evs": [
+            64,
+            255,
+            255,
+            255,
+            255,
+            255
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            243,
+            161,
+            116,
+            116,
+            161,
+            81
+          ],
+          "maximum_training_stats": [
+            266,
+            161,
+            116,
+            116,
+            161,
+            81
+          ],
+          "deficient_stats": [
+            "hp"
+          ],
+          "preview": [
+            {
+              "id": "ev-r1-pool-hc75-top8-tezan-0",
+              "stats": [
+                243,
+                161,
+                116,
+                116,
+                161,
+                81
+              ],
+              "evs": [
+                64,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "ev-r1-pool-hc75-top8-tezan-1",
+              "stats": [
+                243,
+                161,
+                116,
+                116,
+                161,
+                81
+              ],
+              "evs": [
+                64,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "ev-r1-pool-hc75-top8-tezan-0",
+              "stats": [
+                243,
+                161,
+                116,
+                116,
+                161,
+                81
+              ],
+              "evs": [
+                64,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "ev-r1-pool-hc75-top8-tezan-1",
+              "stats": [
+                243,
+                161,
+                116,
+                116,
+                161,
+                81
+              ],
+              "evs": [
+                64,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "ev-r1-pool-hc75-top8-tezan-1",
+      "origin": "machine",
+      "weight": 0.125,
+      "mons": [
+        {
+          "species": "snorlax",
+          "level": 50,
+          "evs": [
+            64,
+            255,
+            255,
+            255,
+            255,
+            255
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            243,
+            161,
+            116,
+            116,
+            161,
+            81
+          ],
+          "maximum_training_stats": [
+            266,
+            161,
+            116,
+            116,
+            161,
+            81
+          ],
+          "deficient_stats": [
+            "hp"
+          ],
+          "preview": [
+            {
+              "id": "ev-r1-pool-hc75-top8-tezan-0",
+              "stats": [
+                243,
+                161,
+                116,
+                116,
+                161,
+                81
+              ],
+              "evs": [
+                64,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "ev-r1-pool-hc75-top8-tezan-1",
+              "stats": [
+                243,
+                161,
+                116,
+                116,
+                161,
+                81
+              ],
+              "evs": [
+                64,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "ev-r1-pool-hc75-top8-tezan-0",
+              "stats": [
+                243,
+                161,
+                116,
+                116,
+                161,
+                81
+              ],
+              "evs": [
+                64,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            },
+            {
+              "id": "ev-r1-pool-hc75-top8-tezan-1",
+              "stats": [
+                243,
+                161,
+                116,
+                116,
+                161,
+                81
+              ],
+              "evs": [
+                64,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "ev-r1-pool-hc75-3rd-bean-0",
+      "origin": "machine",
+      "weight": 0.125,
+      "mons": [
+        {
+          "species": "cloyster",
+          "level": 50,
+          "evs": [
+            255,
+            255,
+            255,
+            255,
+            255,
+            192
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            156,
+            146,
+            231,
+            136,
+            96,
+            114
+          ],
+          "maximum_training_stats": [
+            156,
+            146,
+            231,
+            136,
+            96,
+            121
+          ],
+          "deficient_stats": [
+            "spe"
+          ],
+          "preview": [
+            {
+              "id": "ev-r1-pool-hc75-3rd-bean-0",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                114
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                192
+              ]
+            },
+            {
+              "id": "ev-r1-pool-hc75-3rd-bean-1",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                114
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                192
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "ev-r1-pool-hc75-3rd-bean-0",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                114
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                192
+              ]
+            },
+            {
+              "id": "ev-r1-pool-hc75-3rd-bean-1",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                114
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                192
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "lineage-gb-nash-rand",
+      "origin": "machine",
+      "weight": 0.25,
+      "mons": [
+        {
+          "species": "metapod",
+          "level": 50,
+          "evs": [
+            128,
+            255,
+            192,
+            255,
+            255,
+            255
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            141,
+            71,
+            99,
+            76,
+            76,
+            81
+          ],
+          "maximum_training_stats": [
+            156,
+            71,
+            106,
+            76,
+            76,
+            81
+          ],
+          "deficient_stats": [
+            "hp",
+            "def"
+          ],
+          "preview": [
+            {
+              "id": "lineage-gb-nash-rand",
+              "stats": [
+                141,
+                71,
+                99,
+                76,
+                76,
+                81
+              ],
+              "evs": [
+                128,
+                255,
+                192,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "lineage-gb-nash-rand",
+              "stats": [
+                141,
+                71,
+                99,
+                76,
+                76,
+                81
+              ],
+              "evs": [
+                128,
+                255,
+                192,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "ev-r1-pool-hc75-3rd-bean-1",
+      "origin": "machine",
+      "weight": 0.125,
+      "mons": [
+        {
+          "species": "cloyster",
+          "level": 50,
+          "evs": [
+            255,
+            255,
+            255,
+            255,
+            255,
+            192
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            156,
+            146,
+            231,
+            136,
+            96,
+            114
+          ],
+          "maximum_training_stats": [
+            156,
+            146,
+            231,
+            136,
+            96,
+            121
+          ],
+          "deficient_stats": [
+            "spe"
+          ],
+          "preview": [
+            {
+              "id": "ev-r1-pool-hc75-3rd-bean-0",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                114
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                192
+              ]
+            },
+            {
+              "id": "ev-r1-pool-hc75-3rd-bean-1",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                114
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                192
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "ev-r1-pool-hc75-3rd-bean-0",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                114
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                192
+              ]
+            },
+            {
+              "id": "ev-r1-pool-hc75-3rd-bean-1",
+              "stats": [
+                156,
+                146,
+                231,
+                136,
+                96,
+                114
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                192
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "ev-r1-rand-3-0",
+      "origin": "machine",
+      "weight": 0.25,
+      "mons": [
+        {
+          "species": "miltank",
+          "level": 50,
+          "evs": [
+            255,
+            255,
+            255,
+            192,
+            192,
+            0
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            201,
+            131,
+            156,
+            84,
+            114,
+            120
+          ],
+          "maximum_training_stats": [
+            201,
+            131,
+            156,
+            91,
+            121,
+            151
+          ],
+          "deficient_stats": [
+            "spa",
+            "spd",
+            "spe"
+          ],
+          "preview": [
+            {
+              "id": "ev-r1-rand-3-0",
+              "stats": [
+                201,
+                131,
+                156,
+                84,
+                114,
+                120
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                192,
+                192,
+                0
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "ev-r1-rand-3-0",
+              "stats": [
+                201,
+                131,
+                156,
+                84,
+                114,
+                120
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                192,
+                192,
+                0
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "lineage-fine-s13",
+      "origin": "machine",
+      "weight": 0.25,
+      "mons": [
+        {
+          "species": "gengar",
+          "level": 50,
+          "evs": [
+            255,
+            255,
+            255,
+            64,
+            64,
+            255
+          ],
+          "ivs": [
+            14,
+            0,
+            30,
+            30,
+            30,
+            18
+          ],
+          "original_stats": [
+            158,
+            101,
+            111,
+            158,
+            103,
+            155
+          ],
+          "maximum_training_stats": [
+            158,
+            101,
+            111,
+            181,
+            126,
+            155
+          ],
+          "deficient_stats": [
+            "spa",
+            "spd"
+          ],
+          "preview": [
+            {
+              "id": "lineage-fine-s13",
+              "stats": [
+                158,
+                101,
+                111,
+                158,
+                103,
+                155
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                64,
+                64,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "lineage-fine-s13",
+              "stats": [
+                158,
+                101,
+                111,
+                158,
+                103,
+                155
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                64,
+                64,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        },
+        {
+          "species": "cloyster",
+          "level": 50,
+          "evs": [
+            255,
+            192,
+            255,
+            255,
+            255,
+            192
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            2
+          ],
+          "original_stats": [
+            156,
+            139,
+            231,
+            136,
+            96,
+            100
+          ],
+          "maximum_training_stats": [
+            156,
+            146,
+            231,
+            136,
+            96,
+            107
+          ],
+          "deficient_stats": [
+            "atk",
+            "spe"
+          ],
+          "preview": [
+            {
+              "id": "lineage-fine-s13",
+              "stats": [
+                156,
+                139,
+                231,
+                136,
+                96,
+                100
+              ],
+              "evs": [
+                255,
+                192,
+                255,
+                255,
+                255,
+                192
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "lineage-fine-s13",
+              "stats": [
+                156,
+                139,
+                231,
+                136,
+                96,
+                100
+              ],
+              "evs": [
+                255,
+                192,
+                255,
+                255,
+                255,
+                192
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        },
+        {
+          "species": "snorlax",
+          "level": 55,
+          "evs": [
+            64,
+            255,
+            255,
+            255,
+            255,
+            255
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            266,
+            177,
+            127,
+            127,
+            177,
+            89
+          ],
+          "maximum_training_stats": [
+            292,
+            177,
+            127,
+            127,
+            177,
+            89
+          ],
+          "deficient_stats": [
+            "hp"
+          ],
+          "preview": [
+            {
+              "id": "lineage-fine-s13",
+              "stats": [
+                266,
+                177,
+                127,
+                127,
+                177,
+                89
+              ],
+              "evs": [
+                64,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "lineage-fine-s13",
+              "stats": [
+                266,
+                177,
+                127,
+                127,
+                177,
+                89
+              ],
+              "evs": [
+                64,
+                255,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        },
+        {
+          "species": "zapdos",
+          "level": 54,
+          "evs": [
+            255,
+            255,
+            255,
+            255,
+            255,
+            128
+          ],
+          "ivs": [
+            30,
+            30,
+            26,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            211,
+            152,
+            144,
+            190,
+            152,
+            146
+          ],
+          "maximum_training_stats": [
+            211,
+            152,
+            144,
+            190,
+            152,
+            163
+          ],
+          "deficient_stats": [
+            "spe"
+          ],
+          "preview": [
+            {
+              "id": "lineage-fine-s13",
+              "stats": [
+                211,
+                152,
+                144,
+                190,
+                152,
+                146
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                128
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "lineage-fine-s13",
+              "stats": [
+                211,
+                152,
+                144,
+                190,
+                152,
+                146
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                128
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "lineage-gb-uni-s07",
+      "origin": "machine",
+      "weight": 0.25,
+      "mons": [
+        {
+          "species": "poliwag",
+          "level": 55,
+          "evs": [
+            255,
+            255,
+            64,
+            255,
+            255,
+            255
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            160,
+            111,
+            74,
+            100,
+            100,
+            155
+          ],
+          "maximum_training_stats": [
+            160,
+            111,
+            100,
+            100,
+            100,
+            155
+          ],
+          "deficient_stats": [
+            "def"
+          ],
+          "preview": [
+            {
+              "id": "lineage-gb-uni-s07",
+              "stats": [
+                160,
+                111,
+                74,
+                100,
+                100,
+                155
+              ],
+              "evs": [
+                255,
+                255,
+                64,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "lineage-gb-uni-s07",
+              "stats": [
+                160,
+                111,
+                74,
+                100,
+                100,
+                155
+              ],
+              "evs": [
+                255,
+                255,
+                64,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "mjj-2011-garatank",
+      "origin": "human",
+      "weight": 1.0,
+      "mons": [
+        {
+          "species": "starmie",
+          "level": 51,
+          "evs": [
+            236,
+            0,
+            255,
+            255,
+            255,
+            255
+          ],
+          "ivs": [
+            30,
+            2,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            167,
+            82,
+            139,
+            154,
+            139,
+            169
+          ],
+          "maximum_training_stats": [
+            169,
+            114,
+            139,
+            154,
+            139,
+            169
+          ],
+          "deficient_stats": [
+            "hp",
+            "atk"
+          ],
+          "preview": [
+            {
+              "id": "mjj-2011-garatank",
+              "stats": [
+                167,
+                82,
+                139,
+                154,
+                139,
+                169
+              ],
+              "evs": [
+                236,
+                0,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "mjj-2011-garatank",
+              "stats": [
+                167,
+                82,
+                139,
+                154,
+                139,
+                169
+              ],
+              "evs": [
+                236,
+                0,
+                255,
+                255,
+                255,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "ev-r1-pool-hc75-2nd-toriyama-0",
+      "origin": "machine",
+      "weight": 0.25,
+      "mons": [
+        {
+          "species": "misdreavus",
+          "level": 51,
+          "evs": [
+            255,
+            255,
+            255,
+            128,
+            128,
+            255
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            169,
+            113,
+            113,
+            123,
+            123,
+            139
+          ],
+          "maximum_training_stats": [
+            169,
+            113,
+            113,
+            139,
+            139,
+            139
+          ],
+          "deficient_stats": [
+            "spa",
+            "spd"
+          ],
+          "preview": [
+            {
+              "id": "ev-r1-pool-hc75-2nd-toriyama-0",
+              "stats": [
+                169,
+                113,
+                113,
+                123,
+                123,
+                139
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                128,
+                128,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "ev-r1-pool-hc75-2nd-toriyama-0",
+              "stats": [
+                169,
+                113,
+                113,
+                123,
+                123,
+                139
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                128,
+                128,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "ev-r1-rand-0-1",
+      "origin": "machine",
+      "weight": 0.125,
+      "mons": [
+        {
+          "species": "nidoking",
+          "level": 55,
+          "evs": [
+            255,
+            255,
+            255,
+            255,
+            255,
+            0
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            205,
+            157,
+            140,
+            149,
+            138,
+            115
+          ],
+          "maximum_training_stats": [
+            205,
+            157,
+            140,
+            149,
+            138,
+            149
+          ],
+          "deficient_stats": [
+            "spe"
+          ],
+          "preview": [
+            {
+              "id": "ev-r1-rand-0-1",
+              "stats": [
+                205,
+                157,
+                140,
+                149,
+                138,
+                115
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                0
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "ev-r1-rand-0-1",
+              "stats": [
+                205,
+                157,
+                140,
+                149,
+                138,
+                115
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                0
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        },
+        {
+          "species": "koffing",
+          "level": 50,
+          "evs": [
+            255,
+            255,
+            255,
+            192,
+            192,
+            255
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            10,
+            10,
+            30
+          ],
+          "original_stats": [
+            146,
+            116,
+            146,
+            94,
+            79,
+            86
+          ],
+          "maximum_training_stats": [
+            146,
+            116,
+            146,
+            101,
+            86,
+            86
+          ],
+          "deficient_stats": [
+            "spa",
+            "spd"
+          ],
+          "preview": [
+            {
+              "id": "ev-r1-rand-0-1",
+              "stats": [
+                146,
+                116,
+                146,
+                94,
+                79,
+                86
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                192,
+                192,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "ev-r1-rand-0-1",
+              "stats": [
+                146,
+                116,
+                146,
+                94,
+                79,
+                86
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                192,
+                192,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    },
+    {
+      "id": "ev-r1-rand-0-0",
+      "origin": "machine",
+      "weight": 0.125,
+      "mons": [
+        {
+          "species": "nidoking",
+          "level": 55,
+          "evs": [
+            255,
+            255,
+            255,
+            255,
+            255,
+            0
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            30,
+            30,
+            30
+          ],
+          "original_stats": [
+            205,
+            157,
+            140,
+            149,
+            138,
+            115
+          ],
+          "maximum_training_stats": [
+            205,
+            157,
+            140,
+            149,
+            138,
+            149
+          ],
+          "deficient_stats": [
+            "spe"
+          ],
+          "preview": [
+            {
+              "id": "ev-r1-rand-0-0",
+              "stats": [
+                205,
+                157,
+                140,
+                149,
+                138,
+                115
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                0
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "ev-r1-rand-0-0",
+              "stats": [
+                205,
+                157,
+                140,
+                149,
+                138,
+                115
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                255,
+                255,
+                0
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        },
+        {
+          "species": "koffing",
+          "level": 50,
+          "evs": [
+            255,
+            255,
+            255,
+            192,
+            192,
+            255
+          ],
+          "ivs": [
+            30,
+            30,
+            30,
+            10,
+            10,
+            30
+          ],
+          "original_stats": [
+            146,
+            116,
+            146,
+            94,
+            79,
+            86
+          ],
+          "maximum_training_stats": [
+            146,
+            116,
+            146,
+            101,
+            86,
+            86
+          ],
+          "deficient_stats": [
+            "spa",
+            "spd"
+          ],
+          "preview": [
+            {
+              "id": "ev-r1-rand-0-0",
+              "stats": [
+                146,
+                116,
+                146,
+                94,
+                79,
+                86
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                192,
+                192,
+                255
+              ]
+            }
+          ],
+          "after_own_moves": [
+            {
+              "id": "ev-r1-rand-0-0",
+              "stats": [
+                146,
+                116,
+                146,
+                94,
+                79,
+                86
+              ],
+              "evs": [
+                255,
+                255,
+                255,
+                192,
+                192,
+                255
+              ]
+            }
+          ],
+          "single_move_witnesses": []
+        }
+      ]
+    }
+  ],
+  "catalog": {
+    "catalog_sha256": "01424ff870c1948b8a6787ac1dbb81d3d45943d60c2fa6addff740d91e35d423",
+    "teams": 33,
+    "preview_fallbacks": 0,
+    "mons_with_a_stat_value_absent_at_preview": [
+      {
+        "team": "sample-12",
+        "species": "gengar",
+        "actual_stats": [
+          166,
+          71,
+          111,
+          181,
+          126,
+          161
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-12",
+            "stats": [
+              166,
+              102,
+              111,
+              181,
+              126,
+              161
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "nb-sample-12-0",
+            "stats": [
+              166,
+              102,
+              111,
+              181,
+              126,
+              161
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "sample-12",
+        "species": "starmie",
+        "actual_stats": [
+          166,
+          81,
+          136,
+          151,
+          136,
+          166
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-12",
+            "stats": [
+              166,
+              112,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "nb-sample-12-0",
+            "stats": [
+              166,
+              112,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "sample-12",
+        "species": "umbreon",
+        "actual_stats": [
+          201,
+          71,
+          161,
+          111,
+          181,
+          116
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-12",
+            "stats": [
+              201,
+              102,
+              161,
+              111,
+              181,
+              116
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "nb-sample-12-0",
+            "stats": [
+              201,
+              102,
+              161,
+              111,
+              181,
+              116
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "apex-c08-surgical-142",
+        "species": "cloyster",
+        "actual_stats": [
+          156,
+          109,
+          231,
+          136,
+          96,
+          121
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "apex-c08-surgical-142",
+            "stats": [
+              156,
+              146,
+              231,
+              136,
+              96,
+              121
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "red-v10-s1105-r2-s0142",
+            "stats": [
+              156,
+              146,
+              231,
+              136,
+              96,
+              121
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "apex-c04-bug-3atkstar-boomgen",
+            "stats": [
+              156,
+              146,
+              231,
+              136,
+              96,
+              121
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "red-v10-s1105-r1-s0148",
+            "stats": [
+              156,
+              146,
+              231,
+              136,
+              96,
+              121
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "apex-c08-surgical-142",
+        "species": "starmie",
+        "actual_stats": [
+          166,
+          81,
+          136,
+          151,
+          136,
+          166
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "apex-c08-surgical-142",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "red-v10-s1105-r2-s0142",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "apex-c04-bug-3atkstar-boomgen",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "red-v10-s1105-r1-s0148",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "sample-17-orig",
+        "species": "suicune",
+        "actual_stats": [
+          206,
+          81,
+          166,
+          141,
+          166,
+          136
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-17-orig",
+            "stats": [
+              206,
+              126,
+              166,
+              141,
+              166,
+              136
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "sample-17",
+            "stats": [
+              206,
+              126,
+              166,
+              141,
+              166,
+              136
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "nb-sample-13-0",
+        "species": "gengar",
+        "actual_stats": [
+          166,
+          71,
+          111,
+          181,
+          126,
+          161
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-13",
+            "stats": [
+              166,
+              102,
+              111,
+              181,
+              126,
+              161
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "nb-sample-13-0",
+            "stats": [
+              166,
+              102,
+              111,
+              181,
+              126,
+              161
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "nb-sample-13-0",
+        "species": "starmie",
+        "actual_stats": [
+          166,
+          81,
+          136,
+          151,
+          136,
+          166
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-13",
+            "stats": [
+              166,
+              112,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "nb-sample-13-0",
+            "stats": [
+              166,
+              112,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "red-v10-s1105-r2-s0142",
+        "species": "cloyster",
+        "actual_stats": [
+          156,
+          109,
+          231,
+          136,
+          96,
+          121
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "apex-c08-surgical-142",
+            "stats": [
+              156,
+              146,
+              231,
+              136,
+              96,
+              121
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "red-v10-s1105-r2-s0142",
+            "stats": [
+              156,
+              146,
+              231,
+              136,
+              96,
+              121
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "apex-c04-bug-3atkstar-boomgen",
+            "stats": [
+              156,
+              146,
+              231,
+              136,
+              96,
+              121
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "red-v10-s1105-r1-s0148",
+            "stats": [
+              156,
+              146,
+              231,
+              136,
+              96,
+              121
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "red-v10-s1105-r2-s0142",
+        "species": "starmie",
+        "actual_stats": [
+          166,
+          81,
+          136,
+          151,
+          136,
+          166
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "apex-c08-surgical-142",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "red-v10-s1105-r2-s0142",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "apex-c04-bug-3atkstar-boomgen",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "red-v10-s1105-r1-s0148",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "apex-c04-bug-3atkstar-boomgen",
+        "species": "starmie",
+        "actual_stats": [
+          166,
+          81,
+          136,
+          151,
+          136,
+          166
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "apex-c08-surgical-142",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "red-v10-s1105-r2-s0142",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "apex-c04-bug-3atkstar-boomgen",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "red-v10-s1105-r1-s0148",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "red-v10-s1105-r1-s0148",
+        "species": "starmie",
+        "actual_stats": [
+          166,
+          81,
+          136,
+          151,
+          136,
+          166
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "apex-c08-surgical-142",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "red-v10-s1105-r2-s0142",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "apex-c04-bug-3atkstar-boomgen",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "red-v10-s1105-r1-s0148",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "deme-r1-00-s0030",
+        "species": "suicune",
+        "actual_stats": [
+          206,
+          81,
+          166,
+          141,
+          166,
+          136
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "deme-r1-00-s0030",
+            "stats": [
+              206,
+              126,
+              166,
+              141,
+              166,
+              136
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "sample-11",
+        "species": "alakazam",
+        "actual_stats": [
+          176,
+          61,
+          105,
+          204,
+          149,
+          188
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-11",
+            "stats": [
+              176,
+              95,
+              105,
+              204,
+              149,
+              188
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "sample-11-orig",
+            "stats": [
+              176,
+              95,
+              105,
+              204,
+              149,
+              188
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "sample-11",
+        "species": "venusaur",
+        "actual_stats": [
+          186,
+          88,
+          134,
+          151,
+          151,
+          131
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-11",
+            "stats": [
+              186,
+              119,
+              134,
+              151,
+              151,
+              131
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "sample-11-orig",
+            "stats": [
+              186,
+              119,
+              134,
+              151,
+              151,
+              131
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "sample-11",
+        "species": "suicune",
+        "actual_stats": [
+          206,
+          81,
+          166,
+          141,
+          166,
+          136
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-11",
+            "stats": [
+              206,
+              112,
+              166,
+              141,
+              166,
+              136
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "sample-11-orig",
+            "stats": [
+              206,
+              112,
+              166,
+              141,
+              166,
+              136
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "red-v10-s1105-r2-s0155",
+        "species": "suicune",
+        "actual_stats": [
+          206,
+          81,
+          166,
+          141,
+          166,
+          136
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "red-v10-s1105-r2-s0155",
+            "stats": [
+              206,
+              126,
+              166,
+              141,
+              166,
+              136
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "sample-02",
+        "species": "jynx",
+        "actual_stats": [
+          171,
+          56,
+          86,
+          166,
+          146,
+          146
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-02",
+            "stats": [
+              171,
+              101,
+              86,
+              166,
+              146,
+              146
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "sample-02",
+        "species": "starmie",
+        "actual_stats": [
+          166,
+          81,
+          136,
+          151,
+          136,
+          166
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-02",
+            "stats": [
+              166,
+              126,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "sample-14",
+        "species": "starmie",
+        "actual_stats": [
+          166,
+          81,
+          136,
+          151,
+          136,
+          166
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-14-orig",
+            "stats": [
+              166,
+              112,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "sample-14",
+            "stats": [
+              166,
+              112,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "pb-82",
+            "stats": [
+              166,
+              112,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "sample-14",
+        "species": "houndoom",
+        "actual_stats": [
+          181,
+          96,
+          101,
+          161,
+          131,
+          146
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-14-orig",
+            "stats": [
+              181,
+              127,
+              101,
+              161,
+              131,
+              146
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "sample-14",
+            "stats": [
+              181,
+              127,
+              101,
+              161,
+              131,
+              146
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "pb-82",
+            "stats": [
+              181,
+              127,
+              101,
+              161,
+              131,
+              146
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "sample-14",
+        "species": "misdreavus",
+        "actual_stats": [
+          166,
+          66,
+          111,
+          136,
+          136,
+          136
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-14-orig",
+            "stats": [
+              166,
+              97,
+              111,
+              136,
+              136,
+              136
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "sample-14",
+            "stats": [
+              166,
+              97,
+              111,
+              136,
+              136,
+              136
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "pb-82",
+            "stats": [
+              166,
+              97,
+              111,
+              136,
+              136,
+              136
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "sample-14",
+        "species": "venusaur",
+        "actual_stats": [
+          186,
+          88,
+          134,
+          151,
+          151,
+          131
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "sample-14-orig",
+            "stats": [
+              186,
+              119,
+              134,
+              151,
+              151,
+              131
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "sample-14",
+            "stats": [
+              186,
+              119,
+              134,
+              151,
+              151,
+              131
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          },
+          {
+            "id": "pb-82",
+            "stats": [
+              186,
+              119,
+              134,
+              151,
+              151,
+              131
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "pb-85",
+        "species": "umbreon",
+        "actual_stats": [
+          201,
+          71,
+          161,
+          111,
+          181,
+          116
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "pb-85",
+            "stats": [
+              201,
+              102,
+              161,
+              111,
+              181,
+              116
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "pb-62",
+        "species": "starmie",
+        "actual_stats": [
+          166,
+          81,
+          136,
+          151,
+          136,
+          166
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "pb-62",
+            "stats": [
+              166,
+              112,
+              136,
+              151,
+              136,
+              166
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "pb-96",
+        "species": "misdreavus",
+        "actual_stats": [
+          166,
+          66,
+          111,
+          136,
+          136,
+          136
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "pb-96",
+            "stats": [
+              166,
+              97,
+              111,
+              136,
+              136,
+              136
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "pb-96",
+        "species": "venusaur",
+        "actual_stats": [
+          186,
+          88,
+          134,
+          151,
+          151,
+          131
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "pb-96",
+            "stats": [
+              186,
+              119,
+              134,
+              151,
+              151,
+              131
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      },
+      {
+        "team": "pb-89",
+        "species": "umbreon",
+        "actual_stats": [
+          201,
+          71,
+          161,
+          111,
+          181,
+          116
+        ],
+        "missing_exact_stat_values": [
+          "atk"
+        ],
+        "preview_candidates": [
+          {
+            "id": "pb-89",
+            "stats": [
+              201,
+              102,
+              161,
+              111,
+              181,
+              116
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      }
+    ],
+    "native_special_hidden_power_attack_gaps": [
+      {
+        "team": "sample-07",
+        "species": "zapdos",
+        "attack_dv_before": 15,
+        "attack_ev_before": 255,
+        "attack_dv_after": 11,
+        "attack_ev_after": 0,
+        "attack_before": 155,
+        "attack_after": 116,
+        "hp_power_before": 70,
+        "hp_power_after": 70
+      },
+      {
+        "team": "sample-17-orig",
+        "species": "zapdos",
+        "attack_dv_before": 11,
+        "attack_ev_before": 255,
+        "attack_dv_after": 11,
+        "attack_ev_after": 0,
+        "attack_before": 137,
+        "attack_after": 106,
+        "hp_power_before": 70,
+        "hp_power_after": 70
+      },
+      {
+        "team": "nb-sample-13-0",
+        "species": "zapdos",
+        "attack_dv_before": 15,
+        "attack_ev_before": 255,
+        "attack_dv_after": 11,
+        "attack_ev_after": 0,
+        "attack_before": 141,
+        "attack_after": 106,
+        "hp_power_before": 70,
+        "hp_power_after": 70
+      },
+      {
+        "team": "sample-08",
+        "species": "zapdos",
+        "attack_dv_before": 15,
+        "attack_ev_before": 255,
+        "attack_dv_after": 11,
+        "attack_ev_after": 0,
+        "attack_before": 155,
+        "attack_after": 116,
+        "hp_power_before": 70,
+        "hp_power_after": 70
+      },
+      {
+        "team": "deme-r1-00-s0030",
+        "species": "raikou",
+        "attack_dv_before": 15,
+        "attack_ev_before": 255,
+        "attack_dv_after": 11,
+        "attack_ev_after": 0,
+        "attack_before": 149,
+        "attack_after": 110,
+        "hp_power_before": 70,
+        "hp_power_after": 70
+      },
+      {
+        "team": "sample-06",
+        "species": "raikou",
+        "attack_dv_before": 15,
+        "attack_ev_before": 255,
+        "attack_dv_after": 11,
+        "attack_ev_after": 0,
+        "attack_before": 149,
+        "attack_after": 110,
+        "hp_power_before": 70,
+        "hp_power_after": 70
+      },
+      {
+        "team": "mjj-2010-garap-a",
+        "species": "zapdos",
+        "attack_dv_before": 11,
+        "attack_ev_before": 255,
+        "attack_dv_after": 11,
+        "attack_ev_after": 0,
+        "attack_before": 137,
+        "attack_after": 106,
+        "hp_power_before": 70,
+        "hp_power_after": 70
+      },
+      {
+        "team": "sample-02",
+        "species": "zapdos",
+        "attack_dv_before": 15,
+        "attack_ev_before": 255,
+        "attack_dv_after": 11,
+        "attack_ev_after": 0,
+        "attack_before": 141,
+        "attack_after": 106,
+        "hp_power_before": 70,
+        "hp_power_after": 70
+      },
+      {
+        "team": "sib-r1-n4-red-v6-r1-s0064-s07",
+        "species": "zapdos",
+        "attack_dv_before": 15,
+        "attack_ev_before": 255,
+        "attack_dv_after": 11,
+        "attack_ev_after": 0,
+        "attack_before": 141,
+        "attack_after": 106,
+        "hp_power_before": 70,
+        "hp_power_after": 70
+      },
+      {
+        "team": "sample-14",
+        "species": "zapdos",
+        "attack_dv_before": 11,
+        "attack_ev_before": 255,
+        "attack_dv_after": 11,
+        "attack_ev_after": 0,
+        "attack_before": 137,
+        "attack_after": 106,
+        "hp_power_before": 70,
+        "hp_power_after": 70
+      },
+      {
+        "team": "pb-6",
+        "species": "zapdos",
+        "attack_dv_before": 11,
+        "attack_ev_before": 255,
+        "attack_dv_after": 11,
+        "attack_ev_after": 0,
+        "attack_before": 150,
+        "attack_after": 116,
+        "hp_power_before": 70,
+        "hp_power_after": 70
+      }
+    ]
+  },
+  "played_rain_dance_witness": {
+    "selected": [
+      1,
+      3,
+      6
+    ],
+    "total_level": 155,
+    "candidates_before": [
+      "sample-07",
+      "rental-cban-3",
+      "mjj-2013-mario",
+      "lineage-fine-s07",
+      "pb-15"
+    ],
+    "mons_after_rain_dance": [
+      {
+        "species": "cloyster",
+        "true_stats": [
+          156,
+          146,
+          231,
+          136,
+          96,
+          121
+        ],
+        "posterior": [
+          {
+            "id": "lineage-fine-s07",
+            "stats": [
+              156,
+              146,
+              231,
+              136,
+              96,
+              114
+            ],
+            "evs": [
+              255,
+              255,
+              255,
+              255,
+              255,
+              192
+            ]
+          }
+        ]
+      },
+      {
+        "species": "zapdos",
+        "true_stats": [
+          215,
+          155,
+          147,
+          193,
+          155,
+          166
+        ],
+        "posterior": [
+          {
+            "id": "lineage-fine-s07",
+            "stats": [
+              206,
+              155,
+              147,
+              193,
+              155,
+              166
+            ],
+            "evs": [
+              192,
+              255,
+              255,
+              255,
+              255,
+              255
+            ]
+          }
+        ]
+      }
+    ],
+    "log": [
+      "|gametype|singles",
+      "|player|p1|P1||",
+      "|player|p2|P2||",
+      "|gen|2",
+      "|tier|[Gen 2] Nintendo Cup 2000 No OHKO Stadium2 Strict",
+      "|rule|Species Clause: Limit one of each Pokémon",
+      "|rule|Item Clause: Limit 1 of each item",
+      "|rule|Stadium Sleep Clause: Putting another foe to sleep while any teammate sleeps forfeits the battle",
+      "|rule|Freeze Clause Mod: Limit one foe frozen",
+      "|rule|OHKO Clause: OHKO moves are banned",
+      "|rule|HP Percentage Mod: HP is shown in percentages",
+      "|clearpoke",
+      "|poke|p1|Electrode, L50|item",
+      "|poke|p1|Tauros, L55, M|item",
+      "|poke|p1|Cloyster, L50, M|item",
+      "|poke|p1|Marowak, L55, M|item",
+      "|poke|p1|Snorlax, L50, M|item",
+      "|poke|p1|Zapdos, L55|item",
+      "|poke|p2|Electrode, L50|item",
+      "|poke|p2|Tauros, L55, M|item",
+      "|poke|p2|Cloyster, L50, M|item",
+      "|poke|p2|Marowak, L55, M|item",
+      "|poke|p2|Snorlax, L50, M|item",
+      "|poke|p2|Zapdos, L55|item",
+      "|teampreview|3",
+      "|",
+      "|teamsize|p1|3",
+      "|teamsize|p2|3",
+      "|start",
+      "|split|p1",
+      "|switch|p1a: Electrode|Electrode, L50|166/166",
+      "|switch|p1a: Electrode|Electrode, L50|100/100",
+      "|split|p2",
+      "|switch|p2a: Electrode|Electrode, L50|166/166",
+      "|switch|p2a: Electrode|Electrode, L50|100/100",
+      "|turn|1",
+      "|",
+      "|move|p2a: Electrode|Rain Dance|p2a: Electrode",
+      "|-weather|RainDance",
+      "|move|p1a: Electrode|Rain Dance|p1a: Electrode",
+      "|-weather|RainDance",
+      "|",
+      "|-weather|RainDance|[upkeep]",
+      "|upkeep",
+      "|turn|2"
+    ]
+  }
+}

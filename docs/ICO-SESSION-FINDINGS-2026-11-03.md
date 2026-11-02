@@ -43,3 +43,10 @@ Historical evidence remains accessible in reverted commit `2d2c3d05`.
 No production WASM replacement or deployment occurred. The task's Colab session
 was terminated; no GCP Batch jobs were submitted. Diagnostic scratch files under
 `tmp/ico-v1`, `tmp/ico-v2` and `tmp/ico-leak` are not validated product artifacts.
+
+Follow-up: the [frozen-prior and playable-party training audit](../data/prior-training-audit-v1/README.md)
+independently reproduces missing maximum-training support, a legal Rain Dance
+reveal that leaves only a deficient spread, and catalog/prior Attack mismatches.
+It also checks the catalog's maximum-training and male-camouflage policy.
+It establishes no action-quality or win-rate gap and does not reinstate the
+withdrawn ICO implementation or HP fix.
