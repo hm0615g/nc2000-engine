@@ -718,6 +718,21 @@ def compact_dominated_mask7(
         noop_hbell = (m_sk == 21) & (~party_has_status)
         awake_or_waking = (att_st_raw != Status.SLP) | (att_st_cnt <= 1)
         noop_slptalk = ((m_flags & MoveFlag.IS_SLEEP_USABLE) != 0) & awake_or_waking
+        has_usable_slptalk = jnp.bool_(False)
+        for sm_i in range(4):
+            sm_fl = _get2(table.move_flags, att_idx, sm_i)
+            has_usable_slptalk = has_usable_slptalk | (
+                leg_mask[sm_i] & ((sm_fl & MoveFlag.IS_SLEEP_USABLE) != 0)
+            )
+        att_has_wake_berry = (_get1(state.item, att_idx) != 0) & (
+            (_get1(table.item_flags, att_idx) & (ItemFlag.MINTBERRY | ItemFlag.MIRACLEBERRY)) != 0
+        )
+        asleep_this_turn = (~awake_or_waking) & (~att_has_wake_berry)
+        noop_asleep_non_slptalk = (
+            asleep_this_turn
+            & has_usable_slptalk
+            & ((m_flags & MoveFlag.IS_SLEEP_USABLE) == 0)
+        )
 
         foe_psn_imm = ((m_pstat == Status.PSN) | (m_pstat == Status.TOX)) & (
             (def_tmask & table.poison_immune_mask) != jnp.uint32(0)
@@ -778,6 +793,7 @@ def compact_dominated_mask7(
             | noop_bdrum
             | noop_hbell
             | noop_slptalk
+            | noop_asleep_non_slptalk
             | noop_status
             | noop_sub
             | noop_curse
@@ -1110,6 +1126,25 @@ def sample_heavy_playout_action(
         att_faster = mon_action_speed(state, table, side, att_slot) > mon_action_speed(
             state, table, def_side, def_slot
         )
+        att_st_pk = _get1(state.status_packed, att_idx)
+        att_st_raw = att_st_pk & 0x07
+        att_st_cnt = (att_st_pk >> 3) & 0x07
+        att_wake_berry = (_get1(state.item, att_idx) != 0) & (
+            (_get1(table.item_flags, att_idx) & (ItemFlag.MINTBERRY | ItemFlag.MIRACLEBERRY)) != 0
+        )
+        att_asleep_turn = (att_st_raw == Status.SLP) & (att_st_cnt > 1) & (~att_wake_berry)
+
+        own_has_heal = jnp.bool_(False)
+        for hm_i in range(4):
+            hm_fl = _get2(table.move_flags, att_idx, hm_i)
+            own_has_heal = own_has_heal | (
+                legal7[hm_i] & ((hm_fl & (MoveFlag.IS_REST | MoveFlag.IS_HALF_HEAL)) != 0)
+            )
+        ghost_mask = jnp.uint32(1) << (table.ghost_type.astype(jnp.uint32) & jnp.uint32(31))
+        att_is_ghost = (_get1(table.type_mask, att_idx) & ghost_mask) != jnp.uint32(0)
+        att_b0 = _get2(state.boosts, att_idx, 0)
+        att_b2 = _get2(state.boosts, att_idx, 2)
+        att_b3 = _get2(state.boosts, att_idx, 3)
 
         adj_move_scores = []
         stay_non_sd = jnp.float32(0.0)
@@ -1120,6 +1155,26 @@ def sample_heavy_playout_action(
             m_sk = _get2(table.move_special_kind, att_idx, m_i)
             m_pvol = _get2(table.move_primary_vol, att_idx, m_i)
             m_is_sd = (m_fl & MoveFlag.IS_SELFDESTRUCT) != 0
+
+            # Sleep Talk / Snore when guaranteed asleep this turn (`status_counter >= 2`)
+            slptalk_ok = att_asleep_turn & ((m_fl & MoveFlag.IS_SLEEP_USABLE) != 0)
+            sc_m = jnp.where(slptalk_ok, jnp.maximum(sc_m, jnp.float32(0.75)), sc_m)
+
+            # R2b: Healthy setup + recovery punishes passive non-phazing walls (`foe_best_dmg < 0.25`)
+            is_setup_move = (
+                ((m_sk == 5) & (~att_is_ghost) & (att_b0 < 2))
+                | ((m_fl & MoveFlag.BOOSTS_SELF) != 0) & ((att_b0 < 2) | (att_b2 < 2) | (att_b3 < 2))
+            )
+            r2b_ok = (
+                is_setup_move
+                & own_has_heal
+                & (~att_asleep_turn)
+                & (own_hp_frac >= jnp.float32(0.65))
+                & (best_move_score < jnp.float32(0.45))
+                & (foe_best_dmg < jnp.float32(0.25))
+                & ((att_vol & (VolBit.ENCORE | VolBit.PERISH_SONG)) == 0)
+            )
+            sc_m = jnp.where(r2b_ok, jnp.maximum(sc_m, jnp.float32(0.48)), sc_m)
 
             # R1: Do not waste healthy Self-Destruct/Explosion for non-KO chip when not threatened
             sc_m = jnp.where(

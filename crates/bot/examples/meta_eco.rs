@@ -8156,8 +8156,9 @@ fn main() {
         "stress-falsify" => cmd_stress_falsify(&args[1..]),
         "apex-experiment" => cmd_apex_experiment(&args[1..]),
         "eval-partybox" => cmd_eval_partybox(&args[1..]),
+        "bake-catalog-preview" => cmd_bake_catalog_preview(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit | falsify-conclusion | converge-conclusion | stress-falsify | apex-experiment | eval-partybox)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit | falsify-conclusion | converge-conclusion | stress-falsify | apex-experiment | eval-partybox | bake-catalog-preview)"
         ),
     }
 }
@@ -16904,4 +16905,655 @@ fn cmd_eval_partybox(args: &[String]) {
 
     write_json_atomic(&root.join("data/partybox-v0/eval-report.json"), &out_json);
     println!("\nReport saved to data/partybox-v0/eval-report.json (elapsed: {:.1}s)", t_start.elapsed().as_secs_f64());
+}
+
+fn cmd_bake_catalog_preview(args: &[String]) {
+    let t_start = std::time::Instant::now();
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let max_turns: u16 = num(args, "--max-turns", 250);
+    let ns_apex: u32 = num(args, "--ns-apex", 3);
+    let ns_other: u32 = num(args, "--ns-other", 2);
+    let seed: u64 = num(args, "--seed", 20261111);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(8)
+        });
+
+    let cat_txt = std::fs::read_to_string(root.join("data/team-pool-v2/team-pool.json"))
+        .expect("read data/team-pool-v2/team-pool.json");
+    let cat_v: Value = serde_json::from_str(&cat_txt).unwrap();
+    let cat_arr = cat_v["teams"].as_array().unwrap();
+    let n_teams = cat_arr.len();
+
+    struct CatEntry {
+        id: String,
+        role: String,
+        tier: i64,
+        raw_sets: Vec<PokemonSet>,
+        raw_legal: Vec<[usize; 3]>,
+        canon_roster: CompiledRoster6,
+        raw_to_canon_act: Vec<usize>, // raw_to_canon_act[ia_raw] = ia_canon
+    }
+
+    let apex_id_set: BTreeSet<&str> = BTreeSet::from([
+        "apex-c08-surgical-142",
+        "red-v10-s1105-r2-s0142",
+        "apex-c04-bug-3atkstar-boomgen",
+        "red-v10-s1105-r1-s0148",
+    ]);
+
+    let mut entries: Vec<CatEntry> = Vec::with_capacity(n_teams);
+    for t in cat_arr {
+        let id = t["id"].as_str().unwrap().to_string();
+        let is_nash = t["nash"].as_bool().unwrap_or(false)
+            || t["role"].as_str() == Some("nash")
+            || apex_id_set.contains(id.as_str());
+        let role = if is_nash {
+            "nash".to_string()
+        } else {
+            t["role"].as_str().unwrap_or("specialist").to_string()
+        };
+        let tier = t["tier"].as_i64().unwrap_or(if is_nash { 1 } else { 2 });
+        let raw_arr = t["sets"].as_array().unwrap();
+        let raw_sets = to_sets(raw_arr).unwrap();
+        let raw_legal = legal_triples_sets(&raw_sets);
+
+        let upgraded = normalize_team_dvs_evs(&dex, raw_arr);
+        let canon_val = gen.canonize(&dex, &upgraded).unwrap();
+        let canon_sets = to_sets(&canon_val).unwrap();
+        let canon_roster = CompiledRoster6::compile(&dex, &canon_sets);
+        let canon_to_raw_act = compute_raw_to_canon_action_map(raw_arr, &canon_sets);
+        let mut raw_to_canon_act = vec![0usize; canon_to_raw_act.len()];
+        for (ia_can, &ia_raw) in canon_to_raw_act.iter().enumerate() {
+            raw_to_canon_act[ia_raw] = ia_can;
+        }
+        entries.push(CatEntry {
+            id,
+            role,
+            tier,
+            raw_sets,
+            raw_legal,
+            canon_roster,
+            raw_to_canon_act,
+        });
+    }
+
+    // Group into outer shells by preview_sig_sets(&raw_sets)
+    struct ShellGroup {
+        sig_key: String,
+        member_indices: Vec<usize>,
+        weights: Vec<f64>,
+        is_nash: bool,
+    }
+    let mut shells: Vec<ShellGroup> = Vec::new();
+    let mut sig_to_shell: BTreeMap<PreviewSig, usize> = BTreeMap::new();
+    let apex_weight_map: BTreeMap<&str, f64> = BTreeMap::from([
+        ("apex-c08-surgical-142", 0.30),
+        ("red-v10-s1105-r2-s0142", 0.25),
+        ("apex-c04-bug-3atkstar-boomgen", 0.25),
+        ("red-v10-s1105-r1-s0148", 0.20),
+    ]);
+
+    for (idx, e) in entries.iter().enumerate() {
+        let sig = preview_sig_sets(&e.raw_sets);
+        if let Some(&s_idx) = sig_to_shell.get(&sig) {
+            shells[s_idx].member_indices.push(idx);
+        } else {
+            let sig_key = sig
+                .iter()
+                .map(|(sp, lv, g, it)| format!("{}:{}:{}:{}", sp, lv, g, if *it { 1 } else { 0 }))
+                .collect::<Vec<_>>()
+                .join("|");
+            let s_idx = shells.len();
+            sig_to_shell.insert(sig, s_idx);
+            shells.push(ShellGroup {
+                sig_key,
+                member_indices: vec![idx],
+                weights: Vec::new(),
+                is_nash: e.role == "nash",
+            });
+        }
+    }
+    for sh in &mut shells {
+        if sh.is_nash {
+            sh.weights = sh
+                .member_indices
+                .iter()
+                .map(|&i| *apex_weight_map.get(entries[i].id.as_str()).unwrap_or(&0.25))
+                .collect();
+        } else {
+            let n = sh.member_indices.len();
+            sh.weights = vec![1.0 / (n as f64); n];
+        }
+    }
+
+    println!(
+        "[bake-catalog-preview] Loaded {} teams across {} shells",
+        n_teams,
+        shells.len()
+    );
+
+    // Evaluate all unordered pairs (i, j) with i <= j on canonical rosters
+    let mut jobs: Vec<(usize, usize, u32)> = Vec::new();
+    for i in 0..n_teams {
+        for j in i..n_teams {
+            let ns = if entries[i].role == "nash" || entries[j].role == "nash" {
+                ns_apex
+            } else {
+                ns_other
+            };
+            jobs.push((i, j, ns));
+        }
+    }
+
+    let cursor = std::sync::atomic::AtomicUsize::new(0);
+    let mut pair_mats: Vec<((usize, usize), Vec<f64>, Vec<f64>, u32)> = Vec::with_capacity(jobs.len());
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for _ in 0..threads.max(1) {
+            let (jobs_ref, cursor_ref, entries_ref) = (&jobs, &cursor, &entries);
+            handles.push(scope.spawn(move || {
+                let mut loc = Vec::new();
+                loop {
+                    let k = cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if k >= jobs_ref.len() {
+                        break;
+                    }
+                    let (i, j, ns) = jobs_ref[k];
+                    let r_i = &entries_ref[i].canon_roster;
+                    let r_j = &entries_ref[j].canon_roster;
+                    let ka = r_i.legal.len();
+                    let kb = r_j.legal.len();
+                    let sig_i = preview_sig_sets(&r_i.sets);
+                    let sig_j = preview_sig_sets(&r_j.sets);
+                    let p_seed = shell_pair_crn_seed(seed, &sig_i, &sig_j, 1);
+                    let raw_m = eval_full_preview_matrix_compact(r_i, r_j, ns, max_turns, p_seed);
+                    if i == j {
+                        let mut sym = vec![0.5f64; ka * ka];
+                        for ia in 0..ka {
+                            sym[ia * ka + ia] = 0.5;
+                            for ib in (ia + 1)..ka {
+                                let v = 0.5 * (raw_m[ia * ka + ib] + (1.0 - raw_m[ib * ka + ia]));
+                                sym[ia * ka + ib] = v;
+                                sym[ib * ka + ia] = 1.0 - v;
+                            }
+                        }
+                        loc.push(((i, j), sym.clone(), sym, ns));
+                    } else {
+                        let rev = transpose_preview_matrix(&raw_m, ka, kb);
+                        loc.push(((i, j), raw_m, rev, ns));
+                    }
+                }
+                loc
+            }));
+        }
+        for h in handles {
+            pair_mats.extend(h.join().unwrap());
+        }
+    });
+
+    let mut canon_mat_map: BTreeMap<(usize, usize), (Vec<f64>, u32)> = BTreeMap::new();
+    for ((i, j), m_ij, m_ji, ns) in pair_mats {
+        canon_mat_map.insert((i, j), (m_ij, ns));
+        canon_mat_map.insert((j, i), (m_ji, ns));
+    }
+    println!(
+        "[bake-catalog-preview] Evaluated {} canonical matrices in {:.1}s",
+        jobs.len(),
+        t_start.elapsed().as_secs_f64()
+    );
+
+    // Solve all 30 x 30 shell pairs using solve_debiased_bayesian_shell_preview_nash
+    let n_shells = shells.len();
+    let mut shell_payoff = vec![vec![0.5f64; n_shells]; n_shells];
+    let mut team_payoff = vec![vec![0.5f64; n_teams]; n_teams];
+    // Policies in RAW catalog 3v3 action order for each (team_i, shell_v)
+    let mut raw_nash_pol: BTreeMap<(usize, usize), Vec<f64>> = BTreeMap::new();
+    let mut raw_final_pol: BTreeMap<(usize, usize), Vec<f64>> = BTreeMap::new();
+    // Effective matrix in RAW catalog 3v3 action order for each (team_i, shell_v) against opponent equilibrium
+    let mut raw_expected_ev: BTreeMap<(usize, usize), Vec<f64>> = BTreeMap::new();
+
+    for u in 0..n_shells {
+        for v in u..n_shells {
+            let u_mems = &shells[u].member_indices;
+            let v_mems = &shells[v].member_indices;
+            let u_rosters: Vec<&CompiledRoster6> =
+                u_mems.iter().map(|&i| &entries[i].canon_roster).collect();
+            let v_rosters: Vec<&CompiledRoster6> =
+                v_mems.iter().map(|&j| &entries[j].canon_roster).collect();
+            let ka = u_rosters[0].legal.len();
+            let kb = v_rosters[0].legal.len();
+
+            let mut mats_km: Vec<&[f64]> = Vec::with_capacity(u_mems.len() * v_mems.len());
+            let mut ns_km: Vec<u32> = Vec::with_capacity(u_mems.len() * v_mems.len());
+            for &i in u_mems {
+                for &j in v_mems {
+                    let (ref m, ns) = canon_mat_map[&(i, j)];
+                    mats_km.push(m.as_slice());
+                    ns_km.push(ns);
+                }
+            }
+
+            let (v_deb, per_u, _per_v, p_strats, q_strats) =
+                solve_debiased_bayesian_shell_preview_nash(
+                    &u_rosters,
+                    &v_rosters,
+                    &mats_km,
+                    &ns_km,
+                    ka,
+                    kb,
+                    &shells[u].weights,
+                    &shells[v].weights,
+                    600,
+                );
+            if u == v {
+                shell_payoff[u][u] = 0.5;
+            } else {
+                shell_payoff[u][v] = v_deb;
+                shell_payoff[v][u] = 1.0 - v_deb;
+            }
+
+            // Convert canonical strategies p_strats[k] and q_strats[m] to raw catalog action order
+            // and compute casual diverse policies where applicable
+            let build_policy = |team_idx: usize,
+                                opp_mems: &[usize],
+                                opp_weights: &[f64],
+                                opp_canon_strats: &[Vec<f64>],
+                                own_canon_strat: &[f64],
+                                is_nash: bool|
+             -> (Vec<f64>, Vec<f64>, Vec<f64>) {
+                let e_own = &entries[team_idx];
+                let k_own = e_own.raw_legal.len();
+                let mut x_raw = vec![0.0f64; k_own];
+                for ia_raw in 0..k_own {
+                    let ia_can = e_own.raw_to_canon_act[ia_raw];
+                    x_raw[ia_raw] = own_canon_strat[ia_can];
+                }
+                // Expected payoff of each raw action ia_raw against opponent's canonical equilibrium strategy
+                let mut ev_raw = vec![0.5f64; k_own];
+                for ia_raw in 0..k_own {
+                    let ia_can = e_own.raw_to_canon_act[ia_raw];
+                    let mut val = 0.0f64;
+                    for (m, &opp_j) in opp_mems.iter().enumerate() {
+                        let (ref mat_ij, _) = canon_mat_map[&(team_idx, opp_j)];
+                        let kb_opp = entries[opp_j].canon_roster.legal.len();
+                        let row = &mat_ij[ia_can * kb_opp..(ia_can + 1) * kb_opp];
+                        let mut dot = 0.0f64;
+                        for ib_can in 0..kb_opp {
+                            dot += row[ib_can] * opp_canon_strats[m][ib_can];
+                        }
+                        val += opp_weights[m] * dot;
+                    }
+                    ev_raw[ia_raw] = val;
+                }
+                if is_nash {
+                    return (x_raw.clone(), x_raw, ev_raw);
+                }
+                // Non-Nash casual shell: 78% exact Bayesian Nash + 22% near-optimal coverage across all 6 slots
+                let mut v_eq = 0.0f64;
+                for ia in 0..k_own {
+                    v_eq += x_raw[ia] * ev_raw[ia];
+                }
+                let mut logits = vec![0.0f64; k_own];
+                let mut max_l = f64::NEG_INFINITY;
+                for ia in 0..k_own {
+                    let reg = (v_eq - ev_raw[ia]).max(0.0);
+                    let l = -reg / 0.022;
+                    logits[ia] = l;
+                    if l > max_l {
+                        max_l = l;
+                    }
+                }
+                let mut p_near = vec![0.0f64; k_own];
+                let mut sum_p = 0.0f64;
+                for ia in 0..k_own {
+                    let w = if v_eq - ev_raw[ia] <= 0.045 {
+                        (logits[ia] - max_l).exp()
+                    } else {
+                        0.0
+                    };
+                    p_near[ia] = w;
+                    sum_p += w;
+                }
+                if sum_p > 1e-12 {
+                    for x in &mut p_near {
+                        *x /= sum_p;
+                    }
+                } else {
+                    p_near = x_raw.clone();
+                }
+                let mut p_mix: Vec<f64> = (0..k_own)
+                    .map(|ia| 0.78 * x_raw[ia] + 0.22 * p_near[ia])
+                    .collect();
+                for s_slot in 0..6 {
+                    let mut best_ia = None;
+                    let mut best_ev = f64::NEG_INFINITY;
+                    let mut cur_cov = 0.0f64;
+                    for (ia, trip) in e_own.raw_legal.iter().enumerate() {
+                        if trip[0] == s_slot || trip[1] == s_slot || trip[2] == s_slot {
+                            cur_cov += p_mix[ia];
+                            if ev_raw[ia] > best_ev {
+                                best_ev = ev_raw[ia];
+                                best_ia = Some(ia);
+                            }
+                        }
+                    }
+                    if let Some(b_ia) = best_ia {
+                        if v_eq - best_ev <= 0.055 && cur_cov < 0.12 {
+                            p_mix[b_ia] += 0.12 - cur_cov;
+                        }
+                    }
+                }
+                let s_mix: f64 = p_mix.iter().sum();
+                if s_mix > 1e-12 {
+                    for x in &mut p_mix {
+                        *x /= s_mix;
+                    }
+                }
+                (x_raw, p_mix, ev_raw)
+            };
+
+            for (k, &i_u) in u_mems.iter().enumerate() {
+                let (x_r, p_r, ev_r) = build_policy(
+                    i_u,
+                    v_mems,
+                    &shells[v].weights,
+                    &q_strats,
+                    &p_strats[k],
+                    shells[u].is_nash,
+                );
+                raw_nash_pol.insert((i_u, v), x_r);
+                raw_final_pol.insert((i_u, v), p_r);
+                raw_expected_ev.insert((i_u, v), ev_r);
+            }
+            if u != v {
+                for (m, &j_v) in v_mems.iter().enumerate() {
+                    let (x_r, p_r, ev_r) = build_policy(
+                        j_v,
+                        u_mems,
+                        &shells[u].weights,
+                        &p_strats,
+                        &q_strats[m],
+                        shells[v].is_nash,
+                    );
+                    raw_nash_pol.insert((j_v, u), x_r);
+                    raw_final_pol.insert((j_v, u), p_r);
+                    raw_expected_ev.insert((j_v, u), ev_r);
+                }
+            }
+
+            // Record pairwise team payoffs
+            for (k, &i_u) in u_mems.iter().enumerate() {
+                for (m, &j_v) in v_mems.iter().enumerate() {
+                    if i_u == j_v {
+                        team_payoff[i_u][j_v] = 0.5;
+                    } else {
+                        let (ref mat_ij, _) = canon_mat_map[&(i_u, j_v)];
+                        let mut v_ij = 0.0f64;
+                        for ia in 0..ka {
+                            for ib in 0..kb {
+                                v_ij += p_strats[k][ia] * mat_ij[ia * kb + ib] * q_strats[m][ib];
+                            }
+                        }
+                        // Apply debiased shell adjustment
+                        let raw_u_mean: f64 = (0..v_mems.len())
+                            .map(|mm| {
+                                let (ref m_km, _) = canon_mat_map[&(i_u, v_mems[mm])];
+                                let mut s = 0.0f64;
+                                for ia in 0..ka {
+                                    for ib in 0..kb {
+                                        s += p_strats[k][ia] * m_km[ia * kb + ib] * q_strats[mm][ib];
+                                    }
+                                }
+                                shells[v].weights[mm] * s
+                            })
+                            .sum();
+                        let adj = per_u[k] - raw_u_mean;
+                        let v_adj = (v_ij + adj).clamp(0.0, 1.0);
+                        team_payoff[i_u][j_v] = v_adj;
+                        team_payoff[j_v][i_u] = 1.0 - v_adj;
+                    }
+                }
+            }
+        }
+    }
+
+    // Solve meta-game over the 30 shells
+    let (w_shells, _, _) = solve_rectangular_minimax(&shell_payoff, 100_000);
+    let mut w_teams = vec![0.0f64; n_teams];
+    for (s_idx, sh) in shells.iter().enumerate() {
+        for (k, &t_idx) in sh.member_indices.iter().enumerate() {
+            w_teams[t_idx] = w_shells[s_idx] * sh.weights[k];
+        }
+    }
+
+    let nash_shell_idx = shells.iter().position(|s| s.is_nash).unwrap();
+    let mut min_apex_vs_other = 1.0f64;
+    let mut min_other_id = String::new();
+    println!("\n=== APEX4 SHELL VS ALL 29 OTHER SHELLS (Debiased Bayesian Preview Nash) ===");
+    for (v, sh) in shells.iter().enumerate() {
+        if v == nash_shell_idx {
+            continue;
+        }
+        let wr = shell_payoff[nash_shell_idx][v];
+        let mem_names: Vec<&str> = sh.member_indices.iter().map(|&i| entries[i].id.as_str()).collect();
+        if wr < min_apex_vs_other {
+            min_apex_vs_other = wr;
+            min_other_id = mem_names.join("+");
+        }
+        println!("  APEX4 vs {:28} : {:.4}", mem_names.join("+"), wr);
+    }
+    println!(
+        "\n  APEX4 Min Payoff vs all 29 shells: {:.4} ({})",
+        min_apex_vs_other, min_other_id
+    );
+    println!("  APEX4 Meta-Nash Weight           : {:.6}", w_shells[nash_shell_idx]);
+
+    // Quantize policies to 64 choices for compiled-preview-v1.json and build preview-nash-matrix.json
+    let quantize_64 = |probs: &[f64], evs: &[f64], leg: &[[usize; 3]]| -> Vec<String> {
+        let k_len = probs.len();
+        let mut counts = vec![0usize; k_len];
+        let mut rem: Vec<(usize, f64, f64)> = Vec::with_capacity(k_len);
+        let mut used = 0usize;
+        for i in 0..k_len {
+            let exact = probs[i] * 64.0;
+            let fl = exact.floor() as usize;
+            counts[i] = fl;
+            used += fl;
+            rem.push((i, exact - (fl as f64), evs[i]));
+        }
+        rem.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap().then_with(|| b.2.partial_cmp(&a.2).unwrap()));
+        for r_i in 0..(64usize.saturating_sub(used)) {
+            counts[rem[r_i].0] += 1;
+        }
+        let mut choices: Vec<(usize, String)> = Vec::with_capacity(64);
+        for (i, &c) in counts.iter().enumerate() {
+            if c > 0 {
+                let [a, b, d] = leg[i];
+                let s = format!("team {}, {}, {}", a + 1, b + 1, d + 1);
+                for _ in 0..c {
+                    choices.push((i, s.clone()));
+                }
+            }
+        }
+        choices.sort_by(|a, b| {
+            probs[b.0]
+                .partial_cmp(&probs[a.0])
+                .unwrap()
+                .then_with(|| evs[b.0].partial_cmp(&evs[a.0]).unwrap())
+                .then_with(|| a.0.cmp(&b.0))
+        });
+        choices.into_iter().map(|(_, s)| s).collect()
+    };
+
+    let mut preview_policies_json = serde_json::Map::new();
+    let mut team_summary_json = Vec::new();
+    for i in 0..n_teams {
+        let mut vs_map = serde_json::Map::new();
+        for j in 0..n_teams {
+            let v_sh = sig_to_shell[&preview_sig_sets(&entries[j].raw_sets)];
+            let p_final = &raw_final_pol[&(i, v_sh)];
+            let p_nash = &raw_nash_pol[&(i, v_sh)];
+            let ev_vec = &raw_expected_ev[&(i, v_sh)];
+            let q_choices = quantize_64(p_final, ev_vec, &entries[i].raw_legal);
+
+            let mut top_actions: Vec<usize> = (0..p_final.len()).collect();
+            top_actions.sort_by(|&a, &b| p_final[b].partial_cmp(&p_final[a]).unwrap());
+            let top_act_json: Vec<Value> = top_actions
+                .into_iter()
+                .filter(|&ia| p_final[ia] >= 0.005)
+                .take(12)
+                .map(|ia| {
+                    let [a, b, d] = entries[i].raw_legal[ia];
+                    let sp_a = &entries[i].raw_sets[a].species;
+                    let sp_b = &entries[i].raw_sets[b].species;
+                    let sp_d = &entries[i].raw_sets[d].species;
+                    json!({
+                        "actionIndex": ia,
+                        "choice": format!("team {}, {}, {}", a + 1, b + 1, d + 1),
+                        "slots": [a, b, d],
+                        "lead": sp_a,
+                        "bench": [sp_b, sp_d],
+                        "prob": (p_final[ia] * 10000.0).round() / 10000.0,
+                        "nashProb": (p_nash[ia] * 10000.0).round() / 10000.0,
+                        "expectedWinRate": (ev_vec[ia] * 10000.0).round() / 10000.0,
+                    })
+                })
+                .collect();
+
+            let mut slot_inc = [0.0f64; 6];
+            let mut lead_rate = [0.0f64; 6];
+            for (ia, &[a, b, d]) in entries[i].raw_legal.iter().enumerate() {
+                let pr = p_final[ia];
+                lead_rate[a] += pr;
+                slot_inc[a] += pr;
+                slot_inc[b] += pr;
+                slot_inc[d] += pr;
+            }
+            for s in 0..6 {
+                slot_inc[s] = (slot_inc[s] * 10000.0).round() / 10000.0;
+                lead_rate[s] = (lead_rate[s] * 10000.0).round() / 10000.0;
+            }
+            let supp_cnt = p_final.iter().filter(|&&x| x >= 0.01).count();
+            let sh_wr = shell_payoff[sig_to_shell[&preview_sig_sets(&entries[i].raw_sets)]][v_sh];
+            vs_map.insert(
+                entries[j].id.clone(),
+                json!({
+                    "winRate": (team_payoff[i][j] * 10000.0).round() / 10000.0,
+                    "shellWinRate": (sh_wr * 10000.0).round() / 10000.0,
+                    "policyMode": if entries[i].role == "nash" { "strict-bayesian-nash" } else { "diverse-near-optimal-mix" },
+                    "supportSize": supp_cnt,
+                    "slotInclusionRate": slot_inc,
+                    "leadRate": lead_rate,
+                    "topActions": top_act_json,
+                    "quantizedChoices": q_choices,
+                }),
+            );
+        }
+        preview_policies_json.insert(entries[i].id.clone(), Value::Object(vs_map));
+
+        let mean_wr: f64 = team_payoff[i].iter().sum::<f64>() / (n_teams as f64);
+        let min_wr: f64 = team_payoff[i]
+            .iter()
+            .enumerate()
+            .filter(|&(j, _)| j != i)
+            .map(|(_, &v)| v)
+            .fold(1.0, f64::min);
+        let sh_idx = sig_to_shell[&preview_sig_sets(&entries[i].raw_sets)];
+        team_summary_json.push(json!({
+            "id": entries[i].id,
+            "role": entries[i].role,
+            "tier": entries[i].tier,
+            "shellKey": shells[sh_idx].sig_key,
+            "metaNashWeight": (w_teams[i] * 100000.0).round() / 100000.0,
+            "shellMetaNashWeight": (w_shells[sh_idx] * 100000.0).round() / 100000.0,
+            "meanWinRate": (mean_wr * 10000.0).round() / 10000.0,
+            "minWinRate": (min_wr * 10000.0).round() / 10000.0,
+        }));
+    }
+
+    let rounded_payoff: Vec<Vec<f64>> = team_payoff
+        .iter()
+        .map(|row| row.iter().map(|&x| (x * 10000.0).round() / 10000.0).collect())
+        .collect();
+    let rounded_shell_payoff: Vec<Vec<f64>> = shell_payoff
+        .iter()
+        .map(|row| row.iter().map(|&x| (x * 10000.0).round() / 10000.0).collect())
+        .collect();
+
+    let out_matrix = json!({
+        "version": "team-pool-v2-preview-nash-v3",
+        "method": "Authoritative nc2000-bot CompactBattle Full-Combination 60x60 Matrix + Rao-Blackwellized De-Biased Bayesian Shell Preview Nash (Strict Nash for APEX4, Diverse Near-Optimal Mix for 29 Casual/Specialist Shells)",
+        "numTeams": n_teams,
+        "numShells": n_shells,
+        "teamIds": entries.iter().map(|e| e.id.clone()).collect::<Vec<_>>(),
+        "shellSummary": shells.iter().enumerate().map(|(s_idx, sh)| {
+            let min_sh_wr = shell_payoff[s_idx]
+                .iter()
+                .enumerate()
+                .filter(|&(v, _)| v != s_idx)
+                .map(|(_, &w)| w)
+                .fold(1.0, f64::min);
+            json!({
+                "shellIndex": s_idx,
+                "shellKey": sh.sig_key,
+                "memberIds": sh.member_indices.iter().map(|&i| entries[i].id.clone()).collect::<Vec<_>>(),
+                "isNashShell": sh.is_nash,
+                "metaNashWeight": (w_shells[s_idx] * 100000.0).round() / 100000.0,
+                "minShellWinRate": (min_sh_wr * 10000.0).round() / 10000.0,
+            })
+        }).collect::<Vec<_>>(),
+        "teamSummary": team_summary_json,
+        "shellPayoffMatrix": rounded_shell_payoff,
+        "payoffMatrix": rounded_payoff,
+        "previewPolicies": preview_policies_json,
+    });
+
+    write_json_atomic(
+        &root.join("data/team-pool-v2/preview-nash-matrix.json"),
+        &out_matrix,
+    );
+
+    // Also update data/compiled-preview-v1.json directly using nc2000_bot::compiled_preview::key(&b, 0)
+    let comp_path = root.join("data/compiled-preview-v1.json");
+    let comp_txt = std::fs::read_to_string(&comp_path).expect("read data/compiled-preview-v1.json");
+    let mut comp_v: Value = serde_json::from_str(&comp_txt).unwrap();
+    let mut new_comp_policies = serde_json::Map::new();
+    for i in 0..n_teams {
+        for j in 0..n_teams {
+            let b = nc2000_engine::state::Battle::from_fixture(
+                &dex,
+                "1,2,3,4",
+                &entries[i].raw_sets,
+                &entries[j].raw_sets,
+            )
+            .unwrap();
+            let key = nc2000_bot::compiled_preview::key(&b, 0).unwrap();
+            if !new_comp_policies.contains_key(&key) {
+                let v_sh = sig_to_shell[&preview_sig_sets(&entries[j].raw_sets)];
+                let p_final = &raw_final_pol[&(i, v_sh)];
+                let ev_vec = &raw_expected_ev[&(i, v_sh)];
+                let q_choices = quantize_64(p_final, ev_vec, &entries[i].raw_legal);
+                new_comp_policies.insert(key, json!(q_choices));
+            }
+        }
+    }
+    assert_eq!(new_comp_policies.len(), 990);
+    comp_v["policies"] = Value::Object(new_comp_policies);
+    comp_v["matchups"] = json!(990);
+    comp_v["method"] = out_matrix["method"].clone();
+    write_json_atomic(&comp_path, &comp_v);
+
+    println!(
+        "[bake-catalog-preview] Wrote data/team-pool-v2/preview-nash-matrix.json and data/compiled-preview-v1.json (elapsed: {:.1}s)",
+        t_start.elapsed().as_secs_f64()
+    );
 }
