@@ -1,0 +1,91 @@
+{
+  "format": "nc2000-ico-root-transfer-v1",
+  "training_game_sha256": "6164528e59f6954f061229172129ecf402632aa85e9d3334302e8cdbc1ad4bc7",
+  "holdout_game_sha256": "9d9683dc7438689713d1cca256c3ecd2514ab80569dabeb3ea9d526dae3b75b5",
+  "training_seed": 20261103,
+  "holdout_seed": 20261119,
+  "frozen_training_root": {
+    "backend": "tpu",
+    "checkpoints": [
+      {
+        "value": 0.42015399791117114,
+        "lower": 0.42003590965666604,
+        "upper": 0.42022213555927534,
+        "saddle_gap": 0.00018622590260930494,
+        "iterations": 256,
+        "elapsed_seconds": 2.786571331000232
+      },
+      {
+        "value": 0.4201188682810628,
+        "lower": 0.4200893519464296,
+        "upper": 0.42014438507186963,
+        "saddle_gap": 5.503312544002936e-05,
+        "iterations": 1024,
+        "elapsed_seconds": 7.1288489459998345
+      },
+      {
+        "value": 0.42011546568941677,
+        "lower": 0.4201024723340715,
+        "upper": 0.4201253485073347,
+        "saddle_gap": 2.2876173263186583e-05,
+        "iterations": 4096,
+        "elapsed_seconds": 24.047923497999818
+      }
+    ],
+    "value": 0.42011546568941677,
+    "lower": 0.4201024723340715,
+    "upper": 0.4201253485073347,
+    "saddle_gap": 2.2876173263186583e-05,
+    "iterations": 4096,
+    "elapsed_seconds": 24.047923497999818
+  },
+  "baseline_root": {
+    "backend": "tpu",
+    "checkpoints": [
+      {
+        "value": 0.39881985246360624,
+        "lower": 0.39810231735935786,
+        "upper": 0.3990879886031746,
+        "saddle_gap": 0.0009856712438167659,
+        "iterations": 64,
+        "elapsed_seconds": 0.9523878989998593
+      },
+      {
+        "value": 0.3983278192900185,
+        "lower": 0.3982460658635501,
+        "upper": 0.39838886261219003,
+        "saddle_gap": 0.00014279674863992842,
+        "iterations": 256,
+        "elapsed_seconds": 1.539734414999657
+      },
+      {
+        "value": 0.39828546468173465,
+        "lower": 0.3982375960569506,
+        "upper": 0.3983079299955903,
+        "saddle_gap": 7.03339386396995e-05,
+        "iterations": 1024,
+        "elapsed_seconds": 3.7201529019998816
+      },
+      {
+        "value": 0.3982833288305805,
+        "lower": 0.39825437770788163,
+        "upper": 0.39829588651764725,
+        "saddle_gap": 4.150880976561133e-05,
+        "iterations": 4096,
+        "elapsed_seconds": 12.263988250999773
+      }
+    ],
+    "value": 0.3982833288305805,
+    "lower": 0.39825437770788163,
+    "upper": 0.39829588651764725,
+    "saddle_gap": 4.150880976561133e-05,
+    "iterations": 4096,
+    "elapsed_seconds": 12.263988250999773
+  },
+  "heldout_root_gain_interval": [
+    0.02180658581642425,
+    0.02187097079945305
+  ],
+  "full_game_certified": false,
+  "scope": "training root policy frozen; continuation optimized on independent finite chance game; not a match win rate"
+}

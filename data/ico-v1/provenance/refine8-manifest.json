@@ -1,0 +1,34 @@
+{
+  "format": "nc2000-ico-census-v1",
+  "arguments": {
+    "out": "tmp/ico-v1/refine8",
+    "opponents": [
+      "rental-cban-8",
+      "sample-07"
+    ],
+    "horizon": 2,
+    "samples": 8,
+    "picks": 2,
+    "seed": 20261119,
+    "threads": 2,
+    "max_nodes": 10000000,
+    "solve": false,
+    "iterations": 4096
+  },
+  "opponents": [
+    "rental-cban-8",
+    "sample-07"
+  ],
+  "input_sha256": {
+    "data/search-profiles.json": "157d49892b62fe4bb310e0a0d7f985ecabe6084ddcd5cad2e65ded65a2d9b862",
+    "data/live-search.json": "bcd72c90aff04fb6e8c2ce7fb6551e03d2aafc318a416a153194b0abf4dcebed",
+    "data/team-pool-v2/team-pool.json": "01424ff870c1948b8a6787ac1dbb81d3d45943d60c2fa6addff740d91e35d423",
+    "data/belief-pool-v3/belief-pool.json": "7a48ddb0a69f66805f1c8a12b12bb8c8900655817729c90b3ea8b11a9d50b9a0",
+    "data/kodoku-r3/conclusion-equilibrium-deme.json": "291021651f880ab9ab8681a3882f4f23d5350e8b2f880892461e42c34806d14d",
+    "data/compiled-preview-v1.json": "349e2456501ec6edf6024eda5c839cf414b014c30bb35618caab0a66f9600438",
+    "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+    "crates/bot/examples/ico_export.rs": "73ce62dc875fdd15628d8ac3da6669a1609f38aeaa423ec0f2b61c5f44e36167",
+    "tpu/src/gen2_tpu/ico.py": "aa0825889d4dc4308618bf502b434f39b05578e1402058c6a4b9015eef3bd093"
+  },
+  "git_head": "fcb992636f26f622db1ea8d142b81bfc1fba11e9"
+}

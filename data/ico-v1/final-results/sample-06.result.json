@@ -1,0 +1,1826 @@
+{
+  "format": "nc2000-ico-result-v1",
+  "metadata": {
+    "name": "Information-Constrained Oracle",
+    "abbreviation": "ICO",
+    "opponent": "sample-06",
+    "build": "fnv1a64:ee4b25fb1e98098b:m17e-solver-build-v3",
+    "horizon_decisions": 2,
+    "chance_samples": 4,
+    "chance": "sampled-independent-per-node empirical game; CRN across actions/worlds",
+    "exact_chance": false,
+    "seed": 20261103,
+    "own_distribution": "APEX4 shipped weights",
+    "root_model": "adversarial opponent type from every prior loadout sharing public roster; adversarial top-k reference picks; own top-k compiled picks renormalized",
+    "opponent_types": [
+      "sample-06",
+      "pb-76"
+    ],
+    "picks_per_type": 2,
+    "worlds": [
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "sample-06",
+        "own_pick": "team 1, 3, 4",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.2357142857142857,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "sample-06",
+        "own_pick": "team 1, 3, 4",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.2357142857142857,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "sample-06",
+        "own_pick": "team 3, 1, 2",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.06428571428571428,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "sample-06",
+        "own_pick": "team 3, 1, 2",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.06428571428571428,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "pb-76",
+        "own_pick": "team 1, 3, 4",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.2357142857142857,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "pb-76",
+        "own_pick": "team 1, 3, 4",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.2357142857142857,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "pb-76",
+        "own_pick": "team 3, 1, 2",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.06428571428571428,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "pb-76",
+        "own_pick": "team 3, 1, 2",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.06428571428571428,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "sample-06",
+        "own_pick": "team 1, 2, 6",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.125,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "sample-06",
+        "own_pick": "team 1, 2, 6",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.125,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "sample-06",
+        "own_pick": "team 2, 1, 5",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.125,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "sample-06",
+        "own_pick": "team 2, 1, 5",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.125,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "pb-76",
+        "own_pick": "team 1, 2, 6",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.125,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "pb-76",
+        "own_pick": "team 1, 2, 6",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.125,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "pb-76",
+        "own_pick": "team 2, 1, 5",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.125,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "pb-76",
+        "own_pick": "team 2, 1, 5",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.125,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "sample-06",
+        "own_pick": "team 1, 5, 6",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.15178571428571427,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "sample-06",
+        "own_pick": "team 1, 5, 6",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.15178571428571427,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "sample-06",
+        "own_pick": "team 6, 1, 5",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.09821428571428571,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "sample-06",
+        "own_pick": "team 6, 1, 5",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.09821428571428571,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "pb-76",
+        "own_pick": "team 1, 5, 6",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.15178571428571427,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "pb-76",
+        "own_pick": "team 1, 5, 6",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.15178571428571427,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "pb-76",
+        "own_pick": "team 6, 1, 5",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.09821428571428571,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "pb-76",
+        "own_pick": "team 6, 1, 5",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.09821428571428571,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "sample-06",
+        "own_pick": "team 1, 4, 6",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.1076923076923077,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "sample-06",
+        "own_pick": "team 1, 4, 6",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.1076923076923077,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "sample-06",
+        "own_pick": "team 6, 1, 4",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.09230769230769231,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "sample-06",
+        "own_pick": "team 6, 1, 4",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.09230769230769231,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "pb-76",
+        "own_pick": "team 1, 4, 6",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.1076923076923077,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "pb-76",
+        "own_pick": "team 1, 4, 6",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.1076923076923077,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "pb-76",
+        "own_pick": "team 6, 1, 4",
+        "foe_pick": "team 2, 3, 4",
+        "chance_weight": 0.09230769230769231,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "pb-76",
+        "own_pick": "team 6, 1, 4",
+        "foe_pick": "team 3, 4, 6",
+        "chance_weight": 0.09230769230769231,
+        "opponent_setup_sequence": 4
+      }
+    ],
+    "nodes": 656768,
+    "frontier": "eval_leaf estimate plus [0,1] unresolved interval",
+    "baseline_iterations": 81000,
+    "baseline_c": 0.4,
+    "baseline_hp_buckets": 16,
+    "baseline_policy": "legacy best, fixed-budget, no optional endgame solver",
+    "baseline_calls": 32,
+    "baseline_hidden_world_audits": 16,
+    "baseline_hidden_world_disagreements": 0,
+    "baseline_records": [
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.936075292,
+        "choice": "move curse",
+        "visits": [
+          77908,
+          2206,
+          440,
+          262,
+          124,
+          60
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6049537751463073,
+          0.579790382821875,
+          0.5449382899451879,
+          0.5262621187028326,
+          0.486387223037256,
+          0.43082228978840253
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.4105283339999999,
+        "choice": "move doubleedge",
+        "visits": [
+          278,
+          80380,
+          100,
+          39,
+          122,
+          81
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5445914516229865,
+          0.6223333735070683,
+          0.49186263522261714,
+          0.40167851069000654,
+          0.5036131179481511,
+          0.4760615017523518
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.801210959,
+        "choice": "move icepunch",
+        "visits": [
+          44316,
+          795,
+          107,
+          26957,
+          7849,
+          976
+        ],
+        "actions": [
+          "move icepunch",
+          "move perishsong",
+          "move shadowball",
+          "move zapcannon",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6414657171579902,
+          0.5994372575169351,
+          0.5168091482056331,
+          0.6394516959929658,
+          0.6324836968999171,
+          0.6045785942592906
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.180469625,
+        "choice": "move icepunch",
+        "visits": [
+          79256,
+          207,
+          183,
+          63,
+          302,
+          989
+        ],
+        "actions": [
+          "move icepunch",
+          "move perishsong",
+          "move shadowball",
+          "move zapcannon",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6108581498563892,
+          0.52029451946686,
+          0.5161880650798226,
+          0.44494192648665126,
+          0.5377595819862486,
+          0.572844096197331
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.997463834,
+        "choice": "move curse",
+        "visits": [
+          77908,
+          2206,
+          440,
+          262,
+          124,
+          60
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6049537751463073,
+          0.579790382821875,
+          0.5449382899451879,
+          0.5262621187028326,
+          0.486387223037256,
+          0.43082228978840253
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.632337583,
+        "choice": "move doubleedge",
+        "visits": [
+          278,
+          80380,
+          100,
+          39,
+          122,
+          81
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5445914516229865,
+          0.6223333735070683,
+          0.49186263522261714,
+          0.40167851069000654,
+          0.5036131179481511,
+          0.4760615017523518
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.3222065,
+        "choice": "move icepunch",
+        "visits": [
+          44316,
+          795,
+          107,
+          26957,
+          7849,
+          976
+        ],
+        "actions": [
+          "move icepunch",
+          "move perishsong",
+          "move shadowball",
+          "move zapcannon",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6414657171579902,
+          0.5994372575169351,
+          0.5168091482056331,
+          0.6394516959929658,
+          0.6324836968999171,
+          0.6045785942592906
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.652844583,
+        "choice": "move icepunch",
+        "visits": [
+          79256,
+          207,
+          183,
+          63,
+          302,
+          989
+        ],
+        "actions": [
+          "move icepunch",
+          "move perishsong",
+          "move shadowball",
+          "move zapcannon",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6108581498563892,
+          0.52029451946686,
+          0.5161880650798226,
+          0.44494192648665126,
+          0.5377595819862486,
+          0.572844096197331
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.690624042,
+        "choice": "move curse",
+        "visits": [
+          74317,
+          4032,
+          544,
+          812,
+          362,
+          933
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6874241633826925,
+          0.6707968467215164,
+          0.6345806379434464,
+          0.6444909384958395,
+          0.6214543067894002,
+          0.6481075203300478
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.105226542,
+        "choice": "move doubleedge",
+        "visits": [
+          1171,
+          76866,
+          496,
+          45,
+          1287,
+          1135
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5720160634788746,
+          0.6068784994433835,
+          0.5503976289048546,
+          0.40443649090684924,
+          0.5737873995267393,
+          0.5710475077282172
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.823752917,
+        "choice": "move icebeam",
+        "visits": [
+          58032,
+          264,
+          1837,
+          4165,
+          16585,
+          117
+        ],
+        "actions": [
+          "move icebeam",
+          "move raindance",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6563150566913609,
+          0.5769464764942434,
+          0.6302466217526602,
+          0.6408782046256101,
+          0.6512842525877575,
+          0.5371076682219073
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.005874583,
+        "choice": "move icebeam",
+        "visits": [
+          75341,
+          105,
+          2020,
+          3042,
+          216,
+          276
+        ],
+        "actions": [
+          "move icebeam",
+          "move raindance",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6740228610670796,
+          0.5435857367124388,
+          0.6487986914337907,
+          0.6543258406985206,
+          0.5869600474158,
+          0.597788854688003
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.908572125,
+        "choice": "move curse",
+        "visits": [
+          74317,
+          4032,
+          544,
+          812,
+          362,
+          933
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6874241633826925,
+          0.6707968467215164,
+          0.6345806379434464,
+          0.6444909384958395,
+          0.6214543067894002,
+          0.6481075203300478
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.3396591660000001,
+        "choice": "move doubleedge",
+        "visits": [
+          1171,
+          76866,
+          496,
+          45,
+          1287,
+          1135
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5720160634788746,
+          0.6068784994433835,
+          0.5503976289048546,
+          0.40443649090684924,
+          0.5737873995267393,
+          0.5710475077282172
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.913692333,
+        "choice": "move icebeam",
+        "visits": [
+          58032,
+          264,
+          1837,
+          4165,
+          16585,
+          117
+        ],
+        "actions": [
+          "move icebeam",
+          "move raindance",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6563150566913609,
+          0.5769464764942434,
+          0.6302466217526602,
+          0.6408782046256101,
+          0.6512842525877575,
+          0.5371076682219073
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.123046042,
+        "choice": "move icebeam",
+        "visits": [
+          75341,
+          105,
+          2020,
+          3042,
+          216,
+          276
+        ],
+        "actions": [
+          "move icebeam",
+          "move raindance",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6740228610670796,
+          0.5435857367124388,
+          0.6487986914337907,
+          0.6543258406985206,
+          0.5869600474158,
+          0.597788854688003
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.084244625,
+        "choice": "move curse",
+        "visits": [
+          74420,
+          4609,
+          567,
+          757,
+          94,
+          553
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.658287745297001,
+          0.6429465799544785,
+          0.6063291172879747,
+          0.6139079565047334,
+          0.5228916812547596,
+          0.6056931406503391
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.433533958,
+        "choice": "move doubleedge",
+        "visits": [
+          731,
+          79789,
+          239,
+          145,
+          53,
+          43
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5981305578953647,
+          0.6432987536227112,
+          0.5602011656559136,
+          0.5326512960071524,
+          0.461787664817784,
+          0.43916578329290645
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.734609375,
+        "choice": "move icebeam",
+        "visits": [
+          60453,
+          1722,
+          310,
+          12201,
+          6300,
+          14
+        ],
+        "actions": [
+          "move icebeam",
+          "move psychic",
+          "move recover",
+          "move surf",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6337274178092817,
+          0.6065603725100304,
+          0.5625064801160562,
+          0.6269312372381867,
+          0.6221697326538912,
+          0.2777120183457156
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.12638625,
+        "choice": "move icebeam",
+        "visits": [
+          54881,
+          4022,
+          172,
+          19010,
+          2339,
+          576
+        ],
+        "actions": [
+          "move icebeam",
+          "move psychic",
+          "move recover",
+          "move surf",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.662182210938904,
+          0.6466614151227803,
+          0.5653372910754345,
+          0.6582010027088527,
+          0.6399702731786187,
+          0.6118723444398347
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 3.166743708,
+        "choice": "move curse",
+        "visits": [
+          74420,
+          4609,
+          567,
+          757,
+          94,
+          553
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.658287745297001,
+          0.6429465799544785,
+          0.6063291172879747,
+          0.6139079565047334,
+          0.5228916812547596,
+          0.6056931406503391
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.049990333,
+        "choice": "move doubleedge",
+        "visits": [
+          731,
+          79789,
+          239,
+          145,
+          53,
+          43
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5981305578953647,
+          0.6432987536227112,
+          0.5602011656559136,
+          0.5326512960071524,
+          0.461787664817784,
+          0.43916578329290645
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.580051667,
+        "choice": "move icebeam",
+        "visits": [
+          60453,
+          1722,
+          310,
+          12201,
+          6300,
+          14
+        ],
+        "actions": [
+          "move icebeam",
+          "move psychic",
+          "move recover",
+          "move surf",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6337274178092817,
+          0.6065603725100304,
+          0.5625064801160562,
+          0.6269312372381867,
+          0.6221697326538912,
+          0.2777120183457156
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 0.975794583,
+        "choice": "move icebeam",
+        "visits": [
+          54881,
+          4022,
+          172,
+          19010,
+          2339,
+          576
+        ],
+        "actions": [
+          "move icebeam",
+          "move psychic",
+          "move recover",
+          "move surf",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.662182210938904,
+          0.6466614151227803,
+          0.5653372910754345,
+          0.6582010027088527,
+          0.6399702731786187,
+          0.6118723444398347
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.550638833,
+        "choice": "move curse",
+        "visits": [
+          76876,
+          2551,
+          370,
+          472,
+          28,
+          703
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6542569924258455,
+          0.632326316846855,
+          0.5888813525190085,
+          0.5967562959545419,
+          0.4045103367272383,
+          0.6082025279509068
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.9554815410000002,
+        "choice": "move doubleedge",
+        "visits": [
+          1144,
+          79146,
+          158,
+          27,
+          135,
+          390
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5938963833649502,
+          0.6289744834427222,
+          0.5231035162093243,
+          0.3655968119100607,
+          0.5177843510355994,
+          0.5647622909842036
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.628404417,
+        "choice": "move thunderwave",
+        "visits": [
+          20088,
+          1806,
+          449,
+          53668,
+          4787,
+          202
+        ],
+        "actions": [
+          "move hydropump",
+          "move psychic",
+          "move recover",
+          "move thunderwave",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6266208953204995,
+          0.6047778517563239,
+          0.5731260450343802,
+          0.634150565603182,
+          0.6167344965285428,
+          0.5415288993635914
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.963933084,
+        "choice": "move hydropump",
+        "visits": [
+          73658,
+          1740,
+          454,
+          2304,
+          2622,
+          222
+        ],
+        "actions": [
+          "move hydropump",
+          "move psychic",
+          "move recover",
+          "move thunderwave",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6531507484749897,
+          0.6258200423896365,
+          0.5945316193870246,
+          0.6298037121252658,
+          0.6317811809667964,
+          0.5677884980007182
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.541618208,
+        "choice": "move curse",
+        "visits": [
+          76876,
+          2551,
+          370,
+          472,
+          28,
+          703
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6542569924258455,
+          0.632326316846855,
+          0.5888813525190085,
+          0.5967562959545419,
+          0.4045103367272383,
+          0.6082025279509068
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.949154417,
+        "choice": "move doubleedge",
+        "visits": [
+          1144,
+          79146,
+          158,
+          27,
+          135,
+          390
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5938963833649502,
+          0.6289744834427222,
+          0.5231035162093243,
+          0.3655968119100607,
+          0.5177843510355994,
+          0.5647622909842036
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.905196042,
+        "choice": "move thunderwave",
+        "visits": [
+          20088,
+          1806,
+          449,
+          53668,
+          4787,
+          202
+        ],
+        "actions": [
+          "move hydropump",
+          "move psychic",
+          "move recover",
+          "move thunderwave",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6266208953204995,
+          0.6047778517563239,
+          0.5731260450343802,
+          0.634150565603182,
+          0.6167344965285428,
+          0.5415288993635914
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.637222334,
+        "choice": "move hydropump",
+        "visits": [
+          73658,
+          1740,
+          454,
+          2304,
+          2622,
+          222
+        ],
+        "actions": [
+          "move hydropump",
+          "move psychic",
+          "move recover",
+          "move thunderwave",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6531507484749897,
+          0.6258200423896365,
+          0.5945316193870246,
+          0.6298037121252658,
+          0.6317811809667964,
+          0.5677884980007182
+        ]
+      }
+    ],
+    "elapsed_seconds": 89.962138375,
+    "information_key": "own team + complete player-visible protocol/request history + own attempted actions",
+    "full_game_certified": false
+  },
+  "unrestricted": {
+    "backend": "tpu",
+    "checkpoints": [
+      {
+        "value": 0.4857006944623414,
+        "lower": 0.48272505177678005,
+        "upper": 0.48887098801978796,
+        "saddle_gap": 0.00614593624300791,
+        "iterations": 64,
+        "elapsed_seconds": 1.4040897649997532
+      },
+      {
+        "value": 0.4858572955984684,
+        "lower": 0.4851397280074326,
+        "upper": 0.48693605567282183,
+        "saddle_gap": 0.0017963276653892302,
+        "iterations": 256,
+        "elapsed_seconds": 2.1767330469997432
+      },
+      {
+        "value": 0.48627606759586534,
+        "lower": 0.4858821518792933,
+        "upper": 0.48658723189807657,
+        "saddle_gap": 0.0007050800187832773,
+        "iterations": 1024,
+        "elapsed_seconds": 4.971242535999863
+      },
+      {
+        "value": 0.4864001500784369,
+        "lower": 0.48624247441506946,
+        "upper": 0.486453791273789,
+        "saddle_gap": 0.00021131685871955685,
+        "iterations": 4096,
+        "elapsed_seconds": 15.828539348999584
+      }
+    ],
+    "value": 0.4864001500784369,
+    "lower": 0.48624247441506946,
+    "upper": 0.486453791273789,
+    "saddle_gap": 0.00021131685871955685,
+    "iterations": 4096,
+    "elapsed_seconds": 15.828539348999584
+  },
+  "baseline_root": {
+    "backend": "tpu",
+    "checkpoints": [
+      {
+        "value": 0.45910837265928545,
+        "lower": 0.45886604274508325,
+        "upper": 0.4593847579069461,
+        "saddle_gap": 0.0005187151618628594,
+        "iterations": 64,
+        "elapsed_seconds": 0.8187821780002196
+      },
+      {
+        "value": 0.45913115063938775,
+        "lower": 0.45911586666475357,
+        "upper": 0.45914866480251815,
+        "saddle_gap": 3.279813776457807e-05,
+        "iterations": 256,
+        "elapsed_seconds": 1.199496210000234
+      },
+      {
+        "value": 0.45913263003367866,
+        "lower": 0.459131672141877,
+        "upper": 0.4591337280251477,
+        "saddle_gap": 2.055883270679626e-06,
+        "iterations": 1024,
+        "elapsed_seconds": 2.7250149649999003
+      },
+      {
+        "value": 0.459132722931913,
+        "lower": 0.45913266302043676,
+        "upper": 0.45913279160722514,
+        "saddle_gap": 1.2858678838378879e-07,
+        "iterations": 4096,
+        "elapsed_seconds": 8.188537243000155
+      }
+    ],
+    "value": 0.459132722931913,
+    "lower": 0.45913266302043676,
+    "upper": 0.45913279160722514,
+    "saddle_gap": 1.2858678838378879e-07,
+    "iterations": 4096,
+    "elapsed_seconds": 8.188537243000155
+  },
+  "baseline_kind": "actual-per-world-native-root",
+  "estimated_root_loss_interval": [
+    0.027109682807844315,
+    0.027321128253352256
+  ],
+  "sampled_game_frontier_interval": [
+    -0.0,
+    1.0000000000000002
+  ],
+  "full_game_certified": false,
+  "root_policies": [
+    {
+      "key": "sha256:ae7444878383e863be7a1b2f9892b077b682408b739a47abda871c23a86ae034",
+      "actions": [
+        "move curse",
+        "move doubleedge",
+        "move rest",
+        "move sleeptalk",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        0.99999897579938,
+        9.447471613748233e-07,
+        1.986336466218647e-08,
+        1.986336466218647e-08,
+        1.986336466218647e-08,
+        1.986336466218647e-08
+      ]
+    },
+    {
+      "key": "sha256:b000a55f178f12d60caa738480cacb9283e5f60e9b1a47c87fdec0fe1d964d9a",
+      "actions": [
+        "move curse",
+        "move doubleedge",
+        "move rest",
+        "move sleeptalk",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        8.264234808444844e-08,
+        0.999999837904184,
+        1.986336698756348e-08,
+        1.986336698756348e-08,
+        1.986336698756348e-08,
+        1.986336698756348e-08
+      ]
+    },
+    {
+      "key": "sha256:0e02c9cf07937524ed68d4ae1a35e89fd4d85a24ab42d0be414a68f1d83ab710",
+      "actions": [
+        "move icepunch",
+        "move perishsong",
+        "move shadowball",
+        "move zapcannon",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        6.42242854991229e-07,
+        1.9863365695120137e-08,
+        5.677276854490841e-08,
+        0.17948642040596724,
+        0.18148682675337893,
+        0.6390260339616646
+      ]
+    },
+    {
+      "key": "sha256:fe3da1440e13f6a6b0f5f0a349f4520ca94187c8ae2743b2b1c7a679528d8709",
+      "actions": [
+        "move icepunch",
+        "move perishsong",
+        "move shadowball",
+        "move zapcannon",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        2.625613752016795e-07,
+        1.9863366323788186e-08,
+        1.9863366323788186e-08,
+        1.9863366323788186e-08,
+        2.607697843025096e-07,
+        0.9999994170787415
+      ]
+    },
+    {
+      "key": "sha256:c015d58dbc386a0bf4cca5c6c39d42096a755b02d7aea8357281b257bb74861e",
+      "actions": [
+        "move curse",
+        "move doubleedge",
+        "move rest",
+        "move sleeptalk",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        1.0791896517552893e-06,
+        7.76468333167517e-07,
+        1.986336337741242e-08,
+        1.986336337741242e-08,
+        0.9857623125854019,
+        0.014235792029886382
+      ]
+    },
+    {
+      "key": "sha256:8c4e3b87481fa40e57bbfe6c42a24c16bc6247db2a02d49725645fd4b360208c",
+      "actions": [
+        "move curse",
+        "move doubleedge",
+        "move rest",
+        "move sleeptalk",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        7.641073456364185e-08,
+        0.1147616533604076,
+        1.986336929730941e-08,
+        1.986336929730941e-08,
+        0.8852364679392034,
+        1.762562915808525e-06
+      ]
+    },
+    {
+      "key": "sha256:e08b21519ba09596ea56607dc26a19fe5b72b1e8ffb5d2e141988e4596c58687",
+      "actions": [
+        "move icebeam",
+        "move raindance",
+        "move reflect",
+        "move spikes",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        0.31226093990926024,
+        1.9863370395810403e-08,
+        4.889512620446522e-07,
+        0.14304003892102418,
+        1.1357690822125647e-06,
+        0.5446973765860009
+      ]
+    },
+    {
+      "key": "sha256:196e1342f68801207c3e06e610fe1d1c37ca1d79770734def5318d39baff2c62",
+      "actions": [
+        "move icebeam",
+        "move raindance",
+        "move reflect",
+        "move spikes",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        0.03373229751960156,
+        1.9863370660789715e-08,
+        0.821905523078802,
+        0.14436056678440892,
+        1.1308913637709854e-06,
+        4.618624530414591e-07
+      ]
+    },
+    {
+      "key": "sha256:8206912934d875a6ef9a3a3414fda21f7dc11b388dba21e485355e6fa6123a30",
+      "actions": [
+        "move curse",
+        "move doubleedge",
+        "move rest",
+        "move sleeptalk",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        0.5934831250031991,
+        0.0028627637033393984,
+        1.9863367002634373e-08,
+        1.9863367002634373e-08,
+        1.9863367002634373e-08,
+        0.40365405170336055
+      ]
+    },
+    {
+      "key": "sha256:a94df01fb54847abd1b980b1f47f595f6ca50f6996071a4c5341f2a900bb261d",
+      "actions": [
+        "move curse",
+        "move doubleedge",
+        "move rest",
+        "move sleeptalk",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        7.074222233069951e-08,
+        0.9999998498043159,
+        1.986336544758342e-08,
+        1.986336544758342e-08,
+        1.986336544758342e-08,
+        1.986336544758342e-08
+      ]
+    },
+    {
+      "key": "sha256:788b95c3ad5fee1075b9f7905b6d37ef69d875bbc975a3126505e30575fa0841",
+      "actions": [
+        "move icebeam",
+        "move psychic",
+        "move recover",
+        "move surf",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        0.058215592817088276,
+        0.05622956615431359,
+        0.02344331212162553,
+        0.07782035669743663,
+        0.7842888432681634,
+        2.3289413726094377e-06
+      ]
+    },
+    {
+      "key": "sha256:ce4fe8e6ca622afb2ac395638e0aaa2fb0ef69f50b7cd629d8ee0c9ded579ef2",
+      "actions": [
+        "move icebeam",
+        "move psychic",
+        "move recover",
+        "move surf",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        2.3941779381225713e-06,
+        2.3973122842170416e-06,
+        1.986336592673176e-08,
+        0.9926674297858779,
+        0.007114679038116923,
+        0.0002130798224169056
+      ]
+    },
+    {
+      "key": "sha256:1e907594a27c1d2818e354a86e4731e67a1aa6fc74c080ed39c98f6d68643ef3",
+      "actions": [
+        "move curse",
+        "move doubleedge",
+        "move rest",
+        "move sleeptalk",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        0.6724536268707552,
+        0.10965176426812165,
+        1.9863363843029023e-08,
+        1.9863363843029023e-08,
+        1.9863363843029023e-08,
+        0.21789454927103166
+      ]
+    },
+    {
+      "key": "sha256:b5e2dca3194288a3ac9d3052e650af1d440c68d14ba4aab018eb2266e4e9defe",
+      "actions": [
+        "move curse",
+        "move doubleedge",
+        "move rest",
+        "move sleeptalk",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        7.598003004053587e-08,
+        0.9999984122241639,
+        1.9863365307174597e-08,
+        1.9863365307174597e-08,
+        1.9863365307174597e-08,
+        1.4522057101537219e-06
+      ]
+    },
+    {
+      "key": "sha256:27c3d8c2057ac0c177dfc87e1bd05a6dbdac8eef456c3ba23970d492224890df",
+      "actions": [
+        "move hydropump",
+        "move psychic",
+        "move recover",
+        "move thunderwave",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        0.0043529911133679345,
+        1.5822525200676778e-07,
+        1.986336123515434e-08,
+        0.9956459654236826,
+        8.455109750273533e-07,
+        1.986336123515434e-08
+      ]
+    },
+    {
+      "key": "sha256:6f8675e3e26dd44dbd5e54cce7d66444d8b4684622f91a86c7c4e45e38a5f5b8",
+      "actions": [
+        "move hydropump",
+        "move psychic",
+        "move recover",
+        "move thunderwave",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        0.2524295927513493,
+        2.043518552841744e-06,
+        1.986337281038225e-08,
+        0.7465744551604835,
+        0.0009937533886969975,
+        1.353175446165928e-07
+      ]
+    }
+  ],
+  "game_sha256": "3f5bb348f78c9b1a170bfe833dca7a62d2ad13399568e38ed5f8a22a5ce3b536",
+  "runtime": {
+    "backend": "tpu",
+    "devices": [
+      "TPU_0(process=0,(0,0,0,0))"
+    ],
+    "python": "3.13.18",
+    "jax": "0.11.2",
+    "numpy": "2.1.3",
+    "solver_sha256": "bfefb61b92802baf8989876da024d2d2d97e2c76919f0ef33022e93f877ec1d8"
+  }
+}

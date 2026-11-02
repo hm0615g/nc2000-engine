@@ -1,0 +1,302 @@
+[
+  {
+    "opponent": "sample-07",
+    "nodes": 1488200,
+    "types": 5,
+    "worlds": 80,
+    "baseline_calls": 80,
+    "native_hidden_disagreements": 0,
+    "seconds": 163.62783699994907,
+    "game_sha256": "9a881b04109a100f77773b532ca8a47b414d4a33a2a6a446e2b7d7b7f0047f64"
+  },
+  {
+    "opponent": "rental-cban-8",
+    "nodes": 558048,
+    "types": 2,
+    "worlds": 32,
+    "baseline_calls": 32,
+    "native_hidden_disagreements": 0,
+    "seconds": 68.0400097919628,
+    "game_sha256": "7a22b80ec54ec2a2f89ed6327feaf0aebe7f560f404af8fb24070b4fae1b0226"
+  },
+  {
+    "opponent": "sample-12",
+    "nodes": 929424,
+    "types": 3,
+    "worlds": 48,
+    "baseline_calls": 48,
+    "native_hidden_disagreements": 0,
+    "seconds": 110.70231687510386,
+    "game_sha256": "2afe6174303542adcb23c81e70caf4826640c009ff96c8bf0410083d00e305c8"
+  },
+  {
+    "opponent": "apex-c08-surgical-142",
+    "nodes": 1557456,
+    "types": 5,
+    "worlds": 80,
+    "baseline_calls": 80,
+    "native_hidden_disagreements": 0,
+    "seconds": 185.9878419158049,
+    "game_sha256": "4e10aefea35717eab8e818742e9ecfda646f6a9a7a9a591308cd2bcb359190cd"
+  },
+  {
+    "opponent": "sample-17-orig",
+    "nodes": 850074,
+    "types": 3,
+    "worlds": 42,
+    "baseline_calls": 42,
+    "native_hidden_disagreements": 0,
+    "seconds": 95.9415539172478,
+    "game_sha256": "585c8ffb989fe4dd5c249615d571f8c573ca549351df97948fe42851bbff54bf"
+  },
+  {
+    "opponent": "nb-sample-13-0",
+    "nodes": 902160,
+    "types": 3,
+    "worlds": 48,
+    "baseline_calls": 48,
+    "native_hidden_disagreements": 0,
+    "seconds": 107.75590787502006,
+    "game_sha256": "df85a68e18883ca3f8966feb9825506cc6ddc63ebeb5519147788ca0ecf872e9"
+  },
+  {
+    "opponent": "red-v5-r1-s0097",
+    "nodes": 302464,
+    "types": 1,
+    "worlds": 16,
+    "baseline_calls": 16,
+    "native_hidden_disagreements": 0,
+    "seconds": 38.60129616595805,
+    "game_sha256": "19fc5e4c5e050fac78105a0381bc3f8e14138a20ed80ef156ae9412d8ffc7d32"
+  },
+  {
+    "opponent": "sample-08",
+    "nodes": 873624,
+    "types": 3,
+    "worlds": 48,
+    "baseline_calls": 48,
+    "native_hidden_disagreements": 0,
+    "seconds": 109.03119287500158,
+    "game_sha256": "af66cb4c14640464a545267b10fd37282435d20303b1c3cb77269cebcfb4ea2b"
+  },
+  {
+    "opponent": "rental-cban-13",
+    "nodes": 277240,
+    "types": 1,
+    "worlds": 16,
+    "baseline_calls": 16,
+    "native_hidden_disagreements": 0,
+    "seconds": 35.828751207794994,
+    "game_sha256": "b98ad6373a47a1540b94589cf746c890853af4ed0a1f00ee5072860e6c888d0b"
+  },
+  {
+    "opponent": "deme-r1-00-s0030",
+    "nodes": 657312,
+    "types": 2,
+    "worlds": 32,
+    "baseline_calls": 32,
+    "native_hidden_disagreements": 0,
+    "seconds": 77.51670608436689,
+    "game_sha256": "900abd09c2cc3f2c7ad19837b756446970125585d37fb66ac3cca5c2207f70dc"
+  },
+  {
+    "opponent": "mjj-2014-thdrcomb",
+    "nodes": 593488,
+    "types": 2,
+    "worlds": 32,
+    "baseline_calls": 32,
+    "native_hidden_disagreements": 0,
+    "seconds": 77.94483349984512,
+    "game_sha256": "714b27a45c3e4bbab6e151a5c89cc0c9ed8e3ca69a97de1c18464bb3a008f3fa"
+  },
+  {
+    "opponent": "sample-11",
+    "nodes": 856170,
+    "types": 3,
+    "worlds": 42,
+    "baseline_calls": 42,
+    "native_hidden_disagreements": 0,
+    "seconds": 100.40552099980414,
+    "game_sha256": "9fc6861350edc2fb018df77cb36ef5df00557efad7b02ae120f4098d42ad6f84"
+  },
+  {
+    "opponent": "sample-06",
+    "nodes": 656768,
+    "types": 2,
+    "worlds": 32,
+    "baseline_calls": 32,
+    "native_hidden_disagreements": 0,
+    "seconds": 90.13749016728252,
+    "game_sha256": "7c0e1b67ed4d92680773eabc9db99031ec2f5ac3fed414d2b3c5d55c23a52dfe"
+  },
+  {
+    "opponent": "red-v10-s1105-r2-s0155",
+    "nodes": 658944,
+    "types": 2,
+    "worlds": 32,
+    "baseline_calls": 32,
+    "native_hidden_disagreements": 0,
+    "seconds": 69.72763175005093,
+    "game_sha256": "302b31d362b693708822e765062a86a350a584263a6696151a28f9e0a23158de"
+  },
+  {
+    "opponent": "mjj-2010-garap-a",
+    "nodes": 315600,
+    "types": 1,
+    "worlds": 16,
+    "baseline_calls": 16,
+    "native_hidden_disagreements": 0,
+    "seconds": 33.75739412475377,
+    "game_sha256": "7e6d2d0a813a85894974845b03bc417b0c68b506f81621fc92497d85cfcb69a9"
+  },
+  {
+    "opponent": "mjj-2020-rraikou",
+    "nodes": 283472,
+    "types": 1,
+    "worlds": 16,
+    "baseline_calls": 16,
+    "native_hidden_disagreements": 0,
+    "seconds": 37.379837084095925,
+    "game_sha256": "37e1f63436d86646135f5f3e8413ac56030b0ed2dfc03e43a9d104094869423a"
+  },
+  {
+    "opponent": "sample-02",
+    "nodes": 642912,
+    "types": 2,
+    "worlds": 32,
+    "baseline_calls": 32,
+    "native_hidden_disagreements": 0,
+    "seconds": 74.02342454111204,
+    "game_sha256": "f780251de63beba0ecc755e1c086aaf85af6f84cc8142aaad46642af9e4187e3"
+  },
+  {
+    "opponent": "sib-r1-n4-red-v6-r1-s0064-s07",
+    "nodes": 308208,
+    "types": 1,
+    "worlds": 16,
+    "baseline_calls": 16,
+    "native_hidden_disagreements": 0,
+    "seconds": 31.642966375220567,
+    "game_sha256": "2783c2bb0423771664a770ce4fad67f2393cfbe995dfa6467314cc77627c0f10"
+  },
+  {
+    "opponent": "hc75-top8-tsuru",
+    "nodes": 298776,
+    "types": 1,
+    "worlds": 16,
+    "baseline_calls": 16,
+    "native_hidden_disagreements": 0,
+    "seconds": 31.209906625095755,
+    "game_sha256": "560bfb53423baedd56ca156f85cee2b1984f03fdc03fde6220bc2e367b432f58"
+  },
+  {
+    "opponent": "sample-09",
+    "nodes": 552928,
+    "types": 2,
+    "worlds": 32,
+    "baseline_calls": 32,
+    "native_hidden_disagreements": 0,
+    "seconds": 57.63562700012699,
+    "game_sha256": "c585d1c784678b60d71529a1e76612ef7a410a503e1a99710a6fe983a2cd00f3"
+  },
+  {
+    "opponent": "sample-22-orig",
+    "nodes": 328384,
+    "types": 1,
+    "worlds": 16,
+    "baseline_calls": 16,
+    "native_hidden_disagreements": 0,
+    "seconds": 40.146453250199556,
+    "game_sha256": "19de1aded244b6d80d136d351f4231f62aadd61b0a7d748bb31d127e9ebe1a79"
+  },
+  {
+    "opponent": "sample-14",
+    "nodes": 1297952,
+    "types": 4,
+    "worlds": 64,
+    "baseline_calls": 64,
+    "native_hidden_disagreements": 0,
+    "seconds": 165.73521145805717,
+    "game_sha256": "c1a590925c02a668419dc031c3f51c1ec75638633f87ba0de591a71c0645d96c"
+  },
+  {
+    "opponent": "pb-100",
+    "nodes": 321808,
+    "types": 1,
+    "worlds": 16,
+    "baseline_calls": 16,
+    "native_hidden_disagreements": 0,
+    "seconds": 47.54662958299741,
+    "game_sha256": "d8c1ce1f49da5352ee2e2eb7ee1370b7a63e4d0b54288b7fca9e0b4a9db0c8ee"
+  },
+  {
+    "opponent": "pb-85",
+    "nodes": 631984,
+    "types": 2,
+    "worlds": 32,
+    "baseline_calls": 32,
+    "native_hidden_disagreements": 0,
+    "seconds": 88.69383879192173,
+    "game_sha256": "fd09dfdc182de90937e24ac2c5741349b9e92d2559f1e98d2f08da179186d61a"
+  },
+  {
+    "opponent": "pb-62",
+    "nodes": 639984,
+    "types": 2,
+    "worlds": 32,
+    "baseline_calls": 32,
+    "native_hidden_disagreements": 0,
+    "seconds": 91.76829595863819,
+    "game_sha256": "80b0122459cdb2ac71d0091a435f4cf6bf1dfcb9aca1694ad0030dada1599fcb"
+  },
+  {
+    "opponent": "pb-6",
+    "nodes": 220700,
+    "types": 1,
+    "worlds": 12,
+    "baseline_calls": 12,
+    "native_hidden_disagreements": 0,
+    "seconds": 35.19518200028688,
+    "game_sha256": "27615720b34da79bc87d40a8c8248451c292ac75377200b066e5f6b7cbff27ea"
+  },
+  {
+    "opponent": "pb-96",
+    "nodes": 604528,
+    "types": 2,
+    "worlds": 32,
+    "baseline_calls": 32,
+    "native_hidden_disagreements": 0,
+    "seconds": 94.39313333295286,
+    "game_sha256": "3df1716f5d662045b9e2ddafd9ca8fdc53b3e175138138adcb001eec564a5449"
+  },
+  {
+    "opponent": "pb-89",
+    "nodes": 609744,
+    "types": 2,
+    "worlds": 32,
+    "baseline_calls": 32,
+    "native_hidden_disagreements": 0,
+    "seconds": 94.32701041689143,
+    "game_sha256": "c571d6fff106932cdd34ca924937beb91c094675716c4e5e95f4c54e85e9966d"
+  },
+  {
+    "opponent": "pb-13",
+    "nodes": 280912,
+    "types": 1,
+    "worlds": 16,
+    "baseline_calls": 16,
+    "native_hidden_disagreements": 0,
+    "seconds": 43.97074754117057,
+    "game_sha256": "01868a385f9ff911bd3d561811f7b372ba13a0118a8549a10853b1afcc68d562"
+  },
+  {
+    "opponent": "pb-46",
+    "nodes": 283896,
+    "types": 1,
+    "worlds": 16,
+    "baseline_calls": 16,
+    "native_hidden_disagreements": 0,
+    "seconds": 39.530647666193545,
+    "game_sha256": "235af59873ccd1149d6f16c079fb7a374c8861699bce83c7d1807622eff0f819"
+  }
+]

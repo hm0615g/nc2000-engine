@@ -1,0 +1,539 @@
+{
+  "format": "nc2000-ico-audit-summary-v1",
+  "date": "2026-11-03",
+  "scope": "Finite first-battle-decision surrogate; all subsequent decisions optimized; not match win-rate improvement",
+  "full_game_certified": false,
+  "backend": {
+    "backend": "tpu",
+    "devices": [
+      "TPU_0(process=0,(0,0,0,0))"
+    ],
+    "python": "3.13.18",
+    "jax": "0.11.2",
+    "numpy": "2.1.3",
+    "solver_sha256": "bfefb61b92802baf8989876da024d2d2d97e2c76919f0ef33022e93f877ec1d8"
+  },
+  "baseline_iterations": 81000,
+  "iterations": 4096,
+  "public_rosters": 30,
+  "opponent_type_cases": 62,
+  "hidden_worlds": 976,
+  "expanded_nodes": 18783160,
+  "mean_root_loss": [
+    0.04634870707746515,
+    0.046722171293925495
+  ],
+  "median_root_loss": [
+    0.03826630847802856,
+    0.03841191207622521
+  ],
+  "max_saddle_gap": 0.0011235660445858553,
+  "adversarial_roster_security": {
+    "unrestricted": [
+      0.3083919692489541,
+      0.3085352397023598
+    ],
+    "baseline_root": [
+      0.26900567831617384,
+      0.26902872446093706
+    ],
+    "root_loss": [
+      0.03936324478801706,
+      0.03952956138618596
+    ],
+    "lower_bound_rosters": {
+      "unrestricted": "mjj-2010-garap-a",
+      "baseline_root": "mjj-2010-garap-a"
+    }
+  },
+  "mean_saddle_gap_by_iteration": {
+    "64": 0.006303583394648693,
+    "256": 0.0017691387080986073,
+    "1024": 0.00063655521605675,
+    "4096": 0.00027472647662295143
+  },
+  "native_hidden_choice_counterexamples": [
+    [
+      50,
+      54
+    ],
+    [
+      70,
+      74
+    ]
+  ],
+  "census_native_disagreements": 0,
+  "census": [
+    {
+      "opponent": "sample-07",
+      "root_loss": [
+        0.13066122418454257,
+        0.13086703977098652
+      ],
+      "saddle_gap": 0.00014068350689233622,
+      "baseline_gap": 6.513207955161082e-05,
+      "frontier": [
+        -0.0,
+        1.0000000000000004
+      ]
+    },
+    {
+      "opponent": "rental-cban-13",
+      "root_loss": [
+        0.09053173147731253,
+        0.0916943171992699
+      ],
+      "saddle_gap": 0.0011235660445858553,
+      "baseline_gap": 3.901967737152123e-05,
+      "frontier": [
+        -0.0,
+        1.0
+      ]
+    },
+    {
+      "opponent": "rental-cban-8",
+      "root_loss": [
+        0.079852091555831,
+        0.08022414604845896
+      ],
+      "saddle_gap": 0.00036381402285257103,
+      "baseline_gap": 8.240469775377957e-06,
+      "frontier": [
+        -0.0,
+        1.0
+      ]
+    },
+    {
+      "opponent": "sample-11",
+      "root_loss": [
+        0.0782629812018556,
+        0.07894437460277764
+      ],
+      "saddle_gap": 0.000145646403831301,
+      "baseline_gap": 0.0005357469970907469,
+      "frontier": [
+        -0.0,
+        1.0
+      ]
+    },
+    {
+      "opponent": "sample-09",
+      "root_loss": [
+        0.0776138408339701,
+        0.0778012133348926
+      ],
+      "saddle_gap": 0.00018503587696638846,
+      "baseline_gap": 2.3366239561006807e-06,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "sample-14",
+      "root_loss": [
+        0.07109959055364828,
+        0.07145059073655147
+      ],
+      "saddle_gap": 0.00022983406877596924,
+      "baseline_gap": 0.00012116611412721356,
+      "frontier": [
+        -0.0,
+        1.0000000000000004
+      ]
+    },
+    {
+      "opponent": "pb-6",
+      "root_loss": [
+        0.06878571329887223,
+        0.06929390076300085
+      ],
+      "saddle_gap": 0.0005003993699829179,
+      "baseline_gap": 7.788094145699809e-06,
+      "frontier": [
+        -0.0,
+        1.0000000000000004
+      ]
+    },
+    {
+      "opponent": "sample-17-orig",
+      "root_loss": [
+        0.0590014280364069,
+        0.059565242356024006
+      ],
+      "saddle_gap": 0.0003872770181057583,
+      "baseline_gap": 0.00017653730151134805,
+      "frontier": [
+        -0.0,
+        1.0
+      ]
+    },
+    {
+      "opponent": "pb-46",
+      "root_loss": [
+        0.05614330301534659,
+        0.056611760510650255
+      ],
+      "saddle_gap": 0.00018798888392540514,
+      "baseline_gap": 0.0002804686113782595,
+      "frontier": [
+        -0.0,
+        1.0
+      ]
+    },
+    {
+      "opponent": "pb-13",
+      "root_loss": [
+        0.05223781953407175,
+        0.05254302240985298
+      ],
+      "saddle_gap": 0.00025763463514955065,
+      "baseline_gap": 4.756824063167908e-05,
+      "frontier": [
+        -0.0,
+        1.0
+      ]
+    },
+    {
+      "opponent": "sib-r1-n4-red-v6-r1-s0064-s07",
+      "root_loss": [
+        0.04362965657580936,
+        0.04431243942222984
+      ],
+      "saddle_gap": 0.00045820698798149095,
+      "baseline_gap": 0.0002245758584389912,
+      "frontier": [
+        -0.0,
+        1.0
+      ]
+    },
+    {
+      "opponent": "pb-62",
+      "root_loss": [
+        0.04342101287106476,
+        0.04366560333781888
+      ],
+      "saddle_gap": 0.00015905852910247376,
+      "baseline_gap": 8.553193765165057e-05,
+      "frontier": [
+        -0.0,
+        1.0000000000000004
+      ]
+    },
+    {
+      "opponent": "pb-100",
+      "root_loss": [
+        0.04128548810014343,
+        0.0415229068999281
+      ],
+      "saddle_gap": 0.00017375743334124838,
+      "baseline_gap": 6.36613664434238e-05,
+      "frontier": [
+        -0.0,
+        1.0
+      ]
+    },
+    {
+      "opponent": "sample-02",
+      "root_loss": [
+        0.040240104584342684,
+        0.04046348782001963
+      ],
+      "saddle_gap": 0.00019627746731998297,
+      "baseline_gap": 2.710576835696088e-05,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "mjj-2010-garap-a",
+      "root_loss": [
+        0.03936324478801706,
+        0.03952956138618596
+      ],
+      "saddle_gap": 0.000143270453405675,
+      "baseline_gap": 2.304614476322797e-05,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "pb-85",
+      "root_loss": [
+        0.03716937216804006,
+        0.03729426276626446
+      ],
+      "saddle_gap": 9.730909186633774e-05,
+      "baseline_gap": 2.7581506358065333e-05,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "apex-c08-surgical-142",
+      "root_loss": [
+        0.03625348649515181,
+        0.03663738761695906
+      ],
+      "saddle_gap": 0.0002109755144936165,
+      "baseline_gap": 0.00017292560731363427,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "red-v10-s1105-r2-s0155",
+      "root_loss": [
+        0.035888517926285446,
+        0.035967245316167906
+      ],
+      "saddle_gap": 6.207374591116199e-05,
+      "baseline_gap": 1.6653643971298315e-05,
+      "frontier": [
+        -0.0,
+        1.0000000000000007
+      ]
+    },
+    {
+      "opponent": "red-v5-r1-s0097",
+      "root_loss": [
+        0.035465995119092875,
+        0.03569730293682055
+      ],
+      "saddle_gap": 0.00022561784881441893,
+      "baseline_gap": 5.6899689132583475e-06,
+      "frontier": [
+        -0.0,
+        1.0000000000000004
+      ]
+    },
+    {
+      "opponent": "mjj-2020-rraikou",
+      "root_loss": [
+        0.031841421960003835,
+        0.03217817565224668
+      ],
+      "saddle_gap": 0.00025933941221600865,
+      "baseline_gap": 7.741428002683293e-05,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "nb-sample-13-0",
+      "root_loss": [
+        0.03127755933244275,
+        0.03166934210479366
+      ],
+      "saddle_gap": 0.00034414250075137653,
+      "baseline_gap": 4.76402715995361e-05,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "hc75-top8-tsuru",
+      "root_loss": [
+        0.030956068909818002,
+        0.031708871896961754
+      ],
+      "saddle_gap": 0.00044131073257813735,
+      "baseline_gap": 0.00031149225456561513,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "mjj-2014-thdrcomb",
+      "root_loss": [
+        0.027598264566246755,
+        0.02783387928145542
+      ],
+      "saddle_gap": 0.0001943353133482817,
+      "baseline_gap": 4.127940186038348e-05,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "sample-06",
+      "root_loss": [
+        0.027109682807844315,
+        0.027321128253352256
+      ],
+      "saddle_gap": 0.00021131685871955685,
+      "baseline_gap": 1.2858678838378879e-07,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "deme-r1-00-s0030",
+      "root_loss": [
+        0.026912204972360687,
+        0.027078555366287616
+      ],
+      "saddle_gap": 0.0001642141269439512,
+      "baseline_gap": 2.1362669829771974e-06,
+      "frontier": [
+        -0.0,
+        1.0000000000000004
+      ]
+    },
+    {
+      "opponent": "pb-96",
+      "root_loss": [
+        0.025994501745167264,
+        0.0262258631247293
+      ],
+      "saddle_gap": 0.00011683307575266477,
+      "baseline_gap": 0.00011452830380936918,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "sample-08",
+      "root_loss": [
+        0.02389176015192984,
+        0.0243132092745163
+      ],
+      "saddle_gap": 0.000345631824556325,
+      "baseline_gap": 7.581729803013415e-05,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "sample-22-orig",
+      "root_loss": [
+        0.019713652518773772,
+        0.020020636454683993
+      ],
+      "saddle_gap": 0.0002609890682901961,
+      "baseline_gap": 4.5994867620025026e-05,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "pb-89",
+      "root_loss": [
+        0.015874239910500132,
+        0.016073078924452866
+      ],
+      "saddle_gap": 0.00019701912314346037,
+      "baseline_gap": 1.8198908092736943e-06,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    },
+    {
+      "opponent": "sample-12",
+      "root_loss": [
+        0.012385253129062024,
+        0.013156593249425419
+      ],
+      "saddle_gap": 0.0004582353590841248,
+      "baseline_gap": 0.00031310476127927034,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    }
+  ],
+  "independent_chance": [
+    {
+      "opponent": "rental-cban-8",
+      "root_loss": [
+        0.049412135180333216,
+        0.0496127192553007
+      ],
+      "saddle_gap": 0.000159075265201869,
+      "baseline_gap": 4.150880976561133e-05,
+      "frontier": [
+        -0.0,
+        1.0000000000000007
+      ]
+    },
+    {
+      "opponent": "sample-07",
+      "root_loss": [
+        0.10007592826335737,
+        0.10030281204790392
+      ],
+      "saddle_gap": 0.0001306186857341074,
+      "baseline_gap": 9.62650988124425e-05,
+      "frontier": [
+        -0.0,
+        1.0000000000000002
+      ]
+    }
+  ],
+  "depth_one": [
+    {
+      "opponent": "rental-cban-8",
+      "root_loss": [
+        0.11312623882461476,
+        0.11319769418123177
+      ],
+      "saddle_gap": 7.129433827912646e-05,
+      "baseline_gap": 1.6101833788528808e-07,
+      "frontier": [
+        -0.0,
+        1.0
+      ]
+    },
+    {
+      "opponent": "sample-07",
+      "root_loss": [
+        0.06466594277889837,
+        0.0646863336609973
+      ],
+      "saddle_gap": 2.0335223669898372e-05,
+      "baseline_gap": 5.565842903232365e-08,
+      "frontier": [
+        -0.0,
+        1.0
+      ]
+    }
+  ],
+  "frozen_root_transfer": [
+    {
+      "opponent": "rental-cban-8",
+      "interval": [
+        0.02180658581642425,
+        0.02187097079945305
+      ]
+    },
+    {
+      "opponent": "sample-07",
+      "interval": [
+        0.0773579605212078,
+        0.07755387287942184
+      ]
+    }
+  ],
+  "limitations": [
+    "Horizon two decision transitions; heuristic unresolved frontier remains [0,1]",
+    "Four chance samples per transition in census; eight independent samples in refinement",
+    "Top two compiled selections only; own probabilities renormalized",
+    "Finite catalog/prior types; no claim about all legal opponent parties",
+    "Initial engine fixture seed fixed; initial hidden chance not marginalized",
+    "Single production bot seed in census; separate seed 17011 yields two information-invariance counterexamples",
+    "Float64 best-response numerical brackets, not statistical confidence intervals or formal interval certificates"
+  ]
+}

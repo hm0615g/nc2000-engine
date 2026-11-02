@@ -1,0 +1,22 @@
+[
+  {
+    "opponent": "rental-cban-8",
+    "nodes": 2211776,
+    "types": 2,
+    "worlds": 32,
+    "baseline_calls": 32,
+    "native_hidden_disagreements": 0,
+    "seconds": 149.72974445810542,
+    "game_sha256": "9d9683dc7438689713d1cca256c3ecd2514ab80569dabeb3ea9d526dae3b75b5"
+  },
+  {
+    "opponent": "sample-07",
+    "nodes": 5918528,
+    "types": 5,
+    "worlds": 80,
+    "baseline_calls": 80,
+    "native_hidden_disagreements": 0,
+    "seconds": 307.34550566691905,
+    "game_sha256": "40615443b424d971b98e98b85d206bb56dbf6ab4d0851d76a89a3a0d13dffd3f"
+  }
+]

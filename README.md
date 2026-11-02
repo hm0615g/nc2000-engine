@@ -51,6 +51,7 @@ Rust battle engine, imperfect-information search bot, WebAssembly/Preact client,
 - Compact replay (`NC2-…`) specification: [`docs/replay.md`](docs/replay.md)
 - Residual eval & rollout NN handoff: [`docs/RESIDUAL-NN-HANDOFF.md`](docs/RESIDUAL-NN-HANDOFF.md)
 - Endgame exact/bound solver specification: [`ENDGAME-SOLVER-ALGORITHM.md`](ENDGAME-SOLVER-ALGORITHM.md)
+- Information-Constrained Oracle (ICO), finite-game solver and 81k comparison: [`docs/ICO.md`](docs/ICO.md)
 - Team catalog, belief prior & Nash rebuild protocol: [`docs/TEAM-POOL-REBUILD-PLAN.md`](docs/TEAM-POOL-REBUILD-PLAN.md)
 - License & third-party notices: [`LICENSE`](LICENSE), [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)
 

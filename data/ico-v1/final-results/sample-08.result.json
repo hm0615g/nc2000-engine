@@ -1,0 +1,2451 @@
+{
+  "format": "nc2000-ico-result-v1",
+  "metadata": {
+    "name": "Information-Constrained Oracle",
+    "abbreviation": "ICO",
+    "opponent": "sample-08",
+    "build": "fnv1a64:ee4b25fb1e98098b:m17e-solver-build-v3",
+    "horizon_decisions": 2,
+    "chance_samples": 4,
+    "chance": "sampled-independent-per-node empirical game; CRN across actions/worlds",
+    "exact_chance": false,
+    "seed": 20261103,
+    "own_distribution": "APEX4 shipped weights",
+    "root_model": "adversarial opponent type from every prior loadout sharing public roster; adversarial top-k reference picks; own top-k compiled picks renormalized",
+    "opponent_types": [
+      "sample-08",
+      "hc75-3rd-bean",
+      "rental-cban-6"
+    ],
+    "picks_per_type": 2,
+    "worlds": [
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "sample-08",
+        "own_pick": "team 1, 3, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.2952380952380952,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "sample-08",
+        "own_pick": "team 1, 3, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.2952380952380952,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "sample-08",
+        "own_pick": "team 3, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.0047619047619047615,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "sample-08",
+        "own_pick": "team 3, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.0047619047619047615,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 1, 3, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.2952380952380952,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 1, 3, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.2952380952380952,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 3, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.0047619047619047615,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 3, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.0047619047619047615,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "rental-cban-6",
+        "own_pick": "team 1, 3, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.2952380952380952,
+        "opponent_setup_sequence": 5
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "rental-cban-6",
+        "own_pick": "team 1, 3, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.2952380952380952,
+        "opponent_setup_sequence": 6
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "rental-cban-6",
+        "own_pick": "team 3, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.0047619047619047615,
+        "opponent_setup_sequence": 5
+      },
+      {
+        "own": "apex-c08-surgical-142",
+        "foe": "rental-cban-6",
+        "own_pick": "team 3, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.0047619047619047615,
+        "opponent_setup_sequence": 6
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "sample-08",
+        "own_pick": "team 5, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.17261904761904762,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "sample-08",
+        "own_pick": "team 5, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.17261904761904762,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "sample-08",
+        "own_pick": "team 4, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.07738095238095238,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "sample-08",
+        "own_pick": "team 4, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.07738095238095238,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 5, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.17261904761904762,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 5, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.17261904761904762,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 4, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.07738095238095238,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 4, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.07738095238095238,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "rental-cban-6",
+        "own_pick": "team 5, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.17261904761904762,
+        "opponent_setup_sequence": 5
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "rental-cban-6",
+        "own_pick": "team 5, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.17261904761904762,
+        "opponent_setup_sequence": 6
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "rental-cban-6",
+        "own_pick": "team 4, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.07738095238095238,
+        "opponent_setup_sequence": 5
+      },
+      {
+        "own": "red-v10-s1105-r2-s0142",
+        "foe": "rental-cban-6",
+        "own_pick": "team 4, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.07738095238095238,
+        "opponent_setup_sequence": 6
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "sample-08",
+        "own_pick": "team 3, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.17346938775510204,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "sample-08",
+        "own_pick": "team 3, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.17346938775510204,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "sample-08",
+        "own_pick": "team 2, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.07653061224489796,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "sample-08",
+        "own_pick": "team 2, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.07653061224489796,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 3, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.17346938775510204,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 3, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.17346938775510204,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 2, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.07653061224489796,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 2, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.07653061224489796,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "rental-cban-6",
+        "own_pick": "team 3, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.17346938775510204,
+        "opponent_setup_sequence": 5
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "rental-cban-6",
+        "own_pick": "team 3, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.17346938775510204,
+        "opponent_setup_sequence": 6
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "rental-cban-6",
+        "own_pick": "team 2, 1, 6",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.07653061224489796,
+        "opponent_setup_sequence": 5
+      },
+      {
+        "own": "apex-c04-bug-3atkstar-boomgen",
+        "foe": "rental-cban-6",
+        "own_pick": "team 2, 1, 6",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.07653061224489796,
+        "opponent_setup_sequence": 6
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "sample-08",
+        "own_pick": "team 2, 1, 5",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.10714285714285715,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "sample-08",
+        "own_pick": "team 2, 1, 5",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.10714285714285715,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "sample-08",
+        "own_pick": "team 6, 1, 4",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.09285714285714286,
+        "opponent_setup_sequence": 1
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "sample-08",
+        "own_pick": "team 6, 1, 4",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.09285714285714286,
+        "opponent_setup_sequence": 2
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 2, 1, 5",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.10714285714285715,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 2, 1, 5",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.10714285714285715,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 6, 1, 4",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.09285714285714286,
+        "opponent_setup_sequence": 3
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "hc75-3rd-bean",
+        "own_pick": "team 6, 1, 4",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.09285714285714286,
+        "opponent_setup_sequence": 4
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "rental-cban-6",
+        "own_pick": "team 2, 1, 5",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.10714285714285715,
+        "opponent_setup_sequence": 5
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "rental-cban-6",
+        "own_pick": "team 2, 1, 5",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.10714285714285715,
+        "opponent_setup_sequence": 6
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "rental-cban-6",
+        "own_pick": "team 6, 1, 4",
+        "foe_pick": "team 3, 4, 5",
+        "chance_weight": 0.09285714285714286,
+        "opponent_setup_sequence": 5
+      },
+      {
+        "own": "red-v10-s1105-r1-s0148",
+        "foe": "rental-cban-6",
+        "own_pick": "team 6, 1, 4",
+        "foe_pick": "team 5, 1, 6",
+        "chance_weight": 0.09285714285714286,
+        "opponent_setup_sequence": 6
+      }
+    ],
+    "nodes": 873624,
+    "frontier": "eval_leaf estimate plus [0,1] unresolved interval",
+    "baseline_iterations": 81000,
+    "baseline_c": 0.4,
+    "baseline_hp_buckets": 16,
+    "baseline_policy": "legacy best, fixed-budget, no optional endgame solver",
+    "baseline_calls": 48,
+    "baseline_hidden_world_audits": 32,
+    "baseline_hidden_world_disagreements": 0,
+    "baseline_records": [
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.632111583,
+        "choice": "move curse",
+        "visits": [
+          80057,
+          47,
+          362,
+          136,
+          293,
+          105
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6295008458383125,
+          0.4358970029460105,
+          0.5631329771833956,
+          0.5171165309954739,
+          0.555228835516796,
+          0.5026825537181321
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.276469333,
+        "choice": "move curse",
+        "visits": [
+          80223,
+          230,
+          17,
+          80,
+          62,
+          388
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6670085083843351,
+          0.5829156081127503,
+          0.32400126672492746,
+          0.5177987317688125,
+          0.49747522727697524,
+          0.6024057991207932
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.001472458,
+        "choice": "move zapcannon",
+        "visits": [
+          13919,
+          746,
+          628,
+          64792,
+          255,
+          660
+        ],
+        "actions": [
+          "move icepunch",
+          "move perishsong",
+          "move shadowball",
+          "move zapcannon",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5691424411009968,
+          0.5309428945451563,
+          0.5269020594151929,
+          0.5757836232857889,
+          0.49538160246075846,
+          0.5276135738019812
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.188466167,
+        "choice": "switch 2",
+        "visits": [
+          23383,
+          338,
+          6292,
+          754,
+          37152,
+          13081
+        ],
+        "actions": [
+          "move icepunch",
+          "move perishsong",
+          "move shadowball",
+          "move zapcannon",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5537661254984438,
+          0.48824729110324755,
+          0.5455860237496208,
+          0.5136200044034637,
+          0.5558860308368112,
+          0.5507804379009743
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.623165041,
+        "choice": "move curse",
+        "visits": [
+          80057,
+          47,
+          362,
+          136,
+          293,
+          105
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6295008458383125,
+          0.4358970029460105,
+          0.5631329771833956,
+          0.5171165309954739,
+          0.555228835516796,
+          0.5026825537181321
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.5594152079999999,
+        "choice": "move curse",
+        "visits": [
+          80223,
+          230,
+          17,
+          80,
+          62,
+          388
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6670085083843351,
+          0.5829156081127503,
+          0.32400126672492746,
+          0.5177987317688125,
+          0.49747522727697524,
+          0.6024057991207932
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.871267833,
+        "choice": "move zapcannon",
+        "visits": [
+          13919,
+          746,
+          628,
+          64792,
+          255,
+          660
+        ],
+        "actions": [
+          "move icepunch",
+          "move perishsong",
+          "move shadowball",
+          "move zapcannon",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5691424411009968,
+          0.5309428945451563,
+          0.5269020594151929,
+          0.5757836232857889,
+          0.49538160246075846,
+          0.5276135738019812
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.65005975,
+        "choice": "switch 2",
+        "visits": [
+          23383,
+          338,
+          6292,
+          754,
+          37152,
+          13081
+        ],
+        "actions": [
+          "move icepunch",
+          "move perishsong",
+          "move shadowball",
+          "move zapcannon",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5537661254984438,
+          0.48824729110324755,
+          0.5455860237496208,
+          0.5136200044034637,
+          0.5558860308368112,
+          0.5507804379009743
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.140359042,
+        "choice": "move curse",
+        "visits": [
+          80057,
+          47,
+          362,
+          136,
+          293,
+          105
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6295008458383125,
+          0.4358970029460105,
+          0.5631329771833956,
+          0.5171165309954739,
+          0.555228835516796,
+          0.5026825537181321
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.152037125,
+        "choice": "move curse",
+        "visits": [
+          80223,
+          230,
+          17,
+          80,
+          62,
+          388
+        ],
+        "actions": [
+          "move curse",
+          "move doubleedge",
+          "move rest",
+          "move sleeptalk",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6670085083843351,
+          0.5829156081127503,
+          0.32400126672492746,
+          0.5177987317688125,
+          0.49747522727697524,
+          0.6024057991207932
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.362293333,
+        "choice": "move zapcannon",
+        "visits": [
+          13919,
+          746,
+          628,
+          64792,
+          255,
+          660
+        ],
+        "actions": [
+          "move icepunch",
+          "move perishsong",
+          "move shadowball",
+          "move zapcannon",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5691424411009968,
+          0.5309428945451563,
+          0.5269020594151929,
+          0.5757836232857889,
+          0.49538160246075846,
+          0.5276135738019812
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.331887958,
+        "choice": "switch 2",
+        "visits": [
+          23383,
+          338,
+          6292,
+          754,
+          37152,
+          13081
+        ],
+        "actions": [
+          "move icepunch",
+          "move perishsong",
+          "move shadowball",
+          "move zapcannon",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5537661254984438,
+          0.48824729110324755,
+          0.5455860237496208,
+          0.5136200044034637,
+          0.5558860308368112,
+          0.5507804379009743
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.123955417,
+        "choice": "move swordsdance",
+        "visits": [
+          35142,
+          6263,
+          1092,
+          36891,
+          1504,
+          108
+        ],
+        "actions": [
+          "move earthquake",
+          "move flamethrower",
+          "move rockslide",
+          "move swordsdance",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.4582573196452684,
+          0.4483254091087403,
+          0.42442816743120293,
+          0.4583774675136568,
+          0.4307014217528862,
+          0.3352810763914872
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.8412021250000001,
+        "choice": "move swordsdance",
+        "visits": [
+          2215,
+          780,
+          989,
+          76591,
+          8,
+          417
+        ],
+        "actions": [
+          "move earthquake",
+          "move flamethrower",
+          "move rockslide",
+          "move swordsdance",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6179384473480964,
+          0.5980098599768132,
+          0.6037696099160889,
+          0.6421440527163191,
+          0.15353209048797278,
+          0.58053531357086
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.722306375,
+        "choice": "switch 2",
+        "visits": [
+          12849,
+          616,
+          56,
+          676,
+          65856,
+          947
+        ],
+        "actions": [
+          "move curse",
+          "move earthquake",
+          "move megahorn",
+          "move rest",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.4503279286484156,
+          0.40878826682508357,
+          0.2826535993302299,
+          0.4115486021026742,
+          0.46184281228600194,
+          0.4191192801568812
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.232181417,
+        "choice": "move curse",
+        "visits": [
+          53407,
+          564,
+          19750,
+          1944,
+          241,
+          5094
+        ],
+        "actions": [
+          "move curse",
+          "move earthquake",
+          "move megahorn",
+          "move rest",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5908754522122799,
+          0.5394023722507665,
+          0.5874430543081695,
+          0.5661941993876582,
+          0.5099236604846151,
+          0.5778371637020461
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.679598792,
+        "choice": "move swordsdance",
+        "visits": [
+          35142,
+          6263,
+          1092,
+          36891,
+          1504,
+          108
+        ],
+        "actions": [
+          "move earthquake",
+          "move flamethrower",
+          "move rockslide",
+          "move swordsdance",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.4582573196452684,
+          0.4483254091087403,
+          0.42442816743120293,
+          0.4583774675136568,
+          0.4307014217528862,
+          0.3352810763914872
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.549384625,
+        "choice": "move swordsdance",
+        "visits": [
+          2215,
+          780,
+          989,
+          76591,
+          8,
+          417
+        ],
+        "actions": [
+          "move earthquake",
+          "move flamethrower",
+          "move rockslide",
+          "move swordsdance",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6179384473480964,
+          0.5980098599768132,
+          0.6037696099160889,
+          0.6421440527163191,
+          0.15353209048797278,
+          0.58053531357086
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.129959916,
+        "choice": "switch 2",
+        "visits": [
+          12849,
+          616,
+          56,
+          676,
+          65856,
+          947
+        ],
+        "actions": [
+          "move curse",
+          "move earthquake",
+          "move megahorn",
+          "move rest",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.4503279286484156,
+          0.40878826682508357,
+          0.2826535993302299,
+          0.4115486021026742,
+          0.46184281228600194,
+          0.4191192801568812
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.30068875,
+        "choice": "move curse",
+        "visits": [
+          53407,
+          564,
+          19750,
+          1944,
+          241,
+          5094
+        ],
+        "actions": [
+          "move curse",
+          "move earthquake",
+          "move megahorn",
+          "move rest",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5908754522122799,
+          0.5394023722507665,
+          0.5874430543081695,
+          0.5661941993876582,
+          0.5099236604846151,
+          0.5778371637020461
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.332602542,
+        "choice": "move swordsdance",
+        "visits": [
+          35142,
+          6263,
+          1092,
+          36891,
+          1504,
+          108
+        ],
+        "actions": [
+          "move earthquake",
+          "move flamethrower",
+          "move rockslide",
+          "move swordsdance",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.4582573196452684,
+          0.4483254091087403,
+          0.42442816743120293,
+          0.4583774675136568,
+          0.4307014217528862,
+          0.3352810763914872
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.722294709,
+        "choice": "move swordsdance",
+        "visits": [
+          2215,
+          780,
+          989,
+          76591,
+          8,
+          417
+        ],
+        "actions": [
+          "move earthquake",
+          "move flamethrower",
+          "move rockslide",
+          "move swordsdance",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6179384473480964,
+          0.5980098599768132,
+          0.6037696099160889,
+          0.6421440527163191,
+          0.15353209048797278,
+          0.58053531357086
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.20585975,
+        "choice": "switch 2",
+        "visits": [
+          12849,
+          616,
+          56,
+          676,
+          65856,
+          947
+        ],
+        "actions": [
+          "move curse",
+          "move earthquake",
+          "move megahorn",
+          "move rest",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.4503279286484156,
+          0.40878826682508357,
+          0.2826535993302299,
+          0.4115486021026742,
+          0.46184281228600194,
+          0.4191192801568812
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.101869958,
+        "choice": "move curse",
+        "visits": [
+          53407,
+          564,
+          19750,
+          1944,
+          241,
+          5094
+        ],
+        "actions": [
+          "move curse",
+          "move earthquake",
+          "move megahorn",
+          "move rest",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5908754522122799,
+          0.5394023722507665,
+          0.5874430543081695,
+          0.5661941993876582,
+          0.5099236604846151,
+          0.5778371637020461
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.210696875,
+        "choice": "switch 2",
+        "visits": [
+          58,
+          64,
+          1148,
+          30397,
+          49228,
+          105
+        ],
+        "actions": [
+          "move explosion",
+          "move firepunch",
+          "move icepunch",
+          "move thunderbolt",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.3250199287511553,
+          0.33457921300776733,
+          0.4645798509694695,
+          0.49644812804852273,
+          0.5003328960013408,
+          0.37147798808039745
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 0.7934315,
+        "choice": "move icepunch",
+        "visits": [
+          284,
+          9688,
+          55016,
+          9892,
+          969,
+          5151
+        ],
+        "actions": [
+          "move explosion",
+          "move firepunch",
+          "move icepunch",
+          "move thunderbolt",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5275701261916427,
+          0.594874966683775,
+          0.6030382103436364,
+          0.5950070944560795,
+          0.5649057284816131,
+          0.5896886188594872
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.283836708,
+        "choice": "move icebeam",
+        "visits": [
+          50,
+          70918,
+          230,
+          221,
+          9466,
+          115
+        ],
+        "actions": [
+          "move explosion",
+          "move icebeam",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.3331310494629274,
+          0.5271289782554044,
+          0.44291376085611206,
+          0.43996751106226034,
+          0.5160107813134727,
+          0.40626719380463355
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 0.929611333,
+        "choice": "move reflect",
+        "visits": [
+          988,
+          16934,
+          61133,
+          1603,
+          259,
+          83
+        ],
+        "actions": [
+          "move explosion",
+          "move icebeam",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6396507060394659,
+          0.6723717207484852,
+          0.6773253164419207,
+          0.6490280996883907,
+          0.5989054287670649,
+          0.5281381447433927
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.133141709,
+        "choice": "switch 2",
+        "visits": [
+          58,
+          64,
+          1148,
+          30397,
+          49228,
+          105
+        ],
+        "actions": [
+          "move explosion",
+          "move firepunch",
+          "move icepunch",
+          "move thunderbolt",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.3250199287511553,
+          0.33457921300776733,
+          0.4645798509694695,
+          0.49644812804852273,
+          0.5003328960013408,
+          0.37147798808039745
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 0.825842584,
+        "choice": "move icepunch",
+        "visits": [
+          284,
+          9688,
+          55016,
+          9892,
+          969,
+          5151
+        ],
+        "actions": [
+          "move explosion",
+          "move firepunch",
+          "move icepunch",
+          "move thunderbolt",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5275701261916427,
+          0.594874966683775,
+          0.6030382103436364,
+          0.5950070944560795,
+          0.5649057284816131,
+          0.5896886188594872
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.5076998750000001,
+        "choice": "move icebeam",
+        "visits": [
+          50,
+          70918,
+          230,
+          221,
+          9466,
+          115
+        ],
+        "actions": [
+          "move explosion",
+          "move icebeam",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.3331310494629274,
+          0.5271289782554044,
+          0.44291376085611206,
+          0.43996751106226034,
+          0.5160107813134727,
+          0.40626719380463355
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.477188958,
+        "choice": "move reflect",
+        "visits": [
+          988,
+          16934,
+          61133,
+          1603,
+          259,
+          83
+        ],
+        "actions": [
+          "move explosion",
+          "move icebeam",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6396507060394659,
+          0.6723717207484852,
+          0.6773253164419207,
+          0.6490280996883907,
+          0.5989054287670649,
+          0.5281381447433927
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.138913083,
+        "choice": "switch 2",
+        "visits": [
+          58,
+          64,
+          1148,
+          30397,
+          49228,
+          105
+        ],
+        "actions": [
+          "move explosion",
+          "move firepunch",
+          "move icepunch",
+          "move thunderbolt",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.3250199287511553,
+          0.33457921300776733,
+          0.4645798509694695,
+          0.49644812804852273,
+          0.5003328960013408,
+          0.37147798808039745
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.255855583,
+        "choice": "move icepunch",
+        "visits": [
+          284,
+          9688,
+          55016,
+          9892,
+          969,
+          5151
+        ],
+        "actions": [
+          "move explosion",
+          "move firepunch",
+          "move icepunch",
+          "move thunderbolt",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5275701261916427,
+          0.594874966683775,
+          0.6030382103436364,
+          0.5950070944560795,
+          0.5649057284816131,
+          0.5896886188594872
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.742352625,
+        "choice": "move icebeam",
+        "visits": [
+          50,
+          70918,
+          230,
+          221,
+          9466,
+          115
+        ],
+        "actions": [
+          "move explosion",
+          "move icebeam",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.3331310494629274,
+          0.5271289782554044,
+          0.44291376085611206,
+          0.43996751106226034,
+          0.5160107813134727,
+          0.40626719380463355
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.8927395,
+        "choice": "move reflect",
+        "visits": [
+          988,
+          16934,
+          61133,
+          1603,
+          259,
+          83
+        ],
+        "actions": [
+          "move explosion",
+          "move icebeam",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6396507060394659,
+          0.6723717207484852,
+          0.6773253164419207,
+          0.6490280996883907,
+          0.5989054287670649,
+          0.5281381447433927
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.1375228330000002,
+        "choice": "move icebeam",
+        "visits": [
+          46,
+          59849,
+          1714,
+          911,
+          18444,
+          36
+        ],
+        "actions": [
+          "move explosion",
+          "move icebeam",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.2526210090404927,
+          0.4557277830005491,
+          0.4201237491745077,
+          0.4087210850636215,
+          0.4415322622947704,
+          0.2257414893412687
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.660364375,
+        "choice": "move reflect",
+        "visits": [
+          491,
+          279,
+          78600,
+          1620,
+          5,
+          5
+        ],
+        "actions": [
+          "move explosion",
+          "move icebeam",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5453228762983964,
+          0.5258443243000465,
+          0.6022781928677535,
+          0.5733629376256825,
+          0.0,
+          0.0009300333026293738
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 2.045688708,
+        "choice": "move thunderwave",
+        "visits": [
+          497,
+          11066,
+          122,
+          68736,
+          498,
+          81
+        ],
+        "actions": [
+          "move hydropump",
+          "move psychic",
+          "move recover",
+          "move thunderwave",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.49288916951447176,
+          0.5404267451523425,
+          0.43080278232268204,
+          0.5482060446574302,
+          0.4926775350649101,
+          0.4015585476859657
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.968437583,
+        "choice": "move thunderwave",
+        "visits": [
+          1869,
+          743,
+          725,
+          76030,
+          388,
+          1245
+        ],
+        "actions": [
+          "move hydropump",
+          "move psychic",
+          "move recover",
+          "move thunderwave",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6068660722556216,
+          0.588632276621904,
+          0.5878433951642786,
+          0.6332692000923534,
+          0.5697206376997829,
+          0.5995715789099502
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.570948375,
+        "choice": "move icebeam",
+        "visits": [
+          46,
+          59849,
+          1714,
+          911,
+          18444,
+          36
+        ],
+        "actions": [
+          "move explosion",
+          "move icebeam",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.2526210090404927,
+          0.4557277830005491,
+          0.4201237491745077,
+          0.4087210850636215,
+          0.4415322622947704,
+          0.2257414893412687
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.381508875,
+        "choice": "move reflect",
+        "visits": [
+          491,
+          279,
+          78600,
+          1620,
+          5,
+          5
+        ],
+        "actions": [
+          "move explosion",
+          "move icebeam",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5453228762983964,
+          0.5258443243000465,
+          0.6022781928677535,
+          0.5733629376256825,
+          0.0,
+          0.0009300333026293738
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.304219958,
+        "choice": "move thunderwave",
+        "visits": [
+          497,
+          11066,
+          122,
+          68736,
+          498,
+          81
+        ],
+        "actions": [
+          "move hydropump",
+          "move psychic",
+          "move recover",
+          "move thunderwave",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.49288916951447176,
+          0.5404267451523425,
+          0.43080278232268204,
+          0.5482060446574302,
+          0.4926775350649101,
+          0.4015585476859657
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.9556114999999998,
+        "choice": "move thunderwave",
+        "visits": [
+          1869,
+          743,
+          725,
+          76030,
+          388,
+          1245
+        ],
+        "actions": [
+          "move hydropump",
+          "move psychic",
+          "move recover",
+          "move thunderwave",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6068660722556216,
+          0.588632276621904,
+          0.5878433951642786,
+          0.6332692000923534,
+          0.5697206376997829,
+          0.5995715789099502
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.6347279590000001,
+        "choice": "move icebeam",
+        "visits": [
+          46,
+          59849,
+          1714,
+          911,
+          18444,
+          36
+        ],
+        "actions": [
+          "move explosion",
+          "move icebeam",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.2526210090404927,
+          0.4557277830005491,
+          0.4201237491745077,
+          0.4087210850636215,
+          0.4415322622947704,
+          0.2257414893412687
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.6425043750000001,
+        "choice": "move reflect",
+        "visits": [
+          491,
+          279,
+          78600,
+          1620,
+          5,
+          5
+        ],
+        "actions": [
+          "move explosion",
+          "move icebeam",
+          "move reflect",
+          "move spikes",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.5453228762983964,
+          0.5258443243000465,
+          0.6022781928677535,
+          0.5733629376256825,
+          0.0,
+          0.0009300333026293738
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.5036375419999999,
+        "choice": "move thunderwave",
+        "visits": [
+          497,
+          11066,
+          122,
+          68736,
+          498,
+          81
+        ],
+        "actions": [
+          "move hydropump",
+          "move psychic",
+          "move recover",
+          "move thunderwave",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.49288916951447176,
+          0.5404267451523425,
+          0.43080278232268204,
+          0.5482060446574302,
+          0.4926775350649101,
+          0.4015585476859657
+        ]
+      },
+      {
+        "iterations": 81000,
+        "seed": 7620229681788273117,
+        "browser_constructor_seed": 20261103,
+        "seconds": 1.976771292,
+        "choice": "move thunderwave",
+        "visits": [
+          1869,
+          743,
+          725,
+          76030,
+          388,
+          1245
+        ],
+        "actions": [
+          "move hydropump",
+          "move psychic",
+          "move recover",
+          "move thunderwave",
+          "switch 2",
+          "switch 3"
+        ],
+        "means": [
+          0.6068660722556216,
+          0.588632276621904,
+          0.5878433951642786,
+          0.6332692000923534,
+          0.5697206376997829,
+          0.5995715789099502
+        ]
+      }
+    ],
+    "elapsed_seconds": 108.731191084,
+    "information_key": "own team + complete player-visible protocol/request history + own attempted actions",
+    "full_game_certified": false
+  },
+  "unrestricted": {
+    "backend": "tpu",
+    "checkpoints": [
+      {
+        "value": 0.4621147387407357,
+        "lower": 0.4585037541662163,
+        "upper": 0.46544486473653696,
+        "saddle_gap": 0.006941110570320652,
+        "iterations": 64,
+        "elapsed_seconds": 1.7683921369998643
+      },
+      {
+        "value": 0.46190126850551083,
+        "lower": 0.4605612044076932,
+        "upper": 0.4632603249620157,
+        "saddle_gap": 0.002699120554322476,
+        "iterations": 256,
+        "elapsed_seconds": 2.9236895700000787
+      },
+      {
+        "value": 0.4619419523482206,
+        "lower": 0.4614642352070755,
+        "upper": 0.46241142068083674,
+        "saddle_gap": 0.000947185473761214,
+        "iterations": 1024,
+        "elapsed_seconds": 7.117898685
+      },
+      {
+        "value": 0.4619808889004429,
+        "lower": 0.4617900646136823,
+        "upper": 0.46213569643823865,
+        "saddle_gap": 0.000345631824556325,
+        "iterations": 4096,
+        "elapsed_seconds": 23.47485995299985
+      }
+    ],
+    "value": 0.4619808889004429,
+    "lower": 0.4617900646136823,
+    "upper": 0.46213569643823865,
+    "saddle_gap": 0.000345631824556325,
+    "iterations": 4096,
+    "elapsed_seconds": 23.47485995299985
+  },
+  "baseline_root": {
+    "backend": "tpu",
+    "checkpoints": [
+      {
+        "value": 0.4380841024296768,
+        "lower": 0.4371552634873302,
+        "upper": 0.43892788302039154,
+        "saddle_gap": 0.0017726195330613481,
+        "iterations": 64,
+        "elapsed_seconds": 1.103607287000159
+      },
+      {
+        "value": 0.4378380537633584,
+        "lower": 0.43756910259269044,
+        "upper": 0.4380566435646119,
+        "saddle_gap": 0.00048754097192144075,
+        "iterations": 256,
+        "elapsed_seconds": 1.7063733119998687
+      },
+      {
+        "value": 0.43782809125923566,
+        "lower": 0.4377688612078686,
+        "upper": 0.43794165215408326,
+        "saddle_gap": 0.00017279094621464042,
+        "iterations": 1024,
+        "elapsed_seconds": 3.9403600340001503
+      },
+      {
+        "value": 0.43784217358645383,
+        "lower": 0.43782248716372235,
+        "upper": 0.4378983044617525,
+        "saddle_gap": 7.581729803013415e-05,
+        "iterations": 4096,
+        "elapsed_seconds": 12.702523913999812
+      }
+    ],
+    "value": 0.43784217358645383,
+    "lower": 0.43782248716372235,
+    "upper": 0.4378983044617525,
+    "saddle_gap": 7.581729803013415e-05,
+    "iterations": 4096,
+    "elapsed_seconds": 12.702523913999812
+  },
+  "baseline_kind": "actual-per-world-native-root",
+  "estimated_root_loss_interval": [
+    0.02389176015192984,
+    0.0243132092745163
+  ],
+  "sampled_game_frontier_interval": [
+    -0.0,
+    1.0000000000000002
+  ],
+  "full_game_certified": false,
+  "root_policies": [
+    {
+      "key": "sha256:c62657511b41eb3fb920801daded5de0726c10e1fa6f07e18df4894ff3a1410b",
+      "actions": [
+        "move curse",
+        "move doubleedge",
+        "move rest",
+        "move sleeptalk",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        0.6479970980457285,
+        0.342273629926069,
+        1.9863364749923337e-08,
+        1.9863364749923337e-08,
+        0.009729212438108288,
+        1.9863364749923337e-08
+      ]
+    },
+    {
+      "key": "sha256:57babd8dd5a81d1ac7c63d343b4eda31c3c90b2abe0f6592c24f87877c72f047",
+      "actions": [
+        "move curse",
+        "move doubleedge",
+        "move rest",
+        "move sleeptalk",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        0.99999971731563,
+        1.9352194722718075e-07,
+        1.9863365183809774e-08,
+        1.9863365183809774e-08,
+        2.957232727687114e-08,
+        1.9863365183809774e-08
+      ]
+    },
+    {
+      "key": "sha256:98e8d58ce05955404c640daa555b20ab828705b1254dfaaf150c9fc2639f653f",
+      "actions": [
+        "move icepunch",
+        "move perishsong",
+        "move shadowball",
+        "move zapcannon",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        1.4556994977793367e-06,
+        2.3141778592641592e-08,
+        2.3141778592641592e-08,
+        1.0172952258166276e-06,
+        0.9999974337245711,
+        4.699714810450873e-08
+      ]
+    },
+    {
+      "key": "sha256:4761e77f0b9a12eba2a2b46d1d8482a93971c6f7b85a961bf8d0d507e6e12109",
+      "actions": [
+        "move icepunch",
+        "move perishsong",
+        "move shadowball",
+        "move zapcannon",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "ico": [
+        0.01686130210158914,
+        1.9863372371515496e-08,
+        1.2036530933066736e-07,
+        1.2021744141424933e-05,
+        0.9831264816639885,
+        5.426159925712197e-08
+      ]
+    },
+    {
+      "key": "sha256:69fd8b37db1afbf4b0660b01a5fa3a2252f9c9a438b9f318c5b2744d9fda5f71",
+      "actions": [
+        "move earthquake",
+        "move flamethrower",
+        "move rockslide",
+        "move swordsdance",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        1.1029005586976328e-06,
+        2.5017452762267535e-08,
+        3.387484039094053e-08,
+        0.9999987984804164,
+        1.9863365875831612e-08,
+        1.9863365875831612e-08
+      ]
+    },
+    {
+      "key": "sha256:f2e9777b44f3ff96a9384bc7e47e905a6655cbd259d179d1a140f97378e17192",
+      "actions": [
+        "move earthquake",
+        "move flamethrower",
+        "move rockslide",
+        "move swordsdance",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        0.013812152155369241,
+        1.986337376943022e-08,
+        0.8155515440667453,
+        0.17063595870780823,
+        3.053433296434126e-07,
+        1.986337376943022e-08
+      ]
+    },
+    {
+      "key": "sha256:0d871321cfd8e36e8ea8f4b88d8bab0d06b88084489c13307e86c5a1cbe13920",
+      "actions": [
+        "move curse",
+        "move earthquake",
+        "move megahorn",
+        "move rest",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "ico": [
+        0.9999986553861842,
+        5.8493723337937706e-08,
+        1.063357195043327e-06,
+        1.986336599293968e-08,
+        1.830361655147142e-07,
+        1.986336599293968e-08
+      ]
+    },
+    {
+      "key": "sha256:dfaeae56b496f49035ad7fd1c7a85d8bfb5854f934946ecc25b138c1f89935c9",
+      "actions": [
+        "move curse",
+        "move earthquake",
+        "move megahorn",
+        "move rest",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        0.00011588387661278838,
+        8.422012669369142e-05,
+        1.482496708929928e-07,
+        1.9863364474129046e-08,
+        0.9997997080202937,
+        1.9863364474129046e-08
+      ]
+    },
+    {
+      "key": "sha256:445ebfbe8ba925e48c65edb078c4fd1b3c87c63f4936b01c0cdb2d2e66e9b48e",
+      "actions": [
+        "move explosion",
+        "move firepunch",
+        "move icepunch",
+        "move thunderbolt",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0
+      ],
+      "ico": [
+        1.9863268239878338e-08,
+        0.06724989228730247,
+        0.04013729801962631,
+        0.2675726040322296,
+        0.6250401659343051,
+        1.9863268239878338e-08
+      ]
+    },
+    {
+      "key": "sha256:54f79b3ef3cd8aef8f33b0d1bb202eb104bb8be176bbd03270e17822f94ff1c4",
+      "actions": [
+        "move explosion",
+        "move firepunch",
+        "move icepunch",
+        "move thunderbolt",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        1.9863345099294173e-08,
+        0.0005283843114328945,
+        0.0004669408328460209,
+        0.23383363895316236,
+        0.7651709961758685,
+        1.9863345099294173e-08
+      ]
+    },
+    {
+      "key": "sha256:c06d194bab2f258638e881889877de3857770fdaf4e254816f64aa92c6d1dd75",
+      "actions": [
+        "move explosion",
+        "move icebeam",
+        "move reflect",
+        "move spikes",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        1.9863361128849444e-08,
+        0.1340143409188554,
+        0.08469166029956031,
+        0.6029443860697549,
+        1.9863361128849444e-08,
+        0.17834957298510715
+      ]
+    },
+    {
+      "key": "sha256:831b3be970ca8d9e5cb54c47285aec7876b485aaa0c409ae32f13b5858cd23ec",
+      "actions": [
+        "move explosion",
+        "move icebeam",
+        "move reflect",
+        "move spikes",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        1.9863367677783322e-08,
+        0.49177999321845517,
+        0.5036327056211023,
+        0.004567814430876057,
+        1.9447002831087082e-05,
+        1.9863367677783322e-08
+      ]
+    },
+    {
+      "key": "sha256:4c27559828ba9883e5bc2469f604d6de457278c1af2500bae0b16f4a929680f3",
+      "actions": [
+        "move explosion",
+        "move icebeam",
+        "move reflect",
+        "move spikes",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        1.9863366507780752e-08,
+        0.11611862447231269,
+        0.10979674020442089,
+        0.7740845757331669,
+        1.9863366507780752e-08,
+        1.9863366507780752e-08
+      ]
+    },
+    {
+      "key": "sha256:7bfd0a7794209e23f35db0caa706832c58b9ca5209c3f8fba6c2f90f3a2a312c",
+      "actions": [
+        "move explosion",
+        "move icebeam",
+        "move reflect",
+        "move spikes",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        1.9863367928535167e-08,
+        0.17862969717044702,
+        0.8129166401134649,
+        0.008089608549106219,
+        0.00036388635798603795,
+        1.4794562796821675e-07
+      ]
+    },
+    {
+      "key": "sha256:7a1a2fce43ece161a795fed1364a22d6899a88e379fe709d5c3f094e1543e1e1",
+      "actions": [
+        "move hydropump",
+        "move psychic",
+        "move recover",
+        "move thunderwave",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        0.054976001840993126,
+        0.03785740243221737,
+        1.9863366228961782e-08,
+        0.5920087744561974,
+        0.31515696907978885,
+        8.323274370401933e-07
+      ]
+    },
+    {
+      "key": "sha256:ea2ad89b5bf27f096d3ed9ee2e103612310550aece2bb8d69a20b85f074f29ef",
+      "actions": [
+        "move hydropump",
+        "move psychic",
+        "move recover",
+        "move thunderwave",
+        "switch 2",
+        "switch 3"
+      ],
+      "baseline": [
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "ico": [
+        1.9863364922341615e-08,
+        1.9863364922341615e-08,
+        1.9863364922341615e-08,
+        0.9999811075041954,
+        1.881304234490845e-05,
+        1.9863364922341615e-08
+      ]
+    }
+  ],
+  "game_sha256": "554c0624c3f31833f6354305683db6041483f9bc2fd1dbc8070f57534f0102a5",
+  "runtime": {
+    "backend": "tpu",
+    "devices": [
+      "TPU_0(process=0,(0,0,0,0))"
+    ],
+    "python": "3.13.18",
+    "jax": "0.11.2",
+    "numpy": "2.1.3",
+    "solver_sha256": "bfefb61b92802baf8989876da024d2d2d97e2c76919f0ef33022e93f877ec1d8"
+  }
+}
