@@ -44,14 +44,19 @@ try {
       for (const timing of ["early-flush", "complete"]) {
         const worker = new BotWorker();
         const battle = new wasm.Battle(dex, teams[0], teams[1], "1,2,3,4");
-        const reference = new wasm.BlindSearcher(battle, 1, poolJson, seed, searchProfile("blind").c);
+        const reference = new wasm.ProtocolSearcher(dex, 1, poolJson, seed, searchProfile("blind").c);
+        reference.setOwnTeam(teams[1]);
+        const channel = new wasm.PlayerChannel(1);
         const trajectory = [];
         try {
           await worker.newBattle(teams[0], teams[1], "1,2,3,4", {
             poolJson, side: 1, seed, compiledPreview: false, actionPolicy: mode,
           });
           for (let turn = 0; turn < 3; turn++) {
-            reference.observe(battle); reference.step(budget);
+            const frame = JSON.parse(channel.frame(battle));
+            reference.pushLines(JSON.stringify(frame.lines)); reference.onRequest(JSON.stringify(frame.request)); reference.step(budget);
+            const mapInput = input => battle.resolveChoice(1, input);
+            const mapPolicy = policy => ({ ...policy, actions: policy.actions.map(a => ({ ...a, input: mapInput(a.input) })) });
             const prior = JSON.parse(reference.playPolicy(mode));
             const expected = JSON.parse(reference.commitDecision(mode));
             equal(prior, expected.policy, "inspection changed the policy");
@@ -60,11 +65,13 @@ try {
             if (timing === "early-flush") worker.flush();
             const result = await pending;
             if (timing === "complete") worker.flush();
-            equal(result.policy, JSON.parse(reference.rootPolicy()), "worker search diverged");
-            equal(result.playPolicy, expected.policy, "worker dropped/altered distribution");
-            equal(result.best, expected.input, "worker did not use committed sample");
+            const root = JSON.parse(reference.rootPolicy());
+            for (const row of root.actions) row.input = mapInput(row.input);
+            equal(result.policy, root, "worker search diverged");
+            equal(result.playPolicy, mapPolicy(expected.policy), "worker dropped/altered distribution");
+            equal(result.best, mapInput(expected.input), "worker did not use committed sample");
             check(result, JSON.parse(battle.legalChoices(1)).map(a => a.input));
-            if (mode === "legacy") equal(result.best, reference.best(), "legacy action changed");
+            if (mode === "legacy") equal(result.best, mapInput(reference.best()), "legacy action changed");
             if (mode === "visit-sample" && turn === 0 && result.playPolicy.actions.length < 2)
               throw new Error("visit sampling collapsed to one action");
             trajectory.push({ best: result.best, policy: result.playPolicy });
@@ -72,7 +79,7 @@ try {
             for (const [side, input] of picks) battle.applyChoice(side, input);
             worker.apply(picks);
           }
-        } finally { worker.terminate(); reference.free(); battle.free(); }
+        } finally { worker.terminate(); channel.free(); reference.free(); battle.free(); }
         trajectories.push(trajectory);
       }
       equal(trajectories[0], trajectories[1], "human timing changed execution policy/draws");

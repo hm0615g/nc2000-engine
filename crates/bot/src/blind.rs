@@ -79,6 +79,7 @@ use crate::rng::SplitMix64;
 use crate::smmcts::{key_of, run_iteration, Node, RmConfig, SkuctSearch};
 
 struct GameState {
+    local: Option<crate::player_state::LocalPlayer>,
     side: usize,
     last_turn: u16,
     observer: Observer,
@@ -231,17 +232,24 @@ impl BlindAgent {
 
     fn search(
         &mut self,
-        battle: &Battle,
         dex: &Dex,
         side: usize,
         choices: &[SearchChoice],
     ) -> SearchChoice {
+        let position = {
+            let g = self.game.as_mut().expect("search after lifecycle setup");
+            g.local.as_ref().expect("blind agent requires a player boundary")
+                .position(dex, &mut g.belief, &g.observer, &mut self.rng)
+                .expect("blind player reconstruction failed")
+        };
+        let battle = position.model();
         let g = self.game.as_ref().expect("search after lifecycle setup");
         if !matches!(choices[0], SearchChoice::Team(_)) {
             self.root_stats.searches += 1;
             if let Some(mixture) = self.adaptive_mixture.as_mut() {
                 let mut search =
                     BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
+                search.use_public_exclusions(dex);
                 if self.root_pruning {
                     search.prune_dominated();
                 }
@@ -299,6 +307,7 @@ fn search_choose(
     opp_preview_prior: bool,
 ) -> SearchChoice {
     let mut bs = BlindSearch::with_rng(battle, dex, cfg.clone(), side, rng.clone());
+    if g.local.is_some() { bs.use_public_exclusions(dex); }
     bs.prune_preview_aliases(dex);
     if opp_preview_prior {
         bs.set_opponent_preview_prior(true);
@@ -534,6 +543,23 @@ impl BlindSearch {
         self.opponent_preview_prior = enabled;
     }
 
+    /// Product search: only a player-protocol reconstruction can enter here.
+    pub fn from_observation(position: &crate::player_state::ObservedPosition, dex: &Dex,
+        cfg: RmConfig, side: usize, seed: u64) -> BlindSearch {
+        let mut search = Self::new(position.model(), dex, cfg, side, seed);
+        search.use_public_exclusions(dex);
+        search
+    }
+
+    fn use_public_exclusions(&mut self, _dex: &Dex) {
+        // A guessed world is not a universal proof of uselessness. Even a
+        // last-mon self-KO selection can win if sleep/flinch prevents the
+        // move and residual damage then KOs the foe. Keep heuristic root
+        // exclusions empty; request legality and preview rules are separate.
+        self.my_dominated.fill(false);
+    }
+
+    /// Full-world research API. Product callers use `from_observation`.
     pub fn new(battle: &Battle, dex: &Dex, cfg: RmConfig, side: usize, seed: u64) -> BlindSearch {
         Self::with_rng(battle, dex, cfg, side, SplitMix64::new(seed))
     }
@@ -2216,6 +2242,7 @@ impl OpenAgent {
         let observer = Observer::new(battle, side);
         let belief = Belief::pinned_from_battle(battle, &observer);
         self.game = Some(GameState {
+            local: None,
             side,
             last_turn: battle.turn,
             observer,
@@ -2259,6 +2286,7 @@ impl Agent for OpenAgent {
             let observer = Observer::new(battle, side);
             let belief = Belief::pinned_from_battle(battle, &observer);
             self.game = Some(GameState {
+                local: None,
                 side,
                 last_turn: battle.turn,
                 observer,
@@ -2439,13 +2467,15 @@ impl Agent for BlindAgent {
             Some(g) => g.side != side || is_preview || battle.turn < g.last_turn,
         };
         if stale {
-            let observer = Observer::new(battle, side);
+            let (local, observer) = crate::player_state::LocalPlayer::new(battle, dex, side)
+                .expect("blind player observation failed");
             let mut belief =
                 Belief::with_fallback_policy(dex, &self.pool, &observer, self.fallback_policy);
             if let Some(prior) = self.prior.clone() {
                 belief.set_prior(prior);
             }
             self.game = Some(GameState {
+                local: Some(local),
                 side,
                 last_turn: battle.turn,
                 observer,
@@ -2455,7 +2485,8 @@ impl Agent for BlindAgent {
         {
             let g = self.game.as_mut().unwrap();
             g.last_turn = battle.turn;
-            g.observer.observe(battle, dex);
+            g.local.as_mut().expect("blind agent requires a player boundary")
+                .observe(battle, dex, &mut g.observer).expect("blind player observation failed");
             g.belief.sync(dex, &g.observer);
             if let Some((ref pol, smoothing)) = self.opp_pick_policy {
                 g.belief
@@ -2496,7 +2527,7 @@ impl Agent for BlindAgent {
                 }
             }
         }
-        self.search(battle, dex, side, choices)
+        self.search(dex, side, choices)
     }
 }
 
@@ -2679,200 +2710,48 @@ mod mixed_selection_tests {
         let dex = conformance::load_dex();
         let set = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
             serde_json::from_value(serde_json::json!({"name":species,"species":species,
-                "level":50,"moves":moves,"happiness":255}))
-            .unwrap()
+                "level":50,"moves":moves,"happiness":255})).unwrap()
         };
-        for (species, moves, expected) in [
-            ("Alakazam", vec!["Recover", "Psychic"], vec![true, false]),
-            (
-                "Gengar",
-                vec!["Destiny Bond", "Perish Song"],
-                vec![true, true],
-            ),
-            (
-                "Alakazam",
-                vec!["Psychic", "Thunder Punch"],
-                vec![false, false],
-            ),
-        ] {
-            let mut battle = Battle::from_fixture(
-                &dex,
-                "1,2,3,4",
-                &[set(species, &moves)],
-                &[set("Snorlax", &["Return"])],
-            )
-            .unwrap();
-            let preview = battle.clone();
-            let mut observer = Observer::new(&battle, 0);
-            battle.choose(&dex, 0, "team 1").unwrap();
-            battle.choose(&dex, 1, "team 1").unwrap();
-            observer.observe(&battle, &dex);
-            let legal = battle.legal_choices(&dex, 0);
-            let cfg = RmConfig {
-                iterations: 300,
-                c: 0.4,
-                ..Default::default()
-            };
-            for prune in [false, true] {
-                let mut belief = Belief::pinned_from_battle(&preview, &observer);
-                belief.sync(&dex, &observer);
-                let mut reference = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 17);
-                assert_eq!(reference.dominated(), &expected);
-                if prune {
-                    reference.prune_dominated();
-                }
-                reference.step(&dex, &belief, &observer, cfg.iterations);
-                let mut agent =
-                    BlindAgent::new(cfg.clone(), Arc::new(MetaPool { teams: vec![] }), None, 17);
-                if prune {
-                    agent = agent.with_root_pruning();
-                }
-                agent.game = Some(GameState {
-                    side: 0,
-                    last_turn: battle.turn,
-                    observer: observer.clone(),
-                    belief,
-                });
-                assert_eq!(
-                    Some(agent.choose(&battle, &dex, 0, &legal)),
-                    reference.best()
-                );
-                assert_eq!(agent.search_rng_state(), reference.rng.0);
-                if prune && expected.iter().any(|&x| !x) {
-                    assert!(reference
-                        .visits()
-                        .iter()
-                        .zip(&expected)
-                        .all(|(&n, &masked)| !masked || n == 0));
-                } else {
-                    assert!(reference.visits().iter().all(|&n| n > 0));
-                }
-            }
+        for (species,moves) in [("Alakazam",vec!["Recover","Psychic"]),
+            ("Gengar",vec!["Destiny Bond","Perish Song"])] {
+            let mut battle=Battle::from_fixture(&dex,"1,2,3,4",&[set(species,&moves)],&[set("Snorlax",&["Return"])]).unwrap();
+            battle.choose(&dex,0,"team 1").unwrap();battle.choose(&dex,1,"team 1").unwrap();
+            let cfg=RmConfig{iterations:300,c:0.4,..Default::default()};
+            let mut ordinary=BlindAgent::new(cfg.clone(),Arc::new(MetaPool{teams:vec![]}),None,17);
+            let mut pruned=BlindAgent::new(cfg,Arc::new(MetaPool{teams:vec![]}),None,17).with_root_pruning();
+            let choices=battle.legal_choices(&dex,0);
+            // These moves are not public forfeits. A guessed no-op cannot
+            // become a fixed exclusion or alter the sampling stream.
+            assert_eq!(ordinary.choose(&battle,&dex,0,&choices),pruned.choose(&battle,&dex,0,&choices));
+            assert_eq!(ordinary.search_rng_state(),pruned.search_rng_state());
         }
     }
 
     #[test]
     fn adaptive_agent_uses_the_search_mixture_and_a_separate_draw_stream() {
-        let dex = conformance::load_dex();
-        let set = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
-            serde_json::from_value(
-                serde_json::json!({"name":species,"species":species,"ability":"",
-                "level":50,"moves":moves,"happiness":255,
-                "evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},
-                "ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30}}),
-            )
-            .unwrap()
+        let dex=conformance::load_dex();
+        let set=|species:&str,moves:&[&str]|->nc2000_engine::battle::PokemonSet {
+            serde_json::from_value(serde_json::json!({"name":species,"species":species,"level":50,"moves":moves})).unwrap()
         };
-        for (foe, moves, iterations, expect_mix) in [
-            (
-                "Wobbuffet",
-                vec!["Counter", "Mirror Coat", "Safeguard"],
-                27000,
-                true,
-            ),
-            ("Magikarp", vec!["Splash"], 200, false),
-        ] {
-            let mut battle = Battle::from_fixture(
-                &dex,
-                "1,2,3,4",
-                &[set("Starmie", &["Return", "Surf"])],
-                &[set(foe, &moves)],
-            )
-            .unwrap();
-            let preview = battle.clone();
-            let mut observer = Observer::new(&battle, 0);
-            let mut belief = Belief::pinned_from_battle(&battle, &observer);
-            battle.choose(&dex, 0, "team 1").unwrap();
-            battle.choose(&dex, 1, "team 1").unwrap();
-            for (side, hp) in [(0, 68), (1, 120)] {
-                let id = battle.active_id(side).unwrap();
-                battle.poke_mut(id).hp = hp;
-            }
-            observer.observe(&battle, &dex);
-            belief.sync(&dex, &observer);
-            let cfg = RmConfig {
-                iterations,
-                c: 0.4,
-                ..Default::default()
-            };
-            let reserve = iterations * 2 / 5;
-            let mut reference = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 7);
-            let probes = reference
-                .finish_with_typed_mixed_probes(&dex, &belief, &observer, iterations, reserve);
-            assert_eq!(
-                reference.mixed_policy().is_some(),
-                expect_mix,
-                "{:?}",
-                reference.root_matrix()
-            );
-            let mut draws = SplitMix64::new(7 ^ 0xa24baed4963ee407);
-            let expected = reference.sample_mixed(draws.next_f64()).unwrap();
-            let mut agent =
-                BlindAgent::new(cfg.clone(), Arc::new(MetaPool { teams: vec![] }), None, 7)
-                    .with_adaptive_mixture(reserve);
-            agent.game = Some(GameState {
-                side: 0,
-                last_turn: battle.turn,
-                observer,
-                belief,
-            });
-            let legal = battle.legal_choices(&dex, 0);
-            assert_eq!(agent.choose(&battle, &dex, 0, &legal), expected);
-            assert_eq!(agent.search_rng_state(), reference.rng.0);
-            assert_eq!(agent.adaptive_mixture.as_ref().unwrap().rng.0, draws.0);
-            let stats = RootSearchStats {
-                searches: 1,
-                probed_searches: u64::from(probes > 0),
-                probe_iterations: u64::from(probes),
-                mixed_searches: u64::from(expect_mix),
-            };
-            assert_eq!(agent.root_search_stats(), Some(stats));
-            let obs = agent.game.as_ref().unwrap().observer.clone();
-            let mut exporter =
-                BlindAgent::new(cfg.clone(), Arc::new(MetaPool { teams: vec![] }), None, 7)
-                    .with_adaptive_mixture(reserve);
-            exporter.game = Some(GameState {
-                side: 0,
-                last_turn: battle.turn,
-                belief: Belief::pinned_from_battle(&preview, &obs),
-                observer: obs,
-            });
-            let expected_policy = reference
-                .mixed_policy()
-                .map(|m| m.policy)
-                .unwrap_or_else(|| {
-                    legal
-                        .iter()
-                        .map(|&a| if a == expected { 1. } else { 0. })
-                        .collect()
-                });
-            assert_eq!(
-                exporter.root_policy(&battle, &dex, 0, &legal),
-                expected_policy
-            );
-            assert_eq!(exporter.root_search_stats(), Some(stats));
-            assert_eq!(exporter.search_rng_state(), agent.search_rng_state());
-            let mut forced = battle.clone();
-            let id = forced.active_id(0).unwrap();
-            forced
-                .poke_mut(id)
-                .get_move_slot_mut(dex.moves.id("return").unwrap())
-                .unwrap()
-                .pp = 0;
-            let only = forced.legal_choices(&dex, 0);
-            assert_eq!(only.len(), 1);
-            assert_eq!(exporter.root_policy(&forced, &dex, 0, &only), vec![1.]);
-            assert_eq!(exporter.root_search_stats(), Some(stats));
-            if !expect_mix {
-                assert_eq!(probes, 0);
-                let g = agent.game.as_ref().unwrap();
-                let mut plain = BlindSearch::new(&battle, &dex, cfg, 0, 7);
-                plain.step(&dex, &g.belief, &g.observer, iterations);
-                assert_eq!(plain.best(), Some(expected));
-                assert_eq!(plain.rng.0, agent.search_rng_state());
-                assert_eq!(plain.root_matrix(), reference.root_matrix());
-            }
-        }
+        let mut battle=Battle::from_fixture(&dex,"1,2,3,4",&[set("Starmie",&["Return","Surf"])],
+            &[set("Wobbuffet",&["Counter","Mirror Coat","Safeguard"])]).unwrap();
+        battle.choose(&dex,0,"team 1").unwrap();battle.choose(&dex,1,"team 1").unwrap();
+        let cfg=RmConfig{iterations:1000,c:0.4,..Default::default()};
+        let mut chooser=BlindAgent::new(cfg.clone(),Arc::new(MetaPool{teams:vec![]}),None,7).with_adaptive_mixture(400);
+        let mut exporter=BlindAgent::new(cfg,Arc::new(MetaPool{teams:vec![]}),None,7).with_adaptive_mixture(400);
+        let before=chooser.adaptive_mixture.as_ref().unwrap().rng.0;
+        let mut draw=SplitMix64::new(before);draw.next_f64();
+        let choices=battle.legal_choices(&dex,0);
+        let chosen=chooser.choose(&battle,&dex,0,&choices);
+        let policy=exporter.root_policy(&battle,&dex,0,&choices);
+        let expected=chooser.decision_policy.clone().unwrap_or_else(||choices.iter().map(|&c|if c==chosen {1.} else {0.}).collect());
+        assert_eq!(policy,expected);
+        assert_eq!(chooser.adaptive_mixture.as_ref().unwrap().rng.0,draw.0);
+        assert_eq!(chooser.search_rng_state(),exporter.search_rng_state());
+        assert_eq!(chooser.root_search_stats(),exporter.root_search_stats());
+        assert_eq!(chooser.root_stats.searches,1);
+        assert!(chooser.root_stats.probe_iterations<=400);
+        assert!((policy.iter().sum::<f64>()-1.).abs()<1e-10);
     }
 
     #[test]

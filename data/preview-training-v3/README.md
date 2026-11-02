@@ -18,6 +18,16 @@ engine before converting it to compact rollout state. A regression test checks
 that bench Berserk Gene Tauros keeps its item and has no entry boost/confusion,
 while lead Tauros correctly activates it.
 
+## Boundary repair update
+
+The [boundary repair](../blind-boundary-repair-v1/README.md) selectively recomputed
+182 Nash-involving matrices and reused 946 other matrices after checking their
+source/data dependencies and candidate identities. This rebuilt 149 affected
+policy keys; all 841 unrelated keys were preserved. Recomputed choices happened
+to be identical: this rollout bake does not call the repaired live search.
+`partialRebake` records the previous artifact hash and reuse proof. The new
+artifact still covers all 990 keys and carries the current engine identity.
+
 ## Computation and limits
 
 The bake evaluates 1,128 unordered type-pair matrices. Actions cover each legal
@@ -29,7 +39,7 @@ Bayesian solver runs 600 sweeps with existing finite-sample shrinkage and
 subteam pooling. Ordinary parties retain the previous diversity mixture;
 APEX uses the solved policy. Policies are quantized to 64 deterministic slots.
 
-These are freshly computed, finite-rollout approximate policies. They are not
+These are finite-rollout approximate policies with selective reuse as recorded above. They are not
 a full-game equilibrium certificate or a new measurement of party-draw Nash
 weights. The historical draw weights and measurement labels remain unchanged.
 
@@ -41,7 +51,10 @@ Regenerating training products preserves these fresh tables byte for byte.
 
 ## Verification
 
-`production-verification.json` exercises the actual bundled production worker:
+The original full-bake `production-verification.json` exercised the bundled
+production worker. Updated worker identity and timings after the boundary
+repair are in [the repair verification](../blind-boundary-repair-v1/production-verification.json).
+Both checks cover:
 all **1,089 ordered catalog pairs, both sides (2,178 cases)** return `src=table`
 and zero search iterations, with no search progress messages. Local lookup
 latency is median **1.1 ms**, p95 **1.5 ms**; battle initialization plus lookup
@@ -70,7 +83,7 @@ NC2000_BASE=/nc2000-engine/ npm run test:preview-production
 NC2000_CHECK_OUT=../data/preview-training-v3 node tests/compiled-preview-coverage.mjs
 ```
 
-Build current `pkg-web` WASM first with `crates/wasm/build.sh` when engine/bot
+Build current `pkg-web` and `pkg-node` WASM first with `crates/wasm/build.sh` and `crates/wasm/build.sh nodejs` when engine/bot
 sources change. Matrix cache entries are scoped by the full computation basis;
 an interrupted bake resumes matching work. A partial `--pair-limit` run never
 activates incomplete policies. For deployment verification, set

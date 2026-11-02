@@ -6,6 +6,9 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { preview } from 'vite';
 import { chromium } from '@playwright/test';
+import { createRequire } from 'node:module';
+const wasm = createRequire(import.meta.url)('../../crates/wasm/pkg-node/nc2000_wasm.js');
+const frameDex = new wasm.Dex();
 
 let server, browser;
 try {
@@ -23,6 +26,13 @@ try {
   assert.equal(artifact.priorSha256, expected.prior);
   browser = await chromium.launch();
   const page = await browser.newPage();
+  await page.exposeFunction('__playerFrame', (own, foe, side) => {
+    const teams = side === 0 ? [own, foe] : [foe, own];
+    const battle = new wasm.Battle(frameDex, JSON.stringify(teams[0]), JSON.stringify(teams[1]), '1,2,3,4');
+    const channel = new wasm.PlayerChannel(side);
+    try { return JSON.parse(channel.frame(battle)); }
+    finally { channel.free(); battle.free(); }
+  });
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   await page.goto(base, { waitUntil: 'networkidle' });
@@ -57,12 +67,13 @@ try {
     const timings = [], roundTrips = [], byPublic = new Map();
     const run = async (own, foe, side, poolJson = prior, seed = 7) => {
       const began = performance.now();
-      worker.postMessage({ t: 'battle', p1: JSON.stringify(side === 0 ? own : foe), p2: JSON.stringify(side === 0 ? foe : own), seed: '1,2,3,4', searcher: { poolJson, side, seed } });
+      const frame = await window.__playerFrame(own, foe, side);
+      worker.postMessage({ t: 'battle', ownTeam: JSON.stringify(own), searcher: { poolJson, side, seed } });
       const result = new Promise((resolve, reject) => {
         const request = ++id;
         const timeout = setTimeout(() => { pending.delete(request); reject(Error(`preview timeout ${request}`)); }, 10000);
         pending.set(request, { resolve, reject, timeout });
-        worker.postMessage({ t: 'search', id: request, side, budget: 1, seed: 99, ponder: true });
+        worker.postMessage({ t: 'search', id: request, side, budget: 1, seed: 99, ponder: true, frame });
       });
       const r = await result;
       return { ...r, roundTripMs: performance.now() - began };
@@ -111,6 +122,7 @@ try {
   fs.writeFileSync(output, JSON.stringify(result, null, 2) + '\n');
   console.log(JSON.stringify(result, null, 2));
 } finally {
+  frameDex.free();
   await browser?.close();
   if (server) await new Promise(resolve => server.httpServer.close(resolve));
 }

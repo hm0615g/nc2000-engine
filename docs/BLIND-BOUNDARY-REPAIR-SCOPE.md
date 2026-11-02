@@ -5,6 +5,7 @@ conditional work; it does not implement a repair, authorize deployment, or
 claim that any existing policy is an equilibrium for a corrected bot.
 
 Evidence: [boundary and protocol audits](../data/blind-boundary-audit-v1/README.md).
+Implementation and verification: [repair report](../data/blind-boundary-repair-v1/README.md).
 
 ## Required implementation
 

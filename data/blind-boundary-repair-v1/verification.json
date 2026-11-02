@@ -1,0 +1,232 @@
+{
+  "recorded_at_utc": "2026-11-02T21:55:27.013884+00:00",
+  "build": "fnv1a64:5a574c1c5980add4:m17e-solver-build-v3",
+  "artifact_sha256": "cc2a019e4a1c9459d6a18459291948ace770bce2ad4cce1bc6719eb89f29e90c",
+  "checks": [
+    {
+      "check": "native integration",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "f593d83f4a9b740a6eea1f110b33385a250fd5c879187b6ea40fb8ba47178c04",
+      "test_groups": [
+        {
+          "result": "ok",
+          "passed": 9,
+          "failed": 0
+        },
+        {
+          "result": "ok",
+          "passed": 1,
+          "failed": 0
+        },
+        {
+          "result": "ok",
+          "passed": 5,
+          "failed": 0
+        },
+        {
+          "result": "ok",
+          "passed": 2,
+          "failed": 0
+        },
+        {
+          "result": "ok",
+          "passed": 2,
+          "failed": 0
+        },
+        {
+          "result": "ok",
+          "passed": 3,
+          "failed": 0
+        },
+        {
+          "result": "ok",
+          "passed": 10,
+          "failed": 0
+        }
+      ]
+    },
+    {
+      "check": "boundary at 81000 iterations",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "f34d788850d2f14cfc5076433c3f32dae6c30a8ca2bc68a65a4f01f59accb146",
+      "test_groups": [
+        {
+          "result": "ok",
+          "passed": 5,
+          "failed": 0
+        }
+      ]
+    },
+    {
+      "check": "bot library",
+      "exit_code": 101,
+      "status": "same eight failures as baseline",
+      "log_sha256": "0a072b5711297d07903c94997edf37c67f4f490896c01e8c7c751e88637c7156",
+      "test_groups": [
+        {
+          "result": "FAILED",
+          "passed": 240,
+          "failed": 8
+        }
+      ]
+    },
+    {
+      "check": "compile-fail doctest",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "91cbfb0c8b17d545c52bd0a29be31477bd6f969f4b32df8e29cd91bd0be1fa90",
+      "test_groups": [
+        {
+          "result": "ok",
+          "passed": 1,
+          "failed": 0
+        }
+      ]
+    },
+    {
+      "check": "engine library",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "de9fc030b3bcf9302d5884e9e05e07323f87361281c877a2a6721e715f0c8af9",
+      "test_groups": [
+        {
+          "result": "ok",
+          "passed": 24,
+          "failed": 0
+        }
+      ]
+    },
+    {
+      "check": "replay conformance",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "e273c34fa1c71caf009e74e0c96db407d482b8e6fc073aa14b43f0fdc944db53",
+      "test_groups": [
+        {
+          "result": "ok",
+          "passed": 5,
+          "failed": 0
+        },
+        {
+          "result": "ok",
+          "passed": 4,
+          "failed": 0
+        }
+      ]
+    },
+    {
+      "check": "catalog preview kernels",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "9056c09a09d34c1f194c5f463539e24185410c5fbfa36c2a3ed25ed92f91d1d8",
+      "test_groups": [
+        {
+          "result": "ok",
+          "passed": 5,
+          "failed": 0
+        }
+      ]
+    },
+    {
+      "check": "node WASM suites",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "bcce3e364019433ef135fdaf8552a98d783cc9cdb0d63c829dc0ac006fb116d3",
+      "suites": [
+        "smoke",
+        "determinism",
+        "parity",
+        "kifu",
+        "fork",
+        "solver",
+        "destiny-bond",
+        "priority-heal",
+        "residual-wait",
+        "own-recovery-wait",
+        "preview-cache"
+      ]
+    },
+    {
+      "check": "native/WASM fork parity",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "153007eaaabc936c231fa5ea48f3c8ba960be9b5f1d9c9a4ea1b202e1aa2a7f1"
+    },
+    {
+      "check": "worker transport/timing",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "685e7c08db21a340abbbc959fad4f84fac01d7fa6bc5bc9f5194cd525ef21c94"
+    },
+    {
+      "check": "worker execution policies",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "0f6db0cf84e66833679de2f4e2346e51a6f1382c3f6533d4150084025a898785"
+    },
+    {
+      "check": "evaluation worker",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "ed854d4675526df6f3e1a32c22a004ba9746b52e12714f4b03e1631bbdd16643"
+    },
+    {
+      "check": "web end-to-end",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "19a1a9e2e42082f3fce4f9170f3fae56b3bb2f8c953edcee4c772d5c86d1c7fc",
+      "passed": 70
+    },
+    {
+      "check": "production web build",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "dd89edb88fb955039ba7d069163627d4baf4e5a70b22b371b5b8777d6ba6a9da"
+    },
+    {
+      "check": "production preview",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "45ff46226dd2179f8526bc1deddf48ab9c3fe3877c30fb27f47f1d3ed4b64864"
+    },
+    {
+      "check": "preview slot coverage",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "6e049e825ab11fad4363c451f168f55e8c92432b384ab1bf6d7a193ac7f37c08"
+    },
+    {
+      "check": "training product preservation",
+      "exit_code": 0,
+      "status": "passed",
+      "log_sha256": "85433a33b436d320f98d0b687573331f1996d532fc06d024592625e07c0ed1a4"
+    }
+  ],
+  "baseline_unit_failures": {
+    "revision": "97a133f6",
+    "same_failure_names": [
+      "belief::fallback_tests::bayesian_fallback_infers_baton_pass_from_setup_reveals_and_teammate_context",
+      "belief::fallback_tests::default_policy_anticipates_perish",
+      "belief::fallback_tests::early_perish_activates_on_first_public_appearance",
+      "belief::fallback_tests::early_perish_draws_joint_threat_without_changing_metadata",
+      "belief::fallback_tests::early_rest_keeps_existing_perish_draw_bit_identical",
+      "belief::fallback_tests::retain_perish_changes_only_last_unrevealed_filler",
+      "belief::fallback_tests::retain_perish_determinization_preserves_other_fields_and_rng",
+      "belief::fallback_tests::revealed_loadout_retains_perish_after_mean_look"
+    ],
+    "baseline_log": "baseline-fallback-tests.log",
+    "baseline_result": {
+      "passed": 22,
+      "failed": 8,
+      "filtered_out": 218
+    },
+    "full_repaired_library_result": {
+      "passed": 240,
+      "failed": 8
+    }
+  },
+  "source_unchanged_during_final_challenger_run": true,
+  "deployment": "Local verification only; no publishing action."
+}

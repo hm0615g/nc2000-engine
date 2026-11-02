@@ -121,6 +121,9 @@ jobs:
           test -s web/dist/data/kodoku-r3/conclusion-equilibrium-r1.json
           test -s web/dist/data/kodoku-r3/conclusion-equilibrium-deme.json
 
+      - name: Build player-frame bindings for production worker verification
+        run: crates/wasm/build.sh nodejs
+
       - name: Verify complete production preview lookup
         working-directory: web
         env:
@@ -131,9 +134,8 @@ jobs:
           npm run test:preview-production
           NC2000_BASE=/ NC2000_CHECK_OUT=../target node tests/compiled-preview-coverage.mjs
 
-      - name: Build and verify server cache bindings
+      - name: Verify server cache bindings
         run: |
-          crates/wasm/build.sh nodejs
           for suite in smoke determinism parity kifu fork solver destiny-bond priority-heal residual-wait own-recovery-wait preview-cache; do
             node "crates/wasm/tests-node/$suite.js"
           done

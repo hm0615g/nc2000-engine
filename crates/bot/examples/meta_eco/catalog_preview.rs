@@ -269,6 +269,49 @@ fn casual(p: &[f64], ev: &[f64], legal: &[[usize; 3]]) -> Vec<f64> {
     mix
 }
 
+fn function_source<'a>(source: &'a str, name: &str) -> &'a str {
+    let start = source.find(&format!("fn {name}(")).expect(name);
+    let open = start + source[start..].find('{').unwrap();
+    let mut depth=0;
+    for (offset, byte) in source.as_bytes()[open..].iter().enumerate() {
+        if *byte==b'{' {depth+=1;} else if *byte==b'}' {depth-=1; if depth==0 {return &source[start..=open+offset];}}
+    }
+    panic!("unterminated function {name}")
+}
+
+fn verify_partial_reuse(source: &Path, inputs: &BTreeMap<String,String>, revision: &str) -> Value {
+    let previous: Value=serde_json::from_slice(&std::fs::read(source.join("compiled-preview-v1.json")).unwrap()).unwrap();
+    let old: BTreeMap<String,String>=serde_json::from_value(previous["inputs"].clone()).unwrap();
+    let allowed=["crates/bot/src/belief.rs","crates/bot/src/blind.rs","crates/bot/src/import.rs",
+        "crates/bot/src/lib.rs","crates/bot/src/player.rs","crates/bot/src/player_state.rs","crates/bot/examples/meta_eco/catalog_preview.rs"];
+    let mut changed=Vec::new();
+    for (path,digest) in inputs {
+        if old.get(path)==Some(digest) {continue;}
+        assert!(allowed.contains(&path.as_str()), "rollout/Bayesian dependency changed: {path}; selective reuse refused");
+        changed.push(path.clone());
+    }
+    for path in old.keys() {assert!(inputs.contains_key(path), "removed bake dependency: {path}");}
+    let mut kernels=serde_json::Map::new();
+    for (path,names) in [
+        ("crates/bot/examples/meta_eco/catalog_preview.rs",vec!["initial_state","evaluate_matrix","canonical","material","casual","quantize"]),
+        ("crates/bot/src/belief.rs",vec!["refilter","build_refs","consistent"]),
+    ] {
+        let baseline=std::process::Command::new("git").args(["show",&format!("{revision}:{path}")]).output().unwrap();
+        assert!(baseline.status.success());
+        assert_eq!(sha(&baseline.stdout),old[path],"baseline revision differs from previous bake");
+        let baseline=String::from_utf8(baseline.stdout).unwrap();
+        let current=std::fs::read_to_string(path).unwrap();
+        for name in names {
+            let before=function_source(&baseline,name);let after=function_source(&current,name);
+            assert_eq!(before,after,"semantic preview dependency changed: {path}::{name}");
+            kernels.insert(format!("{path}::{name}"),json!(sha(after.as_bytes())));
+        }
+    }
+    json!({"sourceRevision":revision,"sourceArtifactSha256":file_sha(source.join("compiled-preview-v1.json").to_str().unwrap()),
+        "sourceBuild":previous["build"],"changedInputs":changed,"unchangedKernelFunctions":kernels,
+        "policy":"Recompute only Nash-involving matrices and solutions; reuse other frozen rollout results after closed dependency checks and public candidate/key validation."})
+}
+
 pub(super) fn run(args: &[String]) {
     let started = Instant::now();
     let dex = Dex::from_json(&std::fs::read_to_string("data/gen2stadium2.json").unwrap()).unwrap();
@@ -292,6 +335,12 @@ pub(super) fn run(args: &[String]) {
     let out =
         PathBuf::from(flag(args, "--out-dir").unwrap_or_else(|| "tmp/prior-preview-v1".into()));
     std::fs::create_dir_all(&out).unwrap();
+    let reuse=flag(args,"--nash-only-reuse").map(PathBuf::from);
+    let revision=flag(args,"--reuse-revision").unwrap_or_else(||"97a133f6".into());
+    let reuse_proof=reuse.as_ref().map(|p|verify_partial_reuse(p,&source_inputs(),&revision));
+    let old_artifact: Option<Value>=reuse.as_ref().map(|p|serde_json::from_slice(&std::fs::read(p.join("compiled-preview-v1.json")).unwrap()).unwrap());
+    let old_matrix: Option<Value>=reuse.as_ref().map(|p|serde_json::from_slice(&std::fs::read(p.join("preview-nash-matrix.json")).unwrap()).unwrap());
+    let old_manifest: Option<Value>=reuse.as_ref().map(|p|serde_json::from_slice(&std::fs::read(p.join("manifest.json")).unwrap()).unwrap());
     let cat: Vec<(String, Vec<PokemonSet>, bool)> = catalog_json["teams"]
         .as_array()
         .unwrap()
@@ -407,6 +456,12 @@ pub(super) fn run(args: &[String]) {
     }
     let inputs = source_inputs();
     let basis = json!({"format":"prior-preview-basis-v1","inputs":inputs,"seed":seed,"ns_apex":ns_apex,"ns_other":ns_other,"max_turns":max_turns,"sweeps":sweeps});
+    if let Some(source)=&reuse {
+        let before:Value=serde_json::from_slice(&std::fs::read(source.join("basis.json")).unwrap()).unwrap();
+        for key in ["seed","ns_apex","ns_other","max_turns","sweeps"] {assert_eq!(before[key],basis[key],"changed partial-bake condition {key}");}
+        assert_eq!(old_artifact.as_ref().unwrap()["jobsSha256"],old_manifest.as_ref().unwrap()["basisSha256"]);
+        assert_eq!(old_manifest.as_ref().unwrap()["artifactSha256"],file_sha(source.join("compiled-preview-v1.json").to_str().unwrap()));
+    }
     let basis_hash = sha(&serde_json::to_vec(&basis).unwrap());
     let cache = out.join(&basis_hash);
     std::fs::create_dir_all(&cache).unwrap();
@@ -436,7 +491,16 @@ pub(super) fn run(args: &[String]) {
             loop{let k=cursor.fetch_add(1,Ordering::Relaxed);if k>=run_jobs.len(){break}let (i,j,ns)=run_jobs[k];
                 let path=cache.join(format!("pair-{i:03}-{j:03}.json"));
                 let expected=json!({"basis":basis_hash,"i":i,"j":j,"ns":ns,"own":sha(types[i].identity.as_bytes()),"foe":sha(types[j].identity.as_bytes())});
-                let mat=if path.is_file(){let row:Value=serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();assert_eq!(row["job"],expected);serde_json::from_value(row["matrix"].clone()).unwrap()}
+                let eligible=shells[types[i].shell].apex || shells[types[j].shell].apex;
+                let mat=if let Some(source)=reuse.as_ref().filter(|_|!eligible) {
+                    let old_basis=old_manifest.as_ref().unwrap()["basisSha256"].as_str().unwrap();
+                    let old_path=source.join(old_basis).join(format!("pair-{i:03}-{j:03}.json"));
+                    let row:Value=serde_json::from_slice(&std::fs::read(&old_path).unwrap()).unwrap();
+                    let mut old_expected=expected.clone();old_expected["basis"]=json!(old_basis);
+                    assert_eq!(row["job"],old_expected,"wrong reused matrix {}",old_path.display());
+                    write(&path,&json!({"job":expected,"matrix":row["matrix"],"reusedFromSha256":file_sha(old_path.to_str().unwrap())}));
+                    serde_json::from_value(row["matrix"].clone()).unwrap()
+                } else if path.is_file(){let row:Value=serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();assert_eq!(row["job"],expected);serde_json::from_value(row["matrix"].clone()).unwrap()}
                 else{let pair_seed=shell_pair_crn_seed(seed,&shells[types[i].shell].sig,&shells[types[j].shell].sig,1);
                     let mut mat=evaluate_matrix(&dex,&types[i].roster,&types[j].roster,ns,max_turns,pair_seed);
                     if i==j{let n=types[i].roster.legal.len();for a in 0..n {mat[a*n+a]=0.5;for b in a+1..n{let v=0.5*(mat[a*n+b]+1.0-mat[b*n+a]);mat[a*n+b]=v;mat[b*n+a]=1.0-v;}}}
@@ -469,6 +533,8 @@ pub(super) fn run(args: &[String]) {
         for v in u..shells.len() {
             let a = &shells[u];
             let b = &shells[v];
+            if reuse.is_some() && !a.apex && !b.apex { continue; }
+
             let ar: Vec<_> = a.types.iter().map(|&i| &types[i].roster).collect();
             let br: Vec<_> = b.types.iter().map(|&i| &types[i].roster).collect();
             let pairs: Vec<_> = a
@@ -511,6 +577,16 @@ pub(super) fn run(args: &[String]) {
         let mut vs = serde_json::Map::new();
         for d in &catalog {
             let s = &shells[d.shell];
+            if reuse.is_some() && !c.apex && !s.apex {
+                let row=&old_matrix.as_ref().unwrap()["previewPolicies"][&c.id][&d.id];
+                let planned:Vec<String>=s.types.iter().flat_map(|&i|types[i].ids.clone()).collect();
+                assert_eq!(row["priorEntries"],json!(planned),"changed public candidate membership");
+                let b=Battle::from_fixture(&dex,"1,2,3,4",&c.sets,&d.sets).unwrap();
+                let key=compiled_preview::key(&b,0).unwrap();
+                let old=&old_artifact.as_ref().unwrap()["policies"][&key];assert!(old.is_array(),"changed own/public preview key");
+                policies.insert(key,old.clone());vs.insert(d.id.clone(),row.clone());
+                continue;
+            }
             let ka = types[c.ty].roster.legal.len();
             let mut expected = vec![0.0; ka];
             for (k, &j) in s.types.iter().enumerate() {
@@ -548,9 +624,12 @@ pub(super) fn run(args: &[String]) {
     }
     assert_eq!(policies.len(), catalog.len() * shells.len());
     let method="Native engine team-preview initialization followed by compact rollout full legal matrices; prior-conditioned Bayesian RM+ with subteam pooling and finite-sample shrinkage. Exact trained sets retained; approximation, not a full-game equilibrium certificate.";
+    let regenerated=jobs.iter().filter(|&&(i,j,_)|reuse.is_none() || shells[types[i].shell].apex || shells[types[j].shell].apex).count();
+    let partial= reuse_proof.map(|proof|json!({"proof":proof,"regeneratedMatrices":regenerated,
+        "reusedMatrices":jobs.len()-regenerated,"nashTeams":catalog.iter().filter(|c|c.apex).map(|c|c.id.clone()).collect::<Vec<_>>()}));
     let artifact = json!({"format":"nc2000-compiled-preview-v1","build":compiled_preview::build_fingerprint(),"c":0.4,
         "priorSha256":file_sha("data/belief-pool-v3/belief-pool.json"),"dexSha256":file_sha("data/gen2stadium2.json"),
-        "matchups":policies.len(),"iterations":0,"method":method,"inputs":inputs,"jobsSha256":basis_hash,
+        "matchups":policies.len(),"iterations":0,"method":method,"inputs":inputs,"jobsSha256":basis_hash,"partialRebake":partial,
         "computation":{"initialization":"native-engine-team-preview","seed":seed,"rolloutSeedsApex":ns_apex,"rolloutSeedsOther":ns_other,"maxTurns":max_turns,"solverSweeps":sweeps,"matrices":jobs.len(),"priorEntries":types.iter().map(|t|t.ids.len()).sum::<usize>(),"priorTypes":types.len()},"policies":policies});
     let matrix = json!({"version":"training-v3-prior-preview-v1","method":method,"numTeams":catalog.len(),"numShells":shells.len(),
         "inputs":inputs,"basisSha256":basis_hash,"teamIds":catalog.iter().map(|c|c.id.clone()).collect::<Vec<_>>(),"previewPolicies":preview_policies});
@@ -558,7 +637,7 @@ pub(super) fn run(args: &[String]) {
     write(&out.join("preview-nash-matrix.json"), &matrix);
     write(
         &out.join("manifest.json"),
-        &json!({"basisSha256":basis_hash,"matrices":jobs.len(),"catalogParties":catalog.len(),"publicRosters":shells.len(),"priorTypes":types.len(),"elapsedSeconds":started.elapsed().as_secs_f64(),"artifactSha256":file_sha(out.join("compiled-preview-v1.json").to_str().unwrap())}),
+        &json!({"basisSha256":basis_hash,"matrices":jobs.len(),"catalogParties":catalog.len(),"publicRosters":shells.len(),"priorTypes":types.len(),"partialRebake":partial,"elapsedSeconds":started.elapsed().as_secs_f64(),"artifactSha256":file_sha(out.join("compiled-preview-v1.json").to_str().unwrap())}),
     );
     eprintln!(
         "[prior-preview] wrote {} complete policies to {} in {:.1}s",

@@ -393,6 +393,7 @@ impl LoadoutDraw {
 }
 
 pub struct Belief {
+    hp_observations: Option<Vec<(i32, i32)>>,
     cands: Vec<Candidate>,
     /// Pool indices of the candidates consistent with all observations so
     /// far. Monotonically non-increasing.
@@ -414,6 +415,9 @@ pub struct Belief {
 }
 
 impl Belief {
+    pub(crate) fn set_hp_observations(&mut self, hp: Vec<(i32, i32)>) {
+        self.hp_observations = Some(hp);
+    }
     /// Build the candidate set and apply the preview filter. Call at team
     /// preview, right after `Observer::new`.
     pub fn new(dex: &Dex, pool: &MetaPool, obs: &Observer) -> Belief {
@@ -442,6 +446,7 @@ impl Belief {
             })
             .collect();
         let mut b = Belief {
+            hp_observations: None,
             cands,
             alive: Vec::new(),
             fallback: None,
@@ -505,6 +510,7 @@ impl Belief {
         let refs = build_refs(dex, sets, obs.mons())
             .ok_or_else(|| "pinned opponent team does not match the public preview".to_string())?;
         Ok(Belief {
+            hp_observations: None,
             cands: vec![Candidate {
                 id: id.to_string(),
                 weight: None,
@@ -534,6 +540,7 @@ impl Belief {
     pub fn pinned_from_battle(battle: &Battle, obs: &Observer) -> Belief {
         let refs = battle.sides[obs.opp()].roster.clone();
         Belief {
+            hp_observations: None,
             cands: vec![Candidate {
                 id: "opponent".to_string(),
                 weight: None,
@@ -951,6 +958,9 @@ impl Belief {
             let mo = &obs.mons()[slot];
             let projected = crate::hp_evidence::project(dex, &refs[slot], mo, rng);
             impute_mon(mon, projected.as_ref().unwrap_or(&refs[slot]), mo, dex);
+            if let Some(&(cur, den)) = self.hp_observations.as_ref().and_then(|h| h.get(slot)) {
+                mon.hp = crate::import::impute_hp(cur, den, mon.maxhp);
+            }
             out.refresh_poke_mask(dex, PokeId { side: opp as u8, slot: slot as u8 });
         }
         // active speed reflects stats (+ paralysis, quick claw) like the
@@ -1983,6 +1993,7 @@ fn consistent(dex: &Dex, refs: &[Pokemon], mons: &[MonObs]) -> bool {
 /// a state field breaks this fn until the field is triaged public (keep) /
 /// hidden (impute). Caller refreshes `handler_mask` afterwards.
 fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex) {
+    let public_hp = crate::import::announce_hp(dst.hp, dst.maxhp, 100);
     debug_assert_eq!(refm.base_species, dst.base_species, "ref/roster species drift");
     debug_assert_eq!(refm.level, dst.level, "ref/roster level drift");
     let Pokemon {
@@ -2003,7 +2014,7 @@ fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex) {
         stored_stats,             // HIDDEN unless transformed (copies a public mon)
         base_maxhp,               // HIDDEN → candidate's
         maxhp,                    // HIDDEN → candidate's (Transform does not copy HP)
-        hp,                       // PUBLIC amount (explicitly granted); clamped below
+        hp,                       // public bucket, reconstructed for sampled max HP
         status: _,                // public (announced)
         status_state: _,          // hidden sleep counter: declared non-goal, keep
         boosts: _,                // public (announced)
@@ -2065,10 +2076,10 @@ fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex) {
     }
     *base_maxhp = refm.base_maxhp;
     *maxhp = refm.base_maxhp;
-    // HP amount is public; a mon that never switched in is publicly full
+    // Only the announced HP bucket is public; unseen mons are full.
     let appeared = *previously_switched_in > 0 || *is_active || mo.appeared;
     if appeared {
-        *hp = (*hp).min(*maxhp);
+        *hp = crate::import::impute_hp(public_hp, 100, *maxhp);
     } else {
         *hp = *maxhp;
     }
@@ -2218,6 +2229,7 @@ mod fallback_tests {
     fn test_belief() -> Belief {
         let pool: MetaPool = serde_json::from_str(META_POOL_JSON).unwrap();
         Belief {
+            hp_observations: None,
             cands: pool
                 .teams
                 .into_iter()

@@ -24,7 +24,9 @@ use nc2000_bot::observe::Observer;
 use nc2000_bot::preview::{action_index, preview_actions, MetaPool, MetaTeam};
 use nc2000_bot::smmcts::{RmConfig, SelRule, SkuctSearch};
 use nc2000_bot::teamgen::{to_sets, TeamGen};
-use nc2000_bot::{Agent, BlindAgent, SplitMix64};
+use nc2000_bot::{Agent, BlindAgent, ProtocolAgent, SplitMix64};
+use nc2000_bot::player::PlayerChannel;
+use nc2000_bot::player_state::{LocalPlayer, ObservedPosition};
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::{toid, Dex};
 use nc2000_engine::state::{Battle, RequestState};
@@ -307,6 +309,28 @@ fn eval_full_preview_matrix_compact(
         }
     }
     mat
+}
+
+// Corrected experiments initialize every selected lineup through the engine;
+// copied compact templates can carry entry effects on unseen bench members.
+fn native_preview_matrix(dex:&Dex,a:&CompiledRoster6,b:&CompiledRoster6,ns:u32,turns:u16,seed:u64)->Vec<f64> {
+    let mut matrix=vec![0.;a.legal.len()*b.legal.len()];
+    let template=Battle::from_fixture(dex,"1,2,3,4",&a.sets,&b.sets).unwrap();
+    for (ia,ta) in a.legal.iter().enumerate() {for (ib,tb) in b.legal.iter().enumerate() {
+        let mut value=0.;for k in 0..ns {
+            let mut root=template.clone();root.set_log_enabled(false);
+            let pair_seed=seed ^ u64::from(k).wrapping_mul(0x9E3779B97F4A7C15) ^ ((ia*64+ib) as u64).wrapping_mul(0xBF58476D1CE4E5B9);
+            root.reseed(pair_seed);
+            root.apply_choices(dex,[Some(SearchChoice::Team(ta.map(|i|i as u8+1))),Some(SearchChoice::Team(tb.map(|i|i as u8+1)))]).unwrap();
+            let (table,mut state)=nc2000_engine::compact::CompactBattle::from_battle(&root,dex);
+            value+=nc2000_bot::mcts::compact_playout_value(&mut state,&table,&nc2000_bot::Playout::heavy(),turns,
+                &mut SplitMix64::new(pair_seed ^ 0xA5A55A5AF0F00F0F),nc2000_bot::mcts::RolloutRules::default());
+        }matrix[ia*b.legal.len()+ib]=value/ns as f64;
+    }}matrix
+}
+
+fn model_search(position:Option<&ObservedPosition>,model:&Battle,dex:&Dex,cfg:RmConfig,side:usize,seed:u64)->BlindSearch {
+    match position { Some(p)=>BlindSearch::from_observation(p,dex,cfg,side,seed),None=>BlindSearch::new(model,dex,cfg,side,seed) }
 }
 
 fn solve_bayesian_shell_preview_nash(
@@ -695,6 +719,8 @@ fn play_omniscient_duel_game(
     same_budget: bool,
     k_oracle: usize,
     max_turns: u16,
+    corrected: bool,
+    compiled: &Value,
 ) -> (f64, u16, usize, nc2000_bot::agent::RootSearchStats) {
     let (side_blue, side_red) = if blue_is_p1 { (0, 1) } else { (1, 0) };
     let (t1, t2) = if blue_is_p1 {
@@ -714,9 +740,16 @@ fn play_omniscient_duel_game(
 
     let mut blue_agent = BlindAgent::new(base_cfg.clone(), blue_prior.clone(), None, blue_seed)
         .with_preview_iterations(base_iters.max(240))
-        .with_own_preview_policy(oracle.blue_own_pol60.clone())
-        .with_opponent_pick_policy(oracle.blue_opp_pol60.clone(), 0.10);
+        .with_own_preview_policy(oracle.blue_own_pol60.clone());
+    if !corrected {blue_agent=blue_agent.with_opponent_pick_policy(oracle.blue_opp_pol60.clone(),0.10);}
 
+    // Match the actual live worker: protocol reconstruction, unchanged prior,
+    // u32 search seed, compiled preview selected by seed modulo 64.
+    let mut blue_protocol = corrected.then(|| {
+        let mut agent=ProtocolAgent::new(dex,side_blue,(*blue_prior).clone(),base_cfg.clone(),blue_seed as u32 as u64);
+        agent.set_own_team(blue_sets.to_vec());agent
+    });
+    let mut blue_channel=PlayerChannel::new(side_blue);
     let mut red_rng = SplitMix64::new(red_seed);
     let mut red_std_agent: Option<BlindAgent> = match tier {
         AttackerTier::T0BaselineBlind400 => Some(
@@ -783,6 +816,8 @@ fn play_omniscient_duel_game(
         _ => None,
     };
 
+    let mut red_local: Option<LocalPlayer> = None;
+    let mut blue_public_local: Option<LocalPlayer> = None;
     let mut red_obs: Option<Observer> = None;
     let mut red_belief: Option<Belief> = None;
     // Publicly observable shadow tracker of what Blue knows about Red (100% public info: Red's own preview + Red's public moves/items)
@@ -820,7 +855,17 @@ fn play_omniscient_duel_game(
         let blue_choice = if choices_blue.is_empty() {
             None
         } else {
-            Some(blue_agent.choose(&battle, dex, side_blue, &choices_blue))
+            Some(if let Some(agent)=blue_protocol.as_mut() {
+                let frame=blue_channel.frame(&mut battle,dex).unwrap();
+                for line in frame.lines {agent.push_line(dex,&line);}
+                assert!(agent.on_request(dex,&frame.request.to_string()).unwrap());
+                let input=if matches!(battle.request_state,RequestState::TeamPreview) {
+                    let key=nc2000_bot::compiled_preview::key(agent.battle().unwrap(),side_blue).unwrap();
+                    let choices=compiled["policies"][key].as_array().unwrap();
+                    choices[blue_seed as u32 as usize % choices.len()].as_str().unwrap().to_string()
+                } else {agent.step(dex,base_iters).unwrap();agent.best(dex).unwrap()};
+                nc2000_bot::fork::find_choice(dex,&choices_blue,&input).expect("product emitted illegal action")
+            } else {blue_agent.choose(&battle, dex, side_blue, &choices_blue)})
         };
 
         // 2. Red chooses its action according to `AttackerTier`
@@ -831,7 +876,9 @@ fn play_omniscient_duel_game(
         } else {
             let is_preview = matches!(choices_red[0], SearchChoice::Team(_));
             if red_obs.is_none() || is_preview {
-                let obs = Observer::new(&battle, side_red);
+                let obs = if corrected && tier==AttackerTier::T2RulesBayesianOracleBr {
+                    let (local,obs)=LocalPlayer::new(&battle,dex,side_red).unwrap();red_local=Some(local);obs
+                } else {Observer::new(&battle,side_red)};
                 let bel = match tier {
                     AttackerTier::T2RulesBayesianOracleBr => {
                         Belief::with_fallback_policy(
@@ -852,7 +899,9 @@ fn play_omniscient_duel_game(
                 red_obs = Some(obs);
                 red_belief = Some(bel);
 
-                let b_obs = Observer::new(&battle, side_blue);
+                let b_obs = if corrected && tier==AttackerTier::T2RulesBayesianOracleBr {
+                    let (local,obs)=LocalPlayer::new(&battle,dex,side_blue).unwrap();blue_public_local=Some(local);obs
+                } else {Observer::new(&battle,side_blue)};
                 let b_bel = Belief::with_fallback_policy(
                     dex,
                     &blue_prior,
@@ -865,12 +914,16 @@ fn play_omniscient_duel_game(
 
             let obs = red_obs.as_mut().unwrap();
             let bel = red_belief.as_mut().unwrap();
-            obs.observe(&battle, dex);
+            if let Some(local)=red_local.as_mut() {local.observe(&battle,dex,obs).unwrap();}
+            else {obs.observe(&battle,dex);}
             bel.sync(dex, obs);
+            let public_position=red_local.as_ref().map(|local|local.position(dex,bel,obs,&mut red_rng).unwrap());
             if let (Some(b_obs), Some(b_bel)) = (blue_public_obs.as_mut(), blue_public_bel.as_mut()) {
-                b_obs.observe(&battle, dex);
+                if let Some(local)=blue_public_local.as_mut() {
+                    local.observe(&battle,dex,b_obs).unwrap();local.condition_belief(b_bel,b_obs);
+                } else {b_obs.observe(&battle,dex);}
                 b_bel.sync(dex, b_obs);
-                if !is_preview {
+                if !is_preview && !corrected {
                     b_bel.condition_canonical_pick_policy(
                         &oracle.blue_opp_pol60,
                         0.10,
@@ -952,22 +1005,24 @@ fn play_omniscient_duel_game(
                             // 2. In each world `det_b`, query Blue's 1x `BlindSearch` using only Blue's publicly
                             //    observable belief `blue_public_bel` & `blue_public_obs` tracked from Turn 0.
                             // 3. Evaluate Red's actions coupled to each `(det_b, rep_k)` world (including `BoundSolver` in 1v1).
-                            let mut coupled_worlds: Vec<(Battle, SearchChoice, Vec<SearchChoice>)> =
+                            let mut coupled_worlds: Vec<(Battle, SearchChoice, Vec<SearchChoice>, Option<ObservedPosition>)> =
                                 Vec::with_capacity(k_oracle);
                             if let (Some(b_obs), Some(b_bel)) =
                                 (blue_public_obs.as_ref(), blue_public_bel.as_ref())
                             {
                                 for _ in 0..k_oracle {
-                                    let cand = bel.sample(&mut red_rng);
-                                    let mut det_b =
-                                        bel.determinize_with(dex, &battle, obs, cand, &mut red_rng);
+                                    let sampled=public_position.as_ref().map(|p|p.sample(dex,bel,obs,&mut red_rng));
+                                    let mut det_b=if let Some(p)=&sampled {p.model().clone()} else {
+                                        let cand=bel.sample(&mut red_rng);
+                                        bel.determinize_with(dex,&battle,obs,cand,&mut red_rng)
+                                    };
                                     det_b.set_log_enabled(false);
                                     let det_blue_choices = det_b.legal_choices(dex, side_blue);
                                     if !det_blue_choices.is_empty() {
                                         let rep = if det_blue_choices.len() == 1 {
                                             det_blue_choices[0]
                                         } else {
-                                            let mut b_search = BlindSearch::new(
+                                            let mut b_search = model_search(sampled.as_ref(),
                                                 &det_b,
                                                 dex,
                                                 base_cfg.clone(),
@@ -982,18 +1037,18 @@ fn play_omniscient_duel_game(
                                             }
                                             b_search.best().unwrap_or(det_blue_choices[0])
                                         };
-                                        coupled_worlds.push((det_b, rep, det_blue_choices));
+                                        coupled_worlds.push((det_b, rep, det_blue_choices, sampled));
                                     }
                                 }
                             }
 
-                            let alive_red = count_alive_mons(&battle, side_red);
-                            let alive_blue = count_alive_mons(&battle, side_blue);
+                            let alive_red = count_alive_mons(public_position.as_ref().map(|p|p.model()).unwrap_or(&battle), side_red);
+                            let alive_blue = count_alive_mons(public_position.as_ref().map(|p|p.model()).unwrap_or(&battle), side_blue);
                             let mut solver_pick: Option<SearchChoice> = None;
                             if alive_red == 1 && alive_blue == 1 && !coupled_worlds.is_empty() {
                                 let mut ev_by_a = vec![0.0f64; choices_red.len()];
                                 let mut solved_w = 0usize;
-                                for (det_b, rep_k, det_b_choices) in &coupled_worlds {
+                                for (det_b, rep_k, det_b_choices, _) in &coupled_worlds {
                                     if let Some(b_idx) =
                                         det_b_choices.iter().position(|&c| c == *rep_k)
                                     {
@@ -1042,8 +1097,8 @@ fn play_omniscient_duel_game(
                             if let Some(sp) = solver_pick {
                                 sp
                             } else if coupled_worlds.is_empty() {
-                                let mut bs = BlindSearch::new(
-                                    &battle,
+                                let mut bs = model_search(public_position.as_ref(),
+                                    public_position.as_ref().map(|p|p.model()).unwrap_or(&battle),
                                     dex,
                                     base_cfg.clone(),
                                     side_red,
@@ -1070,9 +1125,9 @@ fn play_omniscient_duel_game(
                                 let w_per_world = ((w_total as usize) / k_w).max(1) as u32;
                                 let mut world_searches: Vec<(BlindSearch, Belief, SearchChoice)> =
                                     Vec::with_capacity(k_w);
-                                for (det_b, rep_k, _) in &coupled_worlds {
+                                for (det_b, rep_k, _, sampled) in &coupled_worlds {
                                     let det_bel = Belief::pinned_from_battle(det_b, obs);
-                                    let mut w_bs = BlindSearch::new(
+                                    let mut w_bs = model_search(sampled.as_ref(),
                                         det_b,
                                         dex,
                                         base_cfg.clone(),
@@ -1395,6 +1450,9 @@ fn main() {
     let find_flag = |k: &str| -> Option<String> {
         args.windows(2).find(|w| w[0] == k).map(|w| w[1].clone())
     };
+    let corrected=args.iter().any(|a|a=="--corrected-product");
+    let compiled:Value=serde_json::from_slice(&std::fs::read(root.join("data/compiled-preview-v1.json")).unwrap()).unwrap();
+    if corrected {assert_eq!(compiled["build"],nc2000_bot::compiled_preview::build_fingerprint(),"stale corrected preview artifact");}
     let base_iters: u32 = find_flag("--iters")
         .and_then(|v| v.parse().ok())
         .unwrap_or(400);
@@ -1408,11 +1466,11 @@ fn main() {
     let k_oracle: usize = find_flag("--k-oracle")
         .and_then(|v| v.parse().ok())
         .unwrap_or(if same_budget { 2 } else { 6 });
-    let max_turns: u16 = 250;
-    let seed: u64 = 20261102;
-    let threads: usize = std::thread::available_parallelism()
+    let max_turns: u16 = find_flag("--max-turns").and_then(|s|s.parse().ok()).unwrap_or(250);
+    let seed: u64 = find_flag("--seed").and_then(|s|s.parse().ok()).unwrap_or(if corrected {2026110307} else {20261102});
+    let threads: usize = find_flag("--threads").and_then(|s|s.parse().ok()).unwrap_or_else(||std::thread::available_parallelism()
         .map(|n| n.get())
-        .unwrap_or(8);
+        .unwrap_or(8));
     let out_path = PathBuf::from(find_flag("--out").unwrap_or_else(|| {
         "data/dominance-audit-v13-verified/omniscient-audit-report.json".to_string()
     }));
@@ -1442,7 +1500,7 @@ fn main() {
         let id = t["id"].as_str().unwrap().to_string();
         let w = t["weight"].as_f64().unwrap();
         let mut raw = t["sets"].as_array().unwrap().clone();
-        gen.optimize_team_dominance(&dex, &mut raw, &mut rng_norm);
+        if !corrected {gen.optimize_team_dominance(&dex, &mut raw, &mut rng_norm);}
         let canon = gen.canonize(&dex, &raw).unwrap();
         let sets = to_sets(&canon).unwrap();
         let roster = CompiledRoster6::compile(&dex, &sets);
@@ -1460,6 +1518,7 @@ fn main() {
     for s in &pi_sets {
         pi_sigs.insert(preview_sig_sets(s));
     }
+    let product_prior=Arc::new(raw_mp.clone());
     let mut clean_teams: Vec<MetaTeam> = raw_mp
         .teams
         .into_iter()
@@ -1483,13 +1542,14 @@ fn main() {
             let p_seed = seed
                 ^ 0x3C6E_F372_FE94_F82A_u64
                 ^ (((r_i * 31 + b_j) as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15));
-            let raw = eval_full_preview_matrix_compact(
+            let raw = if corrected {native_preview_matrix(&dex,&pi_rosters[r_i],&pi_rosters[b_j],4,max_turns,p_seed)}
+            else {eval_full_preview_matrix_compact(
                 &pi_rosters[r_i],
                 &pi_rosters[b_j],
                 4,
                 max_turns,
                 p_seed,
-            );
+            )};
             let ka = pi_rosters[r_i].legal.len();
             let kb = pi_rosters[b_j].legal.len();
             if r_i == b_j {
@@ -1556,8 +1616,22 @@ fn main() {
                     mats_refs.push(pair_mats[r_i * n_pi + b_j].as_slice());
                 }
             }
-            let (p_strats, q_strats) =
+            let (p_strats, mut q_strats) =
                 solve_bayesian_shell_preview_nash(&mats_refs, ka, kb, &alpha, &beta, 600);
+            if corrected {
+                for (v,&b_j) in b_members.iter().enumerate() {
+                    let root=Battle::from_fixture(&dex,"1,2,3,4",&pi_sets[b_j],&pi_sets[r_members[0]]).unwrap();
+                    let key=nc2000_bot::compiled_preview::key(&root,0).unwrap();
+                    let choices=compiled["policies"][&key].as_array().expect("missing regenerated Nash preview");
+                    let mut p=vec![0.;kb];
+                    for choice in choices {
+                        let numbers:Vec<usize>=choice.as_str().unwrap().strip_prefix("team ").unwrap().split(',').map(|x|x.trim().parse::<usize>().unwrap()-1).collect();
+                        let slot=pi_rosters[b_j].legal.iter().position(|t|t[0]==numbers[0] && ((t[1]==numbers[1]&&t[2]==numbers[2])||(t[1]==numbers[2]&&t[2]==numbers[1]))).unwrap();
+                        p[slot]+=1./choices.len() as f64;
+                    }
+                    q_strats[v]=p;
+                }
+            }
 
             let mut r_shell_avg = vec![0.0f64; ka];
             for (u_k, &r_i) in r_members.iter().enumerate() {
@@ -1666,9 +1740,12 @@ fn main() {
     let phi1 = 0.618_033_988_749_894_9_f64;
     let phi2 = 0.381_966_011_250_105_1_f64;
     let mut jobs: Vec<DuelJob> = Vec::with_capacity(num_pairs * 2);
+    let mut matchup_rng=SplitMix64::new(seed ^ 0xD6E8_FEB8_6659_FD93);
     for m in 0..num_pairs {
-        let u_b = (((m as f64) + 0.5) * phi1).rem_euclid(1.0) * w_tot;
-        let u_r = (((m as f64) + 0.5) * phi2).rem_euclid(1.0) * w_tot;
+        // Independent mixture draws in the corrected experiment. The old
+        // complementary QMC coordinates correlated the two hidden types.
+        let (u_b,u_r)=if corrected {(matchup_rng.next_f64()*w_tot,matchup_rng.next_f64()*w_tot)}
+            else {((((m as f64)+0.5)*phi1).rem_euclid(1.0)*w_tot,(((m as f64)+0.5)*phi2).rem_euclid(1.0)*w_tot)};
         let blue_idx = cum_w
             .iter()
             .position(|&cw| cw >= u_b)
@@ -1755,6 +1832,8 @@ fn main() {
         std::thread::scope(|scope| {
             let mut handles = Vec::new();
             for _ in 0..threads.min(jobs.len()).max(1) {
+                let product_prior_ref=&product_prior;
+                let compiled_ref=&compiled;
                 let (jobs_ref, cursor_ref, pi_sets_ref, oracles_ref, mp_ref, dex_ref) = (
                     &jobs,
                     &cursor,
@@ -1780,7 +1859,7 @@ fn main() {
                             job.blue_is_p1,
                             job.blue_seed,
                             job.red_seed,
-                            mp_ref.clone(),
+                            if corrected {product_prior_ref.clone()} else {mp_ref.clone()},
                             mp_ref.clone(),
                             oracle,
                             tier,
@@ -1788,7 +1867,10 @@ fn main() {
                             same_budget,
                             k_oracle,
                             max_turns,
+                            corrected,
+                            compiled_ref,
                         );
+                        eprintln!("[duel] {} game {}/{} blue={} turns={}",tier.id(),k+1,jobs_ref.len(),blue_pts,turns);
                         loc.push((k, blue_pts, turns, solv_hits, r_stats));
                     }
                     loc
@@ -1840,6 +1922,9 @@ fn main() {
         );
 
         tier_reports.push(json!({
+            "game_records":game_outs.iter().map(|(k,score,turns,solver,_)|json!({"index":k,"blue_score":score,"turns":turns,"solver_interventions":solver,
+                "blue_team":pi_ids[jobs[*k].blue_idx],"red_team":pi_ids[jobs[*k].red_idx],"blue_is_p1":jobs[*k].blue_is_p1,
+                "battle_seed":jobs[*k].battle_seed,"blue_seed":jobs[*k].blue_seed,"red_seed":jobs[*k].red_seed})).collect::<Vec<_>>(),
             "tier": tier.id(),
             "description": tier.description(),
             "rules_compliant": tier.rules_compliant(),
@@ -1847,6 +1932,10 @@ fn main() {
             "red_wr": red_wr,
             "blue_wr": blue_wr,
             "se_red_wr": se_red,
+            "paired_red_scores":pair_red_scores,
+            "red_wr_95pct_normal_approx":[(red_wr-1.96*se_red).max(0.),(red_wr+1.96*se_red).min(1.)],
+            "red_wr_onesided95_hoeffding_upper":(red_wr+(20.0_f64.ln()/(2.*num_pairs as f64)).sqrt()).min(1.),
+            "turn_capped_or_natural_ties":game_outs.iter().filter(|x|x.1==0.5).count(),
             "gain_over_shipped_bot": red_gain_over_50,
             "avg_turns": avg_turns,
             "root_searches": tot_searches,
@@ -2132,6 +2221,12 @@ fn main() {
         std::fs::create_dir_all(parent).ok();
     }
     let report = json!({
+        "corrected_product":corrected,"seed":seed,"max_turns":max_turns,"k_oracle":k_oracle,"same_budget":same_budget,
+        "build":nc2000_bot::compiled_preview::build_fingerprint(),
+        "blue_preview":"regenerated compiled choices[u32(seed)%64] when corrected_product=true",
+        "blue_api":"ProtocolAgent with trusted PlayerChannel when corrected_product=true",
+        "matchup_sampling":if corrected {"independent weighted draws per mirrored block"}else{"historical complementary QMC"},
+        "blue_prior":"unmodified frozen production prior when corrected_product=true",
         "elapsed_secs": t_start.elapsed().as_secs_f64(),
         "base_iters": base_iters,
         "pairs_per_tier": num_pairs,

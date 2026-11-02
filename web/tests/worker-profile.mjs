@@ -22,6 +22,14 @@ try {
   const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: "networkidle" });
   const results = await page.evaluate(async (wasmUrl) => {
+    const sent = [];
+    const liveWorkers = new WeakSet();
+    const postMessage = Worker.prototype.postMessage;
+    Worker.prototype.postMessage = function(message, ...args) {
+      if (message?.t === "battle") liveWorkers.add(this);
+      if (liveWorkers.has(this) && ["battle", "apply", "search"].includes(message?.t)) sent.push(structuredClone(message));
+      return postMessage.call(this, message, ...args);
+    };
     const { BotWorker } = await import("/src/bot.ts");
     const { searchProfile } = await import("/src/search-profile.ts");
     const wasm = await import(wasmUrl);
@@ -34,8 +42,11 @@ try {
     const expected = (iterations, c) => {
       const battle = new wasm.Battle(dex, teams[0], teams[1], "1,2,3,4");
       battle.setLogEnabled(true);
-      const search = new wasm.BlindSearcher(battle, 1, poolJson, seed, c);
-      search.observe(battle);
+      const search = new wasm.ProtocolSearcher(dex, 1, poolJson, seed, c);
+      search.setOwnTeam(teams[1]);
+      const channel = new wasm.PlayerChannel(1);
+      const frame = JSON.parse(channel.frame(battle)); channel.free();
+      search.pushLines(JSON.stringify(frame.lines)); search.onRequest(JSON.stringify(frame.request));
       search.step(iterations);
       const policy = JSON.parse(search.rootPolicy());
       search.free();
@@ -171,6 +182,12 @@ try {
         history.replaceState({}, "", previous || "/");
       }
     }
+    const live = sent.filter(m => m.t === "battle");
+    if (!live.length || live.some(m => JSON.stringify(Object.keys(m).sort()) !== JSON.stringify(["ownTeam", "searcher", "t"])))
+      throw new Error("live worker received fields outside the player boundary");
+    if (sent.some(m => m.t === "apply")) throw new Error("unannounced choices reached the live worker");
+    if (sent.filter(m => m.t === "search").some(m => !m.frame)) throw new Error("live search omitted its player frame");
+    Worker.prototype.postMessage = postMessage;
     dex.free();
     return results;
   }, "/@fs" + fileURLToPath(new URL("../../crates/wasm/pkg-web/nc2000_wasm.js", import.meta.url)));

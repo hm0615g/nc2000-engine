@@ -102,7 +102,7 @@ fn player_request(battle: &Battle, dex: &Dex, side: usize, choices: &[SearchChoi
             })
         })
         .collect();
-    let own = json!({"pokemon": pokemon});
+    let own = json!({"pokemon": pokemon, "previewLevelCaps": battle.preview_level_caps});
     if choices.is_empty() {
         return json!({"wait": true, "side": own});
     }

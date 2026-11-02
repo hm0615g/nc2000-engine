@@ -22,14 +22,16 @@ try {
       try {
         battle.applyChoice(0, "team 1"); battle.applyChoice(1, "team 1");
         search.observe(battle);
-        assert.equal(search.best(), priority ? "move recover" : "move psychic");
+        search.step(128);
+        const support = JSON.parse(search.playPolicy("visit-sample")).actions.map(a => a.input).sort();
+        assert.deepEqual(support, ["move psychic", "move recover"]);
         battle.takeNewLog();
         battle.applyChoice(side, "move recover");
         battle.applyChoice(1 - side, `move ${reply}`);
         const log = JSON.parse(battle.takeNewLog());
         const healed = log.some(line => line.startsWith(`|-heal|p${side + 1}a:`));
         assert.equal(healed, priority);
-        rows.push({ side, species, reply, healed, scope: "zero-iteration mask integration probe; no strength claim" });
+        rows.push({ side, species, reply, healed, scope: "both actions remain eligible under uncertain replies; priority execution probe, no strength claim" });
       } finally { search.free(); battle.free(); }
     }
   }

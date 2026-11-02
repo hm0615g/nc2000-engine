@@ -2,7 +2,8 @@ import { ToolError } from "./tool-errors";
 import init, {
   Dex,
   Battle,
-  BlindSearcher,
+  ProtocolSearcher,
+  PlayerChannel,
   deriveBattleSeed,
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
 import {
@@ -52,23 +53,20 @@ async function run(run: EvaluationRun, beliefJson: string) {
           JSON.stringify(teams[1].sets),
           deriveBattleSeed(scheduled.battleSeed),
         );
-        const agents: BlindSearcher[] = [];
+        const agents: ProtocolSearcher[] = [];
+        const channels: PlayerChannel[] = [];
         let game: GameResult;
         try {
           teams.forEach((t, side) =>
             battle.setPreviewLevelCap(side, t.relaxed ? undefined : 155),
           );
-          for (let side = 0; side < 2; side++)
-            agents.push(
-              new BlindSearcher(
-                battle,
-                side,
-                beliefJson,
-                scheduled.agentSeeds[side === playerSide ? 0 : 1],
-                run.config.c,
-                undefined,
-              ),
-            );
+          for (let side = 0; side < 2; side++) {
+            const agent = new ProtocolSearcher(dex, side, beliefJson,
+              scheduled.agentSeeds[side === playerSide ? 0 : 1], run.config.c, undefined);
+            agent.setOwnTeam(JSON.stringify(teams[side].sets));
+            agents.push(agent);
+            channels.push(new PlayerChannel(side));
+          }
           let lastProgress = 0;
           let lastYield = performance.now();
           const selections: GameResult["selections"] = [];
@@ -82,7 +80,9 @@ async function run(run: EvaluationRun, beliefJson: string) {
               const agent = agents[side];
               const preview = JSON.parse(battle.legalChoices(side))[0]?.kind === "team";
               const budget = preview ? run.config.previewIterations : run.config.iterations;
-              agent.observe(battle);
+              const frame = JSON.parse(channels[side].frame(battle));
+              agent.pushLines(JSON.stringify(frame.lines));
+              if (!agent.onRequest(JSON.stringify(frame.request))) throw new ToolError("missingRequests");
               // No compiled lookup, table injection or preview cache. Both
               // sides search every selection using the common live budget.
               for (let n = 0; n < budget; n += 32) {
@@ -104,7 +104,8 @@ async function run(run: EvaluationRun, beliefJson: string) {
                   lastYield = performance.now();
                 }
               }
-              choices[side] = agent.best();
+              const input = agent.best();
+              choices[side] = input ? battle.resolveChoice(side, input) : undefined;
               if (!choices[side])
                 throw new ToolError("noLegalAction", side + 1);
               if (preview) selections.push({ side, input: choices[side]!, iterations: agent.iterations() });
@@ -130,6 +131,7 @@ async function run(run: EvaluationRun, beliefJson: string) {
           };
         } finally {
           agents.forEach((a) => a.free());
+          channels.forEach((c) => c.free());
           battle.free();
         }
         const ack = new Promise<void>((resolve) => {

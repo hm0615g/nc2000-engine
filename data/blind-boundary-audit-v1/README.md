@@ -1,6 +1,6 @@
 # Blind information boundary audit — 2026-11-03
 
-The HP suspicion is confirmed for the current source's ordinary Web play and
+The HP suspicion was confirmed for the audited baseline's ordinary Web play and
 evaluation path. Opponent **absolute current HP survives determinization** and
 can change the selected action at production budgets. Sleep counters and
 pre-determinization action exclusions expose additional private state.
@@ -9,6 +9,10 @@ Baseline: `07bba87fd22f4fb0993a044326d2cfbac69405cb`. This audit adds a
 reproducer and evidence only. It changes no production source, settings,
 preview artifacts or deployment. The hosted binary was not inspected; the
 claim concerns this checkout running the production configuration.
+
+The subsequent [repair report](../blind-boundary-repair-v1/README.md) records the
+implementation and new verification. The reproducers below assert historical
+vulnerabilities and are not acceptance tests for the repaired product.
 
 ## Reproduction and independent observations
 

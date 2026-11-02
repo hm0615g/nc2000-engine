@@ -1,12 +1,10 @@
 // The Nash door's mixture, as the browser plays it: a fixed probability
 // distribution over the solved support, and the draw that samples it.
 //
-// `data/meta-nash-v3/pool-artifact.json` is the shipped end of the rebuild's
-// Nash step (docs/TEAM-POOL-REBUILD-PLAN.md). Its claim is about the MIXTURE,
-// not about any one team, so the draw is the product — a nash game samples
-// it once per battle, independently, and a rematch draws again. Playing the
-// top-weighted team every time would be a different strategy with a
-// different (worse) guarantee.
+// The primary and preserved historical artifacts carry previously computed
+// weights. They are not equilibrium certificates for the repaired bot.
+// A game samples this distribution once; a rematch draws independently.
+// Always playing the highest-weight party would be a different distribution.
 //
 // The mixture governs which team the BOT brings. What the bot assumes about
 // the team it is FACING is the shipped opponent prior (belief-pool-v3),

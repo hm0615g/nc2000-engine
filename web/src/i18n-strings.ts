@@ -431,16 +431,15 @@ const EN: UIStrings = {
   settingsTitle: "Setup",
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
   nashBanner:
-    "The solved mixture — neither side sees the other's sets; each battle " +
-    "the bot draws one of the parties below at the odds shown. Build " +
-    "whatever you like: knowing the mixture is the point.",
+    "The recorded mixture — neither side sees the other's sets; each battle " +
+    "the bot draws one of the parties below at the odds shown. You can use " +
+    "any party; the draw probabilities are public.",
   nashTitle: "The solved mixture",
   nashMixNote:
-    "The equilibrium of the game among this bot's selected parties, solved " +
-    "blind against blind at the bot's own budget. Inside that game no party " +
-    "does better against it, and no outside party tested so far has been " +
-    "shown to beat it. The bot samples it afresh every battle, so which " +
-    "party you are facing stays hidden until the game ends — the odds do not.",
+    "These weights were computed for an earlier version of the bot. " +
+    "Equilibrium for the current version has not been established. The bot " +
+    "samples afresh every battle, so its party stays hidden until the game " +
+    "ends — the odds do not.",
   nashSource: (file) => `Solution: ${file}`,
   priorLabel: "Belief prior",
   priorNone: "None",
@@ -726,16 +725,13 @@ const JA: UIStrings = {
   settingsTitle: "設定",
   settingsValue: (pool, prior) => `${pool} · ${prior}`,
   nashBanner:
-    "結論の混合戦略 — 互いの構成(技・持ち物)は非公開。ボットは毎回、下の" +
-    "確率でパーティを1つ引きます。あなたの編成は自由 — 混合を知られても" +
-    "崩れないことが結論の中身です。",
+    "記録された混合戦略 — 互いの構成(技・持ち物)は非公開。ボットは毎回、下の" +
+    "確率でパーティを1つ引きます。あなたの編成は自由で、抽選確率は公開です。",
   nashTitle: "結論の混合戦略",
   nashMixNote:
-    "このボットの標準パーティ同士のゲームを、互いに構成非公開・実際の" +
-    "思考量で解いた均衡です。そのゲームの中にこれを上回るパーティはなく、" +
-    "外から試したパーティでもこれに勝ると示されたものはまだありません。" +
-    "ボットは毎回引き直すので、今どれと当たっているかは終局まで伏せられ" +
-    "ます — 確率は最初から公開です。",
+    "以前のボットで計算した選出確率です。現在のボットで均衡が成り立つことは" +
+    "確認できていません。ボットは毎回引き直すので、今どれと当たっているかは" +
+    "終局まで伏せられます。確率は最初から公開です。",
   nashSource: (file) => `解: ${file}`,
   priorLabel: "相手構成の事前分布",
   priorNone: "なし",
