@@ -203,16 +203,19 @@ export function App() {
 
   /** The bot's party when nobody pinned one, in one place because the start
    * screen and every rematch must roll the same way. */
-  const drawOpponent = (): SelectedTeam =>
-    custom
-      ? randomPoolTeam(activePool.pool)
-      : drawSource === "nash"
+  const drawOpponent = (): SelectedTeam => {
+    if (custom) return randomPoolTeam(activePool.pool);
+    const drawn =
+      drawSource === "nash"
         ? drawNashTeam(nashMix)
         : drawSource === "nash-r1"
           ? drawNashTeam(prevNashR1Mix)
           : drawSource === "nash-v3"
             ? drawNashTeam(oldNashMix)
             : drawCatalogTeam(catalog);
+    const cat = catalog.teams.find((t) => t.id === drawn.id);
+    return cat ? { id: drawn.id, sets: cat.sets } : drawn;
+  };
   /** The human's "Random": the catalog's draw weights, or uniform over a
    * loaded file — the same rule as the bot's draw from the same lists. */
   const drawHuman = (): SelectedTeam =>
