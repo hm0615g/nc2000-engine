@@ -103,6 +103,8 @@ from .residual import (
     ResidualBundle,
     ResidualTrainingMetrics,
     RolloutResidualWeights,
+    calibrated_residual_bundle,
+    calibrated_rollout_residual_weights,
     compact_eval_residual_sym,
     compute_rollout_action_residuals,
     default_residual_bundle,

@@ -748,7 +748,7 @@ def _get_jit_multi_table_rollout_fn(turns: int, eps: float):
         weights: EvalWeights,
         residual_bundle: ResidualBundle | None,
     ) -> HeavyRolloutResult:
-        if jax.default_backend() != "tpu":
+        if jax.default_backend() not in ("tpu", "gpu"):
             return jax.vmap(
                 lambda pk, tb, ps: _single_table_heavy_rollout(
                     pk,
@@ -3169,6 +3169,7 @@ def select_shell_belief_minimax_action_jax(
     weights: EvalWeights,
     rollout_turns: int = 0,
     rm_sweeps: int = 48,
+    residual_bundle: ResidualBundle | None = None,
 ) -> tuple[jax.Array, jax.Array]:
     """Select an in-battle action for `side` via 1-Ply Simultaneous-Move RM+ over the
     Bayesian posterior distribution of hidden opponent shell variants `candidate_tables_foe`.
@@ -3218,15 +3219,15 @@ def select_shell_belief_minimax_action_jax(
             st0 = state._replace(prng_seed=b_seed_probe)
             st1 = apply_actions(st0, cand_tb, act_pair)
             if rollout_turns <= 0:
-                return eval_compact_leaf(st1, cand_tb, weights)
+                return eval_compact_leaf(st1, cand_tb, weights, residual_bundle=residual_bundle)
             ro = _single_table_heavy_rollout(
                 pack_battle(st1),
                 cand_tb,
                 next_p_seed,
                 weights,
                 turns=rollout_turns,
-                eps=0.2,
-                residual_bundle=None,
+                eps=0.12,
+                residual_bundle=residual_bundle,
             )
             return ro.leaf_values
 
@@ -3262,6 +3263,8 @@ def simulate_shell_belief_minimax_games_tpu(
     turns: int = 24,
     rollout_turns: int = 0,
     rm_sweeps: int = 48,
+    residual_bundle: ResidualBundle | None = None,
+    followup_turns: int = 0,
 ) -> tuple[HeavyRolloutResult, jax.Array, jax.Array]:
     """Simulate `B` games on TPU where both players maintain exact in-battle Bayesian beliefs
     (`belief_mask0`, `belief_mask1`) over the opponent's hidden shell variants and select moves
@@ -3323,6 +3326,7 @@ def simulate_shell_belief_minimax_games_tpu(
                     weights,
                     rollout_turns=rollout_turns,
                     rm_sweeps=rm_sweeps,
+                    residual_bundle=residual_bundle,
                 )
                 ps, a1 = select_shell_belief_minimax_action_jax(
                     st,
@@ -3335,16 +3339,28 @@ def simulate_shell_belief_minimax_games_tpu(
                     weights,
                     rollout_turns=rollout_turns,
                     rm_sweeps=rm_sweeps,
+                    residual_bundle=residual_bundle,
                 )
                 next_st = apply_actions(st, t_tb, jnp.stack([a0, a1], axis=0))
                 next_m0 = update_shell_belief_mask_jax(st, next_st, t_tb, c0, 0, m0)
                 next_m1 = update_shell_belief_mask_jax(st, next_st, t_tb, c1, 1, m1)
                 return (next_st, ps, next_m0, next_m1), None
 
-            (final_st, _, final_m0, final_m1), _ = jax.lax.scan(
+            (final_st, next_ps, final_m0, final_m1), _ = jax.lax.scan(
                 _turn_step, (st_init, p_seed, bm0, bm1), None, length=turns
             )
-            val = eval_compact_leaf(final_st, t_tb, weights)
+            if followup_turns > 0:
+                ro_end = _single_table_heavy_rollout(
+                    pack_battle(final_st),
+                    t_tb,
+                    next_ps,
+                    weights,
+                    turns=followup_turns,
+                    eps=0.06,
+                    residual_bundle=residual_bundle,
+                )
+                return ro_end, final_m0, final_m1
+            val = eval_compact_leaf(final_st, t_tb, weights, residual_bundle=residual_bundle)
             res = HeavyRolloutResult(
                 final_packed=pack_battle(final_st),
                 leaf_values=val,
@@ -3356,9 +3372,9 @@ def simulate_shell_belief_minimax_games_tpu(
         return jax.vmap(_single_game)(
             pk_b,
             true_tb_b,
-            candidate_tables_for_p0,
+            cand0_b,
             prior0_b,
-            candidate_tables_for_p1,
+            cand1_b,
             prior1_b,
             p_seeds_b,
             bmask0_init,
