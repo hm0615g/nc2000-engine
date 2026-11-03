@@ -289,6 +289,305 @@ pub fn mixed_root(
     )
 }
 
+#[derive(Clone, Debug)]
+pub struct BayesianEquilibrium {
+    pub policy: Vec<f64>,
+    pub action_values: Vec<f64>,
+    pub pure_guarantees: Vec<f64>,
+    pub equilibrium_value: f64,
+    pub best_pure_value: f64,
+    pub best_pure_action: usize,
+}
+
+/// Solve the empirical-Bayes shrunk Bayesian root game across sampled determinized worlds:
+/// `\max_{p \in \Delta} \sum_k w_k \min_j \sum_i p_i \hat{V}_k(i, j)`.
+pub fn solve_bayesian_equilibrium(
+    eligible: &[bool],
+    global_visits: &[u32],
+    global_means: &[f64],
+    types: &[RootType],
+) -> Option<BayesianEquilibrium> {
+    solve_bayesian_equilibrium_with_priors(eligible, global_visits, global_means, types, &[])
+}
+
+pub fn solve_bayesian_equilibrium_with_priors(
+    eligible: &[bool],
+    global_visits: &[u32],
+    global_means: &[f64],
+    types: &[RootType],
+    pooled_priors: &[Vec<RootCell>],
+) -> Option<BayesianEquilibrium> {
+    let k_total = eligible.len();
+    if k_total == 0
+        || global_visits.len() != k_total
+        || global_means.len() != k_total
+        || types.is_empty()
+    {
+        return None;
+    }
+    let all_elig: Vec<usize> = (0..k_total).filter(|&i| eligible[i]).collect();
+    if all_elig.is_empty() {
+        return None;
+    }
+    if all_elig.len() == 1 {
+        let only = all_elig[0];
+        let mut policy = vec![0.0; k_total];
+        policy[only] = 1.0;
+        let v = global_means[only];
+        return Some(BayesianEquilibrium {
+            policy,
+            action_values: global_means.to_vec(),
+            pure_guarantees: global_means.to_vec(),
+            equilibrium_value: v,
+            best_pure_value: v,
+            best_pure_action: only,
+        });
+    }
+    let max_v = all_elig
+        .iter()
+        .map(|&i| global_visits[i])
+        .max()
+        .unwrap_or(0);
+    let min_own_v = (max_v / 32).clamp(4, 64).min(max_v);
+    let mut actions: Vec<usize> = all_elig
+        .iter()
+        .copied()
+        .filter(|&i| global_visits[i] >= min_own_v)
+        .collect();
+    if actions.len() < 2 {
+        actions = all_elig.clone();
+    }
+    let n = actions.len();
+
+    let mut raw_worlds: Vec<(f64, usize, Vec<f64>)> = Vec::with_capacity(types.len());
+    let mut total_weight = 0.0_f64;
+
+    for (t_idx, t) in types.iter().enumerate() {
+        let m = t.replies;
+        if t.samples == 0 || m == 0 || t.cells.is_empty() {
+            continue;
+        }
+        let mut cell_n = vec![0u32; n * m];
+        let mut cell_w = vec![0.0f64; n * m];
+        let mut row_n = vec![0u32; n];
+        let mut row_w = vec![0.0f64; n];
+        let mut col_n = vec![0u32; m];
+        let mut col_w = vec![0.0f64; m];
+        let mut world_n = 0u32;
+        let mut world_w = 0.0f64;
+
+        for cell in &t.cells {
+            if cell.reply >= m || cell.samples == 0 || !cell.mean.is_finite() {
+                continue;
+            }
+            let Some(r) = actions.iter().position(|&own| own == cell.own) else {
+                continue;
+            };
+            let s = cell.samples;
+            let w = f64::from(s) * cell.mean.clamp(0.0, 1.0);
+            cell_n[r * m + cell.reply] += s;
+            cell_w[r * m + cell.reply] += w;
+            row_n[r] += s;
+            row_w[r] += w;
+            col_n[cell.reply] += s;
+            col_w[cell.reply] += w;
+            world_n += s;
+            world_w += w;
+        }
+        if world_n == 0 {
+            continue;
+        }
+        let mut prior_n = vec![0u32; n * m];
+        let mut prior_mean = vec![0.0f64; n * m];
+        if let Some(priors) = pooled_priors.get(t_idx) {
+            for cell in priors {
+                if cell.reply >= m || cell.samples == 0 || !cell.mean.is_finite() {
+                    continue;
+                }
+                if let Some(r) = actions.iter().position(|&own| own == cell.own) {
+                    prior_n[r * m + cell.reply] = cell.samples;
+                    prior_mean[r * m + cell.reply] = cell.mean.clamp(0.0, 1.0);
+                }
+            }
+        }
+        let world_mean = world_w / f64::from(world_n);
+        let max_col_n = col_n.iter().copied().max().unwrap_or(0);
+        let min_col_n = (world_n / (2 * m as u32))
+            .max(max_col_n / 5)
+            .clamp(4, 96)
+            .min(max_col_n);
+        let mut active_cols: Vec<usize> = (0..m).filter(|&j| col_n[j] >= min_col_n).collect();
+        if active_cols.is_empty() {
+            active_cols = (0..m).filter(|&j| col_n[j] > 0).collect();
+        }
+        let m_act = active_cols.len();
+        let mut values = vec![0.5f64; n * m_act];
+        const KAPPA_ROW: f64 = 16.0;
+        const KAPPA_CELL: f64 = 64.0;
+        for r in 0..n {
+            let own = actions[r];
+            let g_mean = global_means[own].clamp(0.0, 1.0);
+            let mu_row = (row_w[r] + KAPPA_ROW * g_mean) / (f64::from(row_n[r]) + KAPPA_ROW);
+            for (c_idx, &j) in active_cols.iter().enumerate() {
+                let mu_col = if col_n[j] > 0 {
+                    col_w[j] / f64::from(col_n[j])
+                } else {
+                    world_mean
+                };
+                let col_blunder_bonus = (mu_col - world_mean).max(0.0);
+                let additive_prior = (mu_row + col_blunder_bonus).clamp(0.0, 1.0);
+                let p_n = f64::from(prior_n[r * m + j]);
+                let mu_prior = if p_n > 0.0 {
+                    let pooled_val = prior_mean[r * m + j].clamp(0.0, 1.0);
+                    (p_n * pooled_val + 8.0 * additive_prior) / (p_n + 8.0)
+                } else {
+                    additive_prior
+                };
+                let cn = f64::from(cell_n[r * m + j]);
+                let cw = cell_w[r * m + j];
+                values[r * m_act + c_idx] = (cw + KAPPA_CELL * mu_prior) / (cn + KAPPA_CELL);
+            }
+        }
+        let w_k = f64::from(world_n);
+        total_weight += w_k;
+        raw_worlds.push((w_k, m_act, values));
+    }
+
+    if raw_worlds.is_empty() || total_weight <= 0.0 {
+        return None;
+    }
+
+    let type_matrices: Vec<TypeMatrix> = raw_worlds
+        .into_iter()
+        .map(|(w_k, replies, values)| TypeMatrix {
+            weight: w_k / total_weight,
+            replies,
+            values,
+        })
+        .collect();
+
+    let mut pure_guarantees = global_means.to_vec();
+    for (r, &own) in actions.iter().enumerate() {
+        pure_guarantees[own] = type_matrices
+            .iter()
+            .map(|t| {
+                t.weight
+                    * t.values[r * t.replies..(r + 1) * t.replies]
+                        .iter()
+                        .copied()
+                        .fold(f64::INFINITY, f64::min)
+            })
+            .sum::<f64>();
+    }
+    let best_pure_sub = (0..n)
+        .max_by(|&a, &b| {
+            pure_guarantees[actions[a]]
+                .total_cmp(&pure_guarantees[actions[b]])
+                .then_with(|| global_visits[actions[a]].cmp(&global_visits[actions[b]]))
+        })
+        .unwrap_or(0);
+    let best_pure_action = actions[best_pure_sub];
+    let best_pure_value = pure_guarantees[best_pure_action];
+
+    let mut initial = vec![0.0; n];
+    initial[best_pure_sub] = 1.0;
+    let mut columns = vec![response_column(&type_matrices, &initial)];
+    let uniform = vec![1.0 / n as f64; n];
+    let u_col = response_column(&type_matrices, &uniform);
+    if !columns.contains(&u_col) {
+        columns.push(u_col);
+    }
+
+    let mut best_x = initial.clone();
+    let mut best_y = vec![1.0; 1];
+    let mut best_cols_len = 1usize;
+
+    for _ in 0..64 {
+        let c_len = columns.len();
+        let matrix: Vec<f64> = (0..n)
+            .flat_map(|i| columns.iter().map(move |c| c[i]))
+            .collect();
+        let mut solution = solve_matrix_full(&matrix, n, c_len);
+        if !solution.gap.is_finite()
+            || solution.gap > 1e-6
+            || solution.x.iter().any(|p| !p.is_finite() || *p < -1e-9)
+            || (solution.x.iter().sum::<f64>() - 1.0).abs() > 1e-6
+        {
+            break;
+        }
+        solution.x.iter_mut().for_each(|p| *p = p.max(0.0));
+        let total = solution.x.iter().sum::<f64>();
+        if total <= 0.0 {
+            break;
+        }
+        solution.x.iter_mut().for_each(|p| *p /= total);
+        best_x = solution.x.clone();
+        best_y = solution.y.clone();
+        best_cols_len = c_len;
+
+        let response = response_column(&type_matrices, &solution.x);
+        let lower: f64 = response.iter().zip(&solution.x).map(|(v, p)| v * p).sum();
+        let upper = solution.value + solution.gap / 2.0;
+        if upper - lower <= 1e-7 || columns.contains(&response) {
+            break;
+        }
+        columns.push(response);
+    }
+
+    let mut action_values = pure_guarantees.clone();
+    if best_y.len() == best_cols_len && best_cols_len <= columns.len() {
+        let y_sum: f64 = best_y.iter().map(|&y| y.max(0.0)).sum();
+        if y_sum > 0.0 {
+            for (r, &own) in actions.iter().enumerate() {
+                let eq_v: f64 = (0..best_cols_len)
+                    .map(|c| (best_y[c].max(0.0) / y_sum) * columns[c][r])
+                    .sum();
+                action_values[own] = 0.5 * eq_v + 0.5 * pure_guarantees[own];
+            }
+        }
+    }
+
+    let max_p = best_x.iter().copied().fold(0.0_f64, f64::max);
+    let mut purified_x: Vec<f64> = best_x
+        .iter()
+        .map(|&p| if p >= 0.05 * max_p { p } else { 0.0 })
+        .collect();
+    let p_sum: f64 = purified_x.iter().sum();
+    if p_sum > 0.0 {
+        purified_x.iter_mut().for_each(|p| *p /= p_sum);
+    } else {
+        purified_x = vec![0.0; n];
+        purified_x[best_pure_sub] = 1.0;
+    }
+
+    let eq_guarantee = guarantee(&type_matrices, &purified_x);
+    let mut policy = vec![0.0; k_total];
+    if eq_guarantee > best_pure_value + 0.005 {
+        for (r, &own) in actions.iter().enumerate() {
+            policy[own] = purified_x[r];
+        }
+        Some(BayesianEquilibrium {
+            policy,
+            action_values,
+            pure_guarantees,
+            equilibrium_value: eq_guarantee,
+            best_pure_value,
+            best_pure_action,
+        })
+    } else {
+        policy[best_pure_action] = 1.0;
+        Some(BayesianEquilibrium {
+            policy,
+            action_values,
+            pure_guarantees,
+            equilibrium_value: best_pure_value,
+            best_pure_value,
+            best_pure_action,
+        })
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -573,5 +872,53 @@ mod tests {
         }];
         assert!(guarantee(&oracle, &analysis.policy) + 0.0028 < best_pure(&oracle, 3));
         assert!(bayesian_mixed_root(&[true; 3], 864000, &types).is_none());
+    }
+
+    #[test]
+    fn bayesian_equilibrium_filters_exploration_blunders_and_mixes_on_cyclic_payoffs() {
+        // Action 0 has a higher raw average only because of opponent exploration blunders
+        // in column 1 (`0.95`), whereas against the opponent's dominant reply (column 0,
+        // 1800 visits) Action 1 (`0.55`) strictly beats Action 0 (`0.25`).
+        let pure_type = [RootType {
+            samples: 2000,
+            replies: 2,
+            cells: vec![
+                RootCell { own: 0, reply: 0, samples: 900, mean: 0.25 },
+                RootCell { own: 0, reply: 1, samples: 100, mean: 0.95 },
+                RootCell { own: 1, reply: 0, samples: 900, mean: 0.55 },
+                RootCell { own: 1, reply: 1, samples: 100, mean: 0.55 },
+            ],
+        }];
+        let eq = solve_bayesian_equilibrium(
+            &[true, true],
+            &[1000, 1000],
+            &[0.32, 0.55],
+            &pure_type,
+        )
+        .unwrap();
+        assert_eq!(eq.best_pure_action, 1);
+        assert_eq!(eq.policy, vec![0.0, 1.0]);
+
+        // Matching-pennies world where both columns are actively played: solver returns 50/50 mix.
+        let cyclic_type = [RootType {
+            samples: 2000,
+            replies: 2,
+            cells: vec![
+                RootCell { own: 0, reply: 0, samples: 500, mean: 0.80 },
+                RootCell { own: 0, reply: 1, samples: 500, mean: 0.20 },
+                RootCell { own: 1, reply: 0, samples: 500, mean: 0.20 },
+                RootCell { own: 1, reply: 1, samples: 500, mean: 0.80 },
+            ],
+        }];
+        let mix_eq = solve_bayesian_equilibrium(
+            &[true, true],
+            &[1000, 1000],
+            &[0.50, 0.50],
+            &cyclic_type,
+        )
+        .unwrap();
+        assert!((mix_eq.policy[0] - 0.5).abs() < 1e-4);
+        assert!((mix_eq.policy[1] - 0.5).abs() < 1e-4);
+        assert!(mix_eq.equilibrium_value > mix_eq.best_pure_value + 0.15);
     }
 }

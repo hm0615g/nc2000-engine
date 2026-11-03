@@ -1087,6 +1087,54 @@ impl Node {
     fn continuation(sim: &mut Battle, dex: &Dex, cfg: &RmConfig) -> Node {
         Self::build(sim, dex, cfg.collapse_sleep_actions)
     }
+
+    /// Blend a raw child trajectory return `raw_val0` toward the empirical-Bayes minimax value
+    /// estimate `\hat{V}^*(v) = \bar{R}(v) + (\mu_0^*(v) - \bar{R}(v)) - (\mu_1^*(v) - \bar{R}_1(v))`
+    /// of this internal node. This removes both Side 0's UCB exploration tax and Side 1's UCB
+    /// exploration blunders when backing up to parent nodes, while remaining a strict contraction
+    /// in `[0, 1]`.
+    pub(crate) fn backed_up_value(&self, raw_val0: f64) -> f64 {
+        let n0: u32 = self.n[0].iter().sum();
+        let n1: u32 = self.n[1].iter().sum();
+        let n = n0.max(n1);
+        if n < 2 {
+            return raw_val0;
+        }
+        let r_bar0 = if n0 > 0 {
+            self.w[0].iter().sum::<f64>() / f64::from(n0)
+        } else if n1 > 0 {
+            1.0 - (self.w[1].iter().sum::<f64>() / f64::from(n1))
+        } else {
+            return raw_val0;
+        };
+        const TAU: f64 = 1.5;
+        let gain0 = if self.acts[0].len() > 1 && n0 >= 2 {
+            let mu0 = self.n[0]
+                .iter()
+                .zip(self.w[0].iter())
+                .filter(|&(&na, _)| na > 0)
+                .map(|(&na, &wa)| (wa + TAU * r_bar0) / (f64::from(na) + TAU))
+                .fold(r_bar0, f64::max);
+            (mu0 - r_bar0).max(0.0)
+        } else {
+            0.0
+        };
+        let blunder1 = if self.acts[1].len() > 1 && n1 >= 2 {
+            let r_bar1 = self.w[1].iter().sum::<f64>() / f64::from(n1);
+            let mu1 = self.n[1]
+                .iter()
+                .zip(self.w[1].iter())
+                .filter(|&(&nb, _)| nb > 0)
+                .map(|(&nb, &wb)| (wb + TAU * r_bar1) / (f64::from(nb) + TAU))
+                .fold(r_bar1, f64::max);
+            (mu1 - r_bar1).max(0.0)
+        } else {
+            0.0
+        };
+        let v_star = (r_bar0 + gain0 - blunder1).clamp(0.000_002, 0.999_998);
+        let lambda = 0.85 * (f64::from(n) / (f64::from(n) + 6.0));
+        ((1.0 - lambda) * raw_val0 + lambda * v_star).clamp(0.000_002, 0.999_998)
+    }
 }
 
 pub fn collapse_sleep_choices(b: &Battle, dex: &Dex, side: usize, choices: &mut Vec<SearchChoice>) {
@@ -1627,8 +1675,30 @@ pub(crate) fn run_iteration_with_root_child_value(
         });
     }
 
-    for &(ni, s, ai) in &path_buf[..path_len] {
-        nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
+    let mut path_nodes = [start; 32];
+    let mut path_nodes_len = 0usize;
+    for &(ni, _, _) in &path_buf[..path_len] {
+        if path_nodes_len == 0 || path_nodes[path_nodes_len - 1] != ni {
+            if path_nodes_len < path_nodes.len() {
+                path_nodes[path_nodes_len] = ni;
+                path_nodes_len += 1;
+            }
+        }
+    }
+    let mut val0 = reward0;
+    let mut root_reward0 = reward0;
+    for idx in (0..path_nodes_len).rev() {
+        let ni = path_nodes[idx];
+        for &(p_ni, s, ai) in &path_buf[..path_len] {
+            if p_ni == ni {
+                nodes[ni].w[s][ai] += if s == 0 { val0 } else { 1.0 - val0 };
+            }
+        }
+        if ni == start {
+            root_reward0 = val0;
+        } else if val0 > 0.000_001 && val0 < 0.999_999 {
+            val0 = nodes[ni].backed_up_value(val0);
+        }
     }
     for (ni, s, ai) in path_overflow {
         nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
@@ -1645,7 +1715,7 @@ pub(crate) fn run_iteration_with_root_child_value(
             .unwrap()
             .observe(draw, if s == 0 { 1. - value } else { value });
     }
-    reward0
+    root_reward0
 }
 
 pub(crate) fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
