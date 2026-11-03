@@ -1,6 +1,26 @@
-# belief-pool-v3 — the frozen opponent prior
+# belief-pool-v3 — the known-party opponent prior
 
-`belief-pool.json` is what every searcher assumes about the party it faces:
+The deployed prior now has 411 entries: known real-world parties including
+variants, plus generated sets only when present in the current playable
+catalog. The catalog and Nash draw mixtures are unchanged. `bake-prior.json`
+preserves the previous 221-entry input for preview provenance, historical
+regressions, and the catalog's fixed training choices.
+
+`python3 tools/belief-pool-v3.py build` invokes
+`tools/build-known-prior.mjs`. It retains admitted baseline weights, adds
+new real-world types with weight 1, and collapses duplicate source aliases
+without adding mass. It removes 25 off-catalog generated entries and adds
+215 distinct types. Sources, exclusions for invalid-format parties, and
+hashes are recorded in `known-expansion.json`; excluded records are not
+silently converted into different legal parties. The native verifier checks
+all admitted sets and exact support for every catalog party.
+
+810 existing preview keys remain usable; the 180 keys depending on changed
+`sample-07`, `sample-12`, or `sample-09` shells use live preview search.
+
+## Historical 221-entry prior
+
+`bake-prior.json` records what every searcher previously assumed about the party it faces:
 the web play door, `?nash`, `?solver`, `?evaluate`, kifu continuations and
 the ladder client. It is never a list of parties the bot plays.
 

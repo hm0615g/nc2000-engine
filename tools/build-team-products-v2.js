@@ -51,6 +51,11 @@ const sol = read(arg('--solution') || 'data/meta-nash-v3/solution.json');
 const deployedNash = read('data/kodoku-r3/conclusion-equilibrium-deme.json');
 const PRIOR = 'data/belief-pool-v3/belief-pool.json';
 const prior = read(PRIOR);
+// Preserve the catalog's original training/allocation basis while extending
+// only opponent knowledge. New priors do not re-optimize playable parties.
+const catalogPriorPath = prior.membershipPolicy ? 'data/belief-pool-v3/bake-prior.json' : PRIOR;
+const catalogPrior = read(catalogPriorPath);
+const catalogPriorFp = fnv1a64(catalogPriorPath);
 const allTeams = [...inv.teams, ...evolved.teams, ...partybox.teams];
 const byId = new Map(allTeams.map(t => [t.id, t]));
 
@@ -73,7 +78,7 @@ for (const id of Object.keys(sel.labels)) {
 	if (!byId.has(id) || byId.get(id).measuredAs !== id) fail(`selection label for non-measured id ${id}`);
 }
 const priorIds = new Set(prior.teams.map(t => t.id));
-for (const t of candidates) if (!priorIds.has(t.id)) fail(`${t.id}: measured but missing from the frozen prior`);
+for (const t of candidates) if (!priorIds.has(t.id) && !prior.membershipPolicy) fail(`${t.id}: measured but missing from the frozen prior`);
 
 // ------------------------------------------------------------ catalog
 const deployedNashW = new Map(deployedNash.teams.map(t => [t.id, t.weight]));
@@ -93,7 +98,7 @@ const provenance = t => ({ family: t.family, origin: t.origin, source: t.source.
 // species (e.g. because of a Physical move like Explosion), preserve Male on
 // that species across the cluster so Team Preview gender does not leak moves.
 const dex = read('data/gen2stadium2.json');
-const attract = attractGenderCensus(prior);
+const attract = attractGenderCensus(catalogPrior);
 const optimized = normalizeCatalog(selected, dex, attract.preferFemale);
 write('data/team-pool-v2/team-pool.json', {
 	format: 'nc2000-team-pool-v2',
@@ -106,7 +111,7 @@ write('data/team-pool-v2/team-pool.json', {
 		changedSets: selected.reduce((sum, t) => sum + optimized.get(t.id).changedSets, 0),
 		changedGenders: selected.reduce((sum, t) => sum + optimized.get(t.id).changedGenders, 0),
 		femalePreference: { enabled: attract.preferFemale, weightedDirectSources: attract.weightedSources,
-			basis: attract.basis, priorFingerprint: priorFp },
+			basis: attract.basis, priorFingerprint: catalogPriorFp },
 		scoreBasis: 'Historical confirmation scores and mixture weights were measured before training-v3; normalized sets/prior have not been remeasured.',
 	},
 	drawRule: 'each variant cluster among the selected parties is drawn with equal probability, split equally among its members (drawWeight sums to 1); the same weights serve the human Random and the bot draw',

@@ -52,3 +52,16 @@ Tokiwa case without modifying the shipped prior.
 Validation: semantic regression tests; production Web build; complete worker
 lookup on both sides of all catalog pairs, including changed own/opponent
 shell rejection, unrelated-shell reuse, and formatting-only prior changes.
+
+## Deployment with a partial bake
+
+The known-party expansion contains 411 entries, with 215 additions and 25
+removed off-catalog generated entries. It changes three catalog shells:
+`sample-07`, `sample-12`, and `sample-09`. Exactly 810 keys remain compatible;
+180 use live preview. `web/vite.config.ts` filters invalid policies from the
+actual worker bundle while preserving the historical complete artifact on
+disk. Runtime checks still reject incompatible custom-prior lookups.
+The existing `data/live-search.json` preview budget applies to cache misses.
+
+`bake-prior.json` preserves the original distribution and the catalog's training
+basis. Rebuilding the prior does not re-optimize catalog sets or Nash weights.

@@ -12,10 +12,10 @@ v3 over identical (cell, k, side) games, with a bootstrap over seed indices
 (`--unit k`) or, when there are too few seeds for that, over cells
 (`--unit cell`).
 
-Membership and order come from the frozen belief-pool-v2 file plus the
-records restored because no blind c = 0.4 evidence reconfirms their old
-exclusion (RESTORED); new selection labels are never read, so relabelling
-the own pool cannot move this file.
+The deployed build uses tools/build-known-prior.mjs: known real-world
+parties plus only current-catalog generated sets. bake-prior.json preserves
+the earlier input. Historical diagnostic arms below retain their original
+v2/RESTORED membership and do not define the deployed prior.
 """
 import argparse
 import collections
@@ -134,6 +134,12 @@ def normalize_training(teams):
 
 
 def build():
+    import subprocess
+    subprocess.run(['node', os.path.join(REPO, 'tools/build-known-prior.mjs')], cwd=REPO, check=True)
+    return
+
+
+def build_legacy():
     ids, v1_label, inv = members()
     out = {
         'format': 'nc2000-belief-pool',

@@ -89,3 +89,23 @@ User rule: each bot knows the opponent's selection pool and mixture weights (com
   rejection controls. Choices and computation provenance verified unchanged.
 - Details: `docs/PREVIEW-PRIOR-COMPATIBILITY.md`; evidence:
   `data/blind-boundary-repair-v1/preview-prior-compatibility.json`.
+
+## Known-party prior and partial bake release (2026-11-03)
+
+- Expanded deployed prior to 411 entries: 215 added distinct known types and
+  25 off-catalog generated entries removed. All generated sets now exactly
+  match a current catalog party. Illegal-format source records are excluded
+  with validator findings in `data/belief-pool-v3/known-expansion.json`.
+- Catalog and all Nash mixture artifacts remain byte-identical. Historical
+  catalog training uses `bake-prior.json`, not the expanded opponent prior.
+- Three catalog shells change (`sample-07`, `sample-12`, `sample-09`): 810 of
+  990 preview keys remain valid; 180 fall back to the normal live preview
+  budget. Production worker bundles physically omit invalid choices. The
+  original complete bake remains in the repo as historical data.
+- Local checks: 31 JS regressions; 5 player-boundary tests; 24 engine tests;
+  9 kifu/replay tests; native verification of 3,174 sets, exact support for
+  all 33 catalog parties; 2,178 worker cases (1,800 table / 378 live), 69,696
+  slot checks. Worker routing checks use one live iteration; ordinary play
+  retains the production budget in `data/live-search.json`.
+- Evidence: `partial-preview-production.json` and
+  `partial-preview-coverage.json` under `data/blind-boundary-repair-v1/`.

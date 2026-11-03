@@ -222,6 +222,9 @@ fn main() {
                 issues.push(json!({"team":t.id,"missing_exact_prior_support":true}));
             }
         }
+        // Keep the historical lineage stat regression even when the deployed
+        // known-party policy excludes this off-catalog generated team.
+        let prior = load_meta_pool(Path::new("data/belief-pool-v3/bake-prior.json"));
         let t = prior
             .teams
             .iter()

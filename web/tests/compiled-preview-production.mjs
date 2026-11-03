@@ -28,14 +28,19 @@ try {
     JSON.parse(fs.readFileSync('../data/belief-pool-v3/belief-pool.json')),
     JSON.parse(fs.readFileSync('../data/gen2stadium2.json')),
     text => crypto.createHash('sha256').update(text).digest('hex'));
-  assert.equal(compatible.size, Object.keys(artifact.policies).length);
+  assert.ok(compatible.size > 0, "expected partially reusable bake");
+  const poolJson = fs.readFileSync("../data/belief-pool-v3/belief-pool.json", "utf8");
   browser = await chromium.launch();
   const page = await browser.newPage();
   await page.exposeFunction('__playerFrame', (own, foe, side) => {
     const teams = side === 0 ? [own, foe] : [foe, own];
     const battle = new wasm.Battle(frameDex, JSON.stringify(teams[0]), JSON.stringify(teams[1]), '1,2,3,4');
     const channel = new wasm.PlayerChannel(side);
-    try { return JSON.parse(channel.frame(battle)); }
+    try {
+      const searcher = new wasm.BlindSearcher(battle, side, poolJson, 7, .4);
+      try { return {...JSON.parse(channel.frame(battle)), expectedTable: compatible.has(searcher.compiledPreviewKey(battle))}; }
+      finally { searcher.free(); }
+    }
     finally { channel.free(); battle.free(); }
   });
   const errors = [];
@@ -72,7 +77,7 @@ try {
     const timings = [], roundTrips = [], byPublic = new Map();
     const run = async (own, foe, side, poolJson = prior, seed = 7) => {
       const began = performance.now();
-      const frame = await window.__playerFrame(own, foe, side);
+      const {expectedTable, ...frame} = await window.__playerFrame(own, foe, side);
       worker.postMessage({ t: 'battle', ownTeam: JSON.stringify(own), searcher: { poolJson, side, seed } });
       const result = new Promise((resolve, reject) => {
         const request = ++id;
@@ -81,37 +86,47 @@ try {
         worker.postMessage({ t: 'search', id: request, side, budget: 1, seed: 99, ponder: true, frame });
       });
       const r = await result;
-      return { ...r, roundTripMs: performance.now() - began };
+      return { ...r, expectedTable, roundTripMs: performance.now() - began };
     };
-    let checked = 0;
+    let checked = 0, tableCases = 0, liveCases = 0, firstValidOwn;
     try {
       for (const own of catalog) for (const foe of catalog) for (const side of [0, 1]) {
         const r = await run(own.sets, foe.sets, side);
         const policy = JSON.parse(r.policy);
-        if (r.src !== 'table' || policy.iterations !== 0 || !r.best) throw Error(`live search used: ${own.id}/${foe.id}/side${side}`);
+        if (r.expectedTable) {
+          if (r.src !== 'table' || policy.iterations !== 0 || !r.best) throw Error(`valid table missed: ${own.id}/${foe.id}/side${side}`);
+          tableCases++; firstValidOwn ??= own;
+        } else {
+          if (r.src !== 'search' || policy.iterations !== 1 || !r.best) throw Error(`invalid table used: ${own.id}/${foe.id}/side${side}`);
+          liveCases++; checked++; continue;
+        }
         const visible = JSON.stringify(foe.sets.map(s => [s.species, s.level, s.gender, Boolean(s.item)]));
         const key = `${own.id}:${visible}`;
         if (byPublic.has(key) && byPublic.get(key) !== r.best) throw Error('hidden opponent set or side changed the table policy');
         byPublic.set(key, r.best);
         timings.push(r.ms); roundTrips.push(r.roundTripMs); checked++;
       }
-      if (progress !== 0) throw Error('catalog preview performed search iterations');
-      const own = catalog.find(t => t.id === 'sample-07').sets, foe = own;
+      if (!tableCases || !firstValidOwn) throw Error('no usable table');
+      const own = firstValidOwn.sets, foe = own;
       const reference = await run(own, foe, 1);
       const hidden = structuredClone(foe); hidden[0].item = 'Polkadot Bow'; hidden[0].moves[0] = 'Thunder';
       const hiddenResult = await run(own, hidden, 1);
       if (hiddenResult.src !== 'table' || hiddenResult.best !== reference.best) throw Error('unobserved loadout affected lookup');
       const ownChange = structuredClone(own); ownChange[0].happiness = 254;
-      const genderChange = structuredClone(foe); const cloyster = genderChange.find(s => s.species === 'Cloyster'); cloyster.gender = 'F'; cloyster.ivs.atk = 14;
+      const genderChange = structuredClone(foe); const genderMon = genderChange.find(s => s.gender === 'M' || s.gender === 'F'); genderMon.gender = genderMon.gender === 'M' ? 'F' : 'M';
       const itemChange = structuredClone(foe); itemChange[0].item = '';
       const formatted = await run(own, foe, 1, prior + ' ');
       if (formatted.src !== 'table') throw Error('format-only prior change invalidated preview');
       const changed = JSON.parse(prior);
-      const variant = structuredClone(changed.teams.find(t => t.id === 'sample-07'));
-      variant.id = 'test-new-variant'; variant.sets[0].moves[0] = 'Thunder';
+      const variant = structuredClone({id: 'test-new-variant', sets: own, weight: 1});
+      variant.id = 'test-new-variant'; variant.sets[0].happiness = 254;
       changed.teams.push(variant);
       const changedPrior = JSON.stringify(changed);
-      const unrelated = catalog.find(t => t.id === 'sample-12').sets;
+      let unrelated;
+      for (const t of catalog) {
+        if (t.id !== firstValidOwn.id && (await run(t.sets, t.sets, 1, changedPrior)).src === 'table') { unrelated = t.sets; break; }
+      }
+      if (!unrelated) throw Error('no unrelated reusable shell');
       if ((await run(unrelated, unrelated, 1, changedPrior)).src !== 'table') throw Error('unrelated shell invalidated');
       const controls = [];
       for (const [name, a, b, p] of [
@@ -126,7 +141,7 @@ try {
       const summary = values => { const s = [...values].sort((a, b) => a - b); return { median: s[Math.floor(s.length / 2)], p95: s[Math.floor(s.length * .95)], max: s.at(-1) }; };
       const lookupMs = summary(timings), battleInitAndLookupMs = summary(roundTrips);
       if (lookupMs.p95 >= 20 || battleInitAndLookupMs.p95 >= 100) throw Error('preview lookup latency exceeded instant-selection gate');
-      return { base, workerUrl, catalogPairs: catalog.length ** 2, sideCases: checked, searchIterations: 0,
+      return { base, workerUrl, catalogPairs: catalog.length ** 2, sideCases: checked, tableCases, liveCases, livePreviewTestBudget: 1,
         lookupMs, battleInitAndLookupMs, hiddenLoadoutInvariant: true, rejectionControls: controls,
         servedDataSha256: expected };
     } finally { worker.terminate(); }

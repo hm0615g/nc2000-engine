@@ -1,0 +1,3389 @@
+{
+  "baseline": "data/belief-pool-v3/bake-prior.json",
+  "inputs": {
+    "data/belief-pool-v3/bake-prior.json": "1c0a1d544be667282ed94f891f7fd1d533c324fd7c18c85d530a1cd9d47da6d5",
+    "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
+    "data/team-inventory-v1/inventory.json": "4f70792e967bdce605d5c5a172d02c79e808fcf07e754b0ddc5101999b6b95d8",
+    "data/partybox-v0/teams.json": "99b8c916fe68368f604d045202b044fcb3b46956bda7dd9ef10e3a4f3031e0a0",
+    "data/kodoku-r3/majinjima-assassins.json": "0a49a39f48a07d6d0820cc36c7ff1231ffdbc1ba742ceb54fdf37361624f4fc5",
+    "data/community-rentals-v0/teams.json": "d081ac265f64370fd4a6790cf0eb54c806e8b7bf5ec789c37f9409254f1b50dd",
+    "data/training-v3/supplemental.json": "c004789a0203fccc24b6a32e9970e0f9ab01142c6440ddadcdc5a29811dfd18c"
+  },
+  "parties": 411,
+  "human": 402,
+  "generated": 9,
+  "removedGenerated": [
+    "nb-sample-12-0",
+    "lineage-gb-nash-s07",
+    "lineage-gb-uni-s13",
+    "lineage-gb-nash-s13",
+    "ev-r1-rand-2-0",
+    "lineage-fine-s07",
+    "ev-r1-pool-hc75-top8-tezan-0",
+    "ev-r1-pool-hc75-top8-tezan-1",
+    "ev-r1-pool-hc75-3rd-bean-0",
+    "lineage-gb-nash-rand",
+    "ev-r1-pool-hc75-3rd-bean-1",
+    "lineage-gb-uni-rand",
+    "ev-r1-rand-3-0",
+    "lineage-fine-s13",
+    "lineage-gb-uni-s07",
+    "ev-r1-pool-hc75-2nd-toriyama-0",
+    "ev-r1-rand-5-1",
+    "ev-r1-pool-hc75-1st-show-0",
+    "ev-r1-rand-5-0",
+    "ev-r1-rand-4-0",
+    "ev-r1-rand-1-1",
+    "ev-r1-rand-1-0",
+    "ev-r1-rand-0-1",
+    "ev-r1-rand-0-0",
+    "sib-r1-n4-red-v6-r1-s0064-s07"
+  ],
+  "additions": [
+    {
+      "id": "rental-cban-1",
+      "source": "data/team-inventory-v1/inventory.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true],[\"umbreon\",50,\"M\",true]]"
+    },
+    {
+      "id": "rental-cban-5",
+      "source": "data/team-inventory-v1/inventory.json",
+      "weight": 1,
+      "shell": "[[\"marowak\",50,\"M\",true],[\"raikou\",55,\"N\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"suicune\",50,\"N\",true],[\"umbreon\",50,\"M\",true]]"
+    },
+    {
+      "id": "rental-cban-7",
+      "source": "data/team-inventory-v1/inventory.json",
+      "weight": 1,
+      "shell": "[[\"electrode\",50,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"marowak\",55,\"M\",true],[\"nidoking\",55,\"M\",true],[\"smeargle\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "rental-cban-10",
+      "source": "data/team-inventory-v1/inventory.json",
+      "weight": 1,
+      "shell": "[[\"marowak\",50,\"M\",true],[\"miltank\",55,\"F\",true],[\"misdreavus\",50,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true]]"
+    },
+    {
+      "id": "rental-cban-18",
+      "source": "data/team-inventory-v1/inventory.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"forretress\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"raikou\",55,\"N\",true],[\"starmie\",50,\"N\",true]]"
+    },
+    {
+      "id": "rental-cban-19",
+      "source": "data/team-inventory-v1/inventory.json",
+      "weight": 1,
+      "shell": "[[\"dragonite\",55,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"forretress\",50,\"M\",true],[\"houndoom\",50,\"M\",true],[\"kingdra\",55,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "rental-cban-27",
+      "source": "data/team-inventory-v1/inventory.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",50,\"M\",true],[\"gengar\",55,\"M\",true],[\"golem\",50,\"M\",true],[\"granbull\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2012-goinkyo-t2",
+      "source": "data/team-inventory-v1/inventory.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"F\",true],[\"charizard\",50,\"M\",true],[\"cloyster\",50,\"M\",true],[\"heracross\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"steelix\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2011-murai-t1",
+      "source": "data/team-inventory-v1/inventory.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"raikou\",51,\"N\",true],[\"snorlax\",50,\"M\",true],[\"zapdos\",54,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2011-frozenhell-t0",
+      "source": "data/team-inventory-v1/inventory.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",51,\"F\",true],[\"gengar\",52,\"M\",true],[\"gligar\",51,\"M\",true],[\"houndoom\",51,\"F\",true],[\"skarmory\",52,\"M\",true],[\"suicune\",52,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2025-narumoth",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"misdreavus\",50,\"F\",true],[\"shuckle\",50,\"F\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",55,\"N\",true],[\"tauros\",55,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2025-kenbak",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"electrode\",50,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"tauros\",55,\"M\",true],[\"typhlosion\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2025-12typeA",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"steelix\",50,\"M\",true],[\"tyranitar\",55,\"M\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2025-xu",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"F\",true],[\"cloyster\",50,\"M\",true],[\"donphan\",50,\"M\",true],[\"raichu\",55,\"F\",true],[\"tangela\",50,\"M\",true],[\"venomoth\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-parameter-h60",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"dodrio\",55,\"M\",true],[\"electrode\",50,\"N\",true],[\"marowak\",55,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"parasect\",50,\"M\",true],[\"starmie\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2025-ks",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true],[\"steelix\",50,\"M\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-parameter-a95",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"kangaskhan\",55,\"F\",true],[\"kingdra\",50,\"F\",true],[\"magmar\",55,\"M\",true],[\"sneasel\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2024-teisu",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"aerodactyl\",55,\"M\",true],[\"blissey\",50,\"F\",true],[\"misdreavus\",50,\"F\",true],[\"smeargle\",50,\"F\",true],[\"starmie\",55,\"N\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2024-raista",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"raikou\",55,\"N\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2024-horopuk",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"aerodactyl\",55,\"M\",true],[\"alakazam\",55,\"F\",true],[\"cloyster\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"venusaur\",50,\"F\",true],[\"wigglytuff\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2024-elekgp",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"electabuzz\",55,\"F\",true],[\"marowak\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"porygon2\",50,\"N\",true],[\"snorlax\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2024-my",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"electrode\",51,\"N\",true],[\"meganium\",51,\"M\",true],[\"miltank\",52,\"F\",true],[\"misdreavus\",52,\"M\",true],[\"slowking\",52,\"M\",true],[\"venomoth\",51,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2024-sai",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"gengar\",50,\"M\",true],[\"moltres\",50,\"N\",true],[\"rhydon\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",50,\"N\",true],[\"venusaur\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2024-AI",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"gengar\",50,\"M\",true],[\"lapras\",50,\"F\",true],[\"marowak\",50,\"M\",true],[\"porygon2\",50,\"N\",true],[\"snorlax\",55,\"M\",true],[\"typhlosion\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2016-ukestar-2023",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"piloswine\",55,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",55,\"N\",true],[\"venusaur\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2023-gantetz",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"crobat\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"smeargle\",50,\"F\",true],[\"snorlax\",55,\"M\",true],[\"tangela\",50,\"M\",true],[\"tentacruel\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2023-rosras",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"heracross\",50,\"M\",true],[\"lapras\",50,\"F\",true],[\"murkrow\",50,\"M\",true],[\"pinsir\",50,\"M\",true],[\"tauros\",55,\"M\",true],[\"tyranitar\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2023-spadojo",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",51,\"F\",true],[\"cloyster\",51,\"M\",true],[\"hitmonlee\",51,\"M\",true],[\"marowak\",51,\"M\",true],[\"raikou\",53,\"N\",true],[\"snorlax\",51,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2023-shibarin",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",51,\"M\",true],[\"exeggutor\",51,\"M\",true],[\"machamp\",51,\"M\",true],[\"marowak\",51,\"M\",true],[\"snorlax\",51,\"M\",true],[\"wigglytuff\",53,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2022-mezdok",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"F\",true],[\"cloyster\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"venusaur\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2022-spark",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"lanturn\",53,\"F\",true],[\"machamp\",51,\"M\",true],[\"marowak\",51,\"M\",true],[\"skarmory\",51,\"M\",true],[\"snorlax\",51,\"M\",true],[\"venusaur\",51,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2022-nrsk",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true],[\"umbreon\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2022-punch",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",50,\"F\",true],[\"dragonite\",55,\"M\",true],[\"electabuzz\",55,\"M\",true],[\"gengar\",50,\"M\",true],[\"hitmonlee\",50,\"M\",true],[\"kangaskhan\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2022-sekka",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"golem\",50,\"M\",true],[\"scizor\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",50,\"N\",true],[\"umbreon\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2022-porien",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"entei\",55,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"porygon2\",55,\"N\",true],[\"snorlax\",50,\"M\",true],[\"umbreon\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-parameter-h95",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"clefable\",55,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"miltank\",55,\"F\",true],[\"quagsire\",50,\"M\",true],[\"slowbro\",50,\"M\",true],[\"umbreon\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2022-fushigi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"ivysaur\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"tyranitar\",55,\"M\",true],[\"venusaur\",50,\"M\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2022-ukekent-known-majinjima",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"cloyster\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"snorlax\",50,\"M\",true],[\"tauros\",55,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2022-mofu",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"ampharos\",55,\"M\",true],[\"flareon\",55,\"M\",true],[\"gengar\",50,\"M\",true],[\"jumpluff\",50,\"F\",true],[\"quagsire\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2022-semihela",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"heracross\",54,\"M\",true],[\"marowak\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"skarmory\",50,\"M\",true],[\"starmie\",51,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2022-slp",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"hypno\",53,\"F\",true],[\"machamp\",51,\"M\",true],[\"marowak\",51,\"M\",true],[\"skarmory\",51,\"M\",true],[\"snorlax\",51,\"M\",true],[\"starmie\",51,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2022-quorio",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"cloyster\",50,\"M\",true],[\"dodrio\",55,\"M\",true],[\"marowak\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2022-hagasan",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",51,\"F\",true],[\"cloyster\",51,\"M\",true],[\"snorlax\",51,\"M\",true],[\"starmie\",51,\"N\",true],[\"steelix\",52,\"M\",true],[\"zapdos\",52,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2022-cat",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"jumpluff\",50,\"F\",true],[\"persian\",54,\"M\",true],[\"rapidash\",54,\"M\",true],[\"rhydon\",50,\"M\",true],[\"sneasel\",51,\"M\",true],[\"snorlax\",51,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2022-ymbk",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"F\",true],[\"cloyster\",50,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"hitmonlee\",55,\"M\",true],[\"machamp\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2021-octsume",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"machamp\",55,\"M\",true],[\"octillery\",55,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2021-fliz",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"charizard\",55,\"M\",true],[\"cloyster\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-parameter-490",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",50,\"F\",true],[\"electabuzz\",55,\"M\",true],[\"miltank\",50,\"F\",true],[\"slowbro\",50,\"M\",true],[\"tauros\",55,\"M\",true],[\"weezing\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2021-blue",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"articuno\",55,\"N\",true],[\"golduck\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"jumpluff\",50,\"F\",true],[\"nidoqueen\",55,\"F\",true],[\"quagsire\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2021-mrgdr",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",51,\"M\",true],[\"heracross\",51,\"M\",true],[\"kingdra\",51,\"F\",true],[\"marowak\",51,\"M\",true],[\"raikou\",51,\"N\",true],[\"snorlax\",53,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2021-ka-t0",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blastoise\",50,\"M\",true],[\"dragonite\",55,\"M\",true],[\"kangaskhan\",55,\"F\",true],[\"machamp\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-gym-Hiwada-t0",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"heracross\",51,\"M\",true],[\"machamp\",52,\"M\",true],[\"shuckle\",51,\"F\",true],[\"snorlax\",52,\"M\",true],[\"starmie\",52,\"N\",true],[\"steelix\",52,\"M\",true]]"
+    },
+    {
+      "id": "mjj-gym-Hiwada-t1",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"gyarados\",52,\"M\",true],[\"machamp\",52,\"M\",true],[\"marowak\",52,\"M\",true],[\"scizor\",51,\"M\",true],[\"snorlax\",52,\"M\",true],[\"venomoth\",51,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2021-santan",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"cloyster\",50,\"M\",true],[\"miltank\",55,\"F\",true],[\"misdreavus\",50,\"F\",true],[\"snorlax\",50,\"M\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2021-LIZAM",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"charizard\",55,\"M\",true],[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"snorlax\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-gym-Kikyou-t0",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"forretress\",50,\"M\",true],[\"moltres\",55,\"N\",true],[\"quagsire\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-gym-Kikyou-t1",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"articuno\",51,\"N\",true],[\"charizard\",51,\"M\",true],[\"gengar\",52,\"M\",true],[\"snorlax\",52,\"M\",true],[\"starmie\",52,\"N\",true],[\"steelix\",52,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2021-ha-t0",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"cloyster\",50,\"M\",true],[\"mrmime\",50,\"F\",true],[\"scizor\",50,\"M\",true],[\"typhlosion\",55,\"M\",true],[\"tyranitar\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2021-ha-t1",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"cloyster\",50,\"M\",true],[\"mrmime\",50,\"F\",true],[\"steelix\",50,\"M\",true],[\"typhlosion\",55,\"M\",true],[\"tyranitar\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2020-fu",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"F\",true],[\"forretress\",50,\"M\",true],[\"magmar\",55,\"M\",true],[\"moltres\",50,\"N\",true],[\"umbreon\",50,\"F\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2020-sandal",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",50,\"F\",true],[\"cloyster\",50,\"M\",true],[\"moltres\",50,\"N\",true],[\"primeape\",55,\"M\",true],[\"sandslash\",55,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2020-gusto",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"aerodactyl\",55,\"M\",true],[\"blissey\",50,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"gengar\",55,\"M\",true],[\"machamp\",50,\"M\",true],[\"suicune\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2020-amepal",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"cloyster\",55,\"F\",true],[\"gligar\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2020-yu",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"dewgong\",50,\"F\",true],[\"dragonite\",55,\"M\",true],[\"ninetales\",50,\"F\",true],[\"pikachu\",50,\"M\",true],[\"raichu\",50,\"M\",true],[\"sneasel\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2020-R-t0",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"houndoom\",50,\"F\",true],[\"hypno\",50,\"M\",true],[\"kangaskhan\",55,\"F\",true],[\"marowak\",55,\"M\",true],[\"porygon2\",50,\"N\",true],[\"weezing\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2012-goinkyo-2020-known-majinjima",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"F\",true],[\"cloyster\",50,\"M\",true],[\"heracross\",55,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"snorlax\",50,\"M\",true],[\"steelix\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2020-jara",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"gengar\",50,\"M\",true],[\"kingdra\",50,\"F\",true],[\"snorlax\",50,\"M\",true],[\"steelix\",50,\"M\",true],[\"tangela\",55,\"M\",true],[\"tyranitar\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2020-kbgr-t0",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"moltres\",50,\"N\",true],[\"raikou\",55,\"N\",true],[\"snorlax\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2020-duck",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"golduck\",55,\"M\",true],[\"raikou\",55,\"N\",true],[\"snorlax\",50,\"M\",true],[\"steelix\",50,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2020-efbl",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"espeon\",52,\"F\",true],[\"gengar\",52,\"M\",true],[\"quagsire\",51,\"M\",true],[\"skarmory\",51,\"M\",true],[\"snorlax\",51,\"M\",true],[\"umbreon\",52,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2020-Q",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"misdreavus\",50,\"F\",true],[\"nidoqueen\",55,\"F\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",50,\"N\",true],[\"venusaur\",50,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2020-shiro",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"charizard\",55,\"M\",true],[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"golem\",50,\"M\",true],[\"miltank\",55,\"F\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2019-kamex",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blastoise\",55,\"M\",true],[\"gengar\",50,\"M\",true],[\"golem\",50,\"M\",true],[\"machamp\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2019-haga",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"exeggutor\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",50,\"N\",true],[\"steelix\",55,\"M\",true],[\"tentacruel\",55,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2019-airfy",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"espeon\",52,\"M\",true],[\"gengar\",52,\"M\",true],[\"marowak\",51,\"M\",true],[\"poliwrath\",52,\"M\",true],[\"skarmory\",51,\"M\",true],[\"snorlax\",51,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2019-denkai",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"dragonite\",55,\"M\",true],[\"machamp\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"slowking\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2018-q9con",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"exeggutor\",50,\"M\",true],[\"heracross\",55,\"M\",true],[\"ninetales\",55,\"F\",true],[\"snorlax\",50,\"M\",true],[\"weezing\",50,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2018-raigou",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"gengar\",50,\"M\",true],[\"kingdra\",50,\"F\",true],[\"misdreavus\",50,\"F\",true],[\"raikou\",55,\"N\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2018-galu",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"golem\",50,\"M\",true],[\"kangaskhan\",55,\"F\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",50,\"N\",true],[\"venusaur\",50,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2018-evergreen",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"exeggutor\",50,\"M\",true],[\"politoed\",55,\"M\",true],[\"scyther\",50,\"M\",true],[\"tyranitar\",55,\"M\",true],[\"venusaur\",50,\"M\",true],[\"xatu\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2017-dugmant",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"dugtrio\",55,\"M\",true],[\"electrode\",50,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"golem\",50,\"M\",true],[\"mantine\",55,\"F\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2017-ring",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"machamp\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",50,\"N\",true],[\"steelix\",50,\"M\",true],[\"umbreon\",50,\"F\",true],[\"ursaring\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2017-freeze",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"articuno\",55,\"N\",true],[\"gengar\",50,\"M\",true],[\"golem\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"qwilfish\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2017-rufftan",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"gengar\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"octillery\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"steelix\",50,\"M\",true],[\"vileplume\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2016-ukestar-2016",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"piloswine\",55,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",55,\"N\",true],[\"umbreon\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-parameter-c65",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"kabutops\",55,\"M\",true],[\"machamp\",50,\"M\",true],[\"muk\",50,\"M\",true],[\"persian\",55,\"M\",true],[\"quagsire\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2015-raregol",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"golduck\",55,\"M\",true],[\"magneton\",55,\"N\",true],[\"marowak\",50,\"M\",true],[\"moltres\",50,\"N\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2015-wanko",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"misdreavus\",50,\"M\",true],[\"raichu\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"suicune\",50,\"N\",true],[\"umbreon\",50,\"F\",true],[\"victreebel\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2015-raikoubangi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"forretress\",50,\"M\",true],[\"houndoom\",50,\"F\",true],[\"raikou\",55,\"N\",true],[\"skarmory\",50,\"M\",true],[\"suicune\",50,\"N\",true],[\"tyranitar\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2015-bariwin",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"arcanine\",55,\"M\",true],[\"cloyster\",50,\"M\",true],[\"mrmime\",55,\"F\",true],[\"muk\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-gym-Sekichiku-2",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"gengar\",55,\"M\",true],[\"muk\",55,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"suicune\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-gym-Sekichiku-1",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"aerodactyl\",51,\"M\",true],[\"exeggutor\",51,\"F\",true],[\"heracross\",51,\"M\",true],[\"muk\",53,\"M\",true],[\"scizor\",51,\"M\",true],[\"snorlax\",51,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2015-meroele",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"electabuzz\",55,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"steelix\",50,\"M\",true],[\"tyranitar\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2014-efrc",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"espeon\",55,\"M\",true],[\"misdreavus\",50,\"M\",true],[\"raichu\",55,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"venusaur\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2014-balancetekito",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",51,\"M\",true],[\"gengar\",52,\"M\",true],[\"raikou\",52,\"N\",true],[\"skarmory\",51,\"M\",true],[\"snorlax\",52,\"M\",true],[\"starmie\",51,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2014-fore",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"forretress\",54,\"M\",true],[\"raikou\",51,\"N\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",50,\"N\",true],[\"umbreon\",50,\"F\",true],[\"venusaur\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2014-noropixy",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"clefable\",55,\"M\",true],[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"umbreon\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2014-norotaiko",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"marowak\",50,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true],[\"umbreon\",50,\"F\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2014-daisuki",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"fearow\",55,\"M\",true],[\"rapidash\",55,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2014-raiboo",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"exeggutor\",50,\"F\",true],[\"golem\",50,\"M\",true],[\"magmar\",55,\"M\",true],[\"raikou\",55,\"N\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2014-denryu",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"ampharos\",55,\"M\",true],[\"cloyster\",50,\"M\",true],[\"forretress\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"porygon2\",50,\"N\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2014-windile",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"arcanine\",55,\"M\",true],[\"cloyster\",50,\"M\",true],[\"feraligatr\",55,\"M\",true],[\"golem\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2014-hensoku2014",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"gengar\",52,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"porygon2\",50,\"N\",true],[\"snorlax\",53,\"M\",true],[\"umbreon\",52,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2013-sofu",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"F\",true],[\"miltank\",55,\"F\",true],[\"shuckle\",50,\"F\",true],[\"snorlax\",50,\"M\",true],[\"suicune\",50,\"N\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2013-tono",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"electrode\",50,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"forretress\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"politoed\",55,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2013-kirin",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"girafarig\",55,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"snorlax\",50,\"M\",true],[\"typhlosion\",55,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2013-fighting",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"heracross\",55,\"M\",true],[\"machamp\",55,\"M\",true],[\"umbreon\",50,\"F\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2013-hazure",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"marowak\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"moltres\",50,\"N\",true],[\"tyranitar\",55,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-parameter-s110",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"espeon\",50,\"F\",true],[\"gengar\",50,\"M\",true],[\"jumpluff\",50,\"F\",true],[\"raikou\",51,\"N\",true],[\"starmie\",54,\"N\",true],[\"tauros\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2013-nuoh",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"golem\",50,\"M\",true],[\"quagsire\",55,\"M\",true],[\"skarmory\",50,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-gym-Chouji",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",51,\"M\",true],[\"dewgong\",51,\"F\",true],[\"marowak\",52,\"M\",true],[\"meganium\",52,\"M\",true],[\"snorlax\",52,\"M\",true],[\"zapdos\",52,\"N\",true]]"
+    },
+    {
+      "id": "mjj-gym-Nibi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",50,\"F\",true],[\"blissey\",50,\"F\",true],[\"cloyster\",50,\"M\",true],[\"skarmory\",50,\"M\",true],[\"tyranitar\",55,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-gym-Kuchiba",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"electabuzz\",55,\"M\",true],[\"houndoom\",50,\"F\",true],[\"shuckle\",50,\"F\",true],[\"snorlax\",50,\"M\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2012-odoshi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"misdreavus\",50,\"F\",true],[\"snorlax\",50,\"M\",true],[\"stantler\",55,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2012-dockabi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"aerodactyl\",50,\"M\",true],[\"blastoise\",50,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"snorlax\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-gym-Tokiwa",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"electrode\",50,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"marowak\",55,\"M\",true],[\"nidoking\",55,\"M\",true],[\"smeargle\",50,\"F\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2012-betbaton-t0",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"heracross\",50,\"M\",true],[\"muk\",53,\"M\",true],[\"snorlax\",50,\"M\",true],[\"tentacruel\",53,\"M\",true],[\"umbreon\",52,\"F\",true],[\"vaporeon\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2012-betbaton-t1",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"dewgong\",50,\"F\",true],[\"heracross\",50,\"M\",true],[\"muk\",53,\"M\",true],[\"piloswine\",50,\"M\",true],[\"umbreon\",52,\"F\",true],[\"zapdos\",52,\"N\",true]]"
+    },
+    {
+      "id": "mjj-gym-Tamba-t0",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",50,\"F\",true],[\"cloyster\",50,\"M\",true],[\"houndoom\",50,\"F\",true],[\"machamp\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-gym-Tamba-t1",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",51,\"M\",true],[\"golem\",51,\"M\",true],[\"machamp\",53,\"M\",true],[\"raikou\",51,\"N\",true],[\"snorlax\",51,\"M\",true],[\"starmie\",51,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2012-sunanido",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"forretress\",50,\"M\",true],[\"nidoking\",55,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2012-elekabi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"electabuzz\",55,\"M\",true],[\"gyarados\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"steelix\",50,\"M\",true],[\"umbreon\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2012-magic",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"forretress\",51,\"F\",true],[\"jumpluff\",52,\"F\",true],[\"misdreavus\",51,\"F\",true],[\"skarmory\",51,\"F\",true],[\"smeargle\",51,\"F\",true],[\"umbreon\",52,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2012-ombang",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"omastar\",55,\"M\",true],[\"skarmory\",50,\"M\",true],[\"starmie\",50,\"N\",true],[\"tyranitar\",55,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2012-ngtkabi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"exeggutor\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"porygon2\",50,\"N\",true],[\"snorlax\",55,\"M\",true],[\"vaporeon\",55,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2012-montops",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"heracross\",50,\"M\",true],[\"kabutops\",55,\"M\",true],[\"misdreavus\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"tangela\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2012-balance",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"gengar\",52,\"M\",true],[\"heracross\",51,\"M\",true],[\"piloswine\",51,\"M\",true],[\"snorlax\",51,\"M\",true],[\"starmie\",51,\"N\",true],[\"umbreon\",52,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2012-tsubo",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",51,\"F\",true],[\"houndoom\",51,\"F\",true],[\"shuckle\",53,\"F\",true],[\"snorlax\",51,\"M\",true],[\"suicune\",51,\"N\",true],[\"zapdos\",51,\"N\",true]]"
+    },
+    {
+      "id": "mjj-gym-Gren",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"charizard\",55,\"M\",true],[\"electrode\",50,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"moltres\",55,\"N\",true],[\"snorlax\",50,\"M\",true],[\"steelix\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2012-nands-2012",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"exeggutor\",55,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"nidoking\",55,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2012-bnsbtn",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",52,\"M\",true],[\"heracross\",51,\"M\",true],[\"marowak\",51,\"M\",true],[\"smeargle\",51,\"F\",true],[\"snorlax\",52,\"M\",true],[\"umbreon\",52,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2012-crazycoconut",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",50,\"F\",true],[\"exeggutor\",55,\"M\",true],[\"heracross\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"moltres\",50,\"N\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2012-merobangi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"tyranitar\",55,\"F\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-gym-Fusube",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"dragonite\",55,\"M\",true],[\"gengar\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"scizor\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"steelix\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2011-gfsecond",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"golem\",50,\"M\",true],[\"marowak\",55,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2011-nosex",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"entei\",53,\"N\",true],[\"porygon2\",53,\"N\",true],[\"raikou\",51,\"N\",true],[\"starmie\",51,\"N\",true],[\"suicune\",51,\"N\",true],[\"zapdos\",51,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2011-oiut",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"marowak\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"tyranitar\",55,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2011-garapika",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"jynx\",52,\"F\",true],[\"marowak\",51,\"M\",true],[\"moltres\",52,\"N\",true],[\"pikachu\",51,\"F\",true],[\"skarmory\",52,\"M\",true],[\"snorlax\",51,\"M\",true]]"
+    },
+    {
+      "id": "mjj-gym-Cogane",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"electrode\",50,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"miltank\",55,\"F\",true],[\"snorlax\",50,\"M\",true],[\"tauros\",55,\"M\",true],[\"umbreon\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2011-fbangi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"moltres\",50,\"N\",true],[\"snorlax\",50,\"M\",true],[\"tyranitar\",55,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2011-jiback-2011",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"articuno\",50,\"N\",true],[\"blissey\",50,\"F\",true],[\"meganium\",50,\"F\",true],[\"misdreavus\",50,\"F\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-gym-Enju",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",52,\"M\",true],[\"gengar\",51,\"M\",true],[\"misdreavus\",51,\"F\",true],[\"snorlax\",52,\"M\",true],[\"suicune\",52,\"N\",true],[\"umbreon\",52,\"F\",true]]"
+    },
+    {
+      "id": "mjj-parameter-s130",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"aerodactyl\",55,\"M\",true],[\"alakazam\",50,\"M\",true],[\"crobat\",55,\"M\",true],[\"dugtrio\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"jolteon\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2011-dars",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"jolteon\",55,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2011-gran",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",50,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"granbull\",55,\"M\",true],[\"gyarados\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2011-ibmru",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"houndoom\",50,\"F\",true],[\"jynx\",55,\"F\",true],[\"marowak\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2011-aymbtn",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"charizard\",50,\"M\",true],[\"cloyster\",52,\"M\",true],[\"gengar\",52,\"M\",true],[\"marowak\",53,\"M\",true],[\"snorlax\",52,\"M\",true],[\"umbreon\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2011-mudo",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"heracross\",50,\"M\",true],[\"piloswine\",50,\"M\",true],[\"rhydon\",50,\"M\",true],[\"skarmory\",55,\"M\",true],[\"starmie\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2011-ydmg",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"exeggutor\",55,\"M\",true],[\"jolteon\",50,\"M\",true],[\"kingdra\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"moltres\",50,\"N\",true],[\"nidoking\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2011-raikou",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"houndoom\",50,\"F\",true],[\"raikou\",55,\"N\",true],[\"tentacruel\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2011-bangfire",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"exeggutor\",50,\"M\",true],[\"forretress\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"moltres\",55,\"N\",true],[\"quagsire\",50,\"M\",true],[\"tyranitar\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2011-yad",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",51,\"M\",true],[\"machamp\",51,\"M\",true],[\"marowak\",51,\"M\",true],[\"skarmory\",51,\"M\",true],[\"slowbro\",53,\"M\",true],[\"snorlax\",51,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2010-gebniharas",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",51,\"F\",true],[\"gengar\",52,\"M\",true],[\"nidoqueen\",51,\"F\",true],[\"raikou\",51,\"N\",true],[\"suicune\",51,\"N\",true],[\"umbreon\",52,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2010-garaphantom",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",51,\"M\",true],[\"forretress\",51,\"M\",true],[\"marowak\",53,\"M\",true],[\"moltres\",51,\"N\",true],[\"raikou\",51,\"N\",true],[\"suicune\",51,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2010-ibiki",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"marowak\",55,\"M\",true],[\"moltres\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-type-electric",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"electabuzz\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"jolteon\",50,\"M\",true],[\"lanturn\",50,\"F\",true],[\"magneton\",50,\"N\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2010-monomane",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",50,\"N\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2010-sajintekito",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"heracross\",51,\"M\",true],[\"houndoom\",52,\"F\",true],[\"marowak\",51,\"M\",true],[\"omastar\",52,\"M\",true],[\"steelix\",51,\"M\",true],[\"zapdos\",52,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2010-kabisan",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"muk\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2010-texture",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"electrode\",51,\"N\",true],[\"exeggutor\",51,\"M\",true],[\"kingdra\",51,\"F\",true],[\"porygon2\",53,\"N\",true],[\"skarmory\",51,\"M\",true],[\"snorlax\",51,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2010-ibmricky",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"machamp\",55,\"M\",true],[\"steelix\",50,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2010-starr",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blastoise\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"misdreavus\",50,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2010-firecomb",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"moltres\",54,\"N\",true],[\"raikou\",51,\"N\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2010-mil",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"gyarados\",50,\"M\",true],[\"jynx\",50,\"F\",true],[\"machamp\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"miltank\",54,\"F\",true],[\"raikou\",51,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2010-seaking",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"dragonite\",55,\"M\",true],[\"gengar\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"scizor\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2011-jiback-2009",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"umbreon\",50,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2009-combu",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"forretress\",51,\"M\",true],[\"gengar\",51,\"M\",true],[\"raikou\",51,\"N\",true],[\"steelix\",51,\"M\",true],[\"suicune\",53,\"N\",true],[\"zapdos\",51,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2009-4hon",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",50,\"M\",true],[\"blissey\",50,\"F\",true],[\"crobat\",55,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"machamp\",55,\"M\",true],[\"umbreon\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2009-doblsama",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"smeargle\",55,\"M\",true],[\"starmie\",50,\"N\",true],[\"steelix\",50,\"M\",true],[\"umbreon\",50,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2009-gensama",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"forretress\",50,\"M\",true],[\"gengar\",55,\"M\",true],[\"machamp\",50,\"M\",true],[\"raikou\",50,\"N\",true],[\"suicune\",50,\"N\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2009-kombu",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"exeggutor\",52,\"M\",true],[\"forretress\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"raikou\",53,\"N\",true],[\"steelix\",50,\"M\",true],[\"suicune\",52,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2009-yanagi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"forretress\",50,\"M\",true],[\"gyarados\",55,\"M\",true],[\"meganium\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"piloswine\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2012-nands-2008",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"electrode\",50,\"N\",true],[\"exeggutor\",55,\"M\",true],[\"nidoking\",55,\"M\",true],[\"rhydon\",50,\"M\",true],[\"skarmory\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2009-fthunder",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"machamp\",50,\"M\",true],[\"rhydon\",50,\"M\",true],[\"skarmory\",50,\"M\",true],[\"steelix\",50,\"M\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2009-secretkabi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"gligar\",50,\"M\",true],[\"rhydon\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true],[\"steelix\",50,\"M\",true],[\"umbreon\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2009-fgolduck",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"gengar\",50,\"F\",true],[\"golduck\",55,\"M\",true],[\"meganium\",50,\"M\",true],[\"raikou\",50,\"N\",true],[\"skarmory\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-bp-jolteon-marowak-1",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"jolteon\",50,\"M\",true],[\"marowak\",55,\"M\",true],[\"misdreavus\",50,\"M\",true],[\"scizor\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"suicune\",50,\"N\",true]]"
+    },
+    {
+      "id": "supp-bp-jolteon-marowak-2",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"espeon\",50,\"M\",true],[\"jolteon\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"skarmory\",50,\"M\",true],[\"tyranitar\",55,\"M\",true]]"
+    },
+    {
+      "id": "supp-bp-jolteon-growth",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"girafarig\",50,\"M\",true],[\"jolteon\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",55,\"N\",true]]"
+    },
+    {
+      "id": "supp-bp-scizor-scyther",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"rhydon\",55,\"M\",true],[\"scizor\",50,\"M\",true],[\"scyther\",50,\"M\",true],[\"ursaring\",50,\"M\",true],[\"vaporeon\",50,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "supp-bp-espeon-girafarig",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"espeon\",52,\"M\",true],[\"girafarig\",50,\"M\",true],[\"houndoom\",50,\"M\",true],[\"kangaskhan\",50,\"F\",true],[\"quagsire\",50,\"M\",true],[\"scyther\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-bp-smeargle-umbreon",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"heracross\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"mrmime\",50,\"M\",true],[\"smeargle\",50,\"M\",true],[\"tentacruel\",50,\"M\",true],[\"umbreon\",52,\"M\",true]]"
+    },
+    {
+      "id": "supp-bp-smeargle-flareon-vaporeon",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"flareon\",50,\"M\",true],[\"mrmime\",50,\"M\",true],[\"nidoking\",55,\"M\",true],[\"smeargle\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"vaporeon\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-bp-speed-passers-1",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"aipom\",50,\"M\",true],[\"ariados\",50,\"M\",true],[\"farfetchd\",50,\"M\",true],[\"ledian\",50,\"M\",true],[\"marowak\",55,\"M\",true],[\"venomoth\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-bp-nfe-passers",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"eevee\",50,\"M\",true],[\"ledyba\",50,\"M\",true],[\"smeargle\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"spinarak\",50,\"M\",true],[\"venonat\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-deme-r1-01-s0036",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"heracross\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"marowak\",55,\"M\",true],[\"porygon2\",50,\"N\",true],[\"raikou\",55,\"N\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-deme-r1-00-s0042",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"heracross\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"steelix\",50,\"M\",true],[\"tyranitar\",55,\"M\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "supp-deme-r1-04-s0021",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"F\",true],[\"cloyster\",50,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"gengar\",55,\"F\",true],[\"snorlax\",50,\"M\",true],[\"suicune\",50,\"N\",true]]"
+    },
+    {
+      "id": "supp-cov-extra-1",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"corsola\",50,\"M\",true],[\"golduck\",50,\"M\",true],[\"gyarados\",50,\"M\",true],[\"kingdra\",50,\"M\",true],[\"mantine\",50,\"M\",true],[\"primeape\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-extra-2",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"butterfree\",50,\"M\",true],[\"delibird\",50,\"M\",true],[\"electabuzz\",50,\"M\",true],[\"magmar\",50,\"M\",true],[\"rapidash\",50,\"M\",true],[\"typhlosion\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-extra-3",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"blastoise\",50,\"M\",true],[\"dugtrio\",50,\"M\",true],[\"hitmontop\",50,\"M\",true],[\"kabutops\",50,\"M\",true],[\"raticate\",50,\"M\",true],[\"stantler\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-extra-4",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"electrode\",50,\"N\",true],[\"entei\",50,\"N\",true],[\"gligar\",50,\"M\",true],[\"muk\",50,\"M\",true],[\"pinsir\",50,\"M\",true],[\"seaking\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-0",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"abra\",50,\"M\",true],[\"aerodactyl\",50,\"M\",true],[\"arbok\",50,\"M\",true],[\"arcanine\",50,\"M\",true],[\"azumarill\",50,\"M\",true],[\"bayleef\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-1",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"beedrill\",50,\"M\",true],[\"bellossom\",50,\"M\",true],[\"bellsprout\",50,\"M\",true],[\"chansey\",50,\"F\",true],[\"charmander\",50,\"M\",true],[\"charmeleon\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-2",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"chikorita\",50,\"M\",true],[\"chinchou\",50,\"M\",true],[\"clefairy\",50,\"M\",true],[\"crobat\",50,\"M\",true],[\"croconaw\",50,\"M\",true],[\"cubone\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-3",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"cyndaquil\",50,\"M\",true],[\"dewgong\",50,\"M\",true],[\"dodrio\",50,\"M\",true],[\"doduo\",50,\"M\",true],[\"donphan\",50,\"M\",true],[\"dragonair\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-4",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"dratini\",50,\"M\",true],[\"drowzee\",50,\"M\",true],[\"ekans\",50,\"M\",true],[\"elekid\",50,\"M\",true],[\"exeggcute\",50,\"M\",true],[\"fearow\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-5",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"feraligatr\",50,\"M\",true],[\"flaaffy\",50,\"M\",true],[\"furret\",50,\"M\",true],[\"gastly\",50,\"M\",true],[\"golbat\",50,\"M\",true],[\"goldeen\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-6",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"granbull\",50,\"M\",true],[\"graveler\",50,\"M\",true],[\"grimer\",50,\"M\",true],[\"growlithe\",50,\"M\",true],[\"haunter\",50,\"M\",true],[\"hitmonchan\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-7",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"hoppip\",50,\"M\",true],[\"horsea\",50,\"M\",true],[\"houndour\",50,\"M\",true],[\"hypno\",50,\"M\",true],[\"ivysaur\",50,\"M\",true],[\"jigglypuff\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-8",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"kabuto\",50,\"M\",true],[\"kadabra\",50,\"M\",true],[\"kakuna\",50,\"M\",true],[\"kingler\",50,\"M\",true],[\"krabby\",50,\"M\",true],[\"larvitar\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-9",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"lickitung\",50,\"M\",true],[\"machoke\",50,\"M\",true],[\"machop\",50,\"M\",true],[\"magby\",50,\"M\",true],[\"magcargo\",50,\"M\",true],[\"magikarp\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-10",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"magnemite\",50,\"N\",true],[\"magneton\",50,\"N\",true],[\"mankey\",50,\"M\",true],[\"mareep\",50,\"M\",true],[\"marill\",50,\"M\",true],[\"meowth\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-11",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"murkrow\",50,\"M\",true],[\"natu\",50,\"M\",true],[\"nidoqueen\",50,\"F\",true],[\"nidoranf\",50,\"F\",true],[\"nidoranm\",50,\"M\",true],[\"nidorina\",50,\"F\",true]]"
+    },
+    {
+      "id": "supp-cov-12",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"nidorino\",50,\"M\",true],[\"octillery\",50,\"M\",true],[\"omanyte\",50,\"M\",true],[\"omastar\",50,\"M\",true],[\"paras\",50,\"M\",true],[\"parasect\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-13",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"persian\",50,\"M\",true],[\"pichu\",50,\"M\",true],[\"pidgeot\",50,\"M\",true],[\"pidgeotto\",50,\"M\",true],[\"pidgey\",50,\"M\",true],[\"pikachu\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-14",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"pineco\",50,\"M\",true],[\"politoed\",50,\"M\",true],[\"poliwhirl\",50,\"M\",true],[\"ponyta\",50,\"M\",true],[\"porygon\",50,\"N\",true],[\"psyduck\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-15",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"pupitar\",50,\"M\",true],[\"quilava\",50,\"M\",true],[\"qwilfish\",50,\"M\",true],[\"raichu\",50,\"M\",true],[\"rattata\",50,\"M\",true],[\"remoraid\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-16",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"rhyhorn\",50,\"M\",true],[\"sandshrew\",50,\"M\",true],[\"sandslash\",50,\"M\",true],[\"seadra\",50,\"M\",true],[\"seel\",50,\"M\",true],[\"sentret\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-17",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"shuckle\",50,\"M\",true],[\"skiploom\",50,\"M\",true],[\"slowbro\",50,\"M\",true],[\"slowking\",50,\"M\",true],[\"slowpoke\",50,\"M\",true],[\"slugma\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-18",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"smoochum\",50,\"F\",true],[\"snubbull\",50,\"M\",true],[\"spearow\",50,\"M\",true],[\"squirtle\",50,\"M\",true],[\"staryu\",50,\"N\",true],[\"sudowoodo\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-19",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"sunflora\",50,\"M\",true],[\"sunkern\",50,\"M\",true],[\"swinub\",50,\"M\",true],[\"tangela\",50,\"M\",true],[\"teddiursa\",50,\"M\",true],[\"togepi\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-20",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"totodile\",50,\"M\",true],[\"tyrogue\",50,\"M\",true],[\"unown\",50,\"N\",true],[\"vileplume\",50,\"M\",true],[\"voltorb\",50,\"N\",true],[\"vulpix\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-21",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"wartortle\",50,\"M\",true],[\"weedle\",50,\"M\",true],[\"weepinbell\",50,\"M\",true],[\"wigglytuff\",50,\"M\",true],[\"wobbuffet\",50,\"M\",true],[\"wooper\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-22",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"snorlax\",50,\"M\",true],[\"starmie\",50,\"N\",true],[\"xatu\",50,\"M\",true],[\"yanma\",50,\"M\",true],[\"zapdos\",50,\"N\",true],[\"zubat\",50,\"M\",true]]"
+    }
+  ],
+  "duplicateSourceAliases": [
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "sample-07"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "rental-cban-8"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "sample-12"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "apex-c08-surgical-142"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "sample-17-orig"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "nb-sample-13-0"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "red-v10-s1105-r2-s0142"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "apex-c04-bug-3atkstar-boomgen"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "red-v5-r1-s0097"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "red-v10-s1105-r1-s0148"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "sample-08"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "rental-cban-13"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "deme-r1-00-s0030"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "mjj-2014-thdrcomb"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "sample-11"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "sample-06"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "red-v10-s1105-r2-s0155"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "mjj-2010-garap-a"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "mjj-2020-rraikou"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "sample-02"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "sib-r1-n4-red-v6-r1-s0064-s07"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "hc75-top8-tsuru"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "sample-09"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "sample-22-orig"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "sample-14"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "pb-100"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "pb-85"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "pb-62"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "pb-6"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "pb-96"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "pb-89"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "pb-13"
+    },
+    {
+      "source": "data/team-pool-v2/team-pool.json",
+      "id": "pb-46"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "hc75-1st-show"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "hc75-2nd-toriyama"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "hc75-3rd-bean"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "hc75-top8-tezan"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "hc75-top8-tsuru"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-08"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-15"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-15-orig"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-04"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-14"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-14-orig"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-13"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-03"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-17"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-17-orig"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-10"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-23"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-07"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-06"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-12"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-18"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-20"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-05"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-01"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-19"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-26"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-02"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-11"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-11-orig"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-21"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-25"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-25-orig"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-24"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-09"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-09-orig"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-16"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-16-orig"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-22"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-22-orig"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "sample-27"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-2"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-3"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-4"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-6"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-8"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-9"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-11"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-12"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-13"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-14"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-15"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-17"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-20"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2025-hapim"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2024-kabiliz"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2023-ukethdr"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2023-vakabi"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2022-ukekent"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2020-kb-2022"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2021-crage"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2021-q10con"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2020-ukenta"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2020-kb-2020"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2012-goinkyo-2020"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2020-rraikou"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2019-dojo"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2015-ayagen"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2014-thdrcomb"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2013-mario"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2013-bakabi"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2013-venom"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2012-ibmthdr"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2012-goinkyo-2012"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2011-garatank"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2010-semistar"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2010-garap-a"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2010-garap-b"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2009-chourou"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2011-frozenhell-2008"
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2012-goinkyo-t3"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-46"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-76"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-78"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-64"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-74"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-15"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-1"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-67"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-20"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-66"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-18"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-168"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-19"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-106"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-31"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-62"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-102"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-129"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-65"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-117"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-111"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-13"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-14"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-103"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-3"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-90"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-69"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-146"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-61"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-44"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-63"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-43"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-136"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-77"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-52"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-58"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-132"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-113"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-134"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-108"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-42"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-147"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-4"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-80"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-109"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-84"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-89"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-12"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-98"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-83"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-79"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-16"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-21"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-33"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-57"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-100"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-85"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-2"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-81"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-5"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-137"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-135"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-123"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-82"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-6"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-53"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-93"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-92"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-96"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-32"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-87"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-34"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-35"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-158"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-10"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-9"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-86"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-8"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-153"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-110"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-127"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-105"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-22"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-23"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-91"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-95"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-7"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-99"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-101"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-112"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-68"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-124"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-131"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-122"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-150"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-130"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-121"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-88"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-119"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-107"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-114"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-169"
+    },
+    {
+      "source": "data/partybox-v0/teams.json",
+      "id": "pb-170"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-gym-Sekichiku-t0"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2014-thdriky"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2011-frozenhell-2011"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2011-murai-2010"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2012-goinkyo-t2"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2012-goinkyo-t3"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-1"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-2"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-3"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-4"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-5"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-6"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-7"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-8"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-9"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-10"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-11"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-12"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-13"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-14"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-15"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-17"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-18"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-19"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-20"
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-27"
+    },
+    {
+      "source": "data/training-v3/supplemental.json",
+      "id": "supp-deme-r1-00-s0030"
+    }
+  ],
+  "excludedInvalidFormat": [
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-16",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "item-clause",
+          "mon": "umbreon",
+          "slot": 3,
+          "item": "miracleberry"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "exeggutor",
+          "slot": 0,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "exeggutor",
+          "slot": 0
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "exeggutor",
+          "slot": 0
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "gengar",
+          "slot": 1,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "gengar",
+          "slot": 1
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "gengar",
+          "slot": 1
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "snorlax",
+          "slot": 2,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "snorlax",
+          "slot": 2
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "snorlax",
+          "slot": 2
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "umbreon",
+          "slot": 3,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "umbreon",
+          "slot": 3
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "umbreon",
+          "slot": 3
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "starmie",
+          "slot": 4
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "starmie",
+          "slot": 4
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "miltank",
+          "slot": 5
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "miltank",
+          "slot": 5
+        }
+      ]
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-23",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "tauros",
+          "slot": 0,
+          "move": "horndrill"
+        },
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "machamp",
+          "slot": 5,
+          "move": "fissure"
+        }
+      ]
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-24",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "snorlax",
+          "slot": 0,
+          "move": "fissure"
+        }
+      ]
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-25",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "dugtrio",
+          "slot": 0,
+          "move": "fissure"
+        },
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "tauros",
+          "slot": 1,
+          "move": "horndrill"
+        }
+      ]
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-26",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "level-min",
+          "mon": "scyther",
+          "slot": 0,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "error",
+          "code": "species-underleveled",
+          "mon": "scyther",
+          "slot": 0,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "scyther",
+          "slot": 0,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "scyther",
+          "slot": 0
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "scyther",
+          "slot": 0
+        },
+        {
+          "severity": "error",
+          "code": "level-min",
+          "mon": "elekid",
+          "slot": 1,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "error",
+          "code": "species-underleveled",
+          "mon": "elekid",
+          "slot": 1,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "elekid",
+          "slot": 1,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "elekid",
+          "slot": 1
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "elekid",
+          "slot": 1
+        },
+        {
+          "severity": "error",
+          "code": "level-min",
+          "mon": "chansey",
+          "slot": 2,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "error",
+          "code": "species-underleveled",
+          "mon": "chansey",
+          "slot": 2,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "chansey",
+          "slot": 2
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "chansey",
+          "slot": 2
+        },
+        {
+          "severity": "error",
+          "code": "level-min",
+          "mon": "cubone",
+          "slot": 3,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "error",
+          "code": "species-underleveled",
+          "mon": "cubone",
+          "slot": 3,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "cubone",
+          "slot": 3,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "cubone",
+          "slot": 3
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "cubone",
+          "slot": 3
+        },
+        {
+          "severity": "error",
+          "code": "level-min",
+          "mon": "porygon",
+          "slot": 4,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "error",
+          "code": "species-underleveled",
+          "mon": "porygon",
+          "slot": 4,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "porygon",
+          "slot": 4
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "porygon",
+          "slot": 4
+        },
+        {
+          "severity": "error",
+          "code": "level-min",
+          "mon": "voltorb",
+          "slot": 5,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "error",
+          "code": "species-underleveled",
+          "mon": "voltorb",
+          "slot": 5,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "voltorb",
+          "slot": 5
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "voltorb",
+          "slot": 5
+        }
+      ]
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-21",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "team-size",
+          "size": 5,
+          "min": 6
+        }
+      ]
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-22",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "team-size",
+          "size": 5,
+          "min": 6
+        }
+      ]
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "rental-cban-28",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "team-size",
+          "size": 1,
+          "min": 6
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "ditto",
+          "slot": 0
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "ditto",
+          "slot": 0
+        }
+      ]
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2023-1geki",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "dugtrio",
+          "slot": 0,
+          "move": "fissure"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "dugtrio",
+          "slot": 0,
+          "expected": "M"
+        },
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "tauros",
+          "slot": 1,
+          "move": "horndrill"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "misdreavus",
+          "slot": 2,
+          "expected": "F"
+        },
+        {
+          "severity": "error",
+          "code": "dv-hp",
+          "mon": "exeggutor",
+          "slot": 3,
+          "hp": 15,
+          "expected": 3
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "exeggutor",
+          "slot": 3,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "skarmory",
+          "slot": 4,
+          "expected": "M"
+        }
+      ]
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2023-kabipte",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "snorlax",
+          "slot": 0,
+          "move": "fissure"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "snorlax",
+          "slot": 0,
+          "expected": "F"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "skarmory",
+          "slot": 2,
+          "expected": "F"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "marowak",
+          "slot": 3,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "heracross",
+          "slot": 4,
+          "expected": "F"
+        },
+        {
+          "severity": "error",
+          "code": "dv-hp",
+          "mon": "aerodactyl",
+          "slot": 5,
+          "hp": 15,
+          "expected": 11
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "aerodactyl",
+          "slot": 5,
+          "expected": "M"
+        }
+      ]
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2012-raicomb",
+      "findings": [
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "forretress",
+          "slot": 1,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "cloyster",
+          "slot": 2,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "snorlax",
+          "slot": 3,
+          "expected": "M"
+        },
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "donphan",
+          "slot": 4,
+          "move": "encore"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "donphan",
+          "slot": 4,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "vaporeon",
+          "slot": 5,
+          "expected": "M"
+        }
+      ]
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2011-gykraikou",
+      "findings": [
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "cloyster",
+          "slot": 1,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "umbreon",
+          "slot": 2,
+          "expected": "F"
+        },
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "donphan",
+          "slot": 3,
+          "move": "encore"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "donphan",
+          "slot": 3,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "hypno",
+          "slot": 4,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "charizard",
+          "slot": 5,
+          "expected": "M"
+        }
+      ]
+    },
+    {
+      "source": "data/team-inventory-v1/inventory.json",
+      "id": "mjj-2011-murai-2011",
+      "findings": [
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "marowak",
+          "slot": 1,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "snorlax",
+          "slot": 2,
+          "expected": "M"
+        },
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "donphan",
+          "slot": 3,
+          "move": "encore"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "donphan",
+          "slot": 3,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "gengar",
+          "slot": 4,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "lapras",
+          "slot": 5,
+          "expected": "F"
+        }
+      ]
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-16",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "item-clause",
+          "mon": "umbreon",
+          "slot": 3,
+          "item": "miracleberry"
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "exeggutor",
+          "slot": 0,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "exeggutor",
+          "slot": 0
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "exeggutor",
+          "slot": 0
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "gengar",
+          "slot": 1,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "gengar",
+          "slot": 1
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "gengar",
+          "slot": 1
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "snorlax",
+          "slot": 2,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "snorlax",
+          "slot": 2
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "snorlax",
+          "slot": 2
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "umbreon",
+          "slot": 3,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "umbreon",
+          "slot": 3
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "umbreon",
+          "slot": 3
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "starmie",
+          "slot": 4
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "starmie",
+          "slot": 4
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "miltank",
+          "slot": 5
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "miltank",
+          "slot": 5
+        }
+      ]
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-21",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "team-size",
+          "size": 5,
+          "min": 6
+        }
+      ]
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-22",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "team-size",
+          "size": 5,
+          "min": 6
+        }
+      ]
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-23",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "tauros",
+          "slot": 0,
+          "move": "horndrill"
+        },
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "machamp",
+          "slot": 5,
+          "move": "fissure"
+        }
+      ]
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-24",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "snorlax",
+          "slot": 0,
+          "move": "fissure"
+        }
+      ]
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-25",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "dugtrio",
+          "slot": 0,
+          "move": "fissure"
+        },
+        {
+          "severity": "error",
+          "code": "move-illegal",
+          "mon": "tauros",
+          "slot": 1,
+          "move": "horndrill"
+        }
+      ]
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-26",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "level-min",
+          "mon": "scyther",
+          "slot": 0,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "error",
+          "code": "species-underleveled",
+          "mon": "scyther",
+          "slot": 0,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "scyther",
+          "slot": 0,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "scyther",
+          "slot": 0
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "scyther",
+          "slot": 0
+        },
+        {
+          "severity": "error",
+          "code": "level-min",
+          "mon": "elekid",
+          "slot": 1,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "error",
+          "code": "species-underleveled",
+          "mon": "elekid",
+          "slot": 1,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "elekid",
+          "slot": 1,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "elekid",
+          "slot": 1
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "elekid",
+          "slot": 1
+        },
+        {
+          "severity": "error",
+          "code": "level-min",
+          "mon": "chansey",
+          "slot": 2,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "error",
+          "code": "species-underleveled",
+          "mon": "chansey",
+          "slot": 2,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "chansey",
+          "slot": 2
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "chansey",
+          "slot": 2
+        },
+        {
+          "severity": "error",
+          "code": "level-min",
+          "mon": "cubone",
+          "slot": 3,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "error",
+          "code": "species-underleveled",
+          "mon": "cubone",
+          "slot": 3,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "fix",
+          "code": "gender-fill",
+          "mon": "cubone",
+          "slot": 3,
+          "expected": "M"
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "cubone",
+          "slot": 3
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "cubone",
+          "slot": 3
+        },
+        {
+          "severity": "error",
+          "code": "level-min",
+          "mon": "porygon",
+          "slot": 4,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "error",
+          "code": "species-underleveled",
+          "mon": "porygon",
+          "slot": 4,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "porygon",
+          "slot": 4
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "porygon",
+          "slot": 4
+        },
+        {
+          "severity": "error",
+          "code": "level-min",
+          "mon": "voltorb",
+          "slot": 5,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "error",
+          "code": "species-underleveled",
+          "mon": "voltorb",
+          "slot": 5,
+          "level": 5,
+          "min": 50
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "voltorb",
+          "slot": 5
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "voltorb",
+          "slot": 5
+        }
+      ]
+    },
+    {
+      "source": "data/community-rentals-v0/teams.json",
+      "id": "rental-cban-28",
+      "findings": [
+        {
+          "severity": "error",
+          "code": "team-size",
+          "size": 1,
+          "min": 6
+        },
+        {
+          "severity": "fix",
+          "code": "evs-missing",
+          "mon": "ditto",
+          "slot": 0
+        },
+        {
+          "severity": "fix",
+          "code": "nature-canonical",
+          "mon": "ditto",
+          "slot": 0
+        }
+      ]
+    }
+  ],
+  "preview": {
+    "total": 990,
+    "retained": 810,
+    "invalidated": 180
+  }
+}

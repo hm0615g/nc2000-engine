@@ -1,7 +1,7 @@
 {
   "inputs": {
     "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
-    "data/belief-pool-v3/belief-pool.json": "1c0a1d544be667282ed94f891f7fd1d533c324fd7c18c85d530a1cd9d47da6d5",
+    "data/belief-pool-v3/belief-pool.json": "71f34e0568a39c1ff3b44c1300dee79b79d58dbc1593cb161118e998e2cf7800",
     "data/kodoku-r3/conclusion-equilibrium-deme.json": "cf1c8574064cb2d64363cc8187c5fc0a40e6161f5e73e0d7e9be01bcb48234ef",
     "data/kodoku-r3/conclusion-equilibrium-r1.json": "b5edd0166014004d3df43ed29ef16437cfea6ece2a7792b19b0ebb140e7cdb82",
     "data/meta-nash-v3/pool-artifact.json": "09cb88e174432e728887a2c65a1cf230d248d000579556b9dce3d300d0ac6720",
@@ -9,13 +9,13 @@
     "data/training-v3/rentals.json": "651cfa7a3f05d8264fa2fd6f0e7faa951de59346f002171e148b8d1e13412000"
   },
   "code_and_rules": {
-    "crates/bot/examples/verify_training.rs": "1b22fa9cd8dfea9d9b4a1c10fefe9df97f570dd06657a65e8790fa1d29724d36",
+    "crates/bot/examples/verify_training.rs": "ea226e37b477df242c54482d0cb0f24c2288080dec318376c5f1b4eec92b5865",
     "tools/normalize-training.js": "75e7618dfef6dbe8be45745749806459b2a9375af628270da15a9a8b4bf5756e",
     "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
     "data/learnsets-gen2.json": "8f288150ce10b2698c2100381c3daed6a3a56389bb4fe7169cf3b54407d0d0c4"
   },
-  "checked_sets": 2034,
-  "unique_adversarial_classes": 446,
+  "checked_sets": 3174,
+  "unique_adversarial_classes": 575,
   "dv_tuples_per_class": 65536,
   "catalog_teams_with_exact_prior_support": 33,
   "excluded_sets": 47,

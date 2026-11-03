@@ -89,6 +89,19 @@ function verifyCompiledPreview(): Plugin {
   return {
     name: "verify-compiled-preview",
     apply: "build",
+    enforce: "pre",
+    async load(id) {
+      if (!compiledPreviewEnabled || !id.endsWith('/data/compiled-preview-v1.json?raw')) return;
+      const artifact = JSON.parse(fs.readFileSync(path.join(dataDir, "compiled-preview-v1.json"), "utf8"));
+      if (!artifact.priorDependencies || artifact.status) return;
+      const prior = JSON.parse(fs.readFileSync(path.join(dataDir, "belief-pool-v3/belief-pool.json"), "utf8"));
+      const dex = JSON.parse(fs.readFileSync(path.join(dataDir, "gen2stadium2.json"), "utf8"));
+      const valid = await compatiblePolicyKeys(artifact, prior, dex,
+        (text: string) => createHash("sha256").update(text).digest("hex"));
+      // Keep the full historical bake in the repo; only ship usable choices.
+      artifact.policies = Object.fromEntries(Object.entries(artifact.policies).filter(([key]) => valid.has(key)));
+      return `export default ${JSON.stringify(JSON.stringify(artifact))};`;
+    },
     async buildStart() {
       if (!compiledPreviewEnabled) return;
       const artifact = JSON.parse(fs.readFileSync(path.join(dataDir, "compiled-preview-v1.json"), "utf8"));
@@ -173,6 +186,7 @@ export default defineConfig({
   },
   worker: {
     format: "es",
+    plugins: () => [verifyCompiledPreview()],
   },
   build: {
     target: "es2020",

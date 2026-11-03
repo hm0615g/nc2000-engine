@@ -1,0 +1,31 @@
+{
+  "base": "http://127.0.0.1:58376/",
+  "workerUrl": "http://127.0.0.1:58376/assets/bot-worker-BYnCF_DS.js",
+  "catalogPairs": 1089,
+  "sideCases": 2178,
+  "tableCases": 1800,
+  "liveCases": 378,
+  "livePreviewTestBudget": 1,
+  "lookupMs": {
+    "median": 11.900000095367432,
+    "p95": 12.699999809265137,
+    "max": 17
+  },
+  "battleInitAndLookupMs": {
+    "median": 54.10000038146973,
+    "p95": 57.40000009536743,
+    "max": 64.40000009536743
+  },
+  "hiddenLoadoutInvariant": true,
+  "rejectionControls": [
+    "own-set",
+    "prior-opponent-shell",
+    "prior-own-shell",
+    "public-gender",
+    "public-item-presence"
+  ],
+  "servedDataSha256": {
+    "prior": "71f34e0568a39c1ff3b44c1300dee79b79d58dbc1593cb161118e998e2cf7800",
+    "catalog": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b"
+  }
+}

@@ -110,7 +110,7 @@ test('female preference preserves own Attract targets and impossible fixed/shiny
 
 test('female preference is supported only by the frozen prior source mix', () => {
 	const { attractGenderCensus } = require('./attract-gender-census');
-	const prior = require('../data/belief-pool-v3/belief-pool.json');
+	const prior = require('../data/belief-pool-v3/bake-prior.json');
 	const result = attractGenderCensus(prior);
 	assert.deepEqual(result.weightedSources, { M: 1.25, F: 8, N: 0 });
 	assert.equal(result.preferFemale, true);
