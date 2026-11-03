@@ -99,49 +99,64 @@ fallback unit-test failures are reported separately, with the same eight
 failures reproduced at the unmodified baseline; they were not weakened or
 fixed as part of this task.
 
-## Limited adversarial Nash recheck
+## Adversarial Nash recheck (known-pool rules)
 
-The primary four-party weights (`APEX4` in `data/kodoku-r3/conclusion-equilibrium-deme.json`)
-are historical measurements from before the blind-boundary repair. To test
-whether any existing party achieves > 50% against `APEX4` when **both sides use
-the repaired bot under identical production settings** (`data/live-search.json`:
-`ProtocolAgent` + `PlayerChannel`, `81,000` battle iterations, `729,000`
-unknown-preview iterations or compiled preview lookup `u32(seed) % 64` when
-covered by `data/compiled-preview-v1.json`, `c = 0.4`, `SelRule::Ucb`, legacy
-argmax action policy, and the unmodified `data/belief-pool-v3/belief-pool.json`
-prior), we evaluated the highest-scoring historical challenger parties against
-`APEX4`:
+Information rules (owner, 2026-11-03): each bot does not see the opponent's
+sets, but both sides know the opponent's selection pool and mixture weights,
+as a Nash equilibrium assumes. Same-shell variant mixing is a fair tactic;
+off-pool surprise parties are not allowed.
 
-1. **`mjj-2022-nrsk`** (Starmie50 / Cloyster50 / Machamp50 / Umbreon50 / Marowak50 / Snorlax55):
-   the #1 highest-scoring opponent across all 307 evaluated challengers in
-   `data/kodoku-r3/apex-exp-cache.json` (`0.474688` = `1 - 0.525312148962149`,
-   the exact opponent that set `min_matrix_payoff` in `conclusion-equilibrium-deme.json`).
-2. **Top catalog challengers** from `data/team-pool-v2/preview-nash-matrix.json`
-   and `data/partybox-v0/eval-report.json`: `sample-07` (#1 in the `training-v3`
-   preview matrix, `0.4977`), `mjj-2010-garap-a` (#1 in the pre-`training-v3`
-   catalog matrix, `0.4783`), `pb-100` (#1 in `partybox-v0`, `0.4513`), and
-   `sample-08` (#2 non-APEX4 by `1 - APEX4` value in `training-v3`, `0.4620`).
+Harness: `omniscient_audit --production-challengers`. Per side, the prior is
+`belief-pool-v3` with every team sharing the opponent's public preview
+signature replaced by the opponent's mixture. At team preview every game
+asserts `!is_fallback()` and `candidate_count == opponent variant count`
+(zero violations). Both sides use 729k live preview search (the compiled
+table was baked under the unmodified prior). Otherwise production settings:
+`ProtocolAgent` + `PlayerChannel`, 81k iterations, `c = 0.4`, UCB, `best()`.
 
-| Challenger party | Historical score vs `APEX4` | Games (Mirrored Pairs) | W–L–T–Cap | Win Rate vs `APEX4` | Paired SE | Approx. 95% CI | Preview Source (Blue / Red) |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| **`mjj-2022-nrsk`** | `0.4747` (#1 overall in `apex-exp-cache.json`) | 64 (32) | **41–23–0–0** | **64.06%** | 6.44% | **[51.44%, 76.69%]** | `search` / `search` (729k) |
-| `sample-07` | `0.4977` (#1 catalog in `training-v3` matrix) | 64 (32) | 32–32–0–0 | 50.00% | 5.94% | [38.36%, 61.64%] | `table` / `table` |
-| `mjj-2010-garap-a` | `0.4783` (#1 catalog in `572d77de` matrix) | 64 (32) | 20–44–0–0 | 31.25% | 6.64% | [18.23%, 44.27%] | `table` / `table` |
-| `pb-100` | `0.4513` (#1 in `partybox-v0/eval-report.json`) | 32 (16) | 17–15–0–0 | 53.12% | 8.50% | [36.46%, 69.79%] | `table` / `table` |
-| `sample-08` | `0.4620` (#2 catalog by `1 - APEX4` in `training-v3`) | 32 (16) | 16–16–0–0 | 50.00% | 10.21% | [30.00%, 70.00%] | `table` / `table` |
+Candidates: shells ranked by variant-weight-optimized Bayesian preview value
+vs `APEX4` from `data/kodoku-r3/apex-exp-cache.json`; all four are below 0.5
+at that layer.
 
-In the primary 32-pair (64-game) match under identical production bot settings,
-`mjj-2022-nrsk` won **41 games to 23** (`64.0625%`, paired SE `6.4424%`,
-approximate 95% CI **`[51.44%, 76.69%]`**), with positive or even results across
-all four `APEX4` variants (`19–5` vs `apex-c08-surgical-142`, `10–6` vs
-`red-v10-s1105-r1-s0148`, `8–8` vs `red-v10-s1105-r2-s0142`, `4–4` vs
-`apex-c04-bug-3atkstar-boomgen`; exact mixture-weighted score `61.25%`).
-Within the 33-team catalog (`src=table`), none of the top challengers beat
-`APEX4` (`sample-07` 50.00%, `sample-08` 50.00%, `pb-100` 53.12% ± 8.50%,
-`mjj-2010-garap-a` 31.25%). Because an off-catalog party (`mjj-2022-nrsk`)
-achieves > 50% against `APEX4` under identical production settings of the
-repaired bot, we retain the historical mixture weights and label them as
-historical rather than claiming an equilibrium certificate for the repaired bot.
+| Challenger | Variants (weights) | Preview-layer value | Games | W–L | Win rate | 95% CI |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| `Police3-shell` | sample-08 .221 / hc75-3rd-bean .535 / rental-cban-6 .244 | 0.4751 | 192 | 102–90 | 53.12% | [44.94%, 61.31%] |
+| `mjj-2022-nrsk` | 1 | 0.4614 | 64 | 26–38 | 40.62% | [27.84%, 53.41%] |
+| `Garap2-shell` | garap-a .68 / sib-r2-n3-garap-a-s06 .32 | 0.4754 | 64 | 25–39 | 39.06% | [24.65%, 53.48%] |
+| `Sample12-5var-shell` | s0093 .30 / s0083 .25 / r2-s0101 .20 / s0089 .15 / sample-12 .10 | 0.4673 | 64 | 23–41 | 35.94% | [23.31%, 48.56%] |
+
+Verdict: no challenger significantly beats `APEX4` under known-pool rules.
+Raw records: `known-pool-challenger.json`, `known-pool-police3-p32-96.json`.
+
+The earlier `mjj-2022-nrsk` 41–23 (64.06%) result (`challenger.json`) is
+withdrawn: `APEX4`'s prior did not contain that party, i.e. an off-pool
+surprise. Disclosed, it scores 40.62%.
+
+### Police3 vs expectation
+
+Preview-layer values (same cache, mixtures known, row side's score):
+
+| | APEX4 | old APEX2 | Garap2 | nrsk | Sample12 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Police3 | 0.4751 | 0.5030 | 0.5669 | 0.5574 | 0.5026 |
+| APEX4 | — | n/a | 0.5247 | 0.5386 | 0.5506 |
+| old APEX2 | n/a | — | 0.4785 | 0.5271 | 0.5252 |
+
+Police3's historical role was hunting the predators of the old APEX2
+(Garap2 beat APEX2 0.5215). Police3 itself was roughly even with APEX2
+(0.5030). APEX4 was selected to maximize its minimum over Police3 and Garap2,
+so it covers Garap2 directly and beats Police3 by 2.5 points at this layer;
+Police3 then left the support.
+
+Bot play does not preserve the preview-layer ordering. Against APEX4 the
+predicted shells all lost more than predicted (Garap2 −8.5, nrsk −5.5,
+Sample12 −10.8 points) while Police3 gained (+5.6). The Police3 gap is
+1.3 SE, so "Police3 slightly loses" is not contradicted, but the direction
+is consistent with a layer effect: preview matrices come from heavy-playout
+rollouts, not 81k search. Police3 games are much longer (mean 48 turns vs
+16–33), and within Police3 the `hc75-3rd-bean` draws scored 67/106 while
+`sample-08` scored 14/36 and `rental-cban-6` 21/50. Both are hypotheses
+until tested with a pre-registered run.
 
 ## Reproduction
 

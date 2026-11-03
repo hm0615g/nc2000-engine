@@ -31,7 +31,7 @@ Current mixture: `data/kodoku-r3/conclusion-equilibrium-deme.json` (four parties
     4. **`pb-100`**: #1 in `data/partybox-v0/eval-report.json` (`0.451343`).
     5. **`sample-08`**: #2 non-APEX4 catalog party by `1 - APEX4` value in `training-v3` `preview-nash-matrix.json` (`0.461972`).
   - Tested under **identical production settings on both sides** (`ProtocolAgent` + `PlayerChannel`, `81,000` battle iterations, `729,000` unknown-preview iterations or `data/compiled-preview-v1.json` `choices[u32(seed) % 64]` when present, `c = 0.4`, `SelRule::Ucb`, legacy `best()`, unmodified `data/belief-pool-v3/belief-pool.json` prior):
-    - **`mjj-2022-nrsk` (32 mirrored pairs = 64 games)**: **41–23–0 (`64.06%`, paired SE `6.44%`, approx. 95% CI `[51.44%, 76.69%]`)** — exceeds 50%.
+    - ~~**`mjj-2022-nrsk`**: 41–23 (64.06%)~~ — withdrawn (off-pool surprise); see known-pool rerun below.
     - **`sample-07` (32 mirrored pairs = 64 games)**: **32–32–0 (`50.00%`, paired SE `5.94%`, approx. 95% CI `[38.36%, 61.64%]`)**.
     - **`mjj-2010-garap-a` (32 mirrored pairs = 64 games)**: **20–44–0 (`31.25%`, paired SE `6.64%`, approx. 95% CI `[18.23%, 44.27%]`)**.
     - **`pb-100` (16 mirrored pairs = 32 games)**: **17–15–0 (`53.12%`, paired SE `8.50%`, approx. 95% CI `[36.46%, 69.79%]`)**.
@@ -56,3 +56,4 @@ User rule: each bot knows the opponent's selection pool and mixture weights (com
 - Verdict: no challenger significantly beats APEX4 under known-pool rules. Police3 is the only point estimate above 50% (z = 0.75).
 - Post-hoc observation (not a claim): within Police3, the `hc75-3rd-bean` draws scored 67/106; the other two variants scored poorly. A Police3 reweighting toward hc75 would need a fresh, pre-registered run because the mixture is common knowledge.
 - `sib-r2-n3-mjj-2010-garap-a-s06` is read from the main checkout's `data/dominance-audit-v11-fullnash/` (absent in this worktree).
+- Police3 vs expectation: see `data/blind-boundary-repair-v1/README.md` §"Police3 vs expectation". Police3 was the hunter of old-APEX2's predators and ~even with APEX2; APEX4 was tuned to beat it by 2.5 points at the preview layer. In bot play the predicted shells underperformed and Police3 overperformed (gap 1.3 SE); suspected rollout-vs-search layer effect, unverified.
