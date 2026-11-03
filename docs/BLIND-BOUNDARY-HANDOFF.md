@@ -57,3 +57,15 @@ User rule: each bot knows the opponent's selection pool and mixture weights (com
 - Post-hoc observation (not a claim): within Police3, the `hc75-3rd-bean` draws scored 67/106; the other two variants scored poorly. A Police3 reweighting toward hc75 would need a fresh, pre-registered run because the mixture is common knowledge.
 - `sib-r2-n3-mjj-2010-garap-a-s06` is read from the main checkout's `data/dominance-audit-v11-fullnash/` (absent in this worktree).
 - Police3 vs expectation: see `data/blind-boundary-repair-v1/README.md` §"Police3 vs expectation". Police3 was the hunter of old-APEX2's predators and ~even with APEX2; APEX4 was tuned to beat it by 2.5 points at the preview layer. In bot play the predicted shells underperformed and Police3 overperformed (gap 1.3 SE); suspected rollout-vs-search layer effect, unverified.
+
+## Session record (2026-11-03 12:53)
+
+- Owner decision: the bot repair will be deployed; no pre/post-repair attribution study.
+- Requested stable configuration (not started): repaired bot; party pool, Nash mixture and compiled preview bake unchanged; opponent prior extended so known parties are not off-pool.
+- Facts gathered for that request:
+  - 484 known parties in repo sources (majinjima-assassins, kodoku-r3 promotes/gauntlets/apex-candidates, eco-pool, partybox, community-rentals, dominance-audit nemeses/siblings). 244 share a public preview signature with a current `belief-pool-v3` team; 220 new signatures (240 teams), including `mjj-2022-nrsk`.
+  - `compiled_preview::build_fingerprint` does not hash the prior. `compiled-preview-v1.json` records `priorSha256`; `tools/build-training-products.js` (run by Pages CI) marks the artifact retired when the prior hash differs.
+  - Open owner decisions: whether to add same-signature variants with different sets (would change beliefs for those shells and invalidate their bake keys); which sources count as "known".
+- Corrections to statements made in this session:
+  - Speed stat is not hidden: all 1326 prior sets have max Speed DV and stat exp. Hidden turn-order inputs used by the pre-repair root exclusions (`dominated_reason` on the true battle) were the opponent's item (Quick Claw), the turn's `quick_claw_roll`, unrevealed moves, items and max HP.
+  - Attack-DV minimization does not lower HP DV (minimized sets use Attack DV 1). All 110 sets with HP DV < 15 across `belief-pool-v3`, `team-pool-v2` and APEX4 carry Hidden Power; each equals the maximum HP DV compatible with its gender and Hidden Power type.
