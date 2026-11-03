@@ -1,6 +1,8 @@
 {
   "non_inferiority": {
     "status": "SUPERIOR_CONFIRMED",
+    "candidate_policy": "coupled_per_world_bayesian_equilibrium_and_depth1_minimax",
+    "baseline_policy": "opponent_uniform_row_mean_pure_argmax_katteyomi",
     "mean": 0.722222,
     "lcb": 0.504706,
     "ucb": 0.916346,

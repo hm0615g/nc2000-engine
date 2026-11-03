@@ -3322,7 +3322,10 @@ def select_shell_belief_minimax_action_jax(
     - Solves the coupled Bayesian equilibrium `max_p sum_v w_v min_{j in mask_opp_v} (p^T V_v)_j`
       via `solve_bayesian_equilibrium_jax`.
     When `bayesian_eq=False`:
-    - Uses the legacy world-averaged / optimistic-reply policy for A/B non-inferiority testing.
+    - Measures the pure "勝手読み" (optimistic uniform-reply) baseline: takes the uniform mean across
+      opponent legal columns `j in mask_opp_v` (`row_means_v`), averages over worlds `post_w`, and picks
+      the pure `argmax` action without RM+ mixing or Depth-1 minimax contraction (as distinct from
+      solving RM+ on the world-averaged matrix `m_bayes`).
     """
     use_beq = jnp.asarray(bayesian_eq, dtype=jnp.bool_)
     raw_w = jnp.where(belief_mask_foe, jnp.maximum(prior_weights_foe, jnp.float32(1e-6)), jnp.float32(0.0))
@@ -4415,6 +4418,8 @@ def run_unified_nash_and_bake_pipeline_tpu(
         summary_payload = {
             "non_inferiority": {
                 "status": ni_status,
+                "candidate_policy": "coupled_per_world_bayesian_equilibrium_and_depth1_minimax",
+                "baseline_policy": "opponent_uniform_row_mean_pure_argmax_katteyomi",
                 "mean": round(ni_mean, 6),
                 "lcb": round(ni_lcb, 6),
                 "ucb": round(ni_ucb, 6),
