@@ -11,7 +11,7 @@ import init, {
   embeddedDexJson,
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
 import { searchProfile } from "./search-profile";
-import { compiledPreviewMatches, compiledPreviewPick } from "./compiled-preview";
+import { compiledPreviewCompatibility, compiledPreviewPick } from "./compiled-preview";
 import type { ActionPolicyMode, PlayPolicy } from "./types";
 import type { EndgameSettings } from "./endgame-settings";
 import { runEndgameSearch } from "./endgame-search";
@@ -102,7 +102,7 @@ const ready = init().then(exports => {
 });
 
 let battle: Battle | null = null;
-let compiledAllowed: Promise<boolean> = Promise.resolve(false);
+let compiledAllowed: Promise<Set<string>> = Promise.resolve(new Set());
 let previewSeed = 0;
 let actionPolicy: ActionPolicyMode = "legacy";
 let forked: {
@@ -136,7 +136,7 @@ async function handle(m: WorkerRequest): Promise<void> {
       gen += 1;
       previewSeed = m.searcher.seed;
       compiledAllowed = actionPolicy !== "legacy" || m.searcher.compiledPreview === false || m.searcher.priorJson
-        ? Promise.resolve(false) : compiledPreviewMatches(m.searcher.poolJson, embeddedDexJson()).catch(() => false);
+        ? Promise.resolve(new Set<string>()) : compiledPreviewCompatibility(m.searcher.poolJson, embeddedDexJson()).catch(() => new Set<string>());
       dropForked();
       battle?.free();
       battle = null;
@@ -256,8 +256,8 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
   if (f.live && !f.endgame) {
     const allowed = await compiledAllowed;
     if (gen !== myGen) return;
-    const compiled = allowed ? compiledPreviewPick(f.searcher.compiledPreviewBuild(),
-      f.searcher.compiledPreviewKey(), previewSeed, searchProfile("blind").c, f.searcher.previewCacheInfo()) : undefined;
+    const compiled = allowed.size ? compiledPreviewPick(f.searcher.compiledPreviewBuild(),
+      f.searcher.compiledPreviewKey(), previewSeed, searchProfile("blind").c, f.searcher.previewCacheInfo(), allowed) : undefined;
     if (compiled && frame.legal_actions.some(input => input.replace(/\s/g, "") === compiled.replace(/\s/g, ""))) {
       post({ t: "result", id: m.id, best: compiled,
         playPolicy: { source: "preview-sampled", actions: [{ input: compiled, probability: 1 }] },

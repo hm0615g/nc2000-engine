@@ -49,14 +49,29 @@ const retirement = {
 	priorSha256: sha('data/belief-pool-v3/belief-pool.json'),
 	catalogSha256: sha('data/team-pool-v2/team-pool.json'),
 };
-for (const p of ['data/compiled-preview-v1.json', 'data/team-pool-v2/preview-nash-matrix.json']) {
-	const artifact = read(p);
-	if (!artifact.status &&
-		(artifact.priorSha256 || artifact.inputs?.['data/belief-pool-v3/belief-pool.json']) === retirement.priorSha256 &&
-		artifact.inputs?.['data/team-pool-v2/team-pool.json'] === retirement.catalogSha256) continue;
-	artifact.status = 'retired-training-v3';
-	artifact.retirement = retirement;
-	// Keep computation provenance and policies as historical data. In
-	// particular, never stamp the new input hashes onto old computations.
-	write(p, artifact);
+async function validatePreviews() {
+ const { compatiblePolicyKeys, priorSnapshot } = await import('../web/src/preview-prior.mjs');
+ const digest = text => crypto.createHash('sha256').update(text).digest('hex');
+ const prior = read('data/belief-pool-v3/belief-pool.json');
+ for (const p of ['data/compiled-preview-v1.json', 'data/team-pool-v2/preview-nash-matrix.json']) {
+  const artifact = read(p);
+  const catalogMatches = artifact.inputs?.['data/team-pool-v2/team-pool.json'] === retirement.catalogSha256;
+  if (!artifact.status && catalogMatches && artifact.priorDependencies?.version === 1) {
+   if (artifact.policies) {
+    const valid = await compatiblePolicyKeys(artifact, prior, dex, digest);
+    console.log(`${p}: ${valid.size}/${Object.keys(artifact.policies).length} prior-compatible keys; others use live search`);
+   } else {
+    const current = await priorSnapshot(prior, dex, digest);
+    const changed = Object.entries(artifact.priorDependencies.shells).filter(([s, h]) => current[s] !== h).length;
+    console.log(`${p}: ${changed} changed shell distributions; historical matrix provenance preserved`);
+   }
+   continue;
+  }
+  if (!artifact.status && catalogMatches &&
+      (artifact.priorSha256 || artifact.inputs?.['data/belief-pool-v3/belief-pool.json']) === retirement.priorSha256) continue;
+  artifact.status = 'retired-training-v3';
+  artifact.retirement = retirement;
+  write(p, artifact);
+ }
 }
+validatePreviews().catch(error => { console.error(error); process.exitCode = 1; });

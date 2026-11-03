@@ -69,3 +69,23 @@ User rule: each bot knows the opponent's selection pool and mixture weights (com
 - Corrections to statements made in this session:
   - Speed stat is not hidden: all 1326 prior sets have max Speed DV and stat exp. Hidden turn-order inputs used by the pre-repair root exclusions (`dominated_reason` on the true battle) were the opponent's item (Quick Claw), the turn's `quick_claw_roll`, unrevealed moves, items and max HP.
   - Attack-DV minimization does not lower HP DV (minimized sets use Attack DV 1). All 110 sets with HP DV < 15 across `belief-pool-v3`, `team-pool-v2` and APEX4 carry Hidden Power; each equals the maximum HP DV compatible with its gender and Hidden Power type.
+
+## Semantic preview invalidation (2026-11-03)
+
+- Owner resolved prior membership: real-world parties including variants;
+  evolution-generated parties only if in the current party catalog.
+- Updated CI, Web build, and worker validation to compare conditional type
+  distributions within both public shells. Unrelated shells, metadata,
+  formatting, and proportional weight scaling no longer retire all policies.
+- Installed dependency metadata on the existing artifacts without changing
+  choices, payoff matrices, or original input hashes. All 990 current keys
+  remain active. The shipped prior has **not** yet been expanded.
+- Expansion is not entirely bake-neutral: adding normalized `mjj-gym-Tokiwa`
+  introduces a new variant in `sample-09`'s shell. That addition alone affects
+  62 keys and preserves 928. This is a lower bound, not a complete expansion
+  audit. Affected keys use live preview until recomputed.
+- Checks: 9 semantic regression tests; 221-team material identity parity with
+  WASM; production build; 2,178 production worker cases plus partial-prior
+  rejection controls. Choices and computation provenance verified unchanged.
+- Details: `docs/PREVIEW-PRIOR-COMPATIBILITY.md`; evidence:
+  `data/blind-boundary-repair-v1/preview-prior-compatibility.json`.

@@ -64,5 +64,7 @@ if not args.check_only:
         temp = target.with_suffix('.tmp')
         shutil.copyfile(source, temp)
         temp.replace(target)
+    subprocess.run(['node', 'tools/preview-prior-metadata.mjs',
+                    'data/compiled-preview-v1.json', 'data/team-pool-v2/preview-nash-matrix.json'], check=True)
 print(f"{'Verified' if args.check_only else 'Activated'} {artifact['matchups']} policies; "
       f"{len(own_keys)} own parties x {len(public_keys)} public rosters")

@@ -1,0 +1,41 @@
+{
+  "semanticRegressionTests": 9,
+  "engineMaterialParityTeams": 221,
+  "existingPolicyKeys": 990,
+  "existingChoicesUnchanged": true,
+  "originalComputationProvenanceUnchanged": true,
+  "priorExpansionApplied": false,
+  "tokiwaAdditionOnly": {
+    "invalidKeys": 62,
+    "retainedKeys": 928
+  },
+  "production": {
+    "base": "http://127.0.0.1:56989/",
+    "workerUrl": "http://127.0.0.1:56989/assets/bot-worker-DeJFaalx.js",
+    "catalogPairs": 1089,
+    "sideCases": 2178,
+    "searchIterations": 0,
+    "lookupMs": {
+      "median": 6.199999809265137,
+      "p95": 6.400000095367432,
+      "max": 9.900000095367432
+    },
+    "battleInitAndLookupMs": {
+      "median": 15.300000190734863,
+      "p95": 15.800000190734863,
+      "max": 43.700000286102295
+    },
+    "hiddenLoadoutInvariant": true,
+    "rejectionControls": [
+      "own-set",
+      "prior-opponent-shell",
+      "prior-own-shell",
+      "public-gender",
+      "public-item-presence"
+    ],
+    "servedDataSha256": {
+      "prior": "1c0a1d544be667282ed94f891f7fd1d533c324fd7c18c85d530a1cd9d47da6d5",
+      "catalog": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b"
+    }
+  }
+}

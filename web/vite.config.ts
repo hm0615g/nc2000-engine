@@ -26,6 +26,8 @@ import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
+import { compatiblePolicyKeys } from "./src/preview-prior.mjs";
+
 const webDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webDir, "..");
 const dataDir = path.join(repoRoot, "data");
@@ -87,7 +89,7 @@ function verifyCompiledPreview(): Plugin {
   return {
     name: "verify-compiled-preview",
     apply: "build",
-    buildStart() {
+    async buildStart() {
       if (!compiledPreviewEnabled) return;
       const artifact = JSON.parse(fs.readFileSync(path.join(dataDir, "compiled-preview-v1.json"), "utf8"));
       const catalog = JSON.parse(fs.readFileSync(path.join(dataDir, "team-pool-v2/team-pool.json"), "utf8"));
@@ -108,7 +110,16 @@ function verifyCompiledPreview(): Plugin {
       if (artifact.format !== "nc2000-compiled-preview-v1" || !artifact.inputs || !artifact.matchups || Object.keys(artifact.policies ?? {}).length !== artifact.matchups)
         throw new Error("Compiled previews are incomplete. Run compile_preview and tools/compile-preview-artifact.py.");
       if (artifact.c !== profiles.blind.c) throw new Error("Compiled previews use a different search coefficient. Rebuild the preview artifact.");
+      if (artifact.priorDependencies) {
+        const prior = JSON.parse(fs.readFileSync(path.join(dataDir, "belief-pool-v3/belief-pool.json"), "utf8"));
+        const dex = JSON.parse(fs.readFileSync(path.join(dataDir, "gen2stadium2.json"), "utf8"));
+        const valid = await compatiblePolicyKeys(artifact, prior, dex,
+          (text: string) => createHash("sha256").update(text).digest("hex"));
+        if (valid.size !== artifact.matchups)
+          this.warn(`${artifact.matchups - valid.size} preview keys have changed shell priors and will use live search.`);
+      }
       for (const [relative, expected] of Object.entries(artifact.inputs)) {
+        if (relative === "data/belief-pool-v3/belief-pool.json" && artifact.priorDependencies) continue;
         const actual = createHash("sha256").update(fs.readFileSync(path.join(repoRoot, relative))).digest("hex");
         if (actual !== expected) throw new Error(`Stale compiled previews: ${relative}. Rebuild the preview artifact.`);
       }

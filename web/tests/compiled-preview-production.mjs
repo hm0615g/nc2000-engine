@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { preview } from 'vite';
 import { chromium } from '@playwright/test';
 import { createRequire } from 'node:module';
+import { compatiblePolicyKeys } from '../src/preview-prior.mjs';
 const wasm = createRequire(import.meta.url)('../../crates/wasm/pkg-node/nc2000_wasm.js');
 const frameDex = new wasm.Dex();
 
@@ -23,7 +24,11 @@ try {
   };
   const artifact = JSON.parse(fs.readFileSync('../data/compiled-preview-v1.json', 'utf8'));
   assert.equal(artifact.status, undefined, 'production previews must be active');
-  assert.equal(artifact.priorSha256, expected.prior);
+  const compatible = await compatiblePolicyKeys(artifact,
+    JSON.parse(fs.readFileSync('../data/belief-pool-v3/belief-pool.json')),
+    JSON.parse(fs.readFileSync('../data/gen2stadium2.json')),
+    text => crypto.createHash('sha256').update(text).digest('hex'));
+  assert.equal(compatible.size, Object.keys(artifact.policies).length);
   browser = await chromium.launch();
   const page = await browser.newPage();
   await page.exposeFunction('__playerFrame', (own, foe, side) => {
@@ -99,9 +104,19 @@ try {
       const ownChange = structuredClone(own); ownChange[0].happiness = 254;
       const genderChange = structuredClone(foe); const cloyster = genderChange.find(s => s.species === 'Cloyster'); cloyster.gender = 'F'; cloyster.ivs.atk = 14;
       const itemChange = structuredClone(foe); itemChange[0].item = '';
+      const formatted = await run(own, foe, 1, prior + ' ');
+      if (formatted.src !== 'table') throw Error('format-only prior change invalidated preview');
+      const changed = JSON.parse(prior);
+      const variant = structuredClone(changed.teams.find(t => t.id === 'sample-07'));
+      variant.id = 'test-new-variant'; variant.sets[0].moves[0] = 'Thunder';
+      changed.teams.push(variant);
+      const changedPrior = JSON.stringify(changed);
+      const unrelated = catalog.find(t => t.id === 'sample-12').sets;
+      if ((await run(unrelated, unrelated, 1, changedPrior)).src !== 'table') throw Error('unrelated shell invalidated');
       const controls = [];
       for (const [name, a, b, p] of [
-        ['own-set', ownChange, foe, prior], ['prior-hash', own, foe, prior + ' '],
+        ['own-set', ownChange, foe, prior], ['prior-opponent-shell', unrelated, foe, changedPrior],
+        ['prior-own-shell', own, unrelated, changedPrior],
         ['public-gender', own, genderChange, prior], ['public-item-presence', own, itemChange, prior],
       ]) {
         const r = await run(a, b, 1, p);
