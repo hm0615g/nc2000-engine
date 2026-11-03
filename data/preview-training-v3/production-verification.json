@@ -1,28 +1,31 @@
 {
-  "base": "http://127.0.0.1:61750/nc2000-engine/",
-  "workerUrl": "http://127.0.0.1:61750/nc2000-engine/assets/bot-worker-vgQvf4NB.js",
+  "base": "http://127.0.0.1:62063/nc2000-engine/",
+  "workerUrl": "http://127.0.0.1:62063/nc2000-engine/assets/bot-worker-DkyZQ7QI.js",
   "catalogPairs": 1089,
   "sideCases": 2178,
-  "searchIterations": 0,
+  "tableCases": 2178,
+  "liveCases": 0,
+  "livePreviewTestBudget": 1,
   "lookupMs": {
-    "median": 1.0999999046325684,
-    "p95": 1.5,
-    "max": 10.400000095367432
+    "median": 8,
+    "p95": 9,
+    "max": 12.100000381469727
   },
   "battleInitAndLookupMs": {
-    "median": 20,
-    "p95": 25.199999809265137,
-    "max": 42.90000009536743
+    "median": 28.299999713897705,
+    "p95": 30.799999713897705,
+    "max": 67.69999980926514
   },
   "hiddenLoadoutInvariant": true,
   "rejectionControls": [
     "own-set",
-    "prior-hash",
+    "prior-opponent-shell",
+    "prior-own-shell",
     "public-gender",
     "public-item-presence"
   ],
   "servedDataSha256": {
-    "prior": "1c0a1d544be667282ed94f891f7fd1d533c324fd7c18c85d530a1cd9d47da6d5",
+    "prior": "71f34e0568a39c1ff3b44c1300dee79b79d58dbc1593cb161118e998e2cf7800",
     "catalog": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b"
   }
 }

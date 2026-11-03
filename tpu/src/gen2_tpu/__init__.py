@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import time
 import jax
 import jax.numpy as jnp
+
+os.makedirs("/tmp/jax_cache_gen2_tpu", exist_ok=True)
+jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache_gen2_tpu")
 
 from .tpu_emu import (
     TPU_V5E,
@@ -146,6 +150,7 @@ from .search import (
     solve_rm_plus_jax,
 )
 from .kodoku import (
+    DEFAULT_LEARNSETS_PATH,
     MAX_TOTAL_LEVEL_NC2000,
     PREVIEW_ACTIONS_0BASED_NP,
     PREVIEW_ACTIONS_1BASED,
@@ -153,7 +158,9 @@ from .kodoku import (
     SPACE_VERSION,
     CoreNashPairResult,
     CoupledShellEquilibriumResult,
+    KodokuEvolutionResult,
     KodokuGauntletSummary,
+    KodokuPopulationEvaluation,
     RectEquilibriumResult,
     RosterTable6,
     SharedDexTable,
@@ -165,15 +172,21 @@ from .kodoku import (
     core_nash_6v6_pair_tpu,
     evaluate_3v3_picks_batch_tpu,
     evaluate_kodoku_gauntlet_tpu,
+    evaluate_population_tpu,
     export_dominance_audit_cells_json,
     export_pair_table_dict,
     export_pair_table_json,
     legal_action_indices,
     legal_preview_mask_60,
+    load_learnsets,
+    mutate_team_for_kodoku,
+    normalize_training_set,
+    normalize_training_team,
     preview_actions_1based,
     preview_signature_sets,
     recompute_population_wars_np,
     replicator_dynamics_jax,
+    run_kodoku_tpu,
     run_unified_nash_and_bake_pipeline_tpu,
     select_top_k_orthogonal,
     simulate_multi_table_heavy_games,
@@ -473,6 +486,29 @@ def main(argv: list[str] | None = None) -> None:
     p_uni.add_argument("--refine-turns", type=int, default=60)
     p_uni.add_argument("--seed", type=int, default=20260405)
 
+    p_evo = sub.add_parser(
+        "kodoku-evolve",
+        help="Run Multi-Deme / Challenger Kodoku evolution on TPU under the coupled per-world Bayesian Equilibrium policy",
+    )
+    p_evo.add_argument("--seed-pool", required=True, help="Path to seed team pool JSON")
+    p_evo.add_argument("--opponent-pool", default=None, help="Optional opponent pool JSON (default: self-play)")
+    p_evo.add_argument("--out-dir", required=True, help="Output directory for kodoku_evolution_summary.json")
+    p_evo.add_argument("--generations", type=int, default=2)
+    p_evo.add_argument("--offspring-per-gen", type=int, default=4)
+    p_evo.add_argument("--max-pop-size", type=int, default=12)
+    p_evo.add_argument("--preserve-shell-prob", type=float, default=0.75)
+    p_evo.add_argument("--screen-games", type=int, default=2)
+    p_evo.add_argument("--support-k", type=int, default=3)
+    p_evo.add_argument("--refine-games", type=int, default=4)
+    p_evo.add_argument("--screen-turns", type=int, default=40)
+    p_evo.add_argument("--refine-turns", type=int, default=60)
+    p_evo.add_argument("--survivor-top-k", type=int, default=6)
+    p_evo.add_argument("--policy-games", type=int, default=2)
+    p_evo.add_argument("--policy-turns", type=int, default=12)
+    p_evo.add_argument("--policy-rollout-turns", type=int, default=2)
+    p_evo.add_argument("--policy-followup-turns", type=int, default=24)
+    p_evo.add_argument("--seed", type=int, default=20260405)
+
     ns = parser.parse_args(args_list)
     if ns.cmd == "benchmark":
         _run_benchmark()
@@ -560,6 +596,8 @@ def main(argv: list[str] | None = None) -> None:
             tf.add(pkg_root / "tests", arcname="tests")
             if DEFAULT_DEX_PATH.exists():
                 tf.add(DEFAULT_DEX_PATH, arcname="src/gen2_tpu/data/gen2stadium2.json")
+            if DEFAULT_LEARNSETS_PATH.exists():
+                tf.add(DEFAULT_LEARNSETS_PATH, arcname="src/gen2_tpu/data/learnsets-gen2.json")
         print(f"Created self-contained Colab TPU bundle at {out_path}")
     elif ns.cmd == "nash-pipeline":
         teams_p = _load_pool_teams(ns.pool)
@@ -596,6 +634,34 @@ def main(argv: list[str] | None = None) -> None:
         print(
             f"[Gate 3] Baked PairTables : {len(res_uni.baked_pair_tables)} tables written to {ns.out_dir} "
             f"in {res_uni.elapsed_secs:.2f}s"
+        )
+    elif ns.cmd == "kodoku-evolve":
+        seed_teams = _load_pool_teams(ns.seed_pool)
+        opp_teams = _load_pool_teams(ns.opponent_pool) if ns.opponent_pool else None
+        res_evo = run_kodoku_tpu(
+            seed_teams,
+            opponent_pool=opp_teams,
+            generations=ns.generations,
+            offspring_per_gen=ns.offspring_per_gen,
+            max_population_size=ns.max_pop_size,
+            preserve_shell_prob=ns.preserve_shell_prob,
+            screen_games=ns.screen_games,
+            support_k=ns.support_k,
+            refine_games=ns.refine_games,
+            screen_turns=ns.screen_turns,
+            refine_turns=ns.refine_turns,
+            survivor_top_k=ns.survivor_top_k,
+            policy_games_per_pair=ns.policy_games,
+            policy_turns=ns.policy_turns,
+            policy_rollout_turns=ns.policy_rollout_turns,
+            policy_followup_turns=ns.policy_followup_turns,
+            seed=ns.seed,
+            out_dir=ns.out_dir,
+        )
+        print(
+            f"[Kodoku Evolve] Completed {len(res_evo.generation_history)} generations "
+            f"(final_pop={len(res_evo.final_population)}, nash={list(res_evo.nash_weights.keys())}) "
+            f"in {res_evo.elapsed_secs:.2f}s"
         )
 
 

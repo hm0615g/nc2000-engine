@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { compatiblePolicyKeys, priorSnapshot, policyShells, teamMaterial, materialShell } from '../src/preview-prior.mjs';
 const read = p => JSON.parse(fs.readFileSync(new URL(`../../${p}`, import.meta.url)));
-const prior = read('data/belief-pool-v3/bake-prior.json');
+const prior = read('data/belief-pool-v3/belief-pool.json');
 const dex = read('data/gen2stadium2.json');
 const artifact = read('data/compiled-preview-v1.json');
 const digest = s => crypto.createHash('sha256').update(s).digest('hex');
@@ -64,7 +64,7 @@ test('real Tokiwa variant invalidates exactly 62 sample-09 shell keys', async ()
  const { normalizeTraining } = createRequire(import.meta.url)('../../tools/normalize-training.js');
  const t = read('data/kodoku-r3/majinjima-assassins.json').teams.find(t => t.id === 'mjj-gym-Tokiwa');
  const sets = normalizeTraining(t.sets, dex);
- const p = { teams: [...prior.teams, {...t, sets, weight: 1}] };
+ const p = { teams: prior.teams.filter(team => team.id !== 'mjj-gym-Tokiwa') };
  const valid = await compatible(p);
  assert.equal(count - valid.size, 62);
  const shell = materialShell(teamMaterial(sets, dex));
@@ -72,14 +72,16 @@ test('real Tokiwa variant invalidates exactly 62 sample-09 shell keys', async ()
   assert.equal(valid.has(key), !dependencies.includes(shell));
 });
 
-test('deployed expansion keeps only catalog-generated types and has 810 reusable keys', async () => {
+test('deployed expansion keeps only catalog-generated types and has 990 reusable keys', async () => {
  const pool = read('data/belief-pool-v3/belief-pool.json');
+ const bakePrior = read('data/belief-pool-v3/bake-prior.json');
  const catalog = read('data/team-pool-v2/team-pool.json');
  const types = new Set(catalog.teams.map(t => JSON.stringify(teamMaterial(t.sets, dex))));
  for (const t of pool.teams) if (t.provenance.origin !== 'human')
   assert.ok(types.has(JSON.stringify(teamMaterial(t.sets, dex))), t.id);
  assert.ok(pool.teams.some(t => t.id === 'mjj-2022-nrsk'));
  assert.ok(pool.teams.some(t => t.id === 'mjj-gym-Tokiwa'));
- assert.equal((await compatible(pool)).size, 810);
+ assert.equal((await compatible(pool)).size, 990);
+ assert.equal((await compatible(bakePrior)).size, 810);
  assert.equal(pool.teams.length, 411);
 });

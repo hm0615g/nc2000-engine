@@ -3531,6 +3531,21 @@ def _get_jit_shell_belief_minimax_batch_fn(
             )
             return res, final_m0, final_m1
 
+        if jax.default_backend() == "cpu":
+            return jax.lax.map(
+                lambda xs: _single_game(*xs),
+                (
+                    pk_b,
+                    true_tb_b,
+                    cand0_b,
+                    prior0_b,
+                    cand1_b,
+                    prior1_b,
+                    p_seeds_b,
+                    bmask0_init,
+                    bmask1_init,
+                ),
+            )
         return jax.vmap(_single_game)(
             pk_b,
             true_tb_b,
@@ -3584,9 +3599,9 @@ def simulate_shell_belief_minimax_games_tpu(
         int(turns),
         int(rollout_turns),
         int(rm_sweeps),
-        int(followup_turns),
+        0,
     )
-    return fn(
+    res, final_m0, final_m1 = fn(
         init_packed,
         true_tables,
         candidate_tables_for_p0,
@@ -3601,6 +3616,16 @@ def simulate_shell_belief_minimax_games_tpu(
         weights,
         residual_bundle,
     )
+    if int(followup_turns) > 0:
+        f_seeds = policy_seeds ^ jnp.uint32(0x9E3779B9)
+        res = _get_jit_multi_table_rollout_fn(int(followup_turns), 0.06)(
+            res.final_packed,
+            true_tables,
+            f_seeds,
+            weights,
+            residual_bundle,
+        )
+    return res, final_m0, final_m1
 
 
 class UnifiedNashPipelineResult(NamedTuple):
@@ -3820,7 +3845,11 @@ def _run_policy_duel_batch_tpu(
         if n_actual == 0:
             return np.zeros((0,), dtype=np.float32)
         # Use a single fixed chunk size so XLA compiles only once across all waves and gates
-        chunk_b = 32 if n_actual > 4 else max(2, ((n_actual + 1) // 2) * 2)
+        chunk_b = (
+            2
+            if jax.default_backend() == "cpu"
+            else (32 if n_actual > 4 else max(2, ((n_actual + 1) // 2) * 2))
+        )
         out_chunks: list[np.ndarray] = []
         for start in range(0, n_actual, chunk_b):
             sub = indices[start : start + chunk_b]
@@ -4479,5 +4508,1306 @@ def run_unified_nash_and_bake_pipeline_tpu(
         baked_pair_tables=baked_tables,
         elapsed_secs=elapsed,
     )
+
+
+# =========================================================================
+# 14. Two-Stage Bayesian-Equilibrium Kodoku Population Evaluation & Evolution
+# =========================================================================
+
+_BUNDLED_LEARNSETS_PATH = Path(__file__).resolve().parent / "data" / "learnsets-gen2.json"
+_REPO_LEARNSETS_PATH = Path(__file__).resolve().parents[3] / "data" / "learnsets-gen2.json"
+_REF_LEARNSETS_PATH = Path("/Users/puniu/nc2000-engine/data/learnsets-gen2.json")
+DEFAULT_LEARNSETS_PATH = (
+    _BUNDLED_LEARNSETS_PATH
+    if _BUNDLED_LEARNSETS_PATH.exists()
+    else (_REPO_LEARNSETS_PATH if _REPO_LEARNSETS_PATH.exists() else _REF_LEARNSETS_PATH)
+)
+
+_FIXED_PHYSICAL_MOVES = frozenset({"counter", "seismictoss", "superfang", "bide"})
+_PHYSICAL_ACCESS_MOVES = frozenset({"metronome", "mimic", "mirrormove"})
+_EXCLUDED_KODOKU_MOVES = frozenset(
+    {
+        "beatup",
+        "fissure",
+        "guillotine",
+        "horndrill",
+        "metronome",
+        "mimic",
+        "mirrormove",
+        "transform",
+        "splash",
+        "teleport",
+        "struggle",
+        "sketch",
+        "snore",
+        "dreameater",
+        "nightmare",
+        "bide",
+        "rage",
+        "Detect",
+        "detect",
+    }
+)
+
+_HP_TYPE_DV_PAIRS: dict[str, tuple[int, int]] = {
+    "Fighting": (12, 12),
+    "Flying": (12, 13),
+    "Poison": (12, 14),
+    "Ground": (12, 15),
+    "Rock": (13, 12),
+    "Bug": (13, 13),
+    "Ghost": (13, 14),
+    "Steel": (13, 15),
+    "Fire": (14, 12),
+    "Water": (14, 13),
+    "Grass": (14, 14),
+    "Electric": (14, 15),
+    "Psychic": (15, 12),
+    "Ice": (15, 13),
+    "Dragon": (15, 14),
+    "Dark": (15, 15),
+}
+
+# Curated non-dominated competitive move pools per species for Kodoku mutation
+_CURATED_SPECIES_MOVES: dict[str, tuple[str, ...]] = {
+    "snorlax": (
+        "Double-Edge",
+        "Body Slam",
+        "Return",
+        "Curse",
+        "Earthquake",
+        "Rest",
+        "Sleep Talk",
+        "Self-Destruct",
+        "Fire Blast",
+        "Lovely Kiss",
+        "Thunder",
+        "Ice Beam",
+        "Shadow Ball",
+        "Counter",
+    ),
+    "zapdos": (
+        "Thunderbolt",
+        "Thunder",
+        "Drill Peck",
+        "Hidden Power Ice",
+        "Hidden Power Water",
+        "Rest",
+        "Sleep Talk",
+        "Whirlwind",
+        "Reflect",
+        "Light Screen",
+        "Thunder Wave",
+    ),
+    "cloyster": (
+        "Spikes",
+        "Ice Beam",
+        "Surf",
+        "Hydro Pump",
+        "Explosion",
+        "Reflect",
+        "Rain Dance",
+        "Toxic",
+        "Rapid Spin",
+        "Curse",
+        "Rest",
+    ),
+    "marowak": (
+        "Earthquake",
+        "Rock Slide",
+        "Swords Dance",
+        "Hidden Power Bug",
+        "Hidden Power Flying",
+        "Fire Blast",
+        "Rest",
+        "Sleep Talk",
+        "Double-Edge",
+        "Body Slam",
+        "Counter",
+    ),
+    "gengar": (
+        "Thunderbolt",
+        "Ice Punch",
+        "Fire Punch",
+        "Explosion",
+        "Perish Song",
+        "Mean Look",
+        "Destiny Bond",
+        "Shadow Ball",
+        "Dynamic Punch",
+        "Zap Cannon",
+        "Hypnosis",
+        "Confuse Ray",
+        "Psychic",
+        "Thief",
+        "Counter",
+    ),
+    "starmie": (
+        "Surf",
+        "Hydro Pump",
+        "Psychic",
+        "Ice Beam",
+        "Thunderbolt",
+        "Recover",
+        "Rapid Spin",
+        "Thunder Wave",
+        "Reflect",
+        "Light Screen",
+        "Confuse Ray",
+    ),
+    "heracross": (
+        "Megahorn",
+        "Earthquake",
+        "Curse",
+        "Rest",
+        "Sleep Talk",
+        "Reversal",
+        "Endure",
+        "Counter",
+        "Hidden Power Rock",
+        "Seismic Toss",
+    ),
+    "raikou": (
+        "Thunderbolt",
+        "Thunder",
+        "Hidden Power Ice",
+        "Hidden Power Water",
+        "Crunch",
+        "Rest",
+        "Sleep Talk",
+        "Roar",
+        "Reflect",
+    ),
+    "suicune": (
+        "Surf",
+        "Hydro Pump",
+        "Ice Beam",
+        "Rest",
+        "Sleep Talk",
+        "Roar",
+        "Toxic",
+        "Mirror Coat",
+        "Reflect",
+    ),
+    "exeggutor": (
+        "Psychic",
+        "Giga Drain",
+        "Explosion",
+        "Sleep Powder",
+        "Stun Spore",
+        "Leech Seed",
+        "Hidden Power Fire",
+        "Moonlight",
+        "Reflect",
+    ),
+    "skarmory": (
+        "Drill Peck",
+        "Whirlwind",
+        "Rest",
+        "Sleep Talk",
+        "Curse",
+        "Toxic",
+        "Thief",
+        "Steel Wing",
+    ),
+    "tyranitar": (
+        "Rock Slide",
+        "Earthquake",
+        "Pursuit",
+        "Crunch",
+        "Fire Blast",
+        "Ice Beam",
+        "Thunderbolt",
+        "Roar",
+        "Curse",
+        "Rest",
+        "Dynamic Punch",
+    ),
+    "steelix": (
+        "Earthquake",
+        "Explosion",
+        "Roar",
+        "Curse",
+        "Rock Slide",
+        "Body Slam",
+        "Iron Tail",
+        "Rest",
+    ),
+    "miltank": (
+        "Body Slam",
+        "Earthquake",
+        "Milk Drink",
+        "Heal Bell",
+        "Curse",
+        "Growl",
+        "Counter",
+        "Shadow Ball",
+    ),
+    "blissey": (
+        "Soft-Boiled",
+        "Heal Bell",
+        "Ice Beam",
+        "Thunderbolt",
+        "Flamethrower",
+        "Seismic Toss",
+        "Toxic",
+        "Counter",
+        "Light Screen",
+        "Sing",
+    ),
+    "vaporeon": (
+        "Surf",
+        "Hydro Pump",
+        "Ice Beam",
+        "Growth",
+        "Acid Armor",
+        "Baton Pass",
+        "Rest",
+        "Sleep Talk",
+        "Haze",
+        "Roar",
+    ),
+    "jolteon": (
+        "Thunderbolt",
+        "Thunder",
+        "Hidden Power Ice",
+        "Hidden Power Water",
+        "Agility",
+        "Growth",
+        "Baton Pass",
+        "Substitute",
+        "Thunder Wave",
+        "Roar",
+    ),
+    "umbreon": (
+        "Pursuit",
+        "Charm",
+        "Mean Look",
+        "Baton Pass",
+        "Moonlight",
+        "Rest",
+        "Toxic",
+        "Confuse Ray",
+        "Zap Cannon",
+    ),
+    "machamp": (
+        "Cross Chop",
+        "Rock Slide",
+        "Earthquake",
+        "Fire Blast",
+        "Curse",
+        "Rest",
+        "Sleep Talk",
+        "Hidden Power Bug",
+        "Counter",
+    ),
+    "nidoking": (
+        "Earthquake",
+        "Lovely Kiss",
+        "Ice Beam",
+        "Thunderbolt",
+        "Fire Blast",
+        "Counter",
+        "Rock Slide",
+        "Morning Sun",
+    ),
+    "jynx": (
+        "Lovely Kiss",
+        "Ice Beam",
+        "Psychic",
+        "Substitute",
+        "Perish Song",
+        "Mean Look",
+        "Thief",
+        "Nightmare",
+    ),
+    "alakazam": (
+        "Psychic",
+        "Fire Punch",
+        "Ice Punch",
+        "Thunder Punch",
+        "Recover",
+        "Encore",
+        "Thunder Wave",
+        "Reflect",
+        "Dynamic Punch",
+    ),
+    "misdreavus": (
+        "Mean Look",
+        "Perish Song",
+        "Protect",
+        "Thunderbolt",
+        "Thunder",
+        "Confuse Ray",
+        "Destiny Bond",
+        "Pain Split",
+        "Hypnosis",
+    ),
+    "forretress": (
+        "Spikes",
+        "Explosion",
+        "Rapid Spin",
+        "Hidden Power Bug",
+        "Toxic",
+        "Reflect",
+        "Rest",
+    ),
+    "porygon2": (
+        "Double-Edge",
+        "Return",
+        "Ice Beam",
+        "Thunderbolt",
+        "Recover",
+        "Thunder Wave",
+        "Curse",
+    ),
+    "tauros": (
+        "Double-Edge",
+        "Return",
+        "Earthquake",
+        "Fire Blast",
+        "Hyper Beam",
+        "Icy Wind",
+        "Rest",
+        "Sleep Talk",
+    ),
+    "rhydon": (
+        "Earthquake",
+        "Rock Slide",
+        "Megahorn",
+        "Curse",
+        "Roar",
+        "Rest",
+        "Sleep Talk",
+        "Counter",
+    ),
+    "quagsire": (
+        "Earthquake",
+        "Belly Drum",
+        "Sludge Bomb",
+        "Ancient Power",
+        "Hidden Power Rock",
+        "Rest",
+        "Surf",
+    ),
+    "tentacruel": (
+        "Swords Dance",
+        "Sludge Bomb",
+        "Hydro Pump",
+        "Surf",
+        "Ice Beam",
+        "Substitute",
+        "Rapid Spin",
+        "Mirror Coat",
+    ),
+    "houndoom": (
+        "Fire Blast",
+        "Flamethrower",
+        "Crunch",
+        "Pursuit",
+        "Sunny Day",
+        "Solar Beam",
+        "Counter",
+        "Roar",
+    ),
+    "espeon": (
+        "Psychic",
+        "Growth",
+        "Morning Sun",
+        "Baton Pass",
+        "Bite",
+        "Hidden Power Water",
+        "Reflect",
+    ),
+    "kingdra": (
+        "Surf",
+        "Hydro Pump",
+        "Ice Beam",
+        "Dragon Breath",
+        "Rest",
+        "Sleep Talk",
+        "Double-Edge",
+    ),
+}
+
+_CURATED_COMPETITIVE_ITEMS: tuple[str, ...] = (
+    "Leftovers",
+    "Mint Berry",
+    "Miracle Berry",
+    "Gold Berry",
+    "Scope Lens",
+    "Quick Claw",
+    "BrightPowder",
+    "Focus Band",
+    "Mystery Berry",
+    "Pink Bow",
+    "Charcoal",
+    "Magnet",
+    "Mystic Water",
+    "Never-Melt Ice",
+    "Soft Sand",
+    "Hard Stone",
+    "Twisted Spoon",
+    "BlackGlasses",
+)
+
+
+@lru_cache(maxsize=4)
+def load_learnsets(learnsets_path: str | Path = DEFAULT_LEARNSETS_PATH) -> dict[str, dict[str, Any]]:
+    """Load `learnsets-gen2.json` mapping `species_id -> {moves: [...], ...}`."""
+    raw = json.loads(Path(learnsets_path).read_text(encoding="utf-8"))
+    if isinstance(raw, dict) and "learnsets" in raw:
+        return raw["learnsets"]
+    return raw
+
+
+def _uses_attack_stat(pset: dict[str, Any], dex_raw: dict[str, Any]) -> bool:
+    """Return True if `pset` has any move that benefits from the Attack stat (`usesAttack` in `normalize-training.js`)."""
+    moves_dict = dex_raw["moves"]
+    for m in pset.get("moves") or []:
+        mkey = toid(m)
+        if mkey.startswith("hiddenpower") and mkey not in moves_dict:
+            mkey = "hiddenpower"
+        md = moves_dict.get(mkey)
+        if md is None:
+            raise ValueError(f"Unknown move in normalize_training_set: {m!r}")
+        if mkey in _PHYSICAL_ACCESS_MOVES:
+            return True
+        if md.get("category") == "Physical" and mkey not in _FIXED_PHYSICAL_MOVES:
+            return True
+    return False
+
+
+def normalize_training_set(
+    pset: dict[str, Any],
+    dex_raw: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Normalize a single Gen 2 Pokemon set under `training-v3` (`tools/normalize-training.js`).
+
+    Preserves public `gender`, `shiny` predicate, `Hidden Power` type, and Unown form while:
+    - Maximizing HP, Def, SpA, SpD, Spe DVs & EVs (`255`)
+    - Maximizing Hidden Power base power (`70`)
+    - Maximizing Attack DV/EV (`255`) when `usesAttack` is True, or minimizing Attack DV and setting
+      `evs.atk = 0` when `usesAttack` is False (reducing confusion/Foul Play self-hit damage)
+    - Setting `happiness = 255` for `Return` and `happiness = 0` for `Frustration`.
+    """
+    if dex_raw is None:
+        dex_raw = load_dex().raw
+
+    out = json.loads(json.dumps(pset))
+    sp_id = toid(out["species"])
+    sp = dex_raw["species"].get(sp_id)
+    if sp is None:
+        raise ValueError(f"Unknown species in normalize_training_set: {out['species']!r}")
+
+    out.setdefault("name", out["species"])
+    out.setdefault("ability", "No Ability")
+    out.setdefault("nature", "Serious")
+    out.setdefault("level", 50)
+    out.setdefault("happiness", 255)
+
+    raw_ivs = out.get("ivs") or {}
+    raw_evs = out.get("evs") or {}
+    ivs_map = {k: int(raw_ivs.get(k, 31)) for k in _STAT_KEYS}
+    evs_map = {k: int(raw_evs.get(k, 255)) for k in _STAT_KEYS}
+
+    # If a move specifies an explicit `"Hidden Power <Type>"`, align `(atk, def)` DVs with that type first
+    explicit_hp_type: int | None = None
+    for m in out.get("moves") or []:
+        m_str = str(m).strip()
+        if m_str.lower().startswith("hidden power ") and len(m_str) > 13:
+            t_name = m_str[13:].strip().capitalize()
+            if t_name in _HP_TYPES:
+                explicit_hp_type = _HP_TYPES.index(t_name)
+                dv_a, dv_d = _HP_TYPE_DV_PAIRS[t_name]
+                ivs_map["atk"] = dv_a * 2
+                ivs_map["def"] = dv_d * 2
+                break
+
+    a0 = ivs_map["atk"] // 2
+    d0 = ivs_map["def"] // 2
+    s0 = ivs_map["spe"] // 2
+    c0 = ivs_map["spa"] // 2
+
+    f_ratio = float((sp.get("genderRatio") or {}).get("F", 0.5))
+
+    def _gender_of(a_dv: int) -> str:
+        if sp.get("gender"):
+            return str(sp["gender"])
+        return "F" if a_dv < f_ratio * 16.0 else "M"
+
+    if out.get("gender") not in ("M", "F", "N"):
+        out["gender"] = _gender_of(a0)
+    target_gender = str(out["gender"])
+    if sp.get("gender"):
+        target_gender = str(sp["gender"])
+        out["gender"] = target_gender
+
+    def _is_shiny(a_dv: int, d_dv: int, s_dv: int, c_dv: int) -> bool:
+        return d_dv == 10 and s_dv == 10 and c_dv == 10 and (a_dv % 4) >= 2
+
+    def _hp_dv(a_dv: int, d_dv: int, s_dv: int, c_dv: int) -> int:
+        return (a_dv % 2) * 8 + (d_dv % 2) * 4 + (s_dv % 2) * 2 + (c_dv % 2)
+
+    def _hp_power(a_dv: int, d_dv: int, s_dv: int, c_dv: int) -> int:
+        return (5 * ((a_dv >> 3) * 8 + (d_dv >> 3) * 4 + (s_dv >> 3) * 2 + (c_dv >> 3)) + (c_dv % 4)) // 2 + 31
+
+    def _unown_form(a_dv: int, d_dv: int, s_dv: int, c_dv: int) -> int:
+        return (((a_dv & 6) << 5) | ((d_dv & 6) << 3) | ((s_dv & 6) << 1) | ((c_dv & 6) >> 1)) // 10
+
+    target_shiny = bool(out.get("shiny", False)) or _is_shiny(a0, d0, s0, c0)
+    has_hp_move = any(toid(m).startswith("hiddenpower") for m in (out.get("moves") or []))
+    hp_type = (
+        explicit_hp_type
+        if explicit_hp_type is not None
+        else ((4 * (a0 % 4) + (d0 % 4)) if has_hp_move else None)
+    )
+    form = _unown_form(a0, d0, s0, c0) if sp_id == "unown" else None
+
+    # Update move string if `Hidden Power` is present so `"Hidden Power <Type>"` is explicit when desired
+    attack = _uses_attack_stat(out, dex_raw)
+
+    best_score: tuple[int, ...] | None = None
+    best_dvs: tuple[int, int, int, int, int, int] | None = None
+    for a in range(16):
+        if _gender_of(a) != target_gender:
+            continue
+        for d in range(16):
+            if hp_type is not None and (4 * (a % 4) + (d % 4)) != hp_type:
+                continue
+            for s in range(16):
+                for c in range(16):
+                    if _is_shiny(a, d, s, c) != target_shiny:
+                        continue
+                    if form is not None and _unown_form(a, d, s, c) != form:
+                        continue
+                    h_dv = _hp_dv(a, d, s, c)
+                    sc = (
+                        h_dv,
+                        d,
+                        c,
+                        s,
+                        0 if hp_type is None else _hp_power(a, d, s, c),
+                        a if attack else -a,
+                    )
+                    if best_score is None or sc > best_score:
+                        best_score = sc
+                        best_dvs = (h_dv, a, d, c, c, s)
+
+    if best_dvs is None:
+        raise ValueError(f"{out['species']}: no feasible training-v3 spread for gender={target_gender}, hp_type={hp_type}")
+
+    out["ivs"] = {
+        k: (31 if best_dvs[i] == 15 else best_dvs[i] * 2)
+        for i, k in enumerate(_STAT_KEYS)
+    }
+    out["evs"] = {
+        k: (0 if (k == "atk" and not attack) else 255)
+        for k in _STAT_KEYS
+    }
+    move_ids = [toid(m) for m in (out.get("moves") or [])]
+    if "return" in move_ids and "frustration" in move_ids:
+        raise ValueError(f"{out['species']}: Return and Frustration require conflicting happiness")
+    if "return" in move_ids:
+        out["happiness"] = 255
+    elif "frustration" in move_ids:
+        out["happiness"] = 0
+    return out
+
+
+def normalize_training_team(
+    team_sets: list[dict[str, Any]],
+    dex_raw: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Apply `normalize_training_set` across all 6 Pokemon sets in a party."""
+    if dex_raw is None:
+        dex_raw = load_dex().raw
+    return [normalize_training_set(s, dex_raw=dex_raw) for s in team_sets]
+
+
+def _legal_candidate_moves_for_species(
+    species_name: str,
+    dex_raw: dict[str, Any],
+    learnsets: dict[str, dict[str, Any]],
+) -> list[str]:
+    """Return legal, non-dominated competitive candidate moves for `species_name`."""
+    sp_id = toid(species_name)
+    ls_entry = learnsets.get(sp_id) or {}
+    legal_move_ids = set(ls_entry.get("moves") or [])
+    curated = _CURATED_SPECIES_MOVES.get(sp_id, ())
+
+    candidates: list[str] = []
+    seen_ids: set[str] = set()
+    for m_name in curated:
+        m_id = toid(m_name)
+        base_id = "hiddenpower" if m_id.startswith("hiddenpower") else m_id
+        if (not legal_move_ids or base_id in legal_move_ids) and base_id not in _EXCLUDED_KODOKU_MOVES:
+            if m_id not in seen_ids:
+                seen_ids.add(m_id)
+                candidates.append(m_name)
+
+    if len(candidates) < 6 and legal_move_ids:
+        for m_id in sorted(legal_move_ids):
+            if m_id in _EXCLUDED_KODOKU_MOVES or m_id in seen_ids:
+                continue
+            md = dex_raw["moves"].get(m_id)
+            if not md:
+                continue
+            bp = int(md.get("basePower", 0))
+            cat = md.get("category", "Status")
+            if cat != "Status" and bp < 60 and m_id not in ("rapidspin", "pursuit", "thief", "counter", "mirrorcoat", "seismictoss", "nightshade", "superfang", "reversal", "flail"):
+                continue
+            seen_ids.add(m_id)
+            candidates.append(str(md.get("name", m_id)))
+    return candidates
+
+
+def mutate_team_for_kodoku(
+    parent_team: dict[str, Any],
+    rng: np.random.Generator,
+    *,
+    slot_weights: np.ndarray | None = None,
+    preserve_shell: bool = True,
+    new_team_id: str | None = None,
+    dex_raw: dict[str, Any] | None = None,
+    learnsets: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Generate a legal, `training-v3`-normalized Kodoku child party from `parent_team`.
+
+    - When `preserve_shell=True`, preserves `(species, level, gender, bool(item))` on all 6 slots
+      so the child shares the exact public Team Preview shell (`preview_signature_sets`) with its
+      parent deme while mutating moves, Hidden Power types, or swapping held items across slots.
+    - When `preserve_shell=False`, also permits changing held items freely (under Item Clause) or
+      shifting the level distribution while bias-targeting low-marginal / hitchhiker slots.
+    """
+    if dex_raw is None:
+        dex_raw = load_dex().raw
+    if learnsets is None:
+        learnsets = load_learnsets()
+
+    child = json.loads(json.dumps(parent_team))
+    sets: list[dict[str, Any]] = child["sets"]
+    n_slots = len(sets)
+
+    # Bias slot selection toward slots with lower marginal value (or uniform if not provided)
+    if slot_weights is not None and len(slot_weights) == n_slots:
+        w = np.asarray(slot_weights, dtype=np.float64)
+        # Invert marginals so weak/hitchhiker slots get higher mutation probability
+        inv = np.max(w) - w + 0.05
+        probs = np.maximum(inv, 0.01)
+        probs /= np.sum(probs)
+    else:
+        probs = np.full((n_slots,), 1.0 / n_slots, dtype=np.float64)
+
+    n_edits = int(rng.choice([1, 2], p=[0.65, 0.35]))
+    chosen_slots = rng.choice(n_slots, size=min(n_edits, n_slots), replace=False, p=probs)
+
+    for slot_idx in chosen_slots:
+        pset = sets[int(slot_idx)]
+        sp_name = str(pset["species"])
+        cand_moves = _legal_candidate_moves_for_species(sp_name, dex_raw, learnsets)
+        cur_moves = list(pset.get("moves") or [])
+        if not cur_moves or not cand_moves:
+            continue
+
+        cur_move_ids = {toid(m) for m in cur_moves}
+        has_hp_already = any(m_id.startswith("hiddenpower") for m_id in cur_move_ids)
+
+        # Pick a move slot `m_pos` to replace
+        m_pos = int(rng.integers(0, len(cur_moves)))
+        replacing_id = toid(cur_moves[m_pos])
+        replacing_is_hp = replacing_id.startswith("hiddenpower")
+
+        # Filter legal replacement moves
+        viable_replacements: list[str] = []
+        remaining_ids = {toid(m) for idx, m in enumerate(cur_moves) if idx != m_pos}
+        for cm in cand_moves:
+            cm_id = toid(cm)
+            if cm_id in remaining_ids or cm_id == replacing_id:
+                continue
+            if cm_id.startswith("hiddenpower") and has_hp_already and not replacing_is_hp:
+                continue
+            if cm_id == "sleeptalk" and "rest" not in remaining_ids:
+                continue
+            if replacing_id == "rest" and "sleeptalk" in remaining_ids and cm_id != "rest":
+                continue
+            if cm_id == "return" and "frustration" in remaining_ids:
+                continue
+            if cm_id == "frustration" and "return" in remaining_ids:
+                continue
+            viable_replacements.append(cm)
+
+        if viable_replacements:
+            new_move = str(viable_replacements[int(rng.integers(0, len(viable_replacements)))])
+            cur_moves[m_pos] = new_move
+            pset["moves"] = cur_moves
+
+    # Optionally swap or mutate items (respecting Item Clause and `preserve_shell`)
+    if float(rng.random()) < 0.35:
+        op_kind = int(rng.integers(0, 2))
+        if op_kind == 0:
+            # Swap two non-species-locked items between slots that both have items
+            valid_swap_slots = [
+                idx
+                for idx, s in enumerate(sets)
+                if s.get("item")
+                and toid(s.get("item", "")) not in ("thickclub", "lightball", "metalpowder", "stick", "luckypunch")
+            ]
+            if len(valid_swap_slots) >= 2:
+                i1, i2 = rng.choice(valid_swap_slots, size=2, replace=False)
+                sets[int(i1)]["item"], sets[int(i2)]["item"] = (
+                    sets[int(i2)]["item"],
+                    sets[int(i1)]["item"],
+                )
+        else:
+            # Replace one slot's item with an unused competitive item
+            used_items = {toid(s.get("item", "")) for s in sets if s.get("item")}
+            mutable_slots = [
+                idx
+                for idx, s in enumerate(sets)
+                if (bool(s.get("item")) or not preserve_shell)
+                and toid(s.get("item", "")) not in ("thickclub", "lightball", "metalpowder")
+            ]
+            if mutable_slots:
+                s_idx = int(rng.choice(mutable_slots))
+                sp_id = toid(sets[s_idx]["species"])
+                if sp_id == "marowak" and "thickclub" not in used_items:
+                    sets[s_idx]["item"] = "Thick Club"
+                else:
+                    unused_pool = [
+                        it for it in _CURATED_COMPETITIVE_ITEMS if toid(it) not in used_items
+                    ]
+                    if unused_pool:
+                        sets[s_idx]["item"] = str(unused_pool[int(rng.integers(0, len(unused_pool)))])
+
+    # Enforce Item Clause across all 6 slots (deduplicate any repeated non-empty item)
+    seen_items: set[str] = set()
+    for s in sets:
+        it_raw = str(s.get("item", "")).strip()
+        if not it_raw:
+            continue
+        it_id = toid(it_raw)
+        if it_id in seen_items:
+            for repl in _CURATED_COMPETITIVE_ITEMS:
+                repl_id = toid(repl)
+                if repl_id not in seen_items:
+                    s["item"] = repl
+                    seen_items.add(repl_id)
+                    break
+        else:
+            seen_items.add(it_id)
+
+    # Normalize all 6 sets under `training-v3`
+    child["sets"] = normalize_training_team(sets, dex_raw=dex_raw)
+    child["species"] = [s["species"] for s in child["sets"]]
+    child["levels"] = [int(s.get("level", 50)) for s in child["sets"]]
+    if new_team_id is not None:
+        child["id"] = new_team_id
+    return child
+
+
+class KodokuPopulationEvaluation(NamedTuple):
+    """Result of two-stage Kodoku population evaluation on TPU (`evaluate_population_tpu`)."""
+
+    team_ids: list[str]
+    opponent_ids: list[str]
+    stage1_summary: KodokuGauntletSummary
+    stage1_means: np.ndarray  # float32[N_P]
+    stage1_lcbs: np.ndarray  # float32[N_P]
+    stage1_ucbs: np.ndarray  # float32[N_P]
+    survivor_indices: list[int]
+    stage2_policy_scores: np.ndarray  # float32[N_P] (NaN or stage1 value for pruned rows)
+    stage2_policy_games: np.ndarray  # int32[N_P]
+    blended_payoff_matrix: np.ndarray  # float32[N_P, N_Q]
+    blended_fitness: np.ndarray  # float32[N_P]
+    coupled_equilibrium: CoupledShellEquilibriumResult
+    hitchhiker_flags: np.ndarray  # bool[N_P, 6]
+    statuses: list[str]
+    elapsed_secs: float
+
+
+class KodokuEvolutionResult(NamedTuple):
+    """Result of multi-generation Kodoku evolutionary loop on TPU (`run_kodoku_tpu`)."""
+
+    final_population: list[dict[str, Any]]
+    final_evaluation: KodokuPopulationEvaluation
+    nash_teams: list[dict[str, Any]]
+    nash_weights: dict[str, float]
+    generation_history: list[dict[str, Any]]
+    elapsed_secs: float
+
+
+def evaluate_population_tpu(
+    population: list[dict[str, Any]],
+    opponent_pool: list[dict[str, Any]] | None = None,
+    *,
+    opponent_weights: np.ndarray | list[float] | None = None,
+    screen_games: int = 2,
+    support_k: int = 3,
+    refine_games: int = 4,
+    screen_turns: int = 40,
+    refine_turns: int = 60,
+    screen_stride: int = 1,
+    screen_drop_ucb: float = 0.46,
+    survivor_top_k: int = 8,
+    policy_games_per_pair: int = 2,
+    policy_turns: int = 12,
+    policy_rollout_turns: int = 2,
+    policy_followup_turns: int = 24,
+    policy_rm_sweeps: int = 32,
+    policy_blend_weight: float = 0.35,
+    max_shell_variants: int = 6,
+    bayesian_eq: bool = True,
+    z_value: float = 1.96,
+    seed: int = 20260405,
+    weights: EvalWeights | None = None,
+    residual_bundle: ResidualBundle | None = None,
+    shared_dex: SharedDexTable | None = None,
+) -> KodokuPopulationEvaluation:
+    """Two-stage Kodoku population fitness evaluator on TPU:
+
+    - **Stage 1 (Fast Core-Nash Gauntlet & Bayesian Election-Call Screen)**:
+      Evaluates `population x opponent_pool` via `evaluate_kodoku_gauntlet_tpu`, computing
+      6v6 Core-Nash payoffs, Leave-One-Out slot marginals (`ΔV_{-s}`), slot WARs, and
+      election-call credible intervals `[lcb, ucb]`. Candidates with `ucb < screen_drop_ucb`
+      or outside the top `survivor_top_k` are pruned (`ELIMINATED_STAGE1`).
+    - **Stage 2 (In-Battle Coupled Per-World Bayesian Equilibrium Policy Verification)**:
+      For surviving candidates, solves `solve_bayesian_shell_preview_nash_np` against the
+      top opponent support shells to select equilibrium 3v3 lineups and simulates paired
+      side-swapped CRN games on TPU using `_run_policy_duel_batch_tpu` (`simulate_shell_belief_minimax_games_tpu`
+      with `bayesian_eq_a=bayesian_eq, bayesian_eq_b=bayesian_eq`).
+      Blends Stage-1 preview Nash payoff and Stage-2 in-battle Bayesian Equilibrium policy score.
+    """
+    t0 = time.perf_counter()
+    if weights is None:
+        weights = default_eval_weights()
+    if shared_dex is None:
+        shared_dex = build_shared_dex_table()
+
+    teams_q = population if opponent_pool is None else opponent_pool
+    n_p = len(population)
+    n_q = len(teams_q)
+    if n_p == 0 or n_q == 0:
+        raise ValueError("population and opponent_pool must be non-empty")
+
+    # Stage 1: Fused 6v6 Core-Nash Gauntlet on TPU
+    summary = evaluate_kodoku_gauntlet_tpu(
+        population,
+        teams_q=opponent_pool,
+        q_weights=opponent_weights,
+        screen_games=screen_games,
+        support_k=support_k,
+        refine_games=refine_games,
+        screen_turns=screen_turns,
+        refine_turns=refine_turns,
+        screen_stride=screen_stride,
+        compute_slot_telemetry=True,
+        seed=seed,
+        weights=weights,
+        residual_bundle=residual_bundle,
+    )
+
+    # Determine opponent mixture weights for Stage-1 credible intervals and Stage-2 duel targeting
+    if opponent_weights is not None:
+        q_w = np.asarray(opponent_weights, dtype=np.float32).reshape(n_q)
+        q_w = np.maximum(q_w, 0.0)
+        q_w_sum = float(np.sum(q_w))
+        q_w = q_w / q_w_sum if q_w_sum > 0 else np.full((n_q,), 1.0 / n_q, dtype=np.float32)
+    else:
+        q_w = np.asarray(summary.rect_equilibrium.p_b, dtype=np.float32)
+        if float(np.sum(q_w)) <= 1e-6:
+            q_w = np.full((n_q,), 1.0 / n_q, dtype=np.float32)
+
+    stage1_mat = np.asarray(summary.payoff_matrix, dtype=np.float32)
+    stage1_means = (stage1_mat @ q_w).astype(np.float32)
+
+    # Compute Bayesian election-call bounds per row against `q_w`
+    eff_games_per_cell = max(2.0, float(screen_games + refine_games))
+    cell_var = stage1_mat * (1.0 - stage1_mat) / eff_games_per_cell
+    row_se = np.sqrt(np.maximum(cell_var @ (q_w * q_w), 1e-6)).astype(np.float32)
+    stage1_lcbs = np.clip(stage1_means - float(z_value) * row_se, 0.0, 1.0).astype(np.float32)
+    stage1_ucbs = np.clip(stage1_means + float(z_value) * row_se, 0.0, 1.0).astype(np.float32)
+
+    # Select survivors for Stage-2 Bayesian Equilibrium policy verification
+    ranked_rows = [int(i) for i in np.argsort(-stage1_means)]
+    survivor_indices: list[int] = []
+    statuses = ["ELIMINATED_STAGE1" for _ in range(n_p)]
+    for rank_pos, row_i in enumerate(ranked_rows):
+        if rank_pos == 0 or (
+            len(survivor_indices) < max(1, int(survivor_top_k))
+            and float(stage1_ucbs[row_i]) >= float(screen_drop_ucb)
+        ):
+            survivor_indices.append(row_i)
+            statuses[row_i] = "SURVIVED_STAGE2"
+
+    survivor_indices.sort()
+    blended_mat = stage1_mat.copy()
+    stage2_scores = stage1_means.copy()
+    stage2_games = np.zeros((n_p,), dtype=np.int32)
+
+    if survivor_indices and int(policy_games_per_pair) > 0:
+        # Build unified pool to run `_run_policy_duel_batch_tpu` without duplicating self-play rosters
+        if opponent_pool is None:
+            combined_teams = list(population)
+            q_offset = 0
+        else:
+            combined_teams = list(population) + list(teams_q)
+            q_offset = n_p
+        rosters_all = [compile_roster6(_extract_team_sets(t)) for t in combined_teams]
+        variant_groups_all, _ = _build_shell_variant_rosters_map(
+            rosters_all, combined_teams, max_variants=max_shell_variants
+        )
+
+        # Pick top opponent support columns `j` (up to 4 columns with largest `q_w[j]`)
+        top_q_cols = [
+            int(j)
+            for j in np.argsort(-q_w)[: min(4, n_q)]
+            if float(q_w[j]) > 1e-3
+        ]
+        if not top_q_cols:
+            top_q_cols = [int(np.argmax(q_w))]
+
+        rep_picks_p: list[tuple[int, int, int]] = []
+        for r in rosters_all[:n_p]:
+            leg = [int(x) for x in np.flatnonzero(np.asarray(r.legal_mask_60))]
+            act0 = leg[0] if leg else 0
+            p0 = PREVIEW_ACTIONS_0BASED_NP[act0]
+            rep_picks_p.append((int(p0[0]), int(p0[1]), int(p0[2])))
+
+        rep_picks_q: list[tuple[int, int, int]] = []
+        for r in rosters_all[q_offset : q_offset + n_q]:
+            leg = [int(x) for x in np.flatnonzero(np.asarray(r.legal_mask_60))]
+            act0 = leg[0] if leg else 0
+            p0 = PREVIEW_ACTIONS_0BASED_NP[act0]
+            rep_picks_q.append((int(p0[0]), int(p0[1]), int(p0[2])))
+
+        duel_specs: list[tuple[int, int, tuple[int, int, int], tuple[int, int, int]]] = []
+        spec_pairs: list[tuple[int, int]] = []
+        for i in survivor_indices:
+            for j in top_q_cols:
+                # Skip exact self-mirror when `opponent_pool is None` and `i == j` unless `n_q == 1`
+                if opponent_pool is None and i == j and n_q > 1:
+                    continue
+                duel_specs.append((i, q_offset + j, rep_picks_p[i], rep_picks_q[j]))
+                spec_pairs.append((i, j))
+
+        if duel_specs:
+            g_pol = max(2, int(policy_games_per_pair))
+            if g_pol % 2 == 1:
+                g_pol += 1
+            pol_vals = _run_policy_duel_batch_tpu(
+                rosters_all,
+                variant_groups_all,
+                duel_specs,
+                games_per_spec=g_pol,
+                shared_dex=shared_dex,
+                base_seed_int=int(seed) ^ 0x6A09E667,
+                bayesian_eq_a=bayesian_eq,
+                bayesian_eq_b=bayesian_eq,
+                policy_turns=policy_turns,
+                rollout_turns=policy_rollout_turns,
+                followup_turns=policy_followup_turns,
+                rm_sweeps=policy_rm_sweeps,
+                weights=weights,
+                residual_bundle=residual_bundle,
+            )
+            alpha_blend = float(np.clip(policy_blend_weight, 0.0, 1.0))
+            row_pol_num = np.zeros((n_p,), dtype=np.float64)
+            row_pol_den = np.zeros((n_p,), dtype=np.float64)
+            for idx_s, (i, j) in enumerate(spec_pairs):
+                v_pol = float(pol_vals[idx_s])
+                v_st1 = float(stage1_mat[i, j])
+                v_bld = (1.0 - alpha_blend) * v_st1 + alpha_blend * v_pol
+                blended_mat[i, j] = v_bld
+                if opponent_pool is None and i < n_q and j < n_p:
+                    blended_mat[j, i] = 1.0 - v_bld
+                w_j = float(q_w[j])
+                row_pol_num[i] += w_j * v_pol
+                row_pol_den[i] += w_j
+                stage2_games[i] += g_pol
+
+            for i in survivor_indices:
+                if row_pol_den[i] > 1e-9:
+                    stage2_scores[i] = float(row_pol_num[i] / row_pol_den[i])
+
+    if opponent_pool is None and n_p == n_q:
+        blended_mat = 0.5 * (blended_mat + (1.0 - blended_mat.T))
+        np.fill_diagonal(blended_mat, 0.5)
+
+    blended_fitness = (blended_mat @ q_w).astype(np.float32)
+
+    # Re-solve coupled shell equilibrium on the blended payoff matrix
+    blended_rect = solve_rect_rm_plus_jax(jnp.asarray(blended_mat, dtype=jnp.float32), sweeps=1000)
+    blended_summary = KodokuGauntletSummary(
+        p_ids=summary.p_ids,
+        q_ids=summary.q_ids,
+        payoff_matrix=blended_mat.astype(np.float32),
+        weighted_fitness=blended_fitness,
+        slot_picks=summary.slot_picks,
+        slot_wins=summary.slot_wins,
+        slot_marginals=summary.slot_marginals,
+        slot_wars=summary.slot_wars,
+        effective_cores=summary.effective_cores,
+        rect_equilibrium=blended_rect,
+    )
+    coupled_eq = solve_coupled_shell_equilibrium_tpu(
+        blended_summary,
+        teams_p=population,
+        teams_q=teams_q,
+    )
+    hitchhikers = np.zeros((n_p, 6), dtype=bool)
+    for i in range(n_p):
+        hh_list = detect_hitchhiker_slots(
+            _extract_team_sets(population[i]),
+            blended_summary.slot_picks[i],
+            blended_summary.slot_marginals[i],
+        )
+        for hh in hh_list:
+            s_idx = int(hh.get("slot", -1))
+            if 0 <= s_idx < 6:
+                hitchhikers[i, s_idx] = True
+
+    deployed_w_map = dict(
+        zip(coupled_eq.deployed_team_ids, coupled_eq.deployed_team_weights)
+    )
+    for i in range(n_p):
+        if float(deployed_w_map.get(summary.p_ids[i], 0.0)) >= 0.01:
+            statuses[i] = "NASH_SUPPORT"
+
+    elapsed = time.perf_counter() - t0
+    return KodokuPopulationEvaluation(
+        team_ids=summary.p_ids,
+        opponent_ids=summary.q_ids,
+        stage1_summary=blended_summary,
+        stage1_means=stage1_means,
+        stage1_lcbs=stage1_lcbs,
+        stage1_ucbs=stage1_ucbs,
+        survivor_indices=survivor_indices,
+        stage2_policy_scores=stage2_scores.astype(np.float32),
+        stage2_policy_games=stage2_games,
+        blended_payoff_matrix=blended_mat.astype(np.float32),
+        blended_fitness=blended_fitness,
+        coupled_equilibrium=coupled_eq,
+        hitchhiker_flags=hitchhikers,
+        statuses=statuses,
+        elapsed_secs=elapsed,
+    )
+
+
+def run_kodoku_tpu(
+    seed_teams: list[dict[str, Any]],
+    *,
+    opponent_pool: list[dict[str, Any]] | None = None,
+    generations: int = 2,
+    offspring_per_gen: int = 4,
+    max_population_size: int = 12,
+    preserve_shell_prob: float = 0.75,
+    screen_games: int = 2,
+    support_k: int = 3,
+    refine_games: int = 4,
+    screen_turns: int = 40,
+    refine_turns: int = 60,
+    survivor_top_k: int = 6,
+    policy_games_per_pair: int = 2,
+    policy_turns: int = 12,
+    policy_rollout_turns: int = 2,
+    policy_followup_turns: int = 24,
+    policy_rm_sweeps: int = 32,
+    policy_blend_weight: float = 0.35,
+    max_shell_variants: int = 4,
+    bayesian_eq: bool = True,
+    seed: int = 20260405,
+    out_dir: str | Path | None = None,
+    weights: EvalWeights | None = None,
+    residual_bundle: ResidualBundle | None = None,
+) -> KodokuEvolutionResult:
+    """Run Multi-Deme / Challenger Kodoku evolutionary loop on TPU under the
+    coupled per-world Bayesian Equilibrium + Depth-1 minimax contraction policy.
+
+    Each generation:
+    1. Evaluates the current population via `evaluate_population_tpu` (Stage-1 Core-Nash
+       gauntlet + Stage-2 in-battle Bayesian Equilibrium policy duel verification).
+    2. Retains all Nash support teams plus top non-dominated elites up to `max_population_size`.
+    3. Mutates elites (guided by Leave-One-Out slot marginals `ΔV_{-s}` and hitchhiker flags)
+       via `mutate_team_for_kodoku` + `normalize_training_team` to produce `offspring_per_gen`
+       new candidate parties for the next generation.
+    """
+    t0 = time.perf_counter()
+    if weights is None:
+        weights = default_eval_weights()
+
+    dex_raw = load_dex().raw
+    learnsets = load_learnsets()
+    shared_dex = build_shared_dex_table()
+    rng = np.random.default_rng(int(seed))
+
+    # Normalize initial seed teams under training-v3
+    population: list[dict[str, Any]] = []
+    seen_fingerprints: set[str] = set()
+    for idx, t in enumerate(seed_teams):
+        t_copy = json.loads(json.dumps(t))
+        t_copy.setdefault("id", f"seed_{idx}")
+        t_copy["sets"] = normalize_training_team(_extract_team_sets(t_copy), dex_raw=dex_raw)
+        fp = json.dumps(t_copy["sets"], sort_keys=True)
+        if fp not in seen_fingerprints:
+            seen_fingerprints.add(fp)
+            population.append(t_copy)
+
+    if not population:
+        raise ValueError("seed_teams must contain at least 1 valid team")
+
+    gen_history: list[dict[str, Any]] = []
+    n_gens = max(1, int(generations))
+    eval_res: KodokuPopulationEvaluation | None = None
+
+    for gen_idx in range(n_gens):
+        gen_seed = int(seed) ^ ((gen_idx + 1) * 0x9E3779B9)
+        eval_res = evaluate_population_tpu(
+            population,
+            opponent_pool=opponent_pool,
+            screen_games=screen_games,
+            support_k=support_k,
+            refine_games=refine_games,
+            screen_turns=screen_turns,
+            refine_turns=refine_turns,
+            survivor_top_k=survivor_top_k,
+            policy_games_per_pair=policy_games_per_pair,
+            policy_turns=policy_turns,
+            policy_rollout_turns=policy_rollout_turns,
+            policy_followup_turns=policy_followup_turns,
+            policy_rm_sweeps=policy_rm_sweeps,
+            policy_blend_weight=policy_blend_weight,
+            max_shell_variants=max_shell_variants,
+            bayesian_eq=bayesian_eq,
+            seed=gen_seed,
+            weights=weights,
+            residual_bundle=residual_bundle,
+            shared_dex=shared_dex,
+        )
+
+        ceq = eval_res.coupled_equilibrium
+        dep_map = dict(zip(ceq.deployed_team_ids, ceq.deployed_team_weights))
+        member_w = np.array(
+            [float(dep_map.get(tid, 0.0)) for tid in eval_res.team_ids],
+            dtype=np.float32,
+        )
+        top_idx = int(np.argmax(eval_res.blended_fitness))
+        gen_record = {
+            "generation": gen_idx,
+            "population_size": len(population),
+            "top_team_id": eval_res.team_ids[top_idx],
+            "top_blended_fitness": round(float(eval_res.blended_fitness[top_idx]), 6),
+            "top_stage2_policy_score": round(float(eval_res.stage2_policy_scores[top_idx]), 6),
+            "active_shells": list(ceq.active_shells),
+            "members": [
+                {
+                    "id": eval_res.team_ids[i],
+                    "status": eval_res.statuses[i],
+                    "stage1_mean": round(float(eval_res.stage1_means[i]), 6),
+                    "stage2_policy_score": round(float(eval_res.stage2_policy_scores[i]), 6),
+                    "blended_fitness": round(float(eval_res.blended_fitness[i]), 6),
+                    "nash_weight": round(float(member_w[i]), 6),
+                    "hitchhiker_slots": [
+                        int(s) for s in np.flatnonzero(eval_res.hitchhiker_flags[i])
+                    ],
+                }
+                for i in range(len(population))
+            ],
+            "elapsed_secs": round(eval_res.elapsed_secs, 4),
+        }
+        gen_history.append(gen_record)
+
+        if gen_idx + 1 >= n_gens or int(offspring_per_gen) <= 0:
+            break
+
+        # Elitism: preserve all Nash support teams (`member_w >= 0.01`) + top blended fitness teams
+        support_rows = [int(i) for i in np.flatnonzero(member_w >= 0.01)]
+        fitness_order = [int(i) for i in np.argsort(-eval_res.blended_fitness)]
+        elites_idx: list[int] = []
+        for i in support_rows + fitness_order:
+            if i not in elites_idx and len(elites_idx) < max(2, int(max_population_size)):
+                elites_idx.append(i)
+
+        next_pop = [population[i] for i in elites_idx]
+
+        # Generate `offspring_per_gen` normalized mutations from elites
+        parent_probs = np.array(
+            [max(float(member_w[i]), 0.15) for i in elites_idx], dtype=np.float64
+        )
+        parent_probs /= np.sum(parent_probs)
+
+        created = 0
+        attempts = 0
+        while created < int(offspring_per_gen) and attempts < int(offspring_per_gen) * 6:
+            attempts += 1
+            p_local = int(rng.choice(len(elites_idx), p=parent_probs))
+            p_orig_idx = elites_idx[p_local]
+            parent_team = population[p_orig_idx]
+            slot_margs = np.asarray(eval_res.stage1_summary.slot_marginals[p_orig_idx], dtype=np.float64)
+            preserve_sh = bool(float(rng.random()) < float(preserve_shell_prob))
+            child_id = f"{parent_team.get('id', 'team')}-beq-g{gen_idx + 1}-c{created}"
+            child = mutate_team_for_kodoku(
+                parent_team,
+                rng,
+                slot_weights=slot_margs,
+                preserve_shell=preserve_sh,
+                new_team_id=child_id,
+                dex_raw=dex_raw,
+                learnsets=learnsets,
+            )
+            child["origin"] = "evolved"
+            if preserve_sh and parent_team.get("variantCluster"):
+                child["variantCluster"] = parent_team["variantCluster"]
+            fp = json.dumps(child["sets"], sort_keys=True)
+            if fp not in seen_fingerprints:
+                seen_fingerprints.add(fp)
+                next_pop.append(child)
+                created += 1
+
+        population = next_pop
+
+    assert eval_res is not None
+    final_dep_map = dict(
+        zip(
+            eval_res.coupled_equilibrium.deployed_team_ids,
+            eval_res.coupled_equilibrium.deployed_team_weights,
+        )
+    )
+    nash_teams: list[dict[str, Any]] = []
+    nash_weights: dict[str, float] = {}
+    for i, t in enumerate(population):
+        tid = str(t.get("id", f"team_{i}"))
+        w_i = float(final_dep_map.get(tid, 0.0))
+        if w_i >= 0.01:
+            nash_teams.append(t)
+            nash_weights[tid] = round(w_i, 6)
+
+    total_elapsed = time.perf_counter() - t0
+    if out_dir is not None:
+        out_path = Path(out_dir)
+        out_path.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "policy": "coupled_per_world_bayesian_equilibrium_and_depth1_minimax",
+            "bayesian_eq": bool(bayesian_eq),
+            "generations": n_gens,
+            "offspring_per_gen": int(offspring_per_gen),
+            "nash_weights": nash_weights,
+            "nash_teams": nash_teams,
+            "final_population": population,
+            "generation_history": gen_history,
+            "elapsed_secs": round(total_elapsed, 4),
+        }
+        with (out_path / "kodoku_evolution_summary.json").open("w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+
+    return KodokuEvolutionResult(
+        final_population=population,
+        final_evaluation=eval_res,
+        nash_teams=nash_teams,
+        nash_weights=nash_weights,
+        generation_history=gen_history,
+        elapsed_secs=total_elapsed,
+    )
+
 
 

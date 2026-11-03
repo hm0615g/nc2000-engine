@@ -1387,6 +1387,108 @@ def test_solve_bayesian_equilibrium_jax_and_unified_nash_bake_pipeline_tpu(tmp_p
     assert (out_dir / "unified_summary.json").exists()
 
 
+def test_kodoku_evolution_and_training_normalization_tpu(tmp_path):
+    """Verify `normalize_training_set`, `mutate_team_for_kodoku`, `evaluate_population_tpu`, and `run_kodoku_tpu`."""
+    from gen2_tpu.kodoku import (
+        evaluate_population_tpu,
+        mutate_team_for_kodoku,
+        normalize_training_set,
+        normalize_training_team,
+        preview_signature_sets,
+        run_kodoku_tpu,
+    )
+
+    # 1. Verify training-v3 normalization parity with `tools/normalize-training.js`
+    starmie_special = normalize_training_set(
+        {
+            "species": "Starmie",
+            "level": 50,
+            "gender": "N",
+            "item": "Miracle Berry",
+            "moves": ["Surf", "Ice Beam", "Psychic", "Recover"],
+            "ivs": {"hp": 31, "atk": 31, "def": 31, "spa": 31, "spd": 31, "spe": 31},
+            "evs": {"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255},
+        }
+    )
+    assert starmie_special["ivs"]["atk"] == 2
+    assert starmie_special["evs"]["atk"] == 0
+    assert starmie_special["ivs"]["hp"] == 31
+
+    zapdos_hp_ice = normalize_training_set(
+        {
+            "species": "Zapdos",
+            "level": 50,
+            "gender": "N",
+            "item": "Mint Berry",
+            "moves": ["Thunderbolt", "Hidden Power Ice", "Rest", "Sleep Talk"],
+            "ivs": {"hp": 31, "atk": 31, "def": 26, "spa": 31, "spd": 31, "spe": 31},
+            "evs": {"hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255},
+        }
+    )
+    assert zapdos_hp_ice["ivs"]["atk"] == 22
+    assert zapdos_hp_ice["ivs"]["def"] == 26
+    assert zapdos_hp_ice["evs"]["atk"] == 0
+
+    # 2. Verify shell-preserving Kodoku mutation
+    t_a, t_b = _sample_6v6_teams()
+    parent = {"id": "parent_a", "sets": normalize_training_team(t_a), "variantCluster": "vc-test-a"}
+    rng = np.random.default_rng(42)
+    child = mutate_team_for_kodoku(parent, rng, preserve_shell=True, new_team_id="child_a")
+    assert preview_signature_sets(child["sets"]) == preview_signature_sets(parent["sets"])
+    assert len({s["species"] for s in child["sets"]}) == 6
+    non_empty_items = [s["item"] for s in child["sets"] if s.get("item")]
+    assert len(non_empty_items) == len(set(non_empty_items))
+
+    # 3. Verify two-stage `evaluate_population_tpu` & `run_kodoku_tpu`
+    seed_pool = [
+        {"id": "seed_a", "sets": t_a, "variantCluster": "vc-test-a"},
+        {"id": "seed_b", "sets": t_b, "variantCluster": "vc-test-b"},
+    ]
+    pop_eval = evaluate_population_tpu(
+        seed_pool,
+        screen_games=2,
+        support_k=2,
+        refine_games=2,
+        screen_turns=4,
+        refine_turns=4,
+        survivor_top_k=2,
+        policy_games_per_pair=2,
+        policy_turns=2,
+        policy_rollout_turns=0,
+        policy_followup_turns=0,
+        policy_rm_sweeps=16,
+        max_shell_variants=1,
+        bayesian_eq=True,
+    )
+    assert pop_eval.blended_payoff_matrix.shape == (2, 2)
+    assert len(pop_eval.survivor_indices) >= 1
+
+    evo_out = tmp_path / "kodoku_evo"
+    evo_res = run_kodoku_tpu(
+        seed_pool,
+        generations=2,
+        offspring_per_gen=1,
+        max_population_size=3,
+        screen_games=2,
+        support_k=2,
+        refine_games=2,
+        screen_turns=4,
+        refine_turns=4,
+        survivor_top_k=2,
+        policy_games_per_pair=2,
+        policy_turns=2,
+        policy_rollout_turns=0,
+        policy_followup_turns=0,
+        policy_rm_sweeps=16,
+        max_shell_variants=1,
+        out_dir=evo_out,
+    )
+    assert len(evo_res.generation_history) == 2
+    assert len(evo_res.nash_teams) >= 1
+    assert (evo_out / "kodoku_evolution_summary.json").exists()
+
+
+
 
 
 

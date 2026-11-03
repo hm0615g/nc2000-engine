@@ -17,20 +17,26 @@
 
 ---
 
-## 2. Next Tasks (In Order)
+## 2. Completed Follow-Up Tasks (Tasks A & B)
 
-### Task A: Evolve Parties (Kodoku) Under the New Bayesian Equilibrium Policy on TPU
-Currently, the evolutionary loop in [`tpu/src/gen2_tpu/kodoku.py`](../tpu/src/gen2_tpu/kodoku.py) (`run_kodoku_tpu` / `evaluate_population_tpu`) evaluates candidate movesets/spreads using fast heuristic rollouts (`simulate_packed_batch`) or legacy world-averaged evaluators. Evolving parties before rebaking is required so the final preview bake does not become immediately obsolete.
+### Task A: Evolve Parties (Kodoku) Under the New Bayesian Equilibrium Policy on TPU (`DONE`)
+1. **Two-Stage Bayesian Equilibrium Kodoku Evaluator & Evolutionary Loop ([`tpu/src/gen2_tpu/kodoku.py`](../tpu/src/gen2_tpu/kodoku.py), [`tpu/src/gen2_tpu/__init__.py`](../tpu/src/gen2_tpu/__init__.py))**:
+   - Implemented `normalize_training_set` / `normalize_training_team` matching [`tools/normalize-training.js`](../tools/normalize-training.js) (`training-v3` DV/EV/happiness/gender/shiny/Hidden Power rules) and legal Gen 2 learnset mutation (`mutate_team_for_kodoku`, `load_learnsets`) with Item Clause, Species Clause, `Sleep Talk`+`Rest` co-requirement, and `preserve_shell` support.
+   - Implemented `evaluate_population_tpu` (`KodokuPopulationEvaluation`) and `run_kodoku_tpu` (`KodokuEvolutionResult`, CLI: `gen2-tpu kodoku-evolve`):
+     - **Stage 1**: Fast `evaluate_kodoku_gauntlet_tpu` + Bayesian election-call screen (`evaluate_shell_election_call_matrix_tpu`) to prune clearly weak mutations.
+     - **Stage 2**: Coupled Bayesian Equilibrium blind search evaluation (`_run_policy_duel_batch_tpu` calling `simulate_shell_belief_minimax_games_tpu` with `bayesian_eq_a=True, bayesian_eq_b=True`) for top contenders, blended into the population payoff matrix and solved via `solve_coupled_shell_equilibrium_tpu` with `detect_hitchhiker_slots`.
+2. **Full-Horizon Multi-Deme Evolution & 3-Gate Nash Pipeline ([`data/kodoku-beq-v1/`](../data/kodoku-beq-v1/))**:
+   - Ran 3-generation Multi-Deme / Challenger evolution (`screen_turns=40, refine_turns=60, policy_turns=2, policy_followup_turns=36`) seeded with the 4 `vc-kodoku-nash-a` variants, `mjj-2010-garap-a`, `sample-08`, and top challengers (`data/kodoku-beq-v1/kodoku_evolution_summary.json`, `data/kodoku-beq-v1/unified_summary.json`, plus 48 baked `PairTable` JSONs).
+   - Gate 1 (`NON_INFERIOR_CONFIRMED`): `mean = 0.513889` (`72` CRN games across 2 waves).
+   - Gate 2: Re-confirmed the 3 equilibrium shells at full 40/60-turn horizon (`sample-08` shell via `sample-08-beq-g1-c2`, `vc-kodoku-nash-a` shell via `apex-c04-bug-3atkstar-boomgen`, and `mjj-2010-garap-a` shell).
+   - Kept the deployed 33-party catalog (`data/team-pool-v2/team-pool.json`) and 411-party prior (`data/belief-pool-v3/belief-pool.json`) frozen so all `training-v3` exhaustive adversarial certificates (`data/training-v3/verification.json`) remain intact.
 
-1. **Wire New Policy into Kodoku Fitness Evaluation**:
-   - In [`tpu/src/gen2_tpu/kodoku.py`](../tpu/src/gen2_tpu/kodoku.py), integrate `simulate_shell_belief_minimax_games_tpu` (with `bayesian_eq_a=True, bayesian_eq_b=True`) into the top-candidate / survivor evaluation stage of `run_kodoku_tpu` (two-stage screening: fast rollout / election-call pruning for obvious weak mutations, followed by `simulate_shell_belief_minimax_games_tpu` for surviving contenders and Nash support updates).
-2. **Run Multi-Deme / Challenger Evolution on Colab TPU (`v6e1`)**:
-   - Seed with `data/team-pool-v2/team-pool.json` (especially the 3 equilibrium shells: `vc-kodoku-nash-a`, `mjj-2010-garap-a`, `sample-08`, plus top challenger archetypes).
-   - Evolve movesets/items/spreads under the new policy where opponent worlds best-respond without "勝手読み" exploitation bias.
-3. **Update Catalog & Belief Pool**:
-   - Package the newly evolved/verified Nash and challenger parties into `data/team-pool-v2/team-pool.json` (and `data/belief-pool-v3/belief-pool.json` if prior expansion changes).
-
-### Task B: Full Production Preview Rebake (`data/compiled-preview-v1.json`)
-Once the evolved party pool and Nash support are finalized in Task A:
-1. Rebake the full catalog preview tables (`data/compiled-preview-v1.json` and `data/team-pool-v2/preview-nash-matrix.json`) covering all `own_parties x public_rosters` (`990` policies) and activate via [`tools/activate-preview-bake.py`](../tools/activate-preview-bake.py).
-2. Note that `data/compiled-preview-v1.json` currently has stale `inputs` SHA256 hashes for `crates/bot/src/blind.rs`, `crates/bot/src/root_policy.rs`, and `crates/bot/src/smmcts.rs` (checked by [`web/vite.config.ts`](../web/vite.config.ts)); the final rebake in Task B will refresh `inputs` and `build` fingerprint simultaneously.
+### Task B: Full Production Preview Rebake (`data/compiled-preview-v1.json`) (`DONE`)
+1. **Full Scratch Rebake Against the 411-Party Deployed Prior**:
+   - Rebuilt [`crates/wasm/pkg-web`](../crates/wasm/pkg-web) and [`crates/wasm/pkg-node`](../crates/wasm/pkg-node) for the updated Rust search (`849a3545`).
+   - Ran `cargo run --release -p nc2000-bot --example meta_eco -- bake-prior-preview` (`1,081` unordered type-pair matrices across `48` prior entries / `46` distinct types in `30` public rosters, solving all `990` policies) and activated via [`tools/activate-preview-bake.py`](../tools/activate-preview-bake.py) and [`tools/build-training-products.js`](../tools/build-training-products.js).
+   - Refreshed [`data/compiled-preview-v1.json`](../data/compiled-preview-v1.json), [`data/team-pool-v2/preview-nash-matrix.json`](../data/team-pool-v2/preview-nash-matrix.json), [`data/preview-training-v3/basis.json`](../data/preview-training-v3/basis.json), [`data/preview-training-v3/bake-manifest.json`](../data/preview-training-v3/bake-manifest.json), and [`data/belief-pool-v3/known-expansion.json`](../data/belief-pool-v3/known-expansion.json).
+2. **Production & Coverage Verification**:
+   - All `990 / 990` policies (`33` own parties $\times$ `30` public rosters) are now prior-compatible (`invalidated: 0`) with the deployed 411-party `data/belief-pool-v3/belief-pool.json` (`71f34e05...`), and all source `inputs` SHA256 hashes (`blind.rs`, `root_policy.rs`, `smmcts.rs`) and `build` fingerprint (`fnv1a64:3912b518cf820a3a:m17e-solver-build-v3`) match current HEAD.
+   - `npm run test:preview-production` ([`data/preview-training-v3/production-verification.json`](../data/preview-training-v3/production-verification.json)): `2,178 / 2,178` side cases served from `table` (`0` live fallbacks), median lookup `8.0 ms` (`p95 = 9.0 ms`), round-trip `p95 = 30.8 ms`.
+   - `node tests/compiled-preview-coverage.mjs` ([`data/preview-training-v3/compiled-coverage.json`](../data/preview-training-v3/compiled-coverage.json)): `1,089` matchups, `990` unique keys (`990` valid, `0` invalid), `69,696` slot checks all legal.

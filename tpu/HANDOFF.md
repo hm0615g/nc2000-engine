@@ -56,6 +56,12 @@ uv run --project tpu gen2-tpu pair-table --team-a <teamA.json> --team-b <teamB.j
 # 4. Evaluate a 6v6 pool gauntlet and export cells/unit_cells JSON for meta_eco
 uv run --project tpu gen2-tpu kodoku-cells --pool-p <poolP.json> [--pool-q <poolQ.json>] --out <cache-cells.json>
 
-# 5. Build a self-contained tarball (including gen2stadium2.json) for Colab TPU v6e1
+# 5. Build a self-contained tarball (including gen2stadium2.json and learnsets-gen2.json) for Colab TPU v6e1
 uv run --project tpu gen2-tpu bundle-colab --out /tmp/gen2_tpu_bundle.tar.gz
+
+# 6. Run Unified 3-Gate Nash & PairTable Bake Pipeline
+uv run --project tpu gen2-tpu nash-pipeline --pool data/team-pool-v2/team-pool.json --out-dir data/tpu-nash-bake-v1
+
+# 7. Run Two-Stage Bayesian Equilibrium Kodoku Evolution (with optional 3-Gate Nash + Bake)
+uv run --project tpu gen2-tpu kodoku-evolve --pool data/team-pool-v2/team-pool.json --out-dir data/kodoku-beq-v1 --run-nash-bake
 ```

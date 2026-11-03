@@ -3383,7 +3383,7 @@
   ],
   "preview": {
     "total": 990,
-    "retained": 810,
-    "invalidated": 180
+    "retained": 990,
+    "invalidated": 0
   }
 }
