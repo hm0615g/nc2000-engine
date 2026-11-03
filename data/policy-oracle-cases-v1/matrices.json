@@ -1,0 +1,3015 @@
+[
+  {
+    "id": "g7-t18",
+    "turn": 18,
+    "played": "move curse",
+    "rows": [
+      "move curse",
+      "move earthquake",
+      "move megahorn",
+      "move rest"
+    ],
+    "columns": [
+      "move curse",
+      "move megahorn",
+      "move rest"
+    ],
+    "samples_per_cell": 131072,
+    "request": {
+      "id": "g7-t18",
+      "trace": "tmp/historical-t2-audit/traces/T2_Rules_Bayesian_Oracle_BR-game-007.jsonl",
+      "prior": "tmp/historical-t2-audit/belief-pool.json",
+      "turn": 18,
+      "seed": 2036111028,
+      "samples": 131072
+    },
+    "variants": [
+      {
+        "continuation": "most-visited",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.29568954298065886,
+            "se": 0.001102310942233207,
+            "terminal": 8325
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.31150964230367195,
+            "se": 0.0011159967421159737,
+            "terminal": 5712
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.4772985271513608,
+            "se": 0.0011988013229404409,
+            "terminal": 3
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.18591858664988256,
+            "se": 0.0010265627278152056,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.2009143093057762,
+            "se": 0.0009888595240480694,
+            "terminal": 377
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.34194081256943804,
+            "se": 0.0011988232752032616,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.2701697314603562,
+            "se": 0.0010920999242792662,
+            "terminal": 364
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.2401609586618147,
+            "se": 0.0010668027257427315,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.37793287621536154,
+            "se": 0.00121803505721543,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.3105808450723698,
+            "se": 0.0011201848242847563,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.16823274628350926,
+            "se": 0.0009115095545319693,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.2714679626527131,
+            "se": 0.0011088567697931726,
+            "terminal": 0
+          }
+        ],
+        "row_worst_values": [
+          0.29568954298065886,
+          0.18591858664988256,
+          0.2401609586618147,
+          0.16823274628350926
+        ],
+        "best_pure": 0,
+        "pure_security": 0.29568954298065886,
+        "pure_upper": 0.3105808450723698,
+        "mixed_value": 0.2971789819510215,
+        "matrix_solver_gap": 0.0,
+        "row_mix": [
+          0.8999792656686687,
+          0.0,
+          0.0,
+          0.10002073433133134
+        ],
+        "column_mix": [
+          0.9058514779236576,
+          0.09414852207634239,
+          0.0
+        ],
+        "estimated_mix_gain": 0.0014894389703626332
+      },
+      {
+        "continuation": "visit-sampled",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.30349273218075135,
+            "se": 0.0011034602421553337,
+            "terminal": 4566
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.3051533031225519,
+            "se": 0.0011001031957623318,
+            "terminal": 3435
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.4346604353638261,
+            "se": 0.0011887750398314946,
+            "terminal": 6
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.19299875951593085,
+            "se": 0.0010338377720925892,
+            "terminal": 149
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.19874483532833592,
+            "se": 0.0009867631061296347,
+            "terminal": 55
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.34000079785668097,
+            "se": 0.0011974553830871408,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.25063526772417627,
+            "se": 0.0011000433010920979,
+            "terminal": 702
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.24562609474561195,
+            "se": 0.0010659767293328159,
+            "terminal": 99
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.37800911999066755,
+            "se": 0.0012181908513147909,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.18255985485839535,
+            "se": 0.00098823224641303,
+            "terminal": 66
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.16827990934194445,
+            "se": 0.0009115765985055512,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.2714679626527131,
+            "se": 0.0011088567697931726,
+            "terminal": 0
+          }
+        ],
+        "row_worst_values": [
+          0.30349273218075135,
+          0.19299875951593085,
+          0.24562609474561195,
+          0.16827990934194445
+        ],
+        "best_pure": 0,
+        "pure_security": 0.30349273218075135,
+        "pure_upper": 0.30349273218075135,
+        "mixed_value": 0.30349273218075135,
+        "matrix_solver_gap": 0.0,
+        "row_mix": [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "column_mix": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "estimated_mix_gain": 0.0
+      }
+    ],
+    "scope": "Blind reconstructed root, frozen sampled continuation. Approximate search-payoff matrix; not a full-game equilibrium certificate. Fixed input reply policies only.",
+    "elapsed_seconds": 34.708429458
+  },
+  {
+    "id": "g7-t20",
+    "turn": 20,
+    "played": "move megahorn",
+    "rows": [
+      "move curse",
+      "move earthquake",
+      "move megahorn",
+      "move rest"
+    ],
+    "columns": [
+      "move curse",
+      "move megahorn",
+      "move rest"
+    ],
+    "samples_per_cell": 131072,
+    "request": {
+      "id": "g7-t20",
+      "trace": "tmp/historical-t2-audit/traces/T2_Rules_Bayesian_Oracle_BR-game-007.jsonl",
+      "prior": "tmp/historical-t2-audit/belief-pool.json",
+      "turn": 20,
+      "seed": 2036111030,
+      "samples": 131072
+    },
+    "variants": [
+      {
+        "continuation": "most-visited",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.35453423414942375,
+            "se": 0.001153675130675054,
+            "terminal": 6880
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.400759967373162,
+            "se": 0.0011653614595856755,
+            "terminal": 4132
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.4842714203169574,
+            "se": 0.0011773189887680012,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.3208372966952391,
+            "se": 0.001095825850498965,
+            "terminal": 1836
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.4071910352008572,
+            "se": 0.0011978786285055981,
+            "terminal": 1320
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.5368899387583835,
+            "se": 0.0012474657420382014,
+            "terminal": 692
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.36580752109017267,
+            "se": 0.0011829576438577897,
+            "terminal": 14733
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.39399971568422426,
+            "se": 0.0012161787095082471,
+            "terminal": 6647
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.5778132003578614,
+            "se": 0.0012338897680381853,
+            "terminal": 545
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.2558638031871437,
+            "se": 0.0009933405808842364,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.39707530527963514,
+            "se": 0.0011082082507682463,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.3751673310577879,
+            "se": 0.0011444146572437658,
+            "terminal": 0
+          }
+        ],
+        "row_worst_values": [
+          0.35453423414942375,
+          0.3208372966952391,
+          0.36580752109017267,
+          0.2558638031871437
+        ],
+        "best_pure": 2,
+        "pure_security": 0.36580752109017267,
+        "pure_upper": 0.36580752109017267,
+        "mixed_value": 0.36580752109017267,
+        "matrix_solver_gap": 0.0,
+        "row_mix": [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "column_mix": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "estimated_mix_gain": 0.0
+      },
+      {
+        "continuation": "visit-sampled",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.3618708334188328,
+            "se": 0.001149246035349134,
+            "terminal": 4158
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.39725362256215546,
+            "se": 0.0011987920679836367,
+            "terminal": 5099
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.4932673932514863,
+            "se": 0.0012168607442402627,
+            "terminal": 214
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.3424998492155559,
+            "se": 0.001137446290677351,
+            "terminal": 1302
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.39839657902804654,
+            "se": 0.0011932894603206474,
+            "terminal": 1153
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.5006126978872708,
+            "se": 0.001230005240416401,
+            "terminal": 163
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.3787077292951653,
+            "se": 0.0011969171550174425,
+            "terminal": 13858
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.4142558944369778,
+            "se": 0.001231371016912203,
+            "terminal": 6793
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.532786327519841,
+            "se": 0.00123781489342433,
+            "terminal": 262
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.2865511184917027,
+            "se": 0.0010355252668134485,
+            "terminal": 26
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.3813742918594643,
+            "se": 0.0010978910512656251,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.33545122257306925,
+            "se": 0.0010843294976707514,
+            "terminal": 0
+          }
+        ],
+        "row_worst_values": [
+          0.3618708334188328,
+          0.3424998492155559,
+          0.3787077292951653,
+          0.2865511184917027
+        ],
+        "best_pure": 2,
+        "pure_security": 0.3787077292951653,
+        "pure_upper": 0.3787077292951653,
+        "mixed_value": 0.3787077292951653,
+        "matrix_solver_gap": 0.0,
+        "row_mix": [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "column_mix": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "estimated_mix_gain": 0.0
+      }
+    ],
+    "scope": "Blind reconstructed root, frozen sampled continuation. Approximate search-payoff matrix; not a full-game equilibrium certificate. Fixed input reply policies only.",
+    "elapsed_seconds": 38.184106792
+  },
+  {
+    "id": "g7-t23",
+    "turn": 23,
+    "played": "move rest",
+    "rows": [
+      "move curse",
+      "move earthquake",
+      "move megahorn",
+      "move rest"
+    ],
+    "columns": [
+      "move curse",
+      "move megahorn",
+      "move rest"
+    ],
+    "samples_per_cell": 131072,
+    "request": {
+      "id": "g7-t23",
+      "trace": "tmp/historical-t2-audit/traces/T2_Rules_Bayesian_Oracle_BR-game-007.jsonl",
+      "prior": "tmp/historical-t2-audit/belief-pool.json",
+      "turn": 23,
+      "seed": 2036111033,
+      "samples": 131072
+    },
+    "variants": [
+      {
+        "continuation": "most-visited",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.24603264845058573,
+            "se": 0.001056851214640697,
+            "terminal": 808
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.1706991925714845,
+            "se": 0.0009343378810239083,
+            "terminal": 64266
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.26593958806283763,
+            "se": 0.0010864957485807417,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.30537351706284527,
+            "se": 0.0010404107790242157,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.1886109859941708,
+            "se": 0.0009519848724402912,
+            "terminal": 41930
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.40553071131375007,
+            "se": 0.0012227902634955614,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.4044372621791095,
+            "se": 0.001163263020329845,
+            "terminal": 2095
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.2808404764722877,
+            "se": 0.0011143485645274088,
+            "terminal": 40938
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.42216835458732715,
+            "se": 0.0012159661496871901,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.3516112745217989,
+            "se": 0.0011315964279130927,
+            "terminal": 873
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.25723142343612587,
+            "se": 0.001069809444686517,
+            "terminal": 33259
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.33367475356098586,
+            "se": 0.001134714323086099,
+            "terminal": 275
+          }
+        ],
+        "row_worst_values": [
+          0.1706991925714845,
+          0.1886109859941708,
+          0.2808404764722877,
+          0.25723142343612587
+        ],
+        "best_pure": 2,
+        "pure_security": 0.2808404764722877,
+        "pure_upper": 0.2808404764722877,
+        "mixed_value": 0.2808404764722877,
+        "matrix_solver_gap": 0.0,
+        "row_mix": [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "column_mix": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "estimated_mix_gain": 0.0
+      },
+      {
+        "continuation": "visit-sampled",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.21787092622164833,
+            "se": 0.0009968576655031464,
+            "terminal": 840
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.18454297668254085,
+            "se": 0.0009585410762703628,
+            "terminal": 37799
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.2467307083804705,
+            "se": 0.0010774090414579526,
+            "terminal": 361
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.30537351706284527,
+            "se": 0.0010404107790242157,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.2126944547439967,
+            "se": 0.0009881468121212564,
+            "terminal": 31454
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.40553071131375007,
+            "se": 0.0012227902634955614,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.3681522988651524,
+            "se": 0.0011440574851770647,
+            "terminal": 1895
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.25164141910667126,
+            "se": 0.001081214265497643,
+            "terminal": 45250
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.37778412628803565,
+            "se": 0.0011890495789167936,
+            "terminal": 342
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.36193742774340515,
+            "se": 0.0011410238215923537,
+            "terminal": 465
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.2770219864945046,
+            "se": 0.0010909493699606068,
+            "terminal": 25746
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.378462345089071,
+            "se": 0.0011659585550866992,
+            "terminal": 421
+          }
+        ],
+        "row_worst_values": [
+          0.18454297668254085,
+          0.2126944547439967,
+          0.25164141910667126,
+          0.2770219864945046
+        ],
+        "best_pure": 3,
+        "pure_security": 0.2770219864945046,
+        "pure_upper": 0.2770219864945046,
+        "mixed_value": 0.2770219864945046,
+        "matrix_solver_gap": 0.0,
+        "row_mix": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "column_mix": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "estimated_mix_gain": 0.0
+      }
+    ],
+    "scope": "Blind reconstructed root, frozen sampled continuation. Approximate search-payoff matrix; not a full-game equilibrium certificate. Fixed input reply policies only.",
+    "elapsed_seconds": 32.771558625
+  },
+  {
+    "id": "g24-t2",
+    "turn": 2,
+    "played": "move icebeam",
+    "rows": [
+      "move hydropump",
+      "move icebeam",
+      "move psychic",
+      "move recover",
+      "switch 2",
+      "switch 3"
+    ],
+    "columns": [
+      "move curse",
+      "move doubleedge",
+      "move rest",
+      "move sleeptalk",
+      "switch 2",
+      "switch 3"
+    ],
+    "samples_per_cell": 131072,
+    "request": {
+      "id": "g24-t2",
+      "trace": "tmp/historical-t2-audit/traces/T2_Rules_Bayesian_Oracle_BR-game-024.jsonl",
+      "prior": "tmp/historical-t2-audit/belief-pool.json",
+      "turn": 2,
+      "seed": 2036112712,
+      "samples": 131072
+    },
+    "variants": [
+      {
+        "continuation": "most-visited",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.4293415015261527,
+            "se": 0.0011179748957607508,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.4001490921498411,
+            "se": 0.0010293709848665927,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.403528801259056,
+            "se": 0.0010191696170316848,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 3,
+            "mean": 0.4574065128730173,
+            "se": 0.0010291428240839257,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 4,
+            "mean": 0.66012714210458,
+            "se": 0.0010036998635425242,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 5,
+            "mean": 0.6151908733346807,
+            "se": 0.0009015247535123586,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.3997315920761988,
+            "se": 0.0011568139833954378,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.4547214721694274,
+            "se": 0.001088900462280825,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.4651516073143683,
+            "se": 0.001066569592966378,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 3,
+            "mean": 0.5098476233148725,
+            "se": 0.0010615060657329486,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 4,
+            "mean": 0.5756707490244486,
+            "se": 0.001030745068975428,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 5,
+            "mean": 0.5754578849471366,
+            "se": 0.001003429409150327,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.4239700147653037,
+            "se": 0.0011158597020587315,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.43879384006920374,
+            "se": 0.0010403509001520686,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.45527835179403425,
+            "se": 0.001041122815249276,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 3,
+            "mean": 0.4899761889104311,
+            "se": 0.0010520635989525434,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 4,
+            "mean": 0.7355446702335688,
+            "se": 0.0009273420992048919,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 5,
+            "mean": 0.6072325357179176,
+            "se": 0.0009532922873549225,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.3375966662932592,
+            "se": 0.001066088737836852,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.3812821010389474,
+            "se": 0.0009900855516646542,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.45429694689773503,
+            "se": 0.0010341137664806477,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 3,
+            "mean": 0.44708861369157077,
+            "se": 0.0010046417846989728,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 4,
+            "mean": 0.44184156283481335,
+            "se": 0.001022996158914609,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 5,
+            "mean": 0.5718096249249032,
+            "se": 0.0009353475310015241,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 0,
+            "mean": 0.3975267012775586,
+            "se": 0.0011398260115828018,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 1,
+            "mean": 0.4314973290891687,
+            "se": 0.0010606627365431693,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 2,
+            "mean": 0.4941257049664499,
+            "se": 0.0010737335860445457,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 3,
+            "mean": 0.5307935249094984,
+            "se": 0.0010559967318144322,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 4,
+            "mean": 0.5412326171246127,
+            "se": 0.0010185645600572584,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 5,
+            "mean": 0.5129487687384667,
+            "se": 0.001048265187734028,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 0,
+            "mean": 0.34779752258707525,
+            "se": 0.0010660154282297967,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 1,
+            "mean": 0.3375925701373417,
+            "se": 0.0010029390374414698,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 2,
+            "mean": 0.4789005557150711,
+            "se": 0.0010547303651009825,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 3,
+            "mean": 0.47104729966919967,
+            "se": 0.0010746316748630796,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 4,
+            "mean": 0.5152517406397344,
+            "se": 0.0009281661070617405,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 5,
+            "mean": 0.539558415976063,
+            "se": 0.0009907393556254564,
+            "terminal": 0
+          }
+        ],
+        "row_worst_values": [
+          0.4001490921498411,
+          0.3997315920761988,
+          0.4239700147653037,
+          0.3375966662932592,
+          0.3975267012775586,
+          0.3375925701373417
+        ],
+        "best_pure": 2,
+        "pure_security": 0.4239700147653037,
+        "pure_upper": 0.4293415015261527,
+        "mixed_value": 0.4257790286880879,
+        "matrix_solver_gap": 5.551115123125783e-17,
+        "row_mix": [
+          0.336780858508197,
+          0.0,
+          0.663219141491803,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "column_mix": [
+          0.8779657824011087,
+          0.12203421759889138,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "estimated_mix_gain": 0.0018090139227842084
+      },
+      {
+        "continuation": "visit-sampled",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.40490866913137646,
+            "se": 0.0011202016727469895,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.3831382155890169,
+            "se": 0.001025370301446006,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.39694120137412436,
+            "se": 0.0010246148716046247,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 3,
+            "mean": 0.45137373429921535,
+            "se": 0.001030061770735262,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 4,
+            "mean": 0.6621758155481984,
+            "se": 0.0010042115313341861,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 5,
+            "mean": 0.6167458623988448,
+            "se": 0.0008986484195608267,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.40463774569569866,
+            "se": 0.001149152361104628,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.4506989121677141,
+            "se": 0.0010969772101931164,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.47852551129310106,
+            "se": 0.0010739911140242337,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 3,
+            "mean": 0.48623528393614407,
+            "se": 0.0010827763271206322,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 4,
+            "mean": 0.5690342264304015,
+            "se": 0.0010446998586706576,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 5,
+            "mean": 0.5734996112579436,
+            "se": 0.0009797390259589501,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.4066892614708842,
+            "se": 0.0011211708227108687,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.4177582812094902,
+            "se": 0.0010532914979471217,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.4338418509761328,
+            "se": 0.0010477957372661644,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 3,
+            "mean": 0.46893400572574634,
+            "se": 0.0010558645723874572,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 4,
+            "mean": 0.740420096907189,
+            "se": 0.0009181923593868134,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 5,
+            "mean": 0.6114760982271634,
+            "se": 0.0009284042261517425,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.3467936775759538,
+            "se": 0.001076689446660606,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.3679148513213304,
+            "se": 0.0010102031518158191,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.4181751181746795,
+            "se": 0.0010432620096564942,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 3,
+            "mean": 0.40618228110580595,
+            "se": 0.0010096300562715292,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 4,
+            "mean": 0.44821576784564265,
+            "se": 0.0010285724123681478,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 5,
+            "mean": 0.5646372291424635,
+            "se": 0.0009391016485940755,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 0,
+            "mean": 0.3779374342202218,
+            "se": 0.001122791528149882,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 1,
+            "mean": 0.4256245139938671,
+            "se": 0.0010841442992055748,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 2,
+            "mean": 0.5114254127871966,
+            "se": 0.001083713516765886,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 3,
+            "mean": 0.5110239255417776,
+            "se": 0.0010832428926689846,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 4,
+            "mean": 0.5116677508225925,
+            "se": 0.0010383863814255698,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 5,
+            "mean": 0.5348096876019787,
+            "se": 0.0010124399081900004,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 0,
+            "mean": 0.343111786525675,
+            "se": 0.0010728467805304971,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 1,
+            "mean": 0.31505810705572684,
+            "se": 0.0010052477598516058,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 2,
+            "mean": 0.4719959949921887,
+            "se": 0.0010947063488566673,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 3,
+            "mean": 0.44841790950113336,
+            "se": 0.0010917348645447355,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 4,
+            "mean": 0.5143882764421147,
+            "se": 0.0009356731043406786,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 5,
+            "mean": 0.540304843836286,
+            "se": 0.0009951864290204022,
+            "terminal": 0
+          }
+        ],
+        "row_worst_values": [
+          0.3831382155890169,
+          0.40463774569569866,
+          0.4066892614708842,
+          0.3467936775759538,
+          0.3779374342202218,
+          0.31505810705572684
+        ],
+        "best_pure": 2,
+        "pure_security": 0.4066892614708842,
+        "pure_upper": 0.4066892614708842,
+        "mixed_value": 0.4066892614708842,
+        "matrix_solver_gap": 0.0,
+        "row_mix": [
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "column_mix": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "estimated_mix_gain": 0.0
+      }
+    ],
+    "scope": "Blind reconstructed root, frozen sampled continuation. Approximate search-payoff matrix; not a full-game equilibrium certificate. Fixed input reply policies only.",
+    "elapsed_seconds": 108.982086458
+  },
+  {
+    "id": "g24-t3",
+    "turn": 3,
+    "played": "move icebeam",
+    "rows": [
+      "move hydropump",
+      "move icebeam",
+      "move psychic",
+      "move recover",
+      "switch 2",
+      "switch 3"
+    ],
+    "columns": [
+      "move curse",
+      "move doubleedge",
+      "move rest",
+      "move sleeptalk",
+      "switch 2",
+      "switch 3"
+    ],
+    "samples_per_cell": 131072,
+    "request": {
+      "id": "g24-t3",
+      "trace": "tmp/historical-t2-audit/traces/T2_Rules_Bayesian_Oracle_BR-game-024.jsonl",
+      "prior": "tmp/historical-t2-audit/belief-pool.json",
+      "turn": 3,
+      "seed": 2036112713,
+      "samples": 131072
+    },
+    "variants": [
+      {
+        "continuation": "most-visited",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.34742930335106686,
+            "se": 0.001118400083282597,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.38874483279363087,
+            "se": 0.0011015014753315913,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.3755388256727769,
+            "se": 0.0010593390511509028,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 3,
+            "mean": 0.4596779719755378,
+            "se": 0.0011060617348908658,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 4,
+            "mean": 0.6655163440755394,
+            "se": 0.001013538661991928,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 5,
+            "mean": 0.6206911065464616,
+            "se": 0.000919839391784208,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.358653194609188,
+            "se": 0.001153894705400774,
+            "terminal": 3
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.389897107138215,
+            "se": 0.0011198727716577833,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.4088420407358091,
+            "se": 0.001106197140478585,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 3,
+            "mean": 0.4676245441421508,
+            "se": 0.0011310768418313919,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 4,
+            "mean": 0.5663979488301966,
+            "se": 0.0010373233899379868,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 5,
+            "mean": 0.5767546743494985,
+            "se": 0.0009822554912393795,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.3647386446434328,
+            "se": 0.0011185177358697897,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.37870938219017836,
+            "se": 0.0010893275798512657,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.3648872727672473,
+            "se": 0.0010659608411273962,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 3,
+            "mean": 0.4693782960726629,
+            "se": 0.0011198875983016012,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 4,
+            "mean": 0.7398415714676984,
+            "se": 0.0009238470038526081,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 5,
+            "mean": 0.6194966498527521,
+            "se": 0.0009437877521042426,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.3543002658137692,
+            "se": 0.0010785580770754015,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.2844263898277591,
+            "se": 0.0009955734299243579,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.33095193240208803,
+            "se": 0.0010025246193339013,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 3,
+            "mean": 0.34976368821725007,
+            "se": 0.001037140111581649,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 4,
+            "mean": 0.4716029624595987,
+            "se": 0.0010234189123097608,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 5,
+            "mean": 0.6012526296790581,
+            "se": 0.0008881413569825522,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 0,
+            "mean": 0.24058811840557198,
+            "se": 0.0010151190917664758,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 1,
+            "mean": 0.24749497487319685,
+            "se": 0.001005386713384954,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 2,
+            "mean": 0.33729463440014457,
+            "se": 0.001066626718392963,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 3,
+            "mean": 0.3283278680571207,
+            "se": 0.0010650812084924994,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 4,
+            "mean": 0.5604300546633995,
+            "se": 0.0010253737415170218,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 5,
+            "mean": 0.5687219930698797,
+            "se": 0.0009612760884262918,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 0,
+            "mean": 0.26006352016885914,
+            "se": 0.0010441258867618828,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 1,
+            "mean": 0.2588838814865619,
+            "se": 0.0010025767089937387,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 2,
+            "mean": 0.3108821503604724,
+            "se": 0.0010341779466199348,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 3,
+            "mean": 0.3327675890125001,
+            "se": 0.0010623377999094384,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 4,
+            "mean": 0.5357079912256713,
+            "se": 0.0009082114238178669,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 5,
+            "mean": 0.5692435888356332,
+            "se": 0.0009955963123680657,
+            "terminal": 0
+          }
+        ],
+        "row_worst_values": [
+          0.34742930335106686,
+          0.358653194609188,
+          0.3647386446434328,
+          0.2844263898277591,
+          0.24058811840557198,
+          0.2588838814865619
+        ],
+        "best_pure": 2,
+        "pure_security": 0.3647386446434328,
+        "pure_upper": 0.3647386446434328,
+        "mixed_value": 0.3647386446434328,
+        "matrix_solver_gap": 0.0,
+        "row_mix": [
+          0.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "column_mix": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "estimated_mix_gain": 0.0
+      },
+      {
+        "continuation": "visit-sampled",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.34736802265163913,
+            "se": 0.001131342751410161,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.3764065830735225,
+            "se": 0.0011105486042598096,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.37762470988090524,
+            "se": 0.0010720882014973068,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 3,
+            "mean": 0.43418329610673273,
+            "se": 0.0011183320181794693,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 4,
+            "mean": 0.6677033198780219,
+            "se": 0.0010081854059411411,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 5,
+            "mean": 0.6245575859795333,
+            "se": 0.0009040260824291503,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.35477101469067185,
+            "se": 0.0011555396192740582,
+            "terminal": 36
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.3926694789332037,
+            "se": 0.001134319465036523,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.41301148652052044,
+            "se": 0.0011174885620933426,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 3,
+            "mean": 0.44067415254008274,
+            "se": 0.001138574519229969,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 4,
+            "mean": 0.5846663328271106,
+            "se": 0.001040870563908279,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 5,
+            "mean": 0.5977156218669116,
+            "se": 0.0009598544660615147,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.3357355443971264,
+            "se": 0.0011209183948163136,
+            "terminal": 5
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.3706311409859978,
+            "se": 0.001104039381400789,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.377249269158994,
+            "se": 0.0010764201376739168,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 3,
+            "mean": 0.43800684694739195,
+            "se": 0.0011232449260667162,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 4,
+            "mean": 0.74805716094308,
+            "se": 0.0009091054311998031,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 5,
+            "mean": 0.6209961596356495,
+            "se": 0.0009234776630293076,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.28794012081599324,
+            "se": 0.0010571356699451157,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.27838606937245797,
+            "se": 0.0010071630890148792,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.3164250694492662,
+            "se": 0.0010027997083231007,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 3,
+            "mean": 0.33163104485176587,
+            "se": 0.0010303958243110007,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 4,
+            "mean": 0.4705198536396549,
+            "se": 0.001024470598637032,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 5,
+            "mean": 0.601244124564777,
+            "se": 0.0008883148921374432,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 0,
+            "mean": 0.24266261425026384,
+            "se": 0.0010201270672560733,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 1,
+            "mean": 0.2474224143478498,
+            "se": 0.001005248953250563,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 2,
+            "mean": 0.3376900658417279,
+            "se": 0.0010674757494891864,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 3,
+            "mean": 0.32750081432454026,
+            "se": 0.0010641584704920405,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 4,
+            "mean": 0.5604300546633995,
+            "se": 0.0010253737415170218,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 5,
+            "mean": 0.5687219930698797,
+            "se": 0.0009612760884262918,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 0,
+            "mean": 0.2447100818794297,
+            "se": 0.0010296309651360075,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 1,
+            "mean": 0.25874280814964884,
+            "se": 0.0010022834292003038,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 2,
+            "mean": 0.31738677168744056,
+            "se": 0.0010383818505930948,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 3,
+            "mean": 0.33233124219307614,
+            "se": 0.001063117697007623,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 4,
+            "mean": 0.5357079912256713,
+            "se": 0.0009082114238178669,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 5,
+            "mean": 0.5692435888356332,
+            "se": 0.0009955963123680657,
+            "terminal": 0
+          }
+        ],
+        "row_worst_values": [
+          0.34736802265163913,
+          0.35477101469067185,
+          0.3357355443971264,
+          0.27838606937245797,
+          0.24266261425026384,
+          0.2447100818794297
+        ],
+        "best_pure": 1,
+        "pure_security": 0.35477101469067185,
+        "pure_upper": 0.35477101469067185,
+        "mixed_value": 0.35477101469067185,
+        "matrix_solver_gap": 0.0,
+        "row_mix": [
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "column_mix": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "estimated_mix_gain": 0.0
+      }
+    ],
+    "scope": "Blind reconstructed root, frozen sampled continuation. Approximate search-payoff matrix; not a full-game equilibrium certificate. Fixed input reply policies only.",
+    "elapsed_seconds": 100.493644292
+  },
+  {
+    "id": "g24-t4",
+    "turn": 4,
+    "played": "move icebeam",
+    "rows": [
+      "move hydropump",
+      "move icebeam",
+      "move psychic",
+      "move recover",
+      "switch 2",
+      "switch 3"
+    ],
+    "columns": [
+      "move curse",
+      "move doubleedge",
+      "move rest",
+      "move sleeptalk",
+      "switch 2",
+      "switch 3"
+    ],
+    "samples_per_cell": 131072,
+    "request": {
+      "id": "g24-t4",
+      "trace": "tmp/historical-t2-audit/traces/T2_Rules_Bayesian_Oracle_BR-game-024.jsonl",
+      "prior": "tmp/historical-t2-audit/belief-pool.json",
+      "turn": 4,
+      "seed": 2036112714,
+      "samples": 131072
+    },
+    "variants": [
+      {
+        "continuation": "most-visited",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.26984932995652616,
+            "se": 0.0010860174003596759,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.20470314357361818,
+            "se": 0.0009711554637949657,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.21655182219366198,
+            "se": 0.0009335265144324825,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 3,
+            "mean": 0.3264924483070213,
+            "se": 0.0011454935385282747,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 4,
+            "mean": 0.696458389137795,
+            "se": 0.0009837092023566752,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 5,
+            "mean": 0.6528951778280712,
+            "se": 0.0008676855442114836,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.31431786496858694,
+            "se": 0.001140584293266117,
+            "terminal": 2304
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.3160254849142566,
+            "se": 0.0011470088193402301,
+            "terminal": 690
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.3506094234873626,
+            "se": 0.001119288100186377,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 3,
+            "mean": 0.40448051665632584,
+            "se": 0.0011737871755386994,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 4,
+            "mean": 0.6298114368978035,
+            "se": 0.00100835092784638,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 5,
+            "mean": 0.5894888602555064,
+            "se": 0.000967736267036619,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.3911828862849197,
+            "se": 0.0011518127050515828,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.27717729438693217,
+            "se": 0.001068666910152603,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.2926523014285793,
+            "se": 0.001022204721569871,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 3,
+            "mean": 0.33373620318351754,
+            "se": 0.0011417360452762183,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 4,
+            "mean": 0.7828392878186285,
+            "se": 0.0008628724650721976,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 5,
+            "mean": 0.649733387509924,
+            "se": 0.000882535291591419,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.30941331961421736,
+            "se": 0.001082708191902032,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.23514745182536206,
+            "se": 0.0009773302627569154,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.3201390252695357,
+            "se": 0.0010533683130738583,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 3,
+            "mean": 0.3422736638469194,
+            "se": 0.001062806087037721,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 4,
+            "mean": 0.5093120373426828,
+            "se": 0.0010221593540802624,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 5,
+            "mean": 0.614567739988657,
+            "se": 0.0009253922819663297,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 0,
+            "mean": 0.31297507106881217,
+            "se": 0.001058187386593674,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 1,
+            "mean": 0.25501251296334015,
+            "se": 0.0009963609323333734,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 2,
+            "mean": 0.38138411736951244,
+            "se": 0.0010598722092650533,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 3,
+            "mean": 0.39427872728188346,
+            "se": 0.0011100037804836278,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 4,
+            "mean": 0.557508954694655,
+            "se": 0.0010189608052769592,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 5,
+            "mean": 0.5864889234905194,
+            "se": 0.0009552807295725231,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 0,
+            "mean": 0.22408683220342385,
+            "se": 0.0009832120656065662,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 1,
+            "mean": 0.16790368535621056,
+            "se": 0.0009331370064296474,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 2,
+            "mean": 0.2705119137644732,
+            "se": 0.0010271878191603612,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 3,
+            "mean": 0.24997678387126754,
+            "se": 0.0010457134112483817,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 4,
+            "mean": 0.5561699678861254,
+            "se": 0.0009090196160306914,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 5,
+            "mean": 0.5949558368769468,
+            "se": 0.0009896980845341325,
+            "terminal": 0
+          }
+        ],
+        "row_worst_values": [
+          0.20470314357361818,
+          0.31431786496858694,
+          0.27717729438693217,
+          0.23514745182536206,
+          0.25501251296334015,
+          0.16790368535621056
+        ],
+        "best_pure": 1,
+        "pure_security": 0.31431786496858694,
+        "pure_upper": 0.3160254849142566,
+        "mixed_value": 0.3154521887111639,
+        "matrix_solver_gap": 1.6653345369377348e-16,
+        "row_mix": [
+          0.0,
+          0.9852426536394402,
+          0.014757346360559755,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "column_mix": [
+          0.33572821900245275,
+          0.6642717809975472,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "estimated_mix_gain": 0.001134323742576937
+      },
+      {
+        "continuation": "visit-sampled",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.27016952715968556,
+            "se": 0.0010864313206940886,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.20669039542706652,
+            "se": 0.0009735122572851169,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.2165585837674457,
+            "se": 0.0009335314754247427,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 3,
+            "mean": 0.32591381169777744,
+            "se": 0.0011454449954565375,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 4,
+            "mean": 0.6964732409911318,
+            "se": 0.0009837934414420673,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 5,
+            "mean": 0.6528951778280712,
+            "se": 0.0008676855442114836,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.32454869132799435,
+            "se": 0.0011463244512127896,
+            "terminal": 547
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.31994892407555736,
+            "se": 0.001152808527381348,
+            "terminal": 730
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.3530233782568863,
+            "se": 0.0011266659545097419,
+            "terminal": 1
+          },
+          {
+            "row": 1,
+            "column": 3,
+            "mean": 0.3822057102744337,
+            "se": 0.0011595952736767109,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 4,
+            "mean": 0.6128873259478395,
+            "se": 0.001030907508419874,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 5,
+            "mean": 0.6128697036974179,
+            "se": 0.0009506961690514014,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.3255170231863659,
+            "se": 0.001128881265154619,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.2442845248419615,
+            "se": 0.0010331653675590966,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.2631827238566255,
+            "se": 0.0010005314012393187,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 3,
+            "mean": 0.3241670319914334,
+            "se": 0.0011365783584501748,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 4,
+            "mean": 0.7829962265029927,
+            "se": 0.0008626712753346362,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 5,
+            "mean": 0.6534122942245447,
+            "se": 0.0008744152464365366,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.25605539731736005,
+            "se": 0.0010315775578537824,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.19237113372379963,
+            "se": 0.0009300563755488095,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.27605260777924945,
+            "se": 0.0010295199378997917,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 3,
+            "mean": 0.27182472463061513,
+            "se": 0.0010397215543665088,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 4,
+            "mean": 0.512361674961514,
+            "se": 0.0010268331085127587,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 5,
+            "mean": 0.6186950572137709,
+            "se": 0.0009094566500040637,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 0,
+            "mean": 0.2773908625701357,
+            "se": 0.0010549320934560929,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 1,
+            "mean": 0.23815503819076128,
+            "se": 0.0010047924811612359,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 2,
+            "mean": 0.33575821536519806,
+            "se": 0.00108938783066315,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 3,
+            "mean": 0.34038682339538073,
+            "se": 0.0011092139827847524,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 4,
+            "mean": 0.568350532880565,
+            "se": 0.0010222221095207468,
+            "terminal": 0
+          },
+          {
+            "row": 4,
+            "column": 5,
+            "mean": 0.5870561921129261,
+            "se": 0.0009589729259947232,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 0,
+            "mean": 0.20373036758522473,
+            "se": 0.0009650623678429163,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 1,
+            "mean": 0.1649947901828771,
+            "se": 0.0009298346388712885,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 2,
+            "mean": 0.24613025116447584,
+            "se": 0.0009952020582495954,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 3,
+            "mean": 0.24757116356337833,
+            "se": 0.001045791123033469,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 4,
+            "mean": 0.5561699678861254,
+            "se": 0.0009090196160306914,
+            "terminal": 0
+          },
+          {
+            "row": 5,
+            "column": 5,
+            "mean": 0.5949558368769468,
+            "se": 0.0009896980845341325,
+            "terminal": 0
+          }
+        ],
+        "row_worst_values": [
+          0.20669039542706652,
+          0.31994892407555736,
+          0.2442845248419615,
+          0.19237113372379963,
+          0.23815503819076128,
+          0.1649947901828771
+        ],
+        "best_pure": 1,
+        "pure_security": 0.31994892407555736,
+        "pure_upper": 0.31994892407555736,
+        "mixed_value": 0.31994892407555736,
+        "matrix_solver_gap": 0.0,
+        "row_mix": [
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "column_mix": [
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "estimated_mix_gain": 0.0
+      }
+    ],
+    "scope": "Blind reconstructed root, frozen sampled continuation. Approximate search-payoff matrix; not a full-game equilibrium certificate. Fixed input reply policies only.",
+    "elapsed_seconds": 99.598549709
+  },
+  {
+    "id": "g25-t11",
+    "turn": 11,
+    "played": "move rest",
+    "rows": [
+      "move curse",
+      "move doubleedge",
+      "move rest",
+      "move sleeptalk"
+    ],
+    "columns": [
+      "move curse",
+      "move doubleedge",
+      "move rest",
+      "move sleeptalk",
+      "switch 2",
+      "switch 3"
+    ],
+    "samples_per_cell": 131072,
+    "request": {
+      "id": "g25-t11",
+      "trace": "tmp/historical-t2-audit/traces/T2_Rules_Bayesian_Oracle_BR-game-025.jsonl",
+      "prior": "tmp/historical-t2-audit/belief-pool.json",
+      "turn": 11,
+      "seed": 2036112821,
+      "samples": 131072
+    },
+    "variants": [
+      {
+        "continuation": "most-visited",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.3025622022423983,
+            "se": 0.0012363055034540845,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.00385916933178998,
+            "se": 0.0001692948871555529,
+            "terminal": 8101
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.18822505323716093,
+            "se": 0.0010668947893662161,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 3,
+            "mean": 0.09593070025568806,
+            "se": 0.0008048878964453126,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 4,
+            "mean": 0.3096790059067488,
+            "se": 0.0012744822078090683,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 5,
+            "mean": 0.31238039705261916,
+            "se": 0.0012772441356910457,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.11553811760326772,
+            "se": 0.0008722544458446932,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.0,
+            "se": 0.0,
+            "terminal": 131072
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.2247611388379825,
+            "se": 0.0011324415698157617,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 3,
+            "mean": 0.25715530193399944,
+            "se": 0.001191058323133701,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 4,
+            "mean": 0.2350129726567604,
+            "se": 0.0011698055926554409,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 5,
+            "mean": 0.4156125780040458,
+            "se": 0.0013603543994046997,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.36929744386778107,
+            "se": 0.0013219621199989774,
+            "terminal": 6360
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.41289755341924145,
+            "se": 0.0013504990432689512,
+            "terminal": 9595
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.4410962868446904,
+            "se": 0.0013616107662165478,
+            "terminal": 68
+          },
+          {
+            "row": 2,
+            "column": 3,
+            "mean": 0.44034173602957855,
+            "se": 0.00136210847135576,
+            "terminal": 1475
+          },
+          {
+            "row": 2,
+            "column": 4,
+            "mean": 0.7055658546168077,
+            "se": 0.0012472204771982423,
+            "terminal": 19
+          },
+          {
+            "row": 2,
+            "column": 5,
+            "mean": 0.6673848933339671,
+            "se": 0.0012947477586773876,
+            "terminal": 2527
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.3072639096726681,
+            "se": 0.0012574433053363903,
+            "terminal": 366
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.024085738614245854,
+            "se": 0.0004186715699582254,
+            "terminal": 8181
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.23207835384272327,
+            "se": 0.0011438987724700356,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 3,
+            "mean": 0.2731002201248994,
+            "se": 0.0012068813823480076,
+            "terminal": 792
+          },
+          {
+            "row": 3,
+            "column": 4,
+            "mean": 0.23105036551242908,
+            "se": 0.0011611283024577,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 5,
+            "mean": 0.22444614744836797,
+            "se": 0.0011499697644830793,
+            "terminal": 0
+          }
+        ],
+        "row_worst_values": [
+          0.00385916933178998,
+          0.0,
+          0.36929744386778107,
+          0.024085738614245854
+        ],
+        "best_pure": 2,
+        "pure_security": 0.36929744386778107,
+        "pure_upper": 0.36929744386778107,
+        "mixed_value": 0.36929744386778107,
+        "matrix_solver_gap": 0.0,
+        "row_mix": [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "column_mix": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "estimated_mix_gain": 0.0
+      },
+      {
+        "continuation": "visit-sampled",
+        "cells": [
+          {
+            "row": 0,
+            "column": 0,
+            "mean": 0.2936809935737694,
+            "se": 0.0012244196004998103,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 1,
+            "mean": 0.003924065534978908,
+            "se": 0.00017073219540744336,
+            "terminal": 8101
+          },
+          {
+            "row": 0,
+            "column": 2,
+            "mean": 0.1883734531334319,
+            "se": 0.0010672832652153144,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 3,
+            "mean": 0.09547234164140378,
+            "se": 0.00080310811557219,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 4,
+            "mean": 0.3096790059067488,
+            "se": 0.0012744822078090683,
+            "terminal": 0
+          },
+          {
+            "row": 0,
+            "column": 5,
+            "mean": 0.3123849458798691,
+            "se": 0.0012772071685658072,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 0,
+            "mean": 0.1154026962433028,
+            "se": 0.0008717526676143987,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 1,
+            "mean": 0.0,
+            "se": 0.0,
+            "terminal": 131072
+          },
+          {
+            "row": 1,
+            "column": 2,
+            "mean": 0.2247611388379825,
+            "se": 0.0011324415698157617,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 3,
+            "mean": 0.25715530193399944,
+            "se": 0.001191058323133701,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 4,
+            "mean": 0.2350129726567604,
+            "se": 0.0011698055926554409,
+            "terminal": 0
+          },
+          {
+            "row": 1,
+            "column": 5,
+            "mean": 0.4156125780040458,
+            "se": 0.0013603543994046997,
+            "terminal": 0
+          },
+          {
+            "row": 2,
+            "column": 0,
+            "mean": 0.3489949279910328,
+            "se": 0.001304731523400079,
+            "terminal": 5727
+          },
+          {
+            "row": 2,
+            "column": 1,
+            "mean": 0.38977837325588066,
+            "se": 0.0013373343794639539,
+            "terminal": 9080
+          },
+          {
+            "row": 2,
+            "column": 2,
+            "mean": 0.43080125416002246,
+            "se": 0.0013567889627820377,
+            "terminal": 88
+          },
+          {
+            "row": 2,
+            "column": 3,
+            "mean": 0.4036199185445392,
+            "se": 0.0013441675345926079,
+            "terminal": 1324
+          },
+          {
+            "row": 2,
+            "column": 4,
+            "mean": 0.674017699163764,
+            "se": 0.0012844850600931027,
+            "terminal": 10
+          },
+          {
+            "row": 2,
+            "column": 5,
+            "mean": 0.6687220730249659,
+            "se": 0.0012922566683866883,
+            "terminal": 1006
+          },
+          {
+            "row": 3,
+            "column": 0,
+            "mean": 0.2596393698808946,
+            "se": 0.001192615643142646,
+            "terminal": 1907
+          },
+          {
+            "row": 3,
+            "column": 1,
+            "mean": 0.01554986755676251,
+            "se": 0.00033763917221283116,
+            "terminal": 9806
+          },
+          {
+            "row": 3,
+            "column": 2,
+            "mean": 0.23244329058734628,
+            "se": 0.001144550105794027,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 3,
+            "mean": 0.26994961096677617,
+            "se": 0.0012017613347301316,
+            "terminal": 792
+          },
+          {
+            "row": 3,
+            "column": 4,
+            "mean": 0.23105036551242908,
+            "se": 0.0011611283024577,
+            "terminal": 0
+          },
+          {
+            "row": 3,
+            "column": 5,
+            "mean": 0.2243496723312987,
+            "se": 0.0011498537642927072,
+            "terminal": 0
+          }
+        ],
+        "row_worst_values": [
+          0.003924065534978908,
+          0.0,
+          0.3489949279910328,
+          0.01554986755676251
+        ],
+        "best_pure": 2,
+        "pure_security": 0.3489949279910328,
+        "pure_upper": 0.3489949279910328,
+        "mixed_value": 0.3489949279910328,
+        "matrix_solver_gap": 0.0,
+        "row_mix": [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        "column_mix": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "estimated_mix_gain": 0.0
+      }
+    ],
+    "scope": "Blind reconstructed root, frozen sampled continuation. Approximate search-payoff matrix; not a full-game equilibrium certificate. Fixed input reply policies only.",
+    "elapsed_seconds": 46.191014917
+  }
+]

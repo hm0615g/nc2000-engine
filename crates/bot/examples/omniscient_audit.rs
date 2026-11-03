@@ -32,6 +32,9 @@ use nc2000_engine::dex::{toid, Dex};
 use nc2000_engine::state::{Battle, RequestState};
 use serde_json::{json, Value};
 
+#[path = "omniscient_audit/trace.rs"]
+mod trace;
+
 type PreviewSig = Vec<(String, i64, String, bool)>;
 
 fn preview_sig_sets(sets: &[PokemonSet]) -> PreviewSig {
@@ -721,6 +724,8 @@ fn play_omniscient_duel_game(
     max_turns: u16,
     corrected: bool,
     compiled: &Value,
+    trace_path: Option<&std::path::Path>,
+    blue_override: Option<&(u16, String)>,
 ) -> (f64, u16, usize, nc2000_bot::agent::RootSearchStats) {
     let (side_blue, side_red) = if blue_is_p1 { (0, 1) } else { (1, 0) };
     let (t1, t2) = if blue_is_p1 {
@@ -730,6 +735,13 @@ fn play_omniscient_duel_game(
     };
     let mut battle = Battle::from_fixture(dex, battle_seed, t1, t2).unwrap();
     battle.set_log_enabled(true);
+    let mut trace = trace_path.map(trace::Trace::new);
+    let mut override_applied = false;
+    if let Some(t) = &mut trace {
+        t.write(json!({"kind":"setup", "blue_side":side_blue, "red_side":side_red,
+            "battle_seed":battle_seed, "blue_seed":blue_seed, "red_seed":red_seed,
+            "blue_sets":blue_sets, "red_sets":red_sets}));
+    }
 
     let base_cfg = RmConfig {
         iterations: base_iters,
@@ -851,6 +863,7 @@ fn play_omniscient_duel_game(
         let choices_blue = battle.legal_choices(dex, side_blue);
         let choices_red = battle.legal_choices(dex, side_red);
 
+        let mut red_diagnostics = json!({});
         // 1. Blue always chooses its action via its standard `BlindAgent`
         let blue_choice = if choices_blue.is_empty() {
             None
@@ -1035,6 +1048,12 @@ fn play_omniscient_duel_game(
                                                     break;
                                                 }
                                             }
+                                            if trace.is_some() {
+                                                if red_diagnostics["predictions"].is_null() { red_diagnostics["predictions"] = json!([]); }
+                                                red_diagnostics["predictions"].as_array_mut().unwrap().push(json!({
+                                                    "predicted":b_search.best().map(|a|a.to_input(dex)),
+                                                    "search":trace::search(&b_search,dex), "sampled_world":trace::state(&det_b,dex)}));
+                                            }
                                             b_search.best().unwrap_or(det_blue_choices[0])
                                         };
                                         coupled_worlds.push((det_b, rep, det_blue_choices, sampled));
@@ -1095,6 +1114,7 @@ fn play_omniscient_duel_game(
                             }
 
                             if let Some(sp) = solver_pick {
+                                if trace.is_some() { red_diagnostics["method"] = json!("bound-solver"); }
                                 sp
                             } else if coupled_worlds.is_empty() {
                                 let mut bs = model_search(public_position.as_ref(),
@@ -1180,6 +1200,11 @@ fn play_omniscient_duel_game(
                                         };
                                         br_n[own_a] += 1;
                                         br_w[own_a] += r_my;
+                                    }
+                                    if trace.is_some() {
+                                        red_diagnostics["method"] = json!("coupled-ucb-br");
+                                        red_diagnostics["actions"] = json!(actions.iter().enumerate().map(|(i,a)|json!({
+                                            "input":a.to_input(dex),"visits":br_n[i],"mean":br_w[i]/br_n[i].max(1) as f64})).collect::<Vec<_>>());
                                     }
                                     let max_n =
                                         eligible.iter().map(|&a| br_n[a]).max().unwrap_or(1);
@@ -1398,12 +1423,39 @@ fn play_omniscient_duel_game(
             }
         };
 
+        // Research-only single-decision intervention, applied after Red commits.
+        // Red's predictor is not told the intervention or the realized action.
+        let blue_proposed = blue_choice;
+        let blue_choice = if let Some((_, input)) = blue_override.filter(|(turn, _)|
+            !override_applied && *turn == battle.turn && battle.request_state == RequestState::Move)
+        {
+            override_applied = true;
+            Some(nc2000_bot::fork::find_choice(dex, &choices_blue, input).expect("illegal blue intervention"))
+        } else { blue_choice };
         let pair_choices = if blue_is_p1 {
             [blue_choice, red_choice]
         } else {
             [red_choice, blue_choice]
         };
+        let mut diagnostic = trace.as_ref().map(|_| json!({
+            "kind":"decision", "turn":battle.turn,
+            "blue_proposed":blue_proposed.map(|a|a.to_input(dex)),
+            "blue_choice":blue_choice.map(|a|a.to_input(dex)),
+            "red_choice":red_choice.map(|a|a.to_input(dex)),
+            "blue_search":blue_protocol.as_ref().and_then(|a|a.search()).map(|s|trace::search(s,dex)),
+            "blue_belief":blue_protocol.as_ref().and_then(|a|a.belief()).map(trace::belief),
+            "red_belief":red_belief.as_ref().map(trace::belief),
+            "red_diagnostics":red_diagnostics,
+            "analyst_truth_before":trace::state(&battle,dex)
+        }));
+        let log_start = battle.log.len();
         battle.apply_choices(dex, pair_choices).unwrap();
+        if let (Some(t), Some(d)) = (&mut trace, diagnostic.as_mut()) {
+            d["engine_log"] = json!(&battle.log[log_start..]);
+            d["analyst_truth_after"] = trace::state(&battle,dex);
+            d["outcome"] = json!(battle.outcome().map(|o|format!("{:?}",o)));
+            t.write(d.take());
+        }
     }
 }
 
@@ -1450,6 +1502,13 @@ fn main() {
     let find_flag = |k: &str| -> Option<String> {
         args.windows(2).find(|w| w[0] == k).map(|w| w[1].clone())
     };
+    let trace_dir = find_flag("--trace-dir").map(PathBuf::from);
+    if let Some(dir) = &trace_dir { std::fs::create_dir_all(dir).unwrap(); }
+    let trace_pairs: Option<BTreeSet<usize>> = find_flag("--trace-pairs").map(|s|s.split(',').map(|x|x.parse().expect("pair index")).collect());
+    assert!(trace_pairs.is_none() || trace_dir.is_some(), "--trace-pairs requires --trace-dir");
+    let blue_override = find_flag("--blue-override-turn").map(|s|(
+        s.parse::<u16>().expect("override turn"), find_flag("--blue-override-action").expect("override action")));
+    assert!(blue_override.is_none() || trace_dir.is_some(), "interventions require --trace-dir");
     let corrected=args.iter().any(|a|a=="--corrected-product");
     let compiled:Value=serde_json::from_slice(&std::fs::read(root.join("data/compiled-preview-v1.json")).unwrap()).unwrap();
     if corrected {assert_eq!(compiled["build"],nc2000_bot::compiled_preview::build_fingerprint(),"stale corrected preview artifact");}
@@ -1459,6 +1518,9 @@ fn main() {
     let num_pairs: usize = find_flag("--pairs")
         .and_then(|v| v.parse().ok())
         .unwrap_or(24);
+    if let Some(pairs) = &trace_pairs {
+        assert!(!pairs.is_empty() && pairs.iter().all(|&p|p < num_pairs), "invalid diagnostic pair indices");
+    }
     let endgame_states_target: usize = find_flag("--endgame-states")
         .and_then(|v| v.parse().ok())
         .unwrap_or(24);
@@ -1536,7 +1598,7 @@ fn main() {
     let n_pi = pi_sets.len();
 
     let bp_text =
-        std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
+        std::fs::read_to_string(find_flag("--prior-json").map(PathBuf::from).unwrap_or_else(||root.join("data/belief-pool-v3/belief-pool.json"))).unwrap();
     let raw_mp: MetaPool = serde_json::from_str(&bp_text).unwrap();
     let mut pi_sigs: BTreeSet<PreviewSig> = BTreeSet::new();
     for s in &pi_sets {
@@ -1856,6 +1918,9 @@ fn main() {
         std::thread::scope(|scope| {
             let mut handles = Vec::new();
             for _ in 0..threads.min(jobs.len()).max(1) {
+                let trace_dir_ref=&trace_dir;
+                let trace_pairs_ref=&trace_pairs;
+                let blue_override_ref=&blue_override;
                 let product_prior_ref=&product_prior;
                 let compiled_ref=&compiled;
                 let (jobs_ref, cursor_ref, pi_sets_ref, oracles_ref, mp_ref, dex_ref) = (
@@ -1873,6 +1938,8 @@ fn main() {
                         if k >= jobs_ref.len() {
                             break;
                         }
+                        if trace_pairs_ref.as_ref().is_some_and(|pairs|!pairs.contains(&(k/2))) { continue; }
+                        let trace_path = trace_dir_ref.as_ref().map(|dir|dir.join(format!("{}-game-{k:03}.jsonl",tier.id())));
                         let job = &jobs_ref[k];
                         let oracle = &oracles_ref[job.red_idx * n_pi + job.blue_idx];
                         let (blue_pts, turns, solv_hits, r_stats) = play_omniscient_duel_game(
@@ -1893,6 +1960,8 @@ fn main() {
                             max_turns,
                             corrected,
                             compiled_ref,
+                            trace_path.as_deref(),
+                            blue_override_ref.as_ref(),
                         );
                         eprintln!("[duel] {} game {}/{} blue={} turns={}",tier.id(),k+1,jobs_ref.len(),blue_pts,turns);
                         loc.push((k, blue_pts, turns, solv_hits, r_stats));
@@ -1917,8 +1986,10 @@ fn main() {
         let tot_probed: u64 = game_outs.iter().map(|x| x.4.probed_searches).sum();
         let tot_mixed: u64 = game_outs.iter().map(|x| x.4.mixed_searches).sum();
 
-        let mut pair_red_scores = Vec::with_capacity(num_pairs);
-        for p in 0..num_pairs {
+        let measured_pairs = game_outs.len()/2;
+        assert!(measured_pairs > 0 && game_outs.len() % 2 == 0);
+        let mut pair_red_scores = Vec::with_capacity(measured_pairs);
+        for p in 0..measured_pairs {
             let r0 = 1.0 - game_outs[2 * p].1;
             let r1 = 1.0 - game_outs[2 * p + 1].1;
             pair_red_scores.push(0.5 * (r0 + r1));
@@ -1927,8 +1998,8 @@ fn main() {
             .iter()
             .map(|&x| (x - red_wr).powi(2))
             .sum::<f64>()
-            / ((num_pairs.saturating_sub(1).max(1)) as f64);
-        let se_red = (var_pair / (num_pairs as f64)).sqrt();
+            / ((measured_pairs.saturating_sub(1).max(1)) as f64);
+        let se_red = (var_pair / (measured_pairs as f64)).sqrt();
 
         println!(
             "  {:28} | RulesOK={:5} | Red_WR={:6.2}% (±{:4.2}%) | Gain={:+6.2}% | Turns={:4.1} | Mix={}/{}/{} | Solv={:2} ({:.1}s)",
@@ -1957,8 +2028,10 @@ fn main() {
             "blue_wr": blue_wr,
             "se_red_wr": se_red,
             "paired_red_scores":pair_red_scores,
-            "red_wr_95pct_normal_approx":[(red_wr-1.96*se_red).max(0.),(red_wr+1.96*se_red).min(1.)],
-            "red_wr_onesided95_hoeffding_upper":(red_wr+(20.0_f64.ln()/(2.*num_pairs as f64)).sqrt()).min(1.),
+            "red_wr_95pct_normal_approx":(trace_pairs.is_none() && blue_override.is_none()).then_some([(red_wr-1.96*se_red).max(0.),(red_wr+1.96*se_red).min(1.)]),
+            "red_wr_onesided95_hoeffding_upper":(trace_pairs.is_none() && blue_override.is_none()).then_some((red_wr+(20.0_f64.ln()/(2.*measured_pairs as f64)).sqrt()).min(1.)),
+            "selected_pair_indices":trace_pairs,
+            "diagnostic_subset":trace_pairs.is_some(),
             "turn_capped_or_natural_ties":game_outs.iter().filter(|x|x.1==0.5).count(),
             "gain_over_shipped_bot": red_gain_over_50,
             "avg_turns": avg_turns,
@@ -2250,11 +2323,15 @@ fn main() {
         "blue_preview":"regenerated compiled choices[u32(seed)%64] when corrected_product=true",
         "blue_api":"ProtocolAgent with trusted PlayerChannel when corrected_product=true",
         "matchup_sampling":if corrected {"independent weighted draws per mirrored block"}else{"historical complementary QMC"},
-        "blue_prior":"unmodified frozen production prior when corrected_product=true",
+        "blue_prior":find_flag("--prior-json").unwrap_or_else(||"data/belief-pool-v3/belief-pool.json".into()),
+        "blue_override":blue_override,
+        "selected_pair_indices":trace_pairs,
+        "diagnostic_subset":trace_pairs.is_some(),
         "elapsed_secs": t_start.elapsed().as_secs_f64(),
         "base_iters": base_iters,
-        "pairs_per_tier": num_pairs,
-        "games_per_tier": num_pairs * 2,
+        "generated_pairs": num_pairs,
+        "pairs_per_tier": tier_reports.first().map(|v|v["games"].as_u64().unwrap()/2).unwrap_or(0),
+        "games_per_tier": tier_reports.first().map(|v|v["games"].as_u64().unwrap()).unwrap_or(0),
         "duel_tiers": tier_reports,
         "endgame_bound_solver_summary": {
             "states_evaluated": eg_records.len(),

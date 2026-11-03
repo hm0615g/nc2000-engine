@@ -1,0 +1,58 @@
+[
+  {
+    "id": "g7-t18",
+    "trace": "data/policy-oracle-cases-v1/traces/T2_Rules_Bayesian_Oracle_BR-game-007.jsonl",
+    "prior": "tmp/historical-t2-audit/belief-pool.json",
+    "turn": 18,
+    "seed": 2036111028,
+    "samples": 131072
+  },
+  {
+    "id": "g7-t20",
+    "trace": "data/policy-oracle-cases-v1/traces/T2_Rules_Bayesian_Oracle_BR-game-007.jsonl",
+    "prior": "tmp/historical-t2-audit/belief-pool.json",
+    "turn": 20,
+    "seed": 2036111030,
+    "samples": 131072
+  },
+  {
+    "id": "g7-t23",
+    "trace": "data/policy-oracle-cases-v1/traces/T2_Rules_Bayesian_Oracle_BR-game-007.jsonl",
+    "prior": "tmp/historical-t2-audit/belief-pool.json",
+    "turn": 23,
+    "seed": 2036111033,
+    "samples": 131072
+  },
+  {
+    "id": "g24-t2",
+    "trace": "data/policy-oracle-cases-v1/traces/T2_Rules_Bayesian_Oracle_BR-game-024.jsonl",
+    "prior": "tmp/historical-t2-audit/belief-pool.json",
+    "turn": 2,
+    "seed": 2036112712,
+    "samples": 131072
+  },
+  {
+    "id": "g24-t3",
+    "trace": "data/policy-oracle-cases-v1/traces/T2_Rules_Bayesian_Oracle_BR-game-024.jsonl",
+    "prior": "tmp/historical-t2-audit/belief-pool.json",
+    "turn": 3,
+    "seed": 2036112713,
+    "samples": 131072
+  },
+  {
+    "id": "g24-t4",
+    "trace": "data/policy-oracle-cases-v1/traces/T2_Rules_Bayesian_Oracle_BR-game-024.jsonl",
+    "prior": "tmp/historical-t2-audit/belief-pool.json",
+    "turn": 4,
+    "seed": 2036112714,
+    "samples": 131072
+  },
+  {
+    "id": "g25-t11",
+    "trace": "data/policy-oracle-cases-v1/traces/T2_Rules_Bayesian_Oracle_BR-game-025.jsonl",
+    "prior": "tmp/historical-t2-audit/belief-pool.json",
+    "turn": 11,
+    "seed": 2036112821,
+    "samples": 131072
+  }
+]
