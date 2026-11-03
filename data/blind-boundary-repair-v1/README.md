@@ -101,53 +101,47 @@ fixed as part of this task.
 
 ## Limited adversarial Nash recheck
 
-The primary four-party weights are historical measurements, not a new
-certificate for the repaired policy. The strongest lawful full-game challenger
-in the existing 81k record was tied between T1c and T2; T2's stronger 27k record
-broke the tie. Only **T2 Bayesian policy-oracle response** is rechecked. This
-selects an opponent policy from recorded evidence, rather than searching new
-parties or rerunning all challenger tiers.
+The primary four-party weights (`APEX4` in `data/kodoku-r3/conclusion-equilibrium-deme.json`)
+are historical measurements from before the blind-boundary repair. To test
+whether any existing party achieves > 50% against `APEX4` when **both sides use
+the repaired bot under identical production settings** (`data/live-search.json`:
+`ProtocolAgent` + `PlayerChannel`, `81,000` battle iterations, `729,000`
+unknown-preview iterations or compiled preview lookup `u32(seed) % 64` when
+covered by `data/compiled-preview-v1.json`, `c = 0.4`, `SelRule::Ucb`, legacy
+argmax action policy, and the unmodified `data/belief-pool-v3/belief-pool.json`
+prior), we evaluated the highest-scoring historical challenger parties against
+`APEX4`:
 
-The [fixed protocol](challenger-protocol.json) was written before the run:
-Independent weighted party draws in each of 32 mirrored blocks, 64 games,
-81,000 iterations per ordinary
-search, fresh seed 2026110307, 250-turn cap, K=2. The `same_budget` switch shares
-81k between the attacker's own warmup/response; its two additional opponent
-policy queries cost another 2×81k. Total compute is therefore greater for the
-attacker. The 1v1 bound solver retains its fixed work and 80 ms time limits.
+1. **`mjj-2022-nrsk`** (Starmie50 / Cloyster50 / Machamp50 / Umbreon50 / Marowak50 / Snorlax55):
+   the #1 highest-scoring opponent across all 307 evaluated challengers in
+   `data/kodoku-r3/apex-exp-cache.json` (`0.474688` = `1 - 0.525312148962149`,
+   the exact opponent that set `min_matrix_payoff` in `conclusion-equilibrium-deme.json`).
+2. **Top catalog challengers** from `data/team-pool-v2/preview-nash-matrix.json`
+   and `data/partybox-v0/eval-report.json`: `sample-07` (#1 in the `training-v3`
+   preview matrix, `0.4977`), `mjj-2010-garap-a` (#1 in the pre-`training-v3`
+   catalog matrix, `0.4783`), `pb-100` (#1 in `partybox-v0`, `0.4513`), and
+   `sample-08` (#2 non-APEX4 by `1 - APEX4` value in `training-v3`, `0.4620`).
 
-Blue uses the actual `ProtocolAgent`/`PlayerChannel` path, frozen production
-prior and regenerated compiled choice `u32(seed) % 64`. Red knows the public
-mixture, samples hypothetical worlds from public history, models the compiled
-preview distribution and computes an approximate response. Its queries never
-receive Blue's realized hidden loadout, private request or next action.
-The harness can also run historical full-information tiers, but this corrected
-run selects only the lawful T2 tier and no separate endgame corpus.
+| Challenger party | Historical score vs `APEX4` | Games (Mirrored Pairs) | W–L–T–Cap | Win Rate vs `APEX4` | Paired SE | Approx. 95% CI | Preview Source (Blue / Red) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| **`mjj-2022-nrsk`** | `0.4747` (#1 overall in `apex-exp-cache.json`) | 64 (32) | **41–23–0–0** | **64.06%** | 6.44% | **[51.44%, 76.69%]** | `search` / `search` (729k) |
+| `sample-07` | `0.4977` (#1 catalog in `training-v3` matrix) | 64 (32) | 32–32–0–0 | 50.00% | 5.94% | [38.36%, 61.64%] | `table` / `table` |
+| `mjj-2010-garap-a` | `0.4783` (#1 catalog in `572d77de` matrix) | 64 (32) | 20–44–0–0 | 31.25% | 6.64% | [18.23%, 44.27%] | `table` / `table` |
+| `pb-100` | `0.4513` (#1 in `partybox-v0/eval-report.json`) | 32 (16) | 17–15–0–0 | 53.12% | 8.50% | [36.46%, 69.79%] | `table` / `table` |
+| `sample-08` | `0.4620` (#2 catalog by `1 - APEX4` in `training-v3`) | 32 (16) | 16–16–0–0 | 50.00% | 10.21% | [30.00%, 70.00%] | `table` / `table` |
 
-`challenger-provenance.json` hashes the executable, source/data inputs and
-protocol. `challenger.json` retains every game's teams, seeds, side, score,
-turn count and solver interventions, plus paired uncertainty estimates.
-A failure to detect an advantage against this one opponent cannot establish
-a global Nash equilibrium or rule out untested parties/search policies.
-Two incomplete runs were discarded when integration/adversarial tests
-required source changes (relaxed parties, then the self-KO counterexample).
-The [restart record](challenger-restart.json) documents both technical restarts;
-the opponent, seed, budget and fixed count were unchanged. The final fixed run completed in 1,921 seconds. T2 won **42 games to 22**,
-with no ties or turn caps (maximum 102 turns). Its win rate was **65.625%**;
-the paired standard error was 6.123 percentage points and the approximate
-normal 95% interval was **53.6–77.6%**. There were five solver interventions.
-[Independent aggregate checks](challenger-summary.json) validate all 32 mirrored
-pairs and confirm that every recorded source/data/executable hash stayed
-unchanged throughout the final run.
-
-This is evidence of a T2 advantage under the stated greater-compute setting.
-The normal interval is approximate; the conservative one-sided 95% Hoeffding
-upper bound on T2's mean is 87.3%, not a useful low-exploitability certificate.
-The broad full-game Nash claim is not supported. This experiment changes the
-opponent policy, so it does not by itself disprove an equilibrium of a game
-that fixes both players to the same search policy. That narrower claim would
-require fresh party-payoff measurement. We retain the historical weights and
-label them accordingly rather than replacing them with unmeasured weights.
+In the primary 32-pair (64-game) match under identical production bot settings,
+`mjj-2022-nrsk` won **41 games to 23** (`64.0625%`, paired SE `6.4424%`,
+approximate 95% CI **`[51.44%, 76.69%]`**), with positive or even results across
+all four `APEX4` variants (`19–5` vs `apex-c08-surgical-142`, `10–6` vs
+`red-v10-s1105-r1-s0148`, `8–8` vs `red-v10-s1105-r2-s0142`, `4–4` vs
+`apex-c04-bug-3atkstar-boomgen`; exact mixture-weighted score `61.25%`).
+Within the 33-team catalog (`src=table`), none of the top challengers beat
+`APEX4` (`sample-07` 50.00%, `sample-08` 50.00%, `pb-100` 53.12% ± 8.50%,
+`mjj-2010-garap-a` 31.25%). Because an off-catalog party (`mjj-2022-nrsk`)
+achieves > 50% against `APEX4` under identical production settings of the
+repaired bot, we retain the historical mixture weights and label them as
+historical rather than claiming an equilibrium certificate for the repaired bot.
 
 ## Reproduction
 

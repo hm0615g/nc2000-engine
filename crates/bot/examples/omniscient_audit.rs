@@ -1475,6 +1475,30 @@ fn main() {
         "data/dominance-audit-v13-verified/omniscient-audit-report.json".to_string()
     }));
 
+    if let Some(challengers_arg) = find_flag("--production-challengers") {
+        let preview_iters: u32 = find_flag("--preview-iters")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(729_000);
+        let pair_start: usize = find_flag("--pair-start")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        run_production_challenger_duels(
+            &dex,
+            &root,
+            &compiled,
+            &challengers_arg,
+            base_iters,
+            preview_iters,
+            pair_start,
+            num_pairs,
+            max_turns,
+            seed,
+            threads,
+            &out_path,
+        );
+        return;
+    }
+
     println!("==========================================================================================");
     println!(
         "=== OMNISCIENT & BEST-RESPONSE CEILING AUDIT (iters={}, pairs={} [{}g/tier], threads={}) ===",
@@ -2252,6 +2276,523 @@ fn main() {
     std::fs::write(&out_path, serde_json::to_string_pretty(&report).unwrap()).unwrap();
     println!(
         "\nSaved full omniscient audit report to {}",
+        out_path.display()
+    );
+}
+
+fn choose_production_action(
+    dex: &Dex,
+    battle: &mut Battle,
+    side: usize,
+    choices: &[SearchChoice],
+    agent: &mut ProtocolAgent,
+    channel: &mut PlayerChannel,
+    agent_seed: u64,
+    compiled: &Value,
+    base_iters: u32,
+    preview_iters: u32,
+) -> (SearchChoice, &'static str) {
+    let frame = channel.frame(battle, dex).unwrap();
+    for line in frame.lines {
+        agent.push_line(dex, &line);
+    }
+    assert!(agent.on_request(dex, &frame.request.to_string()).unwrap());
+    let (input, src) = if matches!(battle.request_state, RequestState::TeamPreview) {
+        let key = nc2000_bot::compiled_preview::key(agent.battle().unwrap(), side).unwrap();
+        if let Some(arr) = compiled["policies"].get(&key).and_then(|v| v.as_array()) {
+            (
+                arr[(agent_seed as u32 as usize) % arr.len()]
+                    .as_str()
+                    .unwrap()
+                    .to_string(),
+                "table",
+            )
+        } else {
+            agent.step(dex, preview_iters).unwrap();
+            (agent.best(dex).unwrap(), "search")
+        }
+    } else {
+        agent.step(dex, base_iters).unwrap();
+        (agent.best(dex).unwrap(), "search")
+    };
+    let sc = nc2000_bot::fork::find_choice(dex, choices, &input)
+        .expect("product emitted illegal action");
+    (sc, src)
+}
+
+fn play_production_duel_game(
+    dex: &Dex,
+    battle_seed: &str,
+    blue_sets: &[PokemonSet],
+    red_sets: &[PokemonSet],
+    blue_seed: u64,
+    red_seed: u64,
+    blue_is_p1: bool,
+    prior: &Arc<MetaPool>,
+    compiled: &Value,
+    base_iters: u32,
+    preview_iters: u32,
+    max_turns: u16,
+) -> (f64, u16, &'static str, &'static str) {
+    let (side_blue, side_red) = if blue_is_p1 { (0, 1) } else { (1, 0) };
+    let (t1, t2) = if blue_is_p1 {
+        (blue_sets, red_sets)
+    } else {
+        (red_sets, blue_sets)
+    };
+    let mut battle = Battle::from_fixture(dex, battle_seed, t1, t2).unwrap();
+    battle.set_log_enabled(true);
+
+    let cfg = RmConfig {
+        iterations: base_iters,
+        rule: SelRule::Ucb,
+        c: 0.4,
+        hp_buckets: 16,
+        ..Default::default()
+    };
+
+    let mut blue_agent = ProtocolAgent::new(
+        dex,
+        side_blue,
+        (**prior).clone(),
+        cfg.clone(),
+        blue_seed as u32 as u64,
+    );
+    blue_agent.set_own_team(blue_sets.to_vec());
+    let mut blue_channel = PlayerChannel::new(side_blue);
+
+    let mut red_agent = ProtocolAgent::new(
+        dex,
+        side_red,
+        (**prior).clone(),
+        cfg,
+        red_seed as u32 as u64,
+    );
+    red_agent.set_own_team(red_sets.to_vec());
+    let mut red_channel = PlayerChannel::new(side_red);
+
+    let mut blue_preview_src = "none";
+    let mut red_preview_src = "none";
+
+    loop {
+        if let Some(outcome) = battle.outcome() {
+            let p1_pts = match outcome {
+                Outcome::P1Win => 1.0,
+                Outcome::P2Win => 0.0,
+                Outcome::Tie => 0.5,
+            };
+            let blue_pts = if blue_is_p1 { p1_pts } else { 1.0 - p1_pts };
+            return (blue_pts, battle.turn, blue_preview_src, red_preview_src);
+        }
+        if battle.turn >= max_turns && !matches!(battle.request_state, RequestState::TeamPreview) {
+            return (0.5, battle.turn, blue_preview_src, red_preview_src);
+        }
+
+        let is_preview = matches!(battle.request_state, RequestState::TeamPreview);
+        let choices_blue = battle.legal_choices(dex, side_blue);
+        let choices_red = battle.legal_choices(dex, side_red);
+
+        let blue_choice = if choices_blue.is_empty() {
+            None
+        } else {
+            let (sc, src) = choose_production_action(
+                dex,
+                &mut battle,
+                side_blue,
+                &choices_blue,
+                &mut blue_agent,
+                &mut blue_channel,
+                blue_seed,
+                compiled,
+                base_iters,
+                preview_iters,
+            );
+            if is_preview {
+                blue_preview_src = src;
+            }
+            Some(sc)
+        };
+
+        let red_choice = if choices_red.is_empty() {
+            None
+        } else {
+            let (sc, src) = choose_production_action(
+                dex,
+                &mut battle,
+                side_red,
+                &choices_red,
+                &mut red_agent,
+                &mut red_channel,
+                red_seed,
+                compiled,
+                base_iters,
+                preview_iters,
+            );
+            if is_preview {
+                red_preview_src = src;
+            }
+            Some(sc)
+        };
+
+        let pair = if blue_is_p1 {
+            [blue_choice, red_choice]
+        } else {
+            [red_choice, blue_choice]
+        };
+        battle.apply_choices(dex, pair).unwrap();
+    }
+}
+
+fn load_challenger_database(root: & std::path::Path) -> BTreeMap<String, Vec<PokemonSet>> {
+    let mut db = BTreeMap::new();
+    for rel in [
+        "data/team-pool-v2/team-pool.json",
+        "data/kodoku-r3/conclusion-equilibrium-deme.json",
+        "data/belief-pool-v3/belief-pool.json",
+        "data/kodoku-r3/majinjima-assassins.json",
+        "data/partybox-v0/teams.json",
+    ] {
+        if let Ok(txt) = std::fs::read_to_string(root.join(rel)) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(arr) = v["teams"].as_array() {
+                    for t in arr {
+                        if let Some(id) = t["id"].as_str() {
+                            if !db.contains_key(id) {
+                                if let Ok(sets) =
+                                    serde_json::from_value::<Vec<PokemonSet>>(t["sets"].clone())
+                                {
+                                    db.insert(id.to_string(), sets);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    db
+}
+
+fn run_production_challenger_duels(
+    dex: &Dex,
+    root: &std::path::Path,
+    compiled: &Value,
+    challengers_arg: &str,
+    base_iters: u32,
+    preview_iters: u32,
+    pair_start: usize,
+    num_pairs: usize,
+    max_turns: u16,
+    seed: u64,
+    threads: usize,
+    out_path: &std::path::Path,
+) {
+    let t_start = Instant::now();
+    assert_eq!(
+        compiled["build"],
+        nc2000_bot::compiled_preview::build_fingerprint(),
+        "stale compiled preview artifact"
+    );
+
+    let eq_txt =
+        std::fs::read_to_string(root.join("data/kodoku-r3/conclusion-equilibrium-deme.json"))
+            .expect("read conclusion-equilibrium-deme.json");
+    let eq_v: Value = serde_json::from_str(&eq_txt).unwrap();
+    let mut pi_ids: Vec<String> = Vec::new();
+    let mut pi_weights: Vec<f64> = Vec::new();
+    let mut pi_sets: Vec<Vec<PokemonSet>> = Vec::new();
+    for t in eq_v["teams"].as_array().unwrap() {
+        pi_ids.push(t["id"].as_str().unwrap().to_string());
+        pi_weights.push(t["weight"].as_f64().unwrap());
+        pi_sets.push(serde_json::from_value(t["sets"].clone()).unwrap());
+    }
+    let n_pi = pi_sets.len();
+    let mut cum_w = Vec::with_capacity(n_pi);
+    let mut acc = 0.0f64;
+    for &w in &pi_weights {
+        acc += w;
+        cum_w.push(acc);
+    }
+    let w_tot = acc.max(1e-12);
+
+    let bp_text =
+        std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
+    let product_prior = Arc::new(serde_json::from_str::<MetaPool>(&bp_text).unwrap());
+
+    let db = load_challenger_database(root);
+    let challenger_ids: Vec<String> = challengers_arg
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    for cid in &challenger_ids {
+        assert!(db.contains_key(cid), "unknown challenger id: {cid}");
+    }
+
+    let active_pairs = num_pairs.saturating_sub(pair_start);
+    println!("==========================================================================================");
+    println!(
+        "=== PRODUCTION-EQUIVALENT CHALLENGER DUELS vs APEX4 (iters={}, preview_iters={}, pairs={}..{} [{}g], threads={}) ===",
+        base_iters,
+        preview_iters,
+        pair_start,
+        num_pairs,
+        active_pairs * 2,
+        threads
+    );
+    println!("==========================================================================================");
+
+    struct ProdJob {
+        pair_idx: usize,
+        blue_idx: usize,
+        battle_seed: String,
+        blue_seed: u64,
+        red_seed: u64,
+        blue_is_p1: bool,
+    }
+
+    let mut challenger_reports: Vec<Value> = Vec::new();
+
+    for cid in &challenger_ids {
+        let t_chall = Instant::now();
+        let red_sets = &db[cid];
+        let mut matchup_rng = SplitMix64::new(seed ^ 0xD6E8_FEB8_6659_FD93);
+        let mut jobs: Vec<ProdJob> = Vec::with_capacity(active_pairs * 2);
+        for m in 0..num_pairs {
+            let u_b = matchup_rng.next_f64() * w_tot;
+            if m < pair_start {
+                continue;
+            }
+            let blue_idx = cum_w
+                .iter()
+                .position(|&cw| cw >= u_b)
+                .unwrap_or(n_pi - 1);
+            let mut rng_j = SplitMix64::new(
+                seed ^ ((m as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                    ^ ((blue_idx as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9)),
+            );
+            let bseed = rng_j.battle_seed();
+            let s_a = rng_j.next();
+            let s_b = rng_j.next();
+            jobs.push(ProdJob {
+                pair_idx: m,
+                blue_idx,
+                battle_seed: bseed.clone(),
+                blue_seed: s_a,
+                red_seed: s_b,
+                blue_is_p1: true,
+            });
+            jobs.push(ProdJob {
+                pair_idx: m,
+                blue_idx,
+                battle_seed: bseed,
+                blue_seed: s_b,
+                red_seed: s_a,
+                blue_is_p1: false,
+            });
+        }
+
+        let cursor = AtomicUsize::new(0);
+        let done_count = AtomicUsize::new(0);
+        let mut game_outs: Vec<(usize, f64, u16, &'static str, &'static str)> =
+            Vec::with_capacity(jobs.len());
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for _ in 0..threads.min(jobs.len()).max(1) {
+                let (
+                    jobs_ref,
+                    cursor_ref,
+                    done_ref,
+                    pi_sets_ref,
+                    red_sets_ref,
+                    prior_ref,
+                    compiled_ref,
+                    dex_ref,
+                    cid_str,
+                ) = (
+                    &jobs,
+                    &cursor,
+                    &done_count,
+                    &pi_sets,
+                    red_sets,
+                    &product_prior,
+                    compiled,
+                    dex,
+                    cid.as_str(),
+                );
+                handles.push(scope.spawn(move || {
+                    let mut loc = Vec::new();
+                    loop {
+                        let k = cursor_ref.fetch_add(1, Ordering::Relaxed);
+                        if k >= jobs_ref.len() {
+                            break;
+                        }
+                        let j = &jobs_ref[k];
+                        let (blue_pts, turns, b_src, r_src) = play_production_duel_game(
+                            dex_ref,
+                            &j.battle_seed,
+                            &pi_sets_ref[j.blue_idx],
+                            red_sets_ref,
+                            j.blue_seed,
+                            j.red_seed,
+                            j.blue_is_p1,
+                            prior_ref,
+                            compiled_ref,
+                            base_iters,
+                            preview_iters,
+                            max_turns,
+                        );
+                        let done = done_ref.fetch_add(1, Ordering::Relaxed) + 1;
+                        if done % 8 == 0 || done == jobs_ref.len() {
+                            eprintln!(
+                                "  [{}] progress {}/{} games ({:.1}s)",
+                                cid_str,
+                                done,
+                                jobs_ref.len(),
+                                t_chall.elapsed().as_secs_f64()
+                            );
+                        }
+                        loc.push((k, blue_pts, turns, b_src, r_src));
+                    }
+                    loc
+                }));
+            }
+            for h in handles {
+                game_outs.extend(h.join().unwrap());
+            }
+        });
+        game_outs.sort_by_key(|x| x.0);
+
+        let mut red_wins = 0usize;
+        let mut red_losses = 0usize;
+        let mut red_ties = 0usize;
+        let mut red_caps = 0usize;
+        let mut blue_table_cnt = 0usize;
+        let mut red_table_cnt = 0usize;
+        let mut total_turns = 0u64;
+        let mut pair_red_scores: Vec<f64> = Vec::with_capacity(active_pairs);
+        let mut pair_records: Vec<Value> = Vec::with_capacity(active_pairs);
+
+        for m in 0..active_pairs {
+            let (_, bp0, t0, bs0, rs0) = game_outs[2 * m];
+            let (_, bp1, t1, bs1, rs1) = game_outs[2 * m + 1];
+            let rp0 = 1.0 - bp0;
+            let rp1 = 1.0 - bp1;
+            for &(rp, t, bs, rs) in &[(rp0, t0, bs0, rs0), (rp1, t1, bs1, rs1)] {
+                total_turns += t as u64;
+                if bs == "table" {
+                    blue_table_cnt += 1;
+                }
+                if rs == "table" {
+                    red_table_cnt += 1;
+                }
+                if rp > 0.75 {
+                    red_wins += 1;
+                } else if rp < 0.25 {
+                    red_losses += 1;
+                } else if t >= max_turns {
+                    red_caps += 1;
+                } else {
+                    red_ties += 1;
+                }
+            }
+            let pair_mean = 0.5 * (rp0 + rp1);
+            pair_red_scores.push(pair_mean);
+            pair_records.push(json!({
+                "pair": jobs[2 * m].pair_idx,
+                "blue_team": pi_ids[jobs[2 * m].blue_idx],
+                "battle_seed": jobs[2 * m].battle_seed,
+                "seed_a": jobs[2 * m].blue_seed as u32,
+                "seed_b": jobs[2 * m].red_seed as u32,
+                "red_score_g0_p2": rp0,
+                "red_score_g1_p1": rp1,
+                "pair_red_mean": pair_mean,
+                "turns_g0": t0,
+                "turns_g1": t1,
+                "blue_preview_src": bs0,
+                "red_preview_src": rs0,
+            }));
+        }
+
+        let n_p = active_pairs.max(1) as f64;
+        let red_wr = pair_red_scores.iter().sum::<f64>() / n_p;
+        let blue_wr = 1.0 - red_wr;
+        let var = if active_pairs > 1 {
+            pair_red_scores
+                .iter()
+                .map(|&x| (x - red_wr).powi(2))
+                .sum::<f64>()
+                / ((active_pairs - 1) as f64)
+        } else {
+            0.0
+        };
+        let se = (var / n_p).sqrt();
+        let ci95_lo = (red_wr - 1.96 * se).clamp(0.0, 1.0);
+        let ci95_hi = (red_wr + 1.96 * se).clamp(0.0, 1.0);
+        let hoeffding_95_radius = (0.98 / n_p.sqrt()).min(1.0);
+        let avg_turns = (total_turns as f64) / ((active_pairs * 2).max(1) as f64);
+
+        println!(
+            "  Challenger {:28} | Red_WR={:6.2}% (±{:5.2}% SE, 95% CI [{:5.2}%, {:5.2}%]) | W-L-T-Cap={}-{}-{}-{} | AvgTurns={:.1} | Previews(B/R table)={}/{} | {:.1}s",
+            cid,
+            red_wr * 100.0,
+            se * 100.0,
+            ci95_lo * 100.0,
+            ci95_hi * 100.0,
+            red_wins,
+            red_losses,
+            red_ties,
+            red_caps,
+            avg_turns,
+            blue_table_cnt,
+            red_table_cnt,
+            t_chall.elapsed().as_secs_f64()
+        );
+
+        challenger_reports.push(json!({
+            "challenger_id": cid,
+            "games": active_pairs * 2,
+            "pairs": active_pairs,
+            "red_wr": red_wr,
+            "blue_wr": blue_wr,
+            "red_adv_vs_50": red_wr - 0.5,
+            "se": se,
+            "ci95_lo": ci95_lo,
+            "ci95_hi": ci95_hi,
+            "hoeffding_one_sided_95_upper": (red_wr + (1.0_f64 / (2.0 * n_p) * (1.0 / 0.05_f64).ln()).sqrt()).min(1.0),
+            "hoeffding_two_sided_95_radius": hoeffding_95_radius,
+            "wins": red_wins,
+            "losses": red_losses,
+            "ties": red_ties,
+            "caps": red_caps,
+            "avg_turns": avg_turns,
+            "blue_preview_table_hits": blue_table_cnt,
+            "red_preview_table_hits": red_table_cnt,
+            "elapsed_secs": t_chall.elapsed().as_secs_f64(),
+            "pair_records": pair_records,
+        }));
+    }
+
+    if let Some(parent) = out_path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    let report = json!({
+        "mode": "production_challenger_duels",
+        "build": nc2000_bot::compiled_preview::build_fingerprint(),
+        "seed": seed,
+        "base_iters": base_iters,
+        "preview_iters": preview_iters,
+        "max_turns": max_turns,
+        "pairs_per_challenger": num_pairs,
+        "games_per_challenger": num_pairs * 2,
+        "bot_policy": "Symmetric ProtocolAgent + PlayerChannel on both sides, c=0.4, SelRule::Ucb, unmodified belief-pool-v3 prior, compiled-preview-v1 table lookup when present (fallback preview_iters live search)",
+        "nash_mixture": "data/kodoku-r3/conclusion-equilibrium-deme.json (APEX4: 0.30 apex-c08-surgical-142, 0.25 red-v10-s1105-r2-s0142, 0.25 apex-c04-bug-3atkstar-boomgen, 0.20 red-v10-s1105-r1-s0148)",
+        "elapsed_secs": t_start.elapsed().as_secs_f64(),
+        "challengers": challenger_reports,
+    });
+    std::fs::write(out_path, serde_json::to_string_pretty(&report).unwrap()).unwrap();
+    println!(
+        "\nSaved production challenger duel report to {}",
         out_path.display()
     );
 }

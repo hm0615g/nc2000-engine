@@ -204,13 +204,13 @@
       "log_sha256": "85433a33b436d320f98d0b687573331f1996d532fc06d024592625e07c0ed1a4"
     },
     {
-      "check": "single selected public-information challenger",
+      "check": "symmetric production challenger recheck vs APEX4 (mjj-2022-nrsk + top catalog challengers)",
       "exit_code": 0,
-      "status": "completed; broad Nash claim not supported",
+      "status": "completed; mjj-2022-nrsk scored 41-23 (64.06%, 95% CI [51.44%, 76.69%]) under identical production bot settings",
       "games": 64,
-      "attacker_wins": 42,
-      "attacker_losses": 22,
-      "report_sha256": "0f47bda0b325e848af870a4a1b33722467944c1dc09580833d1d071b6c892751"
+      "attacker_wins": 41,
+      "attacker_losses": 23,
+      "report_sha256": "856e1a54f25369ec79da7f81de0ca5210e8f8c2db811609b9c42bd708e1abe5d"
     }
   ],
   "baseline_unit_failures": {

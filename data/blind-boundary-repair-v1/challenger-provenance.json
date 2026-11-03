@@ -93,14 +93,14 @@
     "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
     "data/training-v3/rentals.json": "651cfa7a3f05d8264fa2fd6f0e7faa951de59346f002171e148b8d1e13412000",
     "data/training-v3/supplemental.json": "c004789a0203fccc24b6a32e9970e0f9ab01142c6440ddadcdc5a29811dfd18c",
-    "crates/bot/examples/omniscient_audit.rs": "931e1d85d53725e23e9b66e401cd59c2e70229e7bbc03ffb8eb57c85904cf574",
+    "crates/bot/examples/omniscient_audit.rs": "b1f4c3f4d0ff51c28313c653671a845d716a8db57e9acaa434ca7a1569c1b163",
     "crates/bot/tests/player_boundary.rs": "d5f1ddbcfdb2f1df1b1f2e544de3237d232933789a85dabc3258b9151ce9f224",
     "crates/wasm/src/lib.rs": "38ab374d3df742ce270ac79d6549a9f5a3500d905094f11c6a34007ea9058522",
     "web/src/bot-worker.ts": "42bec0a0a0feaaebc6ca0677ae3bf128ebc6e0b15629f45fbbaad573005cbe46",
     "web/src/bot.ts": "1d9d253c9389262ad11780853b719ecfed9b61d947978bdcb4d000c0bcddf219",
     "data/compiled-preview-v1.json": "cc2a019e4a1c9459d6a18459291948ace770bce2ad4cce1bc6719eb89f29e90c",
     "data/kodoku-r3/conclusion-equilibrium-deme.json": "cf1c8574064cb2d64363cc8187c5fc0a40e6161f5e73e0d7e9be01bcb48234ef",
-    "data/blind-boundary-repair-v1/challenger-protocol.json": "92d4c096e19571b5f4613c170c45c191259510d5e37bc86bd5ef5b62e5337f24",
-    "target/release/examples/omniscient_audit": "580eb6221095fa8857d08e010f2f598876f40f5717c43de983c7a33f36c35168"
+    "data/blind-boundary-repair-v1/challenger-protocol.json": "11856eaf2265ac1021e33827c98b53f6063f88d8d437b512159155c3f168d418",
+    "target/release/examples/omniscient_audit": "2fb6df43f517c116eafe6b9c16841d981e470681bc6726cfef6d6851be195be8"
   }
 }

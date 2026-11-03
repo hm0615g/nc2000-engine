@@ -1,28 +1,86 @@
 {
-  "completed_at_utc": "2026-11-02T22:21:36.074495+00:00",
+  "completed_at_utc": "2026-11-03T01:24:27+00:00",
   "implementation_commit": "646a08be11ab62798fdafaa2cf8ad9ada6c9fbe8",
-  "challenger": "T2_Rules_Bayesian_Oracle_BR",
+  "primary_challenger": "mjj-2022-nrsk",
+  "selection_basis": "Highest historical opponent score against current Nash mixture (APEX4) in data/kodoku-r3/apex-exp-cache.json (0.474688 = 1 - 0.525312148962149)",
   "games": 64,
   "independent_mirrored_blocks": 32,
-  "attacker_wins": 42,
-  "attacker_losses": 22,
+  "attacker_wins": 41,
+  "attacker_losses": 23,
   "ties_or_caps": 0,
-  "maximum_turns": 102,
-  "attacker_win_rate": 0.65625,
-  "paired_standard_error": 0.06122695418975893,
+  "maximum_turns": 150,
+  "attacker_win_rate": 0.640625,
+  "paired_standard_error": 0.06442352540027595,
   "approximate_95pct_interval": [
-    0.5362451697880725,
-    0.7762548302119275
+    0.5143548902154591,
+    0.7668951097845409
   ],
-  "one_sided_95pct_hoeffding_upper": 0.8726022978252856,
+  "one_sided_95pct_hoeffding_upper": 0.8569772978252856,
   "blue_team_counts": {
-    "red-v10-s1105-r1-s0148": 15,
-    "red-v10-s1105-r2-s0142": 14,
-    "apex-c08-surgical-142": 19,
-    "apex-c04-bug-3atkstar-boomgen": 16
+    "red-v10-s1105-r1-s0148": 16,
+    "red-v10-s1105-r2-s0142": 16,
+    "apex-c08-surgical-142": 24,
+    "apex-c04-bug-3atkstar-boomgen": 8
   },
-  "solver_interventions": 5,
-  "report_sha256": "0f47bda0b325e848af870a4a1b33722467944c1dc09580833d1d071b6c892751",
+  "additional_screened_challengers": [
+    {
+      "challenger_id": "mjj-2010-garap-a",
+      "games": 64,
+      "pairs": 32,
+      "wins": 20,
+      "losses": 44,
+      "ties_or_caps": 0,
+      "win_rate": 0.3125,
+      "paired_standard_error": 0.06640995601613148,
+      "approximate_95pct_interval": [
+        0.1823364862083823,
+        0.4426635137916177
+      ]
+    },
+    {
+      "challenger_id": "sample-07",
+      "games": 64,
+      "pairs": 32,
+      "wins": 32,
+      "losses": 32,
+      "ties_or_caps": 0,
+      "win_rate": 0.5,
+      "paired_standard_error": 0.05939887041393643,
+      "approximate_95pct_interval": [
+        0.3835782139886846,
+        0.6164217860113154
+      ]
+    },
+    {
+      "challenger_id": "sample-08",
+      "games": 32,
+      "pairs": 16,
+      "wins": 16,
+      "losses": 16,
+      "ties_or_caps": 0,
+      "win_rate": 0.5,
+      "paired_standard_error": 0.10206207261596575,
+      "approximate_95pct_interval": [
+        0.29995833767270713,
+        0.7000416623272929
+      ]
+    },
+    {
+      "challenger_id": "pb-100",
+      "games": 32,
+      "pairs": 16,
+      "wins": 17,
+      "losses": 15,
+      "ties_or_caps": 0,
+      "win_rate": 0.53125,
+      "paired_standard_error": 0.08500919067959652,
+      "approximate_95pct_interval": [
+        0.36463198626799087,
+        0.6978680137320091
+      ]
+    }
+  ],
+  "report_sha256": "856e1a54f25369ec79da7f81de0ca5210e8f8c2db811609b9c42bd708e1abe5d",
   "all_provenance_hashes_unchanged": true,
-  "interpretation": "T2 won 42 of 64 games with greater total compute. The approximate paired interval excludes 50%; this is evidence of an advantage in this setting, not a distribution-free certificate. The broad full-game Nash claim is not supported. A fixed-policy finite-party game would require separate payoff remeasurement; its equilibrium is not disproved by changing the opponent policy."
+  "interpretation": "Under identical production bot settings (ProtocolAgent + PlayerChannel, 81,000 battle iterations, 729,000 unknown-preview iterations, c = 0.4, unmodified belief-pool-v3 prior), mjj-2022-nrsk won 41 of 64 games (64.06%, 95% CI [51.44%, 76.69%]) against the APEX4 mixture, while catalog challengers sample-07 (32-32, 50.00%), sample-08 (16-16, 50.00%), pb-100 (17-15, 53.12%), and mjj-2010-garap-a (20-44, 31.25%) did not show a statistically significant advantage."
 }

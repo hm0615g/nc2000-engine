@@ -1,72 +1,15 @@
 {
-  "registered_at_utc": "2026-11-02T21:17:09.802879+00:00",
-  "purpose": "Limited adversarial recheck of the corrected frozen four-team mixture; not a global Nash certificate.",
-  "challenger": "T2_Rules_Bayesian_Oracle_BR",
-  "selection": "Highest lawful full-game score in existing 81k record (tied); stronger 27k result breaks the tie. No new tier sweep.",
-  "selection_records": {
-    "omniscient-audit-prod27k.json": {
-      "sha256": "5e82655f06a852b33f1eff9a3a70d561cc3940d85109ad786393fd0d32bdcaf3",
-      "base_iters": 27000,
-      "games": 36,
-      "lawful_tiers": [
-        {
-          "tier": "T1a_RootPruning_Only",
-          "red_wr": 0.5,
-          "games": 36
-        },
-        {
-          "tier": "T1b_AdaptiveMix_Only",
-          "red_wr": 0.4722222222222222,
-          "games": 36
-        },
-        {
-          "tier": "T1c_AdaptiveMix_And_Pruning",
-          "red_wr": 0.4722222222222222,
-          "games": 36
-        },
-        {
-          "tier": "T2_Rules_Bayesian_Oracle_BR",
-          "red_wr": 0.5555555555555556,
-          "games": 36
-        }
-      ]
-    },
-    "omniscient-audit-prod81k.json": {
-      "sha256": "20f26b3dd69653c81d25301f7d16c9faf04a4aae9586f9156c3f163e89329be1",
-      "base_iters": 81000,
-      "games": 24,
-      "lawful_tiers": [
-        {
-          "tier": "T1c_AdaptiveMix_And_Pruning",
-          "red_wr": 0.5416666666666667,
-          "games": 24
-        },
-        {
-          "tier": "T2a_Rules_SuperSearch_3x",
-          "red_wr": 0.41666666666666663,
-          "games": 24
-        },
-        {
-          "tier": "T2_Rules_Bayesian_Oracle_BR",
-          "red_wr": 0.5416666666666667,
-          "games": 24
-        }
-      ]
-    }
-  },
+  "registered_at_utc": "2026-11-03T00:38:00+00:00",
+  "purpose": "Test whether top historical challenger parties against the current Nash mixture (APEX4 in data/kodoku-r3/conclusion-equilibrium-deme.json) achieve > 50% when both sides use the repaired bot under identical production settings (data/live-search.json).",
+  "primary_challenger": "mjj-2022-nrsk",
+  "selection": "Highest historical opponent score against current APEX4 mixture in data/kodoku-r3/apex-exp-cache.json (0.474688 = 1 - 0.525312148962149), plus top catalog challengers (sample-07, mjj-2010-garap-a, pb-100, sample-08).",
   "base_iters": 81000,
+  "preview_iters": 729000,
   "independent_paired_blocks": 32,
   "games": 64,
   "seed": 2026110307,
-  "max_turns": 250,
-  "threads": 8,
-  "k_oracle": 2,
-  "same_budget": true,
-  "compute_note": "same_budget shares 81k between attacker warmup/response; two opponent-policy queries cost an additional 2x81k. The attacker has more total compute.",
-  "blue": "Actual ProtocolAgent/PlayerChannel, unchanged production prior, exact regenerated compiled preview index u32(seed)%64, default legacy argmax execution.",
-  "red": "Public-history reconstruction and sampled hypothetical worlds only; public mixture weights are known, realized Blue type/selection/randomness is not. Preview best response targets the compiled distribution.",
-  "termination": "Fixed 32 blocks; no optional stopping or result-driven tuning. Natural ties and turn caps both score 0.5, with capped turns retained.",
-  "inference": "Paired block mean, standard error and approximate 95% interval, plus conservative one-sided Hoeffding upper bound. A failure to detect a gain is not a Nash proof.",
-  "endgame_corpus_states": 0,
-  "command": "cargo run --release -p nc2000-bot --example omniscient_audit -- --corrected-product --tiers T2_Rules_Bayesian_Oracle_BR --iters 81000 --pairs 32 --same-budget --k-oracle 2 --max-turns 250 --seed 2026110307 --threads 8 --endgame-states 0 --out data/blind-boundary-repair-v1/challenger.json"
+  "max_turns": 500,
+  "threads": 12,
+  "symmetric_production_policy": "Both Blue (APEX4 mixture) and Red (challenger party) use ProtocolAgent + PlayerChannel, c = 0.4, SelRule::Ucb, unmodified data/belief-pool-v3/belief-pool.json prior, legacy best() action policy, and data/compiled-preview-v1.json choices[u32(seed) % 64] when the matchup key is present (falling back to 729,000 live preview search iterations when off-catalog).",
+  "command": "cargo run --release -p nc2000-bot --example omniscient_audit -- --production-challengers mjj-2022-nrsk,mjj-2010-garap-a,sample-07 --iters 81000 --preview-iters 729000 --pairs 32 --max-turns 500 --seed 2026110307 --threads 12 --out data/blind-boundary-repair-v1/challenger.json"
 }
