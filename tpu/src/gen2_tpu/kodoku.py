@@ -3814,40 +3814,47 @@ def _run_policy_duel_batch_tpu(
 
     def _run_subset(indices: list[int], beq_p0: bool, beq_p1: bool) -> np.ndarray:
         n_actual = len(indices)
-        # Pad batch size to an even bucket (minimum 2) so Gate 1 and Gate 2 share the exact same XLA compilation
-        b_pad = max(2, ((n_actual + 1) // 2) * 2)
-        pad_indices = list(indices) + [indices[-1]] * (b_pad - n_actual)
-        pk_b = PackedBattle(words=jnp.stack([pk_list[i].words for i in pad_indices], axis=0))
-        tb_b = jax.tree_util.tree_map(
-            lambda *xs: jnp.stack(xs, axis=0), *[true_tb_list[i] for i in pad_indices]
-        )
-        c0_b = jax.tree_util.tree_map(
-            lambda *xs: jnp.stack(xs, axis=0), *[cand0_list[i] for i in pad_indices]
-        )
-        pr0_b = jnp.stack([prior0_list[i] for i in pad_indices], axis=0)
-        c1_b = jax.tree_util.tree_map(
-            lambda *xs: jnp.stack(xs, axis=0), *[cand1_list[i] for i in pad_indices]
-        )
-        pr1_b = jnp.stack([prior1_list[i] for i in pad_indices], axis=0)
-        ps_b = jnp.stack([p_seed_list[i] for i in pad_indices], axis=0)
-        ro_res, _, _ = simulate_shell_belief_minimax_games_tpu(
-            pk_b,
-            tb_b,
-            c0_b,
-            pr0_b,
-            c1_b,
-            pr1_b,
-            ps_b,
-            weights=weights,
-            turns=policy_turns,
-            rollout_turns=rollout_turns,
-            rm_sweeps=rm_sweeps,
-            residual_bundle=residual_bundle,
-            followup_turns=followup_turns,
-            bayesian_eq_p0=beq_p0,
-            bayesian_eq_p1=beq_p1,
-        )
-        return np.asarray(ro_res.leaf_values, dtype=np.float32)[:n_actual]
+        if n_actual == 0:
+            return np.zeros((0,), dtype=np.float32)
+        # Use a single fixed chunk size so XLA compiles only once across all waves and gates
+        chunk_b = 32 if n_actual > 4 else max(2, ((n_actual + 1) // 2) * 2)
+        out_chunks: list[np.ndarray] = []
+        for start in range(0, n_actual, chunk_b):
+            sub = indices[start : start + chunk_b]
+            n_sub = len(sub)
+            pad_indices = list(sub) + [sub[-1]] * (chunk_b - n_sub)
+            pk_b = PackedBattle(words=jnp.stack([pk_list[i].words for i in pad_indices], axis=0))
+            tb_b = jax.tree_util.tree_map(
+                lambda *xs: jnp.stack(xs, axis=0), *[true_tb_list[i] for i in pad_indices]
+            )
+            c0_b = jax.tree_util.tree_map(
+                lambda *xs: jnp.stack(xs, axis=0), *[cand0_list[i] for i in pad_indices]
+            )
+            pr0_b = jnp.stack([prior0_list[i] for i in pad_indices], axis=0)
+            c1_b = jax.tree_util.tree_map(
+                lambda *xs: jnp.stack(xs, axis=0), *[cand1_list[i] for i in pad_indices]
+            )
+            pr1_b = jnp.stack([prior1_list[i] for i in pad_indices], axis=0)
+            ps_b = jnp.stack([p_seed_list[i] for i in pad_indices], axis=0)
+            ro_res, _, _ = simulate_shell_belief_minimax_games_tpu(
+                pk_b,
+                tb_b,
+                c0_b,
+                pr0_b,
+                c1_b,
+                pr1_b,
+                ps_b,
+                weights=weights,
+                turns=policy_turns,
+                rollout_turns=rollout_turns,
+                rm_sweeps=rm_sweeps,
+                residual_bundle=residual_bundle,
+                followup_turns=followup_turns,
+                bayesian_eq_p0=beq_p0,
+                bayesian_eq_p1=beq_p1,
+            )
+            out_chunks.append(np.asarray(ro_res.leaf_values, dtype=np.float32)[:n_sub])
+        return np.concatenate(out_chunks, axis=0)
 
     vals_norm = _run_subset(norm_idx, bayesian_eq_a, bayesian_eq_b)
     vals_swap = 1.0 - _run_subset(swap_idx, bayesian_eq_b, bayesian_eq_a)
@@ -3932,15 +3939,37 @@ def run_unified_nash_and_bake_pipeline_tpu(
     inc_w = np.zeros((n_teams,), dtype=np.float32)
     had_explicit_incumbent = incumbent_nash_weights is not None
     if isinstance(incumbent_nash_weights, dict):
+        w_dict = (
+            incumbent_nash_weights["weights"]
+            if "weights" in incumbent_nash_weights and isinstance(incumbent_nash_weights["weights"], dict)
+            else incumbent_nash_weights
+        )
         for i, tid in enumerate(team_ids):
-            inc_w[i] = float(incumbent_nash_weights.get(tid, 0.0))
+            inc_w[i] = float(w_dict.get(tid, 0.0))
     elif incumbent_nash_weights is not None:
         arr = np.asarray(incumbent_nash_weights, dtype=np.float32).reshape(-1)
         inc_w[: min(n_teams, arr.size)] = arr[: min(n_teams, arr.size)]
 
     if float(np.sum(inc_w)) <= 1e-6:
-        # Default incumbent: uniform over first min(3, n_teams) teams (or seed via quick Wave-0 screen)
-        inc_w[0] = 1.0
+        # Check if teams_pool has `"nash": true` entries (e.g. `team-pool-v2` `vc-kodoku-nash-a`)
+        nash_flagged = [
+            i for i, t in enumerate(teams_pool) if isinstance(t, dict) and bool(t.get("nash", False))
+        ]
+        if nash_flagged:
+            had_explicit_incumbent = True
+            canonical_apex = {
+                "apex-c08-surgical-142": 0.30,
+                "red-v10-s1105-r2-s0142": 0.25,
+                "apex-c04-bug-3atkstar-boomgen": 0.25,
+                "red-v10-s1105-r1-s0148": 0.20,
+            }
+            for i in nash_flagged:
+                inc_w[i] = float(
+                    teams_pool[i].get("weight")
+                    or canonical_apex.get(team_ids[i], 1.0 / len(nash_flagged))
+                )
+        else:
+            inc_w[0] = 1.0
     inc_w /= float(np.sum(inc_w))
     inc_support_indices = [int(i) for i in np.flatnonzero(inc_w > 1e-3)]
     inc_nash_ids = [team_ids[i] for i in inc_support_indices]
@@ -4025,14 +4054,43 @@ def run_unified_nash_and_bake_pipeline_tpu(
     # =====================================================================
     # Gate 2: Sequential Election-Call Nash Verification & Rebuild
     # =====================================================================
-    # Track pairwise 6v6 scores M[i, j] for i in 0..N, j in 0..N
-    pair_sum = np.zeros((n_teams, n_teams), dtype=np.float64)
-    pair_sq = np.zeros((n_teams, n_teams), dtype=np.float64)
-    pair_cnt = np.zeros((n_teams, n_teams), dtype=np.int32)
+    # Maintain persistent 3v3 subgame accumulators `(sum_3v3, sq_3v3, cnt_3v3, open_3v3)`
+    # for each `(i, j)` pair (`i in 0..N`, `j in inc_support_indices`) across waves so
+    # cell precision accumulates monotonically (`赤子を産湯と一緒に流さない` + `選挙当確速報`).
+    legals_per_team: list[list[int]] = []
+    for r in rosters:
+        la = [int(idx) for idx in np.flatnonzero(np.asarray(r.legal_mask_60))]
+        legals_per_team.append(la if la else [0])
+
+    sub_sum: dict[tuple[int, int], np.ndarray] = {}
+    sub_sq: dict[tuple[int, int], np.ndarray] = {}
+    sub_cnt: dict[tuple[int, int], np.ndarray] = {}
+    sub_open: dict[tuple[int, int], np.ndarray] = {}
     for i in range(n_teams):
-        pair_sum[i, i] = 0.5
-        pair_sq[i, i] = 0.25
-        pair_cnt[i, i] = 1
+        for j in inc_support_indices:
+            if i == j:
+                continue
+            na, nb = len(legals_per_team[i]), len(legals_per_team[j])
+            sub_sum[(i, j)] = np.zeros((na, nb), dtype=np.float64)
+            sub_sq[(i, j)] = np.zeros((na, nb), dtype=np.float64)
+            sub_cnt[(i, j)] = np.zeros((na, nb), dtype=np.int32)
+            sub_open[(i, j)] = np.ones((na, nb), dtype=bool)
+
+    preview_val_mat = np.full((n_teams, n_teams), 0.5, dtype=np.float32)
+    pair_val_mat = np.full((n_teams, n_teams), 0.5, dtype=np.float32)
+    pair_pol_sum = np.zeros((n_teams, n_teams), dtype=np.float64)
+    pair_pol_sq = np.zeros((n_teams, n_teams), dtype=np.float64)
+    pair_pol_cnt = np.zeros((n_teams, n_teams), dtype=np.int32)
+    pair_evaluated = np.zeros((n_teams, n_teams), dtype=bool)
+    for i in range(n_teams):
+        pair_evaluated[i, i] = True
+
+    # Group incumbent support by shared Team Preview shell (`preview_signature_sets`)
+    # so challengers cannot clairvoyantly distinguish variants of the same shell at Team Preview
+    inc_shell_groups: dict[tuple[tuple[str, int, str, bool], ...], list[int]] = {}
+    for j in inc_support_indices:
+        sig_j = preview_signature_sets(_extract_team_sets(teams_pool[j]))
+        inc_shell_groups.setdefault(sig_j, []).append(j)
 
     challenger_active = np.ones((n_teams,), dtype=bool)
     challenger_statuses = ["INCUMBENT" if inc_w[i] > 1e-3 else "OPEN" for i in range(n_teams)]
@@ -4051,77 +4109,174 @@ def run_unified_nash_and_bake_pipeline_tpu(
         if not active_rows:
             break
 
+        # Step 2a: Run wave `w_idx` on open 3v3 cells for all active `(i, j)` pairs
         for i in active_rows:
+            la = legals_per_team[i]
             for j in inc_support_indices:
                 if i == j:
                     continue
-                res_ij = evaluate_6v6_bayesian_election_call_tpu(
-                    rosters[i],
-                    rosters[j],
-                    shared_dex,
-                    wave_games=(g_w,),
-                    turns=bake_screen_turns,
-                    seed=int(seed) ^ ((w_idx + 1) * 0x9E3779B9) ^ (i * 131 + j * 17),
-                    win_threshold=0.55,
-                    loss_threshold=0.45,
-                    z_value=z_value,
-                    weights=weights,
-                    residual_bundle=residual_bundle,
-                )
-                # Blend in-battle Bayesian Equilibrium policy evaluation on the top equilibrium picks
-                top_a_idx = int(res_ij.legal_a[int(np.argmax(res_ij.x_star))])
-                top_b_idx = int(res_ij.legal_b[int(np.argmax(res_ij.y_star))])
-                pa_top = tuple(int(x) for x in PREVIEW_ACTIONS_0BASED_NP[top_a_idx])
-                pb_top = tuple(int(x) for x in PREVIEW_ACTIONS_0BASED_NP[top_b_idx])
-                pol_sc = _run_policy_duel_batch_tpu(
-                    rosters,
-                    variant_groups,
-                    [(i, j, pa_top, pb_top)],  # type: ignore[list-item]
-                    games_per_spec=2,
-                    shared_dex=shared_dex,
-                    base_seed_int=int(seed) ^ ((w_idx + 1) * 0x27D4EB2F) ^ (i * 257 + j * 31),
-                    bayesian_eq_a=True,
-                    bayesian_eq_b=True,
-                    policy_turns=policy_turns,
-                    rollout_turns=policy_rollout_turns,
-                    followup_turns=policy_followup_turns,
-                    rm_sweeps=policy_rm_sweeps,
-                    weights=weights,
-                    residual_bundle=residual_bundle,
-                )
-                blended_val = 0.70 * float(res_ij.value) + 0.30 * float(pol_sc[0])
-                n_eff = max(1, g_w // 2)
-                pair_sum[i, j] += blended_val * n_eff
-                pair_sq[i, j] += (blended_val * blended_val) * n_eff
-                pair_cnt[i, j] += n_eff
-                # Skew-symmetric mirror for (j, i)
-                if j not in active_rows or i not in inc_support_indices:
-                    v_ji = 1.0 - blended_val
-                    pair_sum[j, i] += v_ji * n_eff
-                    pair_sq[j, i] += (v_ji * v_ji) * n_eff
-                    pair_cnt[j, i] += n_eff
+                lb = legals_per_team[j]
+                open_m = sub_open[(i, j)]
+                open_coords = np.argwhere(open_m)
+                if open_coords.shape[0] > 0:
+                    grid_a, grid_b = np.meshgrid(
+                        np.asarray(la, dtype=np.int32),
+                        np.asarray(lb, dtype=np.int32),
+                        indexing="ij",
+                    )
+                    ia_idx = open_coords[:, 0]
+                    ib_idx = open_coords[:, 1]
+                    act_a = grid_a[ia_idx, ib_idx]
+                    act_b = grid_b[ia_idx, ib_idx]
+                    picks_a_w = jnp.asarray(PREVIEW_ACTIONS_0BASED_NP[act_a], dtype=jnp.int32)
+                    picks_b_w = jnp.asarray(PREVIEW_ACTIONS_0BASED_NP[act_b], dtype=jnp.int32)
+
+                    wave_seed = int(seed) ^ ((w_idx + 1) * 0x9E3779B9) ^ (i * 131 + j * 17)
+                    scores_w = np.asarray(
+                        evaluate_3v3_picks_batch_tpu(
+                            rosters[i],
+                            rosters[j],
+                            picks_a_w,
+                            picks_b_w,
+                            shared_dex,
+                            games_per_pair=g_w,
+                            turns=bake_screen_turns,
+                            eps=0.2,
+                            base_seed_int=wave_seed,
+                            weights=weights,
+                            residual_bundle=residual_bundle,
+                        ),
+                        dtype=np.float64,
+                    )
+                    n_pairs_w = float(g_w // 2)
+                    sub_sum[(i, j)][ia_idx, ib_idx] += scores_w * n_pairs_w
+                    sub_sq[(i, j)][ia_idx, ib_idx] += (scores_w * scores_w) * n_pairs_w
+                    sub_cnt[(i, j)][ia_idx, ib_idx] += int(n_pairs_w)
+
+                    # Prune provably dominated or tightly resolved 3v3 cells for subsequent waves
+                    m_ij, l_ij, u_ij, r_ij = bayesian_election_call_bounds_np(
+                        sub_sum[(i, j)], sub_sq[(i, j)], sub_cnt[(i, j)], z=z_value
+                    )
+                    sol_l = solve_rect_rm_plus_jax(jnp.asarray(l_ij, dtype=jnp.float32), sweeps=400)
+                    sol_u = solve_rect_rm_plus_jax(jnp.asarray(u_ij, dtype=jnp.float32), sweeps=400)
+                    lcb_ij = float(sol_l.value)
+                    ucb_ij = float(sol_u.value)
+                    ev_row_u = np.asarray(sol_u.ev_row, dtype=np.float32)
+                    ev_col_l = np.asarray(sol_l.ev_col, dtype=np.float32)
+                    dom_rows = (ev_row_u + 0.02) < lcb_ij
+                    dom_cols = (ev_col_l - 0.02) > ucb_ij
+                    res_cells = (sub_cnt[(i, j)] >= 2) & (r_ij <= 0.065)
+                    sub_open[(i, j)] = open_m & (~res_cells) & (~(dom_rows[:, None] & dom_cols[None, :]))
                 challenger_games[i] += g_w
 
-        # Compute each team's weighted score and credible interval against incumbent Nash mixture
-        cell_mean, cell_lcb, cell_ucb, _ = bayesian_election_call_bounds_np(
-            pair_sum, pair_sq, pair_cnt, z=z_value
-        )
-        for i in range(n_teams):
-            challenger_means[i] = float(np.dot(cell_mean[i], inc_w))
-            challenger_lcbs[i] = float(np.dot(cell_lcb[i], inc_w))
-            challenger_ucbs[i] = float(np.dot(cell_ucb[i], inc_w))
+        # Step 2b: Solve Bayesian Shell Preview equilibrium (`solve_bayesian_shell_preview_nash_np`)
+        # for each active challenger `i` against each incumbent shell group, and queue in-battle
+        # Bayesian Equilibrium policy duels on the resulting equilibrium 3v3 lineups!
+        wave_pol_specs: list[tuple[int, int, tuple[int, int, int], tuple[int, int, int]]] = []
+        for i in active_rows:
+            la = legals_per_team[i]
+            for _, grp_js in inc_shell_groups.items():
+                valid_js = [j for j in grp_js if j != i]
+                if not valid_js:
+                    continue
+                mats_1xm = np.stack(
+                    [
+                        bayesian_election_call_bounds_np(
+                            sub_sum[(i, j)], sub_sq[(i, j)], sub_cnt[(i, j)], z=z_value
+                        )[0]
+                        for j in valid_js
+                    ],
+                    axis=0,
+                )[None, ...]  # shape [1, M, na, nb]
+                beta_grp = np.array([inc_w[j] for j in valid_js], dtype=np.float32)
+                beta_grp /= max(float(np.sum(beta_grp)), 1e-9)
+                _, _, v_per_v, x_star_grp, y_star_grp = solve_bayesian_shell_preview_nash_np(
+                    mats_1xm, alpha=np.array([1.0], dtype=np.float32), beta=beta_grp, sweeps=400
+                )
+                top_a_local = int(np.argmax(x_star_grp[0]))
+                act_a_top = la[top_a_local]
+                pa_top = (
+                    int(PREVIEW_ACTIONS_0BASED_NP[act_a_top, 0]),
+                    int(PREVIEW_ACTIONS_0BASED_NP[act_a_top, 1]),
+                    int(PREVIEW_ACTIONS_0BASED_NP[act_a_top, 2]),
+                )
+                for m_k, j in enumerate(valid_js):
+                    preview_val_mat[i, j] = float(v_per_v[m_k])
+                    preview_val_mat[j, i] = float(1.0 - v_per_v[m_k])
+                    pair_evaluated[i, j] = True
+                    pair_evaluated[j, i] = True
+                    top_b_local = int(np.argmax(y_star_grp[m_k]))
+                    act_b_top = legals_per_team[j][top_b_local]
+                    pb_top = (
+                        int(PREVIEW_ACTIONS_0BASED_NP[act_b_top, 0]),
+                        int(PREVIEW_ACTIONS_0BASED_NP[act_b_top, 1]),
+                        int(PREVIEW_ACTIONS_0BASED_NP[act_b_top, 2]),
+                    )
+                    wave_pol_specs.append((i, j, pa_top, pb_top))
 
-            if not challenger_active[i]:
-                continue
+        if wave_pol_specs:
+            pol_scores_wave = _run_policy_duel_batch_tpu(
+                rosters,
+                variant_groups,
+                wave_pol_specs,
+                games_per_spec=max(2, g_w // 2),
+                shared_dex=shared_dex,
+                base_seed_int=int(seed) ^ ((w_idx + 1) * 0x27D4EB2F),
+                bayesian_eq_a=True,
+                bayesian_eq_b=True,
+                policy_turns=policy_turns,
+                rollout_turns=policy_rollout_turns,
+                followup_turns=policy_followup_turns,
+                rm_sweeps=policy_rm_sweeps,
+                weights=weights,
+                residual_bundle=residual_bundle,
+            )
+            n_pol_pairs = max(1, g_w // 4)
+            for idx_p, (i, j, _, _) in enumerate(wave_pol_specs):
+                sc_pol = float(pol_scores_wave[idx_p])
+                pair_pol_sum[i, j] += sc_pol * n_pol_pairs
+                pair_pol_sq[i, j] += (sc_pol * sc_pol) * n_pol_pairs
+                pair_pol_cnt[i, j] += n_pol_pairs
+
+        # Step 2c: Compute each active team's blended payoff and credible interval against incumbent Nash
+        for i in active_rows:
+            tot_mean_i = 0.0
+            tot_var_i = 0.0
+            for j in inc_support_indices:
+                w_j = float(inc_w[j])
+                if i == j:
+                    tot_mean_i += w_j * 0.50
+                    continue
+                v_prev_ij = float(preview_val_mat[i, j])
+                n_pol_ij = int(pair_pol_cnt[i, j])
+                if n_pol_ij > 0:
+                    pol_mean_ij = float(pair_pol_sum[i, j]) / n_pol_ij
+                    blended_ij = 0.70 * v_prev_ij + 0.30 * pol_mean_ij
+                else:
+                    blended_ij = v_prev_ij
+                pair_val_mat[i, j] = blended_ij
+                pair_val_mat[j, i] = 1.0 - blended_ij
+                tot_mean_i += w_j * blended_ij
+
+                # Effective independent subgame & policy sample size for (i, j)
+                n_sub_pairs = int(np.sum(sub_cnt[(i, j)]))
+                eff_n_ij = max(4.0, float(n_sub_pairs) / 48.0 + float(n_pol_ij) * 2.0)
+                se_ij_sq = (blended_ij * (1.0 - blended_ij) + 0.02) / eff_n_ij
+                tot_var_i += (w_j * w_j) * se_ij_sq
+
+            rad_i = float(z_value) * float(np.sqrt(max(tot_var_i, 1e-9)))
+            challenger_means[i] = float(np.clip(tot_mean_i, 0.0, 1.0))
+            challenger_lcbs[i] = float(np.clip(tot_mean_i - rad_i, 0.0, 1.0))
+            challenger_ucbs[i] = float(np.clip(tot_mean_i + rad_i, 0.0, 1.0))
+
             if inc_w[i] > 1e-3:
                 challenger_statuses[i] = "INCUMBENT"
                 continue
+            # Early-stop clear losers (`敗退当確`); keep close challengers & potential Nash-breakers
+            # running through the final wave so Nash-break decisions have full statistical confidence!
             if challenger_ucbs[i] < float(early_drop_ucb_threshold):
                 challenger_statuses[i] = "ELIMINATED_EARLY"
                 challenger_active[i] = False
-            elif challenger_lcbs[i] > float(nash_break_lcb_threshold):
-                challenger_statuses[i] = "NASH_BREAKER_CALLED"
-                nash_broken = True
 
         # Stop early if all non-incumbent challengers have been eliminated
         if all(
@@ -4130,35 +4285,44 @@ def run_unified_nash_and_bake_pipeline_tpu(
         ):
             break
 
-    # Final check on surviving challengers
+    # Final check on surviving challengers after full wave verification
     for i in range(n_teams):
-        if inc_w[i] <= 1e-3 and challenger_means[i] > 0.50 + float(nash_break_mean_tol):
+        if inc_w[i] <= 1e-3 and challenger_lcbs[i] > float(nash_break_lcb_threshold):
+            nash_broken = True
+            challenger_statuses[i] = "NASH_BREAKER_CALLED"
+        elif (
+            inc_w[i] <= 1e-3
+            and challenger_means[i] > 0.50 + float(nash_break_mean_tol)
+            and challenger_lcbs[i] > 0.495
+        ):
             nash_broken = True
             if challenger_statuses[i] == "OPEN":
                 challenger_statuses[i] = "NASH_BREAKER_CALLED"
         elif inc_w[i] <= 1e-3 and challenger_statuses[i] == "OPEN":
             challenger_statuses[i] = "CONTAINED"
 
-    cell_mean_final, _, _, _ = bayesian_election_call_bounds_np(
-        pair_sum, pair_sq, pair_cnt, z=z_value
-    )
     # Enforce exact skew-symmetry on evaluated pairs
-    payoff_mat = 0.5 * (cell_mean_final + (1.0 - cell_mean_final.T))
+    payoff_mat = 0.5 * (pair_val_mat + (1.0 - pair_val_mat.T))
     np.fill_diagonal(payoff_mat, 0.5)
 
     if nash_broken and n_teams > 1:
-        # Evaluate remaining unvisited pairs among surviving candidates + incumbent support
+        # Evaluate remaining unvisited pairs between candidate Nash support (`surviving`)
+        # and ALL `n_teams` columns in the pool so the rebuilt Nash equilibrium is guaranteed
+        # across the entire pool (not merely the `surviving x surviving` subgame)!
         surviving = sorted(
             set(inc_support_indices)
             | {
                 i
                 for i in range(n_teams)
-                if challenger_statuses[i] != "ELIMINATED_EARLY"
+                if challenger_statuses[i] == "NASH_BREAKER_CALLED"
+                or (not had_explicit_incumbent and challenger_statuses[i] != "ELIMINATED_EARLY")
             }
         )
-        for idx_pos, i in enumerate(surviving):
-            for j in surviving[idx_pos + 1 :]:
-                if pair_cnt[i, j] == 0:
+        for i in surviving:
+            for j in range(n_teams):
+                if i == j:
+                    continue
+                if not pair_evaluated[i, j]:
                     res_ij = evaluate_6v6_bayesian_election_call_tpu(
                         rosters[i],
                         rosters[j],
@@ -4173,15 +4337,17 @@ def run_unified_nash_and_bake_pipeline_tpu(
                     v_ij = float(res_ij.value)
                     payoff_mat[i, j] = v_ij
                     payoff_mat[j, i] = 1.0 - v_ij
+                    pair_evaluated[i, j] = True
+                    pair_evaluated[j, i] = True
 
-        sub_idx = jnp.asarray(surviving, dtype=jnp.int32)
-        sub_mat = jnp.asarray(payoff_mat[np.ix_(surviving, surviving)], dtype=jnp.float32)
-        sol_new = solve_rect_rm_plus_jax(sub_mat, sweeps=1000)
+        # Solve rectangular minimax game: rows = `surviving` (`incumbent U breakers`), cols = all `n_teams`
+        rect_mat = jnp.asarray(payoff_mat[surviving, :], dtype=jnp.float32)
+        sol_new = solve_rect_rm_plus_jax(rect_mat, sweeps=2000)
         final_w = np.zeros((n_teams,), dtype=np.float32)
         sub_w = np.asarray(sol_new.p_a, dtype=np.float32)
         for k_i, orig_i in enumerate(surviving):
             final_w[orig_i] = float(sub_w[k_i])
-        final_w = np.where(final_w >= 1e-3, final_w, 0.0)
+        final_w = np.where(final_w >= 0.01, final_w, 0.0)
         final_w /= max(float(np.sum(final_w)), 1e-9)
         nash_status = "NASH_REBUILT"
     else:
