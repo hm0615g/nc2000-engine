@@ -1,0 +1,1024 @@
+{
+  "schema": "measurement-gates-v1",
+  "historical_revision": "872d8ed8",
+  "working_head": "47a86092425d74bd37f7e91f28fad1a2cd79165d",
+  "audit_script_sha256": "65414447609e0a6a6c35cbfc3769a1dae422cf616df3089fe16643a2ec46ad9c",
+  "historical_report_sha256": "0f47bda0b325e848af870a4a1b33722467944c1dc09580833d1d071b6c892751",
+  "frozen_input_hashes": {
+    "crates/bot/src/rng.rs": {
+      "historical_sha256": "33cd773ecd9d0b9ea398bf80d93aacd9c141f5f049e2abaf033d78b909a9c8ab",
+      "working_sha256": "33cd773ecd9d0b9ea398bf80d93aacd9c141f5f049e2abaf033d78b909a9c8ab"
+    },
+    "crates/bot/examples/omniscient_audit.rs": {
+      "historical_sha256": "931e1d85d53725e23e9b66e401cd59c2e70229e7bbc03ffb8eb57c85904cf574",
+      "working_sha256": "268640c5cfa6ca77da7285b37f943c6d4a1e71db79a3e2df2a991587b6bd6253"
+    },
+    "data/gen2stadium2.json": {
+      "historical_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
+      "working_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423"
+    },
+    "data/belief-pool-v3/belief-pool.json": {
+      "historical_sha256": "1c0a1d544be667282ed94f891f7fd1d533c324fd7c18c85d530a1cd9d47da6d5",
+      "working_sha256": "71f34e0568a39c1ff3b44c1300dee79b79d58dbc1593cb161118e998e2cf7800"
+    },
+    "data/compiled-preview-v1.json": {
+      "historical_sha256": "cc2a019e4a1c9459d6a18459291948ace770bce2ad4cce1bc6719eb89f29e90c",
+      "working_sha256": "fae8efed814a2ab54442776095638c0ab6465094898f750e8e38f13950010210"
+    },
+    "data/live-search.json": {
+      "historical_sha256": "bcd72c90aff04fb6e8c2ce7fb6551e03d2aafc318a416a153194b0abf4dcebed",
+      "working_sha256": "bcd72c90aff04fb6e8c2ce7fb6551e03d2aafc318a416a153194b0abf4dcebed"
+    },
+    "data/kodoku-r3/conclusion-equilibrium-deme.json": {
+      "historical_sha256": "cf1c8574064cb2d64363cc8187c5fc0a40e6161f5e73e0d7e9be01bcb48234ef",
+      "working_sha256": "cf1c8574064cb2d64363cc8187c5fc0a40e6161f5e73e0d7e9be01bcb48234ef"
+    }
+  },
+  "historical_accounting": {
+    "status": "pass_record_accounting_only",
+    "games": 64,
+    "blocks": 32,
+    "red_wins": 42,
+    "blue_wins": 22,
+    "draws": 0,
+    "paired_red_scores": [
+      1.0,
+      1.0,
+      0.5,
+      1.0,
+      0.5,
+      0.5,
+      0.5,
+      0.5,
+      1.0,
+      1.0,
+      1.0,
+      0.5,
+      1.0,
+      0.5,
+      0.5,
+      0.0,
+      0.5,
+      0.0,
+      1.0,
+      0.5,
+      1.0,
+      1.0,
+      0.0,
+      0.5,
+      0.5,
+      1.0,
+      0.0,
+      1.0,
+      1.0,
+      0.5,
+      1.0,
+      0.5
+    ],
+    "paired_score_histogram": {
+      "1.0": 14,
+      "0.5": 14,
+      "0.0": 4
+    },
+    "red_mean": 0.65625,
+    "paired_standard_error": 0.06122695418975893,
+    "descriptive_normal_95pct": [
+      0.5362451697880725,
+      0.7762548302119275
+    ],
+    "max_recorded_turn": 102,
+    "harness_turn_cap": 250,
+    "records_at_or_above_cap": [],
+    "solver_interventions": 5,
+    "exact_same_type_games": 16,
+    "exact_same_type_red_wins": 9,
+    "exact_same_type_blue_wins": 7,
+    "limitation": "Scores are reported labels; no historical action logs exist to independently re-score engine terminals."
+  },
+  "seed_boundary": {
+    "status": "fail",
+    "recovered_games": 64,
+    "tested_games": 64,
+    "witnesses": [
+      {
+        "index": 0,
+        "attack_inputs": {
+          "own_seed": 11792330719408480657,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "64677,10395,40644,54272",
+          "blue_seed_u64": 14175318832926202200,
+          "blue_effective_seed_u32": 3732445528
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 1,
+        "attack_inputs": {
+          "own_seed": 14175318832926202200,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "64677,10395,40644,54272",
+          "blue_seed_u64": 11792330719408480657,
+          "blue_effective_seed_u32": 2487542161
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 2,
+        "attack_inputs": {
+          "own_seed": 2805352367936371003,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "6478,29413,2380,10050",
+          "blue_seed_u64": 11649560985431792387,
+          "blue_effective_seed_u32": 2246662915
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 3,
+        "attack_inputs": {
+          "own_seed": 11649560985431792387,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "6478,29413,2380,10050",
+          "blue_seed_u64": 2805352367936371003,
+          "blue_effective_seed_u32": 2158360891
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 4,
+        "attack_inputs": {
+          "own_seed": 835250818126330749,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "7884,34813,14317,64613",
+          "blue_seed_u64": 3633173595938494554,
+          "blue_effective_seed_u32": 3644725338
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 5,
+        "attack_inputs": {
+          "own_seed": 3633173595938494554,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "7884,34813,14317,64613",
+          "blue_seed_u64": 835250818126330749,
+          "blue_effective_seed_u32": 2563128189
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 6,
+        "attack_inputs": {
+          "own_seed": 10093148402393078740,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "20635,38120,42910,23942",
+          "blue_seed_u64": 13117697076643865778,
+          "blue_effective_seed_u32": 2626266290
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 7,
+        "attack_inputs": {
+          "own_seed": 13117697076643865778,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "20635,38120,42910,23942",
+          "blue_seed_u64": 10093148402393078740,
+          "blue_effective_seed_u32": 99670996
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 8,
+        "attack_inputs": {
+          "own_seed": 14807317923627441085,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "18155,55741,18338,39158",
+          "blue_seed_u64": 12639709426912446293,
+          "blue_effective_seed_u32": 2001061717
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 9,
+        "attack_inputs": {
+          "own_seed": 12639709426912446293,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "18155,55741,18338,39158",
+          "blue_seed_u64": 14807317923627441085,
+          "blue_effective_seed_u32": 4061567933
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 10,
+        "attack_inputs": {
+          "own_seed": 11450679432304916816,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "7196,54817,29502,32150",
+          "blue_seed_u64": 13288002110438547001,
+          "blue_effective_seed_u32": 1062510137
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 11,
+        "attack_inputs": {
+          "own_seed": 13288002110438547001,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "7196,54817,29502,32150",
+          "blue_seed_u64": 11450679432304916816,
+          "blue_effective_seed_u32": 2137520464
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 12,
+        "attack_inputs": {
+          "own_seed": 10159962300220918382,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "4395,49192,28086,43736",
+          "blue_seed_u64": 11565863791186178779,
+          "blue_effective_seed_u32": 3929305819
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 13,
+        "attack_inputs": {
+          "own_seed": 11565863791186178779,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "4395,49192,28086,43736",
+          "blue_seed_u64": 10159962300220918382,
+          "blue_effective_seed_u32": 3691465326
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 14,
+        "attack_inputs": {
+          "own_seed": 9165628250970136714,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "54017,16356,18731,55055",
+          "blue_seed_u64": 3004893222164432066,
+          "blue_effective_seed_u32": 118949058
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 15,
+        "attack_inputs": {
+          "own_seed": 3004893222164432066,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "54017,16356,18731,55055",
+          "blue_seed_u64": 9165628250970136714,
+          "blue_effective_seed_u32": 710680714
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 16,
+        "attack_inputs": {
+          "own_seed": 13486048201135431163,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "63759,39166,57777,65399",
+          "blue_seed_u64": 17878323558930169,
+          "blue_effective_seed_u32": 2498287353
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 17,
+        "attack_inputs": {
+          "own_seed": 17878323558930169,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "63759,39166,57777,65399",
+          "blue_seed_u64": 13486048201135431163,
+          "blue_effective_seed_u32": 75046395
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 18,
+        "attack_inputs": {
+          "own_seed": 9039997381170787022,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "50794,24041,29951,12545",
+          "blue_seed_u64": 705876192382107442,
+          "blue_effective_seed_u32": 911687474
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 19,
+        "attack_inputs": {
+          "own_seed": 705876192382107442,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "50794,24041,29951,12545",
+          "blue_seed_u64": 9039997381170787022,
+          "blue_effective_seed_u32": 3810882254
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 20,
+        "attack_inputs": {
+          "own_seed": 8810079081163984007,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "58723,23300,9474,55914",
+          "blue_seed_u64": 12755799581259010206,
+          "blue_effective_seed_u32": 3540324510
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 21,
+        "attack_inputs": {
+          "own_seed": 12755799581259010206,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "58723,23300,9474,55914",
+          "blue_seed_u64": 8810079081163984007,
+          "blue_effective_seed_u32": 467733639
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 22,
+        "attack_inputs": {
+          "own_seed": 14365394839255946596,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "52,41276,37140,12648",
+          "blue_seed_u64": 2670300316721588792,
+          "blue_effective_seed_u32": 2110630456
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 23,
+        "attack_inputs": {
+          "own_seed": 2670300316721588792,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "52,41276,37140,12648",
+          "blue_seed_u64": 14365394839255946596,
+          "blue_effective_seed_u32": 3289683300
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 24,
+        "attack_inputs": {
+          "own_seed": 16185095124469774423,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "29127,1771,18969,62503",
+          "blue_seed_u64": 14213178027379974595,
+          "blue_effective_seed_u32": 2069815747
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 25,
+        "attack_inputs": {
+          "own_seed": 14213178027379974595,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "29127,1771,18969,62503",
+          "blue_seed_u64": 16185095124469774423,
+          "blue_effective_seed_u32": 1844279383
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 26,
+        "attack_inputs": {
+          "own_seed": 6143915283270379821,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "14732,7767,30625,39078",
+          "blue_seed_u64": 1684050774537187729,
+          "blue_effective_seed_u32": 3355619729
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 27,
+        "attack_inputs": {
+          "own_seed": 1684050774537187729,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "14732,7767,30625,39078",
+          "blue_seed_u64": 6143915283270379821,
+          "blue_effective_seed_u32": 4117539117
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 28,
+        "attack_inputs": {
+          "own_seed": 3370674976908622493,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "23116,50461,62109,26492",
+          "blue_seed_u64": 10411318846676259100,
+          "blue_effective_seed_u32": 1534578972
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 29,
+        "attack_inputs": {
+          "own_seed": 10411318846676259100,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "23116,50461,62109,26492",
+          "blue_seed_u64": 3370674976908622493,
+          "blue_effective_seed_u32": 1810872989
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 30,
+        "attack_inputs": {
+          "own_seed": 11798863277138687594,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "13070,34558,49371,57908",
+          "blue_seed_u64": 9967487860266677450,
+          "blue_effective_seed_u32": 506901706
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 31,
+        "attack_inputs": {
+          "own_seed": 9967487860266677450,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "13070,34558,49371,57908",
+          "blue_seed_u64": 11798863277138687594,
+          "blue_effective_seed_u32": 859879018
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 32,
+        "attack_inputs": {
+          "own_seed": 15725884426560445872,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "3848,7910,34423,14317",
+          "blue_seed_u64": 13137568920930237628,
+          "blue_effective_seed_u32": 3896655036
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 33,
+        "attack_inputs": {
+          "own_seed": 13137568920930237628,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "3848,7910,34423,14317",
+          "blue_seed_u64": 15725884426560445872,
+          "blue_effective_seed_u32": 268148144
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 34,
+        "attack_inputs": {
+          "own_seed": 9867582930667432390,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "35903,14297,60524,36697",
+          "blue_seed_u64": 15422744836690025116,
+          "blue_effective_seed_u32": 1013324444
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 35,
+        "attack_inputs": {
+          "own_seed": 15422744836690025116,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "35903,14297,60524,36697",
+          "blue_seed_u64": 9867582930667432390,
+          "blue_effective_seed_u32": 237234630
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 36,
+        "attack_inputs": {
+          "own_seed": 16725185428192423090,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "7659,11703,22122,22768",
+          "blue_seed_u64": 685514690127585845,
+          "blue_effective_seed_u32": 2304631349
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 37,
+        "attack_inputs": {
+          "own_seed": 685514690127585845,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "7659,11703,22122,22768",
+          "blue_seed_u64": 16725185428192423090,
+          "blue_effective_seed_u32": 2045963442
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 38,
+        "attack_inputs": {
+          "own_seed": 2329279048553530576,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "31298,14444,5772,8392",
+          "blue_seed_u64": 31027432053145129,
+          "blue_effective_seed_u32": 4191288873
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 39,
+        "attack_inputs": {
+          "own_seed": 31027432053145129,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "31298,14444,5772,8392",
+          "blue_seed_u64": 2329279048553530576,
+          "blue_effective_seed_u32": 533398736
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 40,
+        "attack_inputs": {
+          "own_seed": 15105245674011652214,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "2219,62425,13482,9250",
+          "blue_seed_u64": 246748389658186940,
+          "blue_effective_seed_u32": 1652151484
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 41,
+        "attack_inputs": {
+          "own_seed": 246748389658186940,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "2219,62425,13482,9250",
+          "blue_seed_u64": 15105245674011652214,
+          "blue_effective_seed_u32": 3564662902
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 42,
+        "attack_inputs": {
+          "own_seed": 13101809223732949416,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "27732,36670,62772,60222",
+          "blue_seed_u64": 10127632819158331247,
+          "blue_effective_seed_u32": 4186255215
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 43,
+        "attack_inputs": {
+          "own_seed": 10127632819158331247,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "27732,36670,62772,60222",
+          "blue_seed_u64": 13101809223732949416,
+          "blue_effective_seed_u32": 2542399912
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 44,
+        "attack_inputs": {
+          "own_seed": 2371615860227783906,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "25650,14835,47669,64192",
+          "blue_seed_u64": 12949948083800622767,
+          "blue_effective_seed_u32": 2729428655
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 45,
+        "attack_inputs": {
+          "own_seed": 12949948083800622767,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "25650,14835,47669,64192",
+          "blue_seed_u64": 2371615860227783906,
+          "blue_effective_seed_u32": 1016020194
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 46,
+        "attack_inputs": {
+          "own_seed": 6183252069959567483,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "51768,24008,35660,10291",
+          "blue_seed_u64": 8675146923117977356,
+          "blue_effective_seed_u32": 3871678220
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 47,
+        "attack_inputs": {
+          "own_seed": 8675146923117977356,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "51768,24008,35660,10291",
+          "blue_seed_u64": 6183252069959567483,
+          "blue_effective_seed_u32": 1386449019
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 48,
+        "attack_inputs": {
+          "own_seed": 4081368101020062137,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "60980,14002,19024,51012",
+          "blue_seed_u64": 18046144563356369651,
+          "blue_effective_seed_u32": 674497267
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 49,
+        "attack_inputs": {
+          "own_seed": 18046144563356369651,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "60980,14002,19024,51012",
+          "blue_seed_u64": 4081368101020062137,
+          "blue_effective_seed_u32": 4075377081
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 50,
+        "attack_inputs": {
+          "own_seed": 8735003673916144018,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "8627,16384,8865,13773",
+          "blue_seed_u64": 7482284029554966481,
+          "blue_effective_seed_u32": 2587082705
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 51,
+        "attack_inputs": {
+          "own_seed": 7482284029554966481,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "8627,16384,8865,13773",
+          "blue_seed_u64": 8735003673916144018,
+          "blue_effective_seed_u32": 3078683026
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 52,
+        "attack_inputs": {
+          "own_seed": 13480140508557481812,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "27892,58864,39466,16867",
+          "blue_seed_u64": 17853296349589818907,
+          "blue_effective_seed_u32": 1796492827
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 53,
+        "attack_inputs": {
+          "own_seed": 17853296349589818907,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "27892,58864,39466,16867",
+          "blue_seed_u64": 13480140508557481812,
+          "blue_effective_seed_u32": 653006676
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 54,
+        "attack_inputs": {
+          "own_seed": 16625029133705925359,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "52424,24132,33002,15873",
+          "blue_seed_u64": 10683447697922756082,
+          "blue_effective_seed_u32": 4079390194
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 55,
+        "attack_inputs": {
+          "own_seed": 10683447697922756082,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "52424,24132,33002,15873",
+          "blue_seed_u64": 16625029133705925359,
+          "blue_effective_seed_u32": 4145009391
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 56,
+        "attack_inputs": {
+          "own_seed": 2621740947709391202,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "8227,11551,8615,61660",
+          "blue_seed_u64": 11849948611841621516,
+          "blue_effective_seed_u32": 2406743564
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 57,
+        "attack_inputs": {
+          "own_seed": 11849948611841621516,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "8227,11551,8615,61660",
+          "blue_seed_u64": 2621740947709391202,
+          "blue_effective_seed_u32": 1498444130
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 58,
+        "attack_inputs": {
+          "own_seed": 8756344366803943548,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "43733,51690,38502,33671",
+          "blue_seed_u64": 8214694933027262200,
+          "blue_effective_seed_u32": 2907344632
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 59,
+        "attack_inputs": {
+          "own_seed": 8214694933027262200,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "43733,51690,38502,33671",
+          "blue_seed_u64": 8756344366803943548,
+          "blue_effective_seed_u32": 4200038524
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 60,
+        "attack_inputs": {
+          "own_seed": 6189522436319951329,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "11073,38241,10634,50577",
+          "blue_seed_u64": 2669751257346630611,
+          "blue_effective_seed_u32": 2764858323
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 61,
+        "attack_inputs": {
+          "own_seed": 2669751257346630611,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "11073,38241,10634,50577",
+          "blue_seed_u64": 6189522436319951329,
+          "blue_effective_seed_u32": 3257481697
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 62,
+        "attack_inputs": {
+          "own_seed": 741087993583262484,
+          "own_side": 1
+        },
+        "recovered": {
+          "battle_seed": "52980,29447,54694,62567",
+          "blue_seed_u64": 1652267697091625383,
+          "blue_effective_seed_u32": 1728037287
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      },
+      {
+        "index": 63,
+        "attack_inputs": {
+          "own_seed": 1652267697091625383,
+          "own_side": 0
+        },
+        "recovered": {
+          "battle_seed": "52980,29447,54694,62567",
+          "blue_seed_u64": 741087993583262484,
+          "blue_effective_seed_u32": 2362858260
+        },
+        "engine_seed_matches": true,
+        "opponent_seed_matches": true
+      }
+    ],
+    "attack_uses": [
+      "own Red u64 seed",
+      "own physical seat",
+      "public scheduling algorithm"
+    ],
+    "attack_does_not_use": [
+      "master experiment seed",
+      "block index",
+      "true team",
+      "opponent seed",
+      "engine seed",
+      "future actions"
+    ],
+    "causal_scope": "Recoverability is demonstrated. This does not show that historical T2 used the inverse or that this defect caused its 42 wins."
+  },
+  "confirmation_status": "not_started_gate_failed",
+  "remaining_gates": {
+    "full_manifest_and_binaries": "not_frozen_for_confirmation",
+    "isolated_worker_and_hidden_state_probes": "not_implemented",
+    "actual_worker_parity_and_independent_terminal_replay": "not_run",
+    "T2_W_clock_controls": "not_run",
+    "K_compatible_preview": "not_built",
+    "prospective_D_K_matches": "not_run"
+  }
+}

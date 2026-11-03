@@ -1,8 +1,11 @@
 # Measurement validation before policy diagnosis
 
-Status: **design only, not implemented or executed**. Baseline source revision:
-`69e0f83f`. This document is an experimental protocol proposal, not a record
-of passed gates or a final preregistration. Executable/data hashes, the seed
+Status: **initial audit executed; confirmation stopped at the first failing
+information-boundary gate**. See `data/measurement-validation-v1/README.md`.
+The replacement runner and remaining gates are not implemented/executed.
+Baseline source revision: `69e0f83f`. The design was committed at `47a86092`
+before this audit. This document is not a record of passed gates or a final
+preregistration. Executable/data hashes, the seed
 commitment, and the unchanged protocol must be frozen before confirmation.
 
 ## Question and non-claims
