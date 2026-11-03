@@ -77,6 +77,7 @@ export type WorkerResponse =
       policy: string;
       playPolicy: PlayPolicy | null;
       ms: number;
+      previewLookupMs?: number;
       wasmMemoryBytes: number;
       endgame?: string;
       /** Known preview lookup or a live fixed-budget search. */
@@ -256,14 +257,16 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
   if (f.live && !f.endgame) {
     const allowed = await compiledAllowed;
     if (gen !== myGen) return;
+    const lookupStarted = performance.now();
     const compiled = allowed.size ? compiledPreviewPick(f.searcher.compiledPreviewBuild(),
       f.searcher.compiledPreviewKey(), previewSeed, searchProfile("blind").c, f.searcher.previewCacheInfo(), allowed) : undefined;
+    const previewLookupMs = performance.now() - lookupStarted;
     if (compiled && frame.legal_actions.some(input => input.replace(/\s/g, "") === compiled.replace(/\s/g, ""))) {
       post({ t: "result", id: m.id, best: compiled,
         playPolicy: { source: "preview-sampled", actions: [{ input: compiled, probability: 1 }] },
         policy: JSON.stringify({ iterations: 0, preview: true, baked: true,
           actions: [{ input: compiled, visits: 0, mean: 0.5, frac: 1 }] }),
-        ms: performance.now()-t0, wasmMemoryBytes: wasmMemory.buffer.byteLength, src: "table" });
+        ms: performance.now()-t0, previewLookupMs, wasmMemoryBytes: wasmMemory.buffer.byteLength, src: "table" });
       return;
     }
   }

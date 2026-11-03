@@ -109,3 +109,10 @@ User rule: each bot knows the opponent's selection pool and mixture weights (com
   retains the production budget in `data/live-search.json`.
 - Evidence: `partial-preview-production.json` and
   `partial-preview-coverage.json` under `data/blind-boundary-repair-v1/`.
+- First Pages CI attempt rejected the latency gate after all routing checks.
+  The test included native expectation/oracle construction in its round-trip
+  timing. Moved that setup outside the measured worker interval and instrumented
+  actual lookup preparation in the worker; retained 20 ms lookup / 100 ms
+  round-trip p95 gates. Local rerun: 7.6 ms lookup, 27.6 ms worker round trip.
+- Full-budget fallback smoke: 729,000 iterations, legal selection, ~10.9 s
+  locally (`full-preview-smoke.json`).

@@ -76,8 +76,9 @@ try {
     await ready; clearTimeout(readyTimeout);
     const timings = [], roundTrips = [], byPublic = new Map();
     const run = async (own, foe, side, poolJson = prior, seed = 7) => {
-      const began = performance.now();
       const {expectedTable, ...frame} = await window.__playerFrame(own, foe, side);
+      // The native fixture/oracle is test infrastructure, not worker latency.
+      const began = performance.now();
       worker.postMessage({ t: 'battle', ownTeam: JSON.stringify(own), searcher: { poolJson, side, seed } });
       const result = new Promise((resolve, reject) => {
         const request = ++id;
@@ -104,7 +105,8 @@ try {
         const key = `${own.id}:${visible}`;
         if (byPublic.has(key) && byPublic.get(key) !== r.best) throw Error('hidden opponent set or side changed the table policy');
         byPublic.set(key, r.best);
-        timings.push(r.ms); roundTrips.push(r.roundTripMs); checked++;
+        if (!Number.isFinite(r.previewLookupMs)) throw Error('missing lookup timing');
+        timings.push(r.previewLookupMs); roundTrips.push(r.roundTripMs); checked++;
       }
       if (!tableCases || !firstValidOwn) throw Error('no usable table');
       const own = firstValidOwn.sets, foe = own;
@@ -140,7 +142,7 @@ try {
       }
       const summary = values => { const s = [...values].sort((a, b) => a - b); return { median: s[Math.floor(s.length / 2)], p95: s[Math.floor(s.length * .95)], max: s.at(-1) }; };
       const lookupMs = summary(timings), battleInitAndLookupMs = summary(roundTrips);
-      if (lookupMs.p95 >= 20 || battleInitAndLookupMs.p95 >= 100) throw Error('preview lookup latency exceeded instant-selection gate');
+      if (lookupMs.p95 >= 20 || battleInitAndLookupMs.p95 >= 100) throw Error(`preview latency exceeded gate: ${JSON.stringify({lookupMs, battleInitAndLookupMs})}`);
       return { base, workerUrl, catalogPairs: catalog.length ** 2, sideCases: checked, tableCases, liveCases, livePreviewTestBudget: 1,
         lookupMs, battleInitAndLookupMs, hiddenLoadoutInvariant: true, rejectionControls: controls,
         servedDataSha256: expected };

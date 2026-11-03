@@ -1,20 +1,20 @@
 {
-  "base": "http://127.0.0.1:58376/",
-  "workerUrl": "http://127.0.0.1:58376/assets/bot-worker-BYnCF_DS.js",
+  "base": "http://127.0.0.1:58964/",
+  "workerUrl": "http://127.0.0.1:58964/assets/bot-worker-zcf5h2To.js",
   "catalogPairs": 1089,
   "sideCases": 2178,
   "tableCases": 1800,
   "liveCases": 378,
   "livePreviewTestBudget": 1,
   "lookupMs": {
-    "median": 11.900000095367432,
-    "p95": 12.699999809265137,
-    "max": 17
+    "median": 7,
+    "p95": 7.599999904632568,
+    "max": 8
   },
   "battleInitAndLookupMs": {
-    "median": 54.10000038146973,
-    "p95": 57.40000009536743,
-    "max": 64.40000009536743
+    "median": 26.40000009536743,
+    "p95": 27.59999990463257,
+    "max": 29.5
   },
   "hiddenLoadoutInvariant": true,
   "rejectionControls": [
