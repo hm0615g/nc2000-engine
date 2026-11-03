@@ -2289,6 +2289,8 @@ fn choose_production_action(
     channel: &mut PlayerChannel,
     agent_seed: u64,
     compiled: &Value,
+    allow_table: bool,
+    expected_preview_cands: usize,
     base_iters: u32,
     preview_iters: u32,
 ) -> (SearchChoice, &'static str) {
@@ -2298,8 +2300,23 @@ fn choose_production_action(
     }
     assert!(agent.on_request(dex, &frame.request.to_string()).unwrap());
     let (input, src) = if matches!(battle.request_state, RequestState::TeamPreview) {
+        let bel = agent.belief().expect("belief must exist at preview");
+        assert!(
+            !bel.is_fallback() && bel.candidate_count() == expected_preview_cands,
+            "Known-pool invariant violated on side {}: fallback={}, candidate_count={} (expected {})",
+            side,
+            bel.is_fallback(),
+            bel.candidate_count(),
+            expected_preview_cands
+        );
         let key = nc2000_bot::compiled_preview::key(agent.battle().unwrap(), side).unwrap();
-        if let Some(arr) = compiled["policies"].get(&key).and_then(|v| v.as_array()) {
+        if allow_table
+            && compiled["policies"]
+                .get(&key)
+                .and_then(|v| v.as_array())
+                .is_some()
+        {
+            let arr = compiled["policies"][&key].as_array().unwrap();
             (
                 arr[(agent_seed as u32 as usize) % arr.len()]
                     .as_str()
@@ -2328,7 +2345,12 @@ fn play_production_duel_game(
     blue_seed: u64,
     red_seed: u64,
     blue_is_p1: bool,
-    prior: &Arc<MetaPool>,
+    blue_prior: &Arc<MetaPool>,
+    red_prior: &Arc<MetaPool>,
+    blue_allow_table: bool,
+    red_allow_table: bool,
+    blue_expected_cands: usize,
+    red_expected_cands: usize,
     compiled: &Value,
     base_iters: u32,
     preview_iters: u32,
@@ -2354,7 +2376,7 @@ fn play_production_duel_game(
     let mut blue_agent = ProtocolAgent::new(
         dex,
         side_blue,
-        (**prior).clone(),
+        (**blue_prior).clone(),
         cfg.clone(),
         blue_seed as u32 as u64,
     );
@@ -2364,7 +2386,7 @@ fn play_production_duel_game(
     let mut red_agent = ProtocolAgent::new(
         dex,
         side_red,
-        (**prior).clone(),
+        (**red_prior).clone(),
         cfg,
         red_seed as u32 as u64,
     );
@@ -2404,6 +2426,8 @@ fn play_production_duel_game(
                 &mut blue_channel,
                 blue_seed,
                 compiled,
+                blue_allow_table,
+                blue_expected_cands,
                 base_iters,
                 preview_iters,
             );
@@ -2425,6 +2449,8 @@ fn play_production_duel_game(
                 &mut red_channel,
                 red_seed,
                 compiled,
+                red_allow_table,
+                red_expected_cands,
                 base_iters,
                 preview_iters,
             );
@@ -2443,13 +2469,21 @@ fn play_production_duel_game(
     }
 }
 
-fn load_challenger_database(root: & std::path::Path) -> BTreeMap<String, Vec<PokemonSet>> {
+fn load_challenger_database(root: &std::path::Path) -> BTreeMap<String, Vec<PokemonSet>> {
     let mut db = BTreeMap::new();
     for rel in [
         "data/team-pool-v2/team-pool.json",
         "data/kodoku-r3/conclusion-equilibrium-deme.json",
         "data/belief-pool-v3/belief-pool.json",
+        "data/kodoku-r3/apex-candidates.json",
         "data/kodoku-r3/majinjima-assassins.json",
+        "data/kodoku-r3/step2-promotes.json",
+        "data/kodoku-r3/step3-promotes.json",
+        "data/kodoku-r3/step4-promotes.json",
+        "data/kodoku-r3/step5-promotes.json",
+        "data/kodoku-r3/step6-deme-promotes.json",
+        "data/kodoku-r3/step7-deme-promotes.json",
+        "data/kodoku-r3/step8-deme-promotes.json",
         "data/partybox-v0/teams.json",
     ] {
         if let Ok(txt) = std::fs::read_to_string(root.join(rel)) {
@@ -2470,7 +2504,135 @@ fn load_challenger_database(root: & std::path::Path) -> BTreeMap<String, Vec<Pok
             }
         }
     }
+    for rel in [
+        "data/dominance-audit-v13-verified/converged-report.json",
+        "data/dominance-audit-v12-debiased/converged-report.json",
+        "data/dominance-audit-v11-fullnash/converged-report.json",
+        "data/dominance-audit-v10-fullnash/converged-report.json",
+    ] {
+        let txt_opt = std::fs::read_to_string(root.join(rel))
+            .ok()
+            .or_else(|| std::fs::read_to_string(root.join("../..").join(rel)).ok());
+        if let Some(txt) = txt_opt {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(rounds) = v["rounds"].as_array() {
+                    for r in rounds {
+                        for k in ["holdout_nemeses", "forged_siblings"] {
+                            if let Some(arr) = r[k].as_array() {
+                                for t in arr {
+                                    if let Some(id) = t["id"].as_str() {
+                                        if !db.contains_key(id) {
+                                            if let Ok(sets) = serde_json::from_value::<
+                                                Vec<PokemonSet>,
+                                            >(
+                                                t["sets"].clone()
+                                            ) {
+                                                db.insert(id.to_string(), sets);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     db
+}
+
+struct ChallengerSpec {
+    name: String,
+    variant_ids: Vec<String>,
+    weights: Vec<f64>,
+    sets: Vec<Vec<PokemonSet>>,
+    blue_allow_table: bool,
+    red_allow_table: bool,
+}
+
+fn resolve_challenger_spec(
+    cid: &str,
+    db: &BTreeMap<String, Vec<PokemonSet>>,
+) -> ChallengerSpec {
+    let entries: Vec<(&str, f64)> = match cid {
+        "Garap2-shell" => vec![
+            ("mjj-2010-garap-a", 0.68),
+            ("sib-r2-n3-mjj-2010-garap-a-s06", 0.32),
+        ],
+        "Police3-shell" => vec![
+            ("sample-08", 0.221),
+            ("hc75-3rd-bean", 0.535),
+            ("rental-cban-6", 0.244),
+        ],
+        "Sample12-5var-shell" => vec![
+            ("red-v10-s1105-r1-s0093", 0.30),
+            ("red-v10-s1105-r1-s0083", 0.25),
+            ("red-v10-s1105-r2-s0101", 0.20),
+            ("red-v10-s1105-r1-s0089", 0.15),
+            ("sample-12", 0.10),
+        ],
+        "Sample07-5var-shell" => vec![
+            ("sample-07", 0.20),
+            ("rental-cban-3", 0.20),
+            ("mjj-2013-mario", 0.20),
+            ("lineage-fine-s07", 0.20),
+            ("pb-15", 0.20),
+        ],
+        "ApexCounter4-shell" => vec![
+            ("apex-c06-bseqsnorlax-bugwak", 0.30),
+            ("apex-c09-lksnorlax-bugwak", 0.25),
+            ("apex-c02-bug-ib-eqsnorlax", 0.25),
+            ("apex-c05-flywak-perishtrap", 0.20),
+        ],
+        other => vec![(other, 1.0)],
+    };
+    let mut variant_ids = Vec::with_capacity(entries.len());
+    let mut weights = Vec::with_capacity(entries.len());
+    let mut sets = Vec::with_capacity(entries.len());
+    for (id, w) in entries {
+        assert!(db.contains_key(id), "unknown team id in challenger {cid}: {id}");
+        variant_ids.push(id.to_string());
+        weights.push(w);
+        sets.push(db[id].clone());
+    }
+    // The compiled preview table was baked under the production prior; with the
+    // opponent's disclosed mixture installed it is no longer the policy of this
+    // information set, so both sides use live preview search.
+    ChallengerSpec {
+        name: cid.to_string(),
+        variant_ids,
+        weights,
+        sets,
+        blue_allow_table: false,
+        red_allow_table: false,
+    }
+}
+
+fn build_disclosed_prior(
+    base_mp: &MetaPool,
+    disclosed_ids: &[String],
+    disclosed_weights: &[f64],
+    disclosed_sets: &[Vec<PokemonSet>],
+) -> Arc<MetaPool> {
+    let mut target_sigs: BTreeSet<PreviewSig> = BTreeSet::new();
+    for s in disclosed_sets {
+        target_sigs.insert(preview_sig_sets(s));
+    }
+    let mut teams: Vec<MetaTeam> = base_mp
+        .teams
+        .iter()
+        .filter(|t| !target_sigs.contains(&preview_sig_sets(&t.sets)))
+        .cloned()
+        .collect();
+    for k in 0..disclosed_sets.len() {
+        teams.push(MetaTeam {
+            id: format!("known-{}", disclosed_ids[k]),
+            sets: disclosed_sets[k].clone(),
+            weight: Some(disclosed_weights[k]),
+        });
+    }
+    Arc::new(MetaPool { teams })
 }
 
 fn run_production_challenger_duels(
@@ -2517,7 +2679,8 @@ fn run_production_challenger_duels(
 
     let bp_text =
         std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
-    let product_prior = Arc::new(serde_json::from_str::<MetaPool>(&bp_text).unwrap());
+    let base_mp: MetaPool = serde_json::from_str(&bp_text).unwrap();
+    let red_prior = build_disclosed_prior(&base_mp, &pi_ids, &pi_weights, &pi_sets);
 
     let db = load_challenger_database(root);
     let challenger_ids: Vec<String> = challengers_arg
@@ -2525,14 +2688,15 @@ fn run_production_challenger_duels(
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
-    for cid in &challenger_ids {
-        assert!(db.contains_key(cid), "unknown challenger id: {cid}");
-    }
+    let specs: Vec<ChallengerSpec> = challenger_ids
+        .iter()
+        .map(|cid| resolve_challenger_spec(cid, &db))
+        .collect();
 
     let active_pairs = num_pairs.saturating_sub(pair_start);
     println!("==========================================================================================");
     println!(
-        "=== PRODUCTION-EQUIVALENT CHALLENGER DUELS vs APEX4 (iters={}, preview_iters={}, pairs={}..{} [{}g], threads={}) ===",
+        "=== KNOWN-POOL PRODUCTION CHALLENGER DUELS vs APEX4 (iters={}, preview_iters={}, pairs={}..{} [{}g], threads={}) ===",
         base_iters,
         preview_iters,
         pair_start,
@@ -2545,6 +2709,7 @@ fn run_production_challenger_duels(
     struct ProdJob {
         pair_idx: usize,
         blue_idx: usize,
+        red_idx: usize,
         battle_seed: String,
         blue_seed: u64,
         red_seed: u64,
@@ -2553,13 +2718,26 @@ fn run_production_challenger_duels(
 
     let mut challenger_reports: Vec<Value> = Vec::new();
 
-    for cid in &challenger_ids {
+    for spec in &specs {
+        let cid = &spec.name;
         let t_chall = Instant::now();
-        let red_sets = &db[cid];
+        let n_red = spec.sets.len();
+        let mut red_cum_w = Vec::with_capacity(n_red);
+        let mut r_acc = 0.0f64;
+        for &w in &spec.weights {
+            r_acc += w;
+            red_cum_w.push(r_acc);
+        }
+        let r_tot = r_acc.max(1e-12);
+        let blue_prior =
+            build_disclosed_prior(&base_mp, &spec.variant_ids, &spec.weights, &spec.sets);
+
         let mut matchup_rng = SplitMix64::new(seed ^ 0xD6E8_FEB8_6659_FD93);
+        let mut red_rng = SplitMix64::new(seed ^ 0xA5A5_5A5A_C3C3_3C3C);
         let mut jobs: Vec<ProdJob> = Vec::with_capacity(active_pairs * 2);
         for m in 0..num_pairs {
             let u_b = matchup_rng.next_f64() * w_tot;
+            let u_r = red_rng.next_f64() * r_tot;
             if m < pair_start {
                 continue;
             }
@@ -2567,6 +2745,10 @@ fn run_production_challenger_duels(
                 .iter()
                 .position(|&cw| cw >= u_b)
                 .unwrap_or(n_pi - 1);
+            let red_idx = red_cum_w
+                .iter()
+                .position(|&cw| cw >= u_r)
+                .unwrap_or(n_red - 1);
             let mut rng_j = SplitMix64::new(
                 seed ^ ((m as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15))
                     ^ ((blue_idx as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9)),
@@ -2577,6 +2759,7 @@ fn run_production_challenger_duels(
             jobs.push(ProdJob {
                 pair_idx: m,
                 blue_idx,
+                red_idx,
                 battle_seed: bseed.clone(),
                 blue_seed: s_a,
                 red_seed: s_b,
@@ -2585,6 +2768,7 @@ fn run_production_challenger_duels(
             jobs.push(ProdJob {
                 pair_idx: m,
                 blue_idx,
+                red_idx,
                 battle_seed: bseed,
                 blue_seed: s_b,
                 red_seed: s_a,
@@ -2605,20 +2789,30 @@ fn run_production_challenger_duels(
                     done_ref,
                     pi_sets_ref,
                     red_sets_ref,
-                    prior_ref,
+                    b_prior_ref,
+                    r_prior_ref,
                     compiled_ref,
                     dex_ref,
                     cid_str,
+                    b_allow,
+                    r_allow,
+                    b_exp_cands,
+                    r_exp_cands,
                 ) = (
                     &jobs,
                     &cursor,
                     &done_count,
                     &pi_sets,
-                    red_sets,
-                    &product_prior,
+                    &spec.sets,
+                    &blue_prior,
+                    &red_prior,
                     compiled,
                     dex,
                     cid.as_str(),
+                    spec.blue_allow_table,
+                    spec.red_allow_table,
+                    n_red,
+                    n_pi,
                 );
                 handles.push(scope.spawn(move || {
                     let mut loc = Vec::new();
@@ -2632,11 +2826,16 @@ fn run_production_challenger_duels(
                             dex_ref,
                             &j.battle_seed,
                             &pi_sets_ref[j.blue_idx],
-                            red_sets_ref,
+                            &red_sets_ref[j.red_idx],
                             j.blue_seed,
                             j.red_seed,
                             j.blue_is_p1,
-                            prior_ref,
+                            b_prior_ref,
+                            r_prior_ref,
+                            b_allow,
+                            r_allow,
+                            b_exp_cands,
+                            r_exp_cands,
                             compiled_ref,
                             base_iters,
                             preview_iters,
@@ -2701,6 +2900,7 @@ fn run_production_challenger_duels(
             pair_records.push(json!({
                 "pair": jobs[2 * m].pair_idx,
                 "blue_team": pi_ids[jobs[2 * m].blue_idx],
+                "red_team": spec.variant_ids[jobs[2 * m].red_idx],
                 "battle_seed": jobs[2 * m].battle_seed,
                 "seed_a": jobs[2 * m].blue_seed as u32,
                 "seed_b": jobs[2 * m].red_seed as u32,
@@ -2733,8 +2933,9 @@ fn run_production_challenger_duels(
         let avg_turns = (total_turns as f64) / ((active_pairs * 2).max(1) as f64);
 
         println!(
-            "  Challenger {:28} | Red_WR={:6.2}% (±{:5.2}% SE, 95% CI [{:5.2}%, {:5.2}%]) | W-L-T-Cap={}-{}-{}-{} | AvgTurns={:.1} | Previews(B/R table)={}/{} | {:.1}s",
+            "  Challenger {:24} ({}v) | Red_WR={:6.2}% (±{:5.2}% SE, 95% CI [{:5.2}%, {:5.2}%]) | W-L-T-Cap={}-{}-{}-{} | AvgTurns={:.1} | Previews(B/R table)={}/{} | {:.1}s",
             cid,
+            n_red,
             red_wr * 100.0,
             se * 100.0,
             ci95_lo * 100.0,
@@ -2751,6 +2952,11 @@ fn run_production_challenger_duels(
 
         challenger_reports.push(json!({
             "challenger_id": cid,
+            "variants": spec.variant_ids,
+            "weights": spec.weights,
+            "n_variants": n_red,
+            "known_pool_verified": true,
+            "fallback_rate": 0.0,
             "games": active_pairs * 2,
             "pairs": active_pairs,
             "red_wr": red_wr,

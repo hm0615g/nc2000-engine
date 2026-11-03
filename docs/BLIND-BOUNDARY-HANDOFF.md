@@ -37,3 +37,22 @@ Current mixture: `data/kodoku-r3/conclusion-equilibrium-deme.json` (four parties
     - **`pb-100` (16 mirrored pairs = 32 games)**: **17–15–0 (`53.12%`, paired SE `8.50%`, approx. 95% CI `[36.46%, 69.79%]`)**.
     - **`sample-08` (16 mirrored pairs = 32 games)**: **16–16–0 (`50.00%`, paired SE `10.21%`, approx. 95% CI `[30.00%, 70.00%]`)**.
   - Updated `data/blind-boundary-repair-v1/{README.md,challenger.json,challenger-summary.json,challenger-protocol.json,challenger-provenance.json,verification.json}`.
+
+## Known-pool rerun (2026-11-03, supersedes the table above)
+
+User rule: each bot knows the opponent's selection pool and mixture weights (common knowledge, as Nash assumes) but not the drawn party. Same-shell variant mixing is fair; off-pool surprise is not. The `mjj-2022-nrsk` 64% above is withdrawn: APEX4's prior lacked that party.
+
+- Harness: `omniscient_audit --production-challengers` now installs, per side, `belief-pool-v3` with every team sharing the opponent's preview signature replaced by the opponent's mixture (`build_disclosed_prior`). At team preview it asserts `!is_fallback()` and `candidate_count == opponent variant count`. Compiled preview table disabled on both sides (it was baked under the old prior); both use 729k live preview search. Otherwise production: `ProtocolAgent` + `PlayerChannel`, 81k, `c = 0.4`, UCB, `best()`.
+- Candidates: shells ranked by variant-weight-optimized Bayesian preview value vs APEX4 from `apex-exp-cache.json` (Garap2 0.4754, Police3 0.4752, Sample12 0.4673, nrsk 0.4614). All below 0.5 at the preview layer.
+- Results (`data/blind-boundary-repair-v1/known-pool-challenger.json`, `known-pool-police3-p32-96.json`):
+
+| Challenger | Variants (weights) | Games | W–L | Red WR | 95% CI |
+|---|---|---|---|---|---|
+| Police3-shell | sample-08 .221 / hc75-3rd-bean .535 / rental-cban-6 .244 | 192 | 102–90 | 53.12% | [44.94%, 61.31%] |
+| mjj-2022-nrsk (disclosed) | 1 | 64 | 26–38 | 40.62% | [27.84%, 53.41%] |
+| Garap2-shell | garap-a .68 / sib-r2-n3-garap-a-s06 .32 | 64 | 25–39 | 39.06% | [24.65%, 53.48%] |
+| Sample12-5var-shell | s0093 .30 / s0083 .25 / r2-s0101 .20 / s0089 .15 / sample-12 .10 | 64 | 23–41 | 35.94% | [23.31%, 48.56%] |
+
+- Verdict: no challenger significantly beats APEX4 under known-pool rules. Police3 is the only point estimate above 50% (z = 0.75).
+- Post-hoc observation (not a claim): within Police3, the `hc75-3rd-bean` draws scored 67/106; the other two variants scored poorly. A Police3 reweighting toward hc75 would need a fresh, pre-registered run because the mixture is common knowledge.
+- `sib-r2-n3-mjj-2010-garap-a-s06` is read from the main checkout's `data/dominance-audit-v11-fullnash/` (absent in this worktree).
