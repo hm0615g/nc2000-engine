@@ -157,6 +157,7 @@ from .kodoku import (
     RectEquilibriumResult,
     RosterTable6,
     SharedDexTable,
+    UnifiedNashPipelineResult,
     assemble_3v3_from_rosters_jax,
     build_coupled_shell_units,
     build_shared_dex_table,
@@ -173,8 +174,10 @@ from .kodoku import (
     preview_signature_sets,
     recompute_population_wars_np,
     replicator_dynamics_jax,
+    run_unified_nash_and_bake_pipeline_tpu,
     select_top_k_orthogonal,
     simulate_multi_table_heavy_games,
+    solve_bayesian_equilibrium_jax,
     solve_coupled_shell_equilibrium_tpu,
     solve_rect_rm_plus_jax,
 )
@@ -449,6 +452,27 @@ def main(argv: list[str] | None = None) -> None:
     )
     p_bnd.add_argument("--out", required=True, help="Output .tar.gz path")
 
+    p_uni = sub.add_parser(
+        "nash-pipeline",
+        help="1-run TPU pipeline: (1) New policy non-inferiority vs Legacy, (2) Election-call Nash check/rebuild, (3) PairTable baking",
+    )
+    p_uni.add_argument("--pool", required=True, help="Path to team pool JSON")
+    p_uni.add_argument(
+        "--incumbent-nash",
+        default=None,
+        help="Optional JSON path or inline JSON dict/list of incumbent Nash weights",
+    )
+    p_uni.add_argument("--out-dir", required=True, help="Output directory for baked PairTables and unified_summary.json")
+    p_uni.add_argument("--policy-turns", type=int, default=12)
+    p_uni.add_argument("--policy-rollout-turns", type=int, default=2)
+    p_uni.add_argument("--policy-followup-turns", type=int, default=24)
+    p_uni.add_argument("--screen-games", type=int, default=2)
+    p_uni.add_argument("--support-k", type=int, default=3)
+    p_uni.add_argument("--refine-games", type=int, default=6)
+    p_uni.add_argument("--screen-turns", type=int, default=40)
+    p_uni.add_argument("--refine-turns", type=int, default=60)
+    p_uni.add_argument("--seed", type=int, default=20260405)
+
     ns = parser.parse_args(args_list)
     if ns.cmd == "benchmark":
         _run_benchmark()
@@ -537,5 +561,41 @@ def main(argv: list[str] | None = None) -> None:
             if DEFAULT_DEX_PATH.exists():
                 tf.add(DEFAULT_DEX_PATH, arcname="src/gen2_tpu/data/gen2stadium2.json")
         print(f"Created self-contained Colab TPU bundle at {out_path}")
+    elif ns.cmd == "nash-pipeline":
+        teams_p = _load_pool_teams(ns.pool)
+        inc_w = None
+        if ns.incumbent_nash:
+            inc_path = Path(ns.incumbent_nash)
+            if inc_path.exists():
+                inc_w = json.loads(inc_path.read_text(encoding="utf-8"))
+            else:
+                inc_w = json.loads(ns.incumbent_nash)
+        res_uni = run_unified_nash_and_bake_pipeline_tpu(
+            teams_p,
+            incumbent_nash_weights=inc_w,
+            policy_turns=ns.policy_turns,
+            policy_rollout_turns=ns.policy_rollout_turns,
+            policy_followup_turns=ns.policy_followup_turns,
+            bake_screen_games=ns.screen_games,
+            bake_support_k=ns.support_k,
+            bake_refine_games=ns.refine_games,
+            bake_screen_turns=ns.screen_turns,
+            bake_refine_turns=ns.refine_turns,
+            bake_out_dir=ns.out_dir,
+            seed=ns.seed,
+        )
+        print(
+            f"[Gate 1] Policy vs Legacy : {res_uni.non_inferiority_status} "
+            f"(mean={res_uni.new_vs_legacy_mean:.4f}, [{res_uni.new_vs_legacy_lcb:.4f}, {res_uni.new_vs_legacy_ucb:.4f}], "
+            f"games={res_uni.new_vs_legacy_games})"
+        )
+        print(
+            f"[Gate 2] Nash Equilibrium : {res_uni.nash_status} "
+            f"(active={res_uni.final_nash_ids}, early_dropped={res_uni.early_dropped_count})"
+        )
+        print(
+            f"[Gate 3] Baked PairTables : {len(res_uni.baked_pair_tables)} tables written to {ns.out_dir} "
+            f"in {res_uni.elapsed_secs:.2f}s"
+        )
 
 

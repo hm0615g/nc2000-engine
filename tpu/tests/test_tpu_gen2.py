@@ -1299,6 +1299,95 @@ def test_bayesian_election_call_and_shell_belief_minimax_tpu():
     assert bool(final_m1[0, 0]) is True
 
 
+def test_solve_bayesian_equilibrium_jax_and_unified_nash_bake_pipeline_tpu(tmp_path: Path):
+    """Verify:
+    1. `solve_bayesian_equilibrium_jax` prevents wishful-thinking across determinized worlds
+       (each world `v` minimizes independently over its own legal action mask `masks_opp_v[v]`)
+       and passes strict TPU HLO audit (0 gather/scatter ops, 0 64-bit dtypes).
+    2. `run_unified_nash_and_bake_pipeline_tpu` runs all 3 stages in 1 TPU workflow:
+       - Gate 1: Non-inferiority election-call (`bayesian_eq=True` vs `bayesian_eq=False`),
+       - Gate 2: Sequential election-call Nash verification & rebuild,
+       - Gate 3: Team Preview `PairTable` baking (`SPACE_VERSION = 1`).
+    """
+    from gen2_tpu.kodoku import (
+        run_unified_nash_and_bake_pipeline_tpu,
+        solve_bayesian_equilibrium_jax,
+    )
+
+    # 1. Construct a 2-world Bayesian game where:
+    # - Action 0 is punished in World 0 by opp action 0 (payoff 0.10, while opp action 1 gives 0.95)
+    #   and punished in World 1 by opp action 1 (payoff 0.10, while opp action 0 gives 0.95).
+    #   World-averaging `0.5*(V0 + V1)` falsely makes Action 0 look like 0.525 against everything,
+    #   whereas coupled per-world Bayesian Equilibrium sees that in each world the opponent chooses
+    #   that world's best response (giving 0.10) and therefore selects safe Action 1 (payoff 0.62).
+    v0 = np.full((7, 7), 0.50, dtype=np.float32)
+    v1 = np.full((7, 7), 0.50, dtype=np.float32)
+    v0[0, 0], v0[0, 1] = 0.10, 0.95
+    v1[0, 0], v1[0, 1] = 0.95, 0.10
+    v0[1, :2] = 0.62
+    v1[1, :2] = 0.62
+
+    mats_v = jnp.stack([jnp.asarray(v0), jnp.asarray(v1)], axis=0)
+    mask_own = jnp.array([True, True, False, False, False, False, False], dtype=jnp.bool_)
+    masks_opp_v = jnp.stack([mask_own, mask_own], axis=0)
+    post_w = jnp.array([0.5, 0.5], dtype=jnp.float32)
+
+    sigma0, act_vals, pure_guar, eq_val = solve_bayesian_equilibrium_jax(
+        mats_v, mask_own, masks_opp_v, post_w, sweeps=96
+    )
+    assert float(sigma0[1]) > 0.90
+    assert float(sigma0[0]) < 0.10
+    assert np.isclose(float(eq_val), 0.62, atol=0.05)
+
+    report = verify_tpu_compatibility(
+        lambda mv, mo, mov, pw: solve_bayesian_equilibrium_jax(mv, mo, mov, pw, sweeps=64),
+        mats_v,
+        mask_own,
+        masks_opp_v,
+        post_w,
+        spec=TPU_V5E,
+    )
+    assert report.passed, f"solve_bayesian_equilibrium_jax TPU audit failed: {report}"
+    assert len(report.forbidden_dtypes) == 0
+    assert not report.has_host_callbacks
+    assert not report.has_dynamic_shapes
+
+    # 2. Verify 1-run `run_unified_nash_and_bake_pipeline_tpu`
+    t_a, t_b = _sample_6v6_teams()
+    teams_pool = [
+        {"id": "nash_a", "sets": t_a},
+        {"id": "challenger_b", "sets": t_b},
+    ]
+    out_dir = tmp_path / "unified_bake"
+    pipe_res = run_unified_nash_and_bake_pipeline_tpu(
+        teams_pool,
+        incumbent_nash_weights={"nash_a": 1.0, "challenger_b": 0.0},
+        non_inferiority_waves=(2,),
+        nash_wave_games=(2,),
+        policy_turns=3,
+        policy_rollout_turns=0,
+        policy_followup_turns=4,
+        policy_rm_sweeps=16,
+        bake_screen_games=2,
+        bake_support_k=2,
+        bake_refine_games=2,
+        bake_screen_turns=4,
+        bake_refine_turns=4,
+        bake_out_dir=out_dir,
+        seed=20260405,
+    )
+    assert pipe_res.non_inferiority_status in (
+        "SUPERIOR_CONFIRMED",
+        "NON_INFERIOR_CONFIRMED",
+        "INFERIOR_REJECTED",
+    )
+    assert pipe_res.nash_status in ("NASH_HELD", "NASH_REBUILT")
+    assert np.isclose(float(np.sum(pipe_res.final_nash_weights)), 1.0, atol=1e-5)
+    assert len(pipe_res.baked_pair_tables) >= 2
+    assert (out_dir / "unified_summary.json").exists()
+
+
+
 
 
 

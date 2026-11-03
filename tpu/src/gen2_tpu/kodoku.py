@@ -3157,7 +3157,147 @@ def update_shell_belief_mask_jax(
     return jnp.where(jnp.any(new_mask), new_mask, belief_mask)
 
 
-@partial(jax.jit, static_argnames=("side", "rollout_turns", "rm_sweeps"))
+@partial(jax.jit, static_argnames=("sweeps",))
+def solve_bayesian_equilibrium_jax(
+    mats_v: jax.Array,
+    mask_own: jax.Array,
+    masks_opp_v: jax.Array,
+    post_w: jax.Array,
+    sweeps: int = 64,
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+    """Port of `nc2000_bot::root_policy::solve_bayesian_equilibrium_with_priors` to branchless JAX/TPU.
+
+    Solves the Bayesian root maximin game across `V` determinized worlds:
+        `max_{p in Delta(mask_own)} sum_v post_w[v] min_{j: masks_opp_v[v, j]} sum_i p[i] V_hat[v, i, j]`
+    where `mats_v[v, i, j]` (`float32[V, 7, 7]`) is already oriented from `own`'s perspective
+    (`own` chooses row `i`, `opp` in world `v` chooses column `j`).
+
+    Returns `(policy, action_values, pure_guarantees, equilibrium_value)`.
+    """
+    fb_own = jnp.argmax(mask_own.astype(jnp.int32)).astype(jnp.int32)
+    valid_v = mask_own[None, :, None] & masks_opp_v[:, None, :]
+    clean_v = jnp.where(valid_v, jnp.clip(mats_v, jnp.float32(0.0), jnp.float32(1.0)), jnp.float32(0.5))
+
+    # 1. Cross-world Empirical-Bayes shrinkage (`pooled_prior` + `mu_row + col_blunder_bonus`)
+    pooled_cell = jnp.sum(post_w[:, None, None] * clean_v, axis=0)  # [7, 7]
+    opp_cnt = jnp.maximum(jnp.sum(masks_opp_v.astype(jnp.float32), axis=-1, keepdims=True), jnp.float32(1.0))
+    own_cnt = jnp.maximum(jnp.sum(mask_own.astype(jnp.float32)), jnp.float32(1.0))
+
+    mu_row = jnp.sum(
+        jnp.where(masks_opp_v[:, None, :], clean_v, jnp.float32(0.0)), axis=-1
+    ) / opp_cnt  # [V, 7]
+    mu_col = jnp.sum(
+        jnp.where(mask_own[None, :, None], clean_v, jnp.float32(0.0)), axis=1
+    ) / own_cnt  # [V, 7]
+    mu_world = jnp.sum(
+        jnp.where(masks_opp_v, mu_col, jnp.float32(0.0)), axis=-1, keepdims=True
+    ) / opp_cnt  # [V, 1]
+    col_blunder_bonus = jnp.maximum(jnp.float32(0.0), mu_col - mu_world)  # [V, 7]
+    additive_prior = jnp.clip(mu_row[:, :, None] + col_blunder_bonus[:, None, :], jnp.float32(0.0), jnp.float32(1.0))
+
+    v_hat = (
+        jnp.float32(0.75) * clean_v
+        + jnp.float32(0.15) * pooled_cell[None, :, :]
+        + jnp.float32(0.10) * additive_prior
+    )
+    v_hat = jnp.where(valid_v, v_hat, jnp.float32(0.5))
+
+    # 2. Pure guarantees: `sum_v w_v min_{j in mask_opp_v} v_hat[v, i, j]`
+    masked_for_min = jnp.where(masks_opp_v[:, None, :], v_hat, jnp.float32(1e9))
+    per_world_row_min = jnp.min(masked_for_min, axis=-1)  # [V, 7]
+    per_world_row_min = jnp.where(per_world_row_min > jnp.float32(1.0), jnp.float32(0.5), per_world_row_min)
+    pure_guarantees = jnp.sum(post_w[:, None] * per_world_row_min, axis=0)  # [7]
+
+    raw_best_idx = jnp.argmax(
+        jnp.where(mask_own, pure_guarantees, jnp.float32(-1e9))
+    ).astype(jnp.int32)
+    best_pure_idx = jnp.where(jnp.any(mask_own), raw_best_idx, fb_own)
+    pure_one_hot = (jnp.arange(7, dtype=jnp.int32) == best_pure_idx).astype(jnp.float32)
+    best_pure_val = jnp.sum(pure_guarantees * pure_one_hot)
+
+    # 3. Coupled Regret Matching+ over `(p[7], y[V, 7])`
+    own_unif = mask_own.astype(jnp.float32) / own_cnt
+    opp_unif = masks_opp_v.astype(jnp.float32) / opp_cnt  # [V, 7]
+
+    r_own0 = jnp.zeros((7,), dtype=jnp.float32)
+    r_opp0 = jnp.zeros_like(opp_unif)
+    sum_p0 = jnp.zeros((7,), dtype=jnp.float32)
+    sum_y0 = jnp.zeros_like(opp_unif)
+
+    def _rm_step(t_idx: jax.Array, carry):
+        r_own, r_opp, sum_p, sum_y = carry
+        s_own = jnp.sum(r_own)
+        p = jnp.where(s_own > jnp.float32(1e-12), r_own / jnp.maximum(s_own, jnp.float32(1e-12)), own_unif)
+
+        s_opp = jnp.sum(r_opp, axis=-1, keepdims=True)
+        y = jnp.where(s_opp > jnp.float32(1e-12), r_opp / jnp.maximum(s_opp, jnp.float32(1e-12)), opp_unif)
+
+        # Adversary in each world v minimizes `p^T v_hat[v]` <=> maximizes `-p^T v_hat[v]`
+        q_opp = jnp.einsum("i,vij->vj", p, v_hat)  # [V, 7]
+        u_opp = -q_opp
+        ev_opp = jnp.sum(y * u_opp, axis=-1, keepdims=True)
+        r_opp_next = jnp.maximum(
+            jnp.float32(0.0),
+            r_opp + jnp.where(masks_opp_v, u_opp - ev_opp, jnp.float32(0.0)),
+        )
+
+        # Update y immediately for alternating RM+
+        s_opp_next = jnp.sum(r_opp_next, axis=-1, keepdims=True)
+        y_next = jnp.where(
+            s_opp_next > jnp.float32(1e-12),
+            r_opp_next / jnp.maximum(s_opp_next, jnp.float32(1e-12)),
+            opp_unif,
+        )
+
+        # Own player maximizes `sum_v w_v (v_hat[v] y_next[v])`
+        q_own = jnp.einsum("v,vij,vj->i", post_w, v_hat, y_next)  # [7]
+        ev_own = jnp.sum(p * q_own)
+        r_own_next = jnp.maximum(
+            jnp.float32(0.0),
+            r_own + jnp.where(mask_own, q_own - ev_own, jnp.float32(0.0)),
+        )
+
+        w_t = (t_idx + jnp.int32(1)).astype(jnp.float32)
+        return (r_own_next, r_opp_next, sum_p + w_t * p, sum_y + w_t * y_next)
+
+    _, _, final_sum_p, final_sum_y = jax.lax.fori_loop(
+        0, int(sweeps), _rm_step, (r_own0, r_opp0, sum_p0, sum_y0)
+    )
+
+    p_tot = jnp.sum(final_sum_p)
+    avg_p = jnp.where(p_tot > jnp.float32(1e-12), final_sum_p / jnp.maximum(p_tot, jnp.float32(1e-12)), own_unif)
+    max_p = jnp.max(avg_p)
+    purified_p = jnp.where(mask_own & (avg_p >= jnp.float32(0.05) * max_p), avg_p, jnp.float32(0.0))
+    pur_sum = jnp.sum(purified_p)
+    purified_p = jnp.where(
+        pur_sum > jnp.float32(1e-12),
+        purified_p / jnp.maximum(pur_sum, jnp.float32(1e-12)),
+        pure_one_hot,
+    )
+
+    # Guarantee of purified mixed strategy across worlds
+    mix_col_payoffs = jnp.einsum("i,vij->vj", purified_p, v_hat)  # [V, 7]
+    mix_world_min = jnp.min(
+        jnp.where(masks_opp_v, mix_col_payoffs, jnp.float32(1e9)), axis=-1
+    )
+    mix_world_min = jnp.where(mix_world_min > jnp.float32(1.0), jnp.float32(0.5), mix_world_min)
+    eq_guarantee = jnp.sum(post_w * mix_world_min)
+
+    y_tot = jnp.sum(final_sum_y, axis=-1, keepdims=True)
+    avg_y = jnp.where(y_tot > jnp.float32(1e-12), final_sum_y / jnp.maximum(y_tot, jnp.float32(1e-12)), opp_unif)
+    eq_q = jnp.einsum("v,vij,vj->i", post_w, v_hat, avg_y)
+    action_values = jnp.float32(0.5) * eq_q + jnp.float32(0.5) * pure_guarantees
+
+    use_mixed = eq_guarantee > (best_pure_val + jnp.float32(0.005))
+    final_policy = jnp.where(use_mixed, purified_p, pure_one_hot)
+    final_val = jnp.where(use_mixed, eq_guarantee, best_pure_val)
+    return final_policy, action_values, pure_guarantees, final_val
+
+
+@partial(
+    jax.jit,
+    static_argnames=("side", "rollout_turns", "rm_sweeps"),
+)
 def select_shell_belief_minimax_action_jax(
     state: CompactBattle,
     own_table: MatchTable,
@@ -3170,15 +3310,21 @@ def select_shell_belief_minimax_action_jax(
     rollout_turns: int = 0,
     rm_sweeps: int = 48,
     residual_bundle: ResidualBundle | None = None,
+    bayesian_eq: bool | jax.Array = True,
 ) -> tuple[jax.Array, jax.Array]:
-    """Select an in-battle action for `side` via 1-Ply Simultaneous-Move RM+ over the
-    Bayesian posterior distribution of hidden opponent shell variants `candidate_tables_foe`.
+    """Select an in-battle action for `side` over the posterior distribution of hidden opponent
+    worlds `candidate_tables_foe`.
 
-    1. Computes the normalized Bayesian posterior `post_w` from `prior_weights_foe` and `belief_mask_foe`.
-    2. Evaluates all `7 x 7 = 49` joint actions `(a0, a1)` against every candidate variant `v` in parallel,
-       weighted by `post_w[v]` to form the Bayes-expected 7x7 stage-game payoff matrix `M_bayes`.
-    3. Solves `M_bayes` via `solve_rm_plus_jax` and samples `side`'s action from the Nash strategy.
+    When `bayesian_eq=True` (default, ported from `849a3545`):
+    - Evaluates each determinized world `v` using its own opponent legal non-dominated mask `mask_opp_v`.
+    - Applies Depth-1 minimax contraction (`backed_up_value`) so Depth-1 exploratory noise does not
+      pollute cell payoffs.
+    - Solves the coupled Bayesian equilibrium `max_p sum_v w_v min_{j in mask_opp_v} (p^T V_v)_j`
+      via `solve_bayesian_equilibrium_jax`.
+    When `bayesian_eq=False`:
+    - Uses the legacy world-averaged / optimistic-reply policy for A/B non-inferiority testing.
     """
+    use_beq = jnp.asarray(bayesian_eq, dtype=jnp.bool_)
     raw_w = jnp.where(belief_mask_foe, jnp.maximum(prior_weights_foe, jnp.float32(1e-6)), jnp.float32(0.0))
     w_sum = jnp.sum(raw_w)
     post_w = jnp.where(
@@ -3201,9 +3347,6 @@ def select_shell_belief_minimax_action_jax(
     )
     flat_a0 = grid_a0.reshape(-1)
     flat_a1 = grid_a1.reshape(-1)
-    act0_all = jnp.where(mask0[flat_a0], flat_a0, fb0)
-    act1_all = jnp.where(mask1[flat_a1], flat_a1, fb1)
-    acts_49 = jnp.stack([act0_all, act1_all], axis=-1)  # [49, 2]
 
     next_p_seed, u_draw = prng_random(policy_seed, jnp.int32(10000))
     b_seed_probe = jnp.stack(
@@ -3214,80 +3357,90 @@ def select_shell_belief_minimax_action_jax(
         axis=0,
     )
 
-    def _eval_variant_matrix(cand_tb: MatchTable) -> jax.Array:
+    def _eval_variant_matrix(cand_tb: MatchTable) -> tuple[jax.Array, jax.Array]:
+        c_raw0 = legal_actions_mask(state, cand_tb, 0)[:7]
+        c_raw1 = legal_actions_mask(state, cand_tb, 1)[:7]
+        c_nd0 = c_raw0 & (~compact_dominated_mask7(state, cand_tb, 0))
+        c_nd1 = c_raw1 & (~compact_dominated_mask7(state, cand_tb, 1))
+        m0_v = mask0 if int(side) == 0 else jnp.where(jnp.any(c_nd0), c_nd0, c_raw0)
+        m1_v = jnp.where(jnp.any(c_nd1), c_nd1, c_raw1) if int(side) == 0 else mask1
+        fb0_v = jnp.argmax(m0_v.astype(jnp.int32)).astype(jnp.int32)
+        fb1_v = jnp.argmax(m1_v.astype(jnp.int32)).astype(jnp.int32)
+
+        m0_flat = jnp.broadcast_to(m0_v[:, None], (7, 7)).reshape(-1)
+        m1_flat = jnp.broadcast_to(m1_v[None, :], (7, 7)).reshape(-1)
+        act0_v = jnp.where(m0_flat, flat_a0, fb0_v)
+        act1_v = jnp.where(m1_flat, flat_a1, fb1_v)
+        acts_49_v = jnp.stack([act0_v, act1_v], axis=-1)
+
         def _eval_cell(act_pair: jax.Array) -> jax.Array:
             st0 = state._replace(prng_seed=b_seed_probe)
             st1 = apply_actions(st0, cand_tb, act_pair)
+            v_leaf = eval_compact_leaf(st1, cand_tb, weights, residual_bundle=residual_bundle)
             if rollout_turns <= 0:
-                return eval_compact_leaf(st1, cand_tb, weights, residual_bundle=residual_bundle)
+                return v_leaf
             ro = _single_table_heavy_rollout(
                 pack_battle(st1),
                 cand_tb,
                 next_p_seed,
                 weights,
                 turns=rollout_turns,
-                eps=0.12,
+                eps=0.06,
                 residual_bundle=residual_bundle,
             )
-            return ro.leaf_values
+            is_term = st1.outcome != 0
+            shrunk = jnp.where(
+                is_term,
+                v_leaf,
+                jnp.float32(0.75) * ro.leaf_values + jnp.float32(0.25) * v_leaf,
+            )
+            return jnp.where(use_beq, shrunk, ro.leaf_values)
 
-        vals_49 = jax.vmap(_eval_cell)(acts_49)
-        return vals_49.reshape(7, 7)
+        vals_49 = jax.vmap(_eval_cell)(acts_49_v).reshape(7, 7)
+        mask_opp_v = m1_v if int(side) == 0 else m0_v
+        # Orient matrix so row = `side`'s action, col = `1 - side`'s action, payoff = `side`'s score
+        mat_oriented = vals_49 if int(side) == 0 else (jnp.float32(1.0) - jnp.transpose(vals_49))
+        return mat_oriented, mask_opp_v
 
-    mats_v = jax.vmap(_eval_variant_matrix)(candidate_tables_foe)  # [V, 7, 7]
-    m_bayes = jnp.sum(post_w[:, None, None] * mats_v, axis=0)
-    valid_cells = mask0[:, None] & mask1[None, :]
-    m_bayes = jnp.where(valid_cells, m_bayes, jnp.float32(0.5))
-
-    sigma0, sigma1, _ = solve_rm_plus_jax(m_bayes, mask0, mask1, sweeps=rm_sweeps)
-    sigma_side = sigma0 if int(side) == 0 else sigma1
+    mats_oriented_v, masks_opp_v = jax.vmap(_eval_variant_matrix)(candidate_tables_foe)
     mask_side = mask0 if int(side) == 0 else mask1
     fb_side = fb0 if int(side) == 0 else fb1
 
+    sigma_bayes, _, _, _ = solve_bayesian_equilibrium_jax(
+        mats_oriented_v,
+        mask_side,
+        masks_opp_v,
+        post_w,
+        sweeps=rm_sweeps,
+    )
+    # Legacy policy: averages over opponent worlds and opponent actions ("勝手読み" baseline)
+    opp_cnt_v = jnp.maximum(jnp.sum(masks_opp_v.astype(jnp.float32), axis=-1, keepdims=True), jnp.float32(1.0))
+    row_means_v = jnp.sum(
+        jnp.where(masks_opp_v[:, None, :], mats_oriented_v, jnp.float32(0.0)), axis=-1
+    ) / opp_cnt_v
+    global_row_mean = jnp.sum(post_w[:, None] * row_means_v, axis=0)
+    raw_best_legacy = jnp.argmax(
+        jnp.where(mask_side, global_row_mean, jnp.float32(-1e9))
+    ).astype(jnp.int32)
+    best_legacy = jnp.where(jnp.any(mask_side), raw_best_legacy, fb_side)
+    sigma_legacy = (jnp.arange(7, dtype=jnp.int32) == best_legacy).astype(jnp.float32)
+    sigma_side = jnp.where(use_beq, sigma_bayes, sigma_legacy)
+
     cdf = jnp.cumsum(sigma_side)
     u01 = (u_draw.astype(jnp.float32) + jnp.float32(0.5)) / jnp.float32(10000.0)
-    sampled = jnp.argmax((cdf >= u01) & mask_side).astype(jnp.int32)
-    chosen = jnp.where(mask_side[sampled], sampled, fb_side)
+    hit_mask = (cdf >= u01) & mask_side
+    sampled = jnp.argmax(hit_mask.astype(jnp.int32)).astype(jnp.int32)
+    chosen = jnp.where(jnp.any(hit_mask), sampled, fb_side)
     return next_p_seed, chosen
 
 
-def simulate_shell_belief_minimax_games_tpu(
-    init_packed: PackedBattle,
-    true_tables: MatchTable,
-    candidate_tables_for_p0: MatchTable,
-    prior_weights_for_p0: jax.Array,
-    candidate_tables_for_p1: MatchTable,
-    prior_weights_for_p1: jax.Array,
-    policy_seeds: jax.Array,
-    weights: EvalWeights | None = None,
-    turns: int = 24,
-    rollout_turns: int = 0,
-    rm_sweeps: int = 48,
-    residual_bundle: ResidualBundle | None = None,
-    followup_turns: int = 0,
-) -> tuple[HeavyRolloutResult, jax.Array, jax.Array]:
-    """Simulate `B` games on TPU where both players maintain exact in-battle Bayesian beliefs
-    (`belief_mask0`, `belief_mask1`) over the opponent's hidden shell variants and select moves
-    via 1-ply simultaneous-move RM+ minimax search (`select_shell_belief_minimax_action_jax`).
-
-    Shapes:
-    - `init_packed`: `PackedBattle` (`uint32[B, 30]`)
-    - `true_tables`: `MatchTable` (`[B, ...]`)
-    - `candidate_tables_for_p0`: `MatchTable` (`[B, V1, ...]`) — P0's hypothesis tables for P1's shell
-    - `prior_weights_for_p0`: `float32[B, V1]`
-    - `candidate_tables_for_p1`: `MatchTable` (`[B, V0, ...]`) — P1's hypothesis tables for P0's shell
-    - `prior_weights_for_p1`: `float32[B, V0]`
-    Returns `(HeavyRolloutResult, final_belief_mask0, final_belief_mask1)`.
-    """
-    if weights is None:
-        weights = default_eval_weights()
-
-    b_size = int(init_packed.words.shape[0])
-    v1_size = int(prior_weights_for_p0.shape[1])
-    v0_size = int(prior_weights_for_p1.shape[1])
-    init_bmask0 = jnp.ones((b_size, v1_size), dtype=jnp.bool_)
-    init_bmask1 = jnp.ones((b_size, v0_size), dtype=jnp.bool_)
-
+@lru_cache(maxsize=32)
+def _get_jit_shell_belief_minimax_batch_fn(
+    turns: int,
+    rollout_turns: int,
+    rm_sweeps: int,
+    followup_turns: int,
+):
     @jax.jit
     def _run_batch(
         pk_b: PackedBattle,
@@ -3299,6 +3452,10 @@ def simulate_shell_belief_minimax_games_tpu(
         p_seeds_b: jax.Array,
         bmask0_init: jax.Array,
         bmask1_init: jax.Array,
+        beq0_flag: jax.Array,
+        beq1_flag: jax.Array,
+        weights: EvalWeights,
+        residual_bundle: ResidualBundle | None,
     ):
         def _single_game(
             pk: PackedBattle,
@@ -3327,6 +3484,7 @@ def simulate_shell_belief_minimax_games_tpu(
                     rollout_turns=rollout_turns,
                     rm_sweeps=rm_sweeps,
                     residual_bundle=residual_bundle,
+                    bayesian_eq=beq0_flag,
                 )
                 ps, a1 = select_shell_belief_minimax_action_jax(
                     st,
@@ -3340,6 +3498,7 @@ def simulate_shell_belief_minimax_games_tpu(
                     rollout_turns=rollout_turns,
                     rm_sweeps=rm_sweeps,
                     residual_bundle=residual_bundle,
+                    bayesian_eq=beq1_flag,
                 )
                 next_st = apply_actions(st, t_tb, jnp.stack([a0, a1], axis=0))
                 next_m0 = update_shell_belief_mask_jax(st, next_st, t_tb, c0, 0, m0)
@@ -3381,7 +3540,50 @@ def simulate_shell_belief_minimax_games_tpu(
             bmask1_init,
         )
 
-    return _run_batch(
+    return _run_batch
+
+
+def simulate_shell_belief_minimax_games_tpu(
+    init_packed: PackedBattle,
+    true_tables: MatchTable,
+    candidate_tables_for_p0: MatchTable,
+    prior_weights_for_p0: jax.Array,
+    candidate_tables_for_p1: MatchTable,
+    prior_weights_for_p1: jax.Array,
+    policy_seeds: jax.Array,
+    weights: EvalWeights | None = None,
+    turns: int = 24,
+    rollout_turns: int = 0,
+    rm_sweeps: int = 48,
+    residual_bundle: ResidualBundle | None = None,
+    followup_turns: int = 0,
+    bayesian_eq_p0: bool = True,
+    bayesian_eq_p1: bool = True,
+) -> tuple[HeavyRolloutResult, jax.Array, jax.Array]:
+    """Simulate `B` games on TPU where both players maintain exact in-battle Bayesian beliefs
+    (`belief_mask0`, `belief_mask1`) over the opponent's hidden shell variants and select moves
+    via 1-ply simultaneous-move search (`select_shell_belief_minimax_action_jax`).
+
+    - `bayesian_eq_p0` / `bayesian_eq_p1`: When `True` (default), uses the coupled per-world
+      Bayesian equilibrium solver (`solve_bayesian_equilibrium_jax`) with per-world opponent legal
+      masks and Depth-1 minimax contraction backup. When `False`, uses the legacy world-averaged
+      RM+ baseline, allowing direct CRN head-to-head non-inferiority testing on TPU.
+    """
+    if weights is None:
+        weights = default_eval_weights()
+
+    b_size = int(init_packed.words.shape[0])
+    v1_size = int(prior_weights_for_p0.shape[1])
+    v0_size = int(prior_weights_for_p1.shape[1])
+    init_bmask0 = jnp.ones((b_size, v1_size), dtype=jnp.bool_)
+    init_bmask1 = jnp.ones((b_size, v0_size), dtype=jnp.bool_)
+    fn = _get_jit_shell_belief_minimax_batch_fn(
+        int(turns),
+        int(rollout_turns),
+        int(rm_sweeps),
+        int(followup_turns),
+    )
+    return fn(
         init_packed,
         true_tables,
         candidate_tables_for_p0,
@@ -3391,5 +3593,720 @@ def simulate_shell_belief_minimax_games_tpu(
         policy_seeds,
         init_bmask0,
         init_bmask1,
+        jnp.asarray(bool(bayesian_eq_p0), dtype=jnp.bool_),
+        jnp.asarray(bool(bayesian_eq_p1), dtype=jnp.bool_),
+        weights,
+        residual_bundle,
     )
+
+
+class UnifiedNashPipelineResult(NamedTuple):
+    """Result of the 1-run TPU pipeline for:
+    (1) New Policy (`bayesian_eq=True`) non-inferiority vs Legacy Policy (`bayesian_eq=False`),
+    (2) Sequential Election-Call (`選挙当確速報`) Nash verification & conditional rebuild,
+    (3) Team Preview `PairTable` baking for the pool including Nash parties.
+    """
+
+    # Gate 1: Non-inferiority election-call vs Legacy policy
+    non_inferiority_status: str  # "SUPERIOR_CONFIRMED", "NON_INFERIOR_CONFIRMED", or "INFERIOR_REJECTED"
+    new_vs_legacy_mean: float
+    new_vs_legacy_lcb: float
+    new_vs_legacy_ucb: float
+    new_vs_legacy_games: int
+    new_vs_legacy_waves: int
+
+    # Gate 2: Nash equilibrium verification & conditional rebuild
+    nash_status: str  # "NASH_HELD" or "NASH_REBUILT"
+    incumbent_nash_ids: list[str]
+    incumbent_nash_weights: np.ndarray  # float32[N]
+    final_nash_ids: list[str]
+    final_nash_weights: np.ndarray  # float32[N]
+    challenger_means: np.ndarray  # float32[N] vs incumbent Nash mixture
+    challenger_lcbs: np.ndarray  # float32[N]
+    challenger_ucbs: np.ndarray  # float32[N]
+    challenger_statuses: list[str]  # per-team election call status
+    challenger_games: np.ndarray  # int32[N]
+    max_challenger_mean: float
+    max_challenger_lcb: float
+    early_dropped_count: int
+    payoff_matrix: np.ndarray  # float32[N, N]
+
+    # Gate 3: Baked Team Preview PairTables (`(id_a, id_b) -> PairTable dict`)
+    baked_pair_tables: dict[str, dict[str, Any]]
+    elapsed_secs: float
+
+
+def _extract_team_sets(team_entry: dict | list) -> list[dict]:
+    if isinstance(team_entry, dict) and "sets" in team_entry:
+        return list(team_entry["sets"])
+    if isinstance(team_entry, list):
+        return list(team_entry)
+    raise ValueError(f"Expected team dict with 'sets' or list of 6 sets, got {type(team_entry)}")
+
+
+def _build_shell_variant_rosters_map(
+    rosters: list[RosterTable6],
+    teams_raw: list[dict],
+    max_variants: int = 8,
+) -> tuple[list[list[int]], int]:
+    """Group pool indices sharing the same 6-(species, level) preview shell (or fallback to
+    same lead/core species) so each team `i` has a static-shape list of `V` candidate variant
+    indices `[V]` (padded by repeating `i`) for determinized Bayesian belief simulation on TPU.
+    """
+    n = len(rosters)
+    sigs = [preview_signature_sets(_extract_team_sets(t)) for t in teams_raw]
+    shell_to_indices: dict[tuple[tuple[str, int], ...], list[int]] = {}
+    for idx, sig in enumerate(sigs):
+        shell_to_indices.setdefault(sig, []).append(idx)
+
+    raw_groups: list[list[int]] = []
+    max_v_found = 1
+    for idx, sig in enumerate(sigs):
+        grp = list(shell_to_indices[sig])
+        if len(grp) == 1 and n > 1:
+            # Also include up to (max_variants - 1) nearest species-overlap teams as determinized hypotheses
+            own_species = {entry[0] for entry in sig}
+            others = sorted(
+                (j for j in range(n) if j != idx),
+                key=lambda j: -len(own_species & {entry[0] for entry in sigs[j]}),
+            )
+            grp.extend(others[: max(0, min(max_variants - 1, 3))])
+        grp = grp[:max_variants]
+        max_v_found = max(max_v_found, len(grp))
+        raw_groups.append(grp)
+
+    padded_groups: list[list[int]] = []
+    for idx, grp in enumerate(raw_groups):
+        padded = list(grp) + [idx] * (max_v_found - len(grp))
+        padded_groups.append(padded)
+    return padded_groups, max_v_found
+
+
+def _run_policy_duel_batch_tpu(
+    rosters: list[RosterTable6],
+    variant_groups: list[list[int]],
+    pair_specs: list[tuple[int, int, tuple[int, int, int], tuple[int, int, int]]],
+    games_per_spec: int,
+    shared_dex: SharedDexTable,
+    base_seed_int: int,
+    bayesian_eq_a: bool = True,
+    bayesian_eq_b: bool = True,
+    policy_turns: int = 12,
+    rollout_turns: int = 4,
+    followup_turns: int = 24,
+    rm_sweeps: int = 32,
+    weights: EvalWeights | None = None,
+    residual_bundle: ResidualBundle | None = None,
+) -> np.ndarray:
+    """Run paired side-swapped CRN games on TPU using `simulate_shell_belief_minimax_games_tpu`
+    for a list of `(team_a_idx, team_b_idx, pick_a_0based, pick_b_0based)` specs.
+
+    Returns `float32[len(pair_specs)]` mean scores for Side A in `[0, 1]`.
+    """
+    if weights is None:
+        weights = default_eval_weights()
+    n_specs = len(pair_specs)
+    g_per_spec = max(2, int(games_per_spec))
+    if g_per_spec % 2 == 1:
+        g_per_spec += 1
+    if n_specs == 0:
+        return np.zeros((0,), dtype=np.float32)
+
+    v_size = len(variant_groups[0])
+    pk_list: list[PackedBattle] = []
+    true_tb_list: list[MatchTable] = []
+    cand0_list: list[MatchTable] = []
+    prior0_list: list[jax.Array] = []
+    cand1_list: list[MatchTable] = []
+    prior1_list: list[jax.Array] = []
+    p_seed_list: list[jax.Array] = []
+    swapped_flags: list[bool] = []
+
+    # Cache `assemble_3v3_from_rosters_jax` on JIT
+    asm_jit = jax.jit(
+        lambda ra, rb, pa, pb, bseed: assemble_3v3_from_rosters_jax(
+            ra, rb, pa, pb, bseed, shared_dex
+        )
+    )
+
+    for s_idx, (ia, ib, pa_tup, pb_tup) in enumerate(pair_specs):
+        pa_arr = jnp.asarray(pa_tup, dtype=jnp.int32)
+        pb_arr = jnp.asarray(pb_tup, dtype=jnp.int32)
+        v_a = variant_groups[ia]
+        v_b = variant_groups[ib]
+
+        # Unique weights so duplicate padding variants don't double-count
+        w_a_np = np.zeros((v_size,), dtype=np.float32)
+        seen_a: set[int] = set()
+        for k_i, var_idx in enumerate(v_a):
+            if var_idx not in seen_a:
+                seen_a.add(var_idx)
+                w_a_np[k_i] = 1.0
+        w_a_np /= max(float(np.sum(w_a_np)), 1.0)
+
+        w_b_np = np.zeros((v_size,), dtype=np.float32)
+        seen_b: set[int] = set()
+        for k_i, var_idx in enumerate(v_b):
+            if var_idx not in seen_b:
+                seen_b.add(var_idx)
+                w_b_np[k_i] = 1.0
+        w_b_np /= max(float(np.sum(w_b_np)), 1.0)
+
+        for p_pair in range(g_per_spec // 2):
+            crn_idx = s_idx * (g_per_spec // 2) + p_pair
+            b_seed = jnp.array(
+                [
+                    np.uint32((base_seed_int ^ (crn_idx * 0x9E3779B9)) & 0xFFFFFFFF),
+                    np.uint32(((base_seed_int >> 16) + crn_idx * 0x85EBCA6B + 1) & 0xFFFFFFFF),
+                ],
+                dtype=jnp.uint32,
+            )
+            p_seed = jnp.array(
+                [
+                    np.uint32(((base_seed_int + 0xC2B2AE35) ^ (crn_idx * 0x27D4EB2F)) & 0xFFFFFFFF),
+                    np.uint32((base_seed_int ^ (crn_idx * 0x165667B1 + 7)) & 0xFFFFFFFF),
+                ],
+                dtype=jnp.uint32,
+            )
+
+            # Orientation 0: A is P0, B is P1
+            tb_ab, st_ab = asm_jit(rosters[ia], rosters[ib], pa_arr, pb_arr, b_seed)
+            c0_ab = jax.tree_util.tree_map(
+                lambda *xs: jnp.stack(xs, axis=0),
+                *[asm_jit(rosters[ia], rosters[vb], pa_arr, pb_arr, b_seed)[0] for vb in v_b],
+            )
+            c1_ab = jax.tree_util.tree_map(
+                lambda *xs: jnp.stack(xs, axis=0),
+                *[asm_jit(rosters[va], rosters[ib], pa_arr, pb_arr, b_seed)[0] for va in v_a],
+            )
+            pk_list.append(pack_battle(st_ab))
+            true_tb_list.append(tb_ab)
+            cand0_list.append(c0_ab)
+            prior0_list.append(jnp.asarray(w_b_np, dtype=jnp.float32))
+            cand1_list.append(c1_ab)
+            prior1_list.append(jnp.asarray(w_a_np, dtype=jnp.float32))
+            p_seed_list.append(p_seed)
+            swapped_flags.append(False)
+
+            # Orientation 1 (Side-swapped CRN): B is P0, A is P1
+            tb_ba, st_ba = asm_jit(rosters[ib], rosters[ia], pb_arr, pa_arr, b_seed)
+            c0_ba = jax.tree_util.tree_map(
+                lambda *xs: jnp.stack(xs, axis=0),
+                *[asm_jit(rosters[ib], rosters[va], pb_arr, pa_arr, b_seed)[0] for va in v_a],
+            )
+            c1_ba = jax.tree_util.tree_map(
+                lambda *xs: jnp.stack(xs, axis=0),
+                *[asm_jit(rosters[vb], rosters[ia], pb_arr, pa_arr, b_seed)[0] for vb in v_b],
+            )
+            pk_list.append(pack_battle(st_ba))
+            true_tb_list.append(tb_ba)
+            cand0_list.append(c0_ba)
+            prior0_list.append(jnp.asarray(w_a_np, dtype=np.float32))
+            cand1_list.append(c1_ba)
+            prior1_list.append(jnp.asarray(w_b_np, dtype=np.float32))
+            p_seed_list.append(p_seed)
+            swapped_flags.append(True)
+
+    # Split into Normal orientation (A=P0, B=P1) and Swapped orientation (B=P0, A=P1)
+    # so `bayesian_eq_a` always applies to Team A and `bayesian_eq_b` always applies to Team B!
+    norm_idx = [i for i, sw in enumerate(swapped_flags) if not sw]
+    swap_idx = [i for i, sw in enumerate(swapped_flags) if sw]
+
+    def _run_subset(indices: list[int], beq_p0: bool, beq_p1: bool) -> np.ndarray:
+        n_actual = len(indices)
+        # Pad batch size to an even bucket (minimum 2) so Gate 1 and Gate 2 share the exact same XLA compilation
+        b_pad = max(2, ((n_actual + 1) // 2) * 2)
+        pad_indices = list(indices) + [indices[-1]] * (b_pad - n_actual)
+        pk_b = PackedBattle(words=jnp.stack([pk_list[i].words for i in pad_indices], axis=0))
+        tb_b = jax.tree_util.tree_map(
+            lambda *xs: jnp.stack(xs, axis=0), *[true_tb_list[i] for i in pad_indices]
+        )
+        c0_b = jax.tree_util.tree_map(
+            lambda *xs: jnp.stack(xs, axis=0), *[cand0_list[i] for i in pad_indices]
+        )
+        pr0_b = jnp.stack([prior0_list[i] for i in pad_indices], axis=0)
+        c1_b = jax.tree_util.tree_map(
+            lambda *xs: jnp.stack(xs, axis=0), *[cand1_list[i] for i in pad_indices]
+        )
+        pr1_b = jnp.stack([prior1_list[i] for i in pad_indices], axis=0)
+        ps_b = jnp.stack([p_seed_list[i] for i in pad_indices], axis=0)
+        ro_res, _, _ = simulate_shell_belief_minimax_games_tpu(
+            pk_b,
+            tb_b,
+            c0_b,
+            pr0_b,
+            c1_b,
+            pr1_b,
+            ps_b,
+            weights=weights,
+            turns=policy_turns,
+            rollout_turns=rollout_turns,
+            rm_sweeps=rm_sweeps,
+            residual_bundle=residual_bundle,
+            followup_turns=followup_turns,
+            bayesian_eq_p0=beq_p0,
+            bayesian_eq_p1=beq_p1,
+        )
+        return np.asarray(ro_res.leaf_values, dtype=np.float32)[:n_actual]
+
+    vals_norm = _run_subset(norm_idx, bayesian_eq_a, bayesian_eq_b)
+    vals_swap = 1.0 - _run_subset(swap_idx, bayesian_eq_b, bayesian_eq_a)
+    pair_means = 0.5 * (vals_norm + vals_swap)  # shape [n_specs * (g_per_spec // 2)]
+    return pair_means.reshape(n_specs, g_per_spec // 2).mean(axis=1).astype(np.float32)
+
+
+def run_unified_nash_and_bake_pipeline_tpu(
+    teams_pool: list[dict],
+    incumbent_nash_weights: dict[str, float] | list[float] | np.ndarray | None = None,
+    *,
+    non_inferiority_waves: tuple[int, ...] = (4, 4, 8),
+    non_inferiority_margin: float = 0.02,
+    nash_wave_games: tuple[int, ...] = (2, 2, 4, 8),
+    early_drop_ucb_threshold: float = 0.495,
+    nash_break_lcb_threshold: float = 0.505,
+    nash_break_mean_tol: float = 0.010,
+    policy_turns: int = 12,
+    policy_rollout_turns: int = 2,
+    policy_followup_turns: int = 24,
+    policy_rm_sweeps: int = 32,
+    max_shell_variants: int = 6,
+    bake_screen_games: int = 2,
+    bake_support_k: int = 3,
+    bake_refine_games: int = 6,
+    bake_screen_turns: int = 40,
+    bake_refine_turns: int = 60,
+    bake_out_dir: str | Path | None = None,
+    z_value: float = 2.326,
+    seed: int = 20260405,
+    weights: EvalWeights | None = None,
+    residual_bundle: ResidualBundle | None = None,
+) -> UnifiedNashPipelineResult:
+    """Execute the 3-stage verification & baking workflow on TPU in a single unified run:
+
+    1. **Gate 1 — Non-Inferiority Election-Call (`新方策 vs 旧方策`)**:
+       Tests the new coupled per-world Bayesian Equilibrium + Depth-1 minimax contraction policy
+       (`bayesian_eq=True`) head-to-head against the legacy world-averaged RM+ policy
+       (`bayesian_eq=False`) across the incumbent Nash support pairs with side-swapped CRN waves.
+       Calls `SUPERIOR_CONFIRMED` if `lcb > 0.50`, `NON_INFERIOR_CONFIRMED` if
+       `lcb >= 0.50 - non_inferiority_margin`, or `INFERIOR_REJECTED` if `ucb < 0.50 - margin`.
+
+    2. **Gate 2 — Sequential Bayesian Election-Call Nash Verification (`選挙当確速報`)**:
+       Evaluates all candidate teams in `teams_pool` against the incumbent Nash mixture across
+       progressive waves (`nash_wave_games`):
+       - **Early Drop (`ELIMINATED_EARLY`)**: Challengers with `ucb < early_drop_ucb_threshold`
+          against the incumbent Nash mixture are immediately dropped so zero TPU budget is wasted
+         on blown-out challengers.
+       - **Close-Challenger Escalation**: Challengers whose credible interval straddles `0.50`
+         receive additional waves plus direct in-battle Bayesian Equilibrium policy verification
+         (`_run_policy_duel_batch_tpu`).
+       - **Keep or Rebuild (`NASH_HELD` / `NASH_REBUILT`)**: If no challenger breaches the
+         incumbent Nash equilibrium, the Nash equilibrium is certified (`NASH_HELD`). If any
+         challenger breaks Nash (`lcb > nash_break_lcb_threshold` or final mean > `0.50 + nash_break_mean_tol`),
+         evaluates the full surviving submatrix (`surviving_challengers U incumbent_support`) and
+         rebuilds the Nash equilibrium on TPU (`NASH_REBUILT`).
+
+    3. **Gate 3 — Team Preview `PairTable` Baking (`選出焼き込み`)**:
+       Bakes `PairTable` (`SPACE_VERSION = 1`) for the verified/rebuilt Nash support against the
+       pool on TPU (refining top support cells with the new Bayesian Equilibrium in-battle policy)
+       and optionally writes `<team_a>__vs__<team_b>.json` + `unified_summary.json` to `bake_out_dir`.
+    """
+    t0 = time.perf_counter()
+    if weights is None:
+        weights = default_eval_weights()
+
+    shared_dex = build_shared_dex_table()
+    n_teams = len(teams_pool)
+    if n_teams == 0:
+        raise ValueError("teams_pool must contain at least 1 team")
+
+    team_ids = [
+        str(t.get("id", f"team_{i}")) if isinstance(t, dict) else f"team_{i}"
+        for i, t in enumerate(teams_pool)
+    ]
+    rosters = [compile_roster6(_extract_team_sets(t)) for t in teams_pool]
+    variant_groups, _ = _build_shell_variant_rosters_map(
+        rosters, teams_pool, max_variants=max_shell_variants
+    )
+
+    # Parse or initialize incumbent Nash weights
+    inc_w = np.zeros((n_teams,), dtype=np.float32)
+    had_explicit_incumbent = incumbent_nash_weights is not None
+    if isinstance(incumbent_nash_weights, dict):
+        for i, tid in enumerate(team_ids):
+            inc_w[i] = float(incumbent_nash_weights.get(tid, 0.0))
+    elif incumbent_nash_weights is not None:
+        arr = np.asarray(incumbent_nash_weights, dtype=np.float32).reshape(-1)
+        inc_w[: min(n_teams, arr.size)] = arr[: min(n_teams, arr.size)]
+
+    if float(np.sum(inc_w)) <= 1e-6:
+        # Default incumbent: uniform over first min(3, n_teams) teams (or seed via quick Wave-0 screen)
+        inc_w[0] = 1.0
+    inc_w /= float(np.sum(inc_w))
+    inc_support_indices = [int(i) for i in np.flatnonzero(inc_w > 1e-3)]
+    inc_nash_ids = [team_ids[i] for i in inc_support_indices]
+
+    # Pick representative legal 3-mon lead/core triples for policy head-to-head duels
+    rep_picks_0based: list[tuple[int, int, int]] = []
+    for r in rosters:
+        leg = [int(x) for x in np.flatnonzero(np.asarray(r.legal_mask_60))]
+        act0 = leg[0] if leg else 0
+        p0 = PREVIEW_ACTIONS_0BASED_NP[act0]
+        rep_picks_0based.append((int(p0[0]), int(p0[1]), int(p0[2])))
+
+    # =====================================================================
+    # Gate 1: Non-Inferiority Election-Call (New Policy vs Legacy Policy)
+    # =====================================================================
+    duel_specs: list[tuple[int, int, tuple[int, int, int], tuple[int, int, int]]] = []
+    for idx_a in inc_support_indices[: min(3, len(inc_support_indices))]:
+        for idx_b in range(min(n_teams, 3)):
+            duel_specs.append((idx_a, idx_b, rep_picks_0based[idx_a], rep_picks_0based[idx_b]))
+    if not duel_specs:
+        duel_specs.append((0, 0, rep_picks_0based[0], rep_picks_0based[0]))
+
+    ni_sum = np.zeros((1,), dtype=np.float64)
+    ni_sq = np.zeros((1,), dtype=np.float64)
+    ni_cnt = np.zeros((1,), dtype=np.int32)
+    ni_waves_used = 0
+    ni_status = "NON_INFERIOR_CONFIRMED"
+    ni_mean = 0.5
+    ni_lcb = 0.5
+    ni_ucb = 0.5
+
+    for w_i, g_wave in enumerate(non_inferiority_waves):
+        g_w = max(2, int(g_wave))
+        if g_w % 2 == 1:
+            g_w += 1
+        ni_waves_used = w_i + 1
+        wave_seed = int(seed) ^ ((w_i + 1) * 0x517CC1B7)
+        spec_scores = _run_policy_duel_batch_tpu(
+            rosters,
+            variant_groups,
+            duel_specs,
+            games_per_spec=g_w,
+            shared_dex=shared_dex,
+            base_seed_int=wave_seed,
+            bayesian_eq_a=True,
+            bayesian_eq_b=False,
+            policy_turns=policy_turns,
+            rollout_turns=policy_rollout_turns,
+            followup_turns=policy_followup_turns,
+            rm_sweeps=policy_rm_sweeps,
+            weights=weights,
+            residual_bundle=residual_bundle,
+        )
+        n_pairs_spec = g_w // 2
+        for sc in spec_scores:
+            val_f = float(sc)
+            ni_sum[0] += val_f * n_pairs_spec
+            ni_sq[0] += (val_f * val_f) * n_pairs_spec
+            ni_cnt[0] += n_pairs_spec
+
+        m_arr, l_arr, u_arr, _ = bayesian_election_call_bounds_np(ni_sum, ni_sq, ni_cnt, z=z_value)
+        ni_mean = float(m_arr[0])
+        ni_lcb = float(l_arr[0])
+        ni_ucb = float(u_arr[0])
+
+        if ni_lcb > 0.50:
+            ni_status = "SUPERIOR_CONFIRMED"
+            break
+        if ni_lcb >= 0.50 - float(non_inferiority_margin):
+            ni_status = "NON_INFERIOR_CONFIRMED"
+            break
+        if ni_ucb < 0.50 - float(non_inferiority_margin):
+            ni_status = "INFERIOR_REJECTED"
+            break
+
+    if ni_status not in ("SUPERIOR_CONFIRMED", "INFERIOR_REJECTED"):
+        if ni_mean >= 0.50 - float(non_inferiority_margin):
+            ni_status = "NON_INFERIOR_CONFIRMED"
+        else:
+            ni_status = "INFERIOR_REJECTED"
+
+    # =====================================================================
+    # Gate 2: Sequential Election-Call Nash Verification & Rebuild
+    # =====================================================================
+    # Track pairwise 6v6 scores M[i, j] for i in 0..N, j in 0..N
+    pair_sum = np.zeros((n_teams, n_teams), dtype=np.float64)
+    pair_sq = np.zeros((n_teams, n_teams), dtype=np.float64)
+    pair_cnt = np.zeros((n_teams, n_teams), dtype=np.int32)
+    for i in range(n_teams):
+        pair_sum[i, i] = 0.5
+        pair_sq[i, i] = 0.25
+        pair_cnt[i, i] = 1
+
+    challenger_active = np.ones((n_teams,), dtype=bool)
+    challenger_statuses = ["INCUMBENT" if inc_w[i] > 1e-3 else "OPEN" for i in range(n_teams)]
+    challenger_means = np.full((n_teams,), 0.5, dtype=np.float32)
+    challenger_lcbs = np.zeros((n_teams,), dtype=np.float32)
+    challenger_ucbs = np.ones((n_teams,), dtype=np.float32)
+    challenger_games = np.zeros((n_teams,), dtype=np.int32)
+
+    nash_broken = not had_explicit_incumbent
+
+    for w_idx, g_wave in enumerate(nash_wave_games):
+        g_w = max(2, int(g_wave))
+        if g_w % 2 == 1:
+            g_w += 1
+        active_rows = [i for i in range(n_teams) if challenger_active[i]]
+        if not active_rows:
+            break
+
+        for i in active_rows:
+            for j in inc_support_indices:
+                if i == j:
+                    continue
+                res_ij = evaluate_6v6_bayesian_election_call_tpu(
+                    rosters[i],
+                    rosters[j],
+                    shared_dex,
+                    wave_games=(g_w,),
+                    turns=bake_screen_turns,
+                    seed=int(seed) ^ ((w_idx + 1) * 0x9E3779B9) ^ (i * 131 + j * 17),
+                    win_threshold=0.55,
+                    loss_threshold=0.45,
+                    z_value=z_value,
+                    weights=weights,
+                    residual_bundle=residual_bundle,
+                )
+                # Blend in-battle Bayesian Equilibrium policy evaluation on the top equilibrium picks
+                top_a_idx = int(res_ij.legal_a[int(np.argmax(res_ij.x_star))])
+                top_b_idx = int(res_ij.legal_b[int(np.argmax(res_ij.y_star))])
+                pa_top = tuple(int(x) for x in PREVIEW_ACTIONS_0BASED_NP[top_a_idx])
+                pb_top = tuple(int(x) for x in PREVIEW_ACTIONS_0BASED_NP[top_b_idx])
+                pol_sc = _run_policy_duel_batch_tpu(
+                    rosters,
+                    variant_groups,
+                    [(i, j, pa_top, pb_top)],  # type: ignore[list-item]
+                    games_per_spec=2,
+                    shared_dex=shared_dex,
+                    base_seed_int=int(seed) ^ ((w_idx + 1) * 0x27D4EB2F) ^ (i * 257 + j * 31),
+                    bayesian_eq_a=True,
+                    bayesian_eq_b=True,
+                    policy_turns=policy_turns,
+                    rollout_turns=policy_rollout_turns,
+                    followup_turns=policy_followup_turns,
+                    rm_sweeps=policy_rm_sweeps,
+                    weights=weights,
+                    residual_bundle=residual_bundle,
+                )
+                blended_val = 0.70 * float(res_ij.value) + 0.30 * float(pol_sc[0])
+                n_eff = max(1, g_w // 2)
+                pair_sum[i, j] += blended_val * n_eff
+                pair_sq[i, j] += (blended_val * blended_val) * n_eff
+                pair_cnt[i, j] += n_eff
+                # Skew-symmetric mirror for (j, i)
+                if j not in active_rows or i not in inc_support_indices:
+                    v_ji = 1.0 - blended_val
+                    pair_sum[j, i] += v_ji * n_eff
+                    pair_sq[j, i] += (v_ji * v_ji) * n_eff
+                    pair_cnt[j, i] += n_eff
+                challenger_games[i] += g_w
+
+        # Compute each team's weighted score and credible interval against incumbent Nash mixture
+        cell_mean, cell_lcb, cell_ucb, _ = bayesian_election_call_bounds_np(
+            pair_sum, pair_sq, pair_cnt, z=z_value
+        )
+        for i in range(n_teams):
+            challenger_means[i] = float(np.dot(cell_mean[i], inc_w))
+            challenger_lcbs[i] = float(np.dot(cell_lcb[i], inc_w))
+            challenger_ucbs[i] = float(np.dot(cell_ucb[i], inc_w))
+
+            if not challenger_active[i]:
+                continue
+            if inc_w[i] > 1e-3:
+                challenger_statuses[i] = "INCUMBENT"
+                continue
+            if challenger_ucbs[i] < float(early_drop_ucb_threshold):
+                challenger_statuses[i] = "ELIMINATED_EARLY"
+                challenger_active[i] = False
+            elif challenger_lcbs[i] > float(nash_break_lcb_threshold):
+                challenger_statuses[i] = "NASH_BREAKER_CALLED"
+                nash_broken = True
+
+        # Stop early if all non-incumbent challengers have been eliminated
+        if all(
+            (not challenger_active[i]) or (inc_w[i] > 1e-3)
+            for i in range(n_teams)
+        ):
+            break
+
+    # Final check on surviving challengers
+    for i in range(n_teams):
+        if inc_w[i] <= 1e-3 and challenger_means[i] > 0.50 + float(nash_break_mean_tol):
+            nash_broken = True
+            if challenger_statuses[i] == "OPEN":
+                challenger_statuses[i] = "NASH_BREAKER_CALLED"
+        elif inc_w[i] <= 1e-3 and challenger_statuses[i] == "OPEN":
+            challenger_statuses[i] = "CONTAINED"
+
+    cell_mean_final, _, _, _ = bayesian_election_call_bounds_np(
+        pair_sum, pair_sq, pair_cnt, z=z_value
+    )
+    # Enforce exact skew-symmetry on evaluated pairs
+    payoff_mat = 0.5 * (cell_mean_final + (1.0 - cell_mean_final.T))
+    np.fill_diagonal(payoff_mat, 0.5)
+
+    if nash_broken and n_teams > 1:
+        # Evaluate remaining unvisited pairs among surviving candidates + incumbent support
+        surviving = sorted(
+            set(inc_support_indices)
+            | {
+                i
+                for i in range(n_teams)
+                if challenger_statuses[i] != "ELIMINATED_EARLY"
+            }
+        )
+        for idx_pos, i in enumerate(surviving):
+            for j in surviving[idx_pos + 1 :]:
+                if pair_cnt[i, j] == 0:
+                    res_ij = evaluate_6v6_bayesian_election_call_tpu(
+                        rosters[i],
+                        rosters[j],
+                        shared_dex,
+                        wave_games=(max(2, nash_wave_games[0]),),
+                        turns=bake_screen_turns,
+                        seed=int(seed) ^ (i * 313 + j * 37),
+                        z_value=z_value,
+                        weights=weights,
+                        residual_bundle=residual_bundle,
+                    )
+                    v_ij = float(res_ij.value)
+                    payoff_mat[i, j] = v_ij
+                    payoff_mat[j, i] = 1.0 - v_ij
+
+        sub_idx = jnp.asarray(surviving, dtype=jnp.int32)
+        sub_mat = jnp.asarray(payoff_mat[np.ix_(surviving, surviving)], dtype=jnp.float32)
+        sol_new = solve_rect_rm_plus_jax(sub_mat, sweeps=1000)
+        final_w = np.zeros((n_teams,), dtype=np.float32)
+        sub_w = np.asarray(sol_new.p_a, dtype=np.float32)
+        for k_i, orig_i in enumerate(surviving):
+            final_w[orig_i] = float(sub_w[k_i])
+        final_w = np.where(final_w >= 1e-3, final_w, 0.0)
+        final_w /= max(float(np.sum(final_w)), 1e-9)
+        nash_status = "NASH_REBUILT"
+    else:
+        final_w = inc_w.copy()
+        nash_status = "NASH_HELD"
+
+    final_support_indices = [int(i) for i in np.flatnonzero(final_w > 1e-3)]
+    final_nash_ids = [team_ids[i] for i in final_support_indices]
+
+    # =====================================================================
+    # Gate 3: Bake Team Preview `PairTable`s for Pool Including Nash Parties
+    # =====================================================================
+    baked_tables: dict[str, dict[str, Any]] = {}
+    out_dir_path = Path(bake_out_dir) if bake_out_dir is not None else None
+    if out_dir_path is not None:
+        out_dir_path.mkdir(parents=True, exist_ok=True)
+
+    for i in final_support_indices:
+        for j in range(n_teams):
+            pair_key = f"{team_ids[i]}__vs__{team_ids[j]}"
+            pair_res = core_nash_6v6_pair_tpu(
+                rosters[i],
+                rosters[j],
+                shared_dex,
+                screen_games=bake_screen_games,
+                support_k=bake_support_k,
+                refine_games=bake_refine_games,
+                screen_turns=bake_screen_turns,
+                refine_turns=bake_refine_turns,
+                seed=int(seed) ^ (i * 997 + j * 101),
+                weights=weights,
+                residual_bundle=residual_bundle,
+            )
+            pt_dict = export_pair_table_dict(
+                pair_res,
+                team_a=team_ids[i],
+                team_b=team_ids[j],
+                screen_games=bake_screen_games,
+                support_k=bake_support_k,
+                refine_games=bake_refine_games,
+                screen_turns=bake_screen_turns,
+                refine_turns=bake_refine_turns,
+                seed=int(seed) ^ (i * 997 + j * 101),
+            )
+            baked_tables[pair_key] = pt_dict
+            if out_dir_path is not None:
+                with (out_dir_path / f"{pair_key}.json").open("w", encoding="utf-8") as f:
+                    json.dump(pt_dict, f, indent=2)
+
+    non_inc_mask = inc_w <= 1e-3
+    max_chal_mean = (
+        float(np.max(challenger_means[non_inc_mask]))
+        if np.any(non_inc_mask)
+        else float(np.max(challenger_means))
+    )
+    max_chal_lcb = (
+        float(np.max(challenger_lcbs[non_inc_mask]))
+        if np.any(non_inc_mask)
+        else float(np.max(challenger_lcbs))
+    )
+    early_dropped = int(sum(1 for s in challenger_statuses if s == "ELIMINATED_EARLY"))
+    elapsed = time.perf_counter() - t0
+
+    if out_dir_path is not None:
+        summary_payload = {
+            "non_inferiority": {
+                "status": ni_status,
+                "mean": round(ni_mean, 6),
+                "lcb": round(ni_lcb, 6),
+                "ucb": round(ni_ucb, 6),
+                "games": int(ni_cnt[0] * 2),
+                "waves": int(ni_waves_used),
+            },
+            "nash_verification": {
+                "status": nash_status,
+                "incumbent_nash_ids": inc_nash_ids,
+                "incumbent_weights": [round(float(x), 6) for x in inc_w.tolist()],
+                "final_nash_ids": final_nash_ids,
+                "final_weights": [round(float(x), 6) for x in final_w.tolist()],
+                "max_challenger_mean": round(max_chal_mean, 6),
+                "max_challenger_lcb": round(max_chal_lcb, 6),
+                "early_dropped_count": early_dropped,
+                "challengers": [
+                    {
+                        "team_id": team_ids[i],
+                        "status": challenger_statuses[i],
+                        "mean": round(float(challenger_means[i]), 6),
+                        "lcb": round(float(challenger_lcbs[i]), 6),
+                        "ucb": round(float(challenger_ucbs[i]), 6),
+                        "games": int(challenger_games[i]),
+                        "incumbent_weight": round(float(inc_w[i]), 6),
+                        "final_weight": round(float(final_w[i]), 6),
+                    }
+                    for i in range(n_teams)
+                ],
+            },
+            "baked_pair_tables": list(baked_tables.keys()),
+            "elapsed_secs": round(elapsed, 4),
+        }
+        with (out_dir_path / "unified_summary.json").open("w", encoding="utf-8") as f:
+            json.dump(summary_payload, f, indent=2)
+
+    return UnifiedNashPipelineResult(
+        non_inferiority_status=ni_status,
+        new_vs_legacy_mean=ni_mean,
+        new_vs_legacy_lcb=ni_lcb,
+        new_vs_legacy_ucb=ni_ucb,
+        new_vs_legacy_games=int(ni_cnt[0] * 2),
+        new_vs_legacy_waves=ni_waves_used,
+        nash_status=nash_status,
+        incumbent_nash_ids=inc_nash_ids,
+        incumbent_nash_weights=inc_w,
+        final_nash_ids=final_nash_ids,
+        final_nash_weights=final_w,
+        challenger_means=challenger_means,
+        challenger_lcbs=challenger_lcbs,
+        challenger_ucbs=challenger_ucbs,
+        challenger_statuses=challenger_statuses,
+        challenger_games=challenger_games,
+        max_challenger_mean=max_chal_mean,
+        max_challenger_lcb=max_chal_lcb,
+        early_dropped_count=early_dropped,
+        payoff_matrix=payoff_mat.astype(np.float32),
+        baked_pair_tables=baked_tables,
+        elapsed_secs=elapsed,
+    )
+
 
