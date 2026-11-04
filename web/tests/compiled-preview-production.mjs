@@ -148,7 +148,7 @@ try {
         servedDataSha256: expected };
     } finally { worker.terminate(); }
   }, { base, expected });
-  assert.equal(result.catalogPairs, 1369); assert.equal(result.sideCases, 2738); assert.deepEqual(errors, []);
+  assert.equal(result.catalogPairs, 1089); assert.equal(result.sideCases, 2178); assert.deepEqual(errors, []);
   const output = process.env.NC2000_PREVIEW_CHECK_OUT || '../data/preview-training-v3/production-verification.json';
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(output, JSON.stringify(result, null, 2) + '\n');

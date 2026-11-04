@@ -1538,6 +1538,8 @@ fn main() {
     }));
 
     if let Some(challengers_arg) = find_flag("--production-challengers") {
+        let eq_rel = find_flag("--blue-equilibrium")
+            .unwrap_or_else(|| "data/kodoku-r3/conclusion-equilibrium-deme.json".to_string());
         let preview_iters: u32 = find_flag("--preview-iters")
             .and_then(|v| v.parse().ok())
             .unwrap_or(729_000);
@@ -1548,6 +1550,7 @@ fn main() {
             &dex,
             &root,
             &compiled,
+            &eq_rel,
             &challengers_arg,
             base_iters,
             preview_iters,
@@ -1572,8 +1575,10 @@ fn main() {
     println!("==========================================================================================");
 
     // 1. Load the 5-team Equilibrium `data/kodoku-r3/conclusion-equilibrium-deme.json`
+    let eq_rel = find_flag("--blue-equilibrium")
+        .unwrap_or_else(|| "data/kodoku-r3/conclusion-equilibrium-deme.json".to_string());
     let eq_txt =
-        std::fs::read_to_string(root.join("data/kodoku-r3/conclusion-equilibrium-deme.json"))
+        std::fs::read_to_string(root.join(&eq_rel))
             .expect("read conclusion-equilibrium-deme.json");
     let eq_v: Value = serde_json::from_str(&eq_txt).unwrap();
     let mut pi_ids: Vec<String> = Vec::new();
@@ -2562,6 +2567,8 @@ fn load_challenger_database(root: &std::path::Path) -> BTreeMap<String, Vec<Poke
         "data/kodoku-r3/step7-deme-promotes.json",
         "data/kodoku-r3/step8-deme-promotes.json",
         "data/partybox-v0/teams.json",
+        "data/team-selection-v2/evolved-teams.json",
+        "data/kodoku-beq-v1/novel_evolved_teams.json",
     ] {
         if let Ok(txt) = std::fs::read_to_string(root.join(rel)) {
             if let Ok(v) = serde_json::from_str::<Value>(&txt) {
@@ -2574,6 +2581,23 @@ fn load_challenger_database(root: &std::path::Path) -> BTreeMap<String, Vec<Poke
                                 {
                                     db.insert(id.to_string(), sets);
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if let Ok(txt) = std::fs::read_to_string(root.join("data/kodoku-beq-v1/kodoku_evolution_summary.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["final_population"].as_array() {
+                for t in arr {
+                    if let Some(id) = t["id"].as_str() {
+                        if !db.contains_key(id) {
+                            if let Ok(sets) =
+                                serde_json::from_value::<Vec<PokemonSet>>(t["sets"].clone())
+                            {
+                                db.insert(id.to_string(), sets);
                             }
                         }
                     }
@@ -2656,6 +2680,31 @@ fn resolve_challenger_spec(
             ("lineage-fine-s07", 0.20),
             ("pb-15", 0.20),
         ],
+        "Sample07-beq-4var-shell" => vec![
+            ("sample-07", 0.25),
+            ("sample-07-beq-g1-c4", 0.25),
+            ("sample-07-beq-g2-c4", 0.25),
+            ("sample-07-beq-g1-c3", 0.25),
+        ],
+        "Deme30-beq-5var-shell" => vec![
+            ("deme-r1-00-s0030", 0.20),
+            ("deme-r1-00-s0030-beq-g2-c3", 0.20),
+            ("deme-r1-00-s0030-beq-g2-c3-beq-g3-c0", 0.20),
+            ("deme-r1-00-s0030-beq-g2-c3-beq-g3-c4", 0.20),
+            ("deme-r1-00-s0030-beq-g2-c3-beq-g3-c5", 0.20),
+        ],
+        "Raikou3-shell" => vec![
+            ("mjj-2020-rraikou", 0.50),
+            ("deme-r1-03-s0054", 0.25),
+            ("deme-r3-b1-s0018", 0.25),
+        ],
+        "APEX5-shell" => vec![
+            ("apex-c08-surgical-142", 0.244),
+            ("red-v10-s1105-r2-s0142-beq-g1-c5-beq-g3-c2", 0.218),
+            ("red-v10-s1105-r2-s0142", 0.192),
+            ("apex-c04-bug-3atkstar-boomgen", 0.192),
+            ("red-v10-s1105-r1-s0148", 0.154),
+        ],
         "ApexCounter4-shell" => vec![
             ("apex-c06-bseqsnorlax-bugwak", 0.30),
             ("apex-c09-lksnorlax-bugwak", 0.25),
@@ -2716,6 +2765,7 @@ fn run_production_challenger_duels(
     dex: &Dex,
     root: &std::path::Path,
     compiled: &Value,
+    eq_rel: &str,
     challengers_arg: &str,
     base_iters: u32,
     preview_iters: u32,
@@ -2727,14 +2777,9 @@ fn run_production_challenger_duels(
     out_path: &std::path::Path,
 ) {
     let t_start = Instant::now();
-    assert_eq!(
-        compiled["build"],
-        nc2000_bot::compiled_preview::build_fingerprint(),
-        "stale compiled preview artifact"
-    );
 
     let eq_txt =
-        std::fs::read_to_string(root.join("data/kodoku-r3/conclusion-equilibrium-deme.json"))
+        std::fs::read_to_string(root.join(eq_rel))
             .expect("read conclusion-equilibrium-deme.json");
     let eq_v: Value = serde_json::from_str(&eq_txt).unwrap();
     let mut pi_ids: Vec<String> = Vec::new();

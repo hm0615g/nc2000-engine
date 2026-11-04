@@ -59,20 +59,20 @@ test('missing evidence and invalid weights fail closed', async () => {
  await assert.rejects(compatible(p));
 });
 
-test('real Tokiwa variant invalidates exactly 66 sample-09 shell keys', async () => {
+test('real Tokiwa variant invalidates exactly 62 sample-09 shell keys', async () => {
  const { createRequire } = await import('node:module');
  const { normalizeTraining } = createRequire(import.meta.url)('../../tools/normalize-training.js');
  const t = read('data/kodoku-r3/majinjima-assassins.json').teams.find(t => t.id === 'mjj-gym-Tokiwa');
  const sets = normalizeTraining(t.sets, dex);
  const p = { teams: prior.teams.filter(team => team.id !== 'mjj-gym-Tokiwa') };
  const valid = await compatible(p);
- assert.equal(count - valid.size, 66);
+ assert.equal(count - valid.size, 62);
  const shell = materialShell(teamMaterial(sets, dex));
  for (const [key, dependencies] of Object.entries(policyShells(artifact.policies, dex)))
   assert.equal(valid.has(key), !dependencies.includes(shell));
 });
 
-test('deployed expansion keeps only catalog-generated types and has 1110 reusable keys', async () => {
+test('deployed expansion keeps only catalog-generated types and has 990 reusable keys', async () => {
  const pool = read('data/belief-pool-v3/belief-pool.json');
  const bakePrior = read('data/belief-pool-v3/bake-prior.json');
  const catalog = read('data/team-pool-v2/team-pool.json');
@@ -81,7 +81,7 @@ test('deployed expansion keeps only catalog-generated types and has 1110 reusabl
   assert.ok(types.has(JSON.stringify(teamMaterial(t.sets, dex))), t.id);
  assert.ok(pool.teams.some(t => t.id === 'mjj-2022-nrsk'));
  assert.ok(pool.teams.some(t => t.id === 'mjj-gym-Tokiwa'));
- assert.equal((await compatible(pool)).size, 1110);
- assert.equal((await compatible(bakePrior)).size, 676);
- assert.equal(pool.teams.length, 415);
+ assert.equal((await compatible(pool)).size, 990);
+ assert.equal((await compatible(bakePrior)).size, 810);
+ assert.equal(pool.teams.length, 411);
 });

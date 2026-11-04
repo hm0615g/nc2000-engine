@@ -18,15 +18,19 @@ engine before converting it to compact rollout state. A regression test checks
 that bench Berserk Gene Tauros keeps its item and has no entry boost/confusion,
 while lead Tauros correctly activates it.
 
-## Boundary repair update
+## Tiered production / rollout bake update (2026-11-04)
 
-The [boundary repair](../blind-boundary-repair-v1/README.md) selectively recomputed
-182 Nash-involving matrices and reused 946 other matrices after checking their
-source/data dependencies and candidate identities. This rebuilt 149 affected
-policy keys; all 841 unrelated keys were preserved. Recomputed choices happened
-to be identical: this rollout bake does not call the repaired live search.
-`partialRebake` records the previous artifact hash and reuse proof. The new
-artifact still covers all 990 keys and carries the current engine identity.
+Following the Bayesian Equilibrium search repair (`849a3545`), the preview bake
+in `crates/bot/examples/meta_eco/catalog_preview.rs` uses a tiered policy across
+all **990 keys** (`33` catalog parties $\times$ `30` public rosters):
+- **Nash-involving keys (`149` keys where at least one side is in the APEX Nash shell)**:
+  Evaluated directly with the production preview search (`LocalPlayer::new` +
+  `ObservedPosition` + `BlindSearch::from_observation`, `729,000` iterations,
+  `c = 0.4`, `prune_preview_aliases`, `Belief` prior over `belief-pool-v3`).
+- **Non-Nash keys (`841` keys where neither side is Nash)**:
+  Evaluated via the `903` non-Nash unordered type-pair rollout matrices
+  (`ns_other = 2`, `250` turns) and prior-conditioned debiased Bayesian RM+
+  (`600` sweeps) with ordinary-party near-optimal diversity (`casual`).
 
 ## Computation and limits
 

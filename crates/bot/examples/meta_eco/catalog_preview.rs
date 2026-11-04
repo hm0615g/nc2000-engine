@@ -5,7 +5,10 @@ use super::{
     shell_pair_crn_seed, solve_debiased_bayesian_shell_preview_nash, transpose_preview_matrix,
     CompiledRoster6, PreviewSig,
 };
-use nc2000_bot::{compiled_preview, preview::MetaPool, Belief, Observer, SplitMix64};
+use nc2000_bot::{
+    compiled_preview, player_state::LocalPlayer, preview::MetaPool, Belief, BlindSearch, Observer,
+    RmConfig, SplitMix64,
+};
 use nc2000_engine::{
     battle::{PokemonSet, SearchChoice},
     dex::{toid, Dex},
@@ -166,6 +169,82 @@ fn evaluate_matrix(
     }
     matrix
 }
+fn evaluate_production_preview(
+    dex: &Dex,
+    pool: &MetaPool,
+    c: &Catalog,
+    opp_sets: &[PokemonSet],
+    preview_iters: u32,
+    prod_seed: u64,
+) -> (Vec<f64>, Vec<f64>, f64) {
+    let b = Battle::from_fixture(dex, "1,2,3,4", &c.sets, opp_sets).unwrap();
+    let (local, observer) = LocalPlayer::new(&b, dex, 0).expect("local player");
+    let mut belief = Belief::new(dex, pool, &observer);
+    let mut rng = SplitMix64::new(prod_seed);
+    let pos = local
+        .position(dex, &mut belief, &observer, &mut rng)
+        .expect("team preview position");
+    let mut search = BlindSearch::from_observation(
+        &pos,
+        dex,
+        RmConfig {
+            c: 0.4,
+            ..Default::default()
+        },
+        0,
+        rng.next(),
+    );
+    search.prune_preview_aliases(dex);
+    let allowed: Vec<bool> = search
+        .actions()
+        .iter()
+        .map(|act| match act {
+            SearchChoice::Team(t) => c
+                .legal
+                .contains(&[t[0] as usize - 1, t[1] as usize - 1, t[2] as usize - 1]),
+            _ => false,
+        })
+        .collect();
+    search.mask_actions(&allowed);
+    search.step(dex, &belief, &observer, preview_iters);
+
+    let visits = search.visits();
+    let means = search.means();
+    let ka = c.legal.len();
+    let mut raw = vec![0.0; ka];
+    let mut ev = vec![0.0; ka];
+    for (ir, triple) in c.legal.iter().enumerate() {
+        let target = SearchChoice::Team([
+            triple[0] as u8 + 1,
+            triple[1] as u8 + 1,
+            triple[2] as u8 + 1,
+        ]);
+        let idx = search
+            .actions()
+            .iter()
+            .position(|a| *a == target)
+            .expect("legal team action in search");
+        raw[ir] = visits[idx] as f64;
+        ev[ir] = means[idx];
+    }
+    let total: f64 = raw.iter().sum();
+    if total > 0.0 {
+        for v in &mut raw {
+            *v /= total;
+        }
+    } else {
+        raw.fill(1.0 / ka as f64);
+    }
+    let game_val: f64 = raw.iter().zip(&ev).map(|(p, v)| p * v).sum();
+    (raw, ev, game_val)
+}
+
+fn prod_preview_seed(seed: u64, own_id: &str, opp_sig: &PreviewSig) -> u64 {
+    let payload = serde_json::to_vec(&json!([seed, "prod-preview-v1", own_id, opp_sig])).unwrap();
+    let digest = Sha256::digest(&payload);
+    u64::from_le_bytes(digest[..8].try_into().unwrap())
+}
+
 struct Type {
     ids: Vec<String>,
     weight: f64,
@@ -323,6 +402,7 @@ pub(super) fn run(args: &[String]) {
             .unwrap();
     let ns_apex: u32 = num(args, "--ns-apex", 3);
     let ns_other: u32 = num(args, "--ns-other", 2);
+    let preview_iters: u32 = num(args, "--preview-iters", 729_000);
     let max_turns: u16 = num(args, "--max-turns", 250);
     let seed: u64 = num(args, "--seed", 2026110301);
     let sweeps: usize = num(args, "--sweeps", 600);
@@ -331,7 +411,7 @@ pub(super) fn run(args: &[String]) {
         "--threads",
         std::thread::available_parallelism().unwrap().get(),
     );
-    assert!(ns_apex > 0 && ns_other > 0 && threads > 0 && sweeps > 0);
+    assert!(ns_apex > 0 && ns_other > 0 && preview_iters > 0 && threads > 0 && sweeps > 0);
     let out =
         PathBuf::from(flag(args, "--out-dir").unwrap_or_else(|| "tmp/prior-preview-v1".into()));
     std::fs::create_dir_all(&out).unwrap();
@@ -455,7 +535,7 @@ pub(super) fn run(args: &[String]) {
         assert_eq!(runtime, planned, "prior mismatch: {}", c.id);
     }
     let inputs = source_inputs();
-    let basis = json!({"format":"prior-preview-basis-v1","inputs":inputs,"seed":seed,"ns_apex":ns_apex,"ns_other":ns_other,"max_turns":max_turns,"sweeps":sweeps});
+    let basis = json!({"format":"prior-preview-basis-v1","inputs":inputs,"seed":seed,"ns_apex":ns_apex,"ns_other":ns_other,"preview_iters":preview_iters,"max_turns":max_turns,"sweeps":sweeps});
     if let Some(source)=&reuse {
         let before:Value=serde_json::from_slice(&std::fs::read(source.join("basis.json")).unwrap()).unwrap();
         for key in ["seed","ns_apex","ns_other","max_turns","sweeps"] {assert_eq!(before[key],basis[key],"changed partial-bake condition {key}");}
@@ -469,15 +549,18 @@ pub(super) fn run(args: &[String]) {
     let mut jobs = vec![];
     for i in 0..types.len() {
         for j in i..types.len() {
-            jobs.push((
-                i,
-                j,
-                if shells[types[i].shell].apex || shells[types[j].shell].apex {
-                    ns_apex
-                } else {
-                    ns_other
-                },
-            ));
+            if shells[types[i].shell].apex || shells[types[j].shell].apex {
+                continue;
+            }
+            jobs.push((i, j, ns_other));
+        }
+    }
+    let mut prod_jobs = vec![];
+    for (c_idx, c) in catalog.iter().enumerate() {
+        for (shell_idx, s) in shells.iter().enumerate() {
+            if c.apex || s.apex {
+                prod_jobs.push((c_idx, shell_idx));
+            }
         }
     }
     let limit: usize = num(args, "--pair-limit", jobs.len());
@@ -485,7 +568,15 @@ pub(super) fn run(args: &[String]) {
     let cursor = AtomicUsize::new(0);
     let done = AtomicUsize::new(0);
     let computed = AtomicUsize::new(0);
-    eprintln!("[prior-preview] {} catalog parties, {} public rosters, {} prior entries / {} distinct types, {} matrices",catalog.len(),shells.len(),types.iter().map(|t|t.ids.len()).sum::<usize>(),types.len(),jobs.len());
+    eprintln!(
+        "[prior-preview] {} catalog parties, {} public rosters, {} prior entries / {} distinct types, {} production Nash keys + {} non-Nash rollout matrices",
+        catalog.len(),
+        shells.len(),
+        types.iter().map(|t| t.ids.len()).sum::<usize>(),
+        types.len(),
+        prod_jobs.len(),
+        jobs.len()
+    );
     let matrices = std::thread::scope(|scope| {
         let handles:Vec<_>=(0..threads).map(|_|scope.spawn(||{let mut results=vec![];
             loop{let k=cursor.fetch_add(1,Ordering::Relaxed);if k>=run_jobs.len(){break}let (i,j,ns)=run_jobs[k];
@@ -506,7 +597,7 @@ pub(super) fn run(args: &[String]) {
                     if i==j{let n=types[i].roster.legal.len();for a in 0..n {mat[a*n+a]=0.5;for b in a+1..n{let v=0.5*(mat[a*n+b]+1.0-mat[b*n+a]);mat[a*n+b]=v;mat[b*n+a]=1.0-v;}}}
                     write(&path,&json!({"job":expected,"matrix":mat}));computed.fetch_add(1,Ordering::Relaxed);mat};
                 let n=done.fetch_add(1,Ordering::Relaxed)+1;
-                if n%8==0||n==run_jobs.len(){eprintln!("[prior-preview] {n}/{} matrices, {} new, {:.1}s",run_jobs.len(),computed.load(Ordering::Relaxed),started.elapsed().as_secs_f64());}
+                if n%8==0||n==run_jobs.len(){eprintln!("[prior-preview] {n}/{} non-Nash matrices, {} new, {:.1}s",run_jobs.len(),computed.load(Ordering::Relaxed),started.elapsed().as_secs_f64());}
                 results.push(((i,j),mat,ns));
             }results})).collect();
         handles
@@ -533,6 +624,9 @@ pub(super) fn run(args: &[String]) {
         for v in u..shells.len() {
             let a = &shells[u];
             let b = &shells[v];
+            if a.apex || b.apex {
+                continue;
+            }
             if reuse.is_some() && !a.apex && !b.apex { continue; }
 
             let ar: Vec<_> = a.types.iter().map(|&i| &types[i].roster).collect();
@@ -568,12 +662,93 @@ pub(super) fn run(args: &[String]) {
         }
     }
     eprintln!(
-        "[prior-preview] Bayesian solve complete, {:.1}s",
+        "[prior-preview] Non-Nash Bayesian rollout solve complete, {:.1}s",
         started.elapsed().as_secs_f64()
     );
+    let prod_cursor = AtomicUsize::new(0);
+    let prod_done = AtomicUsize::new(0);
+    let prod_computed = AtomicUsize::new(0);
+    let prod_results = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..threads)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut out_rows = vec![];
+                    loop {
+                        let k = prod_cursor.fetch_add(1, Ordering::Relaxed);
+                        if k >= prod_jobs.len() {
+                            break;
+                        }
+                        let (c_idx, shell_idx) = prod_jobs[k];
+                        let c = &catalog[c_idx];
+                        let s = &shells[shell_idx];
+                        let rep_d = catalog
+                            .iter()
+                            .position(|d| d.shell == shell_idx)
+                            .expect("shell representative");
+                        let prod_seed = prod_preview_seed(seed, &c.id, &s.sig);
+                        let path = cache.join(format!("prod-{c_idx:02}-{shell_idx:02}.json"));
+                        let expected = json!({
+                            "basis": basis_hash,
+                            "c_idx": c_idx,
+                            "shell_idx": shell_idx,
+                            "own_id": c.id,
+                            "opp_sig": s.sig,
+                            "preview_iters": preview_iters,
+                            "prod_seed": prod_seed,
+                        });
+                        let (raw, ev, game_val): (Vec<f64>, Vec<f64>, f64) = if path.is_file() {
+                            let row: Value =
+                                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+                            assert_eq!(row["job"], expected);
+                            (
+                                serde_json::from_value(row["raw"].clone()).unwrap(),
+                                serde_json::from_value(row["ev"].clone()).unwrap(),
+                                row["game_val"].as_f64().unwrap(),
+                            )
+                        } else {
+                            let (raw, ev, game_val) = evaluate_production_preview(
+                                &dex,
+                                &pool,
+                                c,
+                                &catalog[rep_d].sets,
+                                preview_iters,
+                                prod_seed,
+                            );
+                            write(
+                                &path,
+                                &json!({
+                                    "job": expected,
+                                    "raw": raw,
+                                    "ev": ev,
+                                    "game_val": game_val,
+                                }),
+                            );
+                            prod_computed.fetch_add(1, Ordering::Relaxed);
+                            (raw, ev, game_val)
+                        };
+                        let n = prod_done.fetch_add(1, Ordering::Relaxed) + 1;
+                        if n % 4 == 0 || n == prod_jobs.len() {
+                            eprintln!(
+                                "[prior-preview] {n}/{} production Nash preview searches, {} new, {:.1}s",
+                                prod_jobs.len(),
+                                prod_computed.load(Ordering::Relaxed),
+                                started.elapsed().as_secs_f64()
+                            );
+                        }
+                        out_rows.push(((c_idx, shell_idx), (raw, ev, game_val)));
+                    }
+                    out_rows
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap())
+            .collect::<BTreeMap<_, _>>()
+    });
     let mut policies = serde_json::Map::new();
     let mut preview_policies = serde_json::Map::new();
-    for c in &catalog {
+    for (c_idx, c) in catalog.iter().enumerate() {
         let mut vs = serde_json::Map::new();
         for d in &catalog {
             let s = &shells[d.shell];
@@ -587,26 +762,31 @@ pub(super) fn run(args: &[String]) {
                 policies.insert(key,old.clone());vs.insert(d.id.clone(),row.clone());
                 continue;
             }
-            let ka = types[c.ty].roster.legal.len();
-            let mut expected = vec![0.0; ka];
-            for (k, &j) in s.types.iter().enumerate() {
-                let opponent = &solutions[&(j, c.shell)];
-                let kb = opponent.len();
-                let mat = &mats[&(c.ty, j)].0;
-                for ia in 0..ka {
-                    expected[ia] += s.weights[k]
-                        * (0..kb)
-                            .map(|ib| mat[ia * kb + ib] * opponent[ib])
-                            .sum::<f64>();
+            let (raw, ev, game_val) = if c.apex || s.apex {
+                prod_results[&(c_idx, d.shell)].clone()
+            } else {
+                let ka = types[c.ty].roster.legal.len();
+                let mut expected = vec![0.0; ka];
+                for (k, &j) in s.types.iter().enumerate() {
+                    let opponent = &solutions[&(j, c.shell)];
+                    let kb = opponent.len();
+                    let mat = &mats[&(c.ty, j)].0;
+                    for ia in 0..ka {
+                        expected[ia] += s.weights[k]
+                            * (0..kb)
+                                .map(|ib| mat[ia * kb + ib] * opponent[ib])
+                                .sum::<f64>();
+                    }
                 }
-            }
-            let can = &solutions[&(c.ty, d.shell)];
-            let mut raw = vec![0.0; ka];
-            let mut ev = vec![0.0; ka];
-            for (ia, &ir) in c.canonical_to_raw.iter().enumerate() {
-                raw[ir] = can[ia];
-                ev[ir] = expected[ia];
-            }
+                let can = &solutions[&(c.ty, d.shell)];
+                let mut raw = vec![0.0; ka];
+                let mut ev = vec![0.0; ka];
+                for (ia, &ir) in c.canonical_to_raw.iter().enumerate() {
+                    raw[ir] = can[ia];
+                    ev[ir] = expected[ia];
+                }
+                (raw, ev, values[&(c.ty, d.shell)])
+            };
             let final_policy = if c.apex {
                 raw.clone()
             } else {
@@ -618,30 +798,44 @@ pub(super) fn run(args: &[String]) {
             if let Some(old) = policies.insert(key, json!(choices)) {
                 assert_eq!(old, json!(choices), "hidden opponent set affected policy");
             }
-            vs.insert(d.id.clone(),json!({"priorTypeCount":s.types.len(),"priorEntries":s.types.iter().flat_map(|&i|types[i].ids.clone()).collect::<Vec<_>>(),"policy":final_policy,"bayesianPolicy":raw,"expectedPayoffByAction":ev,"quantizedChoices":choices,"rolloutGameValue":values[&(c.ty,d.shell)]}));
+            vs.insert(
+                d.id.clone(),
+                json!({
+                    "priorTypeCount": s.types.len(),
+                    "priorEntries": s.types.iter().flat_map(|&i| types[i].ids.clone()).collect::<Vec<_>>(),
+                    "policy": final_policy,
+                    "bayesianPolicy": raw,
+                    "expectedPayoffByAction": ev,
+                    "quantizedChoices": choices,
+                    "rolloutGameValue": game_val,
+                    "searchTier": if c.apex || s.apex { "production-729k" } else { "rollout-approximation" },
+                }),
+            );
         }
         preview_policies.insert(c.id.clone(), Value::Object(vs));
     }
     assert_eq!(policies.len(), catalog.len() * shells.len());
-    let method="Native engine team-preview initialization followed by compact rollout full legal matrices; prior-conditioned Bayesian RM+ with subteam pooling and finite-sample shrinkage. Exact trained sets retained; approximation, not a full-game equilibrium certificate.";
-    let regenerated=jobs.iter().filter(|&&(i,j,_)|reuse.is_none() || shells[types[i].shell].apex || shells[types[j].shell].apex).count();
+    let method="Tiered preview bake: production BlindSearch::from_observation (729,000 iterations, c=0.4, LocalPlayer public-only boundary, Belief prior over belief-pool-v3) when at least one side is Nash (149 keys); native-engine team-preview initialization followed by compact rollout matrices and prior-conditioned Bayesian RM+ with finite-sample shrinkage otherwise (841 keys).";
+    let regenerated=prod_jobs.len() + jobs.iter().filter(|&&(i,j,_)|reuse.is_none() || shells[types[i].shell].apex || shells[types[j].shell].apex).count();
     let partial= reuse_proof.map(|proof|json!({"proof":proof,"regeneratedMatrices":regenerated,
-        "reusedMatrices":jobs.len()-regenerated,"nashTeams":catalog.iter().filter(|c|c.apex).map(|c|c.id.clone()).collect::<Vec<_>>()}));
+        "reusedMatrices":jobs.len(),"nashTeams":catalog.iter().filter(|c|c.apex).map(|c|c.id.clone()).collect::<Vec<_>>()}));
     let artifact = json!({"format":"nc2000-compiled-preview-v1","build":compiled_preview::build_fingerprint(),"c":0.4,
         "priorSha256":file_sha("data/belief-pool-v3/belief-pool.json"),"dexSha256":file_sha("data/gen2stadium2.json"),
-        "matchups":policies.len(),"iterations":0,"method":method,"inputs":inputs,"jobsSha256":basis_hash,"partialRebake":partial,
-        "computation":{"initialization":"native-engine-team-preview","seed":seed,"rolloutSeedsApex":ns_apex,"rolloutSeedsOther":ns_other,"maxTurns":max_turns,"solverSweeps":sweeps,"matrices":jobs.len(),"priorEntries":types.iter().map(|t|t.ids.len()).sum::<usize>(),"priorTypes":types.len()},"policies":policies});
+        "matchups":policies.len(),"iterations":preview_iters,"method":method,"inputs":inputs,"jobsSha256":basis_hash,"partialRebake":partial,
+        "computation":{"initialization":"native-engine-team-preview","seed":seed,"previewItersApex":preview_iters,"productionKeys":prod_jobs.len(),"rolloutApproximationKeys":policies.len()-prod_jobs.len(),"rolloutSeedsApex":ns_apex,"rolloutSeedsOther":ns_other,"maxTurns":max_turns,"solverSweeps":sweeps,"matrices":jobs.len(),"priorEntries":types.iter().map(|t|t.ids.len()).sum::<usize>(),"priorTypes":types.len()},"policies":policies});
     let matrix = json!({"version":"training-v3-prior-preview-v1","method":method,"numTeams":catalog.len(),"numShells":shells.len(),
         "inputs":inputs,"basisSha256":basis_hash,"teamIds":catalog.iter().map(|c|c.id.clone()).collect::<Vec<_>>(),"previewPolicies":preview_policies});
     write(&out.join("compiled-preview-v1.json"), &artifact);
     write(&out.join("preview-nash-matrix.json"), &matrix);
     write(
         &out.join("manifest.json"),
-        &json!({"basisSha256":basis_hash,"matrices":jobs.len(),"catalogParties":catalog.len(),"publicRosters":shells.len(),"priorTypes":types.len(),"partialRebake":partial,"elapsedSeconds":started.elapsed().as_secs_f64(),"artifactSha256":file_sha(out.join("compiled-preview-v1.json").to_str().unwrap())}),
+        &json!({"basisSha256":basis_hash,"productionKeys":prod_jobs.len(),"rolloutApproximationKeys":policies.len()-prod_jobs.len(),"matrices":jobs.len(),"catalogParties":catalog.len(),"publicRosters":shells.len(),"priorTypes":types.len(),"partialRebake":partial,"elapsedSeconds":started.elapsed().as_secs_f64(),"artifactSha256":file_sha(out.join("compiled-preview-v1.json").to_str().unwrap())}),
     );
     eprintln!(
-        "[prior-preview] wrote {} complete policies to {} in {:.1}s",
+        "[prior-preview] wrote {} complete policies ({} production + {} rollout) to {} in {:.1}s",
         policies.len(),
+        prod_jobs.len(),
+        policies.len() - prod_jobs.len(),
         out.display(),
         started.elapsed().as_secs_f64()
     );

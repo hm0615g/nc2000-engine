@@ -20,10 +20,10 @@
   "fingerprint": "fnv1a64:957b746a94b97708"
  },
  "drawRule": "each variant cluster among the selected parties carries equal mass, split equally among its members",
- "size": 37,
+ "size": 33,
  "sizeTarget": [
   15,
-  40
+  35
  ],
  "V": [
   0.60123510835728,
@@ -1715,34 +1715,6 @@
    "score": 0.317499,
    "se": 0.008,
    "stage": "partybox-v0-gauntlet"
-  },
-  "sample-07-beq-g1-c4": {
-   "stage": "kodoku-beq-v1-nash",
-   "score": 0.69214,
-   "se": 0,
-   "games": 64,
-   "label": "selected"
-  },
-  "sample-07-beq-g2-c4": {
-   "stage": "kodoku-beq-v1-nash",
-   "score": 0.690275,
-   "se": 0,
-   "games": 64,
-   "label": "selected"
-  },
-  "sample-07-beq-g1-c3": {
-   "stage": "kodoku-beq-v1-nash",
-   "score": 0.685048,
-   "se": 0,
-   "games": 64,
-   "label": "selected"
-  },
-  "red-v10-s1105-r2-s0142-beq-g1-c5-beq-g3-c2": {
-   "stage": "kodoku-beq-v1-nash",
-   "score": 0.641476,
-   "se": 0,
-   "games": 64,
-   "label": "selected"
   }
  }
 }

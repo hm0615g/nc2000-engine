@@ -1,8 +1,8 @@
 {
   "inputs": {
-    "data/team-pool-v2/team-pool.json": "bb5cf026aed627a5be018ae6f94c67a5aab2d2320b0b309dca863100046eb47d",
-    "data/belief-pool-v3/belief-pool.json": "0a40df2bff54e0caa5cb1e157100186ccf01cd5dcf6207f642cbc47e2358ba7d",
-    "data/kodoku-r3/conclusion-equilibrium-deme.json": "d491186822d03ba6fd50ee7550db3943beb0ad316be8897b1319a76dfa5972bd",
+    "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
+    "data/belief-pool-v3/belief-pool.json": "71f34e0568a39c1ff3b44c1300dee79b79d58dbc1593cb161118e998e2cf7800",
+    "data/kodoku-r3/conclusion-equilibrium-deme.json": "cf1c8574064cb2d64363cc8187c5fc0a40e6161f5e73e0d7e9be01bcb48234ef",
     "data/kodoku-r3/conclusion-equilibrium-r1.json": "b5edd0166014004d3df43ed29ef16437cfea6ece2a7792b19b0ebb140e7cdb82",
     "data/meta-nash-v3/pool-artifact.json": "09cb88e174432e728887a2c65a1cf230d248d000579556b9dce3d300d0ac6720",
     "data/training-v3/supplemental.json": "c004789a0203fccc24b6a32e9970e0f9ab01142c6440ddadcdc5a29811dfd18c",
@@ -14,10 +14,10 @@
     "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
     "data/learnsets-gen2.json": "8f288150ce10b2698c2100381c3daed6a3a56389bb4fe7169cf3b54407d0d0c4"
   },
-  "checked_sets": 3264,
+  "checked_sets": 3174,
   "unique_adversarial_classes": 575,
   "dv_tuples_per_class": 65536,
-  "catalog_teams_with_exact_prior_support": 37,
+  "catalog_teams_with_exact_prior_support": 33,
   "excluded_sets": 47,
   "excluded_fallback_rentals": [
     "rental-cban-16",

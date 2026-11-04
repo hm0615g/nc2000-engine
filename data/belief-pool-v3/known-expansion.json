@@ -2,16 +2,16 @@
   "baseline": "data/belief-pool-v3/bake-prior.json",
   "inputs": {
     "data/belief-pool-v3/bake-prior.json": "1c0a1d544be667282ed94f891f7fd1d533c324fd7c18c85d530a1cd9d47da6d5",
-    "data/team-pool-v2/team-pool.json": "bb5cf026aed627a5be018ae6f94c67a5aab2d2320b0b309dca863100046eb47d",
+    "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
     "data/team-inventory-v1/inventory.json": "4f70792e967bdce605d5c5a172d02c79e808fcf07e754b0ddc5101999b6b95d8",
     "data/partybox-v0/teams.json": "99b8c916fe68368f604d045202b044fcb3b46956bda7dd9ef10e3a4f3031e0a0",
     "data/kodoku-r3/majinjima-assassins.json": "0a49a39f48a07d6d0820cc36c7ff1231ffdbc1ba742ceb54fdf37361624f4fc5",
     "data/community-rentals-v0/teams.json": "d081ac265f64370fd4a6790cf0eb54c806e8b7bf5ec789c37f9409254f1b50dd",
     "data/training-v3/supplemental.json": "c004789a0203fccc24b6a32e9970e0f9ab01142c6440ddadcdc5a29811dfd18c"
   },
-  "parties": 415,
+  "parties": 411,
   "human": 402,
-  "generated": 13,
+  "generated": 9,
   "removedGenerated": [
     "nb-sample-12-0",
     "lineage-gb-nash-s07",
@@ -40,30 +40,6 @@
     "sib-r1-n4-red-v6-r1-s0064-s07"
   ],
   "additions": [
-    {
-      "id": "sample-07-beq-g1-c4",
-      "source": "data/team-pool-v2/team-pool.json",
-      "weight": 0.25,
-      "shell": "[[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"marowak\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"tauros\",55,\"M\",true],[\"zapdos\",55,\"N\",true]]"
-    },
-    {
-      "id": "sample-07-beq-g2-c4",
-      "source": "data/team-pool-v2/team-pool.json",
-      "weight": 0.25,
-      "shell": "[[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"marowak\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"tauros\",55,\"M\",true],[\"zapdos\",55,\"N\",true]]"
-    },
-    {
-      "id": "sample-07-beq-g1-c3",
-      "source": "data/team-pool-v2/team-pool.json",
-      "weight": 0.25,
-      "shell": "[[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"marowak\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"tauros\",55,\"M\",true],[\"zapdos\",55,\"N\",true]]"
-    },
-    {
-      "id": "red-v10-s1105-r2-s0142-beq-g1-c5-beq-g3-c2",
-      "source": "data/team-pool-v2/team-pool.json",
-      "weight": 0.25,
-      "shell": "[[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"heracross\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true]]"
-    },
     {
       "id": "rental-cban-1",
       "source": "data/team-inventory-v1/inventory.json",
@@ -3406,8 +3382,8 @@
     }
   ],
   "preview": {
-    "total": 1110,
-    "retained": 1110,
+    "total": 990,
+    "retained": 990,
     "invalidated": 0
   }
 }

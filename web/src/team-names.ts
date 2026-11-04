@@ -15,10 +15,6 @@ export const CATALOG_TEAM_NAMES: Record<string, TeamNameEntry> = {
     ja: "雨パル・地震ヘラ55カビ",
     en: "Rain Cloyster · EQ Heracross 55 Snorlax",
   },
-  "red-v10-s1105-r2-s0142-beq-g1-c5-beq-g3-c2": {
-    ja: "雨パル・起死回生ヘラ・文字ガラ55カビ",
-    en: "Rain Cloyster · Reversal Heracross 55 Snorlax",
-  },
   "apex-c04-bug-3atkstar-boomgen": {
     ja: "爆破パル・爆破ゲン・波乗りスタ55カビ",
     en: "Explosion Cloyster · Boom Gengar 55 Snorlax",
@@ -26,18 +22,6 @@ export const CATALOG_TEAM_NAMES: Record<string, TeamNameEntry> = {
   "red-v10-s1105-r1-s0148": {
     ja: "爆破パル・めざ闘ヘラ55カビ",
     en: "Explosion Cloyster · HP-Fight 55 Snorlax",
-  },
-  "sample-07-beq-g1-c4": {
-    ja: "波乗り鈍いパル・眠る55サンダーケンタ",
-    en: "Surf/Curse Cloyster · Rest 55 Zapdos Tauros",
-  },
-  "sample-07-beq-g2-c4": {
-    ja: "爆破パル・リボン自爆カビ・55サンダーケンタ",
-    en: "Explosion Cloyster · Pink Bow Snorlax 55 Zapdos",
-  },
-  "sample-07-beq-g1-c3": {
-    ja: "こご風ケンタ・爆破パル・眠る55サンダー",
-    en: "Icy Wind Tauros · Explosion Cloyster 55 Zapdos",
   },
   "sample-08": {
     ja: "サンダータンク (爆破ナッシー / Sample 08)",

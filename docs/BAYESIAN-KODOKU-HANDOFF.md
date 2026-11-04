@@ -11,32 +11,36 @@
    - [`tpu/src/gen2_tpu/kodoku.py`](../tpu/src/gen2_tpu/kodoku.py):
      - Implemented `solve_bayesian_equilibrium_jax`, updated `select_shell_belief_minimax_action_jax` with per-world opponent legal masking and Depth-1 contraction (`0.75 * ro.leaf_values + 0.25 * v_leaf`), and cached compiled batch execution in `_get_jit_shell_belief_minimax_batch_fn`.
      - Implemented `run_unified_nash_and_bake_pipeline_tpu` (`gen2-tpu nash-pipeline`) and ran it on Colab TPU `v6e1` (`data/tpu-nash-bake-v1/unified_summary.json`).
-   - **Key Findings on Existing `team-pool-v2`**:
-     - Against the pure "勝手読み" baseline (`opponent_uniform_row_mean_pure_argmax_katteyomi`), the coupled Bayesian Equilibrium policy won `72.22%` (`36` games); against the previous world-averaged RM+ / 81k bot (`data/dominance-audit-v13-verified/omniscient-audit-prod81k.json`), the true strength gain is `+4.2% ~ +5.6%` (`WR 54.2% ~ 55.6%`).
-     - Testing `vc-kodoku-nash-a` as a 100% single-shell incumbent re-confirmed the 3-shell equilibrium (`vc-kodoku-nash-a` `50.4%`, `mjj-2010-garap-a` `31.5%`, `sample-08` `18.1%`, game value `0.5000`), while reducing `mjj-2010-garap-a`'s win rate vs `vc-kodoku-nash-a` from `62.08%` (old policy) down to `57.19%`.
 
 ---
 
-## 2. Completed Follow-Up Tasks (Tasks A & B)
+## 2. Methodological Audit & Production Pipeline Alignment (`1. nash計算 -> 2. パーティプール適正化 -> 3. 焼き込み`)
 
-### Task A: Evolve Parties (Kodoku) Under the New Bayesian Equilibrium Policy on TPU (`DONE`)
-1. **Two-Stage Bayesian Equilibrium Kodoku Evaluator & Evolutionary Loop ([`tpu/src/gen2_tpu/kodoku.py`](../tpu/src/gen2_tpu/kodoku.py), [`tpu/src/gen2_tpu/__init__.py`](../tpu/src/gen2_tpu/__init__.py))**:
-   - Implemented `normalize_training_set` / `normalize_training_team` matching [`tools/normalize-training.js`](../tools/normalize-training.js) (`training-v3` DV/EV/happiness/gender/shiny/Hidden Power rules) and legal Gen 2 learnset mutation (`mutate_team_for_kodoku`, `load_learnsets`) with Item Clause, Species Clause, `Sleep Talk`+`Rest` co-requirement, and `preserve_shell` support.
-   - Implemented `evaluate_population_tpu` (`KodokuPopulationEvaluation`) and `run_kodoku_tpu` (`KodokuEvolutionResult`, CLI: `gen2-tpu kodoku-evolve`):
-     - **Stage 1**: Fast `evaluate_kodoku_gauntlet_tpu` + Bayesian election-call screen (`evaluate_shell_election_call_matrix_tpu`) to prune clearly weak mutations.
-     - **Stage 2**: Coupled Bayesian Equilibrium blind search evaluation (`_run_policy_duel_batch_tpu` calling `simulate_shell_belief_minimax_games_tpu` with `bayesian_eq_a=True, bayesian_eq_b=True`) for top contenders, blended into the population payoff matrix and solved via `solve_coupled_shell_equilibrium_tpu` with `detect_hitchhiker_slots`.
-2. **Full-Horizon Multi-Deme Evolution & 3-Gate Nash Pipeline ([`data/kodoku-beq-v1/`](../data/kodoku-beq-v1/))**:
-   - Ran 3-generation Multi-Deme / Challenger evolution (`screen_turns=40, refine_turns=60, policy_turns=2, policy_followup_turns=36`) seeded with the 4 `vc-kodoku-nash-a` variants, `mjj-2010-garap-a`, `sample-08`, and top challengers (`data/kodoku-beq-v1/kodoku_evolution_summary.json`, `data/kodoku-beq-v1/unified_summary.json`, plus 48 baked `PairTable` JSONs).
-   - Gate 1 (`NON_INFERIOR_CONFIRMED`): `mean = 0.513889` (`72` CRN games across 2 waves).
-   - Gate 2: Re-confirmed the 3 equilibrium shells at full 40/60-turn horizon (`sample-08` shell via `sample-08-beq-g1-c2`, `vc-kodoku-nash-a` shell via `apex-c04-bug-3atkstar-boomgen`, and `mjj-2010-garap-a` shell).
-   - Kept the deployed 33-party catalog (`data/team-pool-v2/team-pool.json`) and 411-party prior (`data/belief-pool-v3/belief-pool.json`) frozen so all `training-v3` exhaustive adversarial certificates (`data/training-v3/verification.json`) remain intact.
+Following the 5 methodological questions, the entire post-Kodoku pipeline was re-executed in strict dependency order under production rules:
 
-### Task B: Full Production Preview Rebake (`data/compiled-preview-v1.json`) (`DONE`)
-1. **Full Scratch Rebake Against the 411-Party Deployed Prior**:
-   - Rebuilt [`crates/wasm/pkg-web`](../crates/wasm/pkg-web) and [`crates/wasm/pkg-node`](../crates/wasm/pkg-node) for the updated Rust search (`849a3545`).
-   - Ran `cargo run --release -p nc2000-bot --example meta_eco -- bake-prior-preview` (`1,081` unordered type-pair matrices across `48` prior entries / `46` distinct types in `30` public rosters, solving all `990` policies) and activated via [`tools/activate-preview-bake.py`](../tools/activate-preview-bake.py) and [`tools/build-training-products.js`](../tools/build-training-products.js).
-   - Refreshed [`data/compiled-preview-v1.json`](../data/compiled-preview-v1.json), [`data/team-pool-v2/preview-nash-matrix.json`](../data/team-pool-v2/preview-nash-matrix.json), [`data/preview-training-v3/basis.json`](../data/preview-training-v3/basis.json), [`data/preview-training-v3/bake-manifest.json`](../data/preview-training-v3/bake-manifest.json), and [`data/belief-pool-v3/known-expansion.json`](../data/belief-pool-v3/known-expansion.json).
-2. **Production & Coverage Verification**:
-   - All `990 / 990` policies (`33` own parties $\times$ `30` public rosters) are now prior-compatible (`invalidated: 0`) with the deployed 411-party `data/belief-pool-v3/belief-pool.json` (`71f34e05...`), and all source `inputs` SHA256 hashes (`blind.rs`, `root_policy.rs`, `smmcts.rs`) and `build` fingerprint (`fnv1a64:3912b518cf820a3a:m17e-solver-build-v3`) match current HEAD.
-   - `npm run test:preview-production` ([`data/preview-training-v3/production-verification.json`](../data/preview-training-v3/production-verification.json)): `2,178 / 2,178` side cases served from `table` (`0` live fallbacks), median lookup `8.0 ms` (`p95 = 9.0 ms`), round-trip `p95 = 30.8 ms`.
-   - `node tests/compiled-preview-coverage.mjs` ([`data/preview-training-v3/compiled-coverage.json`](../data/preview-training-v3/compiled-coverage.json)): `1,089` matchups, `990` unique keys (`990` valid, `0` invalid), `69,696` slot checks all legal.
+### Step 1: Production Nash Calculation (`nash計算`) — Multi-Variant Camouflaged Shells at `81k / 729k`
+- **Evaluator**: [`crates/bot/examples/omniscient_audit.rs`](../crates/bot/examples/omniscient_audit.rs) running full production settings (`ProtocolAgent` + `PlayerChannel`, `c = 0.4`, `iters = 81,000` per turn, `preview_iters = 729,000` at team preview, `max_turns = 250`, Known-Pool disclosed priors, Bayesian equilibrium root solver + $K = 48$ systematic world resampling + Depth-1 minimax contraction).
+- **Incumbent**: `APEX4` (`vc-kodoku-nash-a` 4-variant mixture: `apex-c08-surgical-142` `.30`, `red-v10-s1105-r2-s0142` `.25`, `apex-c04-bug-3atkstar-boomgen` `.25`, `red-v10-s1105-r1-s0148` `.20`).
+- **Multi-Variant Camouflaged Challenger Shell Results** ([`data/kodoku-beq-v1/production-nash-verification.json`](../data/kodoku-beq-v1/production-nash-verification.json)):
+  - `Sample07-beq-4var-shell` (`vc02` 4v: `sample-07`, `sample-07-beq-g1-c3`, `sample-07-beq-g1-c4`, `sample-07-beq-g2-c4`): **53.12%** ($\pm 4.29\%$ SE, 95% CI `[44.71%, 61.54%]`, $z = +0.73$, 68W-60L-0T across `64` paired blocks = **128 games**). Does not statistically exceed 50%.
+  - `Police3-shell` (`vc06` 3v: `sample-08`, `hc75-3rd-bean`, `rental-cban-6`): **45.83%** ($\pm 7.92\%$ SE, $z = -0.53$, 22W-26L-0T across `24` pairs = **48 games**).
+  - `Raikou3-shell` (`vc16` 3v: `mjj-2020-rraikou`, `deme-r1-03-s0054`, `deme-r3-b1-s0018`): **43.75%** ($\pm 5.48\%$ SE, $z = -1.14$, 21W-27L-0T across `24` pairs = **48 games**).
+  - `APEX5-shell` (`vc-kodoku-nash-a` 5v adding `red-v10-s1105-r2-s0142-beq-g1-c5-beq-g3-c2`): **41.67%** ($\pm 7.77\%$ SE, $z = -1.07$, 20W-28L-0T across `24` pairs = **48 games**; the TPU-mutated 5th variant dropped Swords Dance on Marowak for double Fire moves, weakening the shell).
+  - `mjj-2022-nrsk` (1v): **50.00%** ($\pm 13.36\%$ SE, $z = 0.00$, 8W-8L-0T across `8` pairs = **16 games**; historical 64g: `40.62%`).
+  - `Sample12-5var-shell` (`vc11` 5v): **43.75%** ($\pm 14.75\%$ SE, $z = -0.42$, 7W-9L-0T across `8` pairs = **16 games**; historical 64g: `35.94%`).
+  - `Garap2-shell` (`vc15` 2v: `mjj-2010-garap-a`, `sib-r2-n3-mjj-2010-garap-a-s06`): **37.50%** ($\pm 12.50\%$ SE, $z = -1.00$, 6W-10L-0T across `8` pairs = **16 games**; early-stopped `< 40%`, historical 64g: `39.06%`).
+  - `Deme30-beq-5var-shell` (`vc-kodoku-evo-ttar-raikou` 5v): **31.25%** ($\pm 13.15\%$ SE, $z = -1.43$, 5W-11L-0T across `8` pairs = **16 games**; early-stopped `< 40%`).
+- **Conclusion**: Under full production search settings (`81k / 729k`) and multi-variant camouflage, the 3-shell convergence observed under the TPU short-horizon proxy (`policy_turns=2, followup=36`) was an artifact of the proxy horizon. No multi-variant camouflaged challenger shell statistically beats `APEX4`, confirming the 1-shell 4-variant `APEX4` Nash equilibrium in [`data/kodoku-r3/conclusion-equilibrium-deme.json`](../data/kodoku-r3/conclusion-equilibrium-deme.json).
+
+### Step 2: Party Pool Optimization (`パーティプール適正化`)
+- Restored [`data/team-pool-v2/team-pool.json`](../data/team-pool-v2/team-pool.json) and [`data/belief-pool-v3/belief-pool.json`](../data/belief-pool-v3/belief-pool.json) to the strict **"Nash shell (4 camouflaged variants) + Tier 2 with meaningful diversity (`size: 1` per non-Nash cluster)"** policy: **33 catalog parties across 30 distinct public rosters** (`411` frozen prior entries, `sets=3174 classes=575 exact_catalog_support=33 issues=0`).
+
+### Step 3: Tiered Production / Approximation Preview Bake (`焼き込み`)
+- Updated [`crates/bot/examples/meta_eco/catalog_preview.rs`](../crates/bot/examples/meta_eco/catalog_preview.rs) (`bake-catalog-preview`) to enforce the tiered policy:
+  - **Nash-involving keys (`c.apex || s.apex`, `149` unique keys)**: Evaluated with full production preview search (`LocalPlayer::new` + `ObservedPosition` + `BlindSearch::from_observation`, `729,000` iterations, `c = 0.4`, `prune_preview_aliases`, `Belief` over `belief-pool-v3`).
+  - **Non-Nash keys (`!c.apex && !s.apex`, `841` unique keys)**: Evaluated via the `903` non-Nash rollout matrices (`ns_other = 2`, `250` turns) and debiased Bayesian RM+ (`600` sweeps) with ordinary-party near-optimal diversity (`casual`).
+- Activated all `990` policies (`149` production + `841` rollout approximation) into [`data/compiled-preview-v1.json`](../data/compiled-preview-v1.json) and [`data/team-pool-v2/preview-nash-matrix.json`](../data/team-pool-v2/preview-nash-matrix.json).
+- **Production & Coverage Verification**:
+  - `npm run test:preview-production` ([`data/preview-training-v3/production-verification.json`](../data/preview-training-v3/production-verification.json)): `2,178 / 2,178` side cases served from `table` (`0` live fallbacks), median lookup `7.2 ms` (`p95 = 7.8 ms`), round-trip `p95 = 28.1 ms`.
+  - `node tests/compiled-preview-coverage.mjs` ([`data/preview-training-v3/compiled-coverage.json`](../data/preview-training-v3/compiled-coverage.json)): `1,089` matchups, `990` unique keys (`990` valid, `0` invalid), `69,696` slot checks all legal.
+  - `npm run test:e2e`: `70 / 70` Playwright E2E tests passed.
