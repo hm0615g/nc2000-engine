@@ -126,11 +126,16 @@ test('female preference is supported only by the frozen prior source mix', () =>
 
 test('training-v3 catalog retains male camouflage and constrained minimum Attack', () => {
 	const catalog = require('../data/team-pool-v2/team-pool.json');
-	assert.equal(catalog.teams.length, 33);
-	const apex = catalog.teams.filter(t => t.nash);
-	assert.equal(apex.length, 4);
+	assert.equal(catalog.teams.length, 37);
+	const nash = catalog.teams.filter(t => t.nash);
+	assert.equal(nash.length, 11);
+	const apex = nash.filter(t => t.sets[0].species === 'Snorlax' && t.sets[1].species === 'Cloyster');
+	const s07 = nash.filter(t => t.sets[0].species === 'Electrode' && t.sets[2].species === 'Cloyster');
+	assert.equal(apex.length, 5);
+	assert.equal(s07.length, 4);
 	assert.equal(new Set(apex.map(t => JSON.stringify(t.sets.map(s => [s.species,s.level,s.gender,Boolean(s.item)])))).size, 1);
-	for (const t of apex) {
+	assert.equal(new Set(s07.map(t => JSON.stringify(t.sets.map(s => [s.species,s.level,s.gender,Boolean(s.item)])))).size, 1);
+	for (const t of [...apex, ...s07]) {
 		const p=t.sets.find(s=>s.species==='Cloyster');
 		const boom=p.moves.includes('Explosion');
 		assert.equal(p.gender,'M');assert.equal(Math.floor(p.ivs.atk/2),boom?15:9);assert.equal(p.evs.atk,boom?255:0);

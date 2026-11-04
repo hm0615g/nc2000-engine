@@ -45,7 +45,7 @@ try {
   }finally{dex.free();}
   return {matchups,uniqueKeys:keys.size,validKeys:validKeys.size,invalidKeys:invalidKeys.size,slotsPerKey:64,slotChecks:matchups*64,allLegal:true};
  },wasmPath);
- assert.equal(result.matchups,1089);assert.equal(result.uniqueKeys,990);
+ assert.equal(result.matchups,1369);assert.equal(result.uniqueKeys,1110);
  const out=process.env.NC2000_CHECK_OUT ?? '../data/preview-training-v3';
  fs.mkdirSync(out,{recursive:true});
  fs.writeFileSync(path.join(out,'compiled-coverage.json'),JSON.stringify(result,null,2)+'\n');console.log(result);

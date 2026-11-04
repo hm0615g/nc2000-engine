@@ -416,6 +416,12 @@ test("the play door's Nash draw choice draws a mixture arm and persists", async 
     pickerCards.filter({ hasText: "red-v10-s1105-r2-s0142" }).locator(".team-name"),
   ).toHaveText("Rain Cloyster · EQ Heracross 55 Snorlax");
   await expect(
+    pickerCards.filter({ hasText: "red-v10-s1105-r2-s0142-beq-g1-c5-beq-g3-c2" }).locator(".team-name"),
+  ).toHaveText("Rain Cloyster · Reversal Heracross 55 Snorlax");
+  await expect(
+    pickerCards.filter({ hasText: "sample-07-beq-g1-c4" }).locator(".team-name"),
+  ).toHaveText("Surf/Curse Cloyster · Rest 55 Zapdos Tauros");
+  await expect(
     pickerCards.filter({ hasText: "apex-c04-bug-3atkstar-boomgen" }).locator(".team-name"),
   ).toHaveText("Explosion Cloyster · Boom Gengar 55 Snorlax");
   await expect(

@@ -3,14 +3,14 @@
  "generator": "tools/build-team-products-v2.js",
  "protocol": "data/team-selection-v2/PROTOCOL.md",
  "counts": {
-  "records": 244,
-  "eligible": 226,
-  "measured": 212,
-  "selected": 33,
+  "records": 248,
+  "eligible": 230,
+  "measured": 216,
+  "selected": 37,
   "pending": 9,
   "notSelected": 170,
-  "prior": 411,
-  "nashSupport": 4,
+  "prior": 415,
+  "nashSupport": 11,
   "legacyNashV3Support": 5
  },
  "teams": [
@@ -838,9 +838,9 @@
     "stage": "C"
    },
    "catalog": true,
-   "drawWeight": 0.033333,
+   "drawWeight": 0.008333,
    "priorWeight": 0.25,
-   "nashWeight": 0,
+   "nashWeight": 0.07,
    "legacyNashV3Weight": 0.261004,
    "variantCluster": "vc02",
    "species": [
@@ -5244,7 +5244,7 @@
    "catalog": true,
    "drawWeight": 0.033333,
    "priorWeight": 1,
-   "nashWeight": 0,
+   "nashWeight": 0.15,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc56",
    "species": [
@@ -5966,7 +5966,7 @@
    "catalog": true,
    "drawWeight": 0.033333,
    "priorWeight": 0.5,
-   "nashWeight": 0,
+   "nashWeight": 0.2,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc44",
    "species": [
@@ -6352,9 +6352,9 @@
     "stage": "kodoku-v14-nash"
    },
    "catalog": true,
-   "drawWeight": 0.008333,
+   "drawWeight": 0.006667,
    "priorWeight": 0.25,
-   "nashWeight": 0.3,
+   "nashWeight": 0.095,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
    "species": [
@@ -6396,9 +6396,9 @@
     "stage": "kodoku-v13-nash"
    },
    "catalog": true,
-   "drawWeight": 0.008333,
+   "drawWeight": 0.006667,
    "priorWeight": 0.25,
-   "nashWeight": 0.25,
+   "nashWeight": 0.075,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
    "species": [
@@ -6440,9 +6440,9 @@
     "stage": "kodoku-v14-nash"
    },
    "catalog": true,
-   "drawWeight": 0.008333,
+   "drawWeight": 0.006667,
    "priorWeight": 0.25,
-   "nashWeight": 0.25,
+   "nashWeight": 0.075,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
    "species": [
@@ -6528,9 +6528,9 @@
     "stage": "kodoku-v13-nash"
    },
    "catalog": true,
-   "drawWeight": 0.008333,
+   "drawWeight": 0.006667,
    "priorWeight": 0.25,
-   "nashWeight": 0.2,
+   "nashWeight": 0.06,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
    "species": [
@@ -6679,6 +6679,182 @@
     50,
     50,
     55,
+    50
+   ]
+  },
+  {
+   "id": "sample-07-beq-g1-c4",
+   "family": "kodoku-beq-v1",
+   "origin": "evolved",
+   "source": {
+    "name": "Kodoku Bayesian Equilibrium v1 (Shell B · Surf/Curse Cloyster + Rest Zapdos + 55 Tauros/Marowak)",
+    "url": "data/kodoku-r3/conclusion-equilibrium-deme.json",
+    "version": "beq-v1-w0.0700"
+   },
+   "eligibility": {
+    "status": "eligible"
+   },
+   "measuredAs": "sample-07-beq-g1-c4",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.69214,
+    "se": 0,
+    "stage": "kodoku-beq-v1-nash"
+   },
+   "catalog": true,
+   "drawWeight": 0.008333,
+   "priorWeight": 0.25,
+   "nashWeight": 0.07,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc02",
+   "species": [
+    "Electrode",
+    "Tauros",
+    "Cloyster",
+    "Marowak",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    55,
+    50,
+    55,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-07-beq-g2-c4",
+   "family": "kodoku-beq-v1",
+   "origin": "evolved",
+   "source": {
+    "name": "Kodoku Bayesian Equilibrium v1 (Shell B · Explosion Cloyster + Pink Bow Snorlax + Rest Zapdos)",
+    "url": "data/kodoku-r3/conclusion-equilibrium-deme.json",
+    "version": "beq-v1-w0.0650"
+   },
+   "eligibility": {
+    "status": "eligible"
+   },
+   "measuredAs": "sample-07-beq-g2-c4",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.690275,
+    "se": 0,
+    "stage": "kodoku-beq-v1-nash"
+   },
+   "catalog": true,
+   "drawWeight": 0.008333,
+   "priorWeight": 0.25,
+   "nashWeight": 0.065,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc02",
+   "species": [
+    "Electrode",
+    "Tauros",
+    "Cloyster",
+    "Marowak",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    55,
+    50,
+    55,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "sample-07-beq-g1-c3",
+   "family": "kodoku-beq-v1",
+   "origin": "evolved",
+   "source": {
+    "name": "Kodoku Bayesian Equilibrium v1 (Shell B · Icy Wind Tauros + Explosion Cloyster + Rest Zapdos)",
+    "url": "data/kodoku-r3/conclusion-equilibrium-deme.json",
+    "version": "beq-v1-w0.0550"
+   },
+   "eligibility": {
+    "status": "eligible"
+   },
+   "measuredAs": "sample-07-beq-g1-c3",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.685048,
+    "se": 0,
+    "stage": "kodoku-beq-v1-nash"
+   },
+   "catalog": true,
+   "drawWeight": 0.008333,
+   "priorWeight": 0.25,
+   "nashWeight": 0.055,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc02",
+   "species": [
+    "Electrode",
+    "Tauros",
+    "Cloyster",
+    "Marowak",
+    "Snorlax",
+    "Zapdos"
+   ],
+   "levels": [
+    50,
+    55,
+    50,
+    55,
+    50,
+    55
+   ]
+  },
+  {
+   "id": "red-v10-s1105-r2-s0142-beq-g1-c5-beq-g3-c2",
+   "family": "kodoku-beq-v1",
+   "origin": "evolved",
+   "source": {
+    "name": "Kodoku Bayesian Equilibrium v1 (Shell A · Rain Cloyster + Reversal Heracross + Fire Blast Marowak)",
+    "url": "data/kodoku-r3/conclusion-equilibrium-deme.json",
+    "version": "beq-v1-w0.0850"
+   },
+   "eligibility": {
+    "status": "eligible"
+   },
+   "measuredAs": "red-v10-s1105-r2-s0142-beq-g1-c5-beq-g3-c2",
+   "v1Label": null,
+   "label": "selected",
+   "reason": null,
+   "evidence": {
+    "score": 0.641476,
+    "se": 0,
+    "stage": "kodoku-beq-v1-nash"
+   },
+   "catalog": true,
+   "drawWeight": 0.006667,
+   "priorWeight": 0.25,
+   "nashWeight": 0.085,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc-kodoku-nash-a",
+   "species": [
+    "Snorlax",
+    "Cloyster",
+    "Gengar",
+    "Heracross",
+    "Marowak",
+    "Starmie"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
     50
    ]
   },
