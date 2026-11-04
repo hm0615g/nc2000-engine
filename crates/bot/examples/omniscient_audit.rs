@@ -1537,6 +1537,33 @@ fn main() {
         "data/dominance-audit-v13-verified/omniscient-audit-report.json".to_string()
     }));
 
+    if let Some(targets_arg) = find_flag("--fallback-non-degradation") {
+        let eq_rel = find_flag("--blue-equilibrium")
+            .unwrap_or_else(|| "data/kodoku-r3/conclusion-equilibrium-deme.json".to_string());
+        let preview_iters: u32 = find_flag("--preview-iters")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(729_000);
+        let pair_start: usize = find_flag("--pair-start")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        run_fallback_non_degradation(
+            &dex,
+            &root,
+            &compiled,
+            &eq_rel,
+            &targets_arg,
+            base_iters,
+            preview_iters,
+            pair_start,
+            num_pairs,
+            max_turns,
+            seed,
+            threads,
+            &out_path,
+        );
+        return;
+    }
+
     if let Some(challengers_arg) = find_flag("--production-challengers") {
         let eq_rel = find_flag("--blue-equilibrium")
             .unwrap_or_else(|| "data/kodoku-r3/conclusion-equilibrium-deme.json".to_string());
@@ -3121,6 +3148,680 @@ fn run_production_challenger_duels(
     std::fs::write(out_path, serde_json::to_string_pretty(&report).unwrap()).unwrap();
     println!(
         "\nSaved production challenger duel report to {}",
+        out_path.display()
+    );
+}
+
+fn build_undisclosed_offprior(base_mp: &MetaPool, red_sets: &[Vec<PokemonSet>]) -> Arc<MetaPool> {
+    let mut target_sigs: BTreeSet<PreviewSig> = BTreeSet::new();
+    for s in red_sets {
+        target_sigs.insert(preview_sig_sets(s));
+    }
+    let teams: Vec<MetaTeam> = base_mp
+        .teams
+        .iter()
+        .filter(|t| !target_sigs.contains(&preview_sig_sets(&t.sets)))
+        .cloned()
+        .collect();
+    Arc::new(MetaPool { teams })
+}
+
+fn make_set(species: &str, item: &str, level: u8, gender: &str, moves: &[&str]) -> PokemonSet {
+    let evs = ["hp", "atk", "def", "spa", "spd", "spe"]
+        .iter()
+        .map(|k| (k.to_string(), 255u16))
+        .collect();
+    PokemonSet {
+        name: species.to_string(),
+        species: species.to_string(),
+        item: item.to_string(),
+        ability: "No Ability".to_string(),
+        moves: moves.iter().map(|m| m.to_string()).collect(),
+        level,
+        evs: Some(evs),
+        ivs: None,
+        happiness: Some(255),
+        gender: Some(gender.to_string()),
+    }
+}
+
+fn resolve_fallback_eval_spec(
+    target: &str,
+    db: &BTreeMap<String, Vec<PokemonSet>>,
+    base_mp: &MetaPool,
+) -> (ChallengerSpec, Arc<MetaPool>, bool) {
+    if let Some(cid) = target.strip_prefix("Known:") {
+        let spec = resolve_challenger_spec(cid, db);
+        let prior = build_disclosed_prior(base_mp, &spec.variant_ids, &spec.weights, &spec.sets);
+        return (spec, prior, true);
+    }
+    let cid = target.strip_prefix("Unknown:").unwrap_or(target);
+    match cid {
+        "TierA-BatonPass" => {
+            let v1 = vec![
+                make_set("Jolteon", "Leftovers", 50, "M", &["Agility", "Baton Pass", "Substitute", "Thunderbolt"]),
+                make_set("Marowak", "Thick Club", 55, "M", &["Earthquake", "Rock Slide", "Swords Dance", "Body Slam"]),
+                make_set("Scizor", "Miracle Berry", 50, "M", &["Swords Dance", "Agility", "Baton Pass", "Steel Wing"]),
+                make_set("Vaporeon", "Gold Berry", 50, "M", &["Surf", "Acid Armor", "Baton Pass", "Rest"]),
+                make_set("Snorlax", "Mint Berry", 55, "M", &["Double-Edge", "Earthquake", "Rest", "Curse"]),
+                make_set("Misdreavus", "PRZ Cure Berry", 50, "M", &["Mean Look", "Perish Song", "Protect", "Thunder"]),
+            ];
+            let v2 = vec![
+                make_set("Espeon", "Leftovers", 50, "M", &["Growth", "Baton Pass", "Psychic", "Substitute"]),
+                make_set("Snorlax", "Mint Berry", 55, "M", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+                make_set("Jolteon", "Miracle Berry", 50, "M", &["Agility", "Baton Pass", "Hidden Power Ice", "Thunderbolt"]),
+                make_set("Scizor", "Gold Berry", 50, "M", &["Swords Dance", "Agility", "Baton Pass", "Hidden Power Bug"]),
+                make_set("Marowak", "Thick Club", 55, "M", &["Earthquake", "Rock Slide", "Swords Dance", "Submission"]),
+                make_set("Gengar", "Scope Lens", 50, "M", &["Thunderbolt", "Ice Punch", "Hypnosis", "Explosion"]),
+            ];
+            let sets = vec![v1, v2];
+            let prior = build_undisclosed_offprior(base_mp, &sets);
+            (
+                ChallengerSpec {
+                    name: target.to_string(),
+                    variant_ids: vec!["unknown-bp-1".to_string(), "unknown-bp-2".to_string()],
+                    weights: vec![0.5, 0.5],
+                    sets,
+                    blue_allow_table: false,
+                    red_allow_table: false,
+                },
+                prior,
+                false,
+            )
+        }
+        "TierA-HoldoutNemesis" => {
+            let mut spec = resolve_challenger_spec("ApexCounter4-shell", db);
+            spec.name = target.to_string();
+            let prior = build_undisclosed_offprior(base_mp, &spec.sets);
+            (spec, prior, false)
+        }
+        "TierB-OffPriorNovel" => {
+            let v1 = vec![
+                make_set("Snorlax", "Leftovers", 55, "M", &["Double-Edge", "Counter", "Curse", "Earthquake"]),
+                make_set("Misdreavus", "Miracle Berry", 50, "M", &["Mean Look", "Attract", "Perish Song", "Protect"]),
+                make_set("Jolteon", "Mint Berry", 50, "M", &["Agility", "Attract", "Baton Pass", "Thunderbolt"]),
+                make_set("Cloyster", "Gold Berry", 50, "M", &["Spikes", "Icy Wind", "Surf", "Explosion"]),
+                make_set("Exeggutor", "Polkadot Bow", 50, "M", &["Sleep Powder", "Ancient Power", "Psychic", "Explosion"]),
+                make_set("Zapdos", "Magnet", 50, "N", &["Thunderbolt", "Drill Peck", "Light Screen", "Whirlwind"]),
+            ];
+            let sets = vec![v1];
+            let prior = build_undisclosed_offprior(base_mp, &sets);
+            (
+                ChallengerSpec {
+                    name: target.to_string(),
+                    variant_ids: vec!["unknown-tierb-offprior-1".to_string()],
+                    weights: vec![1.0],
+                    sets,
+                    blue_allow_table: false,
+                    red_allow_table: false,
+                },
+                prior,
+                false,
+            )
+        }
+        "TierB-CamouflageNovel" => {
+            // Identical preview signature (species, level, gender, has_item) to sample-07,
+            // so at Team Preview !is_fallback(), and mid-battle reveals trigger fallback + Tier B!
+            let mut cam = db["sample-07"].clone();
+            for s in &mut cam {
+                match toid(&s.species).as_str() {
+                    "snorlax" => {
+                        s.moves = vec![
+                            "Double-Edge".into(),
+                            "Counter".into(),
+                            "Curse".into(),
+                            "Earthquake".into(),
+                        ];
+                    }
+                    "misdreavus" => {
+                        s.moves = vec![
+                            "Mean Look".into(),
+                            "Attract".into(),
+                            "Perish Song".into(),
+                            "Protect".into(),
+                        ];
+                    }
+                    "cloyster" => {
+                        s.moves = vec![
+                            "Spikes".into(),
+                            "Icy Wind".into(),
+                            "Surf".into(),
+                            "Explosion".into(),
+                        ];
+                    }
+                    "exeggutor" => {
+                        s.moves = vec![
+                            "Sleep Powder".into(),
+                            "Ancient Power".into(),
+                            "Psychic".into(),
+                            "Explosion".into(),
+                        ];
+                    }
+                    "zapdos" => {
+                        s.moves = vec![
+                            "Thunderbolt".into(),
+                            "Drill Peck".into(),
+                            "Light Screen".into(),
+                            "Whirlwind".into(),
+                        ];
+                    }
+                    _ => {}
+                }
+            }
+            let sets = vec![cam];
+            // Keep base_mp unmodified so sample-07 preview signature matches at Team Preview!
+            let prior = Arc::new(base_mp.clone());
+            (
+                ChallengerSpec {
+                    name: target.to_string(),
+                    variant_ids: vec!["unknown-camouflage-sample07-novel".to_string()],
+                    weights: vec![1.0],
+                    sets,
+                    blue_allow_table: true,
+                    red_allow_table: false,
+                },
+                prior,
+                false,
+            )
+        }
+        other => {
+            let mut spec = resolve_challenger_spec(other, db);
+            spec.name = target.to_string();
+            let prior = build_undisclosed_offprior(base_mp, &spec.sets);
+            (spec, prior, false)
+        }
+    }
+}
+
+fn play_fallback_eval_game(
+    dex: &Dex,
+    battle_seed: &str,
+    blue_sets: &[PokemonSet],
+    red_sets: &[PokemonSet],
+    blue_seed: u64,
+    red_seed: u64,
+    blue_is_p1: bool,
+    blue_prior: &Arc<MetaPool>,
+    red_prior: &Arc<MetaPool>,
+    blue_policy: FallbackPolicy,
+    blue_allow_table: bool,
+    compiled: &Value,
+    base_iters: u32,
+    preview_iters: u32,
+    max_turns: u16,
+) -> (f64, u16, u16, u16, u64) {
+    let (side_blue, side_red) = if blue_is_p1 { (0, 1) } else { (1, 0) };
+    let (t1, t2) = if blue_is_p1 {
+        (blue_sets, red_sets)
+    } else {
+        (red_sets, blue_sets)
+    };
+    let mut battle = Battle::from_fixture(dex, battle_seed, t1, t2).unwrap();
+    battle.set_log_enabled(true);
+
+    let cfg = RmConfig {
+        iterations: base_iters,
+        rule: SelRule::Ucb,
+        c: 0.4,
+        hp_buckets: 16,
+        ..Default::default()
+    };
+
+    let mut blue_agent = ProtocolAgent::new(
+        dex,
+        side_blue,
+        (**blue_prior).clone(),
+        cfg.clone(),
+        blue_seed as u32 as u64,
+    );
+    blue_agent.set_own_team(blue_sets.to_vec());
+    blue_agent.set_fallback_policy(blue_policy);
+    let mut blue_channel = PlayerChannel::new(side_blue);
+
+    let mut red_agent = ProtocolAgent::new(
+        dex,
+        side_red,
+        (**red_prior).clone(),
+        cfg,
+        red_seed as u32 as u64,
+    );
+    red_agent.set_own_team(red_sets.to_vec());
+    let mut red_channel = PlayerChannel::new(side_red);
+
+    let mut fallback_turns = 0u16;
+    let mut multidraw_turns = 0u16;
+    let mut action_trace_hash = 0xcbf29ce484222325u64;
+
+    loop {
+        if let Some(outcome) = battle.outcome() {
+            let p1_pts = match outcome {
+                Outcome::P1Win => 1.0,
+                Outcome::P2Win => 0.0,
+                Outcome::Tie => 0.5,
+            };
+            let blue_pts = if blue_is_p1 { p1_pts } else { 1.0 - p1_pts };
+            return (
+                blue_pts,
+                battle.turn,
+                fallback_turns,
+                multidraw_turns,
+                action_trace_hash,
+            );
+        }
+        if battle.turn >= max_turns && !matches!(battle.request_state, RequestState::TeamPreview) {
+            return (
+                0.5,
+                battle.turn,
+                fallback_turns,
+                multidraw_turns,
+                action_trace_hash,
+            );
+        }
+
+        let is_preview = matches!(battle.request_state, RequestState::TeamPreview);
+        let choices_blue = battle.legal_choices(dex, side_blue);
+        let choices_red = battle.legal_choices(dex, side_red);
+
+        let blue_choice = if choices_blue.is_empty() {
+            None
+        } else {
+            let frame = blue_channel.frame(&mut battle, dex).unwrap();
+            for line in frame.lines {
+                blue_agent.push_line(dex, &line);
+            }
+            assert!(blue_agent.on_request(dex, &frame.request.to_string()).unwrap());
+            if let Some(bel) = blue_agent.belief() {
+                if bel.is_fallback() && !is_preview {
+                    fallback_turns += 1;
+                    let opp_side = 1 - side_blue;
+                    if let Some(act_id) = battle.active_id(opp_side) {
+                        if bel.loadout_draw_len(act_id.slot as usize) >= 2 {
+                            multidraw_turns += 1;
+                        }
+                    }
+                }
+            }
+            let input = if is_preview {
+                let key =
+                    nc2000_bot::compiled_preview::key(blue_agent.battle().unwrap(), side_blue)
+                        .unwrap();
+                if blue_allow_table
+                    && compiled["policies"]
+                        .get(&key)
+                        .and_then(|v| v.as_array())
+                        .is_some()
+                {
+                    let arr = compiled["policies"][&key].as_array().unwrap();
+                    arr[(blue_seed as u32 as usize) % arr.len()]
+                        .as_str()
+                        .unwrap()
+                        .to_string()
+                } else {
+                    blue_agent.step(dex, preview_iters).unwrap();
+                    blue_agent.best(dex).unwrap()
+                }
+            } else {
+                blue_agent.step(dex, base_iters).unwrap();
+                blue_agent.best(dex).unwrap()
+            };
+            for b in input.bytes() {
+                action_trace_hash ^= b as u64;
+                action_trace_hash = action_trace_hash.wrapping_mul(0x100000001b3);
+            }
+            let sc = nc2000_bot::fork::find_choice(dex, &choices_blue, &input)
+                .expect("product emitted illegal action");
+            Some(sc)
+        };
+
+        let red_choice = if choices_red.is_empty() {
+            None
+        } else {
+            let frame = red_channel.frame(&mut battle, dex).unwrap();
+            for line in frame.lines {
+                red_agent.push_line(dex, &line);
+            }
+            assert!(red_agent.on_request(dex, &frame.request.to_string()).unwrap());
+            let input = if is_preview {
+                red_agent.step(dex, preview_iters).unwrap();
+                red_agent.best(dex).unwrap()
+            } else {
+                red_agent.step(dex, base_iters).unwrap();
+                red_agent.best(dex).unwrap()
+            };
+            let sc = nc2000_bot::fork::find_choice(dex, &choices_red, &input)
+                .expect("product emitted illegal action");
+            Some(sc)
+        };
+
+        let pair = if blue_is_p1 {
+            [blue_choice, red_choice]
+        } else {
+            [red_choice, blue_choice]
+        };
+        battle.apply_choices(dex, pair).unwrap();
+    }
+}
+
+fn run_fallback_non_degradation(
+    dex: &Dex,
+    root: &std::path::Path,
+    compiled: &Value,
+    eq_rel: &str,
+    targets_arg: &str,
+    base_iters: u32,
+    preview_iters: u32,
+    pair_start: usize,
+    num_pairs: usize,
+    max_turns: u16,
+    seed: u64,
+    threads: usize,
+    out_path: &std::path::Path,
+) {
+    let t_start = Instant::now();
+    let eq_txt = std::fs::read_to_string(root.join(eq_rel)).unwrap();
+    let eq_v: Value = serde_json::from_str(&eq_txt).unwrap();
+    let mut pi_ids: Vec<String> = Vec::new();
+    let mut pi_weights: Vec<f64> = Vec::new();
+    let mut pi_sets: Vec<Vec<PokemonSet>> = Vec::new();
+    for t in eq_v["teams"].as_array().unwrap() {
+        pi_ids.push(t["id"].as_str().unwrap().to_string());
+        pi_weights.push(t["weight"].as_f64().unwrap());
+        pi_sets.push(serde_json::from_value(t["sets"].clone()).unwrap());
+    }
+    let n_pi = pi_sets.len();
+    let mut cum_w = Vec::with_capacity(n_pi);
+    let mut acc = 0.0f64;
+    for &w in &pi_weights {
+        acc += w;
+        cum_w.push(acc);
+    }
+    let w_tot = acc.max(1e-12);
+
+    let bp_text =
+        std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
+    let base_mp: MetaPool = serde_json::from_str(&bp_text).unwrap();
+    let red_prior = build_disclosed_prior(&base_mp, &pi_ids, &pi_weights, &pi_sets);
+    let db = load_challenger_database(root);
+
+    let targets: Vec<String> = targets_arg
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let active_pairs = num_pairs.saturating_sub(pair_start);
+    println!("==========================================================================================");
+    println!(
+        "=== PRODUCTION FALLBACK NON-DEGRADATION AUDIT (iters={}, preview_iters={}, pairs={}..{} [{}g/target], threads={}) ===",
+        base_iters,
+        preview_iters,
+        pair_start,
+        num_pairs,
+        active_pairs * 2,
+        threads
+    );
+    println!("==========================================================================================");
+
+    struct EvalJob {
+        game_idx: usize,
+        blue_idx: usize,
+        red_idx: usize,
+        battle_seed: String,
+        blue_seed: u64,
+        red_seed: u64,
+        blue_is_p1: bool,
+        is_candidate: bool,
+    }
+
+    let mut target_reports: Vec<Value> = Vec::new();
+
+    for target in &targets {
+        let t_targ = Instant::now();
+        let (spec, blue_prior, is_known) = resolve_fallback_eval_spec(target, &db, &base_mp);
+        let n_red = spec.sets.len();
+        let mut red_cum_w = Vec::with_capacity(n_red);
+        let mut r_acc = 0.0f64;
+        for &w in &spec.weights {
+            r_acc += w;
+            red_cum_w.push(r_acc);
+        }
+        let r_tot = r_acc.max(1e-12);
+
+        let mut matchup_rng = SplitMix64::new(seed ^ 0xD6E8_FEB8_6659_FD93);
+        let mut red_rng = SplitMix64::new(seed ^ 0xA5A5_5A5A_C3C3_3C3C);
+        let mut jobs: Vec<EvalJob> = Vec::with_capacity(active_pairs * 4);
+        let mut g_idx = 0usize;
+        for m in 0..num_pairs {
+            let u_b = matchup_rng.next_f64() * w_tot;
+            let u_r = red_rng.next_f64() * r_tot;
+            if m < pair_start {
+                continue;
+            }
+            let blue_idx = cum_w.iter().position(|&cw| cw >= u_b).unwrap_or(n_pi - 1);
+            let red_idx = red_cum_w
+                .iter()
+                .position(|&cw| cw >= u_r)
+                .unwrap_or(n_red - 1);
+            let mut rng_j = SplitMix64::new(
+                seed ^ ((m as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                    ^ ((blue_idx as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9)),
+            );
+            let bseed = rng_j.battle_seed();
+            let s_a = rng_j.next();
+            let s_b = rng_j.next();
+            for &(blue_is_p1, bs, rs) in &[(true, s_a, s_b), (false, s_b, s_a)] {
+                for &is_candidate in &[false, true] {
+                    // For Known-Pool targets, Baseline and Candidate are provably identical when
+                    // fallback never fires; we still run both on Known to verify bit-identity!
+                    jobs.push(EvalJob {
+                        game_idx: g_idx,
+                        blue_idx,
+                        red_idx,
+                        battle_seed: bseed.clone(),
+                        blue_seed: bs,
+                        red_seed: rs,
+                        blue_is_p1,
+                        is_candidate,
+                    });
+                }
+                g_idx += 1;
+            }
+        }
+
+        let cursor = AtomicUsize::new(0);
+        let done_count = AtomicUsize::new(0);
+        let mut raw_outs: Vec<(usize, bool, f64, u16, u16, u16, u64)> =
+            Vec::with_capacity(jobs.len());
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for _ in 0..threads.min(jobs.len()).max(1) {
+                let (
+                    jobs_ref,
+                    cursor_ref,
+                    done_ref,
+                    pi_sets_ref,
+                    red_sets_ref,
+                    b_prior_ref,
+                    r_prior_ref,
+                    compiled_ref,
+                    dex_ref,
+                    t_name,
+                    b_allow,
+                ) = (
+                    &jobs,
+                    &cursor,
+                    &done_count,
+                    &pi_sets,
+                    &spec.sets,
+                    &blue_prior,
+                    &red_prior,
+                    compiled,
+                    dex,
+                    spec.name.as_str(),
+                    spec.blue_allow_table,
+                );
+                handles.push(scope.spawn(move || {
+                    let mut loc = Vec::new();
+                    loop {
+                        let k = cursor_ref.fetch_add(1, Ordering::Relaxed);
+                        if k >= jobs_ref.len() {
+                            break;
+                        }
+                        let j = &jobs_ref[k];
+                        let pol = if j.is_candidate {
+                            FallbackPolicy::Bayesian
+                        } else {
+                            FallbackPolicy::BayesianPointMass
+                        };
+                        let (blue_pts, turns, fb_turns, md_turns, trace_hash) =
+                            play_fallback_eval_game(
+                                dex_ref,
+                                &j.battle_seed,
+                                &pi_sets_ref[j.blue_idx],
+                                &red_sets_ref[j.red_idx],
+                                j.blue_seed,
+                                j.red_seed,
+                                j.blue_is_p1,
+                                b_prior_ref,
+                                r_prior_ref,
+                                pol,
+                                b_allow,
+                                compiled_ref,
+                                base_iters,
+                                preview_iters,
+                                max_turns,
+                            );
+                        let done = done_ref.fetch_add(1, Ordering::Relaxed) + 1;
+                        if done % 8 == 0 || done == jobs_ref.len() {
+                            eprintln!(
+                                "  [{}] progress {}/{} runs ({:.1}s)",
+                                t_name,
+                                done,
+                                jobs_ref.len(),
+                                t_targ.elapsed().as_secs_f64()
+                            );
+                        }
+                        loc.push((
+                            j.game_idx,
+                            j.is_candidate,
+                            blue_pts,
+                            turns,
+                            fb_turns,
+                            md_turns,
+                            trace_hash,
+                        ));
+                    }
+                    loc
+                }));
+            }
+            for h in handles {
+                raw_outs.extend(h.join().unwrap());
+            }
+        });
+        raw_outs.sort_by_key(|x| (x.0, x.1));
+
+        let n_games = active_pairs * 2;
+        let mut base_blue_sum = 0.0f64;
+        let mut cand_blue_sum = 0.0f64;
+        let mut total_fb_turns_cand = 0u64;
+        let mut total_md_turns_cand = 0u64;
+        let mut trace_identical_games = 0usize;
+        let mut pair_diffs: Vec<f64> = Vec::with_capacity(active_pairs);
+        let mut pair_base_blue: Vec<f64> = Vec::with_capacity(active_pairs);
+        let mut pair_cand_blue: Vec<f64> = Vec::with_capacity(active_pairs);
+
+        for m in 0..active_pairs {
+            let g0_base = raw_outs[4 * m];
+            let g0_cand = raw_outs[4 * m + 1];
+            let g1_base = raw_outs[4 * m + 2];
+            let g1_cand = raw_outs[4 * m + 3];
+
+            if g0_base.6 == g0_cand.6 && g0_base.3 == g0_cand.3 && (g0_base.2 - g0_cand.2).abs() < 1e-9 {
+                trace_identical_games += 1;
+            }
+            if g1_base.6 == g1_cand.6 && g1_base.3 == g1_cand.3 && (g1_base.2 - g1_cand.2).abs() < 1e-9 {
+                trace_identical_games += 1;
+            }
+
+            base_blue_sum += g0_base.2 + g1_base.2;
+            cand_blue_sum += g0_cand.2 + g1_cand.2;
+            total_fb_turns_cand += (g0_cand.4 + g1_cand.4) as u64;
+            total_md_turns_cand += (g0_cand.5 + g1_cand.5) as u64;
+
+            let pb = 0.5 * (g0_base.2 + g1_base.2);
+            let pc = 0.5 * (g0_cand.2 + g1_cand.2);
+            pair_base_blue.push(pb);
+            pair_cand_blue.push(pc);
+            pair_diffs.push(pc - pb);
+        }
+
+        let n_p = active_pairs.max(1) as f64;
+        let base_blue_wr = base_blue_sum / (n_games.max(1) as f64);
+        let cand_blue_wr = cand_blue_sum / (n_games.max(1) as f64);
+        let delta_blue_wr = cand_blue_wr - base_blue_wr;
+        let diff_var = if active_pairs > 1 {
+            pair_diffs
+                .iter()
+                .map(|&d| (d - delta_blue_wr).powi(2))
+                .sum::<f64>()
+                / ((active_pairs - 1) as f64)
+        } else {
+            0.0
+        };
+        let diff_se = (diff_var / n_p).sqrt();
+
+        println!(
+            "  {:28} | Known={:5} | Blue_WR: Base={:6.2}% -> New(A+B)={:6.2}% (Delta={:+6.2}% ±{:5.2}% SE) | BitIdentical={}/{}g | FBTurns={} (MultiDraw={}) | {:.1}s",
+            spec.name,
+            is_known,
+            base_blue_wr * 100.0,
+            cand_blue_wr * 100.0,
+            delta_blue_wr * 100.0,
+            diff_se * 100.0,
+            trace_identical_games,
+            n_games,
+            total_fb_turns_cand,
+            total_md_turns_cand,
+            t_targ.elapsed().as_secs_f64()
+        );
+
+        target_reports.push(json!({
+            "target": spec.name,
+            "is_known_pool": is_known,
+            "pairs": active_pairs,
+            "games": n_games,
+            "baseline_blue_wr": base_blue_wr,
+            "candidate_blue_wr": cand_blue_wr,
+            "delta_blue_wr": delta_blue_wr,
+            "paired_delta_se": diff_se,
+            "bit_identical_games": trace_identical_games,
+            "candidate_fallback_turns": total_fb_turns_cand,
+            "candidate_multidraw_turns": total_md_turns_cand,
+            "pair_baseline_blue": pair_base_blue,
+            "pair_candidate_blue": pair_cand_blue,
+            "pair_deltas": pair_diffs,
+            "elapsed_secs": t_targ.elapsed().as_secs_f64(),
+        }));
+    }
+
+    if let Some(parent) = out_path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    let report = json!({
+        "mode": "fallback_non_degradation_audit",
+        "build": nc2000_bot::compiled_preview::build_fingerprint(),
+        "seed": seed,
+        "base_iters": base_iters,
+        "preview_iters": preview_iters,
+        "max_turns": max_turns,
+        "pairs_per_target": active_pairs,
+        "games_per_target": active_pairs * 2,
+        "targets": target_reports,
+        "elapsed_secs": t_start.elapsed().as_secs_f64(),
+    });
+    std::fs::write(out_path, serde_json::to_string_pretty(&report).unwrap()).unwrap();
+    println!(
+        "\nSaved fallback non-degradation audit report to {}",
         out_path.display()
     );
 }

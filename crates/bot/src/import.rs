@@ -1905,6 +1905,7 @@ pub struct ProtocolAgent {
     /// M18 community belief prior for the hidden-team fallback imputation.
     /// `None` (the default) leaves it exactly as shipped.
     prior: Option<std::sync::Arc<crate::prior::BeliefPrior>>,
+    fallback_policy: crate::belief::FallbackPolicy,
     pick_prior: Option<std::sync::Arc<crate::pick_prior::PickPrior>>,
     pick_preview: bool,
     tracker: ProtocolTracker,
@@ -1942,6 +1943,7 @@ impl ProtocolAgent {
             own_sets: Vec::new(),
             pinned_sets: None,
             prior: None,
+            fallback_policy: crate::belief::FallbackPolicy::default(),
             pick_prior: None,
             pick_preview: false,
             tracker: ProtocolTracker::new(side),
@@ -1961,6 +1963,10 @@ impl ProtocolAgent {
 
     pub fn set_own_team(&mut self, sets: Vec<PokemonSet>) {
         self.own_sets = sets;
+    }
+
+    pub fn set_fallback_policy(&mut self, policy: crate::belief::FallbackPolicy) {
+        self.fallback_policy = policy;
     }
 
     /// Open-team-sheet mode: the opponent's true sets are public.
@@ -2046,7 +2052,7 @@ impl ProtocolAgent {
             }
             let mut belief = match &self.pinned_sets {
                 Some(sets) => Belief::pinned_checked(dex, "opponent", sets, &obs)?,
-                None => Belief::new(dex, &self.pool, &obs),
+                None => Belief::with_fallback_policy(dex, &self.pool, &obs, self.fallback_policy),
             };
             if let (Some(prior), None) = (self.prior.clone(), &self.pinned_sets) {
                 belief.set_prior(prior);

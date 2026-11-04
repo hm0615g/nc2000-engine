@@ -1,20 +1,20 @@
 {
-  "base": "http://127.0.0.1:52193/nc2000-engine/",
-  "workerUrl": "http://127.0.0.1:52193/nc2000-engine/assets/bot-worker-BkScbLtB.js",
+  "base": "http://127.0.0.1:63403/nc2000-engine/",
+  "workerUrl": "http://127.0.0.1:63403/nc2000-engine/assets/bot-worker-D43-b-WQ.js",
   "catalogPairs": 1089,
   "sideCases": 2178,
   "tableCases": 2178,
   "liveCases": 0,
   "livePreviewTestBudget": 1,
   "lookupMs": {
-    "median": 7.200000286102295,
-    "p95": 7.800000190734863,
-    "max": 9.299999713897705
+    "median": 7.700000286102295,
+    "p95": 8.699999809265137,
+    "max": 10.799999713897705
   },
   "battleInitAndLookupMs": {
-    "median": 26.299999713897705,
-    "p95": 28.09999990463257,
-    "max": 57.60000038146973
+    "median": 28.300000190734863,
+    "p95": 30.5,
+    "max": 65.59999990463257
   },
   "hiddenLoadoutInvariant": true,
   "rejectionControls": [
