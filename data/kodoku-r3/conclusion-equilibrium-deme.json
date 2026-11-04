@@ -7,404 +7,8 @@
  "purged_hitchhiker_count": 91,
  "teams": [
   {
-   "id": "apex-c08-surgical-142",
-   "weight": 0.3,
-   "sets": [
-    {
-     "name": "Snorlax",
-     "species": "Snorlax",
-     "item": "Leftovers",
-     "ability": "No Ability",
-     "moves": [
-      "Curse",
-      "Double-Edge",
-      "Rest",
-      "Sleep Talk"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 55,
-     "happiness": 255
-    },
-    {
-     "name": "Cloyster",
-     "species": "Cloyster",
-     "item": "Gold Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Ice Beam",
-      "Rain Dance",
-      "Reflect",
-      "Spikes"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 0,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 18,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Gengar",
-     "species": "Gengar",
-     "item": "Scope Lens",
-     "ability": "No Ability",
-     "moves": [
-      "Ice Punch",
-      "Perish Song",
-      "Shadow Ball",
-      "Zap Cannon"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Heracross",
-     "species": "Heracross",
-     "item": "Mint Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Curse",
-      "Earthquake",
-      "Megahorn",
-      "Rest"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Marowak",
-     "species": "Marowak",
-     "item": "Thick Club",
-     "ability": "No Ability",
-     "moves": [
-      "Earthquake",
-      "Hidden Power Bug",
-      "Rock Slide",
-      "Swords Dance"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 26,
-      "def": 26,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Starmie",
-     "species": "Starmie",
-     "item": "Miracle Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Hydro Pump",
-      "Ice Beam",
-      "Psychic",
-      "Recover"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 0,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "N",
-     "ivs": {
-      "hp": 31,
-      "atk": 2,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    }
-   ]
-  },
-  {
-   "id": "red-v10-s1105-r2-s0142",
-   "weight": 0.25,
-   "sets": [
-    {
-     "name": "Snorlax",
-     "species": "Snorlax",
-     "item": "Leftovers",
-     "ability": "No Ability",
-     "moves": [
-      "Curse",
-      "Double-Edge",
-      "Rest",
-      "Sleep Talk"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 55,
-     "happiness": 255
-    },
-    {
-     "name": "Cloyster",
-     "species": "Cloyster",
-     "item": "Gold Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Ice Beam",
-      "Rain Dance",
-      "Reflect",
-      "Spikes"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 0,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 18,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Gengar",
-     "species": "Gengar",
-     "item": "Berry Juice",
-     "ability": "No Ability",
-     "moves": [
-      "Ice Punch",
-      "Perish Song",
-      "Shadow Ball",
-      "Zap Cannon"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Heracross",
-     "species": "Heracross",
-     "item": "Mint Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Curse",
-      "Earthquake",
-      "Megahorn",
-      "Rest"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Marowak",
-     "species": "Marowak",
-     "item": "Thick Club",
-     "ability": "No Ability",
-     "moves": [
-      "Earthquake",
-      "Flamethrower",
-      "Rock Slide",
-      "Swords Dance"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 255,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "M",
-     "ivs": {
-      "hp": 31,
-      "atk": 31,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    },
-    {
-     "name": "Starmie",
-     "species": "Starmie",
-     "item": "Miracle Berry",
-     "ability": "No Ability",
-     "moves": [
-      "Hydro Pump",
-      "Psychic",
-      "Recover",
-      "Thunder Wave"
-     ],
-     "nature": "Serious",
-     "evs": {
-      "hp": 255,
-      "atk": 0,
-      "def": 255,
-      "spa": 255,
-      "spd": 255,
-      "spe": 255
-     },
-     "gender": "N",
-     "ivs": {
-      "hp": 31,
-      "atk": 2,
-      "def": 31,
-      "spa": 31,
-      "spd": 31,
-      "spe": 31
-     },
-     "level": 50,
-     "happiness": 255
-    }
-   ]
-  },
-  {
    "id": "apex-c04-bug-3atkstar-boomgen",
-   "weight": 0.25,
+   "weight": 0.4,
    "sets": [
     {
      "name": "Snorlax",
@@ -601,8 +205,404 @@
    ]
   },
   {
+   "id": "red-v10-s1105-r2-s0142",
+   "weight": 0.3,
+   "sets": [
+    {
+     "name": "Snorlax",
+     "species": "Snorlax",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Curse",
+      "Double-Edge",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Cloyster",
+     "species": "Cloyster",
+     "item": "Gold Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Ice Beam",
+      "Rain Dance",
+      "Reflect",
+      "Spikes"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 18,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Gengar",
+     "species": "Gengar",
+     "item": "Berry Juice",
+     "ability": "No Ability",
+     "moves": [
+      "Ice Punch",
+      "Perish Song",
+      "Shadow Ball",
+      "Zap Cannon"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Heracross",
+     "species": "Heracross",
+     "item": "Mint Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Curse",
+      "Earthquake",
+      "Megahorn",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Marowak",
+     "species": "Marowak",
+     "item": "Thick Club",
+     "ability": "No Ability",
+     "moves": [
+      "Earthquake",
+      "Flamethrower",
+      "Rock Slide",
+      "Swords Dance"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Starmie",
+     "species": "Starmie",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Hydro Pump",
+      "Psychic",
+      "Recover",
+      "Thunder Wave"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ]
+  },
+  {
+   "id": "apex-c08-surgical-142",
+   "weight": 0.15,
+   "sets": [
+    {
+     "name": "Snorlax",
+     "species": "Snorlax",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Curse",
+      "Double-Edge",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Cloyster",
+     "species": "Cloyster",
+     "item": "Gold Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Ice Beam",
+      "Rain Dance",
+      "Reflect",
+      "Spikes"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 18,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Gengar",
+     "species": "Gengar",
+     "item": "Scope Lens",
+     "ability": "No Ability",
+     "moves": [
+      "Ice Punch",
+      "Perish Song",
+      "Shadow Ball",
+      "Zap Cannon"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Heracross",
+     "species": "Heracross",
+     "item": "Mint Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Curse",
+      "Earthquake",
+      "Megahorn",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Marowak",
+     "species": "Marowak",
+     "item": "Thick Club",
+     "ability": "No Ability",
+     "moves": [
+      "Earthquake",
+      "Hidden Power Bug",
+      "Rock Slide",
+      "Swords Dance"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 26,
+      "def": 26,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Starmie",
+     "species": "Starmie",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Hydro Pump",
+      "Ice Beam",
+      "Psychic",
+      "Recover"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ]
+  },
+  {
    "id": "red-v10-s1105-r1-s0148",
-   "weight": 0.2,
+   "weight": 0.15,
    "sets": [
     {
      "name": "Snorlax",

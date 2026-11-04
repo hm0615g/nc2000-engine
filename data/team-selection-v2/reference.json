@@ -6354,7 +6354,7 @@
    "catalog": true,
    "drawWeight": 0.008333,
    "priorWeight": 0.25,
-   "nashWeight": 0.3,
+   "nashWeight": 0.15,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
    "species": [
@@ -6398,7 +6398,7 @@
    "catalog": true,
    "drawWeight": 0.008333,
    "priorWeight": 0.25,
-   "nashWeight": 0.25,
+   "nashWeight": 0.3,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
    "species": [
@@ -6442,7 +6442,7 @@
    "catalog": true,
    "drawWeight": 0.008333,
    "priorWeight": 0.25,
-   "nashWeight": 0.25,
+   "nashWeight": 0.4,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
    "species": [
@@ -6530,7 +6530,7 @@
    "catalog": true,
    "drawWeight": 0.008333,
    "priorWeight": 0.25,
-   "nashWeight": 0.2,
+   "nashWeight": 0.15,
    "legacyNashV3Weight": 0,
    "variantCluster": "vc-kodoku-nash-a",
    "species": [
