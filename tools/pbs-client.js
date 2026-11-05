@@ -76,14 +76,24 @@ if (args.help || args.h) {
   process.exit(0);
 }
 
+const DISCORD_DAI_TO_LETTER = {
+  '1': 'C', '１': 'C', '一': 'C',
+  '2': 'D', '２': 'D', '二': 'D',
+  '3': 'E', '３': 'E', '三': 'E',
+};
+
 function resolveRoomUrl(raw) {
-  const s = String(raw || 'K').trim();
+  const s = String(raw || 'C').trim();
   if (/^https?:\/\//i.test(s)) return s.replace(/\?.*$/, '');
+  const daiMatch = s.match(/^(?:第)?([1-3１-３一二三])$/);
+  if (daiMatch && DISCORD_DAI_TO_LETTER[daiMatch[1]]) {
+    return `http://psense.lib.net/PBS/_/${DISCORD_DAI_TO_LETTER[daiMatch[1]]}/PS.cgi`;
+  }
   const letter = s.toUpperCase();
   return `http://psense.lib.net/PBS/_/${letter}/PS.cgi`;
 }
 
-const ROOM_URL = resolveRoomUrl(args.room || 'K');
+const ROOM_URL = resolveRoomUrl(args.room || 'C');
 const NAME = String(args.name || 'nc2000bot');
 const PASS = String(args.pass || 'nc2pass');
 const MSG = String(args.msg || 'よろしくおねがいします');
