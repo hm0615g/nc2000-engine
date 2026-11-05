@@ -101,7 +101,6 @@ const LTURN = Math.max(0, parseInt(args.lturn || '0', 10));
 const SEED = parseInt(args.seed || String(Date.now() & 0x7fffffff), 10);
 const RANDOM = Boolean(args.random);
 const QUIET = Boolean(args.quiet);
-const HUMAN_DELAY = !RANDOM && !Boolean(args['no-human-delay']);
 const DECISION_LOG = args['decision-log'] && args['decision-log'] !== true
   ? path.resolve(String(args['decision-log']))
   : '';
@@ -2154,15 +2153,6 @@ function appendDecisionLog(entry) {
   }
 }
 
-async function applyHumanPacing(startedAtMs, minMs, maxMs) {
-  if (!HUMAN_DELAY) return;
-  const targetMs = minMs + Math.floor(rng() * (maxMs - minMs + 1));
-  const elapsed = Date.now() - startedAtMs;
-  if (elapsed < targetMs) {
-    await sleep(targetMs - elapsed);
-  }
-}
-
 // ------------------------------------------------------------------ Single Game Runner
 async function playOneGame(gameIdx) {
   const client = new PbsHttpClient();
@@ -2380,7 +2370,6 @@ async function playOneGame(gameIdx) {
       }
 
       if (page.kind === 'TEAM_PREVIEW_CHECK') {
-        const stepStartMs = Date.now();
         const parsedPreview = parseTeamPreviewHtml(page.html);
         // Determine whether we are P1 (0) or P2 (1)
         if (parsedPreview.p1Name === NAME && parsedPreview.p2Name !== NAME) {
@@ -2476,8 +2465,6 @@ async function playOneGame(gameIdx) {
           (choiceStr ? ` [${previewSource}: ${choiceStr}]` : '')
         );
 
-        await applyHumanPacing(stepStartMs, 3500, 6200);
-
         decisions++;
         appendDecisionLog({
           gameIdx,
@@ -2524,7 +2511,6 @@ async function playOneGame(gameIdx) {
       }
 
       if (page.kind === 'BATTLE_INPUT' || page.kind === 'BATTLE_CHANGE') {
-        const stepStartMs = Date.now();
         const isForceSwitch = page.kind === 'BATTLE_CHANGE';
         const battleTurn = parseBattleTurnHtml(page.html);
         const turnNum = battleTurn.nowVal === '' ? 1 : (parseInt(battleTurn.nowVal, 10) + 1);
@@ -2704,8 +2690,6 @@ async function playOneGame(gameIdx) {
           `submitting MOVE=${chosenMoveValue} (${chosenOptObj ? chosenOptObj.label : ''})` +
           (bestChoice ? ` [search: ${bestChoice}]` : '')
         );
-
-        await applyHumanPacing(stepStartMs, 1600, 3100);
 
         decisions++;
         lastTurnActedKey = turnKey;

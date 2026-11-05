@@ -44,4 +44,5 @@ data/team-selection-v2/stage-a-3000/
 pbs-bot.config.json
 data/pbs-opponent-db.json
 data/pbs-matches.jsonl
+data/discord-events.jsonl
 
