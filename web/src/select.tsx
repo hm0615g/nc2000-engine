@@ -1053,6 +1053,11 @@ export function StartScreen(props: {
         <a class="start-link" href={`${import.meta.env.BASE_URL}?evaluate`}>
           {ui().evaluateLink}
         </a>
+        <a class="start-link" href={`${import.meta.env.BASE_URL}?pdinput`} data-testid="pdinput-link">
+          {props.locale === "ja"
+            ? "PDINPUT.cgi にパーティプールを取り込む"
+            : "Import party pool to PDINPUT.cgi"}
+        </a>
       </main>
 
       {modal === "human" && (
