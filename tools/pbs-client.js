@@ -25,7 +25,6 @@
 const fs = require('fs');
 const path = require('path');
 const net = require('net');
-const { execFileSync } = require('child_process');
 const { encodeTeamForPdinput, PDINPUT_ITEM_CODES } = require('./export-pdinput');
 
 const REPO = path.join(__dirname, '..');
@@ -46,27 +45,34 @@ for (let i = 2; i < process.argv.length; i++) {
 if (args.help || args.h) {
   console.log(`node tools/pbs-client.js — NC2000 bot client for psense.lib.net/PBS/_/X/PS.cgi
 
-  --room ROOM       PBS room letter (C..O, default K) or full PS.cgi URL
-                    (e.g. http://psense.lib.net/PBS/_/C/PS.cgi)
-  --name NAME       Player name registered in PS.cgi (default nc2000bot;
-                    ASCII alphanumeric recommended for non-IE PBS cookie)
-  --pass PASS       Entry password (default random 6-char ASCII)
-  --msg MSG         Entry comment when hosting as P1 (default よろしくおねがいします)
-  --mode MODE       auto | host | join (default auto)
-                      host: only enter as P1 when the room is empty
-                      join: wait until a human P1 enters, then join as P2
-                      auto: join as P2 if P1 is waiting, else enter as P1
-  --team SPEC       pool:nash | pool:random | pool:ID | pool:IDX | FILE.json
-                    (default pool:nash)
-  --iters N         Search iterations per decision (default: blind profile 27000)
-  --seed N          RNG / searcher seed (default 1)
-  --poll-ms MS      Polling interval while waiting for opponent (default 2500)
-  --games N         Number of games to play (default 1)
-  --tlimit SEC      Turn time limit field when entering as P1 (default 120)
-  --lturn N         Max turn limit field when entering as P1 (default 100)
-  --random          Fast uniform-legal driver (no WASM search; useful for testing)
-  --decision-log F  Append JSONL decision records to F
-  --quiet           Minimal console logging`);
+  --room ROOM          PBS room letter (C..O, default K) or full PS.cgi URL
+                       (e.g. http://psense.lib.net/PBS/_/C/PS.cgi)
+  --name NAME          Player name registered in PS.cgi (default nc2000bot;
+                       ASCII alphanumeric recommended for non-IE PBS cookie)
+  --pass PASS          Entry password (default nc2pass)
+  --msg MSG            Entry comment when hosting as P1 (default よろしくおねがいします)
+  --mode MODE          auto | host | join (default auto)
+                         host: only enter as P1 when the room is empty
+                         join: wait until a human P1 enters, then join as P2
+                         auto: join as P2 if P1 is waiting, else enter as P1
+  --tier TIER          default | mercy (default: default = 81k + pool:nash;
+                       mercy = 81k + pool:tier-a human-sized sub-party box)
+  --team SPEC          pool:nash | pool:tier-a | pool:random | pool:ID | FILE.json
+                       (default determined by --tier)
+  --iters N            Search iterations per decision (default: live-search strong 81000)
+  --seed N             RNG / searcher seed (default 1)
+  --poll-ms MS         Polling interval while waiting for opponent (default 2500)
+  --host-timeout-sec S Max seconds to wait as P1 before leaving empty room (default 240, 0=none)
+  --games N            Number of games to play (default 1)
+  --tlimit SEC         Turn time limit field when entering as P1 (default 0)
+  --lturn N            Max turn limit field when entering as P1 (default 0)
+  --opponent-db FILE   JSON path for persistent opponent memory & online adaptation
+                       (default: data/pbs-opponent-db.json; --no-opponent-db to disable)
+  --match-log FILE     JSONL path for completed match records (default: data/pbs-matches.jsonl)
+  --no-human-delay     Disable human-like minimum pacing delays
+  --random             Fast uniform-legal driver (no WASM search; useful for testing)
+  --decision-log F     Append JSONL decision records to F
+  --quiet              Minimal console logging`);
   process.exit(0);
 }
 
@@ -82,21 +88,48 @@ const NAME = String(args.name || 'nc2000bot');
 const PASS = String(args.pass || 'nc2pass');
 const MSG = String(args.msg || 'よろしくおねがいします');
 const MODE = String(args.mode || 'auto').toLowerCase();
-const TEAMSPEC = String(args.team || 'pool:nash');
+const TIER = String(args.tier || 'default').toLowerCase();
+const DEFAULT_TEAM_BY_TIER = (TIER === 'mercy' || TIER === 'tiera' || TIER === 'tier-a' || TIER === 'sub')
+  ? 'pool:tier-a'
+  : 'pool:nash';
+const TEAMSPEC = String(args.team || DEFAULT_TEAM_BY_TIER);
 const GAMES = Math.max(1, parseInt(args.games || '1', 10));
 const POLL_MS = Math.max(500, parseInt(args['poll-ms'] || '2500', 10));
+const HOST_TIMEOUT_SEC = Math.max(0, parseInt(args['host-timeout-sec'] ?? '240', 10));
 const TLIMIT = Math.max(0, parseInt(args.tlimit || '0', 10));
 const LTURN = Math.max(0, parseInt(args.lturn || '0', 10));
-const SEED = parseInt(args.seed || '1', 10);
+const SEED = parseInt(args.seed || String(Date.now() & 0x7fffffff), 10);
 const RANDOM = Boolean(args.random);
 const QUIET = Boolean(args.quiet);
+const HUMAN_DELAY = !RANDOM && !Boolean(args['no-human-delay']);
 const DECISION_LOG = args['decision-log'] && args['decision-log'] !== true
   ? path.resolve(String(args['decision-log']))
   : '';
+const OPPONENT_DB_PATH = args['no-opponent-db']
+  ? ''
+  : path.resolve(
+      REPO,
+      args['opponent-db'] && args['opponent-db'] !== true
+        ? String(args['opponent-db'])
+        : 'data/pbs-opponent-db.json'
+    );
+const MATCH_LOG_PATH = args['no-match-log']
+  ? ''
+  : path.resolve(
+      REPO,
+      args['match-log'] && args['match-log'] !== true
+        ? String(args['match-log'])
+        : 'data/pbs-matches.jsonl'
+    );
 
 const profileText = fs.readFileSync(path.join(REPO, 'data/search-profiles.json'), 'utf8');
 const PROFILE = JSON.parse(profileText).blind;
-const ITERS = parseInt(args.iters || String(PROFILE.iterations), 10);
+let defaultStrongIters = 81000;
+try {
+  const liveSearch = JSON.parse(fs.readFileSync(path.join(REPO, 'data/live-search.json'), 'utf8'));
+  if (liveSearch?.battle?.strong) defaultStrongIters = liveSearch.battle.strong;
+} catch {}
+const ITERS = parseInt(args.iters || String(defaultStrongIters), 10);
 
 // ------------------------------------------------------------------ data & i18n
 const dexData = JSON.parse(fs.readFileSync(path.join(REPO, 'data/gen2stadium2.json'), 'utf8'));
@@ -104,6 +137,24 @@ const i18n = JSON.parse(fs.readFileSync(path.join(REPO, 'data/i18n-ja.json'), 'u
 const ownPool = JSON.parse(fs.readFileSync(path.join(REPO, 'data/team-pool-v2/team-pool.json'), 'utf8'));
 const nashDeme = JSON.parse(fs.readFileSync(path.join(REPO, 'data/kodoku-r3/conclusion-equilibrium-deme.json'), 'utf8'));
 const beliefPoolJson = fs.readFileSync(path.join(REPO, 'data/belief-pool-v3/belief-pool.json'), 'utf8');
+const baseBeliefPool = JSON.parse(beliefPoolJson);
+let compiledPreview = null;
+try {
+  compiledPreview = JSON.parse(fs.readFileSync(path.join(REPO, 'data/compiled-preview-v1.json'), 'utf8'));
+} catch {}
+
+// Skeuomorphic "1 human player's sub-party box" for Tier A (mercy/handicap mode):
+// 8 distinct iconic human-origin archetypes from data/team-pool-v2/team-pool.json
+const TIER_A_BOX_IDS = [
+  'sample-07',        // マルマイン/ケンタロス55/パルシェン/ガラガラ55/カビゴン/サンダー55
+  'sample-08',        // ナッシー/カイリキー/ミルタンク/パルシェン/カビゴン55/サンダー55
+  'sample-12',        // ゲンガー/スターミー/パルシェン/ブラッキー/ガラガラ55/カビゴン55
+  'mjj-2020-rraikou', // ライコウ55/パルシェン/カビゴン55/ガラガラ/ヘラクロス/カイリキー
+  'mjj-2014-thdrcomb',// サンダー55/バンギラス55/フシギバナ/ハガネール/パルシェン/カビゴン
+  'sample-17-orig',   // ハガネール/ナッシー/ポリゴン2-55/カビゴン55/サンダー/スイクン
+  'sample-11',        // フーディン/エアームド/ハピナス/フシギバナ/スイクン55/バンギラス55
+  'rental-cban-8',    // バンギラス55/ナッシー/フシギバナ/ゴローニャ/カビゴン55/ミルタンク
+];
 
 function toId(s) {
   return String(s || '')
@@ -144,6 +195,8 @@ Object.assign(JP_TO_ITEM_ID, {
   [normJp('はっかのきのみ')]: 'mintberry',
   [normJp('きせきのきのみ')]: 'miracleberry',
   [normJp('ふしぎのきのみ')]: 'mysteryberry',
+  [normJp('こおりなおしのきのみ')]: 'iceberry',
+  [normJp('やけどなおしのきのみ')]: 'burntberry',
 });
 
 // ------------------------------------------------------------------ RNG & Teams
@@ -159,8 +212,9 @@ function rngInt(n) {
   return Math.floor(rng() * n);
 }
 
-function pickTeam() {
-  if (TEAMSPEC === 'pool:nash') {
+function pickTeam(specOverride) {
+  const spec = String(specOverride || TEAMSPEC);
+  if (spec === 'pool:nash' || spec === 'nash' || spec === 'default') {
     const teams = nashDeme.teams;
     const total = teams.reduce((a, t) => a + (t.weight || 0), 0);
     let r = rng() * total;
@@ -172,10 +226,18 @@ function pickTeam() {
       }
       r -= (t.weight || 0);
     }
-    return { id: chosen.id, sets: chosen.sets, label: `pool:nash(${chosen.id})` };
+    return { id: chosen.id, sets: chosen.sets, label: `pool:nash(${chosen.id})`, tier: 'nash' };
   }
-  if (TEAMSPEC.startsWith('pool:')) {
-    const which = TEAMSPEC.slice(5);
+  if (spec === 'pool:tier-a' || spec === 'pool:tiera' || spec === 'tier-a' || spec === 'mercy') {
+    const boxTeams = ownPool.teams.filter(t => TIER_A_BOX_IDS.includes(t.id));
+    const candidates = boxTeams.length > 0
+      ? boxTeams
+      : ownPool.teams.filter(t => t.provenance?.origin === 'human');
+    const chosen = candidates[rngInt(candidates.length)];
+    return { id: chosen.id, sets: chosen.sets, label: `pool:tier-a(${chosen.id})`, tier: 'tier-a' };
+  }
+  if (spec.startsWith('pool:')) {
+    const which = spec.slice(5);
     const teams = ownPool.teams;
     let idx = -1;
     if (which === 'random') {
@@ -195,16 +257,16 @@ function pickTeam() {
       if (idx < 0 && /^\d+$/.test(which)) idx = parseInt(which, 10);
     }
     if (!(idx >= 0 && idx < teams.length)) {
-      throw new Error(`Unknown team spec: ${TEAMSPEC}`);
+      throw new Error(`Unknown team spec: ${spec}`);
     }
-    return { id: teams[idx].id, sets: teams[idx].sets, label: `pool:${teams[idx].id}` };
+    return { id: teams[idx].id, sets: teams[idx].sets, label: `pool:${teams[idx].id}`, tier: 'catalog' };
   }
-  const raw = JSON.parse(fs.readFileSync(path.resolve(TEAMSPEC), 'utf8'));
+  const raw = JSON.parse(fs.readFileSync(path.resolve(spec), 'utf8'));
   const sets = Array.isArray(raw) ? raw : raw.sets;
   if (!Array.isArray(sets) || sets.length === 0) {
-    throw new Error(`${TEAMSPEC}: expected JSON array of sets or { sets: [...] }`);
+    throw new Error(`${spec}: expected JSON array of sets or { sets: [...] }`);
   }
-  return { id: raw.id || path.basename(TEAMSPEC), sets, label: TEAMSPEC };
+  return { id: raw.id || path.basename(spec), sets, label: spec, tier: 'custom' };
 }
 
 /**
@@ -223,37 +285,57 @@ function encodeTeamForPbsCookie(team) {
   return encodeTeamForPdinput({ id: team.id || 'bot', sets: clonedSets });
 }
 
-// ------------------------------------------------------------------ EUC-JP helpers
+// ------------------------------------------------------------------ Pure-JS EUC-JP helpers
+// Built by inverting Node's built-in TextDecoder('euc-jp') over JIS X 0208 & halfwidth kana
+// so the client has zero external binary dependencies (`iconv` not needed on Windows).
 const eucJpDecoder = new TextDecoder('euc-jp');
+const UTF8_TO_EUCJP_MAP = (() => {
+  const map = new Map();
+  for (let b1 = 0xa1; b1 <= 0xfe; b1++) {
+    for (let b2 = 0xa1; b2 <= 0xfe; b2++) {
+      const ch = eucJpDecoder.decode(Uint8Array.from([b1, b2]));
+      if (ch.length === 1 && ch !== '\uFFFD' && !map.has(ch)) {
+        map.set(ch, [b1, b2]);
+      }
+    }
+  }
+  for (let b2 = 0xa1; b2 <= 0xdf; b2++) {
+    const ch = eucJpDecoder.decode(Uint8Array.from([0x8e, b2]));
+    if (ch.length === 1 && ch !== '\uFFFD' && !map.has(ch)) {
+      map.set(ch, [0x8e, b2]);
+    }
+  }
+  return map;
+})();
 
 function encodeEucJpPercent(str) {
   const s = String(str ?? '');
-  if (/^[\x00-\x7f]*$/.test(s)) {
-    return encodeURIComponent(s);
-  }
-  try {
-    const buf = execFileSync('iconv', ['-f', 'UTF-8', '-t', 'EUC-JP'], {
-      input: Buffer.from(s, 'utf8'),
-    });
-    let out = '';
-    for (const b of buf) {
+  let out = '';
+  for (const ch of s) {
+    const code = ch.codePointAt(0);
+    if (code < 0x80) {
       if (
-        (b >= 0x30 && b <= 0x39) ||
-        (b >= 0x41 && b <= 0x5a) ||
-        (b >= 0x61 && b <= 0x7a) ||
-        b === 0x2d || b === 0x5f || b === 0x2e || b === 0x2a
+        (code >= 0x30 && code <= 0x39) ||
+        (code >= 0x41 && code <= 0x5a) ||
+        (code >= 0x61 && code <= 0x7a) ||
+        code === 0x2d || code === 0x5f || code === 0x2e || code === 0x2a
       ) {
-        out += String.fromCharCode(b);
-      } else if (b === 0x20) {
+        out += ch;
+      } else if (code === 0x20) {
         out += '+';
       } else {
-        out += '%' + b.toString(16).toUpperCase().padStart(2, '0');
+        out += '%' + code.toString(16).toUpperCase().padStart(2, '0');
+      }
+    } else {
+      const bytes = UTF8_TO_EUCJP_MAP.get(ch);
+      if (bytes) {
+        for (const b of bytes) {
+          out += '%' + b.toString(16).toUpperCase().padStart(2, '0');
+        }
       }
     }
-    return out;
-  } catch {
-    return encodeURIComponent(s);
   }
+  return out;
 }
 
 function encodeFormEucJp(fields) {
@@ -706,10 +788,146 @@ function parsePdatHtml(html) {
   return { mons, foeRemaining };
 }
 
+// ------------------------------------------------------------------ Exact Gen 2 MaxHP & Hidden Power DV Leak Inference
+const HP_TYPES_LIST = [
+  'Fighting', 'Flying', 'Poison', 'Ground',
+  'Rock', 'Bug', 'Ghost', 'Steel',
+  'Fire', 'Water', 'Grass', 'Electric',
+  'Psychic', 'Ice', 'Dragon', 'Dark',
+];
+
+const HP_TYPE_INDEX_BY_ID = Object.fromEntries(
+  HP_TYPES_LIST.map((t, i) => [toId(t), i])
+);
+
+const HP_DVS_BY_TYPE_ID = {
+  bug:      { atk: 13, def: 13 },
+  dark:     { atk: 15, def: 15 },
+  dragon:   { atk: 15, def: 14 },
+  electric: { atk: 14, def: 15 },
+  fighting: { atk: 12, def: 12 },
+  fire:     { atk: 14, def: 12 },
+  flying:   { atk: 12, def: 13 },
+  ghost:    { atk: 13, def: 14 },
+  grass:    { atk: 14, def: 14 },
+  ground:   { atk: 12, def: 15 },
+  ice:      { atk: 15, def: 13 },
+  poison:   { atk: 12, def: 14 },
+  psychic:  { atk: 15, def: 12 },
+  rock:     { atk: 13, def: 12 },
+  steel:    { atk: 13, def: 15 },
+  water:    { atk: 14, def: 13 },
+};
+
+/**
+ * Compute exact Gen 2 MaxHP for a set in `belief-pool-v3` or `team-pool-v2` at a given level.
+ * Mirrors `crates/bot/src/belief.rs::resolve_dvs` and `Dex::max_hp`.
+ */
+function calcSetMaxHp(set, levelOverride) {
+  if (!set) return null;
+  const spId = toId(set.species);
+  const sp = dexData.species[spId];
+  if (!sp || !sp.baseStats) return null;
+  const level = levelOverride || set.level || 50;
+
+  let atk = 15, def = 15, spe = 15, spc = 15;
+  for (const m of set.moves || []) {
+    const mId = toId(m);
+    if (mId.startsWith('hiddenpower') && mId.length > 'hiddenpower'.length) {
+      const hpType = mId.slice('hiddenpower'.length);
+      if (HP_DVS_BY_TYPE_ID[hpType]) {
+        atk = HP_DVS_BY_TYPE_ID[hpType].atk;
+        def = HP_DVS_BY_TYPE_ID[hpType].def;
+      }
+    }
+  }
+  if (set.ivs) {
+    if (set.ivs.atk !== undefined) atk = Math.floor(set.ivs.atk / 2);
+    if (set.ivs.def !== undefined) def = Math.floor(set.ivs.def / 2);
+    if (set.ivs.spe !== undefined) spe = Math.floor(set.ivs.spe / 2);
+    if (set.ivs.spa !== undefined) spc = Math.floor(set.ivs.spa / 2);
+  }
+  if (set.dvs) {
+    if (set.dvs.atk !== undefined) atk = set.dvs.atk;
+    if (set.dvs.def !== undefined) def = set.dvs.def;
+    if (set.dvs.spe !== undefined) spe = set.dvs.spe;
+    if (set.dvs.spc !== undefined) spc = set.dvs.spc;
+  }
+
+  let hpDv = ((atk & 1) << 3) | ((def & 1) << 2) | ((spe & 1) << 1) | (spc & 1);
+  if (set.ivs && set.ivs.hp !== undefined) {
+    hpDv = Math.floor(set.ivs.hp / 2);
+  }
+  if (set.dvs && set.dvs.hp !== undefined) {
+    hpDv = set.dvs.hp;
+  }
+
+  const evHp = set.evs && set.evs.hp !== undefined ? set.evs.hp : 252;
+  const evTerm = Math.min(63, Math.floor(evHp / 4));
+  const baseHp = sp.baseStats.hp;
+  return Math.floor(((baseHp + hpDv) * 2 + evTerm) * level / 100) + level + 10;
+}
+
+/**
+ * Given a Pokemon's species, level, gender, and observed exact `maxHp` from `PS.cgi`,
+ * infer the 16-bit `hp_type_mask` over `HP_TYPES_LIST` (`crates/bot/src/hp_evidence.rs`).
+ * Assuming standard max HP StatExp (`evTerm = 63`), `observedMaxHp` narrows `hpDv`,
+ * which fixes `(atkDv & 1)` (bit 3 of `hpDv`) and `(defDv & 1)` (bit 2 of `hpDv`),
+ * reducing the 16 Hidden Power types to at most 4 compatible types!
+ */
+function inferHpTypeMaskFromMaxHp(speciesId, level, gender, observedMaxHp) {
+  const sp = dexData.species[toId(speciesId)];
+  if (!sp || !sp.baseStats || !observedMaxHp || observedMaxHp <= 0) return 0xffff;
+
+  // Compute gender-legal HP type mask (`hp_evidence::possible_types`)
+  const ratio = sp.genderRatio
+    ? Math.round((sp.genderRatio.F || 0) * 254)
+    : (sp.gender === 'N' ? 255 : sp.gender === 'F' ? 254 : sp.gender === 'M' ? 0 : 127);
+
+  let atkMin = 0, atkMax = 15;
+  if (ratio > 0 && ratio < 254) {
+    const threshold = Math.floor(ratio / 16);
+    if (gender === 'F') {
+      atkMax = Math.max(0, threshold - 1);
+    } else if (gender === 'M') {
+      atkMin = threshold;
+    }
+  }
+
+  let genderPossibleMask = 0;
+  for (let a = atkMin; a <= atkMax; a++) {
+    for (let d = 0; d <= 15; d++) {
+      const idx = 4 * (a & 3) + (d & 3);
+      genderPossibleMask |= (1 << idx);
+    }
+  }
+
+  // Match `hpDv` under full HP EVs (`evTerm = 63`)
+  let maxHpMask = 0;
+  for (let hpDv = 0; hpDv <= 15; hpDv++) {
+    const mHp = Math.floor(((sp.baseStats.hp + hpDv) * 2 + 63) * level / 100) + level + 10;
+    if (mHp === observedMaxHp) {
+      const atkParity = (hpDv >> 3) & 1;
+      const defParity = (hpDv >> 2) & 1;
+      for (let a = atkMin; a <= atkMax; a++) {
+        if ((a & 1) !== atkParity) continue;
+        for (let d = 0; d <= 15; d++) {
+          if ((d & 1) !== defParity) continue;
+          const idx = 4 * (a & 3) + (d & 3);
+          maxHpMask |= (1 << idx);
+        }
+      }
+    }
+  }
+
+  const intersection = maxHpMask & genderPossibleMask;
+  return intersection !== 0 ? intersection : 0xffff;
+}
+
 /**
  * Parse `?ACTION=LLOG` cumulative battle log HTML to extract public battle facts:
  * - appeared mons, fainted mons, move uses per mon, active boosts, weather,
- *   side conditions (Reflect, Light Screen, Spikes), and key volatiles.
+ *   side conditions (Reflect, Light Screen, Spikes), key volatiles, and item reveals.
  */
 function parseLlogHtml(html, previewSides) {
   const info = {
@@ -723,6 +941,7 @@ function parseLlogHtml(html, previewSides) {
           boosts: [0, 0, 0, 0, 0, 0, 0],
           uses: {},
           revealedMoves: new Set(),
+          itemOriginal: null,
           itemCurrent: null,
           volatiles: new Map(),
         })),
@@ -738,6 +957,7 @@ function parseLlogHtml(html, previewSides) {
           boosts: [0, 0, 0, 0, 0, 0, 0],
           uses: {},
           revealedMoves: new Set(),
+          itemOriginal: null,
           itemCurrent: null,
           volatiles: new Map(),
         })),
@@ -773,6 +993,20 @@ function parseLlogHtml(html, previewSides) {
       side.mons[slot].appeared = true;
     }
   };
+
+  const CONSUMED_BERRIES_JP = [
+    ['おうごんのきのみ', 'goldberry'],
+    ['きせきのきのみ', 'miracleberry'],
+    ['はっかのきのみ', 'mintberry'],
+    ['まひなおしのみ', 'przcureberry'],
+    ['こおりなおしのみ', 'iceberry'],
+    ['やけどなおしのみ', 'burntberry'],
+    ['どくけしのみ', 'psncureberry'],
+    ['にがきのみ', 'bitterberry'],
+    ['ふしぎのきのみ', 'mysteryberry'],
+    ['きのみジュース', 'berryjuice'],
+    ['きのみ', 'berry'],
+  ];
 
   // Walk paragraph blocks `<P ALIGN="left|right">...</P>` or turn blocks
   const pRegex = /<P\s+ALIGN="?(left|right)"?\s*>([\s\S]*?)(?=<P\s+ALIGN|<HR|<\/BODY|$)/gi;
@@ -837,6 +1071,30 @@ function parseLlogHtml(html, previewSides) {
                 });
               }
             }
+          }
+        }
+      }
+    }
+
+    // Item reveal cues in LLOG (`たべのこしで体力を回復`, berries consumed, Focus Band, Quick Claw)
+    const itemSlot = findSlot(sideIdx, clean);
+    if (itemSlot !== null && info.sides[sideIdx].mons[itemSlot]) {
+      const mon = info.sides[sideIdx].mons[itemSlot];
+      if (clean.includes('たべのこし') || clean.includes('食べ残し')) {
+        mon.itemOriginal = mon.itemOriginal || 'leftovers';
+        mon.itemCurrent = 'leftovers';
+      } else if (clean.includes('きあいのハチマキ')) {
+        mon.itemOriginal = mon.itemOriginal || 'focusband';
+        mon.itemCurrent = 'focusband';
+      } else if (clean.includes('せんせいのツメ')) {
+        mon.itemOriginal = mon.itemOriginal || 'quickclaw';
+        mon.itemCurrent = 'quickclaw';
+      } else {
+        for (const [jpBerry, berryId] of CONSUMED_BERRIES_JP) {
+          if (clean.includes(jpBerry)) {
+            mon.itemOriginal = mon.itemOriginal || berryId;
+            mon.itemCurrent = '';
+            break;
           }
         }
       }
@@ -915,10 +1173,434 @@ function parseLlogHtml(html, previewSides) {
   return info;
 }
 
+// ------------------------------------------------------------------ Opponent Memory DB & Dynamic Belief Adaptation
+function computeShellKey(previewRoster) {
+  if (!Array.isArray(previewRoster) || previewRoster.length === 0) return '';
+  return previewRoster
+    .map(m => `${toId(m.speciesId || m.species)}:${m.level || 50}`)
+    .sort()
+    .join('/');
+}
+
+function loadOpponentDb(dbPath = OPPONENT_DB_PATH) {
+  if (!dbPath || !fs.existsSync(dbPath)) {
+    return { schema: 'pbs-opponent-db-v1', updatedAt: null, players: {}, shells: {} };
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+    parsed.players = parsed.players || {};
+    parsed.shells = parsed.shells || {};
+    return parsed;
+  } catch {
+    return { schema: 'pbs-opponent-db-v1', updatedAt: null, players: {}, shells: {} };
+  }
+}
+
+function saveOpponentDb(db, dbPath = OPPONENT_DB_PATH) {
+  if (!dbPath || !db) return;
+  try {
+    db.updatedAt = new Date().toISOString();
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+    fs.writeFileSync(dbPath, JSON.stringify(db, null, 2) + '\n', { mode: 0o600 });
+  } catch {
+    // Non-fatal persistence
+  }
+}
+
+function appendMatchLog(entry, logPath = MATCH_LOG_PATH) {
+  if (!logPath) return;
+  try {
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    fs.appendFileSync(logPath, JSON.stringify(entry) + '\n', { mode: 0o600 });
+  } catch {
+    // Non-fatal logging
+  }
+}
+
+/**
+ * Record observed opponent facts from a match into `opponentDb` so subsequent games
+ * (and prior expansion offline) immediately adapt to the opponent's sets and habits.
+ */
+function recordOpponentObservation({
+  opponentDb,
+  foeName,
+  foePreviewMons,
+  seenFoeMons,
+  llogFoeMons,
+  outcome,
+}) {
+  if (!opponentDb || !Array.isArray(foePreviewMons) || foePreviewMons.length !== 6) return;
+  const shellKey = computeShellKey(foePreviewMons);
+  if (!shellKey) return;
+
+  const updateShellBucket = bucket => {
+    bucket.games = (bucket.games || 0) + 1;
+    bucket.lastSeen = new Date().toISOString();
+    bucket.mons = bucket.mons || {};
+
+    for (let i = 0; i < 6; i++) {
+      const pm = foePreviewMons[i];
+      const spId = toId(pm.speciesId || pm.species);
+      const monKey = `${spId}:${pm.level || 50}`;
+      const rec = bucket.mons[monKey] || {
+        species: dexData.species[spId]?.name || pm.species,
+        speciesId: spId,
+        level: pm.level || 50,
+        gender: pm.gender || 'M',
+        itemFlag: Boolean(pm.item_flag),
+        pickedCount: 0,
+        maxHps: {},
+        items: {},
+        noLeftoversCount: 0,
+        moves: {},
+      };
+
+      const seen = seenFoeMons && seenFoeMons[i] ? seenFoeMons[i] : null;
+      const llogMon = llogFoeMons && llogFoeMons[i] ? llogFoeMons[i] : null;
+      const appeared = Boolean(seen?.appeared || llogMon?.appeared);
+      if (appeared) rec.pickedCount = (rec.pickedCount || 0) + 1;
+      if (seen?.maxHp && seen.maxHp > 0) {
+        rec.maxHps[String(seen.maxHp)] = (rec.maxHps[String(seen.maxHp)] || 0) + 1;
+      }
+      const itemOrig = seen?.itemOriginal || llogMon?.itemOriginal || null;
+      if (itemOrig) {
+        rec.items[itemOrig] = (rec.items[itemOrig] || 0) + 1;
+      } else if (seen?.noLeftovers) {
+        rec.noLeftoversCount = (rec.noLeftoversCount || 0) + 1;
+      }
+
+      const moveSet = new Set([
+        ...(seen?.revealedMoves || []),
+        ...(llogMon?.revealedMoves ? [...llogMon.revealedMoves] : []),
+      ]);
+      for (const mvId of moveSet) {
+        if (dexData.moves[mvId]) {
+          rec.moves[mvId] = (rec.moves[mvId] || 0) + 1;
+        }
+      }
+
+      bucket.mons[monKey] = rec;
+    }
+  };
+
+  if (foeName) {
+    opponentDb.players[foeName] = opponentDb.players[foeName] || {
+      name: foeName,
+      games: 0,
+      winsAgainst: 0,
+      lossesAgainst: 0,
+      shells: {},
+    };
+    const p = opponentDb.players[foeName];
+    p.games = (p.games || 0) + 1;
+    if (outcome === 'WIN') p.winsAgainst = (p.winsAgainst || 0) + 1;
+    if (outcome === 'LOSE') p.lossesAgainst = (p.lossesAgainst || 0) + 1;
+    p.shells[shellKey] = p.shells[shellKey] || {};
+    updateShellBucket(p.shells[shellKey]);
+  }
+
+  opponentDb.shells[shellKey] = opponentDb.shells[shellKey] || {};
+  updateShellBucket(opponentDb.shells[shellKey]);
+}
+
+const ITEM_DISPLAY_BY_ID = {
+  leftovers: 'Leftovers',
+  mintberry: 'Mint Berry',
+  miracleberry: 'Miracle Berry',
+  goldberry: 'Gold Berry',
+  przcureberry: 'PRZ Cure Berry',
+  iceberry: 'Ice Berry',
+  burntberry: 'Burnt Berry',
+  psncureberry: 'PSN Cure Berry',
+  bitterberry: 'Bitter Berry',
+  mysteryberry: 'Mystery Berry',
+  berryjuice: 'Berry Juice',
+  berry: 'Berry',
+  thickclub: 'Thick Club',
+  lightball: 'Light Ball',
+  metalpowder: 'Metal Powder',
+  stick: 'Stick',
+  scopelens: 'Scope Lens',
+  focusband: 'Focus Band',
+  quickclaw: 'Quick Claw',
+  kingsrock: 'King\'s Rock',
+  brightpowder: 'BrightPowder',
+  charcoal: 'Charcoal',
+  mysticwater: 'Mystic Water',
+  magnet: 'Magnet',
+  miracleseed: 'Miracle Seed',
+  nevermeltice: 'NeverMeltIce',
+  twistedspoon: 'TwistedSpoon',
+  pinkbow: 'Pink Bow',
+  polkadotbow: 'Polkadot Bow',
+  softsand: 'Soft Sand',
+  hardstone: 'Hard Stone',
+  sharpbeak: 'Sharp Beak',
+  poisonbarb: 'Poison Barb',
+  silverpowder: 'SilverPowder',
+  spelltag: 'Spell Tag',
+  dragonfang: 'Dragon Fang',
+  blackglasses: 'BlackGlasses',
+  blackbelt: 'Black Belt',
+  metalcoat: 'Metal Coat',
+};
+
+/**
+ * Build a per-game adapted `beliefPoolJson` string that combines:
+ * 1. Exact `maxHp` and `noLeftovers` leak reweighting on `belief-pool-v3` candidates.
+ * 2. Synthesized high-prior team candidate(s) from `opponentDb` (past matches against
+ *    this player/shell) + current-match observations, completing any unrevealed move slots
+ *    from the closest `belief-pool-v3` template for each species.
+ */
+function buildDynamicBeliefPoolJson({
+  foePreviewMons,
+  foeName,
+  seenFoeMons,
+  opponentDb,
+}) {
+  if (!Array.isArray(foePreviewMons) || foePreviewMons.length !== 6) {
+    return { json: beliefPoolJson, hasCustomShellMemory: false };
+  }
+
+  const shellKey = computeShellKey(foePreviewMons);
+  const playerShell = foeName && opponentDb?.players?.[foeName]?.shells?.[shellKey]
+    ? opponentDb.players[foeName].shells[shellKey]
+    : null;
+  const globalShell = opponentDb?.shells?.[shellKey] || null;
+  const shellMem = playerShell || globalShell;
+  const hasCustomShellMemory = Boolean(shellMem && shellMem.games > 0);
+
+  // Check whether we have any live leaks (`maxHp` or `noLeftovers`) or historical shell memory
+  const hasLiveLeaks = Array.isArray(seenFoeMons) && seenFoeMons.some(
+    m => m && ((m.maxHp && m.maxHp > 0) || m.noLeftovers || m.itemOriginal)
+  );
+  if (!hasCustomShellMemory && !hasLiveLeaks) {
+    return { json: beliefPoolJson, hasCustomShellMemory: false };
+  }
+
+  const clonedTeams = [];
+
+  for (const team of baseBeliefPool.teams || []) {
+    const newSets = [];
+    let multiplier = 1.0;
+
+    for (const s of team.sets || []) {
+      const spId = toId(s.species);
+      const foeSlot = foePreviewMons.findIndex(pm => toId(pm.speciesId || pm.species) === spId);
+      if (foeSlot < 0) {
+        newSets.push(s);
+        continue;
+      }
+
+      const pm = foePreviewMons[foeSlot];
+      const seen = seenFoeMons && seenFoeMons[foeSlot] ? seenFoeMons[foeSlot] : null;
+      const monKey = `${spId}:${pm.level || s.level || 50}`;
+      const memMon = shellMem?.mons?.[monKey] || null;
+
+      // 1. Check exact maxHp leak (live first, then historical most-frequent maxHp)
+      let targetMaxHp = seen?.maxHp || null;
+      if (!targetMaxHp && memMon && memMon.maxHps) {
+        const sortedHps = Object.entries(memMon.maxHps).sort((a, b) => b[1] - a[1]);
+        if (sortedHps.length > 0) targetMaxHp = parseInt(sortedHps[0][0], 10);
+      }
+      if (targetMaxHp && targetMaxHp > 0) {
+        const candMaxHp = calcSetMaxHp(s, pm.level || s.level || 50);
+        if (candMaxHp !== null && candMaxHp !== targetMaxHp) {
+          multiplier *= 0.03;
+        }
+      }
+
+      // 2. Check Leftovers absence (`noLeftovers`)
+      const noLeftovers = Boolean(
+        seen?.noLeftovers ||
+        (!seen?.itemOriginal && memMon && memMon.noLeftoversCount > 0 && !memMon.items?.leftovers)
+      );
+      if (noLeftovers && toId(s.item || '') === 'leftovers') {
+        multiplier *= 0.02;
+      }
+
+      newSets.push(s);
+    }
+
+    clonedTeams.push({
+      ...team,
+      sets: newSets,
+      weight: Math.max(1e-6, (team.weight ?? 1.0) * multiplier),
+    });
+  }
+
+  // Synthesize adapted team(s) for this opponent's exact 6-mon shell when we have memory or leaks
+  if (hasCustomShellMemory || hasLiveLeaks) {
+    const synthSets = [];
+    for (let i = 0; i < 6; i++) {
+      const pm = foePreviewMons[i];
+      const spId = toId(pm.speciesId || pm.species);
+      const level = pm.level || 50;
+      const seen = seenFoeMons && seenFoeMons[i] ? seenFoeMons[i] : null;
+      const monKey = `${spId}:${level}`;
+      const memMon = shellMem?.mons?.[monKey] || null;
+
+      // Gather known moves (live + historical top moves)
+      const knownMoveIds = [];
+      if (seen?.revealedMoves) {
+        for (const mId of seen.revealedMoves) {
+          if (!knownMoveIds.includes(mId)) knownMoveIds.push(mId);
+        }
+      }
+      if (memMon?.moves) {
+        const sortedMoves = Object.entries(memMon.moves)
+          .sort((a, b) => b[1] - a[1])
+          .map(([k]) => k);
+        for (const mId of sortedMoves) {
+          if (!knownMoveIds.includes(mId) && knownMoveIds.length < 4) {
+            knownMoveIds.push(mId);
+          }
+        }
+      }
+
+      // Gather known item or noLeftovers constraint
+      let knownItemId = seen?.itemOriginal || null;
+      if (!knownItemId && memMon?.items) {
+        const sortedItems = Object.entries(memMon.items).sort((a, b) => b[1] - a[1]);
+        if (sortedItems.length > 0) knownItemId = sortedItems[0][0];
+      }
+      const noLeftovers = Boolean(
+        seen?.noLeftovers ||
+        (!knownItemId && memMon && memMon.noLeftoversCount > 0)
+      );
+
+      // Gather target exact maxHp
+      let targetMaxHp = seen?.maxHp || null;
+      if (!targetMaxHp && memMon?.maxHps) {
+        const sortedHps = Object.entries(memMon.maxHps).sort((a, b) => b[1] - a[1]);
+        if (sortedHps.length > 0) targetMaxHp = parseInt(sortedHps[0][0], 10);
+      }
+
+      // Find the best-matching template set for this species in baseBeliefPool
+      let bestTemplate = null;
+      let bestScore = -1e9;
+      for (const t of baseBeliefPool.teams || []) {
+        for (const cand of t.sets || []) {
+          if (toId(cand.species) !== spId) continue;
+          let score = Math.log(Math.max(1e-4, t.weight ?? 1.0));
+          if ((cand.level || 50) === level) score += 4;
+          const candMoves = (cand.moves || []).map(m => {
+            const id = toId(m);
+            return id.startsWith('hiddenpower') ? 'hiddenpower' : id;
+          });
+          for (const km of knownMoveIds) {
+            const baseKm = km.startsWith('hiddenpower') ? 'hiddenpower' : km;
+            if (candMoves.includes(baseKm)) score += 10;
+          }
+          const candItem = toId(cand.item || '');
+          if (knownItemId && candItem === knownItemId) score += 8;
+          if (noLeftovers && candItem === 'leftovers') score -= 12;
+          if (targetMaxHp && calcSetMaxHp(cand, level) === targetMaxHp) score += 8;
+          if (score > bestScore) {
+            bestScore = score;
+            bestTemplate = cand;
+          }
+        }
+      }
+
+      const baseMoves = bestTemplate
+        ? [...bestTemplate.moves]
+        : ['Return', 'Rest', 'Sleep Talk', 'Curse'];
+      const mergedMoves = [];
+      for (const km of knownMoveIds) {
+        if (km === 'hiddenpower') {
+          const tmplHp = baseMoves.find(m => toId(m).startsWith('hiddenpower'));
+          mergedMoves.push(tmplHp || 'Hidden Power Ice');
+        } else {
+          mergedMoves.push(dexData.moves[km]?.name || km);
+        }
+      }
+      for (const bm of baseMoves) {
+        if (mergedMoves.length >= 4) break;
+        const bmId = toId(bm);
+        const bmBase = bmId.startsWith('hiddenpower') ? 'hiddenpower' : bmId;
+        const already = mergedMoves.some(existing => {
+          const exId = toId(existing);
+          const exBase = exId.startsWith('hiddenpower') ? 'hiddenpower' : exId;
+          return exBase === bmBase;
+        });
+        if (!already) mergedMoves.push(bm);
+      }
+
+      let finalItem = bestTemplate?.item || 'Leftovers';
+      if (!pm.item_flag) {
+        finalItem = '';
+      } else if (knownItemId && ITEM_DISPLAY_BY_ID[knownItemId]) {
+        finalItem = ITEM_DISPLAY_BY_ID[knownItemId];
+      } else if (noLeftovers && toId(finalItem) === 'leftovers') {
+        finalItem = spId === 'marowak' ? 'Thick Club' : 'Mint Berry';
+      }
+
+      const speciesName = dexData.species[spId]?.name || pm.species;
+      const synthSet = {
+        name: speciesName,
+        species: speciesName,
+        level,
+        item: finalItem,
+        ability: 'No Ability',
+        moves: mergedMoves.slice(0, 4),
+        gender: pm.gender || bestTemplate?.gender || 'M',
+        happiness: 255,
+        evs: bestTemplate?.evs
+          ? { ...bestTemplate.evs }
+          : { hp: 255, atk: 255, def: 255, spa: 255, spd: 255, spe: 255 },
+        ivs: bestTemplate?.ivs
+          ? { ...bestTemplate.ivs }
+          : { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
+      };
+
+      // If targetMaxHp differs from default maxHp, set `ivs.hp` so `PokemonSet` maxhp matches `targetMaxHp`!
+      if (targetMaxHp && calcSetMaxHp(synthSet, level) !== targetMaxHp) {
+        const sp = dexData.species[spId];
+        if (sp && sp.baseStats) {
+          for (let hpDv = 0; hpDv <= 15; hpDv++) {
+            const mHp = Math.floor(((sp.baseStats.hp + hpDv) * 2 + 63) * level / 100) + level + 10;
+            if (mHp === targetMaxHp) {
+              synthSet.ivs = {
+                ...synthSet.ivs,
+                hp: hpDv * 2,
+                atk: (hpDv & 8) ? 30 : 28,
+                def: (hpDv & 4) ? 30 : 28,
+              };
+              break;
+            }
+          }
+        }
+      }
+
+      synthSets.push(synthSet);
+    }
+
+    clonedTeams.push({
+      id: `OPPONENT_ADAPTED_${shellKey.slice(0, 24)}`,
+      v1Label: 'strong',
+      sets: synthSets,
+      weight: hasCustomShellMemory ? 6.0 : 2.5,
+    });
+  }
+
+  return {
+    json: JSON.stringify({
+      ...baseBeliefPool,
+      teams: clonedTeams,
+    }),
+    hasCustomShellMemory,
+  };
+}
+
 // ------------------------------------------------------------------ PositionSpec Builder & Sanitizer
 /**
  * Build and strictly sanitize an `nc2000-position-v1` object so `PositionSpec::check()`
  * in `crates/bot/src/position.rs` is guaranteed to succeed.
+ * Incorporates Castle-specific information leaks via `seenFoeMons`:
+ * - Exact bench `hp / maxHp` and `status` for opponent Pokemon that switched out
+ * - Item reveals (`item_original`, `item_current`)
+ * - Exact `maxHp` -> `hp_type_mask` constraint once `hiddenpower` is revealed
  */
 function buildAndSanitizePositionSpec({
   mySide,
@@ -929,6 +1611,7 @@ function buildAndSanitizePositionSpec({
   battleTurn,
   pdat,
   llog,
+  seenFoeMons,
   teamPreview,
   forceSwitch,
 }) {
@@ -972,6 +1655,7 @@ function buildAndSanitizePositionSpec({
       };
       const ownSet = isMe ? ownSets[i] : null;
       const llogMon = llog && llog.sides[s] && llog.sides[s].mons[i] ? llog.sides[s].mons[i] : null;
+      const seenFoe = !isMe && seenFoeMons && seenFoeMons[i] ? seenFoeMons[i] : null;
 
       const speciesName = ownSet
         ? ownSet.species
@@ -981,7 +1665,7 @@ function buildAndSanitizePositionSpec({
       const itemFlag = isMe ? Boolean(ownSet?.item) : Boolean(pm.item_flag);
 
       const uses = [];
-      const revealedMoves = [];
+      const revealedSet = new Set();
       if (llogMon) {
         for (const [mvId, count] of Object.entries(llogMon.uses || {})) {
           if (dexData.moves[mvId]) {
@@ -990,33 +1674,83 @@ function buildAndSanitizePositionSpec({
         }
         for (const mvId of llogMon.revealedMoves || []) {
           if (dexData.moves[mvId]) {
-            revealedMoves.push(mvId);
+            revealedSet.add(mvId);
           }
         }
       }
+      if (seenFoe && seenFoe.revealedMoves) {
+        for (const mvId of seenFoe.revealedMoves) {
+          if (dexData.moves[mvId]) {
+            revealedSet.add(mvId);
+          }
+        }
+      }
+      const revealedMoves = [...revealedSet];
 
-      spec.sides[s].mons.push({
+      const fainted = Boolean(!teamPreview && (llogMon?.fainted || seenFoe?.fainted));
+      const appeared = Boolean(!teamPreview && (llogMon?.appeared || seenFoe?.appeared || fainted));
+
+      let hpDen = 100;
+      let hpNum = fainted ? 0 : 100;
+      let status = !teamPreview && llogMon?.status ? llogMon.status : '';
+
+      // Restore persistent exact HP & status for opponent bench mons from `seenFoeMons`
+      if (!teamPreview && !isMe && seenFoe) {
+        if (seenFoe.maxHp && seenFoe.maxHp > 0) {
+          hpDen = seenFoe.maxHp;
+          hpNum = fainted
+            ? 0
+            : Math.max(1, Math.min(seenFoe.maxHp, seenFoe.hp ?? seenFoe.maxHp));
+        }
+        if (!fainted && seenFoe.status !== undefined) {
+          status = seenFoe.status || status;
+        }
+      }
+
+      const monEntry = {
         species: speciesName,
         level,
         gender,
         name: '',
         item_flag: itemFlag,
-        appeared: Boolean(!teamPreview && llogMon?.appeared),
-        appear_count: !teamPreview && llogMon?.appeared ? 1 : 0,
+        appeared,
+        appear_count: appeared ? 1 : 0,
         switch_in_turn: 0,
         active: false,
-        fainted: Boolean(!teamPreview && llogMon?.fainted),
-        hp_num: !teamPreview && llogMon?.fainted ? 0 : 100,
-        hp_den: 100,
+        fainted,
+        hp_num: hpNum,
+        hp_den: hpDen,
         hp_exact: null,
-        status: !teamPreview && llogMon?.status ? llogMon.status : '',
+        status: fainted ? '' : status,
         rest: Boolean(!teamPreview && llogMon?.rest),
         slept: 0,
         boosts: !teamPreview && llogMon?.boosts ? [...llogMon.boosts] : [0, 0, 0, 0, 0, 0, 0],
         volatiles: !teamPreview && llogMon?.volatiles ? [...llogMon.volatiles.values()] : [],
         uses,
         revealed_moves: isMe ? [] : revealedMoves,
-      });
+      };
+
+      // Attach Castle item reveal & Hidden Power DV mask on opponent mons
+      if (!teamPreview && !isMe) {
+        const itemOrig = seenFoe?.itemOriginal || llogMon?.itemOriginal || null;
+        const itemCur = seenFoe?.itemCurrent !== undefined && seenFoe?.itemCurrent !== null
+          ? seenFoe.itemCurrent
+          : (llogMon?.itemCurrent !== undefined && llogMon?.itemCurrent !== null ? llogMon.itemCurrent : null);
+        if (itemOrig && itemFlag) {
+          monEntry.item_original = { known: true, item: itemOrig };
+          const curStr = itemCur !== null ? itemCur : itemOrig;
+          monEntry.item_current = { known: true, item: curStr ? curStr : null };
+        }
+        // Observer::from_position allows hp_type_mask != 0xFFFF iff revealed_moves has 'hiddenpower'
+        if (revealedSet.has('hiddenpower') && seenFoe?.maxHp && seenFoe.maxHp > 0) {
+          const hpMask = inferHpTypeMaskFromMaxHp(pm.speciesId || pm.species, level, gender, seenFoe.maxHp);
+          if (hpMask !== 0xffff && hpMask !== 0) {
+            monEntry.hp_type_mask = hpMask;
+          }
+        }
+      }
+
+      spec.sides[s].mons.push(monEntry);
     }
 
     if (!teamPreview && llog && llog.sides[s] && llog.sides[s].conditions) {
@@ -1295,7 +2029,7 @@ function mapChoiceToPbsOption(choiceStr, spec, pickedRosterSlots, options, ownSe
         const cIdx = pickedRosterSlots.indexOf(targetRosterSlot);
         if (cIdx >= 0) {
           const wantVal = `C${cIdx + 1}`;
-          const found = options.find(o => o.value === wantVal && (o.hp === null || o.hp > 0));
+          const found = options.find(o => o.value === wantVal && (o.pp === undefined || o.hp === null || o.hp > 0));
           if (found) return found.value;
         }
       }
@@ -1420,6 +2154,15 @@ function appendDecisionLog(entry) {
   }
 }
 
+async function applyHumanPacing(startedAtMs, minMs, maxMs) {
+  if (!HUMAN_DELAY) return;
+  const targetMs = minMs + Math.floor(rng() * (maxMs - minMs + 1));
+  const elapsed = Date.now() - startedAtMs;
+  if (elapsed < targetMs) {
+    await sleep(targetMs - elapsed);
+  }
+}
+
 // ------------------------------------------------------------------ Single Game Runner
 async function playOneGame(gameIdx) {
   const client = new PbsHttpClient();
@@ -1428,33 +2171,96 @@ async function playOneGame(gameIdx) {
   client.setCookie('PD0', encodedPd.cookieValue);
   client.setCookie('PBS', `${NAME}_${PASS}`);
 
-  log(`Game #${gameIdx + 1}: selected team ${team.label}`);
+  const opponentDb = loadOpponentDb(OPPONENT_DB_PATH);
+  log(`Game #${gameIdx + 1}: selected team ${team.label} (iters=${ITERS}, c=${PROFILE.c})`);
 
   let mySide = null; // 0 = P1, 1 = P2
+  let foeName = null;
   let previewSides = null;
   let pickedRosterSlots = null; // [leadIdx, bench1Idx, bench2Idx] (0-indexed)
+  let seenFoeMons = null; // Persistent per-slot opponent state across turns
+  let lastFoeActiveSlot = null;
+  let lastLlogFoeMons = null;
   let searcher = null;
+  let searcherBeliefSignature = '';
+  let hasCustomShellMemory = false;
   let decisions = 0;
   let enteredRoom = false;
+  let hostWaitStartedAt = null;
   let pdRegistered = false;
   let selectSubmitted = false;
   let lastTurnActedKey = '';
+  const matchStartedAt = new Date().toISOString();
 
-  const getSearcher = side => {
+  const ensureSearcher = (side, forceRebuild = false) => {
     if (RANDOM) return null;
-    if (!searcher || mySide !== side) {
+    const foeSide = 1 - side;
+    const foePreviewMons = previewSides && previewSides[foeSide] ? previewSides[foeSide] : null;
+    const sig = JSON.stringify({
+      side,
+      foeName,
+      shell: computeShellKey(foePreviewMons),
+      leaks: (seenFoeMons || []).map(m => ({
+        maxHp: m?.maxHp || null,
+        noLeftovers: Boolean(m?.noLeftovers),
+        itemOriginal: m?.itemOriginal || null,
+      })),
+    });
+
+    if (!searcher || mySide !== side || forceRebuild || sig !== searcherBeliefSignature) {
       if (searcher && typeof searcher.free === 'function') {
         try { searcher.free(); } catch {}
       }
+      const adapted = buildDynamicBeliefPoolJson({
+        foePreviewMons,
+        foeName,
+        seenFoeMons,
+        opponentDb,
+      });
+      hasCustomShellMemory = adapted.hasCustomShellMemory;
+      searcherBeliefSignature = sig;
       searcher = new wasm.ProtocolSearcher(
         wasmDex,
         side,
-        beliefPoolJson,
+        adapted.json,
         SEED * 1000 + gameIdx * 10 + side,
         PROFILE.c
       );
     }
     return searcher;
+  };
+
+  const finalizeMatchRecord = outcome => {
+    if (previewSides && mySide !== null) {
+      const foeSide = 1 - mySide;
+      const foePreviewMons = previewSides[foeSide];
+      recordOpponentObservation({
+        opponentDb,
+        foeName,
+        foePreviewMons,
+        seenFoeMons,
+        llogFoeMons: lastLlogFoeMons,
+        outcome,
+      });
+      saveOpponentDb(opponentDb, OPPONENT_DB_PATH);
+      appendMatchLog({
+        startedAt: matchStartedAt,
+        finishedAt: new Date().toISOString(),
+        roomUrl: ROOM_URL,
+        botName: NAME,
+        foeName: foeName || null,
+        mySide,
+        tier: TIER,
+        teamId: team.id,
+        teamLabel: team.label,
+        iters: ITERS,
+        outcome,
+        decisions,
+        pickedRosterSlots,
+        foeRoster: foePreviewMons,
+        seenFoeMons,
+      });
+    }
   };
 
   try {
@@ -1472,11 +2278,12 @@ async function playOneGame(gameIdx) {
         const lost = /ＬＯＳＥ/.test(page.html || '');
         const outcome = won ? 'WIN' : lost ? 'LOSE' : 'END';
         log(`Game #${gameIdx + 1} finished (${outcome}) after ${decisions} decisions.`);
+        finalizeMatchRecord(outcome);
         // Touch PS.cgi?ACTION=END if link is present so the room cleans up promptly
         if (/PS\.cgi\?ACTION=END/i.test(page.html || '')) {
           try { await client.get(`${ROOM_URL}?ACTION=END`); } catch {}
         }
-        return { outcome, decisions, team: team.id };
+        return { outcome, decisions, team: team.id, foeName };
       }
 
       if (page.kind === 'REDIRECT_OTHER') {
@@ -1495,7 +2302,8 @@ async function playOneGame(gameIdx) {
         // If we had already entered and the room returned to ENTORY, the game ended
         if (enteredRoom && decisions > 0) {
           log(`Game #${gameIdx + 1} finished (room reset to ENTORY) after ${decisions} decisions.`);
-          return { outcome: 'END', decisions, team: team.id };
+          finalizeMatchRecord('END');
+          return { outcome: 'END', decisions, team: team.id, foeName };
         }
 
         if (page.p1Waiting) {
@@ -1505,6 +2313,7 @@ async function playOneGame(gameIdx) {
             res = await client.get(ROOM_URL);
             continue;
           }
+          foeName = page.p1Name || foeName;
           log(`Joining against waiting P1 "${page.p1Name}" as P2...`);
           mySide = 1;
           enteredRoom = true;
@@ -1516,6 +2325,11 @@ async function playOneGame(gameIdx) {
           continue;
         } else {
           if (MODE === 'join') {
+            if (!hostWaitStartedAt) hostWaitStartedAt = Date.now();
+            if (HOST_TIMEOUT_SEC > 0 && (Date.now() - hostWaitStartedAt) > HOST_TIMEOUT_SEC * 1000) {
+              log(`Join wait timeout (${HOST_TIMEOUT_SEC}s) reached with no P1 in room.`);
+              return { outcome: 'TIMEOUT', decisions: 0, team: team.id, foeName: null };
+            }
             log(`Waiting for a P1 player to enter room (--mode join)...`);
             await sleep(POLL_MS);
             res = await client.get(ROOM_URL);
@@ -1524,6 +2338,7 @@ async function playOneGame(gameIdx) {
           log(`Entering empty room as P1 (host)...`);
           mySide = 0;
           enteredRoom = true;
+          hostWaitStartedAt = Date.now();
           res = await client.postForm(ROOM_URL, {
             ACTION: 'ENTORY',
             NAME,
@@ -1537,6 +2352,11 @@ async function playOneGame(gameIdx) {
       }
 
       if (page.kind === 'WAITING_ENTRY') {
+        if (!hostWaitStartedAt) hostWaitStartedAt = Date.now();
+        if (HOST_TIMEOUT_SEC > 0 && (Date.now() - hostWaitStartedAt) > HOST_TIMEOUT_SEC * 1000) {
+          log(`Host wait timeout (${HOST_TIMEOUT_SEC}s) reached with no challenger.`);
+          return { outcome: 'TIMEOUT', decisions: 0, team: team.id, foeName: null };
+        }
         await sleep(POLL_MS);
         res = await client.get(ROOM_URL);
         continue;
@@ -1560,27 +2380,52 @@ async function playOneGame(gameIdx) {
       }
 
       if (page.kind === 'TEAM_PREVIEW_CHECK') {
+        const stepStartMs = Date.now();
         const parsedPreview = parseTeamPreviewHtml(page.html);
         // Determine whether we are P1 (0) or P2 (1)
         if (parsedPreview.p1Name === NAME && parsedPreview.p2Name !== NAME) {
           mySide = 0;
+          foeName = parsedPreview.p2Name || foeName;
         } else if (parsedPreview.p2Name === NAME && parsedPreview.p1Name !== NAME) {
           mySide = 1;
+          foeName = parsedPreview.p1Name || foeName;
         } else if (mySide === null) {
           // Match by own species
           const ownSpIds = team.sets.map(s => toId(s.species)).join(',');
           const p1SpIds = parsedPreview.p1Mons.map(m => m.speciesId).join(',');
           mySide = p1SpIds === ownSpIds ? 0 : 1;
+          foeName = mySide === 0 ? parsedPreview.p2Name : parsedPreview.p1Name;
+        } else {
+          foeName = (mySide === 0 ? parsedPreview.p2Name : parsedPreview.p1Name) || foeName;
         }
 
         previewSides = [parsedPreview.p1Mons, parsedPreview.p2Mons];
         const foeSide = 1 - mySide;
+        seenFoeMons = previewSides[foeSide].map(pm => ({
+          species: pm.species,
+          speciesId: pm.speciesId,
+          level: pm.level || 50,
+          gender: pm.gender || 'M',
+          itemFlag: Boolean(pm.item_flag),
+          appeared: false,
+          fainted: false,
+          hp: null,
+          maxHp: null,
+          status: '',
+          itemOriginal: null,
+          itemCurrent: null,
+          noLeftovers: false,
+          damagedTurnsCount: 0,
+          revealedMoves: [],
+        }));
+
         log(
-          `Team Preview (side=P${mySide + 1}): Foe roster = ` +
+          `Team Preview (side=P${mySide + 1}, foe="${foeName || '?'}"): Foe roster = ` +
           previewSides[foeSide].map(m => `${m.species}(L${m.level})`).join(', ')
         );
 
         let choiceStr = null;
+        let previewSource = 'fallback';
         const spec = buildAndSanitizePositionSpec({
           mySide,
           turn: 0,
@@ -1590,18 +2435,33 @@ async function playOneGame(gameIdx) {
           battleTurn: null,
           pdat: null,
           llog: null,
+          seenFoeMons,
           teamPreview: true,
           forceSwitch: false,
         });
 
         if (!RANDOM) {
           try {
-            const s = getSearcher(mySide);
+            const s = ensureSearcher(mySide, true);
             s.setPosition(JSON.stringify(spec));
-            choiceStr = s.bakedPreview();
+            // If we have not seen this opponent's shell before, check compiled preview book first
+            if (!hasCustomShellMemory && compiledPreview) {
+              try {
+                const cpKey = s.compiledPreviewKey();
+                if (cpKey && compiledPreview[cpKey] && compiledPreview[cpKey].choice) {
+                  choiceStr = compiledPreview[cpKey].choice;
+                  previewSource = 'compiled-book';
+                }
+              } catch {}
+            }
+            if (!choiceStr && !hasCustomShellMemory) {
+              choiceStr = s.bakedPreview();
+              if (choiceStr) previewSource = 'baked';
+            }
             if (!choiceStr) {
               s.step(ITERS);
               choiceStr = s.best();
+              previewSource = hasCustomShellMemory ? 'adapted-search' : 'search';
             }
           } catch (err) {
             log(`Preview search warning (using fallback pick): ${err.message || err}`);
@@ -1613,14 +2473,18 @@ async function playOneGame(gameIdx) {
         log(
           `Preview pick: Lead=#${leadIdx + 1} (${team.sets[leadIdx].species}), ` +
           `Bench=#${b1Idx + 1} (${team.sets[b1Idx].species}), #${b2Idx + 1} (${team.sets[b2Idx].species})` +
-          (choiceStr ? ` [search: ${choiceStr}]` : '')
+          (choiceStr ? ` [${previewSource}: ${choiceStr}]` : '')
         );
+
+        await applyHumanPacing(stepStartMs, 3500, 6200);
 
         decisions++;
         appendDecisionLog({
           gameIdx,
           phase: 'preview',
           side: mySide,
+          foeName,
+          previewSource,
           choiceStr,
           pickedRosterSlots,
         });
@@ -1660,6 +2524,7 @@ async function playOneGame(gameIdx) {
       }
 
       if (page.kind === 'BATTLE_INPUT' || page.kind === 'BATTLE_CHANGE') {
+        const stepStartMs = Date.now();
         const isForceSwitch = page.kind === 'BATTLE_CHANGE';
         const battleTurn = parseBattleTurnHtml(page.html);
         const turnNum = battleTurn.nowVal === '' ? 1 : (parseInt(battleTurn.nowVal, 10) + 1);
@@ -1668,6 +2533,10 @@ async function playOneGame(gameIdx) {
 
         if (mySide === null) {
           mySide = 0;
+        }
+        const foeSide = 1 - mySide;
+        if (!foeName && battleTurn.sides && battleTurn.sides[foeSide]?.trainerName) {
+          foeName = battleTurn.sides[foeSide].trainerName;
         }
 
         // Fetch PDAT and LLOG for richer board context (non-fatal if either fails)
@@ -1680,7 +2549,99 @@ async function playOneGame(gameIdx) {
         try {
           const llogRes = await client.get(`${ROOM_URL}?ACTION=LLOG`);
           llog = parseLlogHtml(llogRes.html, previewSides || [[], []]);
+          if (llog && llog.sides[foeSide]) {
+            lastLlogFoeMons = llog.sides[foeSide].mons;
+          }
         } catch {}
+
+        // Update persistent `seenFoeMons` with Castle leaks (exact HP/maxHp, item reveals, Leftovers absence)
+        if (seenFoeMons && previewSides && previewSides[foeSide]) {
+          const foeTop = battleTurn.sides ? battleTurn.sides[foeSide] : null;
+          let foeActiveSlot = null;
+          if (foeTop && foeTop.speciesId) {
+            foeActiveSlot = previewSides[foeSide].findIndex(m => m.speciesId === foeTop.speciesId);
+          }
+          if (foeActiveSlot === null || foeActiveSlot < 0) {
+            foeActiveSlot = llog?.sides?.[foeSide]?.activeSlot ?? null;
+          }
+
+          for (let i = 0; i < 6; i++) {
+            const seen = seenFoeMons[i];
+            const llogMon = llog?.sides?.[foeSide]?.mons?.[i] || null;
+            if (!seen) continue;
+            if (llogMon) {
+              if (llogMon.appeared) seen.appeared = true;
+              if (llogMon.fainted) {
+                seen.fainted = true;
+                seen.hp = 0;
+                seen.status = '';
+              }
+              if (llogMon.itemOriginal) {
+                seen.itemOriginal = seen.itemOriginal || llogMon.itemOriginal;
+                seen.itemCurrent = llogMon.itemCurrent;
+                if (seen.itemOriginal === 'leftovers') seen.noLeftovers = false;
+              }
+              for (const mvId of llogMon.revealedMoves || []) {
+                if (!seen.revealedMoves.includes(mvId)) {
+                  seen.revealedMoves.push(mvId);
+                }
+              }
+            }
+          }
+
+          if (foeActiveSlot !== null && foeActiveSlot >= 0 && seenFoeMons[foeActiveSlot] && foeTop) {
+            const activeSeen = seenFoeMons[foeActiveSlot];
+            const activeLlog = llog?.sides?.[foeSide]?.mons?.[foeActiveSlot] || null;
+            activeSeen.appeared = true;
+            if (foeTop.maxHp !== null && foeTop.maxHp > 0) {
+              activeSeen.maxHp = foeTop.maxHp;
+            }
+            if (foeTop.hp !== null) {
+              const prevHp = activeSeen.hp;
+              activeSeen.hp = foeTop.hp;
+              activeSeen.fainted = foeTop.hp <= 0;
+              activeSeen.status = foeTop.hp <= 0 ? '' : (foeTop.status || '');
+
+              // Detect Leftovers absence (`noLeftovers`):
+              // At normal turn boundary (`BATTLE_INPUT`, `turnNum >= 2`), if the opponent's active
+              // Pokemon has `0 < hp < maxHp`, has `itemFlag = true`, has never shown Leftovers,
+              // and either was already damaged on a previous turn OR did not just switch in and has
+              // no end-of-turn residual damage source (poison, burn, leech seed, curse, nightmare, sandstorm),
+              // then it could not have been at 100% HP when Leftovers checked -> it does NOT hold Leftovers!
+              if (
+                !isForceSwitch &&
+                turnNum >= 2 &&
+                activeSeen.itemFlag &&
+                !activeSeen.itemOriginal &&
+                activeSeen.maxHp &&
+                foeTop.hp > 0 &&
+                foeTop.hp < activeSeen.maxHp
+              ) {
+                activeSeen.damagedTurnsCount = (activeSeen.damagedTurnsCount || 0) + 1;
+                const hasResidualDamage =
+                  activeSeen.status === 'psn' ||
+                  activeSeen.status === 'tox' ||
+                  activeSeen.status === 'brn' ||
+                  activeLlog?.volatiles?.has('leechseed') ||
+                  activeLlog?.volatiles?.has('nightmare') ||
+                  activeLlog?.volatiles?.has('curse') ||
+                  llog?.weather?.key === 'sandstorm';
+                const stayedInFromLastTurn = lastFoeActiveSlot === foeActiveSlot;
+                if (
+                  activeSeen.damagedTurnsCount >= 2 ||
+                  (stayedInFromLastTurn && !hasResidualDamage) ||
+                  (!hasResidualDamage && prevHp !== null && prevHp < activeSeen.maxHp)
+                ) {
+                  if (!activeSeen.noLeftovers) {
+                    activeSeen.noLeftovers = true;
+                    log(`Leak inference: Foe ${activeSeen.species} (${foeTop.hp}/${activeSeen.maxHp}) lacks Leftovers.`);
+                  }
+                }
+              }
+            }
+            lastFoeActiveSlot = foeActiveSlot;
+          }
+        }
 
         // If pickedRosterSlots was not set (e.g., resumed mid-game), infer from PDAT
         if (!pickedRosterSlots && pdat && pdat.mons.length > 0) {
@@ -1708,13 +2669,14 @@ async function playOneGame(gameIdx) {
           battleTurn,
           pdat,
           llog,
+          seenFoeMons,
           teamPreview: false,
           forceSwitch: isForceSwitch,
         });
 
         if (!RANDOM && battleTurn.options.length > 1) {
           try {
-            const s = getSearcher(mySide);
+            const s = ensureSearcher(mySide, false);
             s.setPosition(JSON.stringify(spec));
             s.step(ITERS);
             bestChoice = s.best();
@@ -1743,6 +2705,8 @@ async function playOneGame(gameIdx) {
           (bestChoice ? ` [search: ${bestChoice}]` : '')
         );
 
+        await applyHumanPacing(stepStartMs, 1600, 3100);
+
         decisions++;
         lastTurnActedKey = turnKey;
         appendDecisionLog({
@@ -1751,6 +2715,7 @@ async function playOneGame(gameIdx) {
           turn: turnNum,
           nowVal: battleTurn.nowVal,
           side: mySide,
+          foeName,
           bestChoice,
           chosenMoveValue,
           options: battleTurn.options,
@@ -1801,7 +2766,13 @@ module.exports = {
   parseBattleTurnHtml,
   parsePdatHtml,
   parseLlogHtml,
+  calcSetMaxHp,
+  inferHpTypeMaskFromMaxHp,
+  buildDynamicBeliefPoolJson,
+  recordOpponentObservation,
   buildAndSanitizePositionSpec,
   selectLegalPbsMoveOption,
   encodeTeamForPbsCookie,
+  encodeFormEucJp,
+  TIER_A_BOX_IDS,
 };
