@@ -1,0 +1,61 @@
+{
+  "summary": {
+    "total_tested": 1,
+    "min_payoff": 0.5530942330682603,
+    "mean_payoff": 0.5530942330682603,
+    "max_payoff": 0.5530942330682603,
+    "sub_50_count": 0,
+    "apex_weights": [
+      0.4,
+      0.3,
+      0.15,
+      0.15
+    ],
+    "apex_ids": [
+      "apex-c04-bug-3atkstar-boomgen",
+      "red-v10-s1105-r2-s0142",
+      "apex-c08-surgical-142",
+      "red-v10-s1105-r1-s0148"
+    ]
+  },
+  "hardest_challengers": [
+    {
+      "id": "mjj-2026-kabegon",
+      "source": "data/team-inventory-v1/sources/majinjima.json",
+      "title": "",
+      "author": "カベゴン",
+      "points": 0,
+      "payoff": 0.5530942330682603,
+      "variant_payoffs": [
+        0.558417730984674,
+        0.5325631490915738,
+        0.5597085337366802,
+        0.5733461059094442
+      ],
+      "species": [
+        "SnorlaxL55",
+        "BlisseyL50",
+        "HeracrossL50",
+        "MarowakL50",
+        "MoltresL50",
+        "StarmieL50"
+      ]
+    }
+  ],
+  "all_results": [
+    {
+      "id": "mjj-2026-kabegon",
+      "source": "data/team-inventory-v1/sources/majinjima.json",
+      "title": "",
+      "author": "カベゴン",
+      "points": 0,
+      "payoff": 0.5530942330682603,
+      "variant_payoffs": [
+        0.558417730984674,
+        0.5325631490915738,
+        0.5597085337366802,
+        0.5733461059094442
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # belief-pool-v3 — the known-party opponent prior
 
-The deployed prior now has 411 entries: known real-world parties including
+The deployed prior now has 468 entries: known real-world parties including
 variants, plus generated sets only when present in the current playable
 catalog. The catalog and Nash draw mixtures are unchanged. `bake-prior.json`
 preserves the previous 221-entry input for preview provenance, historical
@@ -10,10 +10,11 @@ regressions, and the catalog's fixed training choices.
 `tools/build-known-prior.mjs`. It retains admitted baseline weights, adds
 new real-world types with weight 1, and collapses duplicate source aliases
 without adding mass. It removes 25 off-catalog generated entries and adds
-215 distinct types. Sources, exclusions for invalid-format parties, and
-hashes are recorded in `known-expansion.json`; excluded records are not
-silently converted into different legal parties. The native verifier checks
-all admitted sets and exact support for every catalog party.
+272 distinct types (including 57 new real-world parties harvested from Majinjima).
+Sources, exclusions for invalid-format parties, and hashes are recorded in
+`known-expansion.json`; excluded records are not silently converted into different
+legal parties. The native verifier checks all admitted sets and exact support for
+every catalog party (`sets=3516 classes=664 exact_catalog_support=33 issues=0`).
 
 810 existing preview keys remain usable; the 180 keys depending on changed
 `sample-07`, `sample-12`, or `sample-09` shells use live preview search.

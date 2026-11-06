@@ -32,6 +32,8 @@ data/kodoku-r3/*
 !data/kodoku-r3/conclusion-equilibrium-deme.json
 !data/kodoku-r3/conclusion-equilibrium-r1.json
 !data/kodoku-r3/majinjima-assassins.json
+!data/kodoku-r3/majinjima-eval-report.json
+!data/kodoku-r3/majinjima-new-eval-report.json
 !data/kodoku-r3/apex-candidates.json
 data/psro-r*/
 data/dominance-audit-*/

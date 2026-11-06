@@ -1,20 +1,20 @@
 {
-  "base": "http://127.0.0.1:63403/nc2000-engine/",
-  "workerUrl": "http://127.0.0.1:63403/nc2000-engine/assets/bot-worker-D43-b-WQ.js",
+  "base": "http://127.0.0.1:56880/",
+  "workerUrl": "http://127.0.0.1:56880/assets/bot-worker-DAALHAsv.js",
   "catalogPairs": 1089,
   "sideCases": 2178,
   "tableCases": 2178,
   "liveCases": 0,
   "livePreviewTestBudget": 1,
   "lookupMs": {
-    "median": 7.700000286102295,
-    "p95": 8.699999809265137,
-    "max": 10.799999713897705
+    "median": 10,
+    "p95": 11.5,
+    "max": 17.90000009536743
   },
   "battleInitAndLookupMs": {
-    "median": 28.300000190734863,
-    "p95": 30.5,
-    "max": 65.59999990463257
+    "median": 36.90000009536743,
+    "p95": 41.69999980926514,
+    "max": 77.7999997138977
   },
   "hiddenLoadoutInvariant": true,
   "rejectionControls": [
@@ -25,7 +25,7 @@
     "public-item-presence"
   ],
   "servedDataSha256": {
-    "prior": "71f34e0568a39c1ff3b44c1300dee79b79d58dbc1593cb161118e998e2cf7800",
+    "prior": "50618a2a5a59f6cb2e652bce2146987923e88217b471ff0ecb845cc84be5fb5b",
     "catalog": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b"
   }
 }

@@ -9,11 +9,11 @@
   "majinjima": "data/team-inventory-v1/sources/majinjima.json"
  },
  "counts": {
-  "records": 133,
-  "eligible": 115,
-  "eligibleDistinct": 115,
-  "variantClusters": 76,
-  "measured": 103
+  "records": 134,
+  "eligible": 116,
+  "eligibleDistinct": 116,
+  "variantClusters": 77,
+  "measured": 104
  },
  "teams": [
   {
@@ -2081,7 +2081,7 @@
    "exactDuplicates": [],
    "previewSignature": "machamp:55:1,misdreavus:50:1,raikou:50:1,skarmory:50:1,snorlax:50:1,venusaur:50:1",
    "previewCollisions": [],
-   "variantCluster": "vc71",
+   "variantCluster": "vc72",
    "nearVariants": [],
    "loadoutDuplicates": [],
    "measuredAs": "sample-04",
@@ -3124,7 +3124,7 @@
    "exactDuplicates": [],
    "previewSignature": "gengar:50:1,heracross:50:1,raikou:50:1,skarmory:50:1,snorlax:50:1,tyranitar:55:1",
    "previewCollisions": [],
-   "variantCluster": "vc70",
+   "variantCluster": "vc71",
    "nearVariants": [],
    "loadoutDuplicates": [],
    "measuredAs": "sample-03",
@@ -5690,7 +5690,7 @@
    "exactDuplicates": [],
    "previewSignature": "alakazam:50:1,blissey:50:1,cloyster:50:1,gengar:50:1,snorlax:55:1,steelix:50:1",
    "previewCollisions": [],
-   "variantCluster": "vc72",
+   "variantCluster": "vc73",
    "nearVariants": [],
    "loadoutDuplicates": [],
    "measuredAs": "sample-05",
@@ -5933,7 +5933,7 @@
    "exactDuplicates": [],
    "previewSignature": "exeggutor:50:1,rhydon:50:1,snorlax:55:1,starmie:50:1,suicune:50:1,zapdos:50:1",
    "previewCollisions": [],
-   "variantCluster": "vc68",
+   "variantCluster": "vc69",
    "nearVariants": [],
    "loadoutDuplicates": [],
    "measuredAs": "sample-01",
@@ -6176,7 +6176,7 @@
    "exactDuplicates": [],
    "previewSignature": "exeggutor:51:1,gengar:52:1,miltank:52:1,snorlax:52:1,starmie:52:1,umbreon:52:1",
    "previewCollisions": [],
-   "variantCluster": "vc73",
+   "variantCluster": "vc74",
    "nearVariants": [
     {
      "id": "rental-cban-16",
@@ -6434,7 +6434,7 @@
    "exactDuplicates": [],
    "previewSignature": "cloyster:50:1,kangaskhan:55:1,moltres:50:1,starmie:50:1,steelix:50:1,venusaur:50:1",
    "previewCollisions": [],
-   "variantCluster": "vc75",
+   "variantCluster": "vc76",
    "nearVariants": [],
    "loadoutDuplicates": [],
    "measuredAs": "sample-26",
@@ -6677,7 +6677,7 @@
    "exactDuplicates": [],
    "previewSignature": "jynx:50:0,marowak:50:1,porygon2:55:1,snorlax:50:1,starmie:50:1,zapdos:50:1",
    "previewCollisions": [],
-   "variantCluster": "vc69",
+   "variantCluster": "vc70",
    "nearVariants": [],
    "loadoutDuplicates": [],
    "measuredAs": "sample-02",
@@ -8241,7 +8241,7 @@
    "exactDuplicates": [],
    "previewSignature": "charizard:55:1,electrode:50:1,exeggutor:50:1,gengar:50:1,moltres:55:1,snorlax:50:1",
    "previewCollisions": [],
-   "variantCluster": "vc74",
+   "variantCluster": "vc75",
    "nearVariants": [],
    "loadoutDuplicates": [],
    "measuredAs": "sample-24",
@@ -10065,7 +10065,7 @@
    "exactDuplicates": [],
    "previewSignature": "blissey:50:1,clefable:55:1,gengar:50:1,gligar:50:1,machamp:50:1,umbreon:50:1",
    "previewCollisions": [],
-   "variantCluster": "vc76",
+   "variantCluster": "vc77",
    "nearVariants": [],
    "loadoutDuplicates": [],
    "measuredAs": "sample-27",
@@ -18016,7 +18016,7 @@
    "exactDuplicates": [],
    "previewSignature": "cloyster:50:1,exeggutor:50:1,machamp:50:1,snorlax:50:1,tyranitar:55:1,zapdos:55:1",
    "previewCollisions": [],
-   "variantCluster": "vc67",
+   "variantCluster": "vc68",
    "nearVariants": [],
    "loadoutDuplicates": [],
    "measuredAs": "rental-cban-2",
@@ -20647,7 +20647,7 @@
    "exactDuplicates": [],
    "previewSignature": "gengar:53:1,heracross:51:1,marowak:53:1,porygon2:51:1,skarmory:51:1,snorlax:51:1",
    "previewCollisions": [],
-   "variantCluster": "vc64",
+   "variantCluster": "vc65",
    "nearVariants": [],
    "loadoutDuplicates": [],
    "measuredAs": "rental-cban-12",
@@ -20888,7 +20888,7 @@
    "exactDuplicates": [],
    "previewSignature": "exeggutor:50:1,gengar:55:1,golem:50:1,poliwrath:55:1,porygon2:55:1,snorlax:50:1",
    "previewCollisions": [],
-   "variantCluster": "vc65",
+   "variantCluster": "vc66",
    "nearVariants": [],
    "loadoutDuplicates": [],
    "measuredAs": "rental-cban-13",
@@ -21129,7 +21129,7 @@
    "exactDuplicates": [],
    "previewSignature": "exeggutor:50:1,porygon2:55:1,snorlax:50:1,steelix:50:1,vaporeon:55:1,zapdos:50:1",
    "previewCollisions": [],
-   "variantCluster": "vc66",
+   "variantCluster": "vc67",
    "nearVariants": [],
    "loadoutDuplicates": [],
    "measuredAs": "rental-cban-14",
@@ -24361,6 +24361,249 @@
       "transform"
      ],
      "level": 50
+    }
+   ]
+  },
+  {
+   "id": "mjj-2026-kabegon",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2026/kabegon.htm",
+    "version": "カベゴン",
+    "indexName": "カベゴン",
+    "indexSummary": "寝言カビSAガチ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "c17cd710d340fb36e8b09ea53c742f220ac2a4afc9bc007abe0f69c0ed02c954",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "inherited": [],
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "species": [
+    "Snorlax",
+    "Marowak",
+    "Starmie",
+    "Blissey",
+    "Heracross",
+    "Moltres"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
+    50
+   ],
+   "setSignature": "eb9b84d9a3f43824",
+   "canonicalOf": null,
+   "exactDuplicates": [],
+   "previewSignature": "blissey:50:1,heracross:50:1,marowak:50:1,moltres:50:1,snorlax:55:1,starmie:50:1",
+   "previewCollisions": [],
+   "variantCluster": "vc64",
+   "nearVariants": [],
+   "loadoutDuplicates": [],
+   "measuredAs": null,
+   "lineage": null,
+   "deviations": [],
+   "sets": [
+    {
+     "name": "Snorlax",
+     "species": "Snorlax",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Double-Edge",
+      "Curse",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Marowak",
+     "species": "Marowak",
+     "item": "Thick Club",
+     "ability": "No Ability",
+     "moves": [
+      "Bonemerang",
+      "Rock Slide",
+      "Hidden Power Bug",
+      "Swords Dance"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 26,
+      "def": 26,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Starmie",
+     "species": "Starmie",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Hydro Pump",
+      "Psychic",
+      "Thunder Wave",
+      "Recover"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Blissey",
+     "species": "Blissey",
+     "item": "Quick Claw",
+     "ability": "No Ability",
+     "moves": [
+      "Ice Beam",
+      "Fire Blast",
+      "Present",
+      "Soft-Boiled"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Heracross",
+     "species": "Heracross",
+     "item": "Scope Lens",
+     "ability": "No Ability",
+     "moves": [
+      "Megahorn",
+      "Earthquake",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Moltres",
+     "species": "Moltres",
+     "item": "Charcoal",
+     "ability": "No Ability",
+     "moves": [
+      "Fire Blast",
+      "Sunny Day",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
     }
    ]
   },

@@ -3,14 +3,14 @@
   "inputs": {
     "data/belief-pool-v3/bake-prior.json": "1c0a1d544be667282ed94f891f7fd1d533c324fd7c18c85d530a1cd9d47da6d5",
     "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
-    "data/team-inventory-v1/inventory.json": "4f70792e967bdce605d5c5a172d02c79e808fcf07e754b0ddc5101999b6b95d8",
+    "data/team-inventory-v1/inventory.json": "0a02fe4e28024e2d02a9723ba616a6ce9605c8677c134d1440c7976fa7b33c85",
     "data/partybox-v0/teams.json": "99b8c916fe68368f604d045202b044fcb3b46956bda7dd9ef10e3a4f3031e0a0",
-    "data/kodoku-r3/majinjima-assassins.json": "0a49a39f48a07d6d0820cc36c7ff1231ffdbc1ba742ceb54fdf37361624f4fc5",
+    "data/kodoku-r3/majinjima-assassins.json": "f9a5080cae82dcef037c7a702cc78a738b20194a3f81da998b1395b922311efe",
     "data/community-rentals-v0/teams.json": "d081ac265f64370fd4a6790cf0eb54c806e8b7bf5ec789c37f9409254f1b50dd",
     "data/training-v3/supplemental.json": "c004789a0203fccc24b6a32e9970e0f9ab01142c6440ddadcdc5a29811dfd18c"
   },
-  "parties": 411,
-  "human": 402,
+  "parties": 468,
+  "human": 459,
   "generated": 9,
   "removedGenerated": [
     "nb-sample-12-0",
@@ -81,6 +81,12 @@
       "source": "data/team-inventory-v1/inventory.json",
       "weight": 1,
       "shell": "[[\"alakazam\",50,\"M\",true],[\"gengar\",55,\"M\",true],[\"golem\",50,\"M\",true],[\"granbull\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2026-kabegon",
+      "source": "data/team-inventory-v1/inventory.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"heracross\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"moltres\",50,\"N\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true]]"
     },
     {
       "id": "mjj-2012-goinkyo-t2",
@@ -1095,6 +1101,342 @@
       "source": "data/kodoku-r3/majinjima-assassins.json",
       "weight": 1,
       "shell": "[[\"blissey\",50,\"F\",true],[\"gengar\",50,\"F\",true],[\"golduck\",55,\"M\",true],[\"meganium\",50,\"M\",true],[\"raikou\",50,\"N\",true],[\"skarmory\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2026-pau",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"dewgong\",55,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"gengar\",55,\"M\",true],[\"marowak\",50,\"M\",true],[\"seel\",50,\"F\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2026-kc",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"abra\",50,\"F\",true],[\"alakazam\",55,\"F\",true],[\"cloyster\",50,\"M\",true],[\"kadabra\",55,\"F\",true],[\"machamp\",55,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2026-delhel",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"exeggutor\",50,\"M\",true],[\"houndoom\",55,\"M\",true],[\"houndour\",50,\"F\",true],[\"miltank\",55,\"F\",true],[\"shuckle\",50,\"F\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2026-iseki",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"aerodactyl\",55,\"M\",true],[\"kabutops\",55,\"M\",true],[\"omastar\",55,\"M\",true],[\"quagsire\",50,\"M\",true],[\"smeargle\",50,\"F\",true],[\"xatu\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2025-su",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"beedrill\",50,\"M\",true],[\"drowzee\",50,\"M\",true],[\"hypno\",55,\"M\",true],[\"scyther\",55,\"M\",true],[\"starmie\",50,\"N\",true],[\"suicune\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2025-pony",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"marowak\",55,\"M\",true],[\"ponyta\",50,\"F\",true],[\"rapidash\",55,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2025-coil",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"magnemite\",50,\"N\",true],[\"magneton\",55,\"N\",true],[\"marowak\",50,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2025-bay",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"bayleef\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"meganium\",50,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2025-dogas",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"koffing\",50,\"M\",true],[\"marowak\",50,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"starmie\",50,\"N\",true],[\"weezing\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2025-ghos",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"gastly\",50,\"F\",true],[\"gengar\",55,\"F\",true],[\"haunter\",50,\"F\",true],[\"marowak\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2025-pippi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"clefable\",50,\"F\",true],[\"clefairy\",50,\"F\",true],[\"cloyster\",50,\"M\",true],[\"marowak\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2025-marashi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"F\",true],[\"cloyster\",50,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"quilava\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"typhlosion\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2025-fgran",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"gengar\",52,\"M\",true],[\"granbull\",51,\"F\",true],[\"marowak\",52,\"M\",true],[\"skarmory\",52,\"M\",true],[\"snorlax\",52,\"M\",true],[\"starmie\",52,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2024-to",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"dodrio\",55,\"M\",true],[\"donphan\",50,\"M\",true],[\"smeargle\",50,\"F\",true],[\"tentacruel\",55,\"M\",true],[\"togepi\",50,\"F\",true],[\"togetic\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2024-he",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"grimer\",51,\"M\",true],[\"heracross\",51,\"M\",true],[\"houndoom\",51,\"F\",true],[\"lickitung\",51,\"M\",true],[\"muk\",53,\"M\",true],[\"persian\",51,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2023-triple",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"dodrio\",55,\"M\",true],[\"dugtrio\",55,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"hypno\",50,\"M\",true],[\"jolteon\",50,\"F\",true],[\"magneton\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2023-nidori",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"nidorina\",50,\"F\",true],[\"raikou\",55,\"N\",true],[\"snorlax\",50,\"M\",true],[\"tyranitar\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2022-yume",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"beedrill\",55,\"M\",true],[\"cloyster\",50,\"M\",true],[\"dewgong\",55,\"F\",true],[\"jynx\",50,\"F\",true],[\"misdreavus\",50,\"F\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2022-105s",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"electabuzz\",55,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"rapidash\",55,\"F\",true],[\"scyther\",55,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2022-ra",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"chansey\",51,\"F\",true],[\"lanturn\",53,\"F\",true],[\"lapras\",51,\"F\",true],[\"raichu\",51,\"M\",true],[\"raticate\",51,\"M\",true],[\"vileplume\",53,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2022-sa",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"corsola\",51,\"M\",true],[\"hitmonlee\",51,\"M\",true],[\"jolteon\",51,\"F\",true],[\"rhydon\",51,\"M\",true],[\"sandslash\",53,\"M\",true],[\"zapdos\",51,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2021-raimbow",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"dragonite\",55,\"M\",true],[\"gengar\",55,\"M\",true],[\"heracross\",50,\"M\",true],[\"snorlax\",50,\"M\",true],[\"tyranitar\",55,\"M\",true],[\"victreebel\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2021-science",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"golem\",50,\"M\",true],[\"heracross\",55,\"M\",true],[\"magneton\",55,\"N\",true],[\"moltres\",50,\"N\",true],[\"vaporeon\",55,\"M\",true],[\"venusaur\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2021-GL",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"F\",true],[\"kingdra\",50,\"F\",true],[\"miltank\",50,\"F\",true],[\"starmie\",55,\"N\",true],[\"steelix\",50,\"M\",true],[\"vileplume\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2021-dog",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"arcanine\",55,\"M\",true],[\"golem\",50,\"M\",true],[\"granbull\",55,\"M\",true],[\"houndoom\",55,\"F\",true],[\"smeargle\",50,\"F\",true],[\"suicune\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2021-bat",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",52,\"F\",true],[\"charizard\",52,\"M\",true],[\"crobat\",51,\"M\",true],[\"exeggutor\",52,\"M\",true],[\"poliwrath\",52,\"M\",true],[\"snorlax\",52,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2021-e",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"aipom\",50,\"M\",true],[\"electabuzz\",55,\"M\",true],[\"entei\",55,\"N\",true],[\"espeon\",50,\"F\",true],[\"hitmonchan\",55,\"M\",true],[\"skarmory\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2021-sunaqa",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"dugtrio\",55,\"M\",true],[\"magcargo\",55,\"F\",true],[\"magneton\",55,\"N\",true],[\"piloswine\",55,\"M\",true],[\"skarmory\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2020-2020",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"charizard\",55,\"M\",true],[\"cloyster\",50,\"M\",true],[\"hitmonlee\",55,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"snorlax\",50,\"M\",true],[\"tauros\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2020-ukeTA",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"F\",true],[\"blissey\",50,\"F\",true],[\"heracross\",50,\"M\",true],[\"meganium\",55,\"M\",true],[\"misdreavus\",50,\"F\",true],[\"tyranitar\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2020-freefree",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"butterfree\",50,\"F\",true],[\"cloyster\",50,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"raikou\",55,\"N\",true],[\"snorlax\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2020-ebiguratan",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"exeggutor\",50,\"M\",true],[\"granbull\",55,\"M\",true],[\"hitmonchan\",55,\"M\",true],[\"octillery\",55,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2020-rikyriky",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",50,\"F\",true],[\"cloyster\",50,\"M\",true],[\"kadabra\",55,\"M\",true],[\"machamp\",55,\"M\",true],[\"machoke\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-parameter-s55",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"ampharos\",55,\"M\",true],[\"blissey\",50,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"omastar\",55,\"F\",true],[\"ursaring\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2019-arboc",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"arbok\",53,\"M\",true],[\"cloyster\",51,\"M\",true],[\"hitmonlee\",51,\"M\",true],[\"marowak\",51,\"M\",true],[\"raikou\",51,\"N\",true],[\"snorlax\",51,\"M\",true]]"
+    },
+    {
+      "id": "mjj-parameter-b65",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"aerodactyl\",55,\"M\",true],[\"girafarig\",50,\"M\",true],[\"mrmime\",55,\"F\",true],[\"snorlax\",50,\"M\",true],[\"tentacruel\",55,\"M\",true],[\"victreebel\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2010-molf-2019",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"espeon\",52,\"M\",true],[\"marowak\",52,\"M\",true],[\"moltres\",52,\"N\",true],[\"poliwrath\",52,\"M\",true],[\"snorlax\",52,\"M\",true],[\"venomoth\",51,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2018-girlspop",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"F\",true],[\"blissey\",50,\"F\",true],[\"gengar\",55,\"F\",true],[\"miltank\",55,\"F\",true],[\"misdreavus\",50,\"F\",true],[\"venusaur\",50,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2017-ball",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"electrode\",55,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"golem\",50,\"M\",true],[\"miltank\",55,\"F\",true],[\"snorlax\",50,\"M\",true],[\"voltorb\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2017-night",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"gengar\",52,\"M\",true],[\"marowak\",52,\"M\",true],[\"noctowl\",51,\"M\",true],[\"poliwrath\",52,\"M\",true],[\"snorlax\",52,\"M\",true],[\"umbreon\",52,\"F\",true]]"
+    },
+    {
+      "id": "mjj-2011-layer-2017",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",51,\"M\",true],[\"electabuzz\",54,\"M\",true],[\"gengar\",52,\"M\",true],[\"piloswine\",53,\"M\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2014-mew",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"aerodactyl\",55,\"M\",true],[\"electrode\",50,\"N\",true],[\"forretress\",50,\"M\",true],[\"misdreavus\",55,\"M\",true],[\"quagsire\",55,\"M\",true],[\"raticate\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2014-offantom",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"charizard\",55,\"M\",true],[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"porygon2\",55,\"N\",true],[\"snorlax\",50,\"M\",true],[\"tauros\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2014-kairos",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"marowak\",50,\"M\",true],[\"pinsir\",55,\"M\",true],[\"raticate\",50,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2013-gy",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"M\",true],[\"cloyster\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"haunter\",55,\"M\",true],[\"kadabra\",55,\"M\",true],[\"snorlax\",50,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2013-jkko",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"alakazam\",55,\"M\",true],[\"entei\",55,\"N\",true],[\"exeggutor\",50,\"M\",true],[\"marowak\",55,\"M\",true],[\"snorlax\",50,\"M\",true],[\"zapdos\",55,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2013-trinormal",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",50,\"M\",true],[\"electrode\",50,\"N\",true],[\"porygon2\",55,\"N\",true],[\"skarmory\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"tauros\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2013-rainbow",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"exeggutor\",50,\"M\",true],[\"gengar\",55,\"M\",true],[\"heracross\",50,\"M\",true],[\"kingdra\",50,\"F\",true],[\"skarmory\",50,\"M\",true],[\"tyranitar\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2011-xo",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"machamp\",54,\"M\",true],[\"marowak\",54,\"M\",true],[\"porygon2\",54,\"N\",true],[\"snorlax\",50,\"M\",true],[\"starmie\",51,\"N\",true],[\"zapdos\",54,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2011-gsmushi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"ariados\",51,\"M\",true],[\"gengar\",52,\"M\",true],[\"ledian\",51,\"F\",true],[\"marowak\",52,\"M\",true],[\"snorlax\",52,\"M\",true],[\"suicune\",52,\"N\",true]]"
+    },
+    {
+      "id": "mjj-gym-Tamamushi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",52,\"M\",true],[\"exeggutor\",51,\"M\",true],[\"gengar\",52,\"M\",true],[\"nidoking\",52,\"M\",true],[\"raikou\",52,\"N\",true],[\"snorlax\",52,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2010-jakten",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"exeggutor\",51,\"M\",true],[\"kingdra\",52,\"M\",true],[\"quagsire\",52,\"M\",true],[\"raikou\",52,\"N\",true],[\"scizor\",52,\"M\",true],[\"snorlax\",52,\"M\",true]]"
+    },
+    {
+      "id": "mjj-type-normal",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"clefable\",50,\"F\",true],[\"miltank\",50,\"F\",true],[\"pidgeot\",50,\"M\",true],[\"porygon2\",50,\"N\",true],[\"raticate\",50,\"M\",true],[\"snorlax\",55,\"M\",true]]"
+    },
+    {
+      "id": "mjj-2010-54quartet",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"cloyster\",54,\"M\",true],[\"gengar\",54,\"M\",true],[\"heracross\",50,\"M\",true],[\"raikou\",51,\"N\",true],[\"snorlax\",54,\"M\",true],[\"zapdos\",54,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2011-jiback-2009-new",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"blissey\",50,\"F\",true],[\"exeggutor\",50,\"M\",true],[\"machamp\",50,\"M\",true],[\"snorlax\",55,\"M\",true],[\"umbreon\",50,\"M\",true],[\"zapdos\",50,\"N\",true]]"
+    },
+    {
+      "id": "mjj-2009-ebi",
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "weight": 1,
+      "shell": "[[\"exeggutor\",50,\"M\",true],[\"forretress\",50,\"M\",true],[\"gengar\",50,\"M\",true],[\"hitmonchan\",54,\"M\",true],[\"raikou\",51,\"N\",true],[\"snorlax\",50,\"M\",true]]"
     },
     {
       "id": "supp-bp-jolteon-marowak-1",
@@ -2219,6 +2561,114 @@
     {
       "source": "data/kodoku-r3/majinjima-assassins.json",
       "id": "mjj-2012-goinkyo-t3"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2026-kabegon"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2025-hapim"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2024-kabiliz"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2016-ukestar-2023-new"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2023-ukethdr"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2023-vakabi"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2020-kb-2022"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2021-crage"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2021-q10con"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2020-ukenta"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2020-kb-2020"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2012-goinkyo-2020-new"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2020-rraikou"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2019-dojo"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2016-ukestar-2016-new"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2015-ayagen"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2014-thdrcomb"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2013-mario"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2013-bakabi"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2013-venom"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-gym-Sekichiku-2-new"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2012-ibmthdr"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-gym-Sekichiku-1-new"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2011-jiback-2011-new"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2011-garatank"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2011-frozenhell-2011-new"
+    },
+    {
+      "source": "data/kodoku-r3/majinjima-assassins.json",
+      "id": "mjj-2010-garap"
     },
     {
       "source": "data/community-rentals-v0/teams.json",
