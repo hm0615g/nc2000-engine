@@ -45,7 +45,8 @@ for (let i = 2; i < process.argv.length; i++) {
 if (args.help || args.h) {
   console.log(`node tools/pbs-client.js — NC2000 bot client for psense.lib.net/PBS/_/X/PS.cgi
 
-  --room ROOM          PBS room letter (C..O, default K) or full PS.cgi URL
+  --room ROOM          PBS room letter (C..O, default K), Castle alias 第1..第6,
+                       or full PS.cgi URL
                        (e.g. http://psense.lib.net/PBS/_/C/PS.cgi)
   --name NAME          Player name registered in PS.cgi (default nc2000bot;
                        ASCII alphanumeric recommended for non-IE PBS cookie)
@@ -80,12 +81,15 @@ const DISCORD_DAI_TO_LETTER = {
   '1': 'C', '１': 'C', '一': 'C',
   '2': 'D', '２': 'D', '二': 'D',
   '3': 'E', '３': 'E', '三': 'E',
+  '4': 'F', '４': 'F', '四': 'F',
+  '5': 'G', '５': 'G', '五': 'G',
+  '6': 'H', '６': 'H', '六': 'H',
 };
 
 function resolveRoomUrl(raw) {
   const s = String(raw || 'C').trim();
   if (/^https?:\/\//i.test(s)) return s.replace(/\?.*$/, '');
-  const daiMatch = s.match(/^(?:第)?([1-3１-３一二三])$/);
+  const daiMatch = s.match(/^(?:第)?([1-6１-６一二三四五六])$/);
   if (daiMatch && DISCORD_DAI_TO_LETTER[daiMatch[1]]) {
     return `http://psense.lib.net/PBS/_/${DISCORD_DAI_TO_LETTER[daiMatch[1]]}/PS.cgi`;
   }
@@ -2163,6 +2167,37 @@ function appendDecisionLog(entry) {
   }
 }
 
+
+/**
+ * Convert the PBS result banner into an outcome from this bot's point of view.
+ *
+ * PBS WIN/LOSE banners are P1-relative. Therefore a P2 bot must invert them.
+ * mySide: 0 = P1, 1 = P2.
+ */
+function resolveBotOutcomeFromFinishedHtml(html, mySide) {
+  const text = String(html || '');
+
+  const p1Won = text.includes('\uff37\uff29\uff2e\uff01');
+  const p1Lost = text.includes('\uff2c\uff2f\uff33\uff25');
+  const draw = text.includes('\uff24\uff32\uff21\uff37');
+
+  if (draw) return 'DRAW';
+
+  if (!p1Won && !p1Lost) {
+    return 'END';
+  }
+
+  if (mySide === 0) {
+    return p1Won ? 'WIN' : 'LOSE';
+  }
+
+  if (mySide === 1) {
+    return p1Won ? 'LOSE' : 'WIN';
+  }
+
+  return 'END';
+}
+
 // ------------------------------------------------------------------ Single Game Runner
 async function playOneGame(gameIdx) {
   const client = new PbsHttpClient();
@@ -2274,9 +2309,7 @@ async function playOneGame(gameIdx) {
           res = await client.get(`${ROOM_URL}?ACTION=TITLE`);
           continue;
         }
-        const won = /ＷＩＮ！/.test(page.html || '');
-        const lost = /ＬＯＳＥ/.test(page.html || '');
-        const outcome = won ? 'WIN' : lost ? 'LOSE' : 'END';
+        const outcome = resolveBotOutcomeFromFinishedHtml(page.html || '', mySide);
         log(`Game #${gameIdx + 1} finished (${outcome}) after ${decisions} decisions.`);
         finalizeMatchRecord(outcome);
         // Touch PS.cgi?ACTION=END if link is present so the room cleans up promptly
@@ -2768,5 +2801,6 @@ module.exports = {
   selectLegalPbsMoveOption,
   encodeTeamForPbsCookie,
   encodeFormEucJp,
+  resolveBotOutcomeFromFinishedHtml,
   TIER_A_BOX_IDS,
 };

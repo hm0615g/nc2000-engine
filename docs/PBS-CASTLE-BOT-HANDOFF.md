@@ -52,7 +52,7 @@ node tools/pbs-discord-bot.js --token "$DISCORD_TOKEN" --name "NC2000" --pass "n
 [Layer 3: Discord Bot]  tools/pbs-discord-bot.js
   │  Connects to Discord Gateway v10 (ws) + REST v10 (fetch).
   │  Idles with zero HTTP traffic to psense.lib.net until @mentioned.
-  │  Replies "応戦します", resolves room 第1(C) / 第2(D) / 第3(E),
+  │  Replies "応戦します", resolves room 第1(C) through 第6(H),
   │  and spawns 1 game of tools/pbs-client.js.
   ▼
 [Layer 2: Castle Adapter]  tools/pbs-client.js + tools/export-pdinput.js
@@ -81,6 +81,9 @@ node tools/pbs-discord-bot.js --token "$DISCORD_TOKEN" --name "NC2000" --pass "n
 | `第1` / `第一` | `C` | `http://psense.lib.net/PBS/_/C/PS.cgi` |
 | `第2` / `第二` | `D` | `http://psense.lib.net/PBS/_/D/PS.cgi` |
 | `第3` / `第三` | `E` | `http://psense.lib.net/PBS/_/E/PS.cgi` |
+| `第4` / `第四` | `F` | `http://psense.lib.net/PBS/_/F/PS.cgi` |
+| `第5` / `第五` | `G` | `http://psense.lib.net/PBS/_/G/PS.cgi` |
+| `第6` / `第六` | `H` | `http://psense.lib.net/PBS/_/H/PS.cgi` |
 
 *(Direct room letters `C`–`O` and full `PS.cgi` URLs are also accepted.)*
 
@@ -88,10 +91,18 @@ node tools/pbs-discord-bot.js --token "$DISCORD_TOKEN" --name "NC2000" --pass "n
 1. **Challenge `@mention`**: A user posts e.g. `@Bot 対戦希望します` (or `@Bot 手加減で対戦希望します`).
    - Bot immediately sends a Discord Reply: `応戦します`.
 2. **Room Resolution (3 paths)**:
-   - **Path A (Standard `#2000-一撃なし` flow)**: Challenger replies `第1へ` / `第2にて` / `では第三でお願いします` (which also triggers the server's `アナウンス [APP]` bot to post a `[第1]` / `[第2]` / `[第3]` link). As soon as our bot sees either message, it posts `よろしくお願いします` and launches `tools/pbs-client.js` in that room (`C` / `D` / `E`).
+   - **Path A (Standard `#2000-一撃なし` flow)**: Challenger replies `第1へ` / `第2にて` / `では第三でお願いします` (which also triggers the server's `アナウンス [APP]` bot to post a `[第1]` through `[第6]` link). As soon as our bot sees either message, it posts `よろしくお願いします` and launches `tools/pbs-client.js` in that room (`C` through `H`).
    - **Path B (Room included in initial `@mention`)**: If the challenger wrote `@Bot 第2で対戦希望します`, the bot replies `応戦します`, posts `よろしくお願いします`, and enters `第2 (D)` immediately.
-   - **Path C (Auto-pick fallback after `autoPickRoomAfterSec` = 15s)**: If 15 seconds pass after `応戦します` without the challenger naming a room, `probeCastleDiscordRooms()` checks `第1 (C)`, `第2 (D)`, and `第3 (E)` on `psense.lib.net`, picks the room where the challenger is waiting or the first empty room, posts `第1にて` + `よろしくお願いします` in Discord (triggering `アナウンス [APP]`), and enters that room.
+   - **Path C (Auto-pick fallback after `autoPickRoomAfterSec` = 15s)**: If 15 seconds pass after `応戦します` without the challenger naming a room, `probeCastleDiscordRooms()` checks `第1 (C)` through `第6 (H)` on `psense.lib.net`, picks the room where the challenger is waiting or the first empty room, posts `第1にて` + `よろしくお願いします` in Discord (triggering `アナウンス [APP]`), and enters that room.
 3. **Post-Match**: When the battle finishes (`WIN` / `LOSE`), the bot cleans up the room via `PS.cgi?ACTION=END` and posts `ありがとうございました` in the Discord channel.
+
+### Result semantics
+
+- The live PBS test showed that the result banner returned to a P2 client reflected the P1 result.
+- `tools/pbs-client.js` converts the PBS result to the bot perspective using `mySide` (`0 = P1`, `1 = P2`).
+- Thus, when the bot is P2, a P1 `WIN` is recorded as bot `LOSE`; the inverse mapping is applied for P1 `LOSE`.
+- The bot-perspective result is stored in `data/pbs-matches.jsonl` and used for opponent win/loss counters.
+
 
 ---
 
@@ -124,7 +135,7 @@ node tools/pbs-discord-bot.js --selftest
 # Passive observation mode (logs Discord events to console & data/discord-events.jsonl without replying)
 node tools/pbs-discord-bot.js --observe
 
-# Discord dry-run mode (replies "応戦します" and detects 第1/第2/第3 without entering PS.cgi)
+# Discord dry-run mode (replies "応戦します" and detects 第1 through 第6 without entering PS.cgi)
 node tools/pbs-discord-bot.js --dry-run-pbs
 
 # Direct standalone Castle battle without Discord (e.g. in 第1 = Room C)

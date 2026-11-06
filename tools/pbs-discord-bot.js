@@ -6,6 +6,9 @@
  * - `第1` / `第一` -> Room `C` (`http://psense.lib.net/PBS/_/C/PS.cgi`)
  * - `第2` / `第二` -> Room `D` (`http://psense.lib.net/PBS/_/D/PS.cgi`)
  * - `第3` / `第三` -> Room `E` (`http://psense.lib.net/PBS/_/E/PS.cgi`)
+ * - `第4` / `第四` -> Room `F` (`http://psense.lib.net/PBS/_/F/PS.cgi`)
+ * - `第5` / `第五` -> Room `G` (`http://psense.lib.net/PBS/_/G/PS.cgi`)
+ * - `第6` / `第六` -> Room `H` (`http://psense.lib.net/PBS/_/H/PS.cgi`)
  * (Trainer House `L`..`O` and direct room letters `C`..`O` are also supported.)
  *
  * Verified Castle Discord workflow (`#2000-一撃なし`):
@@ -16,12 +19,12 @@
  *      `81,000` iterations (`c = 0.4`) + `pool:tier-a` (8 iconic human-origin Tier A teams).
  * 3. Replies `"応戦します"` (via Discord Reply) to the challenger's message:
  *    - When the challenger replies `第1へ` / `第2にて` / `では第三でお願いします` (or the `アナウンス [APP]`
- *      bot posts the `[第1]` / `[第2]` / `[第3]` link), our bot posts `"よろしくお願いします"` and
- *      immediately launches `pbs-client.js` in the corresponding room (`C` / `D` / `E`).
- *    - If the challenger already wrote `第1` / `第2` / `第3` in the initial `@mention`, our bot replies
+ *      bot posts the `[第1]` through `[第6]` link), our bot posts `"よろしくお願いします"` and
+ *      immediately launches `pbs-client.js` in the corresponding room (`C` through `H`).
+ *    - If the challenger already wrote `第1` through `第6` in the initial `@mention`, our bot replies
  *      `"応戦します\nよろしくお願いします"` and launches `pbs-client.js` immediately.
  *    - If `autoPickRoomAfterSec` (default 15s) elapses after `"応戦します"` without the challenger naming
- *      a room, our bot checks `第1 (C)` / `第2 (D)` / `第3 (E)` on `psense.lib.net`, picks the room where
+ *      a room, our bot checks `第1 (C)` through `第6 (H)` on `psense.lib.net`, picks the room where
  *      the challenger is waiting or the first empty room, posts `"第1にて\nよろしくお願いします"` (which
  *      also triggers `アナウンス [APP]` to post the link), and enters that room.
  * 4. Upon match completion, posts `"ありがとうございました"`.
@@ -32,7 +35,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
-const { PbsHttpClient, classifyPage } = require('./pbs-client.js');
+const { PbsHttpClient, classifyPage, resolveBotOutcomeFromFinishedHtml } = require('./pbs-client.js');
 
 const REPO = path.resolve(__dirname, '..');
 
@@ -41,12 +44,18 @@ const CASTLE_DISCORD_ROOMS = [
   { num: 1, label: '第1', letter: 'C' },
   { num: 2, label: '第2', letter: 'D' },
   { num: 3, label: '第3', letter: 'E' },
+  { num: 4, label: '第4', letter: 'F' },
+  { num: 5, label: '第5', letter: 'G' },
+  { num: 6, label: '第6', letter: 'H' },
 ];
 
 const LETTER_TO_LABEL = {
   C: '第1',
   D: '第2',
   E: '第3',
+  F: '第4',
+  G: '第5',
+  H: '第6',
 };
 
 const DAI_TOKEN_TO_ROOM = {
@@ -62,6 +71,12 @@ const DAI_TOKEN_TO_ROOM = {
   '4': { letter: 'F', label: '第4' },
   '４': { letter: 'F', label: '第4' },
   '四': { letter: 'F', label: '第4' },
+  '5': { letter: 'G', label: '第5' },
+  '５': { letter: 'G', label: '第5' },
+  '五': { letter: 'G', label: '第5' },
+  '6': { letter: 'H', label: '第6' },
+  '６': { letter: 'H', label: '第6' },
+  '六': { letter: 'H', label: '第6' },
 };
 
 function parseArgs(argv) {
@@ -182,12 +197,12 @@ function normalizeFullwidthAscii(str) {
 }
 
 /**
- * Extract a Castle room (`第1`=`C`, `第2`=`D`, `第3`=`E`, or direct `C`..`O` / `PS.cgi` URL)
+ * Extract a Castle room (`第1`=`C` through `第6`=`H`, or direct `C`..`O` / `PS.cgi` URL)
  * from a Discord message or `アナウンス [APP]` link/embed.
  *
  * Matches all real Castle Discord patterns seen in `#2000-一撃なし`:
  * - `第1へ`, `第2にて`, `第2`, `では第三でお願いします🙌`, `第一でお願いします`
- * - `アナウンス [APP]` markdown links: `[第1](http://psense.lib.net/PBS/_/C/PS.cgi)` or `第1` / `第2` / `第3`
+ * - `アナウンス [APP]` markdown links: `[第1](http://psense.lib.net/PBS/_/C/PS.cgi)` or `第1` through `第6`
  * - Direct URLs: `http://psense.lib.net/PBS/_/C/PS.cgi`
  * - Explicit letter rooms: `C部屋`, `D部屋`, `E部屋`, `【C】`, etc.
  */
@@ -211,8 +226,8 @@ function parseRoomFromText(rawText, pbsBaseUrl = 'http://psense.lib.net/PBS/_/{R
     .replace(/<a?:[A-Za-z0-9_]+:\d+>/g, ' ')
     .replace(/<[@#!&][^>]+>/g, ' ');
 
-  // 2. Castle Discord standard notation: `第1` / `第一` / `第2` / `第二` / `第3` / `第三`
-  const daiMatch = stripped.match(/第\s*([1-4一二三四])(?![0-9])/);
+  // 2. Castle Discord standard notation: `第1` through `第6` (including kanji numerals)
+  const daiMatch = stripped.match(/第\s*([1-6一二三四五六])(?![0-9])/);
   if (daiMatch && DAI_TOKEN_TO_ROOM[daiMatch[1]]) {
     const info = DAI_TOKEN_TO_ROOM[daiMatch[1]];
     return {
@@ -338,7 +353,7 @@ function extractFullMessageText(msg) {
 }
 
 /**
- * Probe Castle Discord rooms `第1 (C)`, `第2 (D)`, `第3 (E)` on `psense.lib.net` to find:
+ * Probe Castle Discord rooms `第1 (C)` through `第6 (H)` on `psense.lib.net` to find:
  * 1. A room where a player is already waiting for an opponent (`p1Waiting === true`), OR
  * 2. The first unoccupied room (`page.kind === 'ENTORY' && !page.p1Waiting`).
  */
@@ -514,7 +529,7 @@ class CastleDiscordBot {
       return;
     }
 
-    // 1. If we are waiting for a room specification (`第1` / `第2` / `第3` from challenger or `アナウンス [APP]`)
+    // 1. If we are waiting for a room specification (`第1` through `第6` from challenger or `アナウンス [APP]`)
     //    after replying "応戦します", check if this event specifies the room!
     if (
       this.pendingChallenge &&
@@ -574,7 +589,7 @@ class CastleDiscordBot {
 
     this.log(
       `Received @mention challenge from "${challenge.challengerName}" in channel ${channelId} ` +
-      `(tier=${challenge.tier}${challenge.room ? `, room=${challenge.room.roomLabel}(${challenge.room.roomLetter})` : ', waiting for 第1/第2/第3'})`
+      `(tier=${challenge.tier}${challenge.room ? `, room=${challenge.room.roomLabel}(${challenge.room.roomLetter})` : ', waiting for 第1/第2/第3/第4/第5/第6'})`
     );
 
     // Send immediate response ("応戦します") as a Discord reply to the challenger's message
@@ -592,7 +607,7 @@ class CastleDiscordBot {
       }
     }
 
-    // If the `@mention` already included `第1` / `第2` / `第3` (or `C`..`O`), greet and launch immediately!
+    // If the `@mention` already included `第1` through `第6` (or `C`..`O`), greet and launch immediately!
     if (challenge.room) {
       this.clearPendingChallenge();
       if (this.config.roomEnterGreetText) {
@@ -610,9 +625,9 @@ class CastleDiscordBot {
     }
 
     // Otherwise, wait for the challenger to reply `第1へ` / `第2にて` / `第三でお願いします`
-    // (or `アナウンス [APP]` to post `[第1]` / `[第2]` / `[第3]`).
+    // (or `アナウンス [APP]` to post `[第1]` through `[第6]`).
     // If `autoPickRoomAfterSec` (default 15s) elapses without the challenger naming a room,
-    // automatically probe `第1 (C)` / `第2 (D)` / `第3 (E)` on psense.lib.net, announce `第Xにて`, and enter!
+    // automatically probe `第1 (C)` through `第6 (H)` on psense.lib.net, announce `第Xにて`, and enter!
     this.clearPendingChallenge();
     const timeoutMs = Math.max(15, this.config.roomWaitTimeoutSec) * 1000;
     const timer = setTimeout(() => {
@@ -884,6 +899,45 @@ async function runSelfTest() {
     roomUrl: 'http://psense.lib.net/PBS/_/E/PS.cgi',
   });
 
+  assert.deepStrictEqual(parseRoomFromText('第4'), {
+    roomLetter: 'F',
+    roomLabel: '第4',
+    roomUrl: 'http://psense.lib.net/PBS/_/F/PS.cgi',
+  });
+  assert.deepStrictEqual(parseRoomFromText('第５'), {
+    roomLetter: 'G',
+    roomLabel: '第5',
+    roomUrl: 'http://psense.lib.net/PBS/_/G/PS.cgi',
+  });
+  assert.deepStrictEqual(parseRoomFromText('第六'), {
+    roomLetter: 'H',
+    roomLabel: '第6',
+    roomUrl: 'http://psense.lib.net/PBS/_/H/PS.cgi',
+  });
+  assert.deepStrictEqual(
+    parseRoomFromText('[第6](http://psense.lib.net/PBS/_/H/PS.cgi)'),
+    {
+      roomLetter: 'H',
+      roomLabel: '第6',
+      roomUrl: 'http://psense.lib.net/PBS/_/H/PS.cgi',
+    }
+  );
+
+  // PBS result banners are P1-relative; verify conversion to the bot's perspective.
+  const p1WinHtml =
+    '<html>' + String.fromCodePoint(0xff37, 0xff29, 0xff2e, 0xff01) + '</html>';
+  const p1LoseHtml =
+    '<html>' + String.fromCodePoint(0xff2c, 0xff2f, 0xff33, 0xff25) + '</html>';
+  const drawHtml =
+    '<html>' + String.fromCodePoint(0xff24, 0xff32, 0xff21, 0xff37) + '</html>';
+
+  assert.strictEqual(resolveBotOutcomeFromFinishedHtml(p1WinHtml, 0), 'WIN');
+  assert.strictEqual(resolveBotOutcomeFromFinishedHtml(p1WinHtml, 1), 'LOSE');
+  assert.strictEqual(resolveBotOutcomeFromFinishedHtml(p1LoseHtml, 0), 'LOSE');
+  assert.strictEqual(resolveBotOutcomeFromFinishedHtml(p1LoseHtml, 1), 'WIN');
+  assert.strictEqual(resolveBotOutcomeFromFinishedHtml(drawHtml, 0), 'DRAW');
+  assert.strictEqual(resolveBotOutcomeFromFinishedHtml(drawHtml, 1), 'DRAW');
+
   const cfg = loadConfig({ 'dry-run-pbs': true, 'event-log': '', 'auto-pick-room-sec': '0' });
   cfg.eventLogPath = '';
   const bot = new CastleDiscordBot(cfg);
@@ -944,7 +998,7 @@ async function runSelfTest() {
   assert.strictEqual(launchedMatches[1].roomLabel, '第3');
   assert.strictEqual(launchedMatches[1].tier, 'mercy');
 
-  console.log('[discord-bot] Self-test passed (verified against #2000-一撃なし screenshot flows: 第1=C, 第2=D, 第3=E + アナウンス APP)!');
+  console.log('[discord-bot] Self-test passed (第1=C, 第2=D, 第3=E, 第4=F, 第5=G, 第6=H + bot-perspective outcome conversion)!');
 }
 
 async function main() {
