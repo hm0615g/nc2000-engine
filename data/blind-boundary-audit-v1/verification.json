@@ -1,0 +1,21 @@
+{
+  "schema": "nc2000-blind-boundary-verification-v1",
+  "baseline_commit": "07bba87fd22f4fb0993a044326d2cfbac69405cb",
+  "records_sha256": "dd7911805c5ac8c6eea4401e1a07d09ae126b90312d2571314a4fc265faed982",
+  "native_binary_sha256": "f37de71696c20c9f1acf930faa66a120cc2afff1b1e5acd1a2ff34d72d516a89",
+  "repeat_byte_identical": true,
+  "source_hashes_match": true,
+  "production_runtime_changed": false,
+  "hp_private_pairs": 4,
+  "hp_action_flips": 3,
+  "protocol_private_pairs_equal": 6,
+  "public_hp_positive_controls": 2,
+  "existing_tests": {
+    "blind": 9,
+    "claw_information": 1,
+    "player": 3,
+    "failed": 0
+  },
+  "test_command": "cargo test --release -j 2 -p nc2000-bot --test blind --test player --test claw_information",
+  "interpretation": "The reproducer confirms current privacy violations; passing is not a privacy or repair certification."
+}

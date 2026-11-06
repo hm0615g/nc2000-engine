@@ -31,6 +31,8 @@ data/kodoku-r*/
 data/kodoku-r3/*
 !data/kodoku-r3/conclusion-equilibrium-deme.json
 !data/kodoku-r3/conclusion-equilibrium-r1.json
+!data/kodoku-r3/majinjima-assassins.json
+!data/kodoku-r3/apex-candidates.json
 data/psro-r*/
 data/dominance-audit-*/
 !data/dominance-audit-v8-clean/
@@ -38,4 +40,9 @@ data/dominance-audit-v8-clean/*
 !data/dominance-audit-v8-clean/converged-report-v6.json
 data/team-selection-v2/stage-a-3000/
 /findings/
+/dist/
+pbs-bot.config.json
+data/pbs-opponent-db.json
+data/pbs-matches.jsonl
+data/discord-events.jsonl
 

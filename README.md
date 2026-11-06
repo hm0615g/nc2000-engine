@@ -13,16 +13,16 @@ Rust battle engine, imperfect-information search bot, WebAssembly/Preact client,
 - **Compact, replay & source-hash fingerprints (`crates/engine/build.rs`, `crates/bot/build.rs`, `web/vite.config.ts`)**:
   - `crates/engine/build.rs` hashes all `crates/engine/src/**/*.rs` bytes (including comments) into `ENGINE_FINGERPRINT`, checked alongside `CompactMoveSpec` layout by `crates/conformance/tests/kifu.rs` and `crates/conformance/tests/replay.rs`. Non-semantic edits to `crates/engine/src/` require updating the digest allowlist in `crates/engine/build.rs`.
   - `crates/bot/build.rs` hashes `crates/{engine,conformance,bot}/src/**/*.rs` into `M17E_SOLVER_BUILD_FINGERPRINT`.
-  - `web/vite.config.ts` (`verifyCompiledPreview`) checks SHA-256 digests of every input recorded in `data/compiled-preview-v1.json` during production `npm run build` (`npm run build:research` bypasses compiled preview lookup).
+  - `web/vite.config.ts` (`verifyCompiledPreview`) checks source/data digests and semantic shell-prior compatibility for `data/compiled-preview-v1.json` artifacts. Training-v3 preview tables have been recomputed against the corrected sets and prior; `npm run build:research` disables lookup.
 
 ### 2. Imperfect-Information Search & Data Roles (`crates/bot`)
-- **Blind information boundary**: All live play, evaluation, and ladder play are strictly blind. `Observer` (`crates/bot/src/observe.rs`) and `ProtocolTracker` (`crates/bot/src/import.rs`) consume only player-visible protocol facts. `Belief::determinize` (`crates/bot/src/belief.rs`) resamples hidden sets, DVs/stats, unseen bench picks, and mid-turn pending moves per iteration. Hidden opponent state must never leak into search decisions, root policies, or preview cache keys (`crates/bot/tests/blind.rs`).
+- **Blind information policy**: Live Web search receives only the submitted own team and filtered player frames. Evaluation, PS play, native `BlindAgent` and the legacy WASM facade reconstruct their search roots through the same protocol importer. `ObservedPosition` restricts the product search API to reconstructed input; full-world research APIs remain explicit. Every candidate preserves the announced HP bucket, and product heuristic root exclusions are disabled so uncertain guesses cannot permanently remove an action. See the [repair and limited adversarial recheck](data/blind-boundary-repair-v1/README.md) and the [historical vulnerability audit](data/blind-boundary-audit-v1/README.md).
 - **Retired `open` mode**: Pinned-sheet (`open`) mode exists only to replay historical fork/kifu records (`data/search-profiles.json`).
 - **Three distinct team-data roles (`web/src/data.ts`, `docs/TEAM-POOL-REBUILD-PLAN.md`)** — never substitute one for another:
   1. **Catalog (`data/team-pool-v2/team-pool.json`)**: Human built-in party list and ordinary bot draw (weighted by `drawWeight`).
-  2. **Opponent prior (`data/belief-pool-v3/belief-pool.json`)**: Frozen weighted candidate set used by `Belief` across all doors and tools. User pool overrides never replace this prior. The optional marginal species/move prior (`crates/bot/src/prior.rs`) is opt-in and inert by default (never place a file at `data/belief-prior-v0.json`).
-  3. **Solved Nash mixtures (`data/kodoku-r3/conclusion-equilibrium-deme.json` primary; `data/kodoku-r3/conclusion-equilibrium-r1.json` and `data/meta-nash-v3/pool-artifact.json` preserved under `<details>`)**: Bot party draw when mixture draw (`?nash` or setup selector) is active.
-- **Budgets & compiled preview**: Search coefficients and iteration budgets are read from `data/search-profiles.json` and `data/live-search.json` (never hardcoded in docs). Known catalog preview information sets use `data/compiled-preview-v1.json` (`crates/bot/src/compiled_preview.rs`); production web builds fail-close if the artifact does not match current source/data (`npm run build:research` disables lookup for research builds).
+  2. **Opponent prior (`data/belief-pool-v3/belief-pool.json`)**: Weighted known-party candidate set used by `Belief` across all doors and tools: real-world variants plus only catalog-generated sets. User pool overrides never replace this prior. The optional marginal species/move prior (`crates/bot/src/prior.rs`) is opt-in and inert by default (never place a file at `data/belief-prior-v0.json`).
+  3. **Historical solved mixtures (`data/kodoku-r3/conclusion-equilibrium-deme.json` primary; `data/kodoku-r3/conclusion-equilibrium-r1.json` and `data/meta-nash-v3/pool-artifact.json` preserved under `<details>`)**: Bot party draw when mixture draw (`?nash` or setup selector) is active.
+- **Budgets & compiled preview**: Search coefficients and iteration budgets are read from `data/search-profiles.json` and `data/live-search.json` (never hardcoded in docs). The [training-v3 preview bake](data/preview-training-v3/README.md) retains 810 compatible keys after the known-party prior expansion. The 180 affected keys are excluded from production bundles and use live preview search, as do unrecorded matchups. Source/data guards remain active; conditional distributions within both public shells determine prior compatibility. See [prior compatibility](docs/PREVIEW-PRIOR-COMPATIBILITY.md).
 
 ### 3. WASM, Web App & TPU (`crates/wasm`, `web`, `tpu`)
 - **WASM bridge (`crates/wasm/src/lib.rs`)**: Exposes `Dex`, `Battle`, `Searcher`, `BlindSearcher`, `ProtocolSearcher`, `Validator`, and `ForkArena`. Verified against native behavior via `crates/wasm/tests-node/`.
@@ -41,6 +41,7 @@ Rust battle engine, imperfect-information search bot, WebAssembly/Preact client,
 - WASM bindings & build script: [`crates/wasm/src/lib.rs`](crates/wasm/src/lib.rs), [`crates/wasm/build.sh`](crates/wasm/build.sh), [`crates/wasm/tests-node/`](crates/wasm/tests-node/)
 - Web application & E2E suites: [`web/src/app.tsx`](web/src/app.tsx), [`web/src/data.ts`](web/src/data.ts), [`web/package.json`](web/package.json), [`web/tests/`](web/tests/)
 - PS local/websocket interop & preview cache helper: [`tools/ps-arena.js`](tools/ps-arena.js), [`tools/ps-client.js`](tools/ps-client.js), [`tools/preview-cache.js`](tools/preview-cache.js)
+- Gym Leader's Castle (`PS.cgi`) client, `PD0` exporter & resident Discord bot: [`tools/pbs-client.js`](tools/pbs-client.js), [`tools/export-pdinput.js`](tools/export-pdinput.js), [`tools/pbs-discord-bot.js`](tools/pbs-discord-bot.js)
 - JAX/TPU package: [`tpu/README.md`](tpu/README.md), [`tpu/HANDOFF.md`](tpu/HANDOFF.md)
 - CI / GitHub Pages deployment contract: [`.github/workflows/pages.yml`](.github/workflows/pages.yml)
 
@@ -48,6 +49,7 @@ Rust battle engine, imperfect-information search bot, WebAssembly/Preact client,
 - Format mechanics & PS porting notes: [`PORT-NOTES.md`](PORT-NOTES.md), [`PORTING.md`](PORTING.md)
 - Server-side preview cache specification: [`docs/PREVIEW-CACHE.md`](docs/PREVIEW-CACHE.md) (rendered by [`tools/render-preview-cache-doc.py`](tools/render-preview-cache-doc.py))
 - Native fork integration handoff: [`docs/NATIVE-FORK-HANDOFF.md`](docs/NATIVE-FORK-HANDOFF.md) (rendered by [`tools/render-native-handoff.py`](tools/render-native-handoff.py))
+- Gym Leader's Castle (`PS.cgi`) Discord bot operational handoff: [`docs/PBS-CASTLE-BOT-HANDOFF.md`](docs/PBS-CASTLE-BOT-HANDOFF.md)
 - Compact replay (`NC2-…`) specification: [`docs/replay.md`](docs/replay.md)
 - Residual eval & rollout NN handoff: [`docs/RESIDUAL-NN-HANDOFF.md`](docs/RESIDUAL-NN-HANDOFF.md)
 - Endgame exact/bound solver specification: [`ENDGAME-SOLVER-ALGORITHM.md`](ENDGAME-SOLVER-ALGORITHM.md)

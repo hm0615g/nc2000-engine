@@ -216,6 +216,31 @@ def default_residual_bundle() -> ResidualBundle:
     )
 
 
+def calibrated_rollout_residual_weights() -> RolloutResidualWeights:
+    """Return calibrated `RolloutResidualWeights` activating all 6 tactical action features:
+    - `act_bias[0] = 0.68`: Baton Pass (`sk == 18`) transfer when boosted or behind Substitute
+    - `act_bias[1] = 0.72`: Whirlwind/Roar (`sk == 7`) phaze against boosted or Substitute foe
+    - `act_bias[2] = 0.40`: Self-boost setup (`Curse`, `Belly Drum`, `SD`, `Agility`, `Growth`) when healthy/safe
+    - `act_bias[3] = 0.44`: `Substitute` creation when faster or safe
+    - `act_bias[4] = 0.48`: Status infliction (`Spore`/`Sleep`/`Paralysis`/`Toxic`) on unstatused foe
+    - `act_bias[5] = 0.35`: Voluntary offensive switch when `stay_best_dmg < 0.25`
+    """
+    return RolloutResidualWeights(
+        active=jnp.bool_(True),
+        u_proj=jnp.zeros((ROLLOUT_RANK, ROLLOUT_STATE_DIM), dtype=jnp.float32),
+        v_proj=jnp.zeros((ROLLOUT_RANK, ROLLOUT_ACT_DIM), dtype=jnp.float32),
+        act_bias=jnp.array([0.68, 0.72, 0.40, 0.44, 0.48, 0.35], dtype=jnp.float32),
+    )
+
+
+def calibrated_residual_bundle() -> ResidualBundle:
+    """Return `ResidualBundle` with both Gate-1 `EvalResidualWeights` and tactical `RolloutResidualWeights` active."""
+    return ResidualBundle(
+        eval=default_residual_bundle().eval,
+        rollout=calibrated_rollout_residual_weights(),
+    )
+
+
 def residual_bundle_to_dict(bundle: ResidualBundle) -> dict[str, Any]:
     """Serialize `ResidualBundle` to a JSON-compatible dictionary matching `NC2000_RESIDUAL_JSON`."""
     return {
@@ -885,16 +910,24 @@ def extract_rollout_state_and_actions(
         )
         has_cap_move = has_cap_move | is_bp | is_other_cap
 
+    foe_st_pk = _get1(state.status_packed, def_idx)
+    foe_st_raw_early = foe_st_pk & 0x07
+    foe_st_cnt_early = (foe_st_pk >> 3) & 0x1F
+    foe_incap_now = (foe_st_raw_early == Status.FRZ) | (
+        (foe_st_raw_early == Status.SLP) & (foe_st_cnt_early > 1)
+    )
+    raw_foe_best_dmg = jnp.minimum(
+        jnp.float32(1.5),
+        best_hit_fraction(state, table, def_side, def_slot, side, att_slot, jnp.bool_(True)),
+    )
+    foe_best_dmg = jnp.where(foe_incap_now, jnp.float32(0.0), raw_foe_best_dmg)
+
     can_vol_switch = (
         (stay_best_dmg < jnp.float32(0.25))
         & (own_pos_boosts == jnp.float32(0.0))
         & (own_has_sub == jnp.float32(0.0))
+        & (~((own_has_self_switch > jnp.float32(0.0)) & (own_hp_frac > foe_best_dmg + jnp.float32(0.15))))
         & bench_alive
-    )
-
-    foe_best_dmg = jnp.minimum(
-        jnp.float32(1.5),
-        best_hit_fraction(state, table, def_side, def_slot, side, att_slot, jnp.bool_(True)),
     )
     own_spd = _mon_action_speed(state, table, side, att_slot)
     foe_spd = _mon_action_speed(state, table, def_side, def_slot)

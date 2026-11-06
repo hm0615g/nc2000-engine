@@ -718,6 +718,21 @@ def compact_dominated_mask7(
         noop_hbell = (m_sk == 21) & (~party_has_status)
         awake_or_waking = (att_st_raw != Status.SLP) | (att_st_cnt <= 1)
         noop_slptalk = ((m_flags & MoveFlag.IS_SLEEP_USABLE) != 0) & awake_or_waking
+        has_usable_slptalk = jnp.bool_(False)
+        for sm_i in range(4):
+            sm_fl = _get2(table.move_flags, att_idx, sm_i)
+            has_usable_slptalk = has_usable_slptalk | (
+                leg_mask[sm_i] & ((sm_fl & MoveFlag.IS_SLEEP_USABLE) != 0)
+            )
+        att_has_wake_berry = (_get1(state.item, att_idx) != 0) & (
+            (_get1(table.item_flags, att_idx) & (ItemFlag.MINTBERRY | ItemFlag.MIRACLEBERRY)) != 0
+        )
+        asleep_this_turn = (~awake_or_waking) & (~att_has_wake_berry)
+        noop_asleep_non_slptalk = (
+            asleep_this_turn
+            & has_usable_slptalk
+            & ((m_flags & MoveFlag.IS_SLEEP_USABLE) == 0)
+        )
 
         foe_psn_imm = ((m_pstat == Status.PSN) | (m_pstat == Status.TOX)) & (
             (def_tmask & table.poison_immune_mask) != jnp.uint32(0)
@@ -778,6 +793,7 @@ def compact_dominated_mask7(
             | noop_bdrum
             | noop_hbell
             | noop_slptalk
+            | noop_asleep_non_slptalk
             | noop_status
             | noop_sub
             | noop_curse
@@ -1077,17 +1093,184 @@ def sample_heavy_playout_action(
         best_move_score = jnp.where(better, sc, best_move_score)
 
     if rollout_residual is not None:
-        stay_dmg = jnp.maximum(jnp.float32(0.0), best_move_score)
+        att_hp_f = _get2(state.hp_pool, att_idx, 0).astype(jnp.float32)
+        att_maxhp_f = jnp.maximum(jnp.int32(1), _get1(table.maxhp, att_idx)).astype(jnp.float32)
+        own_hp_frac = att_hp_f / att_maxhp_f
+        def_hp_f = _get2(state.hp_pool, def_idx, 0).astype(jnp.float32)
+        def_maxhp_f = jnp.maximum(jnp.int32(1), _get1(table.maxhp, def_idx)).astype(jnp.float32)
+        foe_hp_frac = def_hp_f / def_maxhp_f
+
+        def_st_raw = _get1(state.status_packed, def_idx) & 0x07
+        foe_can_attack = (def_st_raw != Status.SLP) & (def_st_raw != Status.FRZ)
+        foe_phys_dmg = jnp.float32(0.0)
+        foe_spec_dmg = jnp.float32(0.0)
+        def_nm = _get1(table.num_moves, def_idx)
+        for fm_i in range(4):
+            f_ok = (jnp.int32(fm_i) < def_nm) & (_get2(state.pp, def_idx, fm_i) > 0) & foe_can_attack
+            f_fl = _get2(table.move_flags, def_idx, fm_i)
+            f_is_phys = (f_fl & MoveFlag.IS_PHYSICAL) != 0
+            f_is_stat = (f_fl & MoveFlag.IS_STATUS) != 0
+            f_sc = expected_hit_fraction(
+                state, table, def_side, def_slot, side, att_slot, fm_i, jnp.bool_(True)
+            )
+            f_sc_ok = jnp.where(f_ok & (~f_is_stat), f_sc, jnp.float32(0.0))
+            foe_phys_dmg = jnp.where(f_is_phys, jnp.maximum(foe_phys_dmg, f_sc_ok), foe_phys_dmg)
+            foe_spec_dmg = jnp.where(~f_is_phys, jnp.maximum(foe_spec_dmg, f_sc_ok), foe_spec_dmg)
+        foe_best_dmg = jnp.maximum(foe_phys_dmg, foe_spec_dmg)
+
+        att_vol = _get1(state.vol_flags, att_idx)
+        def_vol = _get1(state.vol_flags, def_idx)
+        foe_has_sub = (def_vol & VolBit.SUBSTITUTE) != 0
+        own_alive_cnt = popcount_3bit(alive_m)
+        foe_alive_cnt = popcount_3bit(_get1(state.alive_mask, def_side))
+        att_faster = mon_action_speed(state, table, side, att_slot) > mon_action_speed(
+            state, table, def_side, def_slot
+        )
+        att_st_pk = _get1(state.status_packed, att_idx)
+        att_st_raw = att_st_pk & 0x07
+        att_st_cnt = (att_st_pk >> 3) & 0x07
+        att_wake_berry = (_get1(state.item, att_idx) != 0) & (
+            (_get1(table.item_flags, att_idx) & (ItemFlag.MINTBERRY | ItemFlag.MIRACLEBERRY)) != 0
+        )
+        att_asleep_turn = (att_st_raw == Status.SLP) & (att_st_cnt > 1) & (~att_wake_berry)
+
+        own_has_heal = jnp.bool_(False)
+        for hm_i in range(4):
+            hm_fl = _get2(table.move_flags, att_idx, hm_i)
+            own_has_heal = own_has_heal | (
+                legal7[hm_i] & ((hm_fl & (MoveFlag.IS_REST | MoveFlag.IS_HALF_HEAL)) != 0)
+            )
+        ghost_mask = jnp.uint32(1) << (table.ghost_type.astype(jnp.uint32) & jnp.uint32(31))
+        att_is_ghost = (_get1(table.type_mask, att_idx) & ghost_mask) != jnp.uint32(0)
+        att_b0 = _get2(state.boosts, att_idx, 0)
+        att_b2 = _get2(state.boosts, att_idx, 2)
+        att_b3 = _get2(state.boosts, att_idx, 3)
+
+        adj_move_scores = []
+        stay_non_sd = jnp.float32(0.0)
+        for m_i in range(4):
+            ok_m = legal7[m_i] & (~suicidal7[m_i])
+            sc_m = move_base_scores[m_i]
+            m_fl = _get2(table.move_flags, att_idx, m_i)
+            m_sk = _get2(table.move_special_kind, att_idx, m_i)
+            m_pvol = _get2(table.move_primary_vol, att_idx, m_i)
+            m_is_sd = (m_fl & MoveFlag.IS_SELFDESTRUCT) != 0
+
+            # Sleep Talk / Snore when guaranteed asleep this turn (`status_counter >= 2`)
+            slptalk_ok = att_asleep_turn & ((m_fl & MoveFlag.IS_SLEEP_USABLE) != 0)
+            sc_m = jnp.where(slptalk_ok, jnp.maximum(sc_m, jnp.float32(0.75)), sc_m)
+
+            # R2b: Healthy setup + recovery punishes passive non-phazing walls (`foe_best_dmg < 0.25`)
+            is_setup_move = (
+                ((m_sk == 5) & (~att_is_ghost) & (att_b0 < 2))
+                | ((m_fl & MoveFlag.BOOSTS_SELF) != 0) & ((att_b0 < 2) | (att_b2 < 2) | (att_b3 < 2))
+            )
+            r2b_ok = (
+                is_setup_move
+                & own_has_heal
+                & (~att_asleep_turn)
+                & (own_hp_frac >= jnp.float32(0.65))
+                & (best_move_score < jnp.float32(0.45))
+                & (foe_best_dmg < jnp.float32(0.25))
+                & ((att_vol & (VolBit.ENCORE | VolBit.PERISH_SONG)) == 0)
+            )
+            sc_m = jnp.where(r2b_ok, jnp.maximum(sc_m, jnp.float32(0.48)), sc_m)
+
+            # R1: Do not waste healthy Self-Destruct/Explosion for non-KO chip when not threatened
+            sc_m = jnp.where(
+                m_is_sd
+                & (own_hp_frac >= jnp.float32(0.50))
+                & (sc_m < jnp.float32(0.82))
+                & (foe_best_dmg < jnp.float32(0.70)),
+                sc_m * jnp.float32(0.15),
+                sc_m,
+            )
+            # Super Fang (sk == 15): 50% of current foe HP when not Ghost-immune (sc_m > 0)
+            sc_m = jnp.where(
+                (m_sk == 15) & (sc_m > jnp.float32(0.0)) & (foe_hp_frac >= jnp.float32(0.35)),
+                jnp.maximum(sc_m, jnp.float32(0.45) * foe_hp_frac),
+                sc_m,
+            )
+            # Counter (sk == 11) vs Physical attacker / Mirror Coat (sk == 12) vs Special attacker
+            cnt_ok = (
+                (m_sk == 11)
+                & (sc_m > jnp.float32(0.0))
+                & (own_hp_frac > foe_phys_dmg + jnp.float32(0.05))
+                & (foe_phys_dmg >= jnp.float32(0.15))
+                & (foe_phys_dmg >= foe_spec_dmg)
+            )
+            mc_ok = (
+                (m_sk == 12)
+                & (sc_m > jnp.float32(0.0))
+                & (own_hp_frac > foe_spec_dmg + jnp.float32(0.05))
+                & (foe_spec_dmg >= jnp.float32(0.15))
+                & (foe_spec_dmg >= foe_phys_dmg)
+            )
+            sc_m = jnp.where(
+                cnt_ok,
+                jnp.maximum(sc_m, jnp.minimum(jnp.float32(0.95), jnp.float32(1.6) * foe_phys_dmg)),
+                sc_m,
+            )
+            sc_m = jnp.where(
+                mc_ok,
+                jnp.maximum(sc_m, jnp.minimum(jnp.float32(0.95), jnp.float32(1.6) * foe_spec_dmg)),
+                sc_m,
+            )
+            # Bulky Recovery (Rest / Recover / Soft-Boiled / Milk Drink / Moonlight) when < 48% HP
+            heal_ok = (
+                ((m_fl & (MoveFlag.IS_REST | MoveFlag.IS_HALF_HEAL)) != 0)
+                & (own_hp_frac < jnp.float32(0.48))
+                & (foe_best_dmg < jnp.float32(0.65))
+                & ((att_vol & VolBit.PERISH_SONG) == 0)
+            )
+            sc_m = jnp.where(heal_ok, jnp.maximum(sc_m, jnp.float32(0.52)), sc_m)
+            # Spikes (sk == 4) and Leech Seed (VolBit.LEECH_SEED) and low-HP Destiny Bond (sk == 20)
+            spikes_ok = (
+                (m_sk == 4)
+                & (foe_alive_cnt > 1)
+                & ((_get1(state.side_flags, def_side) & 0x03) == 0)
+                & (own_hp_frac > foe_best_dmg + jnp.float32(0.15))
+            )
+            sc_m = jnp.where(spikes_ok, jnp.maximum(sc_m, jnp.float32(0.34)), sc_m)
+            lseed_ok = (
+                (m_pvol == VolBit.LEECH_SEED)
+                & (~foe_has_sub)
+                & ((def_vol & VolBit.LEECH_SEED) == 0)
+                & (own_hp_frac > foe_best_dmg + jnp.float32(0.10))
+            )
+            sc_m = jnp.where(lseed_ok, jnp.maximum(sc_m, jnp.float32(0.36)), sc_m)
+            dbond_ok = (
+                (m_sk == 20)
+                & (own_alive_cnt >= 2)
+                & (own_hp_frac <= foe_best_dmg + jnp.float32(0.05))
+                & att_faster
+                & ((att_vol & VolBit.DESTINY_BOND) == 0)
+            )
+            sc_m = jnp.where(dbond_ok, jnp.maximum(sc_m, jnp.float32(0.60)), sc_m)
+
+            sc_eff = jnp.where(rollout_residual.active, sc_m, move_base_scores[m_i])
+            adj_move_scores.append(sc_eff)
+            stay_non_sd = jnp.where(
+                ok_m & (~m_is_sd), jnp.maximum(stay_non_sd, move_base_scores[m_i]), stay_non_sd
+            )
+
+        stay_dmg = jnp.where(
+            rollout_residual.active,
+            stay_non_sd,
+            jnp.maximum(jnp.float32(0.0), best_move_score),
+        )
         deltas = compute_rollout_action_residuals(
             state, table, side, legal7, stay_dmg, rollout_residual
         )
         base7 = jnp.concatenate(
-            [jnp.stack(move_base_scores, axis=0), jnp.zeros((3,), dtype=jnp.float32)],
+            [jnp.stack(adj_move_scores, axis=0), jnp.zeros((3,), dtype=jnp.float32)],
             axis=0,
         )
+        best_move_act = jnp.int32(0)
+        best_move_score = jnp.float32(-1.0)
         for c_i in range(7):
-            ok_c = legal7[c_i] & (~suicidal7[c_i]) & (deltas[c_i] > jnp.float32(0.0))
-            tot_c = base7[c_i] + deltas[c_i]
+            ok_c = legal7[c_i] & (~suicidal7[c_i]) & ((c_i < 4) | (deltas[c_i] > jnp.float32(0.0)))
+            tot_c = base7[c_i] + jnp.maximum(jnp.float32(0.0), deltas[c_i])
             better_c = ok_c & (tot_c > best_move_score)
             best_move_act = jnp.where(better_c, jnp.int32(c_i), best_move_act)
             best_move_score = jnp.where(better_c, tot_c, best_move_score)
@@ -1099,10 +1282,17 @@ def sample_heavy_playout_action(
     att_hp = _get2(state.hp_pool, att_idx, 0)
     att_b0 = _get2(state.boosts, att_idx, 0)
     att_b2 = _get2(state.boosts, att_idx, 2)
+    att_b4 = _get2(state.boosts, att_idx, 4)
+    att_has_sub = (_get1(state.vol_flags, att_idx) & VolBit.SUBSTITUTE) != 0
     foe_alive = ((_get1(state.alive_mask, def_side) & (jnp.int32(1) << def_slot)) != 0) & (
         _get2(state.hp_pool, def_idx, 0) > 0
     )
-    passing_alive = (req == 2) & (att_hp > 0) & ((att_b0 > 0) | (att_b2 > 0)) & foe_alive
+    passing_alive = (
+        (req == 2)
+        & (att_hp > 0)
+        & ((att_b0 > 0) | (att_b2 > 0) | (att_b4 > 0) | att_has_sub)
+        & foe_alive
+    )
 
     best_sw_act = unif_act
     best_sw_score = jnp.float32(-1.0)
@@ -1122,7 +1312,15 @@ def sample_heavy_playout_action(
         eff = best_hit_fraction(state, table, side, slot, def_side, def_slot, jnp.bool_(True))
         bp_sc = hp_f * (jnp.float32(0.4) + jnp.float32(0.6) * passed_stat + jnp.float32(0.8) * jnp.minimum(jnp.float32(1.5), eff))
 
-        sc = jnp.where(passing_alive, bp_sc, hp_f)
+        if rollout_residual is not None:
+            faint_sc = jnp.where(
+                rollout_residual.active & foe_alive,
+                hp_f + jnp.float32(0.25) * jnp.minimum(jnp.float32(1.2), eff),
+                hp_f,
+            )
+        else:
+            faint_sc = hp_f
+        sc = jnp.where(passing_alive, bp_sc, faint_sc)
         better = ok & (sc > best_sw_score)
         best_sw_act = jnp.where(better, act_code, best_sw_act)
         best_sw_score = jnp.where(better, sc, best_sw_score)
@@ -1768,6 +1966,18 @@ def _solve_depth2_from_leaves(
     )
 
 
+@partial(
+    jax.jit,
+    static_argnames=(
+        "top_k",
+        "ply1_samples",
+        "ply2_samples",
+        "rollout_turns",
+        "ply2_rollout_turns",
+        "rm_sweeps",
+        "base_seed_int",
+    ),
+)
 def evaluate_depth2_counterfactual_oracle(
     root_state: CompactBattle,
     table: MatchTable,

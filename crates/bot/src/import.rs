@@ -256,6 +256,10 @@ const THRASH_CLASS: [&str; 3] = ["thrash", "petaldance", "outrage"];
 const BIND_CLASS: [&str; 5] = ["wrap", "bind", "firespin", "clamp", "whirlpool"];
 
 impl ProtocolTracker {
+    pub(crate) fn set_hp_observations(&self, belief: &mut Belief, side: usize) {
+        belief.set_hp_observations(self.sides[side].mons.iter()
+            .map(|m| if m.fainted { (0, m.hp_den) } else { (m.pixels, m.hp_den) }).collect());
+    }
     pub fn new(side: usize) -> ProtocolTracker {
         ProtocolTracker {
             side,
@@ -1066,6 +1070,8 @@ fn boost_index(name: &str) -> Option<usize> {
 #[derive(Clone, Debug, Default)]
 pub struct Request {
     pub team_preview: bool,
+    /// Public local format rules; absent on PS means the standard 155 cap.
+    pub preview_level_caps: Option<[Option<u32>; 2]>,
     pub force_switch: bool,
     pub wait: bool,
     pub trapped: bool,
@@ -1107,6 +1113,9 @@ impl Request {
                 .unwrap_or(false),
             ..Default::default()
         };
+        req.preview_level_caps = v["side"].get("previewLevelCaps")
+            .map(|caps| serde_json::from_value(caps.clone()).map_err(|e|format!("preview caps: {e}")))
+            .transpose()?;
         if let Some(active) = v["active"].as_array().and_then(|a| a.first()) {
             req.trapped = active["trapped"].as_bool().unwrap_or(false);
             if let Some(moves) = active["moves"].as_array() {
@@ -1196,13 +1205,16 @@ impl ProtocolTracker {
         let mut b = Battle::from_fixture(dex, &rng.battle_seed(), p1, p2)
             .map_err(|e| format!("from_fixture: {e:?}"))?;
         b.set_log_enabled(false);
+        b.preview_level_caps=req.preview_level_caps.unwrap_or([Some(MAX_TOTAL_LEVEL as u32);2]);
 
         // opponent roster := belief refs (fresh preview-state mons aligned
         // to observed slots), with public preview facts stamped on
-        if refs.len() != b.sides[opp].roster.len() {
-            return Err("refs/roster length mismatch".to_string());
+        if refs.len() != self.sides[opp].mons.len() {
+            return Err("refs/public roster length mismatch".to_string());
         }
         b.sides[opp].roster = refs.to_vec();
+        b.sides[opp].party=(0..refs.len() as u8).collect();
+        b.sides[opp].pokemon_left=refs.len() as i32;
         for (slot, tm) in self.sides[opp].mons.iter().enumerate() {
             let p = &mut b.sides[opp].roster[slot];
             p.gender = tm.gender;
@@ -1244,7 +1256,9 @@ impl ProtocolTracker {
             let slot = b.sides[me]
                 .roster
                 .iter()
-                .position(|p| p.species == rm.species && p.level == rm.level)
+                .enumerate()
+                .find(|(slot,p)| !own_party.contains(&(*slot as u8)) && p.species == rm.species && p.level == rm.level)
+                .map(|(slot,_)|slot)
                 .ok_or_else(|| "request mon not in own roster".to_string())?;
             own_party.push(slot as u8);
             let p = &mut b.sides[me].roster[slot];
@@ -1891,6 +1905,7 @@ pub struct ProtocolAgent {
     /// M18 community belief prior for the hidden-team fallback imputation.
     /// `None` (the default) leaves it exactly as shipped.
     prior: Option<std::sync::Arc<crate::prior::BeliefPrior>>,
+    fallback_policy: crate::belief::FallbackPolicy,
     pick_prior: Option<std::sync::Arc<crate::pick_prior::PickPrior>>,
     pick_preview: bool,
     tracker: ProtocolTracker,
@@ -1928,6 +1943,7 @@ impl ProtocolAgent {
             own_sets: Vec::new(),
             pinned_sets: None,
             prior: None,
+            fallback_policy: crate::belief::FallbackPolicy::default(),
             pick_prior: None,
             pick_preview: false,
             tracker: ProtocolTracker::new(side),
@@ -1947,6 +1963,10 @@ impl ProtocolAgent {
 
     pub fn set_own_team(&mut self, sets: Vec<PokemonSet>) {
         self.own_sets = sets;
+    }
+
+    pub fn set_fallback_policy(&mut self, policy: crate::belief::FallbackPolicy) {
+        self.fallback_policy = policy;
     }
 
     /// Open-team-sheet mode: the opponent's true sets are public.
@@ -2032,7 +2052,7 @@ impl ProtocolAgent {
             }
             let mut belief = match &self.pinned_sets {
                 Some(sets) => Belief::pinned_checked(dex, "opponent", sets, &obs)?,
-                None => Belief::new(dex, &self.pool, &obs),
+                None => Belief::with_fallback_policy(dex, &self.pool, &obs, self.fallback_policy),
             };
             if let (Some(prior), None) = (self.prior.clone(), &self.pinned_sets) {
                 belief.set_prior(prior);
@@ -2064,6 +2084,8 @@ impl ProtocolAgent {
             belief.condition_pick_prior(dex, prior, &preview, obs);
         }
 
+        // Preserve player HP buckets across every candidate determinization.
+        self.tracker.set_hp_observations(belief, 1-self.side);
         // synthesize
         let pick = belief.alive().first().copied();
         let battle = {
@@ -2073,7 +2095,7 @@ impl ProtocolAgent {
 
         // search + preview policy
         let mut search =
-            BlindSearch::new(&battle, dex, self.cfg.clone(), self.side, self.rng.next());
+            BlindSearch::from_observation(&crate::player_state::ObservedPosition::reconstructed(battle.clone()), dex, self.cfg.clone(), self.side, self.rng.next());
         search.set_opponent_preview_prior(self.pick_preview);
         self.baked = None;
         self.forced = None;
@@ -2088,8 +2110,8 @@ impl ProtocolAgent {
                 .actions()
                 .iter()
                 .map(|c| match c {
-                    SearchChoice::Team(slots) => team_total_level(&levels, slots)
-                        <= MAX_TOTAL_LEVEL,
+                    SearchChoice::Team(slots) => battle.preview_level_caps[self.side]
+                        .map_or(true, |cap|team_total_level(&levels, slots) <= cap as i32),
                     _ => true,
                 })
                 .collect();

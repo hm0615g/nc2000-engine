@@ -36,6 +36,7 @@ const PRIOR: &str = "data/belief-pool-v3/belief-pool.json";
 struct Products {
     inventory: BTreeMap<String, Value>,
     evolved: BTreeMap<String, Value>,
+    partybox: BTreeMap<String, Value>,
     selection: Value,
     catalog: Value,
     prior: Value,
@@ -47,6 +48,7 @@ struct Products {
 fn products() -> Products {
     let inv = read("data/team-inventory-v1/inventory.json");
     let evo = read("data/team-selection-v2/evolved-teams.json");
+    let pb = read("data/partybox-v0/teams.json");
     Products {
         inventory: inv["teams"]
             .as_array()
@@ -55,6 +57,12 @@ fn products() -> Products {
             .map(|t| (t["id"].as_str().unwrap().to_string(), t.clone()))
             .collect(),
         evolved: evo["teams"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| (t["id"].as_str().unwrap().to_string(), t.clone()))
+            .collect(),
+        partybox: pb["teams"]
             .as_array()
             .unwrap()
             .iter()
@@ -72,13 +80,20 @@ fn products() -> Products {
 fn measured(p: &Products) -> BTreeSet<String> {
     p.inventory
         .iter()
+        .chain(p.evolved.iter())
+        .chain(p.partybox.iter())
         .filter(|(id, t)| t["eligibility"]["status"] == "eligible" && t["measuredAs"].as_str() == Some(id.as_str()))
         .map(|(id, _)| id.clone())
         .collect()
 }
 
 fn source_team<'a>(p: &'a Products, id: &str) -> &'a Value {
-    p.inventory.get(id).or_else(|| p.evolved.get(id)).unwrap_or_else(|| panic!("unknown team id {id}"))
+    let base_id = id.strip_suffix("-lowatk").unwrap_or(id);
+    p.inventory
+        .get(base_id)
+        .or_else(|| p.evolved.get(base_id))
+        .or_else(|| p.partybox.get(base_id))
+        .unwrap_or_else(|| panic!("unknown team id {id}"))
 }
 
 #[test]
@@ -86,7 +101,7 @@ fn memberships_follow_the_selection() {
     let p = products();
     let labels = p.selection["labels"].as_object().unwrap();
     let measured = measured(&p);
-    let candidates: BTreeSet<String> = measured.iter().chain(p.evolved.keys()).cloned().collect();
+    let candidates: BTreeSet<String> = measured.clone();
     assert_eq!(labels.keys().cloned().collect::<BTreeSet<_>>(), candidates, "every candidate team, and only those, carries a label");
     for (id, l) in labels {
         let label = l["label"].as_str().unwrap();
@@ -110,7 +125,12 @@ fn memberships_follow_the_selection() {
     for id in ids(&p.nash) {
         assert!(p.inventory.contains_key(&id), "Legacy v3 Nash support {id} is missing from inventory");
     }
-    assert_eq!(ids(&p.prior), measured, "the frozen prior holds every measured eligible team");
+    let prior_ids = ids(&p.prior);
+    let prior_base_ids: BTreeSet<String> = prior_ids
+        .iter()
+        .map(|id| id.strip_suffix("-lowatk").unwrap_or(id.as_str()).to_string())
+        .collect();
+    assert_eq!(prior_base_ids, measured, "the frozen prior holds every measured eligible team");
 }
 
 #[test]
@@ -124,10 +144,22 @@ fn everything_was_measured_on_the_frozen_prior() {
 #[test]
 fn shipped_sets_match_the_inventory_and_audited_catalog_optimization() {
     let p = products();
-    for file in [&p.prior, &p.nash] {
-        for t in file["teams"].as_array().unwrap() {
-            let id = t["id"].as_str().unwrap();
-            assert_eq!(t["sets"], p.inventory[id]["sets"], "{id}: sets differ from the inventory");
+    let cat_by_id: BTreeMap<String, Value> = p.catalog["teams"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| (t["id"].as_str().unwrap().to_string(), t["sets"].clone()))
+        .collect();
+    for t in p.nash["teams"].as_array().unwrap() {
+        let id = t["id"].as_str().unwrap();
+        assert_eq!(t["sets"], p.inventory[id]["sets"], "{id}: sets differ from the inventory");
+    }
+    for t in p.prior["teams"].as_array().unwrap() {
+        let id = t["id"].as_str().unwrap();
+        if let Some(base_id) = id.strip_suffix("-lowatk") {
+            assert_eq!(t["sets"], cat_by_id[base_id], "{id}: lowatk twin sets differ from catalog");
+        } else {
+            assert_eq!(t["sets"], source_team(&p, id)["sets"], "{id}: sets differ from the source inventory");
         }
     }
     let attack = read("findings/low-attack-catalog-v1/audit.json");

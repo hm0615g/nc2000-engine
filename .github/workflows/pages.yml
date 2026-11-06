@@ -21,6 +21,13 @@ on:
       - "tools/preview-cache.js"
       - "tools/render-preview-cache-doc.py"
       - "tools/render-native-handoff.py"
+      - "tools/normalize-training*"
+      - "tools/build-training-products.js"
+      - "tools/preview-prior*"
+      - "tools/belief-pool-v3.py"
+      - "tools/build-known-prior.mjs"
+      - "tools/build-team-products-v2.js"
+      - "tools/optimize-low-attack*"
       - "docs/PREVIEW-CACHE.md"
       - "docs/NATIVE-FORK-HANDOFF.md"
       - "README.md"
@@ -68,6 +75,18 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - name: Build validator and player-frame bindings
+        run: crates/wasm/build.sh nodejs
+
+      - name: Verify normalized training and exact prior coverage
+        run: |
+          node tools/build-training-products.js
+          git diff --exit-code -- data/belief-pool-v3/known-expansion.json data/belief-pool-v3/belief-pool.json data/team-pool-v2/team-pool.json data/team-selection-v2/reference.json data/meta-nash-v3/pool-artifact.json data/kodoku-r3/conclusion-equilibrium-deme.json data/kodoku-r3/conclusion-equilibrium-r1.json data/training-v3/supplemental.json data/training-v3/rentals.json data/compiled-preview-v1.json data/team-pool-v2/preview-nash-matrix.json
+          cargo run --quiet -p nc2000-bot --example verify_training -- target/training-verification.json
+          cmp data/training-v3/verification.json target/training-verification.json
+          node --test tools/normalize-training.test.js tools/optimize-low-attack.test.js web/tests/preview-prior.test.mjs
+          cargo test -p nc2000-bot --example meta_eco catalog_preview::tests
+
       - name: Build web (project-pages base)
         working-directory: web
         env:
@@ -107,9 +126,18 @@ jobs:
           test -s web/dist/data/kodoku-r3/conclusion-equilibrium-r1.json
           test -s web/dist/data/kodoku-r3/conclusion-equilibrium-deme.json
 
-      - name: Build and verify server cache bindings
+      - name: Verify complete production preview lookup
+        working-directory: web
+        env:
+          NC2000_BASE: /nc2000-engine/
+          NC2000_PREVIEW_CHECK_OUT: ../target/production-preview-verification.json
         run: |
-          crates/wasm/build.sh nodejs
+          npx playwright install --with-deps chromium
+          npm run test:preview-production
+          NC2000_BASE=/ NC2000_CHECK_OUT=../target node tests/compiled-preview-coverage.mjs
+
+      - name: Verify server cache bindings
+        run: |
           for suite in smoke determinism parity kifu fork solver destiny-bond priority-heal residual-wait own-recovery-wait preview-cache; do
             node "crates/wasm/tests-node/$suite.js"
           done

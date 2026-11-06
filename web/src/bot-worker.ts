@@ -1,41 +1,17 @@
-// Bot search worker. Owns its own wasm instance and a mirror Battle kept in
-// lockstep with the main thread's (same teams + seed + choice sequence =
-// identical state; the engine PRNG is part of the state). Searches run in
-// step() slices with a macrotask yield in between so progress posts flush
-// and cancel/flush messages can interleave — the UI thread never blocks.
-//
-// Live searches start during the human's selection and stop at a fixed
-// iteration count. Input timing never adds or removes iterations.
-//
-// Information policy: every live game is blind. The per-game BlindSearcher
-// sees what the human also sees — the opponent's six species/levels/types
-// and the public log. The belief identifies the opponent within the shipped
-// prior and, when no prior team is consistent (a custom team), falls back
-// to imputation on a synthesized roster. An optional community belief prior
-// (`searcher.priorJson`, M18) governs that fallback; it is installed in the
-// same synchronous block that constructs the searcher, which is what makes
-// the "after construction, before the first observe()" window
-// `setBeliefPrior` demands structural rather than incidental. The search
-// uses the blind profile (data/search-profiles.json).
-//
-// A forked battle (`?fork`) keeps the information policy its record was
-// made under, including the retired open-sheet policy, and that policy's
-// profile.
-//
-// The mirror battle runs log-ON (the observer's trace-free reveal channel
-// reads it). Per search: observe() feeds the mirror, then the stepped
-// search runs to its fixed count.
+// The live bot worker receives only its own submitted team and PlayerChannel
+// frames. No opponent true team, game RNG or submitted hidden choices enter
+// this worker. Historical fork reconstruction retains its recorded policy.
+// Search runs in fixed-iteration slices; timing never changes the budget.
 
 import init, {
   Dex,
   Battle,
-  BlindSearcher,
   PlayerChannel,
   ProtocolSearcher,
   embeddedDexJson,
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
 import { searchProfile } from "./search-profile";
-import { compiledPreviewMatches, compiledPreviewPick } from "./compiled-preview";
+import { compiledPreviewCompatibility, compiledPreviewPick } from "./compiled-preview";
 import type { ActionPolicyMode, PlayPolicy } from "./types";
 import type { EndgameSettings } from "./endgame-settings";
 import { runEndgameSearch } from "./endgame-search";
@@ -43,9 +19,7 @@ import { runEndgameSearch } from "./endgame-search";
 export type WorkerRequest =
   | {
       t: "battle";
-      p1: string;
-      p2: string;
-      seed: string;
+      ownTeam: string;
       /** Per-game searcher config (always present). `priorJson` is the raw
        * text of a belief-prior table. */
       searcher: {
@@ -82,9 +56,16 @@ export type WorkerRequest =
       budget: number;
       seed: number;
       ponder: boolean;
+      frame?: PlayerFrame;
     }
   | { t: "flush" }
   | { t: "cancel" };
+
+export interface PlayerFrame {
+  lines: string[];
+  request: unknown;
+  legal_actions: string[];
+}
 
 export type WorkerResponse =
   | { t: "ready" }
@@ -96,6 +77,7 @@ export type WorkerResponse =
       policy: string;
       playPolicy: PlayPolicy | null;
       ms: number;
+      previewLookupMs?: number;
       wasmMemoryBytes: number;
       endgame?: string;
       /** Known preview lookup or a live fixed-budget search. */
@@ -121,12 +103,11 @@ const ready = init().then(exports => {
 });
 
 let battle: Battle | null = null;
-let searcher: BlindSearcher | null = null;
-let compiledAllowed: Promise<boolean> = Promise.resolve(false);
+let compiledAllowed: Promise<Set<string>> = Promise.resolve(new Set());
 let previewSeed = 0;
 let actionPolicy: ActionPolicyMode = "legacy";
 let forked: {
-  channel: PlayerChannel;
+  channel: PlayerChannel | null;
   searcher: ProtocolSearcher;
   positioned: boolean;
   endgame?: EndgameSettings;
@@ -134,7 +115,7 @@ let forked: {
 } | null = null;
 
 function dropForked() {
-  forked?.channel.free();
+  forked?.channel?.free();
   forked?.searcher.free();
   forked = null;
 }
@@ -156,52 +137,20 @@ async function handle(m: WorkerRequest): Promise<void> {
       gen += 1;
       previewSeed = m.searcher.seed;
       compiledAllowed = actionPolicy !== "legacy" || m.searcher.compiledPreview === false || m.searcher.priorJson
-        ? Promise.resolve(false) : compiledPreviewMatches(m.searcher.poolJson, embeddedDexJson()).catch(() => false);
-      searcher?.free();
-      searcher = null;
+        ? Promise.resolve(new Set<string>()) : compiledPreviewCompatibility(m.searcher.poolJson, embeddedDexJson()).catch(() => new Set<string>());
       dropForked();
       battle?.free();
-      battle = new Battle(dex, m.p1, m.p2, m.seed);
-      // Keep the protocol log ON — the observer's trace-free reveal
-      // channel (Leftovers / Focus Band / Sleep Talk) reads it.
-      battle.setLogEnabled(true);
-      if (m.searcher.endgame) {
-        const ps = new ProtocolSearcher(dex, m.searcher.side, m.searcher.poolJson, m.searcher.seed >>> 0, searchProfile("blind").c);
-        ps.setOwnTeam(m.searcher.side === 0 ? m.p1 : m.p2);
-        if (m.searcher.priorJson) post({ t: "prior", report: ps.setBeliefPrior(m.searcher.priorJson) });
-        forked = { channel: new PlayerChannel(m.searcher.side), searcher: ps, positioned: false, live: true, endgame: m.searcher.endgame };
-        break;
-      }
-      searcher = new BlindSearcher(
-        battle,
-        m.searcher.side,
-        m.searcher.poolJson,
-        m.searcher.seed >>> 0,
-        searchProfile("blind").c,
-      );
-      if (m.searcher.priorJson) {
-        // The community prior governs the fallback imputation (the
-        // hidden-custom-team branch of the determinizer). setBeliefPrior only
-        // accepts the window "after construction, before the first
-        // observe()" — and this runs in the same synchronous block as the
-        // constructor above, ahead of any observe(), which happens solely in
-        // runSearch. A later `search` message cannot overtake it either:
-        // handle() awaits nothing but the shared `ready`, so once that is
-        // settled the queued handlers resume in message-arrival order. The
-        // call reports instead of throwing; forward the verdict verbatim.
-        post({
-          t: "prior",
-          report: searcher.setBeliefPrior(m.searcher.priorJson),
-        });
-      }
+      battle = null;
+      const ps = new ProtocolSearcher(dex, m.searcher.side, m.searcher.poolJson, m.searcher.seed >>> 0, searchProfile("blind").c);
+      ps.setOwnTeam(m.ownTeam);
+      if (m.searcher.priorJson) post({ t: "prior", report: ps.setBeliefPrior(m.searcher.priorJson) });
+      forked = { channel: null, searcher: ps, positioned: false, live: true, endgame: m.searcher.endgame };
       break;
     }
     case "fork": {
       actionPolicy = m.searcher.actionPolicy ?? "legacy";
       gen += 1;
       forkMode = m.searcher.mode;
-      searcher?.free();
-      searcher = null;
       dropForked();
       battle?.free();
       battle = Battle.fromFork(dex, m.fork, m.seed >>> 0);
@@ -232,8 +181,7 @@ async function handle(m: WorkerRequest): Promise<void> {
       flushed = true;
       break;
     case "search":
-      if (forked) await runForkSearch(m);
-      else await runSearch(m);
+      await runForkSearch(m);
       break;
   }
 }
@@ -263,6 +211,7 @@ interface SearchMsg {
   budget: number;
   seed: number;
   ponder: boolean;
+  frame?: PlayerFrame;
 }
 
 // Commit only after the search finishes. Polls/progress never redraw. The
@@ -288,61 +237,6 @@ function finishDecision(s: { commitDecision(mode: string): string }, protocolSid
     actions: [...probabilities].map(([input, probability]) => ({ input, probability })) } };
 }
 
-// One decision point on the persistent per-game searcher: observe()
-// snapshots the mirror's state (updating the belief's observations), then
-// the stepped search runs to its fixed count. The searcher is NOT freed per
-// decision — it carries the game's accumulated observations.
-async function runSearch(m: SearchMsg): Promise<void> {
-  const myGen = gen;
-  flushed = false;
-  const s = searcher!;
-  const allowCompiled = await compiledAllowed;
-  if (gen !== myGen) return;
-  s.observe(battle!);
-  // That observe() is what re-filtered the belief and rebuilt the fallback
-  // roster the prior drives, so this is the first instant either read means
-  // anything at this decision point. Posted before t0 so the reported search
-  // ms stays the search's.
-  post({ t: "belief", info: s.beliefInfo(), prior: s.beliefPriorInfo() });
-  const t0 = performance.now();
-  const compiled = allowCompiled
-    ? compiledPreviewPick(s.compiledPreviewBuild(), s.compiledPreviewKey(battle!), previewSeed, searchProfile("blind").c, s.previewCacheInfo())
-    : undefined;
-  // Validate against this engine's actual ordered action space, even though
-  // the artifact is built and versioned with the same sources.
-  if (compiled && (JSON.parse(battle!.legalChoices(m.side)) as { input: string }[]).some(c => c.input === compiled)) {
-    post({ t: "result", id: m.id, best: compiled,
-      playPolicy: { source: "preview-sampled", actions: [{ input: compiled, probability: 1 }] },
-      policy: JSON.stringify({ iterations: 0, preview: true, baked: true,
-        actions: [{ input: compiled, visits: 0, mean: 0.5, frac: 1 }] }),
-      ms: performance.now() - t0, wasmMemoryBytes: wasmMemory.buffer.byteLength, src: "table" });
-    return;
-  }
-  let done = 0;
-  for (;;) {
-    if (gen !== myGen) return; // superseded: next observe() resets the search
-    // Always finish the requested count, including after an early flush.
-    const target = m.budget;
-    if (done >= target) break;
-    const next = stepAdaptive(s, Math.min(slice, target - done));
-    if (next === done) break;
-    done = next;
-    post({ t: "progress", id: m.id, done, budget: m.budget });
-    // Macrotask yield: flush the progress post, let cancel/flush interleave.
-    await new Promise((r) => setTimeout(r, 0));
-  }
-  if (gen !== myGen) return;
-  post({
-    t: "result",
-    id: m.id,
-    ...finishDecision(s),
-    policy: s.rootPolicy(),
-    ms: performance.now() - t0,
-    wasmMemoryBytes: wasmMemory.buffer.byteLength,
-    src: "search",
-  });
-}
-
 // The forked bot's decision: catch the searcher up on the player stream
 // since its last decision, then the same fixed-budget loop. At the fork itself the
 // searcher is already installed from the position and no line has arrived.
@@ -351,10 +245,7 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
   const myGen = gen;
   flushed = false;
   const f = forked!;
-  const frame = JSON.parse(f.channel.frame(battle!)) as {
-    lines: string[];
-    request: unknown;
-  };
+  const frame: PlayerFrame = m.frame ?? JSON.parse(f.channel!.frame(battle!));
   const atFork = f.positioned && frame.lines.length === 0;
   f.positioned = false;
   if (!atFork) {
@@ -363,6 +254,22 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
       throw new Error("fork: search requested on a wait request");
   }
   if (f.live) post({ t: "belief", info: f.searcher.beliefInfo(), prior: f.searcher.beliefPriorInfo() });
+  if (f.live && !f.endgame) {
+    const allowed = await compiledAllowed;
+    if (gen !== myGen) return;
+    const lookupStarted = performance.now();
+    const compiled = allowed.size ? compiledPreviewPick(f.searcher.compiledPreviewBuild(),
+      f.searcher.compiledPreviewKey(), previewSeed, searchProfile("blind").c, f.searcher.previewCacheInfo(), allowed) : undefined;
+    const previewLookupMs = performance.now() - lookupStarted;
+    if (compiled && frame.legal_actions.some(input => input.replace(/\s/g, "") === compiled.replace(/\s/g, ""))) {
+      post({ t: "result", id: m.id, best: compiled,
+        playPolicy: { source: "preview-sampled", actions: [{ input: compiled, probability: 1 }] },
+        policy: JSON.stringify({ iterations: 0, preview: true, baked: true,
+          actions: [{ input: compiled, visits: 0, mean: 0.5, frac: 1 }] }),
+        ms: performance.now()-t0, previewLookupMs, wasmMemoryBytes: wasmMemory.buffer.byteLength, src: "table" });
+      return;
+    }
+  }
   if (f.endgame) {
     const current = await runEndgameSearch(f.searcher, f.endgame, {
       cancelled: () => gen !== myGen,
@@ -371,7 +278,7 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
       progress: done => post({ t: "progress", id: m.id, done, budget: m.budget }),
     }, t0);
     if (!current) return;
-    post({ t: "result", id: m.id, ...finishDecision(f.searcher, m.side),
+    post({ t: "result", id: m.id, ...finishDecision(f.searcher, f.live ? undefined : m.side),
       policy: f.searcher.rootPolicy(), ms: performance.now() - t0, wasmMemoryBytes: wasmMemory.buffer.byteLength, src: "search", endgame: f.searcher.endgameStats() });
     return;
   }
@@ -390,7 +297,7 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
   post({
     t: "result",
     id: m.id,
-    ...finishDecision(f.searcher, m.side),
+    ...finishDecision(f.searcher, f.live ? undefined : m.side),
     policy: f.searcher.rootPolicy(),
     ms: performance.now() - t0,
     wasmMemoryBytes: wasmMemory.buffer.byteLength,

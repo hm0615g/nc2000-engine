@@ -1,0 +1,9 @@
+{
+  "matchups": 1089,
+  "uniqueKeys": 990,
+  "validKeys": 990,
+  "invalidKeys": 0,
+  "slotsPerKey": 64,
+  "slotChecks": 69696,
+  "allLegal": true
+}

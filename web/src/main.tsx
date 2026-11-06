@@ -7,6 +7,7 @@ import { readDoor } from "./info-mode";
 import { Evaluate } from "./evaluate";
 import { Fork } from "./fork";
 import { KifuTool } from "./kifu";
+import { PdinputTool } from "./pdinput-tool";
 import { initTooltips } from "./tooltip";
 import { initAnnouncer } from "./announcer";
 import "./style.css";
@@ -21,9 +22,14 @@ function Root() {
   const [language, setLanguage] = useState(locale);
   useLayoutEffect(() => subscribeLocale(() => setLanguage(locale())), []);
   const kifu = params.has("kifu-preview") || (door === "fork" && !legacyFork && !params.has("advanced"));
-  const tool = kifu || door === "evaluate" || door === "fork";
+  const pdinput = door === "pdinput";
+  const tool = kifu || pdinput || door === "evaluate" || door === "fork";
   useLayoutEffect(() => {
-    if (tool) document.title = toolText(kifu ? "kifuTitle" : door === "evaluate" ? "evaluateTitle" : "forkTitle");
+    if (tool) {
+      document.title = pdinput
+        ? (language === "ja" ? "NC2000 — PDINPUT.cgi 自動インポーター" : "NC2000 — PDINPUT.cgi Auto-Importer")
+        : toolText(kifu ? "kifuTitle" : door === "evaluate" ? "evaluateTitle" : "forkTitle");
+    }
   }, [language]);
   return <>
     {tool && <div class="tool-language-bar">
@@ -32,7 +38,7 @@ function Root() {
         <option value="ja">日本語</option>
       </select>
     </div>}
-    {kifu ? <KifuTool /> : door === "evaluate" ? <Evaluate /> : door === "fork" ? <Fork /> : <App />}
+    {pdinput ? <PdinputTool /> : kifu ? <KifuTool /> : door === "evaluate" ? <Evaluate /> : door === "fork" ? <Fork /> : <App />}
   </>;
 }
 

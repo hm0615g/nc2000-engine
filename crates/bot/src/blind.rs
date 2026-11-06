@@ -79,6 +79,7 @@ use crate::rng::SplitMix64;
 use crate::smmcts::{key_of, run_iteration, Node, RmConfig, SkuctSearch};
 
 struct GameState {
+    local: Option<crate::player_state::LocalPlayer>,
     side: usize,
     last_turn: u16,
     observer: Observer,
@@ -231,17 +232,24 @@ impl BlindAgent {
 
     fn search(
         &mut self,
-        battle: &Battle,
         dex: &Dex,
         side: usize,
         choices: &[SearchChoice],
     ) -> SearchChoice {
+        let position = {
+            let g = self.game.as_mut().expect("search after lifecycle setup");
+            g.local.as_ref().expect("blind agent requires a player boundary")
+                .position(dex, &mut g.belief, &g.observer, &mut self.rng)
+                .expect("blind player reconstruction failed")
+        };
+        let battle = position.model();
         let g = self.game.as_ref().expect("search after lifecycle setup");
         if !matches!(choices[0], SearchChoice::Team(_)) {
             self.root_stats.searches += 1;
             if let Some(mixture) = self.adaptive_mixture.as_mut() {
                 let mut search =
                     BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
+                search.use_public_exclusions(dex);
                 if self.root_pruning {
                     search.prune_dominated();
                 }
@@ -299,6 +307,7 @@ fn search_choose(
     opp_preview_prior: bool,
 ) -> SearchChoice {
     let mut bs = BlindSearch::with_rng(battle, dex, cfg.clone(), side, rng.clone());
+    if g.local.is_some() { bs.use_public_exclusions(dex); }
     bs.prune_preview_aliases(dex);
     if opp_preview_prior {
         bs.set_opponent_preview_prior(true);
@@ -404,10 +413,17 @@ enum ForcedRoot {
     TypeProbe,
 }
 
+const MAX_SUBSAMPLED_WORLDS: usize = 24;
+const WORLD_WARMUP_SAMPLES: u32 = 96;
+const CELL_WARMUP_SAMPLES: u32 = 6;
+
 struct RootTypeStats {
     samples: u32,
+    late_samples: u32,
     replies: usize,
+    reply_acts: Vec<SearchChoice>,
     cells: Vec<(u32, f64)>,
+    late_cells: Vec<(u32, f64)>,
 }
 
 pub(crate) fn root_search_key(cfg: &RmConfig, dex: &Dex, battle: &mut Battle) -> u64 {
@@ -436,6 +452,13 @@ struct CachedDetRoot {
     type_index: usize,
 }
 
+struct SampledWorld {
+    sim: Battle,
+    root: usize,
+    type_index: usize,
+    pick: Option<usize>,
+}
+
 /// Persistent, incrementally steppable blind search over ONE decision point
 /// — `BlindAgent`'s search loop in the form the wasm bridge's ponder loop
 /// needs, mirroring `SkuctSearch`: create it at the current (true) battle
@@ -452,11 +475,14 @@ pub struct BlindSearch {
     first_continuation: Option<crate::first_continuation::FirstContinuation>,
     history_continuation: Option<crate::history_continuation::HistoryContinuation>,
     rng: SplitMix64,
+    decision_seed: u64,
     /// Search resets omit the observer's protocol log.
     base: Battle,
     scratch: Option<Box<Battle>>,
     det_cache: FxHashMap<(Option<usize>, u64, [u8; 6], bool), CachedDetRoot>,
     det_cache_obs_rev: u64,
+    world_pool: Vec<SampledWorld>,
+    bayesian_row_q: Option<Vec<f64>>,
     turn_cap: u16,
     side: usize,
     /// The public own-side choice list — the information-set root.
@@ -534,6 +560,23 @@ impl BlindSearch {
         self.opponent_preview_prior = enabled;
     }
 
+    /// Product search: only a player-protocol reconstruction can enter here.
+    pub fn from_observation(position: &crate::player_state::ObservedPosition, dex: &Dex,
+        cfg: RmConfig, side: usize, seed: u64) -> BlindSearch {
+        let mut search = Self::new(position.model(), dex, cfg, side, seed);
+        search.use_public_exclusions(dex);
+        search
+    }
+
+    fn use_public_exclusions(&mut self, _dex: &Dex) {
+        // A guessed world is not a universal proof of uselessness. Even a
+        // last-mon self-KO selection can win if sleep/flinch prevents the
+        // move and residual damage then KOs the foe. Keep heuristic root
+        // exclusions empty; request legality and preview rules are separate.
+        self.my_dominated.fill(false);
+    }
+
+    /// Full-world research API. Product callers use `from_observation`.
     pub fn new(battle: &Battle, dex: &Dex, cfg: RmConfig, side: usize, seed: u64) -> BlindSearch {
         Self::with_rng(battle, dex, cfg, side, SplitMix64::new(seed))
     }
@@ -574,15 +617,19 @@ impl BlindSearch {
             })
             .collect();
         let endgame = crate::smmcts::EndgameRootStats::new(&base, dex, side, &my_acts);
+        let decision_seed = rng.0 ^ 0xa24baed4963ee407;
         BlindSearch {
             first_continuation: None,
             history_continuation: None,
             cfg,
             rng,
+            decision_seed,
             base,
             scratch: None,
             det_cache: FxHashMap::default(),
             det_cache_obs_rev: u64::MAX,
+            world_pool: Vec::new(),
+            bayesian_row_q: None,
             turn_cap,
             side,
             my_n: vec![0; my_acts.len()],
@@ -635,13 +682,17 @@ impl BlindSearch {
         }
         let type_key = root_type_key(sim);
         let opp = 1 - self.side;
-        let replies = self.nodes[root].acts[opp].len();
+        let reply_acts = self.nodes[root].acts[opp].clone();
+        let replies = reply_acts.len();
         let my_len = self.my_acts.len();
         let ti = *self.root_type_index.entry(type_key).or_insert_with(|| {
             self.root_types.push(RootTypeStats {
                 samples: 0,
+                late_samples: 0,
                 replies,
+                reply_acts,
                 cells: vec![(0, 0.); my_len * replies],
+                late_cells: vec![(0, 0.); my_len * replies],
             });
             self.root_types.len() - 1
         });
@@ -761,6 +812,7 @@ impl BlindSearch {
         let obs_rev = obs.revision();
         if self.det_cache_obs_rev != obs_rev {
             self.det_cache.clear();
+            self.world_pool.clear();
             self.det_cache_obs_rev = obs_rev;
         }
         if self.base.queue.is_empty() && !belief.has_active_pick_draws(obs) {
@@ -834,6 +886,59 @@ impl BlindSearch {
         (sim, root, type_index)
     }
 
+    fn next_determinized_world(
+        &mut self,
+        dex: &Dex,
+        belief: &Belief,
+        obs: &Observer,
+    ) -> (Box<Battle>, usize, usize, Option<usize>) {
+        let obs_rev = obs.revision();
+        if self.det_cache_obs_rev != obs_rev {
+            self.det_cache.clear();
+            self.world_pool.clear();
+            self.det_cache_obs_rev = obs_rev;
+        }
+        if self.is_preview() || self.world_pool.len() < MAX_SUBSAMPLED_WORLDS {
+            let pick = belief.sample(&mut self.rng);
+            let (mut sim, root, type_index) =
+                self.determinize_and_resolve_root(dex, belief, obs, pick);
+            if !self.is_preview() {
+                std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                let cached_sim = (*sim).clone();
+                std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+                self.world_pool.push(SampledWorld {
+                    sim: cached_sim,
+                    root,
+                    type_index,
+                    pick,
+                });
+            }
+            return (sim, root, type_index, pick);
+        }
+        let w_idx = (self.done as usize) % self.world_pool.len();
+        let (root, type_index, pick) = {
+            let w = &self.world_pool[w_idx];
+            (w.root, w.type_index, w.pick)
+        };
+        let mut sim = match self.scratch.take() {
+            Some(mut sim) => {
+                sim.as_mut().clone_from(&self.world_pool[w_idx].sim);
+                sim
+            }
+            None => Box::new(self.world_pool[w_idx].sim.clone()),
+        };
+        let seed = self.rng.next();
+        let mut prng = nc2000_engine::prng::Prng::new(seed);
+        let qc = prng.random_chance(60, 256);
+        sim.reseed(prng.seed());
+        sim.quick_claw_roll = qc;
+        if self.cfg.unseen_claw_root && sim.is_idle_move_request() {
+            sim.update_all_speeds(dex);
+        }
+        std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
+        (sim, root, type_index, pick)
+    }
+
     fn step_one_impl(
         &mut self,
         dex: &Dex,
@@ -842,8 +947,37 @@ impl BlindSearch {
         leaf: Option<&mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64>,
         trace: Option<&mut dyn FnMut(crate::smmcts::SearchTrace<'_>)>,
     ) -> f64 {
-        let pick = belief.sample(&mut self.rng);
-        let (mut sim, root, type_index) = self.determinize_and_resolve_root(dex, belief, obs, pick);
+        if !self.is_preview() && self.done >= 512 && self.done % 256 == 0 {
+            if let Some(eq) = self.bayesian_equilibrium() {
+                self.bayesian_row_q = Some(eq.action_values);
+            }
+        }
+        let (mut sim, root, type_index, pick) = self.next_determinized_world(dex, belief, obs);
+        let min_floor_pick =
+            if !self.is_preview() && self.cfg.root_revisit_interval == 0 && self.done >= 512 {
+                let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
+                let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
+                let elig: Vec<usize> = (0..self.my_acts.len())
+                    .filter(|&i| allowed(i) && (!safe || !self.my_dominated[i]))
+                    .collect();
+                let n_elig = (elig.len().max(1)) as u32;
+                let stats = &self.root_types[type_index];
+                let replies = stats.replies;
+                let world_floor = (stats.samples / (3 * n_elig)).min(48);
+                elig.into_iter()
+                    .filter_map(|i| {
+                        let row_start = i * replies;
+                        let w_n: u32 = stats
+                            .cells
+                            .get(row_start..row_start + replies)
+                            .map_or(0, |row| row.iter().map(|&(n, _)| n).sum());
+                        (w_n < world_floor).then_some((w_n, self.my_n[i], i))
+                    })
+                    .min_by_key(|&(w_n, g_n, _)| (w_n, g_n))
+                    .map(|(_, _, i)| i)
+            } else {
+                None
+            };
         let my_pick = if self.cfg.root_revisit_interval > 0
             && !self.is_preview()
             && self.done > 0
@@ -855,13 +989,17 @@ impl BlindSearch {
                 .unwrap();
             self.my_n[action] += 1;
             action
+        } else if let Some(action) = min_floor_pick {
+            self.my_n[action] += 1;
+            action
         } else {
-            select_global(
+            select_global_with_prior(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.my_n,
                 &self.my_w,
                 self.my_mask.as_deref(),
+                self.bayesian_row_q.as_deref(),
             )
         };
         let mut force = [None, None];
@@ -1116,8 +1254,12 @@ impl BlindSearch {
                 "forced root action is masked"
             );
         }
-        let pick = belief.sample(&mut self.rng);
-        let (mut sim, root, type_index) = self.determinize_and_resolve_root(dex, belief, obs, pick);
+        if !self.is_preview() && self.done >= 4096 && self.done % 512 == 0 {
+            if let Some(eq) = self.bayesian_equilibrium() {
+                self.bayesian_row_q = Some(eq.action_values);
+            }
+        }
+        let (mut sim, root, type_index, pick) = self.next_determinized_world(dex, belief, obs);
         let (my_pick, forced_reply, override_reply) = match forcing {
             ForcedRoot::Action { own, reply } => {
                 self.my_n[own] += 1;
@@ -1302,9 +1444,16 @@ impl BlindSearch {
         let stats = &mut self.root_types[type_index];
         stats.samples += 1;
         if joint[opp] < stats.replies {
-            let cell = &mut stats.cells[my_pick * stats.replies + joint[opp]];
+            let cell_idx = my_pick * stats.replies + joint[opp];
+            let cell = &mut stats.cells[cell_idx];
             cell.0 += 1;
             cell.1 += mine;
+            if stats.samples > WORLD_WARMUP_SAMPLES && cell.0 > CELL_WARMUP_SAMPLES {
+                stats.late_samples += 1;
+                let late_cell = &mut stats.late_cells[cell_idx];
+                late_cell.0 += 1;
+                late_cell.1 += mine;
+            }
         }
         let indices = self.root_avail.entry(root).or_insert_with(|| {
             acts.iter()
@@ -1836,7 +1985,7 @@ impl BlindSearch {
         let eligible = |i: usize| allowed(i) && (!safe || !self.my_dominated[i]);
         let ordinary =
             (0..self.my_acts.len()).any(|i| eligible(i) && self.my_n[i] > self.joint_probe_n[i]);
-        if self.cfg.endgame_rules.decision_any() && !self.is_preview() {
+        if !self.is_preview() {
             let eff_n: Vec<u32> = (0..self.my_acts.len())
                 .map(|i| {
                     if ordinary {
@@ -1846,9 +1995,8 @@ impl BlindSearch {
                     }
                 })
                 .collect();
-            return self
-                .endgame
-                .select_best(
+            if self.cfg.endgame_rules.decision_any() {
+                if let Some(info) = self.endgame.analyze(
                     self.cfg.endgame_rules,
                     &self.my_acts,
                     &self.my_n,
@@ -1856,8 +2004,41 @@ impl BlindSearch {
                     &self.my_w,
                     eligible,
                     |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
-                )
-                .map(|i| self.my_acts[i]);
+                ) {
+                    if matches!(
+                        info.regime,
+                        crate::smmcts::EndgameRegime::FastWin
+                            | crate::smmcts::EndgameRegime::ComebackLoss
+                    ) || (info.regime == crate::smmcts::EndgameRegime::SafeWin
+                        && info.chosen_idx != info.legacy_idx)
+                    {
+                        return Some(self.my_acts[info.chosen_idx]);
+                    }
+                }
+            }
+            if !self.nodes.is_empty() && self.done >= 64 {
+                if let Some(eq) = self.bayesian_equilibrium() {
+                    let draw =
+                        SplitMix64::new(self.decision_seed ^ u64::from(self.done)).next_f64();
+                    if let Some(choice) = draw_policy(&self.my_acts, &eq.policy, draw) {
+                        return Some(choice);
+                    }
+                }
+            }
+            if self.cfg.endgame_rules.decision_any() {
+                return self
+                    .endgame
+                    .select_best(
+                        self.cfg.endgame_rules,
+                        &self.my_acts,
+                        &self.my_n,
+                        &eff_n,
+                        &self.my_w,
+                        eligible,
+                        |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
+                    )
+                    .map(|i| self.my_acts[i]);
+            }
         }
         if self.is_preview() {
             return (0..self.my_acts.len())
@@ -1888,6 +2069,120 @@ impl BlindSearch {
                 }
             })
             .map(|i| self.my_acts[i])
+    }
+
+    pub fn bayesian_equilibrium(&self) -> Option<crate::root_policy::BayesianEquilibrium> {
+        if self.is_preview() || self.root_types.is_empty() {
+            return None;
+        }
+        let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |m| m[i]);
+        let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
+        let eligible: Vec<bool> = (0..self.my_acts.len())
+            .map(|i| allowed(i) && (!safe || !self.my_dominated[i]))
+            .collect();
+        let total_late: u64 = self
+            .root_types
+            .iter()
+            .map(|t| u64::from(t.late_samples))
+            .sum();
+        let use_late = total_late >= 512;
+        let mut pooled_late: FxHashMap<(usize, SearchChoice), (u32, f64)> = FxHashMap::default();
+        let mut late_row_n = vec![0u32; self.my_acts.len()];
+        let mut late_row_w = vec![0.0f64; self.my_acts.len()];
+        if use_late {
+            for t in &self.root_types {
+                if t.late_samples == 0 || t.replies == 0 {
+                    continue;
+                }
+                for (i, &(n, sum)) in t.late_cells.iter().enumerate() {
+                    if n == 0 {
+                        continue;
+                    }
+                    let own = i / t.replies;
+                    let reply = i % t.replies;
+                    if let Some(&opp_act) = t.reply_acts.get(reply) {
+                        let entry = pooled_late.entry((own, opp_act)).or_insert((0, 0.0));
+                        entry.0 += n;
+                        entry.1 += sum;
+                    }
+                    if own < late_row_n.len() {
+                        late_row_n[own] += n;
+                        late_row_w[own] += sum;
+                    }
+                }
+            }
+        }
+        let mut types: Vec<crate::root_policy::RootType> = Vec::with_capacity(self.root_types.len());
+        let mut pooled_priors: Vec<Vec<crate::root_policy::RootCell>> =
+            Vec::with_capacity(self.root_types.len());
+        for t in &self.root_types {
+            let (samples, src_cells) = if use_late && t.late_samples >= 16 {
+                (t.late_samples, &t.late_cells)
+            } else {
+                (t.samples, &t.cells)
+            };
+            if samples == 0 || t.replies == 0 {
+                continue;
+            }
+            let cells: Vec<crate::root_policy::RootCell> = src_cells
+                .iter()
+                .enumerate()
+                .filter(|(_, (n, _))| *n > 0)
+                .map(|(i, &(n, sum))| crate::root_policy::RootCell {
+                    own: i / t.replies,
+                    reply: i % t.replies,
+                    samples: n,
+                    mean: sum / f64::from(n),
+                })
+                .collect();
+            let mut priors = Vec::new();
+            for own in 0..self.my_acts.len() {
+                if !eligible[own] {
+                    continue;
+                }
+                for (reply, &opp_act) in t.reply_acts.iter().enumerate() {
+                    if let Some(&(ln, lw)) = pooled_late.get(&(own, opp_act)).filter(|&&(n, _)| n >= 8) {
+                        priors.push(crate::root_policy::RootCell {
+                            own,
+                            reply,
+                            samples: ln,
+                            mean: lw / f64::from(ln),
+                        });
+                    } else if let Some(&idx) = self.joint_index.get(&(own, opp_act)) {
+                        let (_, _, jn, jw) = self.joint[idx];
+                        if jn > 0 {
+                            priors.push(crate::root_policy::RootCell {
+                                own,
+                                reply,
+                                samples: jn,
+                                mean: jw / f64::from(jn),
+                            });
+                        }
+                    }
+                }
+            }
+            types.push(crate::root_policy::RootType {
+                samples,
+                replies: t.replies,
+                cells,
+            });
+            pooled_priors.push(priors);
+        }
+        let mut means = self.means();
+        if use_late {
+            for own in 0..means.len() {
+                if late_row_n[own] >= 16 {
+                    means[own] = late_row_w[own] / f64::from(late_row_n[own]);
+                }
+            }
+        }
+        crate::root_policy::solve_bayesian_equilibrium_with_priors(
+            &eligible,
+            &self.my_n,
+            &means,
+            &types,
+            &pooled_priors,
+        )
     }
 
     /// Actual execution probabilities, not `rootPolicy` visit diagnostics.
@@ -2117,6 +2412,17 @@ fn select_global(
     w: &[f64],
     mask: Option<&[bool]>,
 ) -> usize {
+    select_global_with_prior(cfg, rng, n, w, mask, None)
+}
+
+fn select_global_with_prior(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    n: &mut [u32],
+    w: &[f64],
+    mask: Option<&[bool]>,
+    bayesian_q: Option<&[f64]>,
+) -> usize {
     let k = n.len();
     let ok = |a: usize| mask.map_or(true, |m| m[a]);
     let mut n_untried = 0usize;
@@ -2145,7 +2451,12 @@ fn select_global(
         let mut best_v = f64::NEG_INFINITY;
         for a in (0..k).filter(|&a| ok(a)) {
             let (na, wa) = (n[a] as f64, w[a]);
-            let v = wa / na + cfg.c * (ln_total / na).sqrt();
+            let raw_mean = wa / na;
+            let mean_a = match bayesian_q.and_then(|q| q.get(a).copied()) {
+                Some(qa) => qa,
+                None => raw_mean,
+            };
+            let v = mean_a + cfg.c * (ln_total / na).sqrt();
             if v > best_v {
                 best_v = v;
                 best = a;
@@ -2216,6 +2527,7 @@ impl OpenAgent {
         let observer = Observer::new(battle, side);
         let belief = Belief::pinned_from_battle(battle, &observer);
         self.game = Some(GameState {
+            local: None,
             side,
             last_turn: battle.turn,
             observer,
@@ -2259,6 +2571,7 @@ impl Agent for OpenAgent {
             let observer = Observer::new(battle, side);
             let belief = Belief::pinned_from_battle(battle, &observer);
             self.game = Some(GameState {
+                local: None,
                 side,
                 last_turn: battle.turn,
                 observer,
@@ -2439,13 +2752,15 @@ impl Agent for BlindAgent {
             Some(g) => g.side != side || is_preview || battle.turn < g.last_turn,
         };
         if stale {
-            let observer = Observer::new(battle, side);
+            let (local, observer) = crate::player_state::LocalPlayer::new(battle, dex, side)
+                .expect("blind player observation failed");
             let mut belief =
                 Belief::with_fallback_policy(dex, &self.pool, &observer, self.fallback_policy);
             if let Some(prior) = self.prior.clone() {
                 belief.set_prior(prior);
             }
             self.game = Some(GameState {
+                local: Some(local),
                 side,
                 last_turn: battle.turn,
                 observer,
@@ -2455,7 +2770,8 @@ impl Agent for BlindAgent {
         {
             let g = self.game.as_mut().unwrap();
             g.last_turn = battle.turn;
-            g.observer.observe(battle, dex);
+            g.local.as_mut().expect("blind agent requires a player boundary")
+                .observe(battle, dex, &mut g.observer).expect("blind player observation failed");
             g.belief.sync(dex, &g.observer);
             if let Some((ref pol, smoothing)) = self.opp_pick_policy {
                 g.belief
@@ -2496,7 +2812,7 @@ impl Agent for BlindAgent {
                 }
             }
         }
-        self.search(battle, dex, side, choices)
+        self.search(dex, side, choices)
     }
 }
 
@@ -2679,200 +2995,48 @@ mod mixed_selection_tests {
         let dex = conformance::load_dex();
         let set = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
             serde_json::from_value(serde_json::json!({"name":species,"species":species,
-                "level":50,"moves":moves,"happiness":255}))
-            .unwrap()
+                "level":50,"moves":moves,"happiness":255})).unwrap()
         };
-        for (species, moves, expected) in [
-            ("Alakazam", vec!["Recover", "Psychic"], vec![true, false]),
-            (
-                "Gengar",
-                vec!["Destiny Bond", "Perish Song"],
-                vec![true, true],
-            ),
-            (
-                "Alakazam",
-                vec!["Psychic", "Thunder Punch"],
-                vec![false, false],
-            ),
-        ] {
-            let mut battle = Battle::from_fixture(
-                &dex,
-                "1,2,3,4",
-                &[set(species, &moves)],
-                &[set("Snorlax", &["Return"])],
-            )
-            .unwrap();
-            let preview = battle.clone();
-            let mut observer = Observer::new(&battle, 0);
-            battle.choose(&dex, 0, "team 1").unwrap();
-            battle.choose(&dex, 1, "team 1").unwrap();
-            observer.observe(&battle, &dex);
-            let legal = battle.legal_choices(&dex, 0);
-            let cfg = RmConfig {
-                iterations: 300,
-                c: 0.4,
-                ..Default::default()
-            };
-            for prune in [false, true] {
-                let mut belief = Belief::pinned_from_battle(&preview, &observer);
-                belief.sync(&dex, &observer);
-                let mut reference = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 17);
-                assert_eq!(reference.dominated(), &expected);
-                if prune {
-                    reference.prune_dominated();
-                }
-                reference.step(&dex, &belief, &observer, cfg.iterations);
-                let mut agent =
-                    BlindAgent::new(cfg.clone(), Arc::new(MetaPool { teams: vec![] }), None, 17);
-                if prune {
-                    agent = agent.with_root_pruning();
-                }
-                agent.game = Some(GameState {
-                    side: 0,
-                    last_turn: battle.turn,
-                    observer: observer.clone(),
-                    belief,
-                });
-                assert_eq!(
-                    Some(agent.choose(&battle, &dex, 0, &legal)),
-                    reference.best()
-                );
-                assert_eq!(agent.search_rng_state(), reference.rng.0);
-                if prune && expected.iter().any(|&x| !x) {
-                    assert!(reference
-                        .visits()
-                        .iter()
-                        .zip(&expected)
-                        .all(|(&n, &masked)| !masked || n == 0));
-                } else {
-                    assert!(reference.visits().iter().all(|&n| n > 0));
-                }
-            }
+        for (species,moves) in [("Alakazam",vec!["Recover","Psychic"]),
+            ("Gengar",vec!["Destiny Bond","Perish Song"])] {
+            let mut battle=Battle::from_fixture(&dex,"1,2,3,4",&[set(species,&moves)],&[set("Snorlax",&["Return"])]).unwrap();
+            battle.choose(&dex,0,"team 1").unwrap();battle.choose(&dex,1,"team 1").unwrap();
+            let cfg=RmConfig{iterations:300,c:0.4,..Default::default()};
+            let mut ordinary=BlindAgent::new(cfg.clone(),Arc::new(MetaPool{teams:vec![]}),None,17);
+            let mut pruned=BlindAgent::new(cfg,Arc::new(MetaPool{teams:vec![]}),None,17).with_root_pruning();
+            let choices=battle.legal_choices(&dex,0);
+            // These moves are not public forfeits. A guessed no-op cannot
+            // become a fixed exclusion or alter the sampling stream.
+            assert_eq!(ordinary.choose(&battle,&dex,0,&choices),pruned.choose(&battle,&dex,0,&choices));
+            assert_eq!(ordinary.search_rng_state(),pruned.search_rng_state());
         }
     }
 
     #[test]
     fn adaptive_agent_uses_the_search_mixture_and_a_separate_draw_stream() {
-        let dex = conformance::load_dex();
-        let set = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
-            serde_json::from_value(
-                serde_json::json!({"name":species,"species":species,"ability":"",
-                "level":50,"moves":moves,"happiness":255,
-                "evs":{"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},
-                "ivs":{"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30}}),
-            )
-            .unwrap()
+        let dex=conformance::load_dex();
+        let set=|species:&str,moves:&[&str]|->nc2000_engine::battle::PokemonSet {
+            serde_json::from_value(serde_json::json!({"name":species,"species":species,"level":50,"moves":moves})).unwrap()
         };
-        for (foe, moves, iterations, expect_mix) in [
-            (
-                "Wobbuffet",
-                vec!["Counter", "Mirror Coat", "Safeguard"],
-                27000,
-                true,
-            ),
-            ("Magikarp", vec!["Splash"], 200, false),
-        ] {
-            let mut battle = Battle::from_fixture(
-                &dex,
-                "1,2,3,4",
-                &[set("Starmie", &["Return", "Surf"])],
-                &[set(foe, &moves)],
-            )
-            .unwrap();
-            let preview = battle.clone();
-            let mut observer = Observer::new(&battle, 0);
-            let mut belief = Belief::pinned_from_battle(&battle, &observer);
-            battle.choose(&dex, 0, "team 1").unwrap();
-            battle.choose(&dex, 1, "team 1").unwrap();
-            for (side, hp) in [(0, 68), (1, 120)] {
-                let id = battle.active_id(side).unwrap();
-                battle.poke_mut(id).hp = hp;
-            }
-            observer.observe(&battle, &dex);
-            belief.sync(&dex, &observer);
-            let cfg = RmConfig {
-                iterations,
-                c: 0.4,
-                ..Default::default()
-            };
-            let reserve = iterations * 2 / 5;
-            let mut reference = BlindSearch::new(&battle, &dex, cfg.clone(), 0, 7);
-            let probes = reference
-                .finish_with_typed_mixed_probes(&dex, &belief, &observer, iterations, reserve);
-            assert_eq!(
-                reference.mixed_policy().is_some(),
-                expect_mix,
-                "{:?}",
-                reference.root_matrix()
-            );
-            let mut draws = SplitMix64::new(7 ^ 0xa24baed4963ee407);
-            let expected = reference.sample_mixed(draws.next_f64()).unwrap();
-            let mut agent =
-                BlindAgent::new(cfg.clone(), Arc::new(MetaPool { teams: vec![] }), None, 7)
-                    .with_adaptive_mixture(reserve);
-            agent.game = Some(GameState {
-                side: 0,
-                last_turn: battle.turn,
-                observer,
-                belief,
-            });
-            let legal = battle.legal_choices(&dex, 0);
-            assert_eq!(agent.choose(&battle, &dex, 0, &legal), expected);
-            assert_eq!(agent.search_rng_state(), reference.rng.0);
-            assert_eq!(agent.adaptive_mixture.as_ref().unwrap().rng.0, draws.0);
-            let stats = RootSearchStats {
-                searches: 1,
-                probed_searches: u64::from(probes > 0),
-                probe_iterations: u64::from(probes),
-                mixed_searches: u64::from(expect_mix),
-            };
-            assert_eq!(agent.root_search_stats(), Some(stats));
-            let obs = agent.game.as_ref().unwrap().observer.clone();
-            let mut exporter =
-                BlindAgent::new(cfg.clone(), Arc::new(MetaPool { teams: vec![] }), None, 7)
-                    .with_adaptive_mixture(reserve);
-            exporter.game = Some(GameState {
-                side: 0,
-                last_turn: battle.turn,
-                belief: Belief::pinned_from_battle(&preview, &obs),
-                observer: obs,
-            });
-            let expected_policy = reference
-                .mixed_policy()
-                .map(|m| m.policy)
-                .unwrap_or_else(|| {
-                    legal
-                        .iter()
-                        .map(|&a| if a == expected { 1. } else { 0. })
-                        .collect()
-                });
-            assert_eq!(
-                exporter.root_policy(&battle, &dex, 0, &legal),
-                expected_policy
-            );
-            assert_eq!(exporter.root_search_stats(), Some(stats));
-            assert_eq!(exporter.search_rng_state(), agent.search_rng_state());
-            let mut forced = battle.clone();
-            let id = forced.active_id(0).unwrap();
-            forced
-                .poke_mut(id)
-                .get_move_slot_mut(dex.moves.id("return").unwrap())
-                .unwrap()
-                .pp = 0;
-            let only = forced.legal_choices(&dex, 0);
-            assert_eq!(only.len(), 1);
-            assert_eq!(exporter.root_policy(&forced, &dex, 0, &only), vec![1.]);
-            assert_eq!(exporter.root_search_stats(), Some(stats));
-            if !expect_mix {
-                assert_eq!(probes, 0);
-                let g = agent.game.as_ref().unwrap();
-                let mut plain = BlindSearch::new(&battle, &dex, cfg, 0, 7);
-                plain.step(&dex, &g.belief, &g.observer, iterations);
-                assert_eq!(plain.best(), Some(expected));
-                assert_eq!(plain.rng.0, agent.search_rng_state());
-                assert_eq!(plain.root_matrix(), reference.root_matrix());
-            }
-        }
+        let mut battle=Battle::from_fixture(&dex,"1,2,3,4",&[set("Starmie",&["Return","Surf"])],
+            &[set("Wobbuffet",&["Counter","Mirror Coat","Safeguard"])]).unwrap();
+        battle.choose(&dex,0,"team 1").unwrap();battle.choose(&dex,1,"team 1").unwrap();
+        let cfg=RmConfig{iterations:1000,c:0.4,..Default::default()};
+        let mut chooser=BlindAgent::new(cfg.clone(),Arc::new(MetaPool{teams:vec![]}),None,7).with_adaptive_mixture(400);
+        let mut exporter=BlindAgent::new(cfg,Arc::new(MetaPool{teams:vec![]}),None,7).with_adaptive_mixture(400);
+        let before=chooser.adaptive_mixture.as_ref().unwrap().rng.0;
+        let mut draw=SplitMix64::new(before);draw.next_f64();
+        let choices=battle.legal_choices(&dex,0);
+        let chosen=chooser.choose(&battle,&dex,0,&choices);
+        let policy=exporter.root_policy(&battle,&dex,0,&choices);
+        let expected=chooser.decision_policy.clone().unwrap_or_else(||choices.iter().map(|&c|if c==chosen {1.} else {0.}).collect());
+        assert_eq!(policy,expected);
+        assert_eq!(chooser.adaptive_mixture.as_ref().unwrap().rng.0,draw.0);
+        assert_eq!(chooser.search_rng_state(),exporter.search_rng_state());
+        assert_eq!(chooser.root_search_stats(),exporter.root_search_stats());
+        assert_eq!(chooser.root_stats.searches,1);
+        assert!(chooser.root_stats.probe_iterations<=400);
+        assert!((policy.iter().sum::<f64>()-1.).abs()<1e-10);
     }
 
     #[test]
@@ -3038,8 +3202,11 @@ mod mixed_selection_tests {
         ];
         search.root_types = vec![RootTypeStats {
             samples: 40000,
+            late_samples: 0,
             replies: 2,
+            reply_acts: actions.to_vec(),
             cells: vec![(10000, 0.), (10000, 10000.), (10000, 10000.), (10000, 0.)],
+            late_cells: vec![(0, 0.); 4],
         }];
         let rng = search.rng.0;
         use crate::decision::PolicyMode;

@@ -1,0 +1,17 @@
+{
+  "recorded_at_utc": "2026-11-02T21:33:43.511908+00:00",
+  "reason": "Integration test found an evaluation regression for unequal roster sizes / relaxed public level caps. Source changed before completion, so the partial run was discarded and the exact fixed protocol was restarted from the beginning.",
+  "completed_games_discarded": 14,
+  "discarded_log_sha256": "fe22a73ab6a1c6f83183a492026eb35407ccaa8d668a4bb81219639add8762a4",
+  "discarded_executable_sha256": "fee3b5e6e04de261321d365a3aef3b6022968261da6b634d58212576cada13ce",
+  "protocol_changed": false,
+  "final_result_policy": "All 64 games use the final executable; none from the partial run is included.",
+  "additional_harness_correction": "Before the final run, corrected mode replaced correlated historical QMC type coordinates with independent weighted draws, matching the registered independent-block protocol.",
+  "second_technical_restart": {
+    "recorded_at_utc": "2026-11-02T21:44:36.620094+00:00",
+    "reason": "Independent mechanics counterexample showed that selecting a self-KO move while asleep can win via residual damage. Removed the remaining heuristic product root exclusion; restarted the unchanged fixed protocol on the final binary.",
+    "completed_games_discarded": 7,
+    "discarded_log_sha256": "8359b990fed57afedd2f99d6899f3e57e5fd3d78560ff5dfa8256cdacd96ffe2",
+    "discarded_executable_sha256": "b70235b76f8ec946b32f1dcdc572e82300c09c6fdc88a861da4b85523d305086"
+  }
+}

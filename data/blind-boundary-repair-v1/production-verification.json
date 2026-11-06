@@ -1,0 +1,28 @@
+{
+  "base": "http://127.0.0.1:59533/",
+  "workerUrl": "http://127.0.0.1:59533/assets/bot-worker-CDzaXHIG.js",
+  "catalogPairs": 1089,
+  "sideCases": 2178,
+  "searchIterations": 0,
+  "lookupMs": {
+    "median": 7.5,
+    "p95": 9.400000095367432,
+    "max": 25.200000286102295
+  },
+  "battleInitAndLookupMs": {
+    "median": 23.199999809265137,
+    "p95": 26.700000286102295,
+    "max": 45.30000019073486
+  },
+  "hiddenLoadoutInvariant": true,
+  "rejectionControls": [
+    "own-set",
+    "prior-hash",
+    "public-gender",
+    "public-item-presence"
+  ],
+  "servedDataSha256": {
+    "prior": "1c0a1d544be667282ed94f891f7fd1d533c324fd7c18c85d530a1cd9d47da6d5",
+    "catalog": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b"
+  }
+}

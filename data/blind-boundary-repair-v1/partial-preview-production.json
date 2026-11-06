@@ -1,0 +1,31 @@
+{
+  "base": "http://127.0.0.1:58964/",
+  "workerUrl": "http://127.0.0.1:58964/assets/bot-worker-zcf5h2To.js",
+  "catalogPairs": 1089,
+  "sideCases": 2178,
+  "tableCases": 1800,
+  "liveCases": 378,
+  "livePreviewTestBudget": 1,
+  "lookupMs": {
+    "median": 7,
+    "p95": 7.599999904632568,
+    "max": 8
+  },
+  "battleInitAndLookupMs": {
+    "median": 26.40000009536743,
+    "p95": 27.59999990463257,
+    "max": 29.5
+  },
+  "hiddenLoadoutInvariant": true,
+  "rejectionControls": [
+    "own-set",
+    "prior-opponent-shell",
+    "prior-own-shell",
+    "public-gender",
+    "public-item-presence"
+  ],
+  "servedDataSha256": {
+    "prior": "71f34e0568a39c1ff3b44c1300dee79b79d58dbc1593cb161118e998e2cf7800",
+    "catalog": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b"
+  }
+}

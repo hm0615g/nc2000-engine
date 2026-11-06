@@ -26,6 +26,8 @@ import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
+import { compatiblePolicyKeys } from "./src/preview-prior.mjs";
+
 const webDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webDir, "..");
 const dataDir = path.join(repoRoot, "data");
@@ -87,18 +89,50 @@ function verifyCompiledPreview(): Plugin {
   return {
     name: "verify-compiled-preview",
     apply: "build",
-    buildStart() {
+    enforce: "pre",
+    async load(id) {
+      if (!compiledPreviewEnabled || !id.endsWith('/data/compiled-preview-v1.json?raw')) return;
+      const artifact = JSON.parse(fs.readFileSync(path.join(dataDir, "compiled-preview-v1.json"), "utf8"));
+      if (!artifact.priorDependencies || artifact.status) return;
+      const prior = JSON.parse(fs.readFileSync(path.join(dataDir, "belief-pool-v3/belief-pool.json"), "utf8"));
+      const dex = JSON.parse(fs.readFileSync(path.join(dataDir, "gen2stadium2.json"), "utf8"));
+      const valid = await compatiblePolicyKeys(artifact, prior, dex,
+        (text: string) => createHash("sha256").update(text).digest("hex"));
+      // Keep the full historical bake in the repo; only ship usable choices.
+      artifact.policies = Object.fromEntries(Object.entries(artifact.policies).filter(([key]) => valid.has(key)));
+      return `export default ${JSON.stringify(JSON.stringify(artifact))};`;
+    },
+    async buildStart() {
       if (!compiledPreviewEnabled) return;
       const artifact = JSON.parse(fs.readFileSync(path.join(dataDir, "compiled-preview-v1.json"), "utf8"));
       const catalog = JSON.parse(fs.readFileSync(path.join(dataDir, "team-pool-v2/team-pool.json"), "utf8"));
       const profiles = JSON.parse(fs.readFileSync(path.join(dataDir, "search-profiles.json"), "utf8"));
+      if (artifact.status === "retired-training-v3") {
+        for (const [relative, expected] of [
+          ["data/belief-pool-v3/belief-pool.json", artifact.retirement?.priorSha256],
+          ["data/team-pool-v2/team-pool.json", artifact.retirement?.catalogSha256],
+        ]) {
+          const actual = createHash("sha256").update(fs.readFileSync(path.join(repoRoot, relative))).digest("hex");
+          if (actual !== expected) throw new Error(`Stale training migration: ${relative}. Run tools/build-training-products.js.`);
+        }
+        return; // Explicitly retired policies; runtime always uses live search.
+      }
       const publicRosters = new Set(catalog.teams.map((t: { sets: { species: string; level: number }[] }) => JSON.stringify(t.sets.map(p => [p.species, p.level]))));
       if (artifact.matchups !== catalog.teams.length * publicRosters.size)
         throw new Error("Compiled previews do not cover the complete catalog matchup grid.");
       if (artifact.format !== "nc2000-compiled-preview-v1" || !artifact.inputs || !artifact.matchups || Object.keys(artifact.policies ?? {}).length !== artifact.matchups)
         throw new Error("Compiled previews are incomplete. Run compile_preview and tools/compile-preview-artifact.py.");
       if (artifact.c !== profiles.blind.c) throw new Error("Compiled previews use a different search coefficient. Rebuild the preview artifact.");
+      if (artifact.priorDependencies) {
+        const prior = JSON.parse(fs.readFileSync(path.join(dataDir, "belief-pool-v3/belief-pool.json"), "utf8"));
+        const dex = JSON.parse(fs.readFileSync(path.join(dataDir, "gen2stadium2.json"), "utf8"));
+        const valid = await compatiblePolicyKeys(artifact, prior, dex,
+          (text: string) => createHash("sha256").update(text).digest("hex"));
+        if (valid.size !== artifact.matchups)
+          this.warn(`${artifact.matchups - valid.size} preview keys have changed shell priors and will use live search.`);
+      }
       for (const [relative, expected] of Object.entries(artifact.inputs)) {
+        if (relative === "data/belief-pool-v3/belief-pool.json" && artifact.priorDependencies) continue;
         const actual = createHash("sha256").update(fs.readFileSync(path.join(repoRoot, relative))).digest("hex");
         if (actual !== expected) throw new Error(`Stale compiled previews: ${relative}. Rebuild the preview artifact.`);
       }
@@ -152,6 +186,7 @@ export default defineConfig({
   },
   worker: {
     format: "es",
+    plugins: () => [verifyCompiledPreview()],
   },
   build: {
     target: "es2020",

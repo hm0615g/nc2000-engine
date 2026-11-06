@@ -1,5 +1,9 @@
 # meta-nash-v3 — the `?nash` mixture under the shipped blind profile
 
+Historical artifact: these weights were computed before the
+[blind-boundary repair](../blind-boundary-repair-v1/README.md). They are
+preserved as recorded results, not a certificate for the repaired bot.
+
 `pool-artifact.json` is generated (`node tools/build-team-products-v2.js`)
 from `solution.json`; it is what `?nash` draws the bot's party from, once per
 battle, the play door's draw when the setup panel's "solved mixture" choice

@@ -2,6 +2,8 @@
  "format": "meta-nash-pool-v3",
  "source_solution": "data/meta-nash-v3/solution.json",
  "conditions": "blind vs blind at blind:27000:0.4 on the frozen prior v3 (fnv1a64:ffa73c4245fe3774), no pondering, 500-turn cap = 0.5; the finite game over the 22 support-relevant selected parties (19 from the blind:3000:0.4 game + 3 joined by best-response rounds), pooled across stage B/C (seed bases 20261121, 20261131), initial 16 seed blocks per pair (seed base 20261161), and +16 refinement seed blocks per pair on the top 10 support candidates (seed base 20262161); RM+ (tools/nash-solve.py), support >= 0.01 renormalized",
+ "trainingPolicy": "training-v3",
+ "measurementStatus": "Historical weights; normalized sets and prior have not been remeasured.",
  "teams": [
   {
    "id": "sample-07",
@@ -182,7 +184,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -191,7 +193,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -221,7 +223,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -285,7 +287,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -381,7 +383,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -390,7 +392,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -580,7 +582,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -589,7 +591,7 @@
      "gender": "N",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 22,
       "def": 26,
       "spa": 31,
       "spd": 31,
@@ -659,12 +661,12 @@
      },
      "gender": "M",
      "ivs": {
-      "hp": 30,
+      "hp": 31,
       "atk": 26,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -683,7 +685,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -691,12 +693,12 @@
      },
      "gender": "N",
      "ivs": {
-      "hp": 30,
-      "atk": 30,
+      "hp": 31,
+      "atk": 22,
       "def": 26,
-      "spa": 30,
-      "spd": 30,
-      "spe": 30
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
      },
      "level": 55,
      "happiness": 255
@@ -946,7 +948,7 @@
      "nature": "Serious",
      "evs": {
       "hp": 255,
-      "atk": 255,
+      "atk": 0,
       "def": 255,
       "spa": 255,
       "spd": 255,
@@ -955,7 +957,7 @@
      "gender": "M",
      "ivs": {
       "hp": 31,
-      "atk": 31,
+      "atk": 6,
       "def": 31,
       "spa": 31,
       "spd": 31,

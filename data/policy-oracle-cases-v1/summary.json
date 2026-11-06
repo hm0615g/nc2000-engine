@@ -1,0 +1,505 @@
+{
+  "historical_commit": "872d8ed8",
+  "baseline_head": "0746d22e60c80e8ac1d2431030214387822c3c75",
+  "selection": "First exact-type double-loss pair (0), one different-type double-loss pair (3), next exact-type double-loss pair (12). Selected historical losses, not a new win-rate sample.",
+  "replay_comparison": [
+    {
+      "game": 0,
+      "historical": {
+        "index": 0,
+        "blue_score": 0.0,
+        "turns": 36,
+        "solver_interventions": 0,
+        "blue_team": "red-v10-s1105-r1-s0148",
+        "red_team": "red-v10-s1105-r1-s0148",
+        "blue_is_p1": true,
+        "battle_seed": "64677,10395,40644,54272",
+        "blue_seed": 14175318832926202200,
+        "red_seed": 11792330719408480657
+      },
+      "replayed": {
+        "index": 0,
+        "blue_score": 0.0,
+        "turns": 36,
+        "solver_interventions": 0,
+        "blue_team": "red-v10-s1105-r1-s0148",
+        "red_team": "red-v10-s1105-r1-s0148",
+        "blue_is_p1": true,
+        "battle_seed": "64677,10395,40644,54272",
+        "blue_seed": 14175318832926202200,
+        "red_seed": 11792330719408480657
+      },
+      "score_and_turns_match": true,
+      "solver_interventions_match": true
+    },
+    {
+      "game": 1,
+      "historical": {
+        "index": 1,
+        "blue_score": 0.0,
+        "turns": 18,
+        "solver_interventions": 0,
+        "blue_team": "red-v10-s1105-r1-s0148",
+        "red_team": "red-v10-s1105-r1-s0148",
+        "blue_is_p1": false,
+        "battle_seed": "64677,10395,40644,54272",
+        "blue_seed": 11792330719408480657,
+        "red_seed": 14175318832926202200
+      },
+      "replayed": {
+        "index": 1,
+        "blue_score": 0.0,
+        "turns": 18,
+        "solver_interventions": 0,
+        "blue_team": "red-v10-s1105-r1-s0148",
+        "red_team": "red-v10-s1105-r1-s0148",
+        "blue_is_p1": false,
+        "battle_seed": "64677,10395,40644,54272",
+        "blue_seed": 11792330719408480657,
+        "red_seed": 14175318832926202200
+      },
+      "score_and_turns_match": true,
+      "solver_interventions_match": true
+    },
+    {
+      "game": 6,
+      "historical": {
+        "index": 6,
+        "blue_score": 0.0,
+        "turns": 10,
+        "solver_interventions": 0,
+        "blue_team": "red-v10-s1105-r1-s0148",
+        "red_team": "apex-c04-bug-3atkstar-boomgen",
+        "blue_is_p1": true,
+        "battle_seed": "20635,38120,42910,23942",
+        "blue_seed": 13117697076643865778,
+        "red_seed": 10093148402393078740
+      },
+      "replayed": {
+        "index": 6,
+        "blue_score": 0.0,
+        "turns": 10,
+        "solver_interventions": 1,
+        "blue_team": "red-v10-s1105-r1-s0148",
+        "red_team": "apex-c04-bug-3atkstar-boomgen",
+        "blue_is_p1": true,
+        "battle_seed": "20635,38120,42910,23942",
+        "blue_seed": 13117697076643865778,
+        "red_seed": 10093148402393078740
+      },
+      "score_and_turns_match": true,
+      "solver_interventions_match": false
+    },
+    {
+      "game": 7,
+      "historical": {
+        "index": 7,
+        "blue_score": 0.0,
+        "turns": 29,
+        "solver_interventions": 0,
+        "blue_team": "apex-c04-bug-3atkstar-boomgen",
+        "red_team": "red-v10-s1105-r1-s0148",
+        "blue_is_p1": false,
+        "battle_seed": "20635,38120,42910,23942",
+        "blue_seed": 10093148402393078740,
+        "red_seed": 13117697076643865778
+      },
+      "replayed": {
+        "index": 7,
+        "blue_score": 0.0,
+        "turns": 29,
+        "solver_interventions": 0,
+        "blue_team": "apex-c04-bug-3atkstar-boomgen",
+        "red_team": "red-v10-s1105-r1-s0148",
+        "blue_is_p1": false,
+        "battle_seed": "20635,38120,42910,23942",
+        "blue_seed": 10093148402393078740,
+        "red_seed": 13117697076643865778
+      },
+      "score_and_turns_match": true,
+      "solver_interventions_match": true
+    },
+    {
+      "game": 24,
+      "historical": {
+        "index": 24,
+        "blue_score": 0.0,
+        "turns": 11,
+        "solver_interventions": 0,
+        "blue_team": "apex-c08-surgical-142",
+        "red_team": "apex-c08-surgical-142",
+        "blue_is_p1": true,
+        "battle_seed": "29127,1771,18969,62503",
+        "blue_seed": 14213178027379974595,
+        "red_seed": 16185095124469774423
+      },
+      "replayed": {
+        "index": 24,
+        "blue_score": 0.0,
+        "turns": 11,
+        "solver_interventions": 0,
+        "blue_team": "apex-c08-surgical-142",
+        "red_team": "apex-c08-surgical-142",
+        "blue_is_p1": true,
+        "battle_seed": "29127,1771,18969,62503",
+        "blue_seed": 14213178027379974595,
+        "red_seed": 16185095124469774423
+      },
+      "score_and_turns_match": true,
+      "solver_interventions_match": true
+    },
+    {
+      "game": 25,
+      "historical": {
+        "index": 25,
+        "blue_score": 0.0,
+        "turns": 33,
+        "solver_interventions": 0,
+        "blue_team": "apex-c08-surgical-142",
+        "red_team": "apex-c08-surgical-142",
+        "blue_is_p1": false,
+        "battle_seed": "29127,1771,18969,62503",
+        "blue_seed": 16185095124469774423,
+        "red_seed": 14213178027379974595
+      },
+      "replayed": {
+        "index": 25,
+        "blue_score": 0.0,
+        "turns": 33,
+        "solver_interventions": 0,
+        "blue_team": "apex-c08-surgical-142",
+        "red_team": "apex-c08-surgical-142",
+        "blue_is_p1": false,
+        "battle_seed": "29127,1771,18969,62503",
+        "blue_seed": 16185095124469774423,
+        "red_seed": 14213178027379974595
+      },
+      "score_and_turns_match": true,
+      "solver_interventions_match": true
+    }
+  ],
+  "fork_turn": 2,
+  "fork_blue_action": "switch 2 (Snorlax)",
+  "fork_applied_after_red_decision": true,
+  "fork_game_records": [
+    {
+      "index": 24,
+      "blue_score": 1.0,
+      "turns": 28,
+      "solver_interventions": 0,
+      "blue_team": "apex-c08-surgical-142",
+      "red_team": "apex-c08-surgical-142",
+      "blue_is_p1": true,
+      "battle_seed": "29127,1771,18969,62503",
+      "blue_seed": 14213178027379974595,
+      "red_seed": 16185095124469774423
+    },
+    {
+      "index": 25,
+      "blue_score": 0.0,
+      "turns": 13,
+      "solver_interventions": 0,
+      "blue_team": "apex-c08-surgical-142",
+      "red_team": "apex-c08-surgical-142",
+      "blue_is_p1": false,
+      "battle_seed": "29127,1771,18969,62503",
+      "blue_seed": 16185095124469774423,
+      "red_seed": 14213178027379974595
+    }
+  ],
+  "root_matrices": [
+    {
+      "id": "g7-t18",
+      "continuation": "most-visited",
+      "played": "move curse",
+      "played_security": 0.29568954298065886,
+      "best_pure": "move curse",
+      "pure_security": 0.29568954298065886,
+      "mixed_value": 0.2971789819510215,
+      "mix_gain": 0.0014894389703626332,
+      "row_mix": {
+        "move curse": 0.8999792656686687,
+        "move earthquake": 0.0,
+        "move megahorn": 0.0,
+        "move rest": 0.10002073433133134
+      },
+      "best_pure_dominance_margin": -0.014891302091710967,
+      "max_cell_standard_error": 0.00121803505721543,
+      "terminal_fraction": 0.009397506713867188
+    },
+    {
+      "id": "g7-t18",
+      "continuation": "visit-sampled",
+      "played": "move curse",
+      "played_security": 0.30349273218075135,
+      "best_pure": "move curse",
+      "pure_security": 0.30349273218075135,
+      "mixed_value": 0.30349273218075135,
+      "mix_gain": 0.0,
+      "row_mix": {
+        "move curse": 1.0,
+        "move earthquake": 0.0,
+        "move megahorn": 0.0,
+        "move rest": 0.0
+      },
+      "best_pure_dominance_margin": 0.052857464456575076,
+      "max_cell_standard_error": 0.0012181908513147909,
+      "terminal_fraction": 0.005771636962890625
+    },
+    {
+      "id": "g7-t20",
+      "continuation": "most-visited",
+      "played": "move megahorn",
+      "played_security": 0.36580752109017267,
+      "best_pure": "move megahorn",
+      "pure_security": 0.36580752109017267,
+      "mixed_value": 0.36580752109017267,
+      "mix_gain": 0.0,
+      "row_mix": {
+        "move curse": 0.0,
+        "move earthquake": 0.0,
+        "move megahorn": 1.0,
+        "move rest": 0.0
+      },
+      "best_pure_dominance_margin": -0.013191319516632938,
+      "max_cell_standard_error": 0.0012474657420382014,
+      "terminal_fraction": 0.02338727315266927
+    },
+    {
+      "id": "g7-t20",
+      "continuation": "visit-sampled",
+      "played": "move megahorn",
+      "played_security": 0.3787077292951653,
+      "best_pure": "move megahorn",
+      "pure_security": 0.3787077292951653,
+      "mixed_value": 0.3787077292951653,
+      "mix_gain": 0.0,
+      "row_mix": {
+        "move curse": 0.0,
+        "move earthquake": 0.0,
+        "move megahorn": 1.0,
+        "move rest": 0.0
+      },
+      "best_pure_dominance_margin": 0.015859315408931263,
+      "max_cell_standard_error": 0.00123781489342433,
+      "terminal_fraction": 0.020998636881510418
+    },
+    {
+      "id": "g7-t23",
+      "continuation": "most-visited",
+      "played": "move rest",
+      "played_security": 0.25723142343612587,
+      "best_pure": "move megahorn",
+      "pure_security": 0.2808404764722877,
+      "mixed_value": 0.2808404764722877,
+      "mix_gain": 0.0,
+      "row_mix": {
+        "move curse": 0.0,
+        "move earthquake": 0.0,
+        "move megahorn": 1.0,
+        "move rest": 0.0
+      },
+      "best_pure_dominance_margin": 0.016637643273577085,
+      "max_cell_standard_error": 0.0012227902634955614,
+      "terminal_fraction": 0.11726633707682292
+    },
+    {
+      "id": "g7-t23",
+      "continuation": "visit-sampled",
+      "played": "move rest",
+      "played_security": 0.2770219864945046,
+      "best_pure": "move rest",
+      "pure_security": 0.2770219864945046,
+      "mixed_value": 0.2770219864945046,
+      "mix_gain": 0.0,
+      "row_mix": {
+        "move curse": 0.0,
+        "move earthquake": 0.0,
+        "move megahorn": 0.0,
+        "move rest": 1.0
+      },
+      "best_pure_dominance_margin": -0.027068366224679064,
+      "max_cell_standard_error": 0.0012227902634955614,
+      "terminal_fraction": 0.09191703796386719
+    },
+    {
+      "id": "g24-t2",
+      "continuation": "most-visited",
+      "played": "move icebeam",
+      "played_security": 0.3997315920761988,
+      "best_pure": "move psychic",
+      "pure_security": 0.4239700147653037,
+      "mixed_value": 0.4257790286880879,
+      "mix_gain": 0.0018090139227842084,
+      "row_mix": {
+        "move hydropump": 0.336780858508197,
+        "move icebeam": 0.0,
+        "move psychic": 0.663219141491803,
+        "move recover": 0.0,
+        "switch 2": 0.0,
+        "switch 3": 0.0
+      },
+      "best_pure_dominance_margin": -0.040817335999067283,
+      "max_cell_standard_error": 0.0011568139833954378,
+      "terminal_fraction": 0.0
+    },
+    {
+      "id": "g24-t2",
+      "continuation": "visit-sampled",
+      "played": "move icebeam",
+      "played_security": 0.40463774569569866,
+      "best_pure": "move psychic",
+      "pure_security": 0.4066892614708842,
+      "mixed_value": 0.4066892614708842,
+      "mix_gain": 0.0,
+      "row_mix": {
+        "move hydropump": 0.0,
+        "move icebeam": 0.0,
+        "move psychic": 1.0,
+        "move recover": 0.0,
+        "switch 2": 0.0,
+        "switch 3": 0.0
+      },
+      "best_pure_dominance_margin": -0.07758356181106374,
+      "max_cell_standard_error": 0.001149152361104628,
+      "terminal_fraction": 0.0
+    },
+    {
+      "id": "g24-t3",
+      "continuation": "most-visited",
+      "played": "move icebeam",
+      "played_security": 0.358653194609188,
+      "best_pure": "move psychic",
+      "pure_security": 0.3647386446434328,
+      "mixed_value": 0.3647386446434328,
+      "mix_gain": 0.0,
+      "row_mix": {
+        "move hydropump": 0.0,
+        "move icebeam": 0.0,
+        "move psychic": 1.0,
+        "move recover": 0.0,
+        "switch 2": 0.0,
+        "switch 3": 0.0
+      },
+      "best_pure_dominance_margin": -0.04395476796856179,
+      "max_cell_standard_error": 0.001153894705400774,
+      "terminal_fraction": 6.357828776041666e-07
+    },
+    {
+      "id": "g24-t3",
+      "continuation": "visit-sampled",
+      "played": "move icebeam",
+      "played_security": 0.35477101469067185,
+      "best_pure": "move icebeam",
+      "pure_security": 0.35477101469067185,
+      "mixed_value": 0.35477101469067185,
+      "mix_gain": 0.0,
+      "row_mix": {
+        "move hydropump": 0.0,
+        "move icebeam": 1.0,
+        "move psychic": 0.0,
+        "move recover": 0.0,
+        "switch 2": 0.0,
+        "switch 3": 0.0
+      },
+      "best_pure_dominance_margin": -0.1633908281159694,
+      "max_cell_standard_error": 0.0011555396192740582,
+      "terminal_fraction": 8.689032660590277e-06
+    },
+    {
+      "id": "g24-t4",
+      "continuation": "most-visited",
+      "played": "move icebeam",
+      "played_security": 0.31431786496858694,
+      "best_pure": "move icebeam",
+      "pure_security": 0.31431786496858694,
+      "mixed_value": 0.3154521887111639,
+      "mix_gain": 0.001134323742576937,
+      "row_mix": {
+        "move hydropump": 0.0,
+        "move icebeam": 0.9852426536394402,
+        "move psychic": 0.014757346360559755,
+        "move recover": 0.0,
+        "switch 2": 0.0,
+        "switch 3": 0.0
+      },
+      "best_pure_dominance_margin": -0.15302785092082505,
+      "max_cell_standard_error": 0.0011737871755386994,
+      "terminal_fraction": 0.0006345113118489584
+    },
+    {
+      "id": "g24-t4",
+      "continuation": "visit-sampled",
+      "played": "move icebeam",
+      "played_security": 0.31994892407555736,
+      "best_pure": "move icebeam",
+      "pure_security": 0.31994892407555736,
+      "mixed_value": 0.31994892407555736,
+      "mix_gain": 0.0,
+      "row_mix": {
+        "move hydropump": 0.0,
+        "move icebeam": 1.0,
+        "move psychic": 0.0,
+        "move recover": 0.0,
+        "switch 2": 0.0,
+        "switch 3": 0.0
+      },
+      "best_pure_dominance_margin": -0.17010890055515326,
+      "max_cell_standard_error": 0.0011595952736767109,
+      "terminal_fraction": 0.000270843505859375
+    },
+    {
+      "id": "g25-t11",
+      "continuation": "most-visited",
+      "played": "move rest",
+      "played_security": 0.36929744386778107,
+      "best_pure": "move rest",
+      "pure_security": 0.36929744386778107,
+      "mixed_value": 0.36929744386778107,
+      "mix_gain": 0.0,
+      "row_mix": {
+        "move curse": 0.0,
+        "move doubleedge": 0.0,
+        "move rest": 1.0,
+        "move sleeptalk": 0.0
+      },
+      "best_pure_dominance_margin": 0.06203353419511298,
+      "max_cell_standard_error": 0.00136210847135576,
+      "terminal_fraction": 0.05358250935872396
+    },
+    {
+      "id": "g25-t11",
+      "continuation": "visit-sampled",
+      "played": "move rest",
+      "played_security": 0.3489949279910328,
+      "best_pure": "move rest",
+      "pure_security": 0.3489949279910328,
+      "mixed_value": 0.3489949279910328,
+      "mix_gain": 0.0,
+      "row_mix": {
+        "move curse": 0.0,
+        "move doubleedge": 0.0,
+        "move rest": 1.0,
+        "move sleeptalk": 0.0
+      },
+      "best_pure_dominance_margin": 0.0553139344172634,
+      "max_cell_standard_error": 0.0013603543994046997,
+      "terminal_fraction": 0.053695996602376304
+    }
+  ],
+  "sampling": {
+    "samples_per_cell": 131072,
+    "total_cells_across_roots_and_modes": 336,
+    "total_draws": 44040192,
+    "simultaneous_hoeffding_halfwidth_95": 0.00602183330909923,
+    "note": "Nominal bounded independent-draw model for fixed surrogate payoffs; pseudorandom sampling, model/continuation error and omitted type-contingent responses are not covered."
+  },
+  "limitations": [
+    "Frozen search continuation with heuristic leaves, not optimal-play win probabilities.",
+    "Reply columns are fixed input policies legal in sampled worlds; arbitrary private-type-contingent policies are not enumerated.",
+    "No full-game blind Nash/no-Nash classification follows from these matrices.",
+    "Historical logs did not retain actions. Replayed score/turn agreement does not prove original action-by-action identity.",
+    "Game 6 replay has one extra time-budgeted BoundSolver intervention on the final turn, without changing score or terminal turn.",
+    "Single seeded intervention is not a win-rate improvement estimate."
+  ]
+}

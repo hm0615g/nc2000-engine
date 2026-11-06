@@ -36,6 +36,9 @@ use nc2000_engine::dex::{toid, Dex};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+#[path = "meta_eco/catalog_preview.rs"]
+mod catalog_preview;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct NicheSpec {
     name: String,
@@ -8154,8 +8157,11 @@ fn main() {
         "falsify-conclusion" => cmd_falsify_conclusion(&args[1..]),
         "converge-conclusion" => cmd_converge_conclusion(&args[1..]),
         "stress-falsify" => cmd_stress_falsify(&args[1..]),
+        "apex-experiment" => cmd_apex_experiment(&args[1..]),
+        "eval-partybox" => cmd_eval_partybox(&args[1..]),
+        "bake-catalog-preview" | "bake-prior-preview" => catalog_preview::run(&args[1..]),
         other => panic!(
-            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit | falsify-conclusion | converge-conclusion | stress-falsify)"
+            "unknown subcommand {other} (expected evolve-island | extract-pool | extract-nash | verify-nash | update-ring | update-pool | tomography | kodoku | core-nash | verify-1gen | audit-elites | sibling-mix | dominance-audit | falsify-conclusion | converge-conclusion | stress-falsify | apex-experiment | eval-partybox | bake-catalog-preview)"
         ),
     }
 }
@@ -10626,6 +10632,7 @@ fn shell_pair_crn_seed(seed: u64, sig_a: &PreviewSig, sig_b: &PreviewSig, extra:
 
 fn mon_set_fingerprint(m: &PokemonSet) -> u64 {
     let mut h = 0xcbf2_9ce4_8422_2325_u64;
+    h = (h ^ u64::from(m.happiness.unwrap_or(255))).wrapping_mul(0x0100_0000_01b3);
     for b in toid(&m.species).as_bytes() {
         h = (h ^ (*b as u64)).wrapping_mul(0x0100_0000_01b3);
     }
@@ -10654,8 +10661,7 @@ fn mon_set_fingerprint(m: &PokemonSet) -> u64 {
             h = (h ^ (v as u64)).wrapping_mul(0x0100_0000_01b3);
         }
     }
-    let mut mvs: Vec<String> = m.moves.iter().map(|x| toid(x)).collect();
-    mvs.sort();
+    let mvs: Vec<String> = m.moves.iter().map(|x| toid(x)).collect();
     for mv in &mvs {
         for b in mv.as_bytes() {
             h = (h ^ (*b as u64)).wrapping_mul(0x0100_0000_01b3);
@@ -11269,6 +11275,21 @@ fn cmd_converge_conclusion(args: &[String]) {
             12usize,
         ),
         ("data/kodoku-r3/red-gauntlet.json", "red_gauntlet", 100usize),
+        (
+            "data/kodoku-r3/majinjima-assassins.json",
+            "majinjima_assassin",
+            300usize,
+        ),
+        (
+            "data/partybox-v0/teams.json",
+            "partybox_assassin",
+            150usize,
+        ),
+        (
+            "data/kodoku-r3/apex-candidates.json",
+            "apex_cand",
+            50usize,
+        ),
     ] {
         if let Ok(txt) = std::fs::read_to_string(root.join(path)) {
             if let Ok(v) = serde_json::from_str::<Value>(&txt) {
@@ -15414,5 +15435,2129 @@ fn cmd_stress_falsify(args: &[String]) {
             "pairs_per_arm": num_pairs,
             "results": report_rows,
         }),
+    );
+}
+
+fn cmd_apex_experiment(args: &[String]) {
+    let t_start = std::time::Instant::now();
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let max_turns: u16 = num(args, "--max-turns", 250);
+    let seed: u64 = num(args, "--seed", 20261105);
+    let cache_file = PathBuf::from(flag(args, "--cache-file").unwrap_or_else(|| {
+        "data/dominance-audit-v13-verified/cache-matrices.json".to_string()
+    }));
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(8)
+        });
+
+    let mut team_db: BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)> = BTreeMap::new();
+    let mut seen_db_keys: BTreeSet<String> = BTreeSet::new();
+    let mut key_to_id: BTreeMap<String, String> = BTreeMap::new();
+    let raw_alias_map: std::cell::RefCell<BTreeMap<String, (String, Vec<usize>)>> =
+        std::cell::RefCell::new(BTreeMap::new());
+
+    let register_team = |db: &mut BTreeMap<String, (Vec<PokemonSet>, Vec<Value>, String)>,
+                         seen_keys: &mut BTreeSet<String>,
+                         k2id: &mut BTreeMap<String, String>,
+                         id: &str,
+                         grp: &str,
+                         raw: &[Value]|
+     -> Option<String> {
+        let upgraded = normalize_team_dvs_evs(&dex, raw);
+        let canon = gen
+            .canonize(&dex, &upgraded)
+            .or_else(|| gen.canonize(&dex, raw))?;
+        let k = team_key(&canon);
+        let sets = to_sets(&canon).ok()?;
+        let row_map = compute_raw_to_canon_action_map(raw, &sets);
+        if let Some(existing_id) = k2id.get(&k) {
+            raw_alias_map
+                .borrow_mut()
+                .entry(id.to_string())
+                .or_insert_with(|| (existing_id.clone(), row_map));
+            return Some(existing_id.clone());
+        }
+        if structural_hitchhiker_reason(&sets).is_some() {
+            return None;
+        }
+        let final_id = if db.contains_key(id) {
+            format!("{}-{}", grp, id)
+        } else {
+            id.to_string()
+        };
+        raw_alias_map
+            .borrow_mut()
+            .insert(id.to_string(), (final_id.clone(), row_map.clone()));
+        raw_alias_map
+            .borrow_mut()
+            .insert(final_id.clone(), (final_id.clone(), row_map));
+        k2id.insert(k.clone(), final_id.clone());
+        seen_keys.insert(k);
+        db.insert(final_id.clone(), (sets, canon, grp.to_string()));
+        Some(final_id)
+    };
+
+    for (path, grp, cap) in [
+        ("data/meta-nash-v3/pool-artifact.json", "meta-nash-v3", 100usize),
+        ("data/eco-pool/nash-solution.json", "kodoku-r2-nash", 100usize),
+        ("data/kodoku-r1/nash-solution-next.json", "kodoku-r1-nash", 100usize),
+        ("data/eco-pool/master-pool.json", "master-pool", 200usize),
+        ("data/kodoku-r3/step2-promotes.json", "step2", 100usize),
+        ("data/kodoku-r3/step3-promotes.json", "step3", 100usize),
+        ("data/kodoku-r3/step4-promotes.json", "step4", 100usize),
+        ("data/kodoku-r3/step5-promotes.json", "step5", 100usize),
+        ("data/kodoku-r3/step6-deme-promotes.json", "step6", 100usize),
+        ("data/kodoku-r3/step7-deme-promotes.json", "step7", 100usize),
+        ("data/kodoku-r3/step8-deme-promotes.json", "step8", 100usize),
+        ("data/team-inventory-v1/eval/teams.json", "inventory", 200usize),
+        ("data/community-rentals-v0/teams.json", "community_rental", 30usize),
+        ("data/eco-r17/pool-artifact.json", "eco_r17", 12usize),
+        ("data/kodoku-r1/nash-candidates.json", "kodoku_r1_cand", 10usize),
+        ("data/kodoku-r2/nash-candidates.json", "kodoku_r2_cand", 12usize),
+        ("data/kodoku-r3/red-gauntlet.json", "red_gauntlet", 100usize),
+        ("data/kodoku-r3/majinjima-assassins.json", "majinjima_assassin", 300usize),
+        ("data/partybox-v0/teams.json", "partybox_assassin", 150usize),
+        ("data/kodoku-r3/apex-candidates.json", "apex_cand", 50usize),
+    ] {
+        if let Ok(txt) = std::fs::read_to_string(root.join(path)) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(arr) = v["teams"].as_array() {
+                    for t in arr.iter().take(cap) {
+                        if let (Some(id), Some(sets)) = (t["id"].as_str(), t["sets"].as_array()) {
+                            if path.contains("team-inventory-v1") && id.starts_with("ctl-") {
+                                continue;
+                            }
+                            register_team(&mut team_db, &mut seen_db_keys, &mut key_to_id, id, grp, sets);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for prev_path in [
+        root.join("data/dominance-audit-v13-verified/converged-report.json"),
+        root.join("data/dominance-audit-v12-debiased/converged-report.json"),
+        root.join("data/dominance-audit-v11-fullnash/converged-report.json"),
+        root.join("data/dominance-audit-v10-fullnash/converged-report.json"),
+    ] {
+        if let Ok(txt) = std::fs::read_to_string(&prev_path) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(rounds_arr) = v["rounds"].as_array() {
+                    for r_val in rounds_arr {
+                        if let Some(nems) = r_val["holdout_nemeses"].as_array() {
+                            for n_val in nems {
+                                if let (Some(id), Some(sets)) = (n_val["id"].as_str(), n_val["sets"].as_array()) {
+                                    register_team(&mut team_db, &mut seen_db_keys, &mut key_to_id, id, "nem", sets);
+                                }
+                            }
+                        }
+                        if let Some(sibs) = r_val["forged_siblings"].as_array() {
+                            for s_val in sibs {
+                                if let (Some(id), Some(sets)) = (s_val["id"].as_str(), s_val["sets"].as_array()) {
+                                    register_team(&mut team_db, &mut seen_db_keys, &mut key_to_id, id, "sib", sets);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let mut roster_db: BTreeMap<String, CompiledRoster6> = BTreeMap::new();
+    for (tid, (sets, _, _)) in &team_db {
+        roster_db.insert(tid.clone(), CompiledRoster6::compile(&dex, sets));
+    }
+
+    // Load cached pair matrices
+    let mut pair_mat_cache: BTreeMap<(String, String), (Vec<f64>, u32)> = BTreeMap::new();
+    if let Ok(txt) = std::fs::read_to_string(&cache_file) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["pair_matrices"].as_array() {
+                let alias_ref = raw_alias_map.borrow();
+                for c_val in arr {
+                    if let (Some(pid), Some(qid), Some(ns), Some(m_arr)) = (
+                        c_val["p_id"].as_str(),
+                        c_val["q_id"].as_str(),
+                        c_val["n_seeds"].as_u64(),
+                        c_val["mat"].as_array(),
+                    ) {
+                        if ns == 0 {
+                            continue;
+                        }
+                        let Some((canon_p, rm_p)) = alias_ref.get(pid) else {
+                            continue;
+                        };
+                        let Some((canon_q, rm_q)) = alias_ref.get(qid) else {
+                            continue;
+                        };
+                        if let (Some(r_p), Some(r_q)) = (roster_db.get(canon_p), roster_db.get(canon_q)) {
+                            let ka = r_p.legal.len();
+                            let kb = r_q.legal.len();
+                            let mat: Vec<f64> = m_arr.iter().filter_map(|x| x.as_f64()).collect();
+                            if mat.len() == ka * kb && rm_p.len() == ka && rm_q.len() == kb {
+                                let ns_u32 = ns as u32;
+                                let mut mat_can = vec![0.5f64; ka * kb];
+                                for ia in 0..ka {
+                                    let raw_ia = rm_p[ia];
+                                    for ib in 0..kb {
+                                        let raw_ib = rm_q[ib];
+                                        mat_can[ia * kb + ib] = mat[raw_ia * kb + raw_ib];
+                                    }
+                                }
+                                let rev_can = transpose_preview_matrix(&mat_can, ka, kb);
+                                pair_mat_cache.insert((canon_p.clone(), canon_q.clone()), (mat_can, ns_u32));
+                                pair_mat_cache.insert((canon_q.clone(), canon_p.clone()), (rev_can, ns_u32));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    eprintln!(
+        "[apex-experiment] Loaded {} teams in roster_db, {} cached pair matrices ({:.1}s)",
+        roster_db.len(),
+        pair_mat_cache.len() / 2,
+        t_start.elapsed().as_secs_f64()
+    );
+
+    let save_exp_cache = |pmc: &BTreeMap<(String, String), (Vec<f64>, u32)>| {
+        let mut recs: Vec<Value> = Vec::new();
+        for ((pid, qid), (mat, ns)) in pmc {
+            if pid <= qid {
+                let rounded: Vec<f64> = mat
+                    .iter()
+                    .map(|&x| (x * 10000.0).round() / 10000.0)
+                    .collect();
+                recs.push(json!({
+                    "p_id": pid,
+                    "q_id": qid,
+                    "n_seeds": ns,
+                    "mat": rounded,
+                }));
+            }
+        }
+        write_json_atomic(
+            &root.join("data/kodoku-r3/apex-exp-cache.json"),
+            &json!({ "pair_matrices": recs }),
+        );
+    };
+    if let Ok(txt) = std::fs::read_to_string(root.join("data/kodoku-r3/apex-exp-cache.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["pair_matrices"].as_array() {
+                for c_val in arr {
+                    if let (Some(pid), Some(qid), Some(ns), Some(m_arr)) = (
+                        c_val["p_id"].as_str(),
+                        c_val["q_id"].as_str(),
+                        c_val["n_seeds"].as_u64(),
+                        c_val["mat"].as_array(),
+                    ) {
+                        if let (Some(r_p), Some(r_q)) = (roster_db.get(pid), roster_db.get(qid)) {
+                            let ka = r_p.legal.len();
+                            let kb = r_q.legal.len();
+                            let mat: Vec<f64> = m_arr.iter().filter_map(|x| x.as_f64()).collect();
+                            if mat.len() == ka * kb {
+                                let rev = transpose_preview_matrix(&mat, ka, kb);
+                                pair_mat_cache.insert((pid.to_string(), qid.to_string()), (mat, ns as u32));
+                                pair_mat_cache.insert((qid.to_string(), pid.to_string()), (rev, ns as u32));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 1. Identify all challengers `q_ids` (all cached opponents + all newly added majinjima_assassin teams)
+    let mut cached_opps: BTreeSet<String> = BTreeSet::new();
+    for (p, q) in pair_mat_cache.keys() {
+        cached_opps.insert(p.clone());
+        cached_opps.insert(q.clone());
+    }
+    let mjj_assassin_ids: Vec<String> = team_db
+        .iter()
+        .filter(|(_, (_, _, grp))| grp == "majinjima_assassin")
+        .map(|(id, _)| id.clone())
+        .collect();
+    let apex_cand_ids: Vec<String> = team_db
+        .iter()
+        .filter(|(_, (_, _, grp))| grp == "apex_cand")
+        .map(|(id, _)| id.clone())
+        .collect();
+
+    let base_apex_ids = vec![
+        "red-v10-s1105-r1-s0148".to_string(),
+        "red-v10-s1105-r2-s0142".to_string(),
+    ];
+    let police_ids = vec![
+        "sample-08".to_string(),
+        "rental-cban-6".to_string(),
+        "hc75-3rd-bean".to_string(),
+    ];
+
+    // Step A: Evaluate all 172 new Majinjima assassins against `base_apex_ids` and `police_ids` at ns=1!
+    let mut eval_pairs: Vec<(String, String, u32)> = Vec::new();
+    for mid in base_apex_ids.iter().chain(police_ids.iter()) {
+        for qid in &mjj_assassin_ids {
+            if !pair_mat_cache.contains_key(&(mid.clone(), qid.clone())) {
+                eval_pairs.push((mid.clone(), qid.clone(), 1));
+            }
+        }
+    }
+    eprintln!(
+        "[Step A] Screening {} new Majinjima assassins against Apex2 + Police3 ({} 60x60 matrices)...",
+        mjj_assassin_ids.len(),
+        eval_pairs.len()
+    );
+    {
+        let cursor = std::sync::atomic::AtomicUsize::new(0);
+        let mut outs = Vec::with_capacity(eval_pairs.len());
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for _ in 0..threads.max(1) {
+                let (jobs_ref, cursor_ref, roster_ref) = (&eval_pairs, &cursor, &roster_db);
+                handles.push(scope.spawn(move || {
+                    let mut loc = Vec::new();
+                    loop {
+                        let k = cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if k >= jobs_ref.len() {
+                            break;
+                        }
+                        let (ref pid, ref qid, ns) = jobs_ref[k];
+                        let r_p = &roster_ref[pid];
+                        let r_q = &roster_ref[qid];
+                        let ka = r_p.legal.len();
+                        let kb = r_q.legal.len();
+                        let sig_p = preview_sig_sets(&r_p.sets);
+                        let sig_q = preview_sig_sets(&r_q.sets);
+                        let p_seed = shell_pair_crn_seed(seed, &sig_p, &sig_q, 1);
+                        let mat = eval_full_preview_matrix_compact(r_p, r_q, ns, max_turns, p_seed);
+                        let rev = transpose_preview_matrix(&mat, ka, kb);
+                        loc.push((pid.clone(), qid.clone(), mat, rev, ns));
+                    }
+                    loc
+                }));
+            }
+            for h in handles {
+                outs.extend(h.join().unwrap());
+            }
+        });
+        for (pid, qid, mat, rev, ns) in outs {
+            pair_mat_cache.insert((pid.clone(), qid.clone()), (mat, ns));
+            pair_mat_cache.insert((qid, pid), (rev, ns));
+        }
+        save_exp_cache(&pair_mat_cache);
+    }
+
+    // Score all 172 new Majinjima assassins against Apex2 (`[0.312, 0.688]`) and Police3
+    let apex_rosters: Vec<&CompiledRoster6> = base_apex_ids.iter().map(|id| &roster_db[id]).collect();
+    let apex_w = vec![0.3120, 0.6880];
+    let police_rosters: Vec<&CompiledRoster6> = police_ids.iter().map(|id| &roster_db[id]).collect();
+    let police_w = vec![0.1925, 0.1456, 0.6619];
+
+    let mut mjj_scores: Vec<(String, f64, f64, f64, f64, f64)> = Vec::new();
+    for qid in &mjj_assassin_ids {
+        let r_q = &roster_db[qid];
+        let kb = r_q.legal.len();
+        let (ref m148, ns148) = pair_mat_cache[&(base_apex_ids[0].clone(), qid.clone())];
+        let (ref m142, ns142) = pair_mat_cache[&(base_apex_ids[1].clone(), qid.clone())];
+        let (val_apex, per_u, _, _, _) = solve_debiased_bayesian_shell_preview_nash(
+            &apex_rosters,
+            &[r_q],
+            &[m148.as_slice(), m142.as_slice()],
+            &[ns148, ns142],
+            60,
+            kb,
+            &apex_w,
+            &[1.0],
+            300,
+        );
+        let mut p_mats = Vec::new();
+        let mut p_ns = Vec::new();
+        for pid in &police_ids {
+            let (ref mp, nsp) = pair_mat_cache[&(pid.clone(), qid.clone())];
+            p_mats.push(mp.as_slice());
+            p_ns.push(nsp);
+        }
+        let (val_pol, _, _, _, _) = solve_debiased_bayesian_shell_preview_nash(
+            &police_rosters,
+            &[r_q],
+            &p_mats,
+            &p_ns,
+            48,
+            kb,
+            &police_w,
+            &[1.0],
+            300,
+        );
+        let mix_val = 0.8120 * val_apex + 0.1880 * val_pol;
+        mjj_scores.push((qid.clone(), val_apex, per_u[0], per_u[1], val_pol, mix_val));
+    }
+    mjj_scores.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+    // Refine top 25 dangerous new Majinjima assassins to ns=3 (+2 CRN seeds) against Apex2 and Police3!
+    let top_mjj_refine: Vec<String> = mjj_scores.iter().take(25).map(|x| x.0.clone()).collect();
+    let mut refine_jobs: Vec<(String, String)> = Vec::new();
+    for mid in base_apex_ids.iter().chain(police_ids.iter()) {
+        for qid in &top_mjj_refine {
+            refine_jobs.push((mid.clone(), qid.clone()));
+        }
+    }
+    eprintln!(
+        "[Step A.2] Refining top 25 Majinjima assassins to ns=3 ({} matrices)...",
+        refine_jobs.len()
+    );
+    {
+        let cursor = std::sync::atomic::AtomicUsize::new(0);
+        let mut outs = Vec::with_capacity(refine_jobs.len());
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for _ in 0..threads.max(1) {
+                let (jobs_ref, cursor_ref, roster_ref, pmc_ref) = (&refine_jobs, &cursor, &roster_db, &pair_mat_cache);
+                handles.push(scope.spawn(move || {
+                    let mut loc = Vec::new();
+                    loop {
+                        let k = cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if k >= jobs_ref.len() {
+                            break;
+                        }
+                        let (ref pid, ref qid) = jobs_ref[k];
+                        let r_p = &roster_ref[pid];
+                        let r_q = &roster_ref[qid];
+                        let (old_mat, prev_ns) = pmc_ref[&(pid.clone(), qid.clone())].clone();
+                        let sig_p = preview_sig_sets(&r_p.sets);
+                        let sig_q = preview_sig_sets(&r_q.sets);
+                        let p_seed = shell_pair_crn_seed(
+                            seed ^ 0xA5A5_5A5A_1111_2222_u64,
+                            &sig_p,
+                            &sig_q,
+                            prev_ns as u64,
+                        );
+                        let (blended, new_ns) = eval_incremental_adaptive_preview_matrix_compact(
+                            r_p, r_q, &old_mat, prev_ns, 2, max_turns, p_seed,
+                        );
+                        let ka = r_p.legal.len();
+                        let kb = r_q.legal.len();
+                        let rev = transpose_preview_matrix(&blended, ka, kb);
+                        loc.push((pid.clone(), qid.clone(), blended, rev, new_ns));
+                    }
+                    loc
+                }));
+            }
+            for h in handles {
+                outs.extend(h.join().unwrap());
+            }
+        });
+        for (pid, qid, mat, rev, ns) in outs {
+            pair_mat_cache.insert((pid.clone(), qid.clone()), (mat, ns));
+            pair_mat_cache.insert((qid, pid), (rev, ns));
+        }
+        save_exp_cache(&pair_mat_cache);
+    }
+
+    // Recompute mjj_scores after ns=3 refinement
+    mjj_scores.clear();
+    for qid in &mjj_assassin_ids {
+        let r_q = &roster_db[qid];
+        let kb = r_q.legal.len();
+        let (ref m148, ns148) = pair_mat_cache[&(base_apex_ids[0].clone(), qid.clone())];
+        let (ref m142, ns142) = pair_mat_cache[&(base_apex_ids[1].clone(), qid.clone())];
+        let (val_apex, per_u, _, _, _) = solve_debiased_bayesian_shell_preview_nash(
+            &apex_rosters,
+            &[r_q],
+            &[m148.as_slice(), m142.as_slice()],
+            &[ns148, ns142],
+            60,
+            kb,
+            &apex_w,
+            &[1.0],
+            300,
+        );
+        let mut p_mats = Vec::new();
+        let mut p_ns = Vec::new();
+        for pid in &police_ids {
+            let (ref mp, nsp) = pair_mat_cache[&(pid.clone(), qid.clone())];
+            p_mats.push(mp.as_slice());
+            p_ns.push(nsp);
+        }
+        let (val_pol, _, _, _, _) = solve_debiased_bayesian_shell_preview_nash(
+            &police_rosters,
+            &[r_q],
+            &p_mats,
+            &p_ns,
+            48,
+            kb,
+            &police_w,
+            &[1.0],
+            300,
+        );
+        let mix_val = 0.8120 * val_apex + 0.1880 * val_pol;
+        mjj_scores.push((qid.clone(), val_apex, per_u[0], per_u[1], val_pol, mix_val));
+    }
+    mjj_scores.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+    println!("\n=== TOP 25 NEW MAJINJIMA ASSASSINS vs CURRENT APEX PREDATOR (ns=3) ===");
+    for (rk, (qid, v_ap, v148, v142, v_pol, v_mix)) in mjj_scores.iter().take(25).enumerate() {
+        let mons: Vec<String> = roster_db[qid]
+            .sets
+            .iter()
+            .map(|s| format!("{}L{}", s.species, s.level))
+            .collect();
+        println!(
+            "  #{:02} {:28} | Apex2={:.4} (148={:.4}, 142={:.4}) | Police3={:.4} | Mix={:.4} | {}",
+            rk + 1,
+            qid,
+            v_ap,
+            v148,
+            v142,
+            v_pol,
+            v_mix,
+            mons.join(" ")
+        );
+    }
+
+    // Step B: Screen all 16 Apex Candidate variants (`apex_cand_ids`) against the worst 30 challengers
+    // (including `mjj-2010-garap-a`, `sib-r2-n3-mjj-2010-garap-a-s06`, `Police3`, `deme-r1-00-s0042`, `rental-cban-2`,
+    // and the top 15 new Majinjima assassins) at ns=3!
+    let mut hard_chall_ids: Vec<String> = vec![
+        "mjj-2010-garap-a".to_string(),
+        "sib-r2-n3-mjj-2010-garap-a-s06".to_string(),
+        "hc75-3rd-bean".to_string(),
+        "rental-cban-6".to_string(),
+        "sample-08".to_string(),
+        "deme-r1-00-s0042".to_string(),
+        "rental-cban-2".to_string(),
+        "red-v10-s1105-r1-s0101".to_string(),
+        "deme-r2-03-s0041".to_string(),
+        "sample-12".to_string(),
+        "nb-sample-12-0".to_string(),
+        "mjj-2023-ukethdr".to_string(),
+        "mjj-2020-rraikou".to_string(),
+        "deme-r1-03-s0054".to_string(),
+        "deme-r3-b1-s0018".to_string(),
+        "hc75-top8-tezan".to_string(),
+        "sample-07".to_string(),
+        "sample-10".to_string(),
+        "sample-14-orig".to_string(),
+        "deme-r2-01-s0030".to_string(),
+    ];
+    for (qid, _, _, _, _, _) in mjj_scores.iter().take(15) {
+        if !hard_chall_ids.contains(qid) {
+            hard_chall_ids.push(qid.clone());
+        }
+    }
+    hard_chall_ids.retain(|id| roster_db.contains_key(id));
+
+    let mut cand_jobs: Vec<(String, String)> = Vec::new();
+    for cid in base_apex_ids.iter().chain(apex_cand_ids.iter()) {
+        for qid in &hard_chall_ids {
+            cand_jobs.push((cid.clone(), qid.clone()));
+        }
+    }
+    eprintln!(
+        "\n[Step B] Evaluating {} Apex Predator variants x {} hard challengers at ns=3 ({} matrices)...",
+        base_apex_ids.len() + apex_cand_ids.len(),
+        hard_chall_ids.len(),
+        cand_jobs.len()
+    );
+    {
+        let cursor = std::sync::atomic::AtomicUsize::new(0);
+        let mut outs = Vec::with_capacity(cand_jobs.len());
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for _ in 0..threads.max(1) {
+                let (jobs_ref, cursor_ref, roster_ref, pmc_ref) = (&cand_jobs, &cursor, &roster_db, &pair_mat_cache);
+                handles.push(scope.spawn(move || {
+                    let mut loc = Vec::new();
+                    loop {
+                        let k = cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if k >= jobs_ref.len() {
+                            break;
+                        }
+                        let (ref pid, ref qid) = jobs_ref[k];
+                        let r_p = &roster_ref[pid];
+                        let r_q = &roster_ref[qid];
+                        let ka = r_p.legal.len();
+                        let kb = r_q.legal.len();
+                        let sig_p = preview_sig_sets(&r_p.sets);
+                        let sig_q = preview_sig_sets(&r_q.sets);
+                        if let Some((old_m, old_ns)) = pmc_ref.get(&(pid.clone(), qid.clone())).cloned() {
+                            if old_ns >= 3 {
+                                continue;
+                            }
+                            let p_seed = shell_pair_crn_seed(
+                                seed ^ 0xA5A5_5A5A_1111_2222_u64,
+                                &sig_p,
+                                &sig_q,
+                                old_ns as u64,
+                            );
+                            let (blended, new_ns) = eval_incremental_adaptive_preview_matrix_compact(
+                                r_p, r_q, &old_m, old_ns, 3 - old_ns, max_turns, p_seed,
+                            );
+                            let rev = transpose_preview_matrix(&blended, ka, kb);
+                            loc.push((pid.clone(), qid.clone(), blended, rev, new_ns));
+                        } else {
+                            let s1 = shell_pair_crn_seed(seed, &sig_p, &sig_q, 1);
+                            let m1 = eval_full_preview_matrix_compact(r_p, r_q, 1, max_turns, s1);
+                            let s2 = shell_pair_crn_seed(seed ^ 0xA5A5_5A5A_1111_2222_u64, &sig_p, &sig_q, 1);
+                            let (blended, new_ns) = eval_incremental_adaptive_preview_matrix_compact(
+                                r_p, r_q, &m1, 1, 2, max_turns, s2,
+                            );
+                            let rev = transpose_preview_matrix(&blended, ka, kb);
+                            loc.push((pid.clone(), qid.clone(), blended, rev, new_ns));
+                        }
+                    }
+                    loc
+                }));
+            }
+            for h in handles {
+                outs.extend(h.join().unwrap());
+            }
+        });
+        for (pid, qid, mat, rev, ns) in outs {
+            pair_mat_cache.insert((pid.clone(), qid.clone()), (mat, ns));
+            pair_mat_cache.insert((qid, pid), (rev, ns));
+        }
+        save_exp_cache(&pair_mat_cache);
+    }
+
+    // Print 1v1 performance table of all Apex variants against key counters
+    let all_apex_pool: Vec<String> = base_apex_ids
+        .iter()
+        .chain(apex_cand_ids.iter())
+        .cloned()
+        .collect();
+    println!("\n=== 1v1 PERFORMANCE OF APEX VARIANTS vs KEY COUNTERS (ns=3) ===");
+    for cid in &all_apex_pool {
+        let r_c = &roster_db[cid];
+        let get_v = |qid: &str| -> f64 {
+            let r_q = &roster_db[qid];
+            let (ref m, _) = pair_mat_cache[&(cid.clone(), qid.to_string())];
+            solve_preview_nash(m, r_c.legal.len(), r_q.legal.len(), 300).2
+        };
+        let v_garap = get_v("mjj-2010-garap-a");
+        let v_garap_sib = get_v("sib-r2-n3-mjj-2010-garap-a-s06");
+        let v_bean = get_v("hc75-3rd-bean");
+        let v_cban6 = get_v("rental-cban-6");
+        let v_s08 = get_v("sample-08");
+        let v_s0042 = get_v("deme-r1-00-s0042");
+        let _v_cban2 = get_v("rental-cban-2");
+        let mut min_35 = 1.0f64;
+        let mut min_35_id = String::new();
+        let mut sum_35 = 0.0f64;
+        for qid in &hard_chall_ids {
+            let v = get_v(qid);
+            sum_35 += v;
+            if v < min_35 {
+                min_35 = v;
+                min_35_id = qid.clone();
+            }
+        }
+        let avg_35 = sum_35 / (hard_chall_ids.len() as f64);
+        println!(
+            "  {:28} | garap={:.4} gsib={:.4} bean={:.4} cban6={:.4} s08={:.4} s0042={:.4} | min35={:.4} ({}) | avg35={:.4}",
+            cid, v_garap, v_garap_sib, v_bean, v_cban6, v_s08, v_s0042, min_35, min_35_id, avg_35
+        );
+    }
+
+    // Step C: Search over 2-variant, 3-variant, and 4-variant Apex shells (`vc-kodoku-nash-a`)
+    // against all 35 hard singletons + multi-variant shells (`Police3`, `Garap2`)!
+    let garap2_ids = vec![
+        "mjj-2010-garap-a".to_string(),
+        "sib-r2-n3-mjj-2010-garap-a-s06".to_string(),
+    ];
+    let garap2_rosters: Vec<&CompiledRoster6> = garap2_ids.iter().map(|id| &roster_db[id]).collect();
+    let garap2_w = vec![0.5, 0.5];
+
+    let eval_shell_tuple = |m_ids: &[String], weights: &[f64]| -> (f64, String, f64, f64, f64, f64) {
+        let u_rosters: Vec<&CompiledRoster6> = m_ids.iter().map(|id| &roster_db[id]).collect();
+        let n_u = m_ids.len();
+        // vs Police3
+        let mut mats_pol = Vec::with_capacity(n_u * 3);
+        let mut ns_pol = Vec::with_capacity(n_u * 3);
+        for uid in m_ids {
+            for pid in &police_ids {
+                let (ref m, ns) = pair_mat_cache[&(uid.clone(), pid.clone())];
+                mats_pol.push(m.as_slice());
+                ns_pol.push(ns);
+            }
+        }
+        let (v_pol3, _, _, _, _) = solve_debiased_bayesian_shell_preview_nash(
+            &u_rosters,
+            &police_rosters,
+            &mats_pol,
+            &ns_pol,
+            60,
+            48,
+            weights,
+            &police_w,
+            250,
+        );
+        // vs Garap2
+        let mut mats_g2 = Vec::with_capacity(n_u * 2);
+        let mut ns_g2 = Vec::with_capacity(n_u * 2);
+        for uid in m_ids {
+            for gid in &garap2_ids {
+                let (ref m, ns) = pair_mat_cache[&(uid.clone(), gid.clone())];
+                mats_g2.push(m.as_slice());
+                ns_g2.push(ns);
+            }
+        }
+        let (v_garap2, _, _, _, _) = solve_debiased_bayesian_shell_preview_nash(
+            &u_rosters,
+            &garap2_rosters,
+            &mats_g2,
+            &ns_g2,
+            60,
+            60,
+            weights,
+            &garap2_w,
+            250,
+        );
+        let mut min_v = v_pol3.min(v_garap2);
+        let mut min_id = if v_pol3 < v_garap2 {
+            "SHELL:Police3".to_string()
+        } else {
+            "SHELL:Garap2".to_string()
+        };
+        let mut v_garap1 = 0.5f64;
+        let mut sum_v = 0.0f64;
+        for qid in &hard_chall_ids {
+            let r_q = &roster_db[qid];
+            let kb = r_q.legal.len();
+            let mut mats_q = Vec::with_capacity(n_u);
+            let mut ns_q = Vec::with_capacity(n_u);
+            for uid in m_ids {
+                let (ref m, ns) = pair_mat_cache[&(uid.clone(), qid.clone())];
+                mats_q.push(m.as_slice());
+                ns_q.push(ns);
+            }
+            let (vq, _, _, _, _) = solve_debiased_bayesian_shell_preview_nash(
+                &u_rosters,
+                &[r_q],
+                &mats_q,
+                &ns_q,
+                60,
+                kb,
+                weights,
+                &[1.0],
+                250,
+            );
+            if qid == "mjj-2010-garap-a" {
+                v_garap1 = vq;
+            }
+            sum_v += vq;
+            if vq < min_v {
+                min_v = vq;
+                min_id = qid.clone();
+            }
+        }
+        let avg_v = sum_v / (hard_chall_ids.len() as f64);
+        (min_v, min_id, v_garap1, v_garap2, v_pol3, avg_v)
+    };
+
+    // Baseline Apex2
+    let base_res = eval_shell_tuple(&base_apex_ids, &apex_w);
+    println!(
+        "\n=== BASELINE 2-VARIANT APEX SHELL ({}) ===",
+        base_apex_ids.join(" + ")
+    );
+    println!(
+        "  min={:.4} (vs {}) | garap1={:.4} | garap2={:.4} | Police3={:.4} | avg35={:.4}",
+        base_res.0, base_res.1, base_res.2, base_res.3, base_res.4, base_res.5
+    );
+
+    // Test adding a 3rd variant to `[r1-s0148, r2-s0142]` or replacing/combining up to 3-4 variants!
+    println!("\n=== 3-VARIANT EXPANSIONS [r1-s0148 + r2-s0142 + cand] ===");
+    for cid in &apex_cand_ids {
+        let m3 = vec![base_apex_ids[0].clone(), base_apex_ids[1].clone(), cid.clone()];
+        for &(w0, w1, w2) in &[
+            (0.25, 0.50, 0.25),
+            (0.20, 0.45, 0.35),
+            (0.20, 0.35, 0.45),
+            (0.333, 0.333, 0.334),
+        ] {
+            let res = eval_shell_tuple(&m3, &[w0, w1, w2]);
+            if res.0 >= 0.495 {
+                println!(
+                    "  + {:26} @ [{:.2},{:.2},{:.2}] -> min={:.4} ({:18}) | garap1={:.4} garap2={:.4} Pol3={:.4} avg35={:.4}",
+                    cid, w0, w1, w2, res.0, res.1, res.2, res.3, res.4, res.5
+                );
+            }
+        }
+    }
+
+    // Also test tuned 2-variant and 3-variant combinations among all candidates!
+    let mut best_combos: Vec<(f64, String, Vec<String>, Vec<f64>, f64, f64, f64, f64)> = Vec::new();
+    for i in 0..all_apex_pool.len() {
+        for j in (i + 1)..all_apex_pool.len() {
+            let m2 = vec![all_apex_pool[i].clone(), all_apex_pool[j].clone()];
+            for &(w0, w1) in &[(0.35, 0.65), (0.50, 0.50), (0.65, 0.35)] {
+                let res = eval_shell_tuple(&m2, &[w0, w1]);
+                if res.0 >= 0.500 {
+                    best_combos.push((res.0, res.1, m2.clone(), vec![w0, w1], res.2, res.3, res.4, res.5));
+                }
+            }
+        }
+    }
+    // Check top 3-variant combinations using top 8 individual variants
+    let top_indiv: Vec<String> = vec![
+        "red-v10-s1105-r1-s0148".to_string(),
+        "red-v10-s1105-r2-s0142".to_string(),
+        "apex-u148-scope".to_string(),
+        "apex-u142-scope".to_string(),
+        "apex-c01-bug-ib-giga".to_string(),
+        "apex-c02-bug-ib-eqsnorlax".to_string(),
+        "apex-c03-bug-surfstar-surfcloy".to_string(),
+        "apex-c04-bug-3atkstar-boomgen".to_string(),
+        "apex-c06-bseqsnorlax-bugwak".to_string(),
+        "apex-c07-surgical-148".to_string(),
+        "apex-c08-surgical-142".to_string(),
+        "apex-c11-148-hpbug-only".to_string(),
+        "apex-c12-148-ibstar-only".to_string(),
+    ]
+    .into_iter()
+    .filter(|id| roster_db.contains_key(id))
+    .collect();
+
+    for i in 0..top_indiv.len() {
+        for j in (i + 1)..top_indiv.len() {
+            for k in (j + 1)..top_indiv.len() {
+                let m3 = vec![top_indiv[i].clone(), top_indiv[j].clone(), top_indiv[k].clone()];
+                for &(w0, w1, w2) in &[(0.333, 0.333, 0.334), (0.25, 0.45, 0.30), (0.30, 0.30, 0.40)] {
+                    let res = eval_shell_tuple(&m3, &[w0, w1, w2]);
+                    if res.0 >= 0.505 {
+                        best_combos.push((res.0, res.1, m3.clone(), vec![w0, w1, w2], res.2, res.3, res.4, res.5));
+                    }
+                }
+            }
+        }
+    }
+
+    best_combos.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    println!("\n=== TOP 20 SELF-SUFFICIENT APEX PREDATOR SHELLS (100% Apex, 0% Police, min >= 0.500) ===");
+    for (rk, (min_v, min_id, m_ids, ws, g1, g2, p3, avg_v)) in best_combos.iter().take(20).enumerate() {
+        let w_str: Vec<String> = ws.iter().map(|w| format!("{:.2}", w)).collect();
+        println!(
+            "  #{:02} min={:.4} (vs {:18}) | garap1={:.4} garap2={:.4} Pol3={:.4} avg35={:.4} | [{}] {}",
+            rk + 1,
+            min_v,
+            min_id,
+            g1,
+            g2,
+            p3,
+            avg_v,
+            w_str.join(","),
+            m_ids.join(" + ")
+        );
+    }
+
+    // Step D: Full 312-Challenger Universe Verification & Deep-MCTS Falsification Gate
+    // Evaluate `apex-c04-bug-3atkstar-boomgen` and `apex-c08-surgical-142` against ALL 312 non-mirror teams
+    // in `cached_opps + mjj_assassin_ids`, plus all multi-variant shells!
+    let top2_new_apex = vec![
+        "apex-c04-bug-3atkstar-boomgen".to_string(),
+        "apex-c08-surgical-142".to_string(),
+    ];
+    let mut all_q_universe: Vec<String> = cached_opps
+        .iter()
+        .chain(mjj_assassin_ids.iter())
+        .cloned()
+        .collect();
+    all_q_universe.sort();
+    all_q_universe.dedup();
+    let apex_sig = preview_sig_sets(&roster_db[&base_apex_ids[0]].sets);
+    all_q_universe.retain(|qid| {
+        roster_db
+            .get(qid)
+            .is_some_and(|r| preview_sig_sets(&r.sets) != apex_sig)
+    });
+
+    let mut full_jobs: Vec<(String, String)> = Vec::new();
+    for cid in &top2_new_apex {
+        for qid in &all_q_universe {
+            if !pair_mat_cache.contains_key(&(cid.clone(), qid.clone())) {
+                full_jobs.push((cid.clone(), qid.clone()));
+            }
+        }
+    }
+    eprintln!(
+        "\n[Step D] Evaluating top 2 new Apex variants against ALL {} non-mirror teams ({} missing matrices)...",
+        all_q_universe.len(),
+        full_jobs.len()
+    );
+    if !full_jobs.is_empty() {
+        let cursor = std::sync::atomic::AtomicUsize::new(0);
+        let mut outs = Vec::with_capacity(full_jobs.len());
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for _ in 0..threads.max(1) {
+                let (jobs_ref, cursor_ref, roster_ref) = (&full_jobs, &cursor, &roster_db);
+                handles.push(scope.spawn(move || {
+                    let mut loc = Vec::new();
+                    loop {
+                        let k = cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if k >= jobs_ref.len() {
+                            break;
+                        }
+                        let (ref pid, ref qid) = jobs_ref[k];
+                        let r_p = &roster_ref[pid];
+                        let r_q = &roster_ref[qid];
+                        let ka = r_p.legal.len();
+                        let kb = r_q.legal.len();
+                        let sig_p = preview_sig_sets(&r_p.sets);
+                        let sig_q = preview_sig_sets(&r_q.sets);
+                        let p_seed = shell_pair_crn_seed(seed, &sig_p, &sig_q, 1);
+                        let mat = eval_full_preview_matrix_compact(r_p, r_q, 1, max_turns, p_seed);
+                        let rev = transpose_preview_matrix(&mat, ka, kb);
+                        loc.push((pid.clone(), qid.clone(), mat, rev, 1u32));
+                    }
+                    loc
+                }));
+            }
+            for h in handles {
+                outs.extend(h.join().unwrap());
+            }
+        });
+        for (pid, qid, mat, rev, ns) in outs {
+            pair_mat_cache.insert((pid.clone(), qid.clone()), (mat, ns));
+            pair_mat_cache.insert((qid, pid), (rev, ns));
+        }
+        save_exp_cache(&pair_mat_cache);
+    }
+
+    // Group `all_q_universe` by `PreviewSig` to form all multi-variant opponent shells as well!
+    let mut opp_shells_by_sig: BTreeMap<PreviewSig, Vec<String>> = BTreeMap::new();
+    for qid in &all_q_universe {
+        let sig = preview_sig_sets(&roster_db[qid].sets);
+        opp_shells_by_sig.entry(sig).or_default().push(qid.clone());
+    }
+    let multi_opp_shells: Vec<Vec<String>> = opp_shells_by_sig
+        .into_values()
+        .filter(|v| v.len() >= 2)
+        .collect();
+
+    let eval_full_universe = |m_ids: &[String], weights: &[f64], label: &str| {
+        let u_rosters: Vec<&CompiledRoster6> = m_ids.iter().map(|id| &roster_db[id]).collect();
+        let n_u = m_ids.len();
+        let mut all_scores: Vec<(String, f64)> = Vec::new();
+        for qid in &all_q_universe {
+            let r_q = &roster_db[qid];
+            let kb = r_q.legal.len();
+            let mut mats_q = Vec::with_capacity(n_u);
+            let mut ns_q = Vec::with_capacity(n_u);
+            for uid in m_ids {
+                let (ref m, ns) = pair_mat_cache[&(uid.clone(), qid.clone())];
+                mats_q.push(m.as_slice());
+                ns_q.push(ns);
+            }
+            let (vq, _, _, _, _) = solve_debiased_bayesian_shell_preview_nash(
+                &u_rosters,
+                &[r_q],
+                &mats_q,
+                &ns_q,
+                60,
+                kb,
+                weights,
+                &[1.0],
+                250,
+            );
+            all_scores.push((qid.clone(), vq));
+        }
+        for sh_ids in &multi_opp_shells {
+            let v_rosters: Vec<&CompiledRoster6> = sh_ids.iter().map(|id| &roster_db[id]).collect();
+            let kb = v_rosters[0].legal.len();
+            let n_v = sh_ids.len();
+            let beta = if sh_ids.contains(&"sample-08".to_string()) && n_v == 3 {
+                police_w.clone()
+            } else {
+                vec![1.0 / (n_v as f64); n_v]
+            };
+            let mut mats_v = Vec::with_capacity(n_u * n_v);
+            let mut ns_v = Vec::with_capacity(n_u * n_v);
+            for uid in m_ids {
+                for vid in sh_ids {
+                    let (ref m, ns) = pair_mat_cache[&(uid.clone(), vid.clone())];
+                    mats_v.push(m.as_slice());
+                    ns_v.push(ns);
+                }
+            }
+            let (vv, _, _, _, _) = solve_debiased_bayesian_shell_preview_nash(
+                &u_rosters,
+                &v_rosters,
+                &mats_v,
+                &ns_v,
+                60,
+                kb,
+                weights,
+                &beta,
+                250,
+            );
+            all_scores.push((format!("SHELL{}:{}", n_v, sh_ids[0]), vv));
+        }
+        all_scores.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        let avg_all: f64 =
+            all_scores.iter().map(|x| x.1).sum::<f64>() / (all_scores.len().max(1) as f64);
+        let below_50 = all_scores.iter().filter(|x| x.1 < 0.500).count();
+        println!(
+            "\n=== FULL UNIVERSE ({} singletons + {} multi-shells = {} cols) FOR {} ===",
+            all_q_universe.len(),
+            multi_opp_shells.len(),
+            all_scores.len(),
+            label
+        );
+        println!(
+            "  min_payoff={:.4} (vs {}) | cols_below_50%={} | omni_avg={:.4}",
+            all_scores[0].1, all_scores[0].0, below_50, avg_all
+        );
+        for (rk, (cid, sc)) in all_scores.iter().take(12).enumerate() {
+            println!("    worst #{:02}: {:32} -> {:.4}", rk + 1, cid, sc);
+        }
+    };
+
+    eval_full_universe(
+        &base_apex_ids,
+        &[0.3120, 0.6880],
+        "OLD APEX2 (r1-s0148 + r2-s0142)",
+    );
+    let apex3_a = vec![
+        "red-v10-s1105-r2-s0142".to_string(),
+        "apex-c04-bug-3atkstar-boomgen".to_string(),
+        "apex-c08-surgical-142".to_string(),
+    ];
+    eval_full_universe(
+        &apex3_a,
+        &[0.30, 0.30, 0.40],
+        "NEW APEX3-A (r2-s0142 + c04 + c08 @ [0.30,0.30,0.40])",
+    );
+    let apex3_b = vec![
+        "red-v10-s1105-r1-s0148".to_string(),
+        "apex-c04-bug-3atkstar-boomgen".to_string(),
+        "apex-c08-surgical-142".to_string(),
+    ];
+    eval_full_universe(
+        &apex3_b,
+        &[0.333, 0.333, 0.334],
+        "NEW APEX3-B (r1-s0148 + c04 + c08 @ [0.33,0.33,0.33])",
+    );
+    let apex4 = vec![
+        "red-v10-s1105-r1-s0148".to_string(),
+        "red-v10-s1105-r2-s0142".to_string(),
+        "apex-c04-bug-3atkstar-boomgen".to_string(),
+        "apex-c08-surgical-142".to_string(),
+    ];
+    eval_full_universe(
+        &apex4,
+        &[0.20, 0.25, 0.25, 0.30],
+        "NEW APEX4 (r1-s0148 + r2-s0142 + c04 + c08 @ [0.20,0.25,0.25,0.30])",
+    );
+
+    // Step E: Deep-MCTS Falsification Gate (Disclosed & Zero-Knowledge BlindAgent MCTS, 64 pairs = 128g per arm @ 160 iters)
+    // Compare OLD 2-shell 5-variant Nash vs NEW 1-shell 100%-Apex3-A (`r2-s0142 + c04 + c08`) and NEW 1-shell 100%-Apex4
+    // against:
+    //   1. `mjj-2010-garap-a`
+    //   2. `counter-deme-garap-3var` (3-variant Garap shell)
+    //   3. `Police3` (`sample-08 + rental-cban-6 + hc75-3rd-bean`)
+    //   4. `mjj-2022-nrsk` (#1 new Majinjima assassin)
+    //   5. `mjj-2009-fthunder` (#2 new Majinjima assassin)
+    //   6. `mjj-2025-12typeA` (`TtarL55 + ZapdosL55 + Cloyster + Exeggutor + Heracross + Steelix`, where Police3 scored badly)
+    //   7. `mjj-2020-rraikou` (`SnorlaxL55 + RaikouL55`, where Police3 lost 0.4422)
+    let bp_text = std::fs::read_to_string(root.join("data/belief-pool-v3/belief-pool.json")).unwrap();
+    let raw_mp: MetaPool = serde_json::from_str(&bp_text).expect("parse belief-pool");
+    let base_mp = normalize_belief_pool(&dex, &gen, &raw_mp);
+
+    let test_challengers: Vec<(&str, Vec<Vec<PokemonSet>>)> = vec![
+        ("mjj-2010-garap-a", vec![roster_db["mjj-2010-garap-a"].sets.clone()]),
+        (
+            "Garap2-shell",
+            vec![
+                roster_db["mjj-2010-garap-a"].sets.clone(),
+                roster_db["sib-r2-n3-mjj-2010-garap-a-s06"].sets.clone(),
+            ],
+        ),
+        (
+            "Police3-shell",
+            vec![
+                roster_db["sample-08"].sets.clone(),
+                roster_db["rental-cban-6"].sets.clone(),
+                roster_db["hc75-3rd-bean"].sets.clone(),
+            ],
+        ),
+        ("mjj-2022-nrsk", vec![roster_db["mjj-2022-nrsk"].sets.clone()]),
+        ("mjj-2009-fthunder", vec![roster_db["mjj-2009-fthunder"].sets.clone()]),
+        ("mjj-2025-12typeA", vec![roster_db["mjj-2025-12typeA"].sets.clone()]),
+        ("mjj-2020-rraikou", vec![roster_db["mjj-2020-rraikou"].sets.clone()]),
+    ];
+
+    for (eq_label, eq_ids, eq_ws) in [
+        (
+            "NEW_100%_APEX3_A (r2-s0142 + c04 + c08)",
+            apex3_a.clone(),
+            vec![0.30, 0.30, 0.40],
+        ),
+        (
+            "NEW_100%_APEX4 (148 + 142 + c04 + c08)",
+            apex4.clone(),
+            vec![0.20, 0.25, 0.25, 0.30],
+        ),
+    ] {
+        println!(
+            "\n=== DEEP-MCTS FALSIFICATION GATE FOR {} (128g Disclosed + 128g ZeroKnow @ 160 iters) ===",
+            eq_label
+        );
+        let pi_sets: Vec<Vec<PokemonSet>> = eq_ids.iter().map(|id| roster_db[id].sets.clone()).collect();
+        let mut pi_mp = base_mp.clone();
+        pi_mp.teams.retain(|t| preview_sig_sets(&t.sets) != apex_sig);
+        for (k, p_s) in pi_sets.iter().enumerate() {
+            pi_mp.teams.push(nc2000_bot::preview::MetaTeam {
+                id: eq_ids[k].clone(),
+                sets: p_s.clone(),
+                weight: Some(eq_ws[k]),
+            });
+        }
+        let pi_mp = Arc::new(pi_mp);
+        let empty_pols = PiStarPreviewPolicies {
+            blue_own_pol_by_idx: vec![vec![]; pi_sets.len()],
+            blue_opp_pol_by_idx: vec![vec![]; pi_sets.len()],
+            red_own_pol_by_blue_idx: vec![vec![]; pi_sets.len()],
+            red_opp_pol_by_blue_idx: vec![vec![]; pi_sets.len()],
+        };
+
+        for (c_idx, (c_name, c_vars)) in test_challengers.iter().enumerate() {
+            let n_var = c_vars.len();
+            let var_w = 1.0 / (n_var as f64);
+            let mut blue_mp_disc = (*pi_mp).clone();
+            for (v_i, v_sets) in c_vars.iter().enumerate() {
+                blue_mp_disc.teams.push(nc2000_bot::preview::MetaTeam {
+                    id: format!("disc-{}-{}", c_name, v_i),
+                    sets: v_sets.clone(),
+                    weight: Some(0.25 * var_w),
+                });
+            }
+            let blue_mp_disc = Arc::new(blue_mp_disc);
+            let num_pairs = 64usize;
+            let mut disc_games = 0usize;
+            let mut disc_blue = 0.0f64;
+            let mut zk_games = 0usize;
+            let mut zk_blue = 0.0f64;
+            for (v_i, v_sets) in c_vars.iter().enumerate() {
+                let p_start = (v_i * num_pairs) / n_var;
+                let p_end = ((v_i + 1) * num_pairs) / n_var;
+                let p_cnt = p_end.saturating_sub(p_start).max(1);
+                let t_seed = seed
+                    ^ ((c_idx as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+                    ^ ((v_i as u64 + 1).wrapping_mul(0xBF58_476D_1CE4_E5B9));
+                let out_d = eval_vs_pi_star_qmc_with_preview(
+                    &dex,
+                    &pi_sets,
+                    &eq_ws,
+                    v_sets,
+                    blue_mp_disc.clone(),
+                    pi_mp.clone(),
+                    None,
+                    128 + p_start,
+                    p_cnt,
+                    160,
+                    0.4,
+                    max_turns,
+                    threads,
+                    t_seed,
+                );
+                disc_games += out_d.games_played;
+                disc_blue += out_d.blue_score * (out_d.games_played as f64);
+
+                let out_z = eval_vs_pi_star_qmc_with_preview(
+                    &dex,
+                    &pi_sets,
+                    &eq_ws,
+                    v_sets,
+                    pi_mp.clone(),
+                    pi_mp.clone(),
+                    Some(&empty_pols),
+                    256 + p_start,
+                    p_cnt,
+                    160,
+                    0.4,
+                    max_turns,
+                    threads,
+                    t_seed ^ 0xCAFE_F00D_1234_5678,
+                );
+                zk_games += out_z.games_played;
+                zk_blue += out_z.blue_score * (out_z.games_played as f64);
+            }
+            let disc_blue_wr = disc_blue / (disc_games.max(1) as f64);
+            let zk_blue_wr = zk_blue / (zk_games.max(1) as f64);
+            let avg_blue_wr = 0.5 * (disc_blue_wr + zk_blue_wr);
+            println!(
+                "  vs {:22} ({}v) | Blue_Disclosed={:.4} ({}g) | Blue_ZeroKnow={:.4} ({}g) | Blue_Avg={:.4} (Red_WR={:.4})",
+                c_name,
+                n_var,
+                disc_blue_wr,
+                disc_games,
+                zk_blue_wr,
+                zk_games,
+                avg_blue_wr,
+                1.0 - avg_blue_wr
+            );
+        }
+    }
+}
+
+fn cmd_eval_partybox(args: &[String]) {
+    let t_start = std::time::Instant::now();
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let max_turns: u16 = num(args, "--max-turns", 250);
+    let ns: u32 = num(args, "--ns", 3);
+    let seed: u64 = num(args, "--seed", 20261111);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(8)
+        });
+
+    // 1. Load APEX4
+    let eq_txt = std::fs::read_to_string(root.join("data/kodoku-r3/conclusion-equilibrium-deme.json"))
+        .expect("read conclusion-equilibrium-deme.json");
+    let eq_v: Value = serde_json::from_str(&eq_txt).unwrap();
+    let mut apex_ids: Vec<String> = Vec::new();
+    let mut apex_weights: Vec<f64> = Vec::new();
+    let mut apex_rosters: Vec<CompiledRoster6> = Vec::new();
+
+    for t in eq_v["teams"].as_array().unwrap() {
+        let id = t["id"].as_str().unwrap().to_string();
+        let w = t["weight"].as_f64().unwrap();
+        let raw = t["sets"].as_array().unwrap();
+        let upgraded = normalize_team_dvs_evs(&dex, raw);
+        let canon = gen.canonize(&dex, &upgraded).unwrap();
+        let sets = to_sets(&canon).unwrap();
+        apex_ids.push(id);
+        apex_weights.push(w);
+        apex_rosters.push(CompiledRoster6::compile(&dex, &sets));
+    }
+    let ka = apex_rosters[0].legal.len();
+
+    // 2. Load PartyBox teams from data/partybox-v0/teams.json
+    // and psense teams from data/community-rentals-v0/teams.json
+    struct Challenger {
+        id: String,
+        source: String,
+        title: String,
+        author: String,
+        points: i64,
+        roster: CompiledRoster6,
+    }
+
+    let mut challengers: Vec<Challenger> = Vec::new();
+
+    if let Ok(txt) = std::fs::read_to_string(root.join("data/partybox-v0/teams.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["teams"].as_array() {
+                for t in arr {
+                    let id = t["id"].as_str().unwrap().to_string();
+                    let title = t["title"].as_str().unwrap_or("").to_string();
+                    let author = t["author"].as_str().unwrap_or("").to_string();
+                    let pts = t["points"].as_i64().unwrap_or(0);
+                    let raw = t["sets"].as_array().unwrap();
+                    let upgraded = normalize_team_dvs_evs(&dex, raw);
+                    if let Some(canon) = gen.canonize(&dex, &upgraded) {
+                        if let Ok(sets) = to_sets(&canon) {
+                            let r = CompiledRoster6::compile(&dex, &sets);
+                            challengers.push(Challenger {
+                                id,
+                                source: "PartyBox".to_string(),
+                                title,
+                                author,
+                                points: pts,
+                                roster: r,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if let Ok(txt) = std::fs::read_to_string(root.join("data/community-rentals-v0/teams.json")) {
+        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+            if let Some(arr) = v["teams"].as_array() {
+                for (idx, t) in arr.iter().enumerate() {
+                    let cban = t["cban"].as_i64().unwrap_or((idx + 1) as i64);
+                    let id = format!("rental-cban-{}", cban);
+                    let title = t["archetype"].as_str().unwrap_or("").to_string();
+                    if let Some(raw) = t["sets"].as_array() {
+                        let upgraded = normalize_team_dvs_evs(&dex, raw);
+                        if let Some(canon) = gen.canonize(&dex, &upgraded) {
+                            if let Ok(sets) = to_sets(&canon) {
+                                let r = CompiledRoster6::compile(&dex, &sets);
+                                challengers.push(Challenger {
+                                    id,
+                                    source: "psense".to_string(),
+                                    title,
+                                    author: "psense".to_string(),
+                                    points: 0,
+                                    roster: r,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    println!(
+        "[eval-partybox] Loaded {} APEX4 variants, {} challengers (PartyBox + psense)",
+        apex_rosters.len(),
+        challengers.len()
+    );
+
+    // 3. Parallel evaluation of all (APEX4 variant, challenger) pairs
+    struct PairJob {
+        u_idx: usize,
+        c_idx: usize,
+    }
+    let mut jobs = Vec::new();
+    for u_idx in 0..apex_rosters.len() {
+        for c_idx in 0..challengers.len() {
+            jobs.push(PairJob { u_idx, c_idx });
+        }
+    }
+
+    let cursor = std::sync::atomic::AtomicUsize::new(0);
+    let mut mats: Vec<Vec<f64>> = vec![Vec::new(); jobs.len()];
+
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for _ in 0..threads.max(1) {
+            let cursor_ref = &cursor;
+            let jobs_ref = &jobs;
+            let apex_ref = &apex_rosters;
+            let chall_ref = &challengers;
+            handles.push(scope.spawn(move || {
+                let mut local = Vec::new();
+                loop {
+                    let k = cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if k >= jobs_ref.len() {
+                        break;
+                    }
+                    let job = &jobs_ref[k];
+                    let r_a = &apex_ref[job.u_idx];
+                    let r_b = &chall_ref[job.c_idx].roster;
+                    let sig_a = preview_sig_sets(&r_a.sets);
+                    let sig_b = preview_sig_sets(&r_b.sets);
+                    let p_seed = shell_pair_crn_seed(seed, &sig_a, &sig_b, 1);
+                    let mat = eval_full_preview_matrix_compact(r_a, r_b, ns, max_turns, p_seed);
+                    local.push((k, mat));
+                }
+                local
+            }));
+        }
+        for h in handles {
+            for (k, mat) in h.join().unwrap() {
+                mats[k] = mat;
+            }
+        }
+    });
+
+    // 4. Solve Bayesian preview game for each challenger vs APEX4
+    struct EvalResult {
+        id: String,
+        source: String,
+        title: String,
+        author: String,
+        points: i64,
+        payoff: f64,
+        variant_payoffs: Vec<f64>,
+        species_list: Vec<String>,
+    }
+
+    let mut results: Vec<EvalResult> = Vec::new();
+
+    for (c_idx, c) in challengers.iter().enumerate() {
+        let kb = c.roster.legal.len();
+        let mut u_mats = Vec::with_capacity(apex_rosters.len());
+        for u_idx in 0..apex_rosters.len() {
+            let job_idx = u_idx * challengers.len() + c_idx;
+            u_mats.push(mats[job_idx].as_slice());
+        }
+
+        let (payoff, per_u, _, _, _) = solve_bayesian_shell_preview_nash(
+            &u_mats,
+            ka,
+            kb,
+            &apex_weights,
+            &[1.0],
+            500,
+        );
+
+        let mons: Vec<String> = c
+            .roster
+            .sets
+            .iter()
+            .map(|s| format!("{}L{}", s.species, s.level))
+            .collect();
+
+        results.push(EvalResult {
+            id: c.id.clone(),
+            source: c.source.clone(),
+            title: c.title.clone(),
+            author: c.author.clone(),
+            points: c.points,
+            payoff,
+            variant_payoffs: per_u,
+            species_list: mons,
+        });
+    }
+
+    // Sort by payoff ascending (lowest payoff for APEX4 first = hardest challengers)
+    results.sort_by(|a, b| a.payoff.partial_cmp(&b.payoff).unwrap());
+
+    // Print results
+    let min_payoff = results.first().map(|r| r.payoff).unwrap_or(0.5);
+    let max_payoff = results.last().map(|r| r.payoff).unwrap_or(0.5);
+    let avg_payoff: f64 = results.iter().map(|r| r.payoff).sum::<f64>() / (results.len() as f64);
+    let sub_50_count = results.iter().filter(|r| r.payoff < 0.50).count();
+
+    println!("\n==================================================================================");
+    println!("APEX4 vs PARTYBOX & PSENSE GAUNTLET EVALUATION REPORT (ns={})", ns);
+    println!("==================================================================================");
+    println!("Total Challengers Tested : {}", results.len());
+    println!("APEX4 Min Payoff         : {:.4} ({})", min_payoff, if results.is_empty() { "none" } else { &results[0].id });
+    println!("APEX4 Mean Payoff        : {:.4}", avg_payoff);
+    println!("APEX4 Max Payoff         : {:.4}", max_payoff);
+    println!("Challengers with Payoff < 0.50: {}", sub_50_count);
+
+    println!("\n--- TOP 30 HARDEST CHALLENGERS (Lowest Payoff for APEX4) ---");
+    for (rk, r) in results.iter().take(30).enumerate() {
+        let flag = if r.payoff < 0.50 { " [BREAKS APEX4!]" } else { "" };
+        println!(
+            "#{:02} {:18} | {:8} | Payoff={:.4}{} | pts={:>3} | [{}] {} | {}",
+            rk + 1,
+            r.id,
+            r.source,
+            r.payoff,
+            flag,
+            r.points,
+            r.author,
+            r.title,
+            r.species_list.join(" ")
+        );
+        println!(
+            "     per-variant: [c08_142={:.4}, r2_142={:.4}, c04_bug={:.4}, r1_148={:.4}]",
+            r.variant_payoffs[0],
+            r.variant_payoffs[1],
+            r.variant_payoffs[2],
+            r.variant_payoffs[3]
+        );
+    }
+
+    // Save JSON report
+    let out_json = json!({
+        "summary": {
+            "total_tested": results.len(),
+            "min_payoff": min_payoff,
+            "mean_payoff": avg_payoff,
+            "max_payoff": max_payoff,
+            "sub_50_count": sub_50_count,
+            "apex_weights": apex_weights,
+            "apex_ids": apex_ids,
+        },
+        "hardest_challengers": results.iter().take(50).map(|r| {
+            json!({
+                "id": r.id,
+                "source": r.source,
+                "title": r.title,
+                "author": r.author,
+                "points": r.points,
+                "payoff": r.payoff,
+                "variant_payoffs": r.variant_payoffs,
+                "species": r.species_list,
+            })
+        }).collect::<Vec<_>>(),
+        "all_results": results.iter().map(|r| {
+            json!({
+                "id": r.id,
+                "source": r.source,
+                "title": r.title,
+                "author": r.author,
+                "points": r.points,
+                "payoff": r.payoff,
+                "variant_payoffs": r.variant_payoffs,
+            })
+        }).collect::<Vec<_>>(),
+    });
+
+    write_json_atomic(&root.join("data/partybox-v0/eval-report.json"), &out_json);
+    println!("\nReport saved to data/partybox-v0/eval-report.json (elapsed: {:.1}s)", t_start.elapsed().as_secs_f64());
+}
+
+#[allow(dead_code)] // Historical pre-training-v3 bake; the command uses catalog_preview::run.
+fn cmd_bake_catalog_preview(args: &[String]) {
+    let t_start = std::time::Instant::now();
+    let dex = load_dex();
+    let root = repo_root();
+    let ls_text = std::fs::read_to_string(root.join("data/learnsets-gen2.json")).unwrap();
+    let pool_text = std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+    let gen = TeamGen::new(&dex, &ls_text, &pool_text).unwrap();
+
+    let max_turns: u16 = num(args, "--max-turns", 250);
+    let ns_apex: u32 = num(args, "--ns-apex", 3);
+    let ns_other: u32 = num(args, "--ns-other", 2);
+    let seed: u64 = num(args, "--seed", 20261111);
+    let threads: usize = flag(args, "--threads")
+        .map(|v| v.parse().unwrap())
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(8)
+        });
+
+    let cat_txt = std::fs::read_to_string(root.join("data/team-pool-v2/team-pool.json"))
+        .expect("read data/team-pool-v2/team-pool.json");
+    let cat_v: Value = serde_json::from_str(&cat_txt).unwrap();
+    let cat_arr = cat_v["teams"].as_array().unwrap();
+    let n_teams = cat_arr.len();
+
+    struct CatEntry {
+        id: String,
+        role: String,
+        tier: i64,
+        raw_sets: Vec<PokemonSet>,
+        raw_legal: Vec<[usize; 3]>,
+        canon_roster: CompiledRoster6,
+        raw_to_canon_act: Vec<usize>, // raw_to_canon_act[ia_raw] = ia_canon
+    }
+
+    let apex_id_set: BTreeSet<&str> = BTreeSet::from([
+        "apex-c08-surgical-142",
+        "red-v10-s1105-r2-s0142",
+        "apex-c04-bug-3atkstar-boomgen",
+        "red-v10-s1105-r1-s0148",
+    ]);
+
+    let mut entries: Vec<CatEntry> = Vec::with_capacity(n_teams);
+    for t in cat_arr {
+        let id = t["id"].as_str().unwrap().to_string();
+        let is_nash = t["nash"].as_bool().unwrap_or(false)
+            || t["role"].as_str() == Some("nash")
+            || apex_id_set.contains(id.as_str());
+        let role = if is_nash {
+            "nash".to_string()
+        } else {
+            t["role"].as_str().unwrap_or("specialist").to_string()
+        };
+        let tier = t["tier"].as_i64().unwrap_or(if is_nash { 1 } else { 2 });
+        let raw_arr = t["sets"].as_array().unwrap();
+        let raw_sets = to_sets(raw_arr).unwrap();
+        let raw_legal = legal_triples_sets(&raw_sets);
+
+        let upgraded = normalize_team_dvs_evs(&dex, raw_arr);
+        let canon_val = gen.canonize(&dex, &upgraded).unwrap();
+        let canon_sets = to_sets(&canon_val).unwrap();
+        let canon_roster = CompiledRoster6::compile(&dex, &canon_sets);
+        let canon_to_raw_act = compute_raw_to_canon_action_map(raw_arr, &canon_sets);
+        let mut raw_to_canon_act = vec![0usize; canon_to_raw_act.len()];
+        for (ia_can, &ia_raw) in canon_to_raw_act.iter().enumerate() {
+            raw_to_canon_act[ia_raw] = ia_can;
+        }
+        entries.push(CatEntry {
+            id,
+            role,
+            tier,
+            raw_sets,
+            raw_legal,
+            canon_roster,
+            raw_to_canon_act,
+        });
+    }
+
+    // Group into outer shells by preview_sig_sets(&raw_sets)
+    struct ShellGroup {
+        sig_key: String,
+        member_indices: Vec<usize>,
+        weights: Vec<f64>,
+        is_nash: bool,
+    }
+    let mut shells: Vec<ShellGroup> = Vec::new();
+    let mut sig_to_shell: BTreeMap<PreviewSig, usize> = BTreeMap::new();
+    let apex_weight_map: BTreeMap<&str, f64> = BTreeMap::from([
+        ("apex-c08-surgical-142", 0.30),
+        ("red-v10-s1105-r2-s0142", 0.25),
+        ("apex-c04-bug-3atkstar-boomgen", 0.25),
+        ("red-v10-s1105-r1-s0148", 0.20),
+    ]);
+
+    for (idx, e) in entries.iter().enumerate() {
+        let sig = preview_sig_sets(&e.raw_sets);
+        if let Some(&s_idx) = sig_to_shell.get(&sig) {
+            shells[s_idx].member_indices.push(idx);
+        } else {
+            let sig_key = sig
+                .iter()
+                .map(|(sp, lv, g, it)| format!("{}:{}:{}:{}", sp, lv, g, if *it { 1 } else { 0 }))
+                .collect::<Vec<_>>()
+                .join("|");
+            let s_idx = shells.len();
+            sig_to_shell.insert(sig, s_idx);
+            shells.push(ShellGroup {
+                sig_key,
+                member_indices: vec![idx],
+                weights: Vec::new(),
+                is_nash: e.role == "nash",
+            });
+        }
+    }
+    for sh in &mut shells {
+        if sh.is_nash {
+            sh.weights = sh
+                .member_indices
+                .iter()
+                .map(|&i| *apex_weight_map.get(entries[i].id.as_str()).unwrap_or(&0.25))
+                .collect();
+        } else {
+            let n = sh.member_indices.len();
+            sh.weights = vec![1.0 / (n as f64); n];
+        }
+    }
+
+    println!(
+        "[bake-catalog-preview] Loaded {} teams across {} shells",
+        n_teams,
+        shells.len()
+    );
+
+    // Evaluate all unordered pairs (i, j) with i <= j on canonical rosters
+    let mut jobs: Vec<(usize, usize, u32)> = Vec::new();
+    for i in 0..n_teams {
+        for j in i..n_teams {
+            let ns = if entries[i].role == "nash" || entries[j].role == "nash" {
+                ns_apex
+            } else {
+                ns_other
+            };
+            jobs.push((i, j, ns));
+        }
+    }
+
+    let cursor = std::sync::atomic::AtomicUsize::new(0);
+    let mut pair_mats: Vec<((usize, usize), Vec<f64>, Vec<f64>, u32)> = Vec::with_capacity(jobs.len());
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for _ in 0..threads.max(1) {
+            let (jobs_ref, cursor_ref, entries_ref) = (&jobs, &cursor, &entries);
+            handles.push(scope.spawn(move || {
+                let mut loc = Vec::new();
+                loop {
+                    let k = cursor_ref.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if k >= jobs_ref.len() {
+                        break;
+                    }
+                    let (i, j, ns) = jobs_ref[k];
+                    let r_i = &entries_ref[i].canon_roster;
+                    let r_j = &entries_ref[j].canon_roster;
+                    let ka = r_i.legal.len();
+                    let kb = r_j.legal.len();
+                    let sig_i = preview_sig_sets(&r_i.sets);
+                    let sig_j = preview_sig_sets(&r_j.sets);
+                    let p_seed = shell_pair_crn_seed(seed, &sig_i, &sig_j, 1);
+                    let raw_m = eval_full_preview_matrix_compact(r_i, r_j, ns, max_turns, p_seed);
+                    if i == j {
+                        let mut sym = vec![0.5f64; ka * ka];
+                        for ia in 0..ka {
+                            sym[ia * ka + ia] = 0.5;
+                            for ib in (ia + 1)..ka {
+                                let v = 0.5 * (raw_m[ia * ka + ib] + (1.0 - raw_m[ib * ka + ia]));
+                                sym[ia * ka + ib] = v;
+                                sym[ib * ka + ia] = 1.0 - v;
+                            }
+                        }
+                        loc.push(((i, j), sym.clone(), sym, ns));
+                    } else {
+                        let rev = transpose_preview_matrix(&raw_m, ka, kb);
+                        loc.push(((i, j), raw_m, rev, ns));
+                    }
+                }
+                loc
+            }));
+        }
+        for h in handles {
+            pair_mats.extend(h.join().unwrap());
+        }
+    });
+
+    let mut canon_mat_map: BTreeMap<(usize, usize), (Vec<f64>, u32)> = BTreeMap::new();
+    for ((i, j), m_ij, m_ji, ns) in pair_mats {
+        canon_mat_map.insert((i, j), (m_ij, ns));
+        canon_mat_map.insert((j, i), (m_ji, ns));
+    }
+    println!(
+        "[bake-catalog-preview] Evaluated {} canonical matrices in {:.1}s",
+        jobs.len(),
+        t_start.elapsed().as_secs_f64()
+    );
+
+    // Solve all 30 x 30 shell pairs using solve_debiased_bayesian_shell_preview_nash
+    let n_shells = shells.len();
+    let mut shell_payoff = vec![vec![0.5f64; n_shells]; n_shells];
+    let mut team_payoff = vec![vec![0.5f64; n_teams]; n_teams];
+    // Policies in RAW catalog 3v3 action order for each (team_i, shell_v)
+    let mut raw_nash_pol: BTreeMap<(usize, usize), Vec<f64>> = BTreeMap::new();
+    let mut raw_final_pol: BTreeMap<(usize, usize), Vec<f64>> = BTreeMap::new();
+    // Effective matrix in RAW catalog 3v3 action order for each (team_i, shell_v) against opponent equilibrium
+    let mut raw_expected_ev: BTreeMap<(usize, usize), Vec<f64>> = BTreeMap::new();
+
+    for u in 0..n_shells {
+        for v in u..n_shells {
+            let u_mems = &shells[u].member_indices;
+            let v_mems = &shells[v].member_indices;
+            let u_rosters: Vec<&CompiledRoster6> =
+                u_mems.iter().map(|&i| &entries[i].canon_roster).collect();
+            let v_rosters: Vec<&CompiledRoster6> =
+                v_mems.iter().map(|&j| &entries[j].canon_roster).collect();
+            let ka = u_rosters[0].legal.len();
+            let kb = v_rosters[0].legal.len();
+
+            let mut mats_km: Vec<&[f64]> = Vec::with_capacity(u_mems.len() * v_mems.len());
+            let mut ns_km: Vec<u32> = Vec::with_capacity(u_mems.len() * v_mems.len());
+            for &i in u_mems {
+                for &j in v_mems {
+                    let (ref m, ns) = canon_mat_map[&(i, j)];
+                    mats_km.push(m.as_slice());
+                    ns_km.push(ns);
+                }
+            }
+
+            let (v_deb, per_u, _per_v, p_strats, q_strats) =
+                solve_debiased_bayesian_shell_preview_nash(
+                    &u_rosters,
+                    &v_rosters,
+                    &mats_km,
+                    &ns_km,
+                    ka,
+                    kb,
+                    &shells[u].weights,
+                    &shells[v].weights,
+                    600,
+                );
+            if u == v {
+                shell_payoff[u][u] = 0.5;
+            } else {
+                shell_payoff[u][v] = v_deb;
+                shell_payoff[v][u] = 1.0 - v_deb;
+            }
+
+            // Convert canonical strategies p_strats[k] and q_strats[m] to raw catalog action order
+            // and compute casual diverse policies where applicable
+            let build_policy = |team_idx: usize,
+                                opp_mems: &[usize],
+                                opp_weights: &[f64],
+                                opp_canon_strats: &[Vec<f64>],
+                                own_canon_strat: &[f64],
+                                is_nash: bool|
+             -> (Vec<f64>, Vec<f64>, Vec<f64>) {
+                let e_own = &entries[team_idx];
+                let k_own = e_own.raw_legal.len();
+                let mut x_raw = vec![0.0f64; k_own];
+                for ia_raw in 0..k_own {
+                    let ia_can = e_own.raw_to_canon_act[ia_raw];
+                    x_raw[ia_raw] = own_canon_strat[ia_can];
+                }
+                // Expected payoff of each raw action ia_raw against opponent's canonical equilibrium strategy
+                let mut ev_raw = vec![0.5f64; k_own];
+                for ia_raw in 0..k_own {
+                    let ia_can = e_own.raw_to_canon_act[ia_raw];
+                    let mut val = 0.0f64;
+                    for (m, &opp_j) in opp_mems.iter().enumerate() {
+                        let (ref mat_ij, _) = canon_mat_map[&(team_idx, opp_j)];
+                        let kb_opp = entries[opp_j].canon_roster.legal.len();
+                        let row = &mat_ij[ia_can * kb_opp..(ia_can + 1) * kb_opp];
+                        let mut dot = 0.0f64;
+                        for ib_can in 0..kb_opp {
+                            dot += row[ib_can] * opp_canon_strats[m][ib_can];
+                        }
+                        val += opp_weights[m] * dot;
+                    }
+                    ev_raw[ia_raw] = val;
+                }
+                if is_nash {
+                    return (x_raw.clone(), x_raw, ev_raw);
+                }
+                // Non-Nash casual shell: 78% exact Bayesian Nash + 22% near-optimal coverage across all 6 slots
+                let mut v_eq = 0.0f64;
+                for ia in 0..k_own {
+                    v_eq += x_raw[ia] * ev_raw[ia];
+                }
+                let mut logits = vec![0.0f64; k_own];
+                let mut max_l = f64::NEG_INFINITY;
+                for ia in 0..k_own {
+                    let reg = (v_eq - ev_raw[ia]).max(0.0);
+                    let l = -reg / 0.022;
+                    logits[ia] = l;
+                    if l > max_l {
+                        max_l = l;
+                    }
+                }
+                let mut p_near = vec![0.0f64; k_own];
+                let mut sum_p = 0.0f64;
+                for ia in 0..k_own {
+                    let w = if v_eq - ev_raw[ia] <= 0.045 {
+                        (logits[ia] - max_l).exp()
+                    } else {
+                        0.0
+                    };
+                    p_near[ia] = w;
+                    sum_p += w;
+                }
+                if sum_p > 1e-12 {
+                    for x in &mut p_near {
+                        *x /= sum_p;
+                    }
+                } else {
+                    p_near = x_raw.clone();
+                }
+                let mut p_mix: Vec<f64> = (0..k_own)
+                    .map(|ia| 0.78 * x_raw[ia] + 0.22 * p_near[ia])
+                    .collect();
+                for s_slot in 0..6 {
+                    let mut best_ia = None;
+                    let mut best_ev = f64::NEG_INFINITY;
+                    let mut cur_cov = 0.0f64;
+                    for (ia, trip) in e_own.raw_legal.iter().enumerate() {
+                        if trip[0] == s_slot || trip[1] == s_slot || trip[2] == s_slot {
+                            cur_cov += p_mix[ia];
+                            if ev_raw[ia] > best_ev {
+                                best_ev = ev_raw[ia];
+                                best_ia = Some(ia);
+                            }
+                        }
+                    }
+                    if let Some(b_ia) = best_ia {
+                        if v_eq - best_ev <= 0.055 && cur_cov < 0.12 {
+                            p_mix[b_ia] += 0.12 - cur_cov;
+                        }
+                    }
+                }
+                let s_mix: f64 = p_mix.iter().sum();
+                if s_mix > 1e-12 {
+                    for x in &mut p_mix {
+                        *x /= s_mix;
+                    }
+                }
+                (x_raw, p_mix, ev_raw)
+            };
+
+            for (k, &i_u) in u_mems.iter().enumerate() {
+                let (x_r, p_r, ev_r) = build_policy(
+                    i_u,
+                    v_mems,
+                    &shells[v].weights,
+                    &q_strats,
+                    &p_strats[k],
+                    shells[u].is_nash,
+                );
+                raw_nash_pol.insert((i_u, v), x_r);
+                raw_final_pol.insert((i_u, v), p_r);
+                raw_expected_ev.insert((i_u, v), ev_r);
+            }
+            if u != v {
+                for (m, &j_v) in v_mems.iter().enumerate() {
+                    let (x_r, p_r, ev_r) = build_policy(
+                        j_v,
+                        u_mems,
+                        &shells[u].weights,
+                        &p_strats,
+                        &q_strats[m],
+                        shells[v].is_nash,
+                    );
+                    raw_nash_pol.insert((j_v, u), x_r);
+                    raw_final_pol.insert((j_v, u), p_r);
+                    raw_expected_ev.insert((j_v, u), ev_r);
+                }
+            }
+
+            // Record pairwise team payoffs
+            for (k, &i_u) in u_mems.iter().enumerate() {
+                for (m, &j_v) in v_mems.iter().enumerate() {
+                    if i_u == j_v {
+                        team_payoff[i_u][j_v] = 0.5;
+                    } else {
+                        let (ref mat_ij, _) = canon_mat_map[&(i_u, j_v)];
+                        let mut v_ij = 0.0f64;
+                        for ia in 0..ka {
+                            for ib in 0..kb {
+                                v_ij += p_strats[k][ia] * mat_ij[ia * kb + ib] * q_strats[m][ib];
+                            }
+                        }
+                        // Apply debiased shell adjustment
+                        let raw_u_mean: f64 = (0..v_mems.len())
+                            .map(|mm| {
+                                let (ref m_km, _) = canon_mat_map[&(i_u, v_mems[mm])];
+                                let mut s = 0.0f64;
+                                for ia in 0..ka {
+                                    for ib in 0..kb {
+                                        s += p_strats[k][ia] * m_km[ia * kb + ib] * q_strats[mm][ib];
+                                    }
+                                }
+                                shells[v].weights[mm] * s
+                            })
+                            .sum();
+                        let adj = per_u[k] - raw_u_mean;
+                        let v_adj = (v_ij + adj).clamp(0.0, 1.0);
+                        team_payoff[i_u][j_v] = v_adj;
+                        team_payoff[j_v][i_u] = 1.0 - v_adj;
+                    }
+                }
+            }
+        }
+    }
+
+    // Solve meta-game over the 30 shells
+    let (w_shells, _, _) = solve_rectangular_minimax(&shell_payoff, 100_000);
+    let mut w_teams = vec![0.0f64; n_teams];
+    for (s_idx, sh) in shells.iter().enumerate() {
+        for (k, &t_idx) in sh.member_indices.iter().enumerate() {
+            w_teams[t_idx] = w_shells[s_idx] * sh.weights[k];
+        }
+    }
+
+    let nash_shell_idx = shells.iter().position(|s| s.is_nash).unwrap();
+    let mut min_apex_vs_other = 1.0f64;
+    let mut min_other_id = String::new();
+    println!("\n=== APEX4 SHELL VS ALL 29 OTHER SHELLS (Debiased Bayesian Preview Nash) ===");
+    for (v, sh) in shells.iter().enumerate() {
+        if v == nash_shell_idx {
+            continue;
+        }
+        let wr = shell_payoff[nash_shell_idx][v];
+        let mem_names: Vec<&str> = sh.member_indices.iter().map(|&i| entries[i].id.as_str()).collect();
+        if wr < min_apex_vs_other {
+            min_apex_vs_other = wr;
+            min_other_id = mem_names.join("+");
+        }
+        println!("  APEX4 vs {:28} : {:.4}", mem_names.join("+"), wr);
+    }
+    println!(
+        "\n  APEX4 Min Payoff vs all 29 shells: {:.4} ({})",
+        min_apex_vs_other, min_other_id
+    );
+    println!("  APEX4 Meta-Nash Weight           : {:.6}", w_shells[nash_shell_idx]);
+
+    // Quantize policies to 64 choices for compiled-preview-v1.json and build preview-nash-matrix.json
+    let quantize_64 = |probs: &[f64], evs: &[f64], leg: &[[usize; 3]]| -> Vec<String> {
+        let k_len = probs.len();
+        let mut counts = vec![0usize; k_len];
+        let mut rem: Vec<(usize, f64, f64)> = Vec::with_capacity(k_len);
+        let mut used = 0usize;
+        for i in 0..k_len {
+            let exact = probs[i] * 64.0;
+            let fl = exact.floor() as usize;
+            counts[i] = fl;
+            used += fl;
+            rem.push((i, exact - (fl as f64), evs[i]));
+        }
+        rem.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap().then_with(|| b.2.partial_cmp(&a.2).unwrap()));
+        for r_i in 0..(64usize.saturating_sub(used)) {
+            counts[rem[r_i].0] += 1;
+        }
+        let mut choices: Vec<(usize, String)> = Vec::with_capacity(64);
+        for (i, &c) in counts.iter().enumerate() {
+            if c > 0 {
+                let [a, b, d] = leg[i];
+                let s = format!("team {}, {}, {}", a + 1, b + 1, d + 1);
+                for _ in 0..c {
+                    choices.push((i, s.clone()));
+                }
+            }
+        }
+        choices.sort_by(|a, b| {
+            probs[b.0]
+                .partial_cmp(&probs[a.0])
+                .unwrap()
+                .then_with(|| evs[b.0].partial_cmp(&evs[a.0]).unwrap())
+                .then_with(|| a.0.cmp(&b.0))
+        });
+        choices.into_iter().map(|(_, s)| s).collect()
+    };
+
+    let mut preview_policies_json = serde_json::Map::new();
+    let mut team_summary_json = Vec::new();
+    for i in 0..n_teams {
+        let mut vs_map = serde_json::Map::new();
+        for j in 0..n_teams {
+            let v_sh = sig_to_shell[&preview_sig_sets(&entries[j].raw_sets)];
+            let p_final = &raw_final_pol[&(i, v_sh)];
+            let p_nash = &raw_nash_pol[&(i, v_sh)];
+            let ev_vec = &raw_expected_ev[&(i, v_sh)];
+            let q_choices = quantize_64(p_final, ev_vec, &entries[i].raw_legal);
+
+            let mut top_actions: Vec<usize> = (0..p_final.len()).collect();
+            top_actions.sort_by(|&a, &b| p_final[b].partial_cmp(&p_final[a]).unwrap());
+            let top_act_json: Vec<Value> = top_actions
+                .into_iter()
+                .filter(|&ia| p_final[ia] >= 0.005)
+                .take(12)
+                .map(|ia| {
+                    let [a, b, d] = entries[i].raw_legal[ia];
+                    let sp_a = &entries[i].raw_sets[a].species;
+                    let sp_b = &entries[i].raw_sets[b].species;
+                    let sp_d = &entries[i].raw_sets[d].species;
+                    json!({
+                        "actionIndex": ia,
+                        "choice": format!("team {}, {}, {}", a + 1, b + 1, d + 1),
+                        "slots": [a, b, d],
+                        "lead": sp_a,
+                        "bench": [sp_b, sp_d],
+                        "prob": (p_final[ia] * 10000.0).round() / 10000.0,
+                        "nashProb": (p_nash[ia] * 10000.0).round() / 10000.0,
+                        "expectedWinRate": (ev_vec[ia] * 10000.0).round() / 10000.0,
+                    })
+                })
+                .collect();
+
+            let mut slot_inc = [0.0f64; 6];
+            let mut lead_rate = [0.0f64; 6];
+            for (ia, &[a, b, d]) in entries[i].raw_legal.iter().enumerate() {
+                let pr = p_final[ia];
+                lead_rate[a] += pr;
+                slot_inc[a] += pr;
+                slot_inc[b] += pr;
+                slot_inc[d] += pr;
+            }
+            for s in 0..6 {
+                slot_inc[s] = (slot_inc[s] * 10000.0).round() / 10000.0;
+                lead_rate[s] = (lead_rate[s] * 10000.0).round() / 10000.0;
+            }
+            let supp_cnt = p_final.iter().filter(|&&x| x >= 0.01).count();
+            let sh_wr = shell_payoff[sig_to_shell[&preview_sig_sets(&entries[i].raw_sets)]][v_sh];
+            vs_map.insert(
+                entries[j].id.clone(),
+                json!({
+                    "winRate": (team_payoff[i][j] * 10000.0).round() / 10000.0,
+                    "shellWinRate": (sh_wr * 10000.0).round() / 10000.0,
+                    "policyMode": if entries[i].role == "nash" { "strict-bayesian-nash" } else { "diverse-near-optimal-mix" },
+                    "supportSize": supp_cnt,
+                    "slotInclusionRate": slot_inc,
+                    "leadRate": lead_rate,
+                    "topActions": top_act_json,
+                    "quantizedChoices": q_choices,
+                }),
+            );
+        }
+        preview_policies_json.insert(entries[i].id.clone(), Value::Object(vs_map));
+
+        let mean_wr: f64 = team_payoff[i].iter().sum::<f64>() / (n_teams as f64);
+        let min_wr: f64 = team_payoff[i]
+            .iter()
+            .enumerate()
+            .filter(|&(j, _)| j != i)
+            .map(|(_, &v)| v)
+            .fold(1.0, f64::min);
+        let sh_idx = sig_to_shell[&preview_sig_sets(&entries[i].raw_sets)];
+        team_summary_json.push(json!({
+            "id": entries[i].id,
+            "role": entries[i].role,
+            "tier": entries[i].tier,
+            "shellKey": shells[sh_idx].sig_key,
+            "metaNashWeight": (w_teams[i] * 100000.0).round() / 100000.0,
+            "shellMetaNashWeight": (w_shells[sh_idx] * 100000.0).round() / 100000.0,
+            "meanWinRate": (mean_wr * 10000.0).round() / 10000.0,
+            "minWinRate": (min_wr * 10000.0).round() / 10000.0,
+        }));
+    }
+
+    let rounded_payoff: Vec<Vec<f64>> = team_payoff
+        .iter()
+        .map(|row| row.iter().map(|&x| (x * 10000.0).round() / 10000.0).collect())
+        .collect();
+    let rounded_shell_payoff: Vec<Vec<f64>> = shell_payoff
+        .iter()
+        .map(|row| row.iter().map(|&x| (x * 10000.0).round() / 10000.0).collect())
+        .collect();
+
+    let out_matrix = json!({
+        "version": "team-pool-v2-preview-nash-v3",
+        "method": "Authoritative nc2000-bot CompactBattle Full-Combination 60x60 Matrix + Rao-Blackwellized De-Biased Bayesian Shell Preview Nash (Strict Nash for APEX4, Diverse Near-Optimal Mix for 29 Casual/Specialist Shells)",
+        "numTeams": n_teams,
+        "numShells": n_shells,
+        "teamIds": entries.iter().map(|e| e.id.clone()).collect::<Vec<_>>(),
+        "shellSummary": shells.iter().enumerate().map(|(s_idx, sh)| {
+            let min_sh_wr = shell_payoff[s_idx]
+                .iter()
+                .enumerate()
+                .filter(|&(v, _)| v != s_idx)
+                .map(|(_, &w)| w)
+                .fold(1.0, f64::min);
+            json!({
+                "shellIndex": s_idx,
+                "shellKey": sh.sig_key,
+                "memberIds": sh.member_indices.iter().map(|&i| entries[i].id.clone()).collect::<Vec<_>>(),
+                "isNashShell": sh.is_nash,
+                "metaNashWeight": (w_shells[s_idx] * 100000.0).round() / 100000.0,
+                "minShellWinRate": (min_sh_wr * 10000.0).round() / 10000.0,
+            })
+        }).collect::<Vec<_>>(),
+        "teamSummary": team_summary_json,
+        "shellPayoffMatrix": rounded_shell_payoff,
+        "payoffMatrix": rounded_payoff,
+        "previewPolicies": preview_policies_json,
+    });
+
+    write_json_atomic(
+        &root.join("data/team-pool-v2/preview-nash-matrix.json"),
+        &out_matrix,
+    );
+
+    // Also update data/compiled-preview-v1.json directly using nc2000_bot::compiled_preview::key(&b, 0)
+    let comp_path = root.join("data/compiled-preview-v1.json");
+    let comp_txt = std::fs::read_to_string(&comp_path).expect("read data/compiled-preview-v1.json");
+    let mut comp_v: Value = serde_json::from_str(&comp_txt).unwrap();
+    let mut new_comp_policies = serde_json::Map::new();
+    for i in 0..n_teams {
+        for j in 0..n_teams {
+            let b = nc2000_engine::state::Battle::from_fixture(
+                &dex,
+                "1,2,3,4",
+                &entries[i].raw_sets,
+                &entries[j].raw_sets,
+            )
+            .unwrap();
+            let key = nc2000_bot::compiled_preview::key(&b, 0).unwrap();
+            if !new_comp_policies.contains_key(&key) {
+                let v_sh = sig_to_shell[&preview_sig_sets(&entries[j].raw_sets)];
+                let p_final = &raw_final_pol[&(i, v_sh)];
+                let ev_vec = &raw_expected_ev[&(i, v_sh)];
+                let q_choices = quantize_64(p_final, ev_vec, &entries[i].raw_legal);
+                new_comp_policies.insert(key, json!(q_choices));
+            }
+        }
+    }
+    assert_eq!(new_comp_policies.len(), 990);
+    comp_v["policies"] = Value::Object(new_comp_policies);
+    comp_v["matchups"] = json!(990);
+    comp_v["method"] = out_matrix["method"].clone();
+    write_json_atomic(&comp_path, &comp_v);
+
+    println!(
+        "[bake-catalog-preview] Wrote data/team-pool-v2/preview-nash-matrix.json and data/compiled-preview-v1.json (elapsed: {:.1}s)",
+        t_start.elapsed().as_secs_f64()
     );
 }

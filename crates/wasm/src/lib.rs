@@ -456,6 +456,7 @@ fn policy_rows(
 
 #[wasm_bindgen(js_name = BlindSearcher)]
 pub struct WasmBlindSearcher {
+    local: nc2000_bot::player_state::LocalPlayer,
     dex: Rc<Dex>,
     cfg: RmConfig,
     side: usize,
@@ -499,9 +500,10 @@ impl WasmBlindSearcher {
     ) -> Result<WasmBlindSearcher, JsError> {
         let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
         let tables = TableSet::from_pool(&battle.dex, &pool);
-        let observer = Observer::new(&battle.battle, side);
+        let (local, observer) = nc2000_bot::player_state::LocalPlayer::new(&battle.battle, &battle.dex, side).map_err(js_err)?;
         let belief = Belief::new(&battle.dex, &pool, &observer);
         Ok(WasmBlindSearcher {
+            local,
             dex: battle.dex.clone(),
             cfg: skuct_config(c.unwrap_or_else(|| profile_c("blind")), hp_buckets),
             side,
@@ -578,14 +580,14 @@ impl WasmBlindSearcher {
         self.decision.reset();
         self.preview_cache_info = None;
         self.observed = true;
-        self.observer.observe(&battle.battle, &self.dex);
+        self.local.observe(&battle.battle, &self.dex, &mut self.observer).map_err(js_err)?;
         self.belief
             .sync_checked(&self.dex, &self.observer)
             .map_err(js_err)?;
         self.baked = None;
         let seed = self.rng.next();
-        let search =
-            BlindSearch::new(&battle.battle, &self.dex, self.cfg.clone(), self.side, seed);
+        let position = self.local.position(&self.dex, &mut self.belief, &self.observer, &mut self.rng).map_err(js_err)?;
+        let search = BlindSearch::from_observation(&position, &self.dex, self.cfg.clone(), self.side, seed);
         if search.is_preview() {
             // Pinned (open sheet): both sheets public — resolve the pair
             // directly by signature, no identification condition. Else the
@@ -1038,6 +1040,16 @@ impl WasmProtocolSearcher {
         self.decision.reset();
         self.endgame = None;
         self.agent.on_request(&self.dex, request_json).map_err(|e| JsError::new(&e))
+    }
+
+    #[wasm_bindgen(js_name = compiledPreviewKey)]
+    pub fn compiled_preview_key(&self) -> Option<String> {
+        nc2000_bot::compiled_preview::key(self.agent.battle()?, self.agent.side())
+    }
+
+    #[wasm_bindgen(js_name = compiledPreviewBuild)]
+    pub fn compiled_preview_build(&self) -> String {
+        nc2000_bot::compiled_preview::build_fingerprint().to_string()
     }
 
     /// Opaque cache identity after onRequest(), for a blind preview only.

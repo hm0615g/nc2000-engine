@@ -1,0 +1,15 @@
+{
+  "registered_at_utc": "2026-11-03T00:38:00+00:00",
+  "purpose": "Test whether top historical challenger parties against the current Nash mixture (APEX4 in data/kodoku-r3/conclusion-equilibrium-deme.json) achieve > 50% when both sides use the repaired bot under identical production settings (data/live-search.json).",
+  "primary_challenger": "mjj-2022-nrsk",
+  "selection": "Highest historical opponent score against current APEX4 mixture in data/kodoku-r3/apex-exp-cache.json (0.474688 = 1 - 0.525312148962149), plus top catalog challengers (sample-07, mjj-2010-garap-a, pb-100, sample-08).",
+  "base_iters": 81000,
+  "preview_iters": 729000,
+  "independent_paired_blocks": 32,
+  "games": 64,
+  "seed": 2026110307,
+  "max_turns": 500,
+  "threads": 12,
+  "symmetric_production_policy": "Both Blue (APEX4 mixture) and Red (challenger party) use ProtocolAgent + PlayerChannel, c = 0.4, SelRule::Ucb, unmodified data/belief-pool-v3/belief-pool.json prior, legacy best() action policy, and data/compiled-preview-v1.json choices[u32(seed) % 64] when the matchup key is present (falling back to 729,000 live preview search iterations when off-catalog).",
+  "command": "cargo run --release -p nc2000-bot --example omniscient_audit -- --production-challengers mjj-2022-nrsk,mjj-2010-garap-a,sample-07 --iters 81000 --preview-iters 729000 --pairs 32 --max-turns 500 --seed 2026110307 --threads 12 --out data/blind-boundary-repair-v1/challenger.json"
+}

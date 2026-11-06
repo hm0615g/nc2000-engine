@@ -12,10 +12,10 @@ v3 over identical (cell, k, side) games, with a bootstrap over seed indices
 (`--unit k`) or, when there are too few seeds for that, over cells
 (`--unit cell`).
 
-Membership and order come from the frozen belief-pool-v2 file plus the
-records restored because no blind c = 0.4 evidence reconfirms their old
-exclusion (RESTORED); new selection labels are never read, so relabelling
-the own pool cannot move this file.
+The deployed build uses tools/build-known-prior.mjs: known real-world
+parties plus only current-catalog generated sets. bake-prior.json preserves
+the earlier input. Historical diagnostic arms below retain their original
+v2/RESTORED membership and do not define the deployed prior.
 """
 import argparse
 import collections
@@ -26,8 +26,21 @@ REPO = os.path.join(os.path.dirname(__file__), '..')
 V2 = os.path.join(REPO, 'data/belief-pool-v2/belief-pool.json')
 V3 = os.path.join(REPO, 'data/belief-pool-v3/belief-pool.json')
 INV = os.path.join(REPO, 'data/team-inventory-v1/inventory.json')
+EVO = os.path.join(REPO, 'data/team-selection-v2/evolved-teams.json')
+PB = os.path.join(REPO, 'data/partybox-v0/teams.json')
 MACHINE_FACTOR = 0.25
 RESTORED = ['mjj-2020-kb-2020']
+LOWATK_TWINS = [
+    'rental-cban-8',
+    'mjj-2014-thdrcomb',
+    'sample-06',
+    'mjj-2010-garap-a',
+    'sib-r1-n4-red-v6-r1-s0064-s07',
+    'sample-09',
+    'sample-22-orig',
+    'pb-100',
+    'pb-6',
+]
 X_TEAMS = ['sample-07', 'sample-13', 'mjj-2021-q10con', 'mjj-2023-ukethdr']
 
 
@@ -35,16 +48,63 @@ def load(path):
     return json.load(open(path))
 
 
+def lowatk_sets(sets_by_id):
+    import subprocess
+    script = """
+    const fs = require('fs');
+    const dex = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
+    const { optimizeLowAttack } = require(process.argv[2]);
+    const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+    const out = {};
+    for (const [id, sets] of Object.entries(input)) {
+      out[id] = optimizeLowAttack(sets, dex, { preferFemale: true }).sets;
+    }
+    process.stdout.write(JSON.stringify(out));
+    """
+    res = subprocess.run(
+        ['node', '-e', script, os.path.join(REPO, 'data/gen2stadium2.json'), os.path.join(REPO, 'tools/optimize-low-attack.js')],
+        input=json.dumps(sets_by_id),
+         text=True,
+        capture_output=True,
+        check=True,
+    )
+    return json.loads(res.stdout)
+
+
 def members():
     v2 = load(V2)
     inv = {t['id']: t for t in load(INV)['teams']}
+    evo = {t['id']: t for t in load(EVO)['teams']}
+    pb = {t['id']: t for t in load(PB)['teams']}
+    all_records = {**inv, **evo, **pb}
     ids = [t['id'] for t in v2['teams']]
     v1_label = {t['id']: t['label'] for t in v2['teams']}
     for r in RESTORED:
         assert r not in ids and inv[r]['measuredAs'] == r and inv[r]['eligibility']['status'] == 'eligible'
         ids.append(r)
         v1_label[r] = 'dominated'
-    return ids, v1_label, inv
+    for t in load(EVO)['teams']:
+        i = t['id']
+        assert i not in ids and t['measuredAs'] == i and t['eligibility']['status'] == 'eligible'
+        ids.append(i)
+        v1_label[i] = 'evolved'
+    for t in load(PB)['teams']:
+        i = t['id']
+        if t['measuredAs'] != i or t['eligibility']['status'] != 'eligible':
+            continue
+        assert i not in ids
+        ids.append(i)
+        v1_label[i] = 'partybox'
+    opt_sets = lowatk_sets({b: all_records[b]['sets'] for b in LOWATK_TWINS})
+    for b in LOWATK_TWINS:
+        twin_id = f'{b}-lowatk'
+        base = dict(all_records[b])
+        base['id'] = twin_id
+        base['sets'] = opt_sets[b]
+        all_records[twin_id] = base
+        ids.append(twin_id)
+        v1_label[twin_id] = v1_label[b]
+    return ids, v1_label, all_records
 
 
 def weights(ids, inv, machine_factor=MACHINE_FACTOR):
@@ -63,7 +123,23 @@ def prior(ids, v1_label, inv, w):
             for i in ids]
 
 
+def normalize_training(teams):
+    import subprocess
+    result = subprocess.run(
+        ['node', os.path.join(REPO, 'tools/normalize-training.js')],
+        input=json.dumps({t['id']: t['sets'] for t in teams}),
+        text=True, capture_output=True, check=True)
+    normalized = json.loads(result.stdout)
+    return [dict(t, sets=normalized[t['id']]) for t in teams]
+
+
 def build():
+    import subprocess
+    subprocess.run(['node', os.path.join(REPO, 'tools/build-known-prior.mjs')], cwd=REPO, check=True)
+    return
+
+
+def build_legacy():
     ids, v1_label, inv = members()
     out = {
         'format': 'nc2000-belief-pool',
@@ -73,8 +149,14 @@ def build():
                 + ', '.join(RESTORED) + ', whose open-era dominated verdict is not reconfirmed under blind c = 0.4). '
                 + f'weight = 1/(members of its variant cluster in this prior), x{MACHINE_FACTOR} for machine-generated teams; '
                 + 'weighted identification and weighted-mode fallback (crates/bot/src/belief.rs). '
-                + 'v1Label is the historical open-era label, not the selection label. See data/belief-pool-v3/README.md.',
-        'teams': prior(ids, v1_label, inv, weights(ids, inv)),
+                + 'Sets use training-v3 normalization. v1Label is the historical open-era label, not the selection label. See data/belief-pool-v3/README.md.',
+        'trainingNormalization': {
+            'policy': 'training-v3',
+            'previousFingerprint': 'fnv1a64:957b746a94b97708',
+            'previousSha256': '7a48ddb0a69f66805f1c8a12b12bb8c8900655817729c90b3ea8b11a9d50b9a0',
+            'constraints': 'Preserve loadout, public gender, shiny status and Hidden Power type. Maximize HP/non-Attack stats and Hidden Power power; maximize usable Attack, otherwise minimize it. Maximize Return/Frustration power.',
+        },
+        'teams': normalize_training(prior(ids, v1_label, inv, weights(ids, inv))),
     }
     os.makedirs(os.path.dirname(V3), exist_ok=True)
     with open(V3, 'w') as f:
@@ -88,7 +170,7 @@ def arms(out_dir):
     strong = [i for i in ids if v1_label[i] == 'strong']
 
     def dump(name, teams):
-        json.dump({'teams': teams}, open(os.path.join(out_dir, f'prior-{name}.json'), 'w'))
+        json.dump({'teams': normalize_training(teams)}, open(os.path.join(out_dir, f'prior-{name}.json'), 'w'))
 
     dump('strongonly', prior(strong, v1_label, inv, weights(strong, inv)))
     dump('mf1', prior(ids, v1_label, inv, weights(ids, inv, machine_factor=1.0)))

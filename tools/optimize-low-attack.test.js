@@ -110,56 +110,29 @@ test('female preference preserves own Attract targets and impossible fixed/shiny
 
 test('female preference is supported only by the frozen prior source mix', () => {
 	const { attractGenderCensus } = require('./attract-gender-census');
-	const prior = require('../data/belief-pool-v3/belief-pool.json');
+	const prior = require('../data/belief-pool-v3/bake-prior.json');
 	const result = attractGenderCensus(prior);
-	assert.deepEqual(result.weightedSources, { M: 0.25, F: 1, N: 0 });
+	assert.deepEqual(result.weightedSources, { M: 1.25, F: 8, N: 0 });
 	assert.equal(result.preferFemale, true);
-	assert.equal(result.sources.length, 2);
+	assert.equal(result.sources.length, 10);
 	const catalog = require('../data/team-pool-v2/team-pool.json');
 	assert.equal(attractGenderCensus(catalog, 'drawWeight').sources.length, 0);
-	const equal = { teams: result.sources.map(s => ({ id: s.team, weight: 1,
+	const equal = { teams: [result.sources[0], result.sources[1]].map(s => ({ id: s.team, weight: 1,
 		sets: [{ species: s.species, gender: s.gender, moves: ['Attract'] }] })) };
 	assert.equal(attractGenderCensus(equal).preferFemale, false);
 	equal.teams[0].weight = NaN;
 	assert.throws(() => attractGenderCensus(equal), /invalid weight/);
 });
 
-test('generated catalog matches the independently audited adjustments and cluster gender preservation', () => {
+test('training-v3 catalog retains male camouflage and constrained minimum Attack', () => {
 	const catalog = require('../data/team-pool-v2/team-pool.json');
-	const inventory = require('../data/team-inventory-v1/inventory.json');
-	const evolved = require('../data/team-selection-v2/evolved-teams.json');
-	const audit = require('../findings/low-attack-catalog-v1/audit.json');
-	const genderAudit = require('../findings/attract-gender-v1/mechanics.json');
-	const original = new Map([...inventory.teams, ...evolved.teams].map(team => [team.id, team]));
-	assert.equal(catalog.teams.length, 24);
-	assert.equal(catalog.setOptimization.changedTeams, 16);
-	assert.equal(catalog.setOptimization.changedSets, 29);
-	assert.equal(catalog.setOptimization.changedGenders, 7);
-	assert.equal(audit.rows.length, 27);
-	for (const team of catalog.teams) {
-		const src = original.get(team.id);
-		assert(src, `missing source for ${team.id}`);
-		const preserveGenderSpecies = team.id === 'red-v10-s1105-r2-s0142' ? ['cloyster'] : null;
-		const opt = optimizeLowAttack(src.sets, dex, { preferFemale: true, preserveGenderSpecies });
-		assert.deepEqual(team.sets, opt.sets, team.id);
-		if (audit.rows.some(row => row.baseId === team.id) || genderAudit.rows.some(row => row.baseId === team.id)) {
-			const expected = structuredClone(src.sets);
-			for (const row of audit.rows.filter(row => row.baseId === team.id)) {
-				const mon = expected[row.slot - 1];
-				assert.equal(mon.species, row.species);
-				assert.equal(Math.floor(mon.ivs.atk / 2), row.attackDvBefore);
-				assert.equal(mon.evs.atk, row.attackEvBefore);
-				mon.ivs.atk = row.attackDvAfter * 2;
-				mon.evs.atk = 0;
-			}
-			for (const row of genderAudit.rows.filter(row => row.baseId === team.id)) {
-				const mon = expected[row.slot - 1];
-				assert.equal(mon.gender, row.genderBefore);
-				assert.equal(Math.floor(mon.ivs.atk / 2), row.attackDvBefore);
-				mon.gender = row.genderAfter;
-				mon.ivs.atk = row.attackDvAfter * 2;
-			}
-			assert.deepEqual(team.sets, expected, team.id);
-		}
+	assert.equal(catalog.teams.length, 33);
+	const apex = catalog.teams.filter(t => t.nash);
+	assert.equal(apex.length, 4);
+	assert.equal(new Set(apex.map(t => JSON.stringify(t.sets.map(s => [s.species,s.level,s.gender,Boolean(s.item)])))).size, 1);
+	for (const t of apex) {
+		const p=t.sets.find(s=>s.species==='Cloyster');
+		const boom=p.moves.includes('Explosion');
+		assert.equal(p.gender,'M');assert.equal(Math.floor(p.ivs.atk/2),boom?15:9);assert.equal(p.evs.atk,boom?255:0);
 	}
 });

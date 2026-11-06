@@ -20,7 +20,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { optimizeLowAttack } = require('./optimize-low-attack');
+const { normalizeTraining, normalizeCatalog } = require('./normalize-training');
 const { attractGenderCensus } = require('./attract-gender-census');
 
 const REPO = path.join(__dirname, '..');
@@ -44,22 +44,31 @@ const fail = msg => { throw new Error(msg); };
 
 const inv = read('data/team-inventory-v1/inventory.json');
 const evolved = read('data/team-selection-v2/evolved-teams.json');
+const partybox = read('data/partybox-v0/teams.json');
 const v1 = read('data/team-inventory-v1/classification.json');
 const sel = read(arg('--selection') || 'data/team-selection-v2/selection.json');
 const sol = read(arg('--solution') || 'data/meta-nash-v3/solution.json');
 const deployedNash = read('data/kodoku-r3/conclusion-equilibrium-deme.json');
 const PRIOR = 'data/belief-pool-v3/belief-pool.json';
 const prior = read(PRIOR);
-const allTeams = [...inv.teams, ...evolved.teams];
+// Preserve the catalog's original training/allocation basis while extending
+// only opponent knowledge. New priors do not re-optimize playable parties.
+const catalogPriorPath = prior.membershipPolicy ? 'data/belief-pool-v3/bake-prior.json' : PRIOR;
+const catalogPrior = read(catalogPriorPath);
+const catalogPriorFp = fnv1a64(catalogPriorPath);
+const allTeams = [...inv.teams, ...evolved.teams, ...partybox.teams];
 const byId = new Map(allTeams.map(t => [t.id, t]));
 
 const priorFp = fnv1a64(PRIOR);
-if (sel.prior.fingerprint !== priorFp) fail(`selection was measured on another prior (${sel.prior.fingerprint} vs ${priorFp})`);
-if (sol.prior.fingerprint !== priorFp) fail(`Nash solution was measured on another prior (${sol.prior.fingerprint} vs ${priorFp})`);
+const acceptedMeasurementPrior = fingerprint => fingerprint === priorFp ||
+	(prior.trainingNormalization?.policy === 'training-v3' && fingerprint === prior.trainingNormalization.previousFingerprint);
+if (!acceptedMeasurementPrior(sel.prior.fingerprint)) fail(`selection was measured on another prior (${sel.prior.fingerprint} vs ${priorFp})`);
+if (!acceptedMeasurementPrior(sol.prior.fingerprint)) fail(`Nash solution was measured on another prior (${sol.prior.fingerprint} vs ${priorFp})`);
 
 const LABELS = new Set(['selected', 'pending', 'not-selected']);
 const measured = inv.teams.filter(t => t.eligibility.status === 'eligible' && t.measuredAs === t.id);
-const candidates = [...measured, ...evolved.teams];
+const pbMeasured = partybox.teams.filter(t => t.eligibility.status === 'eligible' && t.measuredAs === t.id);
+const candidates = [...measured, ...evolved.teams, ...pbMeasured];
 for (const t of candidates) {
 	const l = sel.labels[t.id];
 	if (!l || !LABELS.has(l.label)) fail(`${t.id}: no selection label`);
@@ -69,7 +78,7 @@ for (const id of Object.keys(sel.labels)) {
 	if (!byId.has(id) || byId.get(id).measuredAs !== id) fail(`selection label for non-measured id ${id}`);
 }
 const priorIds = new Set(prior.teams.map(t => t.id));
-for (const t of measured) if (!priorIds.has(t.id)) fail(`${t.id}: measured but missing from the frozen prior`);
+for (const t of candidates) if (!priorIds.has(t.id) && !prior.membershipPolicy) fail(`${t.id}: measured but missing from the frozen prior`);
 
 // ------------------------------------------------------------ catalog
 const deployedNashW = new Map(deployedNash.teams.map(t => [t.id, t.weight]));
@@ -83,45 +92,27 @@ const clusters = size.size;
 const drawWeight = t => 1 / (clusters * size.get(clusterKey(t)));
 const round = x => Math.round(x * 1e6) / 1e6;
 const provenance = t => ({ family: t.family, origin: t.origin, source: t.source.name, url: t.source.url, version: t.source.version || null });
-// Optimize only the playable catalog. All measurements, the Nash solution,
-// reference inventory and frozen opponent prior keep their original inputs.
+// Normalize playable sets; historical measurements retain their original
+// input fingerprints and are explicitly labelled as not remeasured.
 // Within any multi-member camouflage cluster, if a sibling keeps Male on a
 // species (e.g. because of a Physical move like Explosion), preserve Male on
 // that species across the cluster so Team Preview gender does not leak moves.
 const dex = read('data/gen2stadium2.json');
-const attract = attractGenderCensus(prior);
-const clusterPreserve = new Map();
-for (const t of selected) {
-	const ck = clusterKey(t);
-	if (size.get(ck) <= 1) continue;
-	const pass1 = optimizeLowAttack(t.sets, dex, { preferFemale: attract.preferFemale }).sets;
-	for (const mon of pass1) {
-		if (mon.gender === 'M') {
-			if (!clusterPreserve.has(ck)) clusterPreserve.set(ck, new Set());
-			clusterPreserve.get(ck).add(mon.species);
-		}
-	}
-}
-const optimized = new Map(selected.map(t => [
-	t.id,
-	optimizeLowAttack(t.sets, dex, {
-		preferFemale: attract.preferFemale,
-		preserveGenderSpecies: clusterPreserve.get(clusterKey(t)) || null,
-	}),
-]));
+const attract = attractGenderCensus(catalogPrior);
+const optimized = normalizeCatalog(selected, dex, attract.preferFemale);
 write('data/team-pool-v2/team-pool.json', {
 	format: 'nc2000-team-pool-v2',
 	generator: 'tools/build-team-products-v2.js',
 	protocol: sel.protocol,
 	condition: sel.condition,
 	setOptimization: {
-		policy: 'low-attack-v2: no Physical move, Hidden Power or external move access; minimum Attack DV preserving HP and shiny status; Attack EV 0; conditional female preference except own Attract users and multi-variant camouflage clusters',
+		policy: 'training-v3: maximum HP/non-Attack stats and Hidden Power power; maximum usable Attack, otherwise minimum; preserve public gender, shiny status, Hidden Power type and camouflage',
 		changedTeams: selected.filter(t => optimized.get(t.id).changedSets > 0).length,
 		changedSets: selected.reduce((sum, t) => sum + optimized.get(t.id).changedSets, 0),
 		changedGenders: selected.reduce((sum, t) => sum + optimized.get(t.id).changedGenders, 0),
 		femalePreference: { enabled: attract.preferFemale, weightedDirectSources: attract.weightedSources,
-			basis: attract.basis, priorFingerprint: priorFp },
-		scoreBasis: 'confirmation scores refer to the original inventory/evolved sets, before low-attack-v2; optimized sets have not been remeasured',
+			basis: attract.basis, priorFingerprint: catalogPriorFp },
+		scoreBasis: 'Historical confirmation scores and mixture weights were measured before training-v3; normalized sets/prior have not been remeasured.',
 	},
 	drawRule: 'each variant cluster among the selected parties is drawn with equal probability, split equally among its members (drawWeight sums to 1); the same weights serve the human Random and the bot draw',
 	teams: selected.map((t, i) => ({
@@ -148,7 +139,9 @@ write('data/meta-nash-v3/pool-artifact.json', {
 	format: 'meta-nash-pool-v3',
 	source_solution: 'data/meta-nash-v3/solution.json',
 	conditions: sol.conditions,
-	teams: nash.map(([id, w]) => ({ id, origin: byId.get(id).family, weight: w, sets: byId.get(id).sets })),
+	trainingPolicy: 'training-v3',
+	measurementStatus: 'Historical weights; normalized sets and prior have not been remeasured.',
+	teams: nash.map(([id, w]) => ({ id, origin: byId.get(id).family, weight: w, sets: normalizeTraining(byId.get(id).sets, dex) })),
 });
 
 // ------------------------------------------------------------ reference

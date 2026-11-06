@@ -56,6 +56,7 @@ mod hp_evidence;
 pub mod observe;
 pub mod position;
 pub mod player;
+pub mod player_state;
 pub mod pick_prior;
 pub mod preview;
 pub mod prior;

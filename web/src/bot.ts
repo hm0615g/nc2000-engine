@@ -1,3 +1,5 @@
+import { Battle, loadEngine } from "./engine";
+import { PlayerChannel } from "../../crates/wasm/pkg-web/nc2000_wasm";
 // Main-thread client for the bot search worker.
 
 import type { WorkerRequest, WorkerResponse } from "./bot-worker";
@@ -16,6 +18,9 @@ export interface SearchOutcome {
 }
 
 export class BotWorker {
+  private mirror: Battle | null = null;
+  private channel: PlayerChannel | null = null;
+  private side = 0;
   private worker: Worker;
   private ready: Promise<void>;
   private nextId = 1;
@@ -31,6 +36,7 @@ export class BotWorker {
     {
       resolve: (r: SearchOutcome) => void;
       onProgress?: (done: number, budget: number) => void;
+      resolveInput: (input: string) => string;
     }
   >();
 
@@ -53,9 +59,13 @@ export class BotWorker {
           const p = this.pending.get(m.id);
           if (p) {
             this.pending.delete(m.id);
+            const resolve = p.resolveInput;
+            const policy = JSON.parse(m.policy) as RootPolicy;
+            for (const row of policy.actions) row.input = resolve(row.input);
+            if (m.playPolicy) for (const row of m.playPolicy.actions) row.input = resolve(row.input);
             p.resolve({
-              best: m.best,
-              policy: JSON.parse(m.policy) as RootPolicy,
+              best: m.best === null ? null : resolve(m.best),
+              policy,
               playPolicy: m.playPolicy,
               ms: m.ms,
               wasmMemoryBytes: m.wasmMemoryBytes,
@@ -104,7 +114,13 @@ export class BotWorker {
     },
   ): Promise<void> {
     await this.ready;
-    this.send({ t: "battle", p1, p2, seed, searcher: { ...searcher, endgame: searcher.endgame ?? endgameSettings() } });
+    this.channel?.free();
+    this.mirror?.free();
+    this.side = searcher.side;
+    this.mirror = new Battle(await loadEngine(), p1, p2, seed);
+    this.channel = new PlayerChannel(this.side);
+    this.send({ t: "battle", ownTeam: this.side === 0 ? p1 : p2,
+      searcher: { ...searcher, endgame: searcher.endgame ?? endgameSettings() } });
   }
 
   /** Start a forked battle (`?fork`): the worker's mirror is
@@ -123,12 +139,17 @@ export class BotWorker {
     },
   ): Promise<void> {
     await this.ready;
+    this.channel?.free(); this.channel = null;
+    this.mirror?.free(); this.mirror = null;
     this.send({ t: "fork", fork, seed, searcher: { ...searcher, endgame: searcher.endgame ?? endgameSettings() } });
   }
 
   /** Keep the mirror battle in lockstep (same picks, same order). */
   apply(picks: [number, string][]): void {
-    this.send({ t: "apply", picks });
+    if (this.mirror) {
+      for (const [side, input] of picks) this.mirror.applyChoice(side, input);
+      this.send({ t: "cancel" });
+    } else this.send({ t: "apply", picks });
   }
 
   /** Search the mirror battle's current decision point for `side`.
@@ -146,8 +167,17 @@ export class BotWorker {
   ): Promise<SearchOutcome> {
     const id = this.nextId++;
     return new Promise<SearchOutcome>((resolve) => {
-      this.pending.set(id, { resolve, onProgress });
-      this.send({ t: "search", id, side, budget, seed, ponder });
+      const inputs: string[] = this.mirror ? JSON.parse(this.mirror.legalChoices(side)).map((c: {input:string})=>c.input) : [];
+      const key = (input: string) => input.replace(/\s/g, "").replace(/^movehiddenpower.*/, "movehiddenpower");
+      const resolveInput = (input: string) => {
+        if (!inputs.length) return input;
+        const canonical = inputs.find(candidate => key(candidate) === key(input));
+        if (!canonical) throw new Error(`Cannot resolve player action: ${input}`);
+        return canonical;
+      };
+      this.pending.set(id, { resolve, onProgress, resolveInput });
+      const frame = this.mirror ? JSON.parse(this.channel!.frame(this.mirror)) : undefined;
+      this.send({ t: "search", id, side, budget, seed, ponder, frame });
     });
   }
 
@@ -165,5 +195,7 @@ export class BotWorker {
   terminate(): void {
     this.pending.clear();
     this.worker.terminate();
+    this.channel?.free(); this.channel = null;
+    this.mirror?.free(); this.mirror = null;
   }
 }

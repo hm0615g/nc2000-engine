@@ -1,0 +1,95 @@
+   Compiling nc2000-bot v0.1.0 (/Volumes/WorkData/work/nc2000-engine/crates/bot)
+    Finished `release` profile [optimized] target(s) in 1m 06s
+     Running unittests src/lib.rs (target/release/deps/nc2000_bot-64908959f5686f2c)
+
+running 30 tests
+test belief::fallback_tests::candidate_sampling_follows_weights_and_equal_weights_draw_as_before ... ok
+test belief::fallback_tests::a_pinned_open_sheet_belief_never_samples ... ok
+test belief::fallback_tests::a_weighted_prior_falls_back_to_the_heaviest_loadout ... ok
+test belief::fallback_tests::early_perish_preserves_unseen_revealed_and_unsupported_paths ... ok
+test belief::fallback_tests::early_rest_keeps_existing_perish_draw_bit_identical ... FAILED
+test belief::fallback_tests::early_rest_cannot_displace_a_retained_perish_combo ... ok
+test belief::fallback_tests::early_perish_activates_on_first_public_appearance ... FAILED
+test belief::fallback_tests::default_policy_anticipates_perish ... FAILED
+test belief::fallback_tests::a_fully_revealed_mon_is_left_alone ... ok
+test belief::fallback_tests::early_perish_draws_joint_threat_without_changing_metadata ... FAILED
+test belief::fallback_tests::legacy_control_reproduces_meta_only_then_implicit_struggle ... ok
+test belief::fallback_tests::bayesian_fallback_infers_baton_pass_from_setup_reveals_and_teammate_context ... FAILED
+test belief::fallback_tests::early_rest_samples_only_an_unrevealed_slot_and_preserves_metadata ... ok
+test belief::fallback_tests::fallback_priority_is_reveal_then_pool_then_rental_then_legal_default ... ok
+test belief::fallback_tests::heavier_marginals_are_drawn_more_often ... ok
+test belief::fallback_tests::pinned_sheet_rejects_illegal_and_preview_mismatched_teams ... ok
+test belief::fallback_tests::loadout_draw_preserves_combo_and_empirical_mass ... ok
+test belief::fallback_tests::pinned_sheet_rejects_a_later_move_contradiction ... ok
+test belief::fallback_tests::loadout_draw_respects_item_reveals_and_hidden_state_independence ... ok
+test belief::fallback_tests::loadout_draw_preserves_unaffected_paths_and_rng ... ok
+test belief::fallback_tests::retain_perish_changes_only_last_unrevealed_filler ... FAILED
+test belief::fallback_tests::supplemental_prior_teams_are_all_format_legal_and_cover_baton_pass_learners ... ok
+test belief::fallback_tests::sampled_slots_carry_the_same_pp_as_a_set_built_from_json ... ok
+test belief::fallback_tests::retain_perish_determinization_preserves_other_fields_and_rng ... FAILED
+test belief::fallback_tests::revealed_loadout_retains_perish_after_mean_look ... FAILED
+test belief::fallback_tests::the_rental_pool_takes_only_teams_the_format_accepts ... ok
+test belief::fallback_tests::the_prior_samples_only_legal_unrevealed_moves_and_reveals_always_survive ... ok
+test belief::fallback_tests::fallback_moves_are_seed_and_thread_deterministic ... ok
+test belief::fallback_tests::without_a_prior_the_determinization_is_bit_identical ... ok
+test belief::fallback_tests::every_format_species_gets_one_to_four_legal_moves_at_zero_reveal ... ok
+
+failures:
+
+---- belief::fallback_tests::early_rest_keeps_existing_perish_draw_bit_identical stdout ----
+
+thread 'belief::fallback_tests::early_rest_keeps_existing_perish_draw_bit_identical' (75858597) panicked at crates/bot/src/belief.rs:2480:42:
+called `Option::unwrap()` on a `None` value
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- belief::fallback_tests::early_perish_activates_on_first_public_appearance stdout ----
+
+thread 'belief::fallback_tests::early_perish_activates_on_first_public_appearance' (75858593) panicked at crates/bot/src/belief.rs:2498:47:
+called `Option::unwrap()` on a `None` value
+
+---- belief::fallback_tests::default_policy_anticipates_perish stdout ----
+
+thread 'belief::fallback_tests::default_policy_anticipates_perish' (75858592) panicked at crates/bot/src/belief.rs:2313:47:
+called `Option::unwrap()` on a `None` value
+
+---- belief::fallback_tests::early_perish_draws_joint_threat_without_changing_metadata stdout ----
+
+thread 'belief::fallback_tests::early_perish_draws_joint_threat_without_changing_metadata' (75858594) panicked at crates/bot/src/belief.rs:2510:53:
+called `Option::unwrap()` on a `None` value
+
+---- belief::fallback_tests::bayesian_fallback_infers_baton_pass_from_setup_reveals_and_teammate_context stdout ----
+
+thread 'belief::fallback_tests::bayesian_fallback_infers_baton_pass_from_setup_reveals_and_teammate_context' (75858590) panicked at crates/bot/src/belief.rs:3546:9:
+assertion failed: espeon_ref.base_move_slots.iter().any(|m| dex.moves.key(m.id) == "batonpass")
+
+---- belief::fallback_tests::retain_perish_changes_only_last_unrevealed_filler stdout ----
+
+thread 'belief::fallback_tests::retain_perish_changes_only_last_unrevealed_filler' (75858609) panicked at crates/bot/src/belief.rs:2602:21:
+assertion failed: !expected.moves.iter().any(|m| toid(m) == "perishsong")
+
+---- belief::fallback_tests::retain_perish_determinization_preserves_other_fields_and_rng stdout ----
+
+thread 'belief::fallback_tests::retain_perish_determinization_preserves_other_fields_and_rng' (75858610) panicked at crates/bot/src/belief.rs:2655:21:
+assertion `left == right` failed
+  left: "protect"
+ right: "perishsong"
+
+---- belief::fallback_tests::revealed_loadout_retains_perish_after_mean_look stdout ----
+
+thread 'belief::fallback_tests::revealed_loadout_retains_perish_after_mean_look' (75858611) panicked at crates/bot/src/belief.rs:2342:13:
+assertion failed: !old.moves.iter().any(|m| toid(m) == "perishsong")
+
+
+failures:
+    belief::fallback_tests::bayesian_fallback_infers_baton_pass_from_setup_reveals_and_teammate_context
+    belief::fallback_tests::default_policy_anticipates_perish
+    belief::fallback_tests::early_perish_activates_on_first_public_appearance
+    belief::fallback_tests::early_perish_draws_joint_threat_without_changing_metadata
+    belief::fallback_tests::early_rest_keeps_existing_perish_draw_bit_identical
+    belief::fallback_tests::retain_perish_changes_only_last_unrevealed_filler
+    belief::fallback_tests::retain_perish_determinization_preserves_other_fields_and_rng
+    belief::fallback_tests::revealed_loadout_retains_perish_after_mean_look
+
+test result: FAILED. 22 passed; 8 failed; 0 ignored; 0 measured; 218 filtered out; finished in 0.05s
+
+error: test failed, to rerun pass `-p nc2000-bot --lib`

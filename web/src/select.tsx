@@ -163,7 +163,8 @@ function NashCard(props: { team: NashTeam; index: number }) {
   const isEvolved =
     team.id.startsWith("red-") ||
     team.id.startsWith("deme-") ||
-    team.id.startsWith("sib-");
+    team.id.startsWith("sib-") ||
+    team.id.startsWith("apex-");
   return (
     <div class="team-card nash-card" data-team={index} data-nash={team.id}>
       <div class="team-card-head">
@@ -1051,6 +1052,11 @@ export function StartScreen(props: {
         </button>
         <a class="start-link" href={`${import.meta.env.BASE_URL}?evaluate`}>
           {ui().evaluateLink}
+        </a>
+        <a class="start-link" href={`${import.meta.env.BASE_URL}?pdinput`} data-testid="pdinput-link">
+          {props.locale === "ja"
+            ? "PDINPUT.cgi にパーティプールを取り込む"
+            : "Import party pool to PDINPUT.cgi"}
         </a>
       </main>
 

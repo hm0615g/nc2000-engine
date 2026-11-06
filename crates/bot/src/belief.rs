@@ -94,13 +94,13 @@ use crate::pick_prior::{PickDistribution, PickPrior, PreviewMon};
 use crate::prior::BeliefPrior;
 use crate::rng::SplitMix64;
 
-/// Canonicalized no-OHKO community rentals, baked into the bot so the live
+/// Training-normalized no-OHKO community rentals, baked into the bot so the live
 /// protocol/WASM paths get the prior without runtime filesystem plumbing.
 /// Parsing is paid once per process; source order is the deterministic
 /// pedigree order.
 const COMMUNITY_RENTALS_JSON: &str =
-    include_str!("../../../data/community-rentals-v0/teams.json");
-const SUPPLEMENTAL_PRIOR_JSON: &str = include_str!("belief_supplement_v1.json");
+    include_str!("../../../data/training-v3/rentals.json");
+const SUPPLEMENTAL_PRIOR_JSON: &str = include_str!("../../../data/training-v3/supplemental.json");
 const FORMAT_LEARNSETS_JSON: &str = include_str!("../../../data/learnsets-gen2.json");
 
 #[derive(serde::Deserialize)]
@@ -268,6 +268,7 @@ pub enum FallbackPolicy {
     RetainPerish,
     EarlyPerish,
     EarlyRest,
+    BayesianPointMass,
     #[default]
     Bayesian,
 }
@@ -282,6 +283,7 @@ impl FallbackPolicy {
             Self::RetainPerish => "retain-perish-v1",
             Self::EarlyPerish => "early-perish-v1",
             Self::EarlyRest => "early-rest-v1",
+            Self::BayesianPointMass => "bayesian-point-mass-v1",
             Self::Bayesian => "bayesian-soft-prior-v1",
         }
     }
@@ -393,6 +395,7 @@ impl LoadoutDraw {
 }
 
 pub struct Belief {
+    hp_observations: Option<Vec<(i32, i32)>>,
     cands: Vec<Candidate>,
     /// Pool indices of the candidates consistent with all observations so
     /// far. Monotonically non-increasing.
@@ -414,6 +417,9 @@ pub struct Belief {
 }
 
 impl Belief {
+    pub(crate) fn set_hp_observations(&mut self, hp: Vec<(i32, i32)>) {
+        self.hp_observations = Some(hp);
+    }
     /// Build the candidate set and apply the preview filter. Call at team
     /// preview, right after `Observer::new`.
     pub fn new(dex: &Dex, pool: &MetaPool, obs: &Observer) -> Belief {
@@ -442,6 +448,7 @@ impl Belief {
             })
             .collect();
         let mut b = Belief {
+            hp_observations: None,
             cands,
             alive: Vec::new(),
             fallback: None,
@@ -505,6 +512,7 @@ impl Belief {
         let refs = build_refs(dex, sets, obs.mons())
             .ok_or_else(|| "pinned opponent team does not match the public preview".to_string())?;
         Ok(Belief {
+            hp_observations: None,
             cands: vec![Candidate {
                 id: id.to_string(),
                 weight: None,
@@ -534,6 +542,7 @@ impl Belief {
     pub fn pinned_from_battle(battle: &Battle, obs: &Observer) -> Belief {
         let refs = battle.sides[obs.opp()].roster.clone();
         Belief {
+            hp_observations: None,
             cands: vec![Candidate {
                 id: "opponent".to_string(),
                 weight: None,
@@ -712,6 +721,13 @@ impl Belief {
     /// `is_fallback()`; callers may inspect it at preview before any reveal.
     pub fn fallback_sources(&self, dex: &Dex, obs: &Observer) -> Vec<FallbackSource> {
         obs.mons().iter().map(|mo| self.fallback_source(dex, mo)).collect()
+    }
+
+    pub fn loadout_draw_len(&self, slot: usize) -> usize {
+        self.loadout_draws
+            .as_deref()
+            .and_then(|d| d.get(slot)?.as_ref())
+            .map_or(0, |ld| ld.entries.len())
     }
 
     pub fn candidate_id(&self, pool_idx: usize) -> &str {
@@ -951,6 +967,9 @@ impl Belief {
             let mo = &obs.mons()[slot];
             let projected = crate::hp_evidence::project(dex, &refs[slot], mo, rng);
             impute_mon(mon, projected.as_ref().unwrap_or(&refs[slot]), mo, dex);
+            if let Some(&(cur, den)) = self.hp_observations.as_ref().and_then(|h| h.get(slot)) {
+                mon.hp = crate::import::impute_hp(cur, den, mon.maxhp);
+            }
             out.refresh_poke_mask(dex, PokeId { side: opp as u8, slot: slot as u8 });
         }
         // active speed reflects stats (+ paralysis, quick claw) like the
@@ -1301,6 +1320,7 @@ impl Belief {
             FallbackPolicy::RevealedLoadoutDraw
                 | FallbackPolicy::EarlyPerish
                 | FallbackPolicy::EarlyRest
+                | FallbackPolicy::BayesianPointMass
                 | FallbackPolicy::Bayesian
         ) || self.pinned
         {
@@ -1311,7 +1331,9 @@ impl Belief {
             .iter()
             .zip(roster)
             .map(|(mo, mon)| match self.fallback_policy {
-                FallbackPolicy::EarlyPerish => self.early_perish_draw(dex, mo, mon),
+                FallbackPolicy::EarlyPerish | FallbackPolicy::BayesianPointMass => {
+                    self.early_perish_draw(dex, mo, mon)
+                }
                 FallbackPolicy::EarlyRest => self.early_perish_draw(dex, mo, mon)
                     .or_else(|| self.early_rest_draw(dex, mo, mon)),
                 FallbackPolicy::Bayesian => self.bayesian_loadout_draw(dex, mo, obs.mons(), mon),
@@ -1339,7 +1361,7 @@ impl Belief {
             FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest => {
                 !battle.sides[opp].roster[slot].fainted
             }
-            FallbackPolicy::Bayesian => {
+            FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian => {
                 let r = &battle.sides[opp].roster[slot];
                 !r.fainted && (r.is_active || battle.active_id(opp).is_none())
             }
@@ -1388,7 +1410,7 @@ impl Belief {
             FallbackPolicy::EarlyPerish | FallbackPolicy::EarlyRest => {
                 !battle.sides[opp].roster[slot].fainted
             }
-            FallbackPolicy::Bayesian => {
+            FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian => {
                 let r = &battle.sides[opp].roster[slot];
                 !r.fainted && (r.is_active || battle.active_id(opp).is_none())
             }
@@ -1404,7 +1426,10 @@ impl Belief {
             if !active(slot) {
                 continue;
             }
-            if self.fallback_policy == FallbackPolicy::Bayesian {
+            if matches!(
+                self.fallback_policy,
+                FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian
+            ) {
                 if let Some(draw) = self.draws.as_ref().and_then(|d| d[slot].as_ref()) {
                     let slots = draw.draw(rng);
                     if !slots.is_empty() {
@@ -1434,7 +1459,9 @@ impl Belief {
             .mons()
             .iter()
             .map(|mo| match self.fallback_policy {
-                FallbackPolicy::Bayesian => self.bayesian_fallback_set(dex, mo, obs.mons()),
+                FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian => {
+                    self.bayesian_fallback_set(dex, mo, obs.mons())
+                }
                 _ => self.fallback_set(dex, mo),
             })
             .collect();
@@ -1463,6 +1490,7 @@ impl Belief {
                         | FallbackPolicy::RetainPerish
                         | FallbackPolicy::EarlyPerish
                         | FallbackPolicy::EarlyRest
+                        | FallbackPolicy::BayesianPointMass
                         | FallbackPolicy::Bayesian => base_set(dex, mo),
                     })
                     .collect();
@@ -1485,7 +1513,7 @@ impl Belief {
         }
         match self.fallback_policy {
             FallbackPolicy::LegacyMetaOnly => FallbackSource::LegacyEmpty,
-            FallbackPolicy::Bayesian
+            FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian
                 if community_rental_sets(dex)
                     .iter()
                     .any(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
@@ -1515,6 +1543,7 @@ impl Belief {
             | FallbackPolicy::RetainPerish
             | FallbackPolicy::EarlyPerish
             | FallbackPolicy::EarlyRest
+            | FallbackPolicy::BayesianPointMass
             | FallbackPolicy::Bayesian => FallbackSource::Learnset,
         }
     }
@@ -1532,7 +1561,8 @@ impl Belief {
         mo: &MonObs,
         obs_mons: &[MonObs],
     ) -> Vec<(&'a PokemonSet, f64)> {
-        let team_soft_weight = |sets: &[PokemonSet], base_w: f64| -> f64 {
+        let level_aware = self.fallback_policy == FallbackPolicy::Bayesian;
+        let team_soft_weight = |sets: &[PokemonSet], base_w: f64, carrier_set: &PokemonSet| -> f64 {
             let mut match_score = 0.0f64;
             for other in obs_mons {
                 if other.species == mo.species {
@@ -1543,6 +1573,9 @@ impl Belief {
                     .find(|s| dex.species.id(&toid(&s.species)) == Some(other.species))
                 {
                     match_score += 1.0;
+                    if level_aware && s.level == other.level {
+                        match_score += 0.5;
+                    }
                     if !other.revealed_moves.is_empty() {
                         let all_rev_match = other.revealed_moves.iter().all(|&rev| {
                             s.moves
@@ -1559,7 +1592,16 @@ impl Belief {
                     }
                 }
             }
-            base_w * (0.6 * match_score).exp()
+            let level_mult = if level_aware {
+                if carrier_set.level == mo.level {
+                    1.0
+                } else {
+                    0.15
+                }
+            } else {
+                1.0
+            };
+            base_w * level_mult * (0.6 * match_score).exp()
         };
 
         let mut out: Vec<(&'a PokemonSet, f64)> = Vec::new();
@@ -1570,7 +1612,7 @@ impl Belief {
                 .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
             {
                 let base_w = c.weight.unwrap_or(1.0);
-                out.push((s, team_soft_weight(&c.sets, base_w)));
+                out.push((s, team_soft_weight(&c.sets, base_w, s)));
             }
         }
         let cands_has_species = !out.is_empty();
@@ -1581,7 +1623,7 @@ impl Belief {
                     .iter()
                     .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
                 {
-                    out.push((s, team_soft_weight(&t.sets, t.weight)));
+                    out.push((s, team_soft_weight(&t.sets, t.weight, s)));
                 }
             }
             for rental_sets in community_rental_teams(dex) {
@@ -1589,7 +1631,7 @@ impl Belief {
                     .iter()
                     .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
                 {
-                    out.push((s, team_soft_weight(rental_sets, 0.10)));
+                    out.push((s, team_soft_weight(rental_sets, 0.10, s)));
                 }
             }
         }
@@ -1631,31 +1673,81 @@ impl Belief {
                 let has_both = carriers
                     .iter()
                     .any(|(s, _)| matches_moves(s) && matches_item(s));
-                let loadout_key = |s: &PokemonSet| {
-                    let mut mvs: Vec<String> = s
-                        .moves
-                        .iter()
-                        .map(|m| toid(m))
-                        .filter(|m| format_move_legal_at_level(species_key, m, mo.level))
-                        .collect();
-                    mvs.sort();
-                    (toid(&s.item), mvs)
-                };
-                let mut tally: Vec<((String, Vec<String>), f64, &PokemonSet)> = Vec::new();
-                for &(s, w) in &carriers {
-                    if !matches_moves(s) || (has_both && !matches_item(s)) {
-                        continue;
+                if self.fallback_policy == FallbackPolicy::Bayesian {
+                    let mut marginal_w: HashMap<String, f64> = HashMap::new();
+                    // (sorted_mvs, total_weight, best_rep_weight, best_rep_set)
+                    let mut tally: Vec<(Vec<String>, f64, f64, &PokemonSet)> = Vec::new();
+                    for &(s, w) in &carriers {
+                        if !matches_moves(s) || (has_both && !matches_item(s)) {
+                            continue;
+                        }
+                        let mut mvs: Vec<String> = s
+                            .moves
+                            .iter()
+                            .map(|m| toid(m))
+                            .filter(|m| format_move_legal_at_level(species_key, m, mo.level))
+                            .collect();
+                        mvs.sort();
+                        mvs.dedup();
+                        for mv in &mvs {
+                            *marginal_w.entry(mv.clone()).or_insert(0.0) += w;
+                        }
+                        match tally.iter_mut().find(|(k, _, _, _)| *k == mvs) {
+                            Some(entry) => {
+                                entry.1 += w;
+                                if w > entry.2 {
+                                    entry.2 = w;
+                                    entry.3 = s;
+                                }
+                            }
+                            None => tally.push((mvs, w, w, s)),
+                        }
                     }
-                    let key = loadout_key(s);
-                    match tally.iter_mut().find(|(k, _, _)| *k == key) {
-                        Some(entry) => entry.1 += w,
-                        None => tally.push((key, w, s)),
+                    tally
+                        .into_iter()
+                        .max_by(|a, b| {
+                            let sa = a.1
+                                + 0.15
+                                    * a.0
+                                        .iter()
+                                        .map(|m| marginal_w.get(m).copied().unwrap_or(0.0))
+                                        .sum::<f64>();
+                            let sb = b.1
+                                + 0.15
+                                    * b.0
+                                        .iter()
+                                        .map(|m| marginal_w.get(m).copied().unwrap_or(0.0))
+                                        .sum::<f64>();
+                            sa.partial_cmp(&sb).unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                        .map(|(_, _, _, s)| s)
+                } else {
+                    let loadout_key = |s: &PokemonSet| {
+                        let mut mvs: Vec<String> = s
+                            .moves
+                            .iter()
+                            .map(|m| toid(m))
+                            .filter(|m| format_move_legal_at_level(species_key, m, mo.level))
+                            .collect();
+                        mvs.sort();
+                        (toid(&s.item), mvs)
+                    };
+                    let mut tally: Vec<((String, Vec<String>), f64, &PokemonSet)> = Vec::new();
+                    for &(s, w) in &carriers {
+                        if !matches_moves(s) || (has_both && !matches_item(s)) {
+                            continue;
+                        }
+                        let key = loadout_key(s);
+                        match tally.iter_mut().find(|(k, _, _)| *k == key) {
+                            Some(entry) => entry.1 += w,
+                            None => tally.push((key, w, s)),
+                        }
                     }
+                    tally
+                        .into_iter()
+                        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+                        .map(|(_, _, s)| s)
                 }
-                tally
-                    .into_iter()
-                    .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
-                    .map(|(_, _, s)| s)
             } else {
                 // Novel move combination: score sets by exponential overlap with revealed moves
                 carriers
@@ -1715,13 +1807,17 @@ impl Belief {
             }
         }
 
-        // Conditional move co-occurrence backoff for any remaining open slots
+        // Conditional move co-occurrence + non-dominated learnset backoff for any remaining open slots
         // (fires when a novel move combination was revealed or when a template move
         // was level-filtered).
         if moves.len() < 4 && !carriers.is_empty() {
-            let mut move_scores: Vec<(MoveId, String, f64)> = Vec::new();
+            let mut move_scores: Vec<(MoveId, String, f64, f64, f64)> = Vec::new();
+            let mut max_overlap = 0usize;
+            let mut total_carrier_w = 0.0f64;
+            let mut max_overlap_w = 0.0f64;
             for &(s, w) in &carriers {
-                let overlap = mo
+                total_carrier_w += w;
+                let ov = mo
                     .revealed_moves
                     .iter()
                     .filter(|&&rev| {
@@ -1730,8 +1826,28 @@ impl Belief {
                             .filter_map(|m| dex.moves.id(&toid(m)))
                             .any(|m| move_matches(dex, m, rev))
                     })
-                    .count() as f64;
+                    .count();
+                if ov > max_overlap {
+                    max_overlap = ov;
+                    max_overlap_w = w;
+                } else if ov == max_overlap {
+                    max_overlap_w += w;
+                }
+            }
+            for &(s, w) in &carriers {
+                let ov = mo
+                    .revealed_moves
+                    .iter()
+                    .filter(|&&rev| {
+                        s.moves
+                            .iter()
+                            .filter_map(|m| dex.moves.id(&toid(m)))
+                            .any(|m| move_matches(dex, m, rev))
+                    })
+                    .count();
+                let overlap = ov as f64;
                 let set_w = w * (4.0 * overlap).exp() * if matches_item(s) { 1.5 } else { 1.0 };
+                let in_max = if ov == max_overlap { w } else { 0.0 };
                 for name in &s.moves {
                     let Some(id) = dex.moves.id(&toid(name)) else { continue };
                     if !format_move_legal_at_level(species_key, dex.moves.key(id), mo.level)
@@ -1740,18 +1856,75 @@ impl Belief {
                     {
                         continue;
                     }
-                    match move_scores.iter_mut().find(|(mid, _, _)| *mid == id) {
-                        Some(entry) => entry.2 += set_w,
-                        None => move_scores.push((id, name.clone(), set_w)),
+                    match move_scores.iter_mut().find(|(mid, _, _, _, _)| *mid == id) {
+                        Some(entry) => {
+                            entry.2 += set_w;
+                            entry.3 += in_max;
+                            entry.4 += w;
+                        }
+                        None => move_scores.push((id, name.clone(), set_w, in_max, w)),
                     }
                 }
             }
             move_scores.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
-            for (_, name, _) in move_scores {
+            if self.fallback_policy == FallbackPolicy::Bayesian {
+                if moves.len() + move_scores.len() < 4 {
+                    let floor_scale = move_scores
+                        .last()
+                        .map(|x| x.2 * 0.15)
+                        .unwrap_or(1.0)
+                        .max(1e-4);
+                    for (id, name, quality) in non_dominated_learnset_moves(dex, mo) {
+                        if mo.revealed_moves.iter().any(|&m| move_matches(dex, id, m))
+                            || moves.iter().any(|m| dex.moves.id(&toid(m)) == Some(id))
+                            || move_scores.iter().any(|(mid, _, _, _, _)| *mid == id)
+                        {
+                            continue;
+                        }
+                        move_scores.push((id, name, floor_scale * quality, 0.0, 0.0));
+                    }
+                    move_scores
+                        .sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+                }
+                // Prioritise essential synergy partners (>=85% conditional presence in max-overlap
+                // carriers, ordered by Bayesian lift) before remaining co-occurrence fillers.
+                if max_overlap_w > 0.0 && total_carrier_w > 0.0 {
+                    move_scores.sort_by(|a, b| {
+                        let pa_max = a.3 / max_overlap_w;
+                        let pb_max = b.3 / max_overlap_w;
+                        let a_ess = pa_max >= 0.85;
+                        let b_ess = pb_max >= 0.85;
+                        match (a_ess, b_ess) {
+                            (true, true) => {
+                                let la = pa_max / (a.4 / total_carrier_w).max(0.05).powf(0.3);
+                                let lb = pb_max / (b.4 / total_carrier_w).max(0.05).powf(0.3);
+                                lb.partial_cmp(&la).unwrap_or(std::cmp::Ordering::Equal)
+                            }
+                            (true, false) => std::cmp::Ordering::Less,
+                            (false, true) => std::cmp::Ordering::Greater,
+                            (false, false) => {
+                                b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal)
+                            }
+                        }
+                    });
+                }
+            }
+            for (_, name, _, _, _) in move_scores {
                 if moves.len() >= 4 {
                     break;
                 }
                 moves.push(name);
+            }
+        } else if self.fallback_policy == FallbackPolicy::Bayesian && moves.len() < 4 {
+            for (id, name, _) in non_dominated_learnset_moves(dex, mo) {
+                if moves.len() >= 4 {
+                    break;
+                }
+                if !mo.revealed_moves.iter().any(|&m| move_matches(dex, id, m))
+                    && !moves.iter().any(|m| dex.moves.id(&toid(m)) == Some(id))
+                {
+                    moves.push(name);
+                }
             }
         }
 
@@ -1774,14 +1947,469 @@ impl Belief {
         &self,
         dex: &Dex,
         mo: &MonObs,
-        _obs_mons: &[MonObs],
+        obs_mons: &[MonObs],
         fallback_mon: &Pokemon,
     ) -> Option<LoadoutDraw> {
-        self.early_perish_draw(dex, mo, fallback_mon)
+        if !mo.appeared {
+            return None;
+        }
+        let carriers = self.bayesian_prior_carriers(dex, mo, obs_mons);
+        if carriers.is_empty() && !self.is_weighted_prior() {
+            return None;
+        }
+        let species_key = dex.species.key(mo.species);
+        let strict_item = |source: &PokemonSet| {
+            let item = dex.items.id(&toid(&source.item));
+            item.is_some() == mo.preview_has_item
+                && mo.item.original.is_none_or(|known| known == item)
+        };
+        let resolve_item = |source_item: &str, use_strict: bool| -> String {
+            if use_strict {
+                source_item.to_string()
+            } else {
+                match mo.item.original {
+                    Some(Some(x)) => dex.items.key(x).to_string(),
+                    Some(None) => String::new(),
+                    None if mo.preview_has_item => {
+                        if dex.items.id(&toid(source_item)).is_some() {
+                            source_item.to_string()
+                        } else {
+                            "leftovers".to_string()
+                        }
+                    }
+                    None => String::new(),
+                }
+            }
+        };
+        let move_sig = |p: &Pokemon| {
+            let mut mvs: Vec<u16> = p.base_move_slots.iter().map(|s| s.id.0).collect();
+            mvs.sort_unstable();
+            (
+                mo.item.original.is_some().then(|| p.item.map(|i| i.0)),
+                mvs,
+            )
+        };
+        let fallback_sig = move_sig(fallback_mon);
+        // Align candidate move slots 0..4 with `fallback_mon.base_move_slots` so that
+        // any move shared with `fallback_mon` (including all revealed moves and shared
+        // unrevealed staples) occupies the exact same `SearchChoice::Move(1..=4)` index
+        // across all worlds in `BlindSearch`.
+        let align_moves_to_fallback = |mut mon: Pokemon| -> Pokemon {
+            let fb_slots = &fallback_mon.base_move_slots;
+            let cand_slots = mon.base_move_slots;
+            if cand_slots.len() != fb_slots.len() || cand_slots.is_empty() {
+                return mon;
+            }
+            let n = cand_slots.len();
+            let mut aligned: [Option<MoveSlot>; 4] = [None; 4];
+            let mut used_cand = [false; 4];
+            for (c_idx, cs) in cand_slots.iter().enumerate() {
+                if let Some(f_idx) =
+                    (0..n).find(|&fi| aligned[fi].is_none() && fb_slots[fi].id == cs.id)
+                {
+                    aligned[f_idx] = Some(*cs);
+                    used_cand[c_idx] = true;
+                }
+            }
+            for (c_idx, cs) in cand_slots.iter().enumerate() {
+                if used_cand[c_idx] {
+                    continue;
+                }
+                if dex.moves.key(cs.id).starts_with("hiddenpower") {
+                    if let Some(f_idx) = (0..n).find(|&fi| {
+                        aligned[fi].is_none()
+                            && dex.moves.key(fb_slots[fi].id).starts_with("hiddenpower")
+                    }) {
+                        aligned[f_idx] = Some(*cs);
+                        used_cand[c_idx] = true;
+                    }
+                }
+            }
+            for (c_idx, cs) in cand_slots.iter().enumerate() {
+                if used_cand[c_idx] {
+                    continue;
+                }
+                if let Some(f_idx) = (0..n).find(|&fi| aligned[fi].is_none()) {
+                    aligned[f_idx] = Some(*cs);
+                }
+            }
+            let mut nb = MoveSlots::default();
+            for fi in 0..n {
+                if let Some(slot) = aligned[fi] {
+                    nb.push(slot);
+                }
+            }
+            mon.base_move_slots = nb;
+            mon.move_slots = nb;
+            mon
+        };
+        let build_candidate_mon = |mut set: PokemonSet| -> Option<Pokemon> {
+            set.level = mo.level;
+            set.name.clear();
+            let gender_str = match mo.gender.as_str() {
+                "" => "N".to_string(),
+                g => g.to_string(),
+            };
+            if let Ok(built) = Battle::from_fixture(dex, "1,2,3,4", &[set.clone()], &[set.clone()])
+            {
+                let mon = &built.sides[0].roster[0];
+                if mon.gender == mo.gender
+                    && crate::hp_evidence::consistent(dex, mon, mo.hp_type_mask)
+                {
+                    return Some(mon.clone());
+                }
+            }
+            set.gender = Some(gender_str);
+            set.ivs = None;
+            let built = Battle::from_fixture(dex, "1,2,3,4", &[set.clone()], &[set]).ok()?;
+            let mon = &built.sides[0].roster[0];
+            (mon.gender == mo.gender && crate::hp_evidence::consistent(dex, mon, mo.hp_type_mask))
+                .then(|| mon.clone())
+        };
+
+        let move_consistent: Vec<(&PokemonSet, f64)> = carriers
+            .iter()
+            .copied()
+            .filter(|(source, _)| {
+                !source.moves.is_empty()
+                    && source.moves.len() <= 4
+                    && source
+                        .moves
+                        .iter()
+                        .all(|m| format_move_legal_at_level(species_key, &toid(m), mo.level))
+                    && mo.revealed_moves.iter().all(|&revealed| {
+                        source
+                            .moves
+                            .iter()
+                            .filter_map(|m| dex.moves.id(&toid(m)))
+                            .any(|m| move_matches(dex, m, revealed))
+                    })
+            })
+            .collect();
+
+        let mut entries: Vec<(Pokemon, f64)> = Vec::new();
+
+        if !move_consistent.is_empty() {
+            // Tier A: Aggregate soft-likelihood weights by canonical sorted 4-move set
+            // before constructing Pokemon fixtures, retaining the modal item for each
+            // moveset and keeping the top-K major movesets (weight >= 0.20 * top_w).
+            let use_strict_item = move_consistent.iter().any(|(s, _)| strict_item(s));
+            let mut marginal_w: HashMap<String, f64> = HashMap::new();
+            // (sorted_moves, total_weight, best_rep_weight, best_rep_set)
+            let mut tally: Vec<(Vec<String>, f64, f64, &PokemonSet)> = Vec::new();
+            for &(source, weight) in &move_consistent {
+                if use_strict_item && !strict_item(source) {
+                    continue;
+                }
+                let mut mvs: Vec<String> = source.moves.iter().map(|m| toid(m)).collect();
+                mvs.sort();
+                mvs.dedup();
+                for mv in &mvs {
+                    *marginal_w.entry(mv.clone()).or_insert(0.0) += weight;
+                }
+                match tally.iter_mut().find(|(k, _, _, _)| *k == mvs) {
+                    Some(entry) => {
+                        entry.1 += weight;
+                        if weight > entry.2 {
+                            entry.2 = weight;
+                            entry.3 = source;
+                        }
+                    }
+                    None => tally.push((mvs, weight, weight, source)),
+                }
+            }
+            for (mvs, exact_w, _, _) in &mut tally {
+                if !mvs.is_empty() {
+                    let sum_marg: f64 = mvs
+                        .iter()
+                        .map(|m| marginal_w.get(m).copied().unwrap_or(0.0))
+                        .sum::<f64>();
+                    *exact_w += 0.15 * sum_marg;
+                }
+            }
+            tally.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+            let has_baton_pass = tally.first().is_some_and(|(_, top_w, _, _)| {
+                tally
+                    .iter()
+                    .any(|(mvs, w, _, _)| *w >= top_w * 0.15 && mvs.iter().any(|m| m == "batonpass"))
+            });
+
+            if let Some((top_mvs, top_w, _, top_rep)) = tally.first().cloned() {
+                let is_joint_trap = |mvs: &[String]| {
+                    mvs.iter().any(|m| m == "meanlook" || m == "spiderweb")
+                        && mvs.iter().any(|m| m == "perishsong")
+                };
+                let mut selected: Vec<(Vec<String>, f64, &PokemonSet)> =
+                    vec![(top_mvs.clone(), top_w, top_rep)];
+                let max_tier_a = if has_baton_pass { 3 } else { 2 };
+                for (mvs, w, _, rep) in tally.iter().skip(1) {
+                    if selected.len() >= max_tier_a {
+                        break;
+                    }
+                    let diff_moves = mvs.iter().filter(|m| !top_mvs.contains(m)).count();
+                    let min_rel = if has_baton_pass { 0.20 } else { 0.55 };
+                    let distinct_archetype = has_baton_pass || diff_moves >= 2;
+                    if *w >= top_w * min_rel && distinct_archetype {
+                        selected.push((mvs.clone(), *w, *rep));
+                    }
+                }
+
+                // Ensure Mean Look + Perish Song joint trap mass is never pruned away
+                // if present in consistent carriers.
+                if !selected.iter().any(|(mvs, _, _)| is_joint_trap(mvs)) {
+                    let trap_total: f64 = tally
+                        .iter()
+                        .filter(|(mvs, _, _, _)| is_joint_trap(mvs))
+                        .map(|(_, w, _, _)| *w)
+                        .sum();
+                    if trap_total > 0.0 {
+                        if let Some((k, _, _, rep)) =
+                            tally.iter().find(|(mvs, _, _, _)| is_joint_trap(mvs))
+                        {
+                            selected.push((k.clone(), trap_total, *rep));
+                        }
+                    }
+                }
+
+                for (_, weight, source) in selected {
+                    let mut set = source.clone();
+                    set.item = resolve_item(&source.item, use_strict_item);
+                    let Some(mon) = build_candidate_mon(set) else {
+                        continue;
+                    };
+                    let sig = move_sig(&mon);
+                    let mon = if sig == fallback_sig {
+                        fallback_mon.clone()
+                    } else {
+                        align_moves_to_fallback(mon)
+                    };
+                    match entries.iter_mut().find(|(existing, _)| move_sig(existing) == sig) {
+                        Some((_, w)) => *w += weight,
+                        None => entries.push((mon, weight)),
+                    }
+                }
+            }
+        } else if mo.revealed_moves.len() < 4 {
+            // Tier B: Novel move combination (or unseen prior species) — conditional
+            // move co-occurrence + non-dominated learnset backoff over open slots.
+            let open_slots = 4 - mo.revealed_moves.len();
+            let mut max_overlap = 0usize;
+            let mut total_carrier_w = 0.0f64;
+            let mut max_overlap_w = 0.0f64;
+            for &(s, w) in &carriers {
+                total_carrier_w += w;
+                let ov = mo
+                    .revealed_moves
+                    .iter()
+                    .filter(|&&rev| {
+                        s.moves
+                            .iter()
+                            .filter_map(|m| dex.moves.id(&toid(m)))
+                            .any(|m| move_matches(dex, m, rev))
+                    })
+                    .count();
+                if ov > max_overlap {
+                    max_overlap = ov;
+                    max_overlap_w = w;
+                } else if ov == max_overlap {
+                    max_overlap_w += w;
+                }
+            }
+
+            // (MoveId, display_name, co_occurrence_score, w_in_max_overlap, w_in_all)
+            let mut move_scores: Vec<(MoveId, String, f64, f64, f64)> = Vec::new();
+            for &(s, w) in &carriers {
+                let ov = mo
+                    .revealed_moves
+                    .iter()
+                    .filter(|&&rev| {
+                        s.moves
+                            .iter()
+                            .filter_map(|m| dex.moves.id(&toid(m)))
+                            .any(|m| move_matches(dex, m, rev))
+                    })
+                    .count();
+                let overlap = ov as f64;
+                let set_w = w * (4.0 * overlap).exp() * if strict_item(s) { 1.5 } else { 1.0 };
+                for name in &s.moves {
+                    let Some(id) = dex.moves.id(&toid(name)) else { continue };
+                    if !format_move_legal_at_level(species_key, dex.moves.key(id), mo.level)
+                        || mo.revealed_moves.iter().any(|&m| move_matches(dex, id, m))
+                    {
+                        continue;
+                    }
+                    let in_max = if ov == max_overlap { w } else { 0.0 };
+                    match move_scores.iter_mut().find(|(mid, _, _, _, _)| *mid == id) {
+                        Some(entry) => {
+                            entry.2 += set_w;
+                            entry.3 += in_max;
+                            entry.4 += w;
+                        }
+                        None => move_scores.push((id, name.clone(), set_w, in_max, w)),
+                    }
+                }
+            }
+            move_scores.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+
+            if move_scores.len() < (open_slots + 2).min(6) {
+                let floor_scale = move_scores
+                    .last()
+                    .map(|x| x.2 * 0.15)
+                    .unwrap_or(1.0)
+                    .max(1e-4);
+                for (id, name, quality) in non_dominated_learnset_moves(dex, mo) {
+                    if mo.revealed_moves.iter().any(|&m| move_matches(dex, id, m))
+                        || move_scores.iter().any(|(mid, _, _, _, _)| *mid == id)
+                    {
+                        continue;
+                    }
+                    move_scores.push((id, name, floor_scale * quality, 0.0, 0.0));
+                }
+                move_scores
+                    .sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+            }
+
+            let pool_len = move_scores.len().min(open_slots + 3);
+            let has_novel_baton_pass = move_scores
+                .iter()
+                .take(pool_len)
+                .any(|(id, _, _, _, _)| dex.moves.key(*id) == "batonpass")
+                || mo
+                    .revealed_moves
+                    .iter()
+                    .any(|&id| dex.moves.key(id) == "batonpass");
+            if pool_len > open_slots && has_novel_baton_pass {
+                let template_set = carriers
+                    .iter()
+                    .max_by(|(sa, wa), (sb, wb)| {
+                        let ov_a = mo
+                            .revealed_moves
+                            .iter()
+                            .filter(|&&rev| {
+                                sa.moves
+                                    .iter()
+                                    .filter_map(|m| dex.moves.id(&toid(m)))
+                                    .any(|m| move_matches(dex, m, rev))
+                            })
+                            .count() as f64;
+                        let ov_b = mo
+                            .revealed_moves
+                            .iter()
+                            .filter(|&&rev| {
+                                sb.moves
+                                    .iter()
+                                    .filter_map(|m| dex.moves.id(&toid(m)))
+                                    .any(|m| move_matches(dex, m, rev))
+                            })
+                            .count() as f64;
+                        let sc_a = wa * (4.0 * ov_a).exp() * if strict_item(sa) { 1.5 } else { 1.0 };
+                        let sc_b = wb * (4.0 * ov_b).exp() * if strict_item(sb) { 1.5 } else { 1.0 };
+                        sc_a.partial_cmp(&sc_b).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|&(s, _)| s.clone())
+                    .unwrap_or_else(|| base_set(dex, mo));
+
+                let base_moves: Vec<String> = mo
+                    .revealed_moves
+                    .iter()
+                    .map(|&m| dex.moves.key(m).to_string())
+                    .collect();
+
+                // Identify moves in the MAP prefix that are near-universal staples or essential
+                // synergy partners of the matched revealed moves (>= 85% conditional presence in
+                // max-overlap carriers), locking up to `open_slots - 1` of them in priority order
+                // of Bayesian lift over unconditional carrier frequency.
+                let locked_partners: Vec<usize> =
+                    if open_slots >= 2 && max_overlap_w > 0.0 && total_carrier_w > 0.0 {
+                        let mut cands: Vec<(usize, f64)> = (0..open_slots.min(pool_len))
+                            .filter_map(|i| {
+                                let p_max = move_scores[i].3 / max_overlap_w;
+                                let p_uncond = (move_scores[i].4 / total_carrier_w).max(0.05);
+                                (p_max >= 0.85).then_some((i, p_max / p_uncond.powf(0.3)))
+                            })
+                            .collect();
+                        cands.sort_by(|a, b| {
+                            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                        cands
+                            .into_iter()
+                            .take(open_slots - 1)
+                            .map(|(i, _)| i)
+                            .collect()
+                    } else {
+                        Vec::new()
+                    };
+
+                let mut combos: Vec<(Vec<usize>, f64)> = Vec::new();
+                for mask in 0..(1usize << pool_len) {
+                    if mask.count_ones() as usize != open_slots {
+                        continue;
+                    }
+                    let idxs: Vec<usize> =
+                        (0..pool_len).filter(|&i| (mask & (1 << i)) != 0).collect();
+                    let w: f64 = idxs.iter().map(|&i| move_scores[i].2).product();
+                    if w > 0.0 {
+                        combos.push((idxs, w));
+                    }
+                }
+                combos.sort_by(|a, b| {
+                    b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+                });
+                if let Some(best_w) = combos.first().map(|x| x.1) {
+                    const MAX_NOVEL_LOADOUTS: usize = 2;
+                    for (idxs, w) in combos
+                        .into_iter()
+                        .filter(|(idxs, w)| {
+                            *w >= best_w * 0.25
+                                && locked_partners.iter().all(|req| idxs.contains(req))
+                        })
+                        .take(MAX_NOVEL_LOADOUTS)
+                    {
+                        let mut set = template_set.clone();
+                        let mut mvs = base_moves.clone();
+                        for idx in idxs {
+                            mvs.push(move_scores[idx].1.clone());
+                        }
+                        mvs.truncate(4);
+                        set.moves = mvs;
+                        let pool_item = std::mem::take(&mut set.item);
+                        set.item = resolve_item(&pool_item, false);
+                        let Some(mon) = build_candidate_mon(set) else {
+                            continue;
+                        };
+                        let sig = move_sig(&mon);
+                        let mon = if sig == fallback_sig {
+                            fallback_mon.clone()
+                        } else {
+                            align_moves_to_fallback(mon)
+                        };
+                        match entries
+                            .iter_mut()
+                            .find(|(existing, _)| move_sig(existing) == sig)
+                        {
+                            Some((_, ew)) => *ew += w,
+                            None => entries.push((mon, w)),
+                        }
+                    }
+                }
+            }
+        }
+
+        if entries.is_empty()
+            || (entries.len() == 1 && move_sig(&entries[0].0) == fallback_sig)
+        {
+            return self.early_perish_draw(dex, mo, fallback_mon);
+        }
+        let total = entries.iter().map(|(_, w)| *w).sum();
+        Some(LoadoutDraw { entries, total })
     }
 
     fn fallback_set(&self, dex: &Dex, mo: &MonObs) -> PokemonSet {
-        if self.fallback_policy == FallbackPolicy::Bayesian {
+        if matches!(
+            self.fallback_policy,
+            FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian
+        ) {
             return self.bayesian_fallback_set(dex, mo, std::slice::from_ref(mo));
         }
         let pool_set = self.pool_set_for(dex, mo);
@@ -1806,6 +2434,7 @@ impl Belief {
             | FallbackPolicy::RetainPerish
             | FallbackPolicy::EarlyPerish
             | FallbackPolicy::EarlyRest
+            | FallbackPolicy::BayesianPointMass
             | FallbackPolicy::Bayesian => base_set(dex, mo),
         });
         set.level = mo.level;
@@ -1935,6 +2564,104 @@ fn legal_fallback_move(dex: &Dex, mo: &MonObs) -> String {
         .unwrap_or_else(|| "return".to_string())
 }
 
+/// Non-dominated legal moves from `mo.species`'s learnset at `mo.level`, ranked
+/// by competitive utility / STAB expected power as a backoff prior when empirical
+/// co-occurrence carriers provide fewer than 6 distinct filler moves.
+fn non_dominated_learnset_moves(dex: &Dex, mo: &MonObs) -> Vec<(MoveId, String, f64)> {
+    const ZERO_OR_DOMINATED: &[&str] = &[
+        "splash", "teleport", "falseswipe", "payday", "frustration", "growl", "leer",
+        "tailwhip", "harden", "withdraw", "kinesis", "flash", "poisongas", "poisonpowder",
+        "supersonic", "stringshot", "snore", "sweetscent", "defensecurl", "sharpen",
+        "meditate", "rage", "constrict", "absorb", "megadrain", "ember", "watergun",
+        "thundershock", "peck", "pound", "scratch", "tackle", "vinewhip", "bubble",
+        "confusion", "rockthrow", "karatechop", "gust", "smog", "lick", "leechlife",
+    ];
+    const HIGH_VALUE_STATUS: &[(&str, f64)] = &[
+        ("rest", 3.0),
+        ("sleeptalk", 2.4),
+        ("curse", 2.6),
+        ("swordsdance", 2.4),
+        ("batonpass", 2.5),
+        ("meanlook", 2.4),
+        ("spiderweb", 2.4),
+        ("perishsong", 2.5),
+        ("destinybond", 2.3),
+        ("encore", 2.4),
+        ("thunderwave", 2.3),
+        ("stunspore", 2.1),
+        ("sleeppowder", 2.6),
+        ("lovelykiss", 2.7),
+        ("spore", 2.9),
+        ("hypnosis", 2.2),
+        ("toxic", 2.2),
+        ("confuseray", 1.9),
+        ("reflect", 2.1),
+        ("lightscreen", 2.1),
+        ("substitute", 2.1),
+        ("recover", 2.8),
+        ("softboiled", 2.8),
+        ("milkdrink", 2.8),
+        ("moonlight", 2.3),
+        ("morningsun", 2.3),
+        ("synthesis", 2.3),
+        ("roar", 2.2),
+        ("whirlwind", 2.2),
+        ("protect", 2.0),
+        ("agility", 2.0),
+        ("amnesia", 1.9),
+        ("bellydrum", 2.2),
+        ("charm", 2.0),
+        ("painsplit", 2.1),
+        ("Safeguard", 1.7),
+        ("healbell", 2.3),
+        ("leechseed", 2.2),
+        ("spikes", 2.5),
+    ];
+    let species_key = dex.species.key(mo.species);
+    let Some(learnset) = format_learnsets().species(species_key) else {
+        return Vec::new();
+    };
+    let sp_types = &dex.species.get(mo.species).types;
+    let mut out: Vec<(MoveId, String, f64)> = Vec::new();
+    for m in &learnset.moves {
+        if ZERO_OR_DOMINATED.contains(&m.as_str()) {
+            continue;
+        }
+        let Some(id) = dex.moves.id(m) else { continue };
+        if !format_move_legal_at_level(species_key, m, mo.level) {
+            continue;
+        }
+        let md = dex.moves.get(id);
+        let score = if let Some(&(_, w)) = HIGH_VALUE_STATUS.iter().find(|&&(k, _)| k == m.as_str())
+        {
+            w
+        } else if m == "explosion" || m == "selfdestruct" {
+            2.6
+        } else if m == "counter" || m == "mirrorcoat" || m == "seismictoss" || m == "superfang" {
+            2.0
+        } else if m == "rapidspin" || m == "pursuit" || m == "thief" || m == "encore" {
+            1.9
+        } else if md.base_power > 0 {
+            let stab = if sp_types.iter().any(|t| t == &md.move_type) {
+                1.35
+            } else {
+                1.0
+            };
+            let acc = md
+                .accuracy
+                .as_f64()
+                .map(|p| (p / 100.0).clamp(0.5, 1.0))
+                .unwrap_or(1.0);
+            ((md.base_power as f64 * stab * acc) / 45.0).clamp(0.4, 3.0)
+        } else {
+            0.5
+        };
+        out.push((id, m.clone(), score));
+    }
+    out.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+    out
+}
+
 /// Construct a pool team's reference mons and align them to the opponent's
 /// observed roster slots by (species, level, gender). `None` =
 /// preview-inconsistent (public detail mismatch or unbuildable team).
@@ -1983,6 +2710,7 @@ fn consistent(dex: &Dex, refs: &[Pokemon], mons: &[MonObs]) -> bool {
 /// a state field breaks this fn until the field is triaged public (keep) /
 /// hidden (impute). Caller refreshes `handler_mask` afterwards.
 fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex) {
+    let public_hp = crate::import::announce_hp(dst.hp, dst.maxhp, 100);
     debug_assert_eq!(refm.base_species, dst.base_species, "ref/roster species drift");
     debug_assert_eq!(refm.level, dst.level, "ref/roster level drift");
     let Pokemon {
@@ -2003,7 +2731,7 @@ fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex) {
         stored_stats,             // HIDDEN unless transformed (copies a public mon)
         base_maxhp,               // HIDDEN → candidate's
         maxhp,                    // HIDDEN → candidate's (Transform does not copy HP)
-        hp,                       // PUBLIC amount (explicitly granted); clamped below
+        hp,                       // public bucket, reconstructed for sampled max HP
         status: _,                // public (announced)
         status_state: _,          // hidden sleep counter: declared non-goal, keep
         boosts: _,                // public (announced)
@@ -2065,10 +2793,10 @@ fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex) {
     }
     *base_maxhp = refm.base_maxhp;
     *maxhp = refm.base_maxhp;
-    // HP amount is public; a mon that never switched in is publicly full
+    // Only the announced HP bucket is public; unseen mons are full.
     let appeared = *previously_switched_in > 0 || *is_active || mo.appeared;
     if appeared {
-        *hp = (*hp).min(*maxhp);
+        *hp = crate::import::impute_hp(public_hp, 100, *maxhp);
     } else {
         *hp = *maxhp;
     }
@@ -2078,8 +2806,15 @@ fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex) {
     let mut nb = MoveSlots::default();
     for rs in refm.base_move_slots.iter() {
         if mo.revealed_moves.iter().any(|m| move_matches(dex, rs.id, *m)) {
-            match old_base.iter().find(|s| s.id == rs.id) {
-                Some(os) => nb.push(MoveSlot { shared: true, ..*os }),
+            match old_base
+                .iter()
+                .find(|s| s.id == rs.id || move_matches(dex, s.id, rs.id))
+            {
+                Some(os) => nb.push(MoveSlot {
+                    id: rs.id,
+                    shared: true,
+                    ..*os
+                }),
                 None => nb.push(*rs), // fallback-merge oddity: fresh slot
             }
         } else {
@@ -2218,6 +2953,7 @@ mod fallback_tests {
     fn test_belief() -> Belief {
         let pool: MetaPool = serde_json::from_str(META_POOL_JSON).unwrap();
         Belief {
+            hp_observations: None,
             cands: pool
                 .teams
                 .into_iter()
@@ -3595,5 +4331,49 @@ mod fallback_tests {
             "novel Mean Look + Attract Misdreavus must retain Perish Song via co-occurrence: {:?}",
             novel_mis_set.moves
         );
+
+        // Tier A verification: Jolteon loadout_draws contains multiple distinct Agility+BatonPass loadouts
+        let tier_a_draw = belief.loadout_draws.as_ref().unwrap()[0].as_ref().unwrap();
+        assert!(
+            (2..=4).contains(&tier_a_draw.entries.len()),
+            "Tier A should retain 2..=4 top loadouts, got {}",
+            tier_a_draw.entries.len()
+        );
+        // Verify predict_fallback_draws advances RNG bit-identically to determinize_in_place
+        for seed in 0..32 {
+            let mut rng_probe = SplitMix64::new(seed);
+            let fb_key = belief.predict_fallback_draws(None, &battle, 1, &mut rng_probe);
+            assert!(fb_key.is_some());
+            let mut rng_actual = SplitMix64::new(seed);
+            let _ = belief.sample_fallback_refs(None, &mut rng_actual, &battle, 1);
+            assert_eq!(
+                rng_probe.0, rng_actual.0,
+                "predict_fallback_draws and sample_fallback_refs RNG must match"
+            );
+        }
+
+        // Tier B verification: Jolteon reveals Attract (novel move combination Agility + Attract)
+        obs.ingest_line("|move|p2a: Jolteon|Attract|p1a: Target", &dex);
+        belief.sync(&dex, &obs);
+        let tier_b_draw = belief.loadout_draws.as_ref().unwrap()[0]
+            .as_ref()
+            .expect("Tier B must construct LoadoutDraw for novel move combination");
+        assert!(
+            (2..=4).contains(&tier_b_draw.entries.len()),
+            "Tier B should construct 2..=4 novel completions, got {}",
+            tier_b_draw.entries.len()
+        );
+        for (p, _) in &tier_b_draw.entries {
+            let mvs: Vec<&str> = p
+                .base_move_slots
+                .iter()
+                .map(|m| dex.moves.key(m.id))
+                .collect();
+            assert_eq!(mvs.len(), 4);
+            assert!(
+                mvs.contains(&"agility") && mvs.contains(&"attract") && mvs.contains(&"batonpass"),
+                "every Tier B completion for Agility+Attract Jolteon must retain Baton Pass: {mvs:?}"
+            );
+        }
     }
 }

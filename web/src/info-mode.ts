@@ -3,14 +3,14 @@
  * records made under it (forks, kifu) replay with their own semantics. */
 export type InfoMode = "open" | "blind";
 /** `play` is `/`; `?blind` is kept as an alias of it. Tools and alternate
- * interfaces have their own doors (`?fork`, `?evaluate`, `?solver`). */
-export type Door = "play" | "solver" | "evaluate" | "fork";
+ * interfaces have their own doors (`?fork`, `?evaluate`, `?solver`, `?pdinput`). */
+export type Door = "play" | "solver" | "evaluate" | "fork" | "pdinput";
 export { readNashVariant, type NashVariant } from "./draw-source";
 
 export function readDoor(search?: string): Door {
   const query = search ?? (typeof location === "undefined" ? "" : location.search);
   const params = new URLSearchParams(query);
-  for (const door of ["fork", "evaluate", "solver"] as const) {
+  for (const door of ["fork", "evaluate", "solver", "pdinput"] as const) {
     if (isOpen(params.get(door))) return door;
   }
   return "play";
