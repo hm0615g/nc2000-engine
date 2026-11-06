@@ -185,6 +185,7 @@ const ITEM_ALIASES = {
 	'先制のツメ': 'quickclaw', '水玉リボン': 'polkadotbow', 'ピンクのリボン': 'pinkbow',
 	'木の実ジュース': 'berryjuice', '黒帯': 'blackbelt', '銀の粉': 'silverpowder',
 	'曲がったスプーン': 'twistedspoon', '神秘の雫': 'mysticwater', '磁石': 'magnet',
+	'木炭': 'charcoal',
 	'ヒントレンズ': 'scopelens', // chourou: source typo of ピントレンズ
 };
 // Where the visible table and the hidden encoded field disagree, the choice

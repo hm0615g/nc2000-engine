@@ -1,0 +1,2287 @@
+{
+  "summary": {
+    "total_tested": 83,
+    "min_payoff": 0.5310498776766022,
+    "mean_payoff": 0.7817564647300931,
+    "max_payoff": 0.9832345021245066,
+    "sub_50_count": 0,
+    "apex_weights": [
+      0.4,
+      0.3,
+      0.15,
+      0.15
+    ],
+    "apex_ids": [
+      "apex-c04-bug-3atkstar-boomgen",
+      "red-v10-s1105-r2-s0142",
+      "apex-c08-surgical-142",
+      "red-v10-s1105-r1-s0148"
+    ]
+  },
+  "hardest_challengers": [
+    {
+      "id": "mjj-2010-garap",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ラプラス入りガラパ",
+      "author": "ガラプラス",
+      "points": 0,
+      "payoff": 0.5310498776766022,
+      "variant_payoffs": [
+        0.5294385309633507,
+        0.5278096642008556,
+        0.546944219778422,
+        0.525932887094946
+      ],
+      "species": [
+        "MarowakL55",
+        "ExeggutorL50",
+        "JolteonL50",
+        "LaprasL50",
+        "SnorlaxL50",
+        "ZapdosL50"
+      ]
+    },
+    {
+      "id": "mjj-2026-kabegon",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "寝言カビSAガチ",
+      "author": "カベゴン",
+      "points": 0,
+      "payoff": 0.5530942330682603,
+      "variant_payoffs": [
+        0.558417730984674,
+        0.5325631490915738,
+        0.5597085337366802,
+        0.5733461059094442
+      ],
+      "species": [
+        "SnorlaxL55",
+        "BlisseyL50",
+        "HeracrossL50",
+        "MarowakL50",
+        "MoltresL50",
+        "StarmieL50"
+      ]
+    },
+    {
+      "id": "mjj-2023-ukethdr",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "電磁波サンダーSA",
+      "author": "サンダーヱーヴ",
+      "points": 0,
+      "payoff": 0.5913645183097421,
+      "variant_payoffs": [
+        0.5875946106773923,
+        0.5960066873752863,
+        0.59196273710953,
+        0.591535048398466
+      ],
+      "species": [
+        "ZapdosL55",
+        "BlisseyL50",
+        "CloysterL50",
+        "MarowakL50",
+        "MisdreavusL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2020-rraikou",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "リフ奇跡ライコウA",
+      "author": "ソード＆シールド",
+      "points": 0,
+      "payoff": 0.5928247601296571,
+      "variant_payoffs": [
+        0.5740555804651153,
+        0.6130969326285133,
+        0.6199811645592164,
+        0.5751751564744971
+      ],
+      "species": [
+        "MarowakL55",
+        "RaikouL55",
+        "CloysterL50",
+        "HeracrossL50",
+        "MachampL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2013-mario",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "健太サンダーガラTA",
+      "author": "マリオパーティ１３",
+      "points": 0,
+      "payoff": 0.6234657359149935,
+      "variant_payoffs": [
+        0.6168841455098498,
+        0.6148518760217797,
+        0.6240143884335952,
+        0.6576957109298697
+      ],
+      "species": [
+        "MarowakL55",
+        "TaurosL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "ElectrodeL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2012-ibmthdr",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "いばみがサンダーA",
+      "author": "未完",
+      "points": 0,
+      "payoff": 0.6429523830771152,
+      "variant_payoffs": [
+        0.6271554505800745,
+        0.6485163648140979,
+        0.662389317724917,
+        0.6545126382807893
+      ],
+      "species": [
+        "TaurosL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "ElectrodeL50",
+        "MarowakL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2020-ukenta",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "遺伝子ケンタSAガチ",
+      "author": "受けンタ",
+      "points": 0,
+      "payoff": 0.6505221436194333,
+      "variant_payoffs": [
+        0.6026700806616314,
+        0.6917897162838093,
+        0.691422446071743,
+        0.6546921970591768
+      ],
+      "species": [
+        "TaurosL55",
+        "BlisseyL50",
+        "CloysterL50",
+        "MarowakL50",
+        "MisdreavusL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2025-hapim",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ガラサンダーWA",
+      "author": "新生ハピムウマvol.1",
+      "points": 0,
+      "payoff": 0.6526644407593203,
+      "variant_payoffs": [
+        0.6394734192132768,
+        0.6726474442550618,
+        0.677737312233965,
+        0.622801619749308
+      ],
+      "species": [
+        "MarowakL55",
+        "ZapdosL55",
+        "BlisseyL50",
+        "CloysterL50",
+        "MisdreavusL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2025-bay",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ベイリーフ＆ガニュ",
+      "author": "ハーブ園",
+      "points": 0,
+      "payoff": 0.6530002260786585,
+      "variant_payoffs": [
+        0.6595402338204696,
+        0.6267111272975672,
+        0.6677837217862564,
+        0.6733549072884131
+      ],
+      "species": [
+        "SnorlaxL55",
+        "BayleefL50",
+        "MarowakL50",
+        "MeganiumL50",
+        "MisdreavusL50",
+        "StarmieL50"
+      ]
+    },
+    {
+      "id": "mjj-2014-thdrcomb",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "サンダーバンギWAガチ",
+      "author": "サンダー昆布シリーズ",
+      "points": 0,
+      "payoff": 0.654716574533221,
+      "variant_payoffs": [
+        0.6466054082261815,
+        0.6412481630437608,
+        0.6517638621441265,
+        0.706235886720007
+      ],
+      "species": [
+        "TyranitarL55",
+        "ZapdosL55",
+        "CloysterL50",
+        "SnorlaxL50",
+        "SteelixL50",
+        "VenusaurL50"
+      ]
+    },
+    {
+      "id": "mjj-2014-offantom",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "リザードン入りTA",
+      "author": "ナマステひつまぶし",
+      "points": 0,
+      "payoff": 0.6617189736170166,
+      "variant_payoffs": [
+        0.6631973135182514,
+        0.6349292420351552,
+        0.6772471871115457,
+        0.6958279835495841
+      ],
+      "species": [
+        "CharizardL55",
+        "Porygon2L55",
+        "TaurosL55",
+        "CloysterL50",
+        "ElectrodeL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2021-raimbow",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "全属性攻撃技入り",
+      "author": "オルバリ２",
+      "points": 0,
+      "payoff": 0.6763162326432424,
+      "variant_payoffs": [
+        0.6925509473453196,
+        0.6454780618104377,
+        0.6770779843855435,
+        0.693938250027678
+      ],
+      "species": [
+        "DragoniteL55",
+        "GengarL55",
+        "TyranitarL55",
+        "HeracrossL50",
+        "SnorlaxL50",
+        "VictreebelL50"
+      ]
+    },
+    {
+      "id": "mjj-2013-jkko",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "地震雷火事親父QA",
+      "author": "地震雷火事親父",
+      "points": 0,
+      "payoff": 0.6919204476020161,
+      "variant_payoffs": [
+        0.7104256383033505,
+        0.6761939871644407,
+        0.7021286026416542,
+        0.6638180382339703
+      ],
+      "species": [
+        "AlakazamL55",
+        "EnteiL55",
+        "MarowakL55",
+        "ZapdosL55",
+        "ExeggutorL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2025-pippi",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ピッピ＆ピクシー",
+      "author": "月下雑技団",
+      "points": 0,
+      "payoff": 0.6924661547289961,
+      "variant_payoffs": [
+        0.6860610991147568,
+        0.7078265920990183,
+        0.7107141146438233,
+        0.6605774683787626
+      ],
+      "species": [
+        "MarowakL55",
+        "ZapdosL55",
+        "ClefableL50",
+        "ClefairyL50",
+        "CloysterL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2020-ebiguratan",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "エビグラタンTA",
+      "author": "エビグラタン",
+      "points": 0,
+      "payoff": 0.6944780074113672,
+      "variant_payoffs": [
+        0.6469532675286165,
+        0.7084178561792611,
+        0.7149096207766529,
+        0.7728993361976294
+      ],
+      "species": [
+        "GranbullL55",
+        "HitmonchanL55",
+        "OctilleryL55",
+        "CloysterL50",
+        "ExeggutorL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2025-dogas",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ドガース＆マタドガス",
+      "author": "サラニドガス",
+      "points": 0,
+      "payoff": 0.6995354586056786,
+      "variant_payoffs": [
+        0.706127739329896,
+        0.665510002802121,
+        0.742708992641191,
+        0.7068334209127008
+      ],
+      "species": [
+        "SnorlaxL55",
+        "KoffingL50",
+        "MarowakL50",
+        "SkarmoryL50",
+        "StarmieL50",
+        "WeezingL50"
+      ]
+    },
+    {
+      "id": "mjj-2025-pony",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ポニータ＆ギャロップ",
+      "author": "厩舎",
+      "points": 0,
+      "payoff": 0.6996970116325524,
+      "variant_payoffs": [
+        0.6915751571398451,
+        0.7144666147666521,
+        0.7235175036589294,
+        0.6679955919851952
+      ],
+      "species": [
+        "MarowakL55",
+        "RapidashL55",
+        "CloysterL50",
+        "ExeggutorL50",
+        "PonytaL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2023-vakabi",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "セミフルカビ＆タンクWA",
+      "author": "秀才カビ'23",
+      "points": 0,
+      "payoff": 0.7029097098828696,
+      "variant_payoffs": [
+        0.6831409776149026,
+        0.7200327594355663,
+        0.7024845541074756,
+        0.7218053859341154
+      ],
+      "species": [
+        "MiltankL55",
+        "SnorlaxL55",
+        "MarowakL50",
+        "MisdreavusL50",
+        "SkarmoryL50",
+        "StarmieL50"
+      ]
+    },
+    {
+      "id": "mjj-2013-trinormal",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ノーマルTA",
+      "author": "無色三重奏",
+      "points": 0,
+      "payoff": 0.7029529741260265,
+      "variant_payoffs": [
+        0.6796281785619555,
+        0.7177899396967352,
+        0.7256556291773505,
+        0.7127758427708072
+      ],
+      "species": [
+        "Porygon2L55",
+        "SnorlaxL55",
+        "TaurosL55",
+        "CloysterL50",
+        "ElectrodeL50",
+        "SkarmoryL50"
+      ]
+    },
+    {
+      "id": "mjj-2025-coil",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "コイル＆レアコイル",
+      "author": "URコイル",
+      "points": 0,
+      "payoff": 0.7041224379832561,
+      "variant_payoffs": [
+        0.7101029155399029,
+        0.6827914247093235,
+        0.7211345169041212,
+        0.7138244454591982
+      ],
+      "species": [
+        "MagnetonL55",
+        "SnorlaxL55",
+        "MagnemiteL50",
+        "MarowakL50",
+        "SkarmoryL50",
+        "StarmieL50"
+      ]
+    },
+    {
+      "id": "mjj-2025-fgran",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "グランブル逆A",
+      "author": "Jealous Dog",
+      "points": 0,
+      "payoff": 0.7078208306432692,
+      "variant_payoffs": [
+        0.68233544316165,
+        0.6967558836017667,
+        0.7275683335930332,
+        0.7781642550608275
+      ],
+      "species": [
+        "GengarL52",
+        "MarowakL52",
+        "SkarmoryL52",
+        "SnorlaxL52",
+        "StarmieL52",
+        "GranbullL51"
+      ]
+    },
+    {
+      "id": "mjj-2024-kabiliz",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "太鼓カビリザWA",
+      "author": "速攻カビガラポリ",
+      "points": 0,
+      "payoff": 0.7103727931228355,
+      "variant_payoffs": [
+        0.6962150251790568,
+        0.7099592503304853,
+        0.7301571187683337,
+        0.729169600912114
+      ],
+      "species": [
+        "CharizardL55",
+        "SnorlaxL55",
+        "CloysterL50",
+        "ElectrodeL50",
+        "MarowakL50",
+        "Porygon2L50"
+      ]
+    },
+    {
+      "id": "mjj-2020-rikyriky",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "進化前＆進化後",
+      "author": "授業参観日II",
+      "points": 0,
+      "payoff": 0.72261371357061,
+      "variant_payoffs": [
+        0.7003020079792526,
+        0.7133862090006531,
+        0.7759176536509685,
+        0.7472626642071186
+      ],
+      "species": [
+        "KadabraL55",
+        "MachampL55",
+        "AlakazamL50",
+        "CloysterL50",
+        "MachokeL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-type-normal",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ノーマルポケ縛り",
+      "author": "平凡な毎日",
+      "points": 0,
+      "payoff": 0.725351452497921,
+      "variant_payoffs": [
+        0.6898654949865751,
+        0.720956445713087,
+        0.7432679177939227,
+        0.8108542208018429
+      ],
+      "species": [
+        "SnorlaxL55",
+        "ClefableL50",
+        "MiltankL50",
+        "PidgeotL50",
+        "Porygon2L50",
+        "RaticateL50"
+      ]
+    },
+    {
+      "id": "mjj-2021-q10con",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "キュウコンAガチパ",
+      "author": "阡年の怨み",
+      "points": 0,
+      "payoff": 0.7256627015768925,
+      "variant_payoffs": [
+        0.6805465608948126,
+        0.7115603648452344,
+        0.7526452645454241,
+        0.8471945205572231
+      ],
+      "species": [
+        "NinetalesL55",
+        "SnorlaxL55",
+        "MarowakL50",
+        "MisdreavusL50",
+        "Porygon2L50",
+        "StarmieL50"
+      ]
+    },
+    {
+      "id": "mjj-2026-kc",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ケーシィ一族",
+      "author": "エスパーようせいじょ",
+      "points": 0,
+      "payoff": 0.7265823849545864,
+      "variant_payoffs": [
+        0.6999997162127387,
+        0.7498255864035377,
+        0.7220888310797438,
+        0.755476652576454
+      ],
+      "species": [
+        "AlakazamL55",
+        "KadabraL55",
+        "MachampL55",
+        "AbraL50",
+        "CloysterL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2019-dojo",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "司令塔ポリ２HAガチ",
+      "author": "藝術道場",
+      "points": 0,
+      "payoff": 0.737432633580776,
+      "variant_payoffs": [
+        0.7256123911313149,
+        0.7405294651295635,
+        0.7405140884670919,
+        0.7596781621287824
+      ],
+      "species": [
+        "Porygon2L53",
+        "CloysterL51",
+        "HitmonleeL51",
+        "MarowakL51",
+        "RaikouL51",
+        "SnorlaxL51"
+      ]
+    },
+    {
+      "id": "mjj-2013-venom",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "バンギフーWAガチ",
+      "author": "王パCH流アレンジ",
+      "points": 0,
+      "payoff": 0.742323765058424,
+      "variant_payoffs": [
+        0.7382170508615431,
+        0.729410900459785,
+        0.7279822565184212,
+        0.7934422406540546
+      ],
+      "species": [
+        "AlakazamL55",
+        "TyranitarL55",
+        "BlisseyL50",
+        "SkarmoryL50",
+        "SuicuneL50",
+        "VenusaurL50"
+      ]
+    },
+    {
+      "id": "mjj-2012-goinkyo-2020-new",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "フーヘラWAガチ",
+      "author": "おぢいちゃんII'20",
+      "points": 0,
+      "payoff": 0.74234517322573,
+      "variant_payoffs": [
+        0.6889521306343366,
+        0.7850037018223704,
+        0.7760390998554637,
+        0.7657156363130988
+      ],
+      "species": [
+        "AlakazamL55",
+        "HeracrossL55",
+        "CloysterL50",
+        "MisdreavusL50",
+        "SnorlaxL50",
+        "SteelixL50"
+      ]
+    },
+    {
+      "id": "mjj-2020-2020",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ケンタ沢村リザTA",
+      "author": "2020年の蟹さん",
+      "points": 0,
+      "payoff": 0.7439469602107626,
+      "variant_payoffs": [
+        0.7380912082343732,
+        0.7576084326742434,
+        0.7565598607007377,
+        0.7196264533975308
+      ],
+      "species": [
+        "CharizardL55",
+        "HitmonleeL55",
+        "TaurosL55",
+        "CloysterL50",
+        "MisdreavusL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2017-ball",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ビリリダマ＋マルマイン",
+      "author": "だるま落とし",
+      "points": 0,
+      "payoff": 0.7538902618765599,
+      "variant_payoffs": [
+        0.7026695414384009,
+        0.7893483106723452,
+        0.7927746822288219,
+        0.7806783317678181
+      ],
+      "species": [
+        "ElectrodeL55",
+        "MiltankL55",
+        "ExeggutorL50",
+        "GolemL50",
+        "SnorlaxL50",
+        "VoltorbL50"
+      ]
+    },
+    {
+      "id": "mjj-2011-frozenhell-2011-new",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ガン受け＋冷凍",
+      "author": "凍て付いた地獄'11",
+      "points": 0,
+      "payoff": 0.757078101519313,
+      "variant_payoffs": [
+        0.7589112248077814,
+        0.7465461749483354,
+        0.7597647499296035,
+        0.770566977481729
+      ],
+      "species": [
+        "GengarL52",
+        "SkarmoryL52",
+        "SuicuneL52",
+        "BlisseyL51",
+        "GligarL51",
+        "HoundoomL51"
+      ]
+    },
+    {
+      "id": "mjj-2011-xo",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "クソゲー",
+      "author": "クソいヤツら",
+      "points": 0,
+      "payoff": 0.7572326715744101,
+      "variant_payoffs": [
+        0.7579600856494157,
+        0.7566092578965373,
+        0.7563677947020869,
+        0.7574046049357972
+      ],
+      "species": [
+        "MachampL54",
+        "MarowakL54",
+        "Porygon2L54",
+        "ZapdosL54",
+        "StarmieL51",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2020-kb-2022",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "地震カビ＆バンギWA",
+      "author": "カビバン'22",
+      "points": 0,
+      "payoff": 0.7624417851539094,
+      "variant_payoffs": [
+        0.7825851383108045,
+        0.7390394245964391,
+        0.7543569357491675,
+        0.7636157472552049
+      ],
+      "species": [
+        "SnorlaxL55",
+        "TyranitarL55",
+        "HeracrossL50",
+        "MisdreavusL50",
+        "SkarmoryL50",
+        "StarmieL50"
+      ]
+    },
+    {
+      "id": "mjj-2019-arboc",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "司令塔アーボックHA",
+      "author": "そっちの道は蛇の道",
+      "points": 0,
+      "payoff": 0.7712561198591088,
+      "variant_payoffs": [
+        0.7739187695619035,
+        0.7693848959543229,
+        0.7705291811598453,
+        0.7686251071604912
+      ],
+      "species": [
+        "ArbokL53",
+        "CloysterL51",
+        "HitmonleeL51",
+        "MarowakL51",
+        "RaikouL51",
+        "SnorlaxL51"
+      ]
+    },
+    {
+      "id": "mjj-2021-crage",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ドククラゲAガチパ",
+      "author": "ポリガラクラゲ",
+      "points": 0,
+      "payoff": 0.7753567296456538,
+      "variant_payoffs": [
+        0.7514641730324335,
+        0.7910177888003006,
+        0.8026480688506854,
+        0.7804567564332491
+      ],
+      "species": [
+        "SnorlaxL55",
+        "TentacruelL55",
+        "CloysterL50",
+        "MarowakL50",
+        "MisdreavusL50",
+        "Porygon2L50"
+      ]
+    },
+    {
+      "id": "mjj-gym-Sekichiku-2-new",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ベトンゲンガーWA",
+      "author": "CH流セキチクジム２",
+      "points": 0,
+      "payoff": 0.7783698655195811,
+      "variant_payoffs": [
+        0.7868017813993058,
+        0.76552554009198,
+        0.7965113724019215,
+        0.7634319004798439
+      ],
+      "species": [
+        "GengarL55",
+        "MukL55",
+        "BlisseyL50",
+        "SkarmoryL50",
+        "SnorlaxL50",
+        "SuicuneL50"
+      ]
+    },
+    {
+      "id": "mjj-gym-Tamamushi",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "爆破ナッシー逆A",
+      "author": "CH流タマムシジム",
+      "points": 0,
+      "payoff": 0.7800412460359669,
+      "variant_payoffs": [
+        0.7833279023431152,
+        0.764903733208297,
+        0.7548399320672741,
+        0.826753168840937
+      ],
+      "species": [
+        "CloysterL52",
+        "GengarL52",
+        "NidokingL52",
+        "RaikouL52",
+        "SnorlaxL52",
+        "ExeggutorL51"
+      ]
+    },
+    {
+      "id": "mjj-2020-kb-2020",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "セミフルカビ＆バンギWA",
+      "author": "カビバン",
+      "points": 0,
+      "payoff": 0.7803527439804648,
+      "variant_payoffs": [
+        0.8009056083188051,
+        0.7589102411871789,
+        0.7481067772416797,
+        0.8006760780702481
+      ],
+      "species": [
+        "SnorlaxL55",
+        "TyranitarL55",
+        "HeracrossL50",
+        "MisdreavusL50",
+        "SkarmoryL50",
+        "StarmieL50"
+      ]
+    },
+    {
+      "id": "mjj-2011-jiback-2009-new",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "55自爆カビ",
+      "author": "地雷カビ ～2009～",
+      "points": 0,
+      "payoff": 0.781215856310172,
+      "variant_payoffs": [
+        0.779125678467984,
+        0.7684210493476525,
+        0.8216510146260837,
+        0.7719441194984675
+      ],
+      "species": [
+        "SnorlaxL55",
+        "BlisseyL50",
+        "ExeggutorL50",
+        "MachampL50",
+        "UmbreonL50",
+        "ZapdosL50"
+      ]
+    },
+    {
+      "id": "mjj-2025-ghos",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "トリプルゴースト",
+      "author": "タチサレ音頭",
+      "points": 0,
+      "payoff": 0.7854955665821671,
+      "variant_payoffs": [
+        0.7908385672349931,
+        0.7810489159427274,
+        0.8523613724560518,
+        0.7132750602462923
+      ],
+      "species": [
+        "GengarL55",
+        "MarowakL55",
+        "GastlyL50",
+        "HaunterL50",
+        "SnorlaxL50",
+        "StarmieL50"
+      ]
+    },
+    {
+      "id": "mjj-2011-garatank",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ガラタンク同居パ",
+      "author": "牛骨",
+      "points": 0,
+      "payoff": 0.7894661743962696,
+      "variant_payoffs": [
+        0.8108131971538381,
+        0.7669746488721507,
+        0.8051387055118926,
+        0.7618513003087013
+      ],
+      "species": [
+        "MarowakL53",
+        "ExeggutorL51",
+        "HoundoomL51",
+        "MiltankL51",
+        "SnorlaxL51",
+        "StarmieL51"
+      ]
+    },
+    {
+      "id": "mjj-gym-Sekichiku-1-new",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "53フルアタベトンA",
+      "author": "CH流セキチクジム１",
+      "points": 0,
+      "payoff": 0.789532153232204,
+      "variant_payoffs": [
+        0.793730405075339,
+        0.774863419082165,
+        0.8157713350911985,
+        0.7814351014249278
+      ],
+      "species": [
+        "MukL53",
+        "AerodactylL51",
+        "ExeggutorL51",
+        "HeracrossL51",
+        "ScizorL51",
+        "SnorlaxL51"
+      ]
+    },
+    {
+      "id": "mjj-2014-kairos",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "カイロス単A",
+      "author": "とても美しい芸術作品",
+      "points": 0,
+      "payoff": 0.7977488865114923,
+      "variant_payoffs": [
+        0.8005918000360174,
+        0.7920516878913517,
+        0.8032355947658153,
+        0.7960754727653848
+      ],
+      "species": [
+        "PinsirL55",
+        "CloysterL50",
+        "ElectrodeL50",
+        "MarowakL50",
+        "RaticateL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2013-bakabi",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "セミフルカビ単A",
+      "author": "秀才カビ",
+      "points": 0,
+      "payoff": 0.7999579618438415,
+      "variant_payoffs": [
+        0.7958074179312996,
+        0.7835039090190223,
+        0.7964281179525364,
+        0.8474640284848969
+      ],
+      "species": [
+        "SnorlaxL55",
+        "ExeggutorL50",
+        "MisdreavusL50",
+        "SkarmoryL50",
+        "SuicuneL50",
+        "UmbreonL50"
+      ]
+    },
+    {
+      "id": "mjj-2015-ayagen",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "55怪しい光ゲンガー",
+      "author": "8番道路ジム",
+      "points": 0,
+      "payoff": 0.8048456799407722,
+      "variant_payoffs": [
+        0.8238003764734481,
+        0.7959914330912184,
+        0.8189857159593034,
+        0.7578682802008797
+      ],
+      "species": [
+        "AlakazamL55",
+        "GengarL55",
+        "ExeggutorL50",
+        "SnorlaxL50",
+        "SuicuneL50",
+        "UmbreonL50"
+      ]
+    },
+    {
+      "id": "mjj-parameter-s55",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "S55族縛り",
+      "author": "ｺﾞｺﾞｺﾞｺﾞｺﾞｺﾞ",
+      "points": 0,
+      "payoff": 0.8061650776584853,
+      "variant_payoffs": [
+        0.7858145163927278,
+        0.8248235613886903,
+        0.8251192891408511,
+        0.8041620620910631
+      ],
+      "species": [
+        "AmpharosL55",
+        "OmastarL55",
+        "UrsaringL55",
+        "BlisseyL50",
+        "ExeggutorL50",
+        "MachampL50"
+      ]
+    },
+    {
+      "id": "mjj-2026-delhel",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "デルビル＆ヘルガー",
+      "author": "見習い番犬",
+      "points": 0,
+      "payoff": 0.8082680709127614,
+      "variant_payoffs": [
+        0.7414698804152995,
+        0.8565164764948298,
+        0.8419857501271398,
+        0.8561820885274792
+      ],
+      "species": [
+        "HoundoomL55",
+        "MiltankL55",
+        "ExeggutorL50",
+        "HoundourL50",
+        "ShuckleL50",
+        "SnorlaxL50"
+      ]
+    },
+    {
+      "id": "mjj-2018-girlspop",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "♀ポケモン縛り",
+      "author": "女の連帯感",
+      "points": 0,
+      "payoff": 0.8108460233596344,
+      "variant_payoffs": [
+        0.7837270769743939,
+        0.8332134784310204,
+        0.827073675567344,
+        0.8222006513697941
+      ],
+      "species": [
+        "AlakazamL55",
+        "GengarL55",
+        "MiltankL55",
+        "BlisseyL50",
+        "MisdreavusL50",
+        "VenusaurL50"
+      ]
+    },
+    {
+      "id": "mjj-2013-rainbow",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "全属性攻撃技入り",
+      "author": "オールバリエーション",
+      "points": 0,
+      "payoff": 0.8169675508663936,
+      "variant_payoffs": [
+        0.799691321078922,
+        0.8108121072456929,
+        0.8329128862970948,
+        0.8594030487770183
+      ],
+      "species": [
+        "GengarL55",
+        "TyranitarL55",
+        "ExeggutorL50",
+        "HeracrossL50",
+        "KingdraL50",
+        "SkarmoryL50"
+      ]
+    }
+  ],
+  "all_results": [
+    {
+      "id": "mjj-2010-garap",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ラプラス入りガラパ",
+      "author": "ガラプラス",
+      "points": 0,
+      "payoff": 0.5310498776766022,
+      "variant_payoffs": [
+        0.5294385309633507,
+        0.5278096642008556,
+        0.546944219778422,
+        0.525932887094946
+      ]
+    },
+    {
+      "id": "mjj-2026-kabegon",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "寝言カビSAガチ",
+      "author": "カベゴン",
+      "points": 0,
+      "payoff": 0.5530942330682603,
+      "variant_payoffs": [
+        0.558417730984674,
+        0.5325631490915738,
+        0.5597085337366802,
+        0.5733461059094442
+      ]
+    },
+    {
+      "id": "mjj-2023-ukethdr",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "電磁波サンダーSA",
+      "author": "サンダーヱーヴ",
+      "points": 0,
+      "payoff": 0.5913645183097421,
+      "variant_payoffs": [
+        0.5875946106773923,
+        0.5960066873752863,
+        0.59196273710953,
+        0.591535048398466
+      ]
+    },
+    {
+      "id": "mjj-2020-rraikou",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "リフ奇跡ライコウA",
+      "author": "ソード＆シールド",
+      "points": 0,
+      "payoff": 0.5928247601296571,
+      "variant_payoffs": [
+        0.5740555804651153,
+        0.6130969326285133,
+        0.6199811645592164,
+        0.5751751564744971
+      ]
+    },
+    {
+      "id": "mjj-2013-mario",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "健太サンダーガラTA",
+      "author": "マリオパーティ１３",
+      "points": 0,
+      "payoff": 0.6234657359149935,
+      "variant_payoffs": [
+        0.6168841455098498,
+        0.6148518760217797,
+        0.6240143884335952,
+        0.6576957109298697
+      ]
+    },
+    {
+      "id": "mjj-2012-ibmthdr",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "いばみがサンダーA",
+      "author": "未完",
+      "points": 0,
+      "payoff": 0.6429523830771152,
+      "variant_payoffs": [
+        0.6271554505800745,
+        0.6485163648140979,
+        0.662389317724917,
+        0.6545126382807893
+      ]
+    },
+    {
+      "id": "mjj-2020-ukenta",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "遺伝子ケンタSAガチ",
+      "author": "受けンタ",
+      "points": 0,
+      "payoff": 0.6505221436194333,
+      "variant_payoffs": [
+        0.6026700806616314,
+        0.6917897162838093,
+        0.691422446071743,
+        0.6546921970591768
+      ]
+    },
+    {
+      "id": "mjj-2025-hapim",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ガラサンダーWA",
+      "author": "新生ハピムウマvol.1",
+      "points": 0,
+      "payoff": 0.6526644407593203,
+      "variant_payoffs": [
+        0.6394734192132768,
+        0.6726474442550618,
+        0.677737312233965,
+        0.622801619749308
+      ]
+    },
+    {
+      "id": "mjj-2025-bay",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ベイリーフ＆ガニュ",
+      "author": "ハーブ園",
+      "points": 0,
+      "payoff": 0.6530002260786585,
+      "variant_payoffs": [
+        0.6595402338204696,
+        0.6267111272975672,
+        0.6677837217862564,
+        0.6733549072884131
+      ]
+    },
+    {
+      "id": "mjj-2014-thdrcomb",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "サンダーバンギWAガチ",
+      "author": "サンダー昆布シリーズ",
+      "points": 0,
+      "payoff": 0.654716574533221,
+      "variant_payoffs": [
+        0.6466054082261815,
+        0.6412481630437608,
+        0.6517638621441265,
+        0.706235886720007
+      ]
+    },
+    {
+      "id": "mjj-2014-offantom",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "リザードン入りTA",
+      "author": "ナマステひつまぶし",
+      "points": 0,
+      "payoff": 0.6617189736170166,
+      "variant_payoffs": [
+        0.6631973135182514,
+        0.6349292420351552,
+        0.6772471871115457,
+        0.6958279835495841
+      ]
+    },
+    {
+      "id": "mjj-2021-raimbow",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "全属性攻撃技入り",
+      "author": "オルバリ２",
+      "points": 0,
+      "payoff": 0.6763162326432424,
+      "variant_payoffs": [
+        0.6925509473453196,
+        0.6454780618104377,
+        0.6770779843855435,
+        0.693938250027678
+      ]
+    },
+    {
+      "id": "mjj-2013-jkko",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "地震雷火事親父QA",
+      "author": "地震雷火事親父",
+      "points": 0,
+      "payoff": 0.6919204476020161,
+      "variant_payoffs": [
+        0.7104256383033505,
+        0.6761939871644407,
+        0.7021286026416542,
+        0.6638180382339703
+      ]
+    },
+    {
+      "id": "mjj-2025-pippi",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ピッピ＆ピクシー",
+      "author": "月下雑技団",
+      "points": 0,
+      "payoff": 0.6924661547289961,
+      "variant_payoffs": [
+        0.6860610991147568,
+        0.7078265920990183,
+        0.7107141146438233,
+        0.6605774683787626
+      ]
+    },
+    {
+      "id": "mjj-2020-ebiguratan",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "エビグラタンTA",
+      "author": "エビグラタン",
+      "points": 0,
+      "payoff": 0.6944780074113672,
+      "variant_payoffs": [
+        0.6469532675286165,
+        0.7084178561792611,
+        0.7149096207766529,
+        0.7728993361976294
+      ]
+    },
+    {
+      "id": "mjj-2025-dogas",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ドガース＆マタドガス",
+      "author": "サラニドガス",
+      "points": 0,
+      "payoff": 0.6995354586056786,
+      "variant_payoffs": [
+        0.706127739329896,
+        0.665510002802121,
+        0.742708992641191,
+        0.7068334209127008
+      ]
+    },
+    {
+      "id": "mjj-2025-pony",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ポニータ＆ギャロップ",
+      "author": "厩舎",
+      "points": 0,
+      "payoff": 0.6996970116325524,
+      "variant_payoffs": [
+        0.6915751571398451,
+        0.7144666147666521,
+        0.7235175036589294,
+        0.6679955919851952
+      ]
+    },
+    {
+      "id": "mjj-2023-vakabi",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "セミフルカビ＆タンクWA",
+      "author": "秀才カビ'23",
+      "points": 0,
+      "payoff": 0.7029097098828696,
+      "variant_payoffs": [
+        0.6831409776149026,
+        0.7200327594355663,
+        0.7024845541074756,
+        0.7218053859341154
+      ]
+    },
+    {
+      "id": "mjj-2013-trinormal",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ノーマルTA",
+      "author": "無色三重奏",
+      "points": 0,
+      "payoff": 0.7029529741260265,
+      "variant_payoffs": [
+        0.6796281785619555,
+        0.7177899396967352,
+        0.7256556291773505,
+        0.7127758427708072
+      ]
+    },
+    {
+      "id": "mjj-2025-coil",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "コイル＆レアコイル",
+      "author": "URコイル",
+      "points": 0,
+      "payoff": 0.7041224379832561,
+      "variant_payoffs": [
+        0.7101029155399029,
+        0.6827914247093235,
+        0.7211345169041212,
+        0.7138244454591982
+      ]
+    },
+    {
+      "id": "mjj-2025-fgran",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "グランブル逆A",
+      "author": "Jealous Dog",
+      "points": 0,
+      "payoff": 0.7078208306432692,
+      "variant_payoffs": [
+        0.68233544316165,
+        0.6967558836017667,
+        0.7275683335930332,
+        0.7781642550608275
+      ]
+    },
+    {
+      "id": "mjj-2024-kabiliz",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "太鼓カビリザWA",
+      "author": "速攻カビガラポリ",
+      "points": 0,
+      "payoff": 0.7103727931228355,
+      "variant_payoffs": [
+        0.6962150251790568,
+        0.7099592503304853,
+        0.7301571187683337,
+        0.729169600912114
+      ]
+    },
+    {
+      "id": "mjj-2020-rikyriky",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "進化前＆進化後",
+      "author": "授業参観日II",
+      "points": 0,
+      "payoff": 0.72261371357061,
+      "variant_payoffs": [
+        0.7003020079792526,
+        0.7133862090006531,
+        0.7759176536509685,
+        0.7472626642071186
+      ]
+    },
+    {
+      "id": "mjj-type-normal",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ノーマルポケ縛り",
+      "author": "平凡な毎日",
+      "points": 0,
+      "payoff": 0.725351452497921,
+      "variant_payoffs": [
+        0.6898654949865751,
+        0.720956445713087,
+        0.7432679177939227,
+        0.8108542208018429
+      ]
+    },
+    {
+      "id": "mjj-2021-q10con",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "キュウコンAガチパ",
+      "author": "阡年の怨み",
+      "points": 0,
+      "payoff": 0.7256627015768925,
+      "variant_payoffs": [
+        0.6805465608948126,
+        0.7115603648452344,
+        0.7526452645454241,
+        0.8471945205572231
+      ]
+    },
+    {
+      "id": "mjj-2026-kc",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ケーシィ一族",
+      "author": "エスパーようせいじょ",
+      "points": 0,
+      "payoff": 0.7265823849545864,
+      "variant_payoffs": [
+        0.6999997162127387,
+        0.7498255864035377,
+        0.7220888310797438,
+        0.755476652576454
+      ]
+    },
+    {
+      "id": "mjj-2019-dojo",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "司令塔ポリ２HAガチ",
+      "author": "藝術道場",
+      "points": 0,
+      "payoff": 0.737432633580776,
+      "variant_payoffs": [
+        0.7256123911313149,
+        0.7405294651295635,
+        0.7405140884670919,
+        0.7596781621287824
+      ]
+    },
+    {
+      "id": "mjj-2013-venom",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "バンギフーWAガチ",
+      "author": "王パCH流アレンジ",
+      "points": 0,
+      "payoff": 0.742323765058424,
+      "variant_payoffs": [
+        0.7382170508615431,
+        0.729410900459785,
+        0.7279822565184212,
+        0.7934422406540546
+      ]
+    },
+    {
+      "id": "mjj-2012-goinkyo-2020-new",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "フーヘラWAガチ",
+      "author": "おぢいちゃんII'20",
+      "points": 0,
+      "payoff": 0.74234517322573,
+      "variant_payoffs": [
+        0.6889521306343366,
+        0.7850037018223704,
+        0.7760390998554637,
+        0.7657156363130988
+      ]
+    },
+    {
+      "id": "mjj-2020-2020",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ケンタ沢村リザTA",
+      "author": "2020年の蟹さん",
+      "points": 0,
+      "payoff": 0.7439469602107626,
+      "variant_payoffs": [
+        0.7380912082343732,
+        0.7576084326742434,
+        0.7565598607007377,
+        0.7196264533975308
+      ]
+    },
+    {
+      "id": "mjj-2017-ball",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ビリリダマ＋マルマイン",
+      "author": "だるま落とし",
+      "points": 0,
+      "payoff": 0.7538902618765599,
+      "variant_payoffs": [
+        0.7026695414384009,
+        0.7893483106723452,
+        0.7927746822288219,
+        0.7806783317678181
+      ]
+    },
+    {
+      "id": "mjj-2011-frozenhell-2011-new",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ガン受け＋冷凍",
+      "author": "凍て付いた地獄'11",
+      "points": 0,
+      "payoff": 0.757078101519313,
+      "variant_payoffs": [
+        0.7589112248077814,
+        0.7465461749483354,
+        0.7597647499296035,
+        0.770566977481729
+      ]
+    },
+    {
+      "id": "mjj-2011-xo",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "クソゲー",
+      "author": "クソいヤツら",
+      "points": 0,
+      "payoff": 0.7572326715744101,
+      "variant_payoffs": [
+        0.7579600856494157,
+        0.7566092578965373,
+        0.7563677947020869,
+        0.7574046049357972
+      ]
+    },
+    {
+      "id": "mjj-2020-kb-2022",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "地震カビ＆バンギWA",
+      "author": "カビバン'22",
+      "points": 0,
+      "payoff": 0.7624417851539094,
+      "variant_payoffs": [
+        0.7825851383108045,
+        0.7390394245964391,
+        0.7543569357491675,
+        0.7636157472552049
+      ]
+    },
+    {
+      "id": "mjj-2019-arboc",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "司令塔アーボックHA",
+      "author": "そっちの道は蛇の道",
+      "points": 0,
+      "payoff": 0.7712561198591088,
+      "variant_payoffs": [
+        0.7739187695619035,
+        0.7693848959543229,
+        0.7705291811598453,
+        0.7686251071604912
+      ]
+    },
+    {
+      "id": "mjj-2021-crage",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ドククラゲAガチパ",
+      "author": "ポリガラクラゲ",
+      "points": 0,
+      "payoff": 0.7753567296456538,
+      "variant_payoffs": [
+        0.7514641730324335,
+        0.7910177888003006,
+        0.8026480688506854,
+        0.7804567564332491
+      ]
+    },
+    {
+      "id": "mjj-gym-Sekichiku-2-new",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ベトンゲンガーWA",
+      "author": "CH流セキチクジム２",
+      "points": 0,
+      "payoff": 0.7783698655195811,
+      "variant_payoffs": [
+        0.7868017813993058,
+        0.76552554009198,
+        0.7965113724019215,
+        0.7634319004798439
+      ]
+    },
+    {
+      "id": "mjj-gym-Tamamushi",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "爆破ナッシー逆A",
+      "author": "CH流タマムシジム",
+      "points": 0,
+      "payoff": 0.7800412460359669,
+      "variant_payoffs": [
+        0.7833279023431152,
+        0.764903733208297,
+        0.7548399320672741,
+        0.826753168840937
+      ]
+    },
+    {
+      "id": "mjj-2020-kb-2020",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "セミフルカビ＆バンギWA",
+      "author": "カビバン",
+      "points": 0,
+      "payoff": 0.7803527439804648,
+      "variant_payoffs": [
+        0.8009056083188051,
+        0.7589102411871789,
+        0.7481067772416797,
+        0.8006760780702481
+      ]
+    },
+    {
+      "id": "mjj-2011-jiback-2009-new",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "55自爆カビ",
+      "author": "地雷カビ ～2009～",
+      "points": 0,
+      "payoff": 0.781215856310172,
+      "variant_payoffs": [
+        0.779125678467984,
+        0.7684210493476525,
+        0.8216510146260837,
+        0.7719441194984675
+      ]
+    },
+    {
+      "id": "mjj-2025-ghos",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "トリプルゴースト",
+      "author": "タチサレ音頭",
+      "points": 0,
+      "payoff": 0.7854955665821671,
+      "variant_payoffs": [
+        0.7908385672349931,
+        0.7810489159427274,
+        0.8523613724560518,
+        0.7132750602462923
+      ]
+    },
+    {
+      "id": "mjj-2011-garatank",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ガラタンク同居パ",
+      "author": "牛骨",
+      "points": 0,
+      "payoff": 0.7894661743962696,
+      "variant_payoffs": [
+        0.8108131971538381,
+        0.7669746488721507,
+        0.8051387055118926,
+        0.7618513003087013
+      ]
+    },
+    {
+      "id": "mjj-gym-Sekichiku-1-new",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "53フルアタベトンA",
+      "author": "CH流セキチクジム１",
+      "points": 0,
+      "payoff": 0.789532153232204,
+      "variant_payoffs": [
+        0.793730405075339,
+        0.774863419082165,
+        0.8157713350911985,
+        0.7814351014249278
+      ]
+    },
+    {
+      "id": "mjj-2014-kairos",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "カイロス単A",
+      "author": "とても美しい芸術作品",
+      "points": 0,
+      "payoff": 0.7977488865114923,
+      "variant_payoffs": [
+        0.8005918000360174,
+        0.7920516878913517,
+        0.8032355947658153,
+        0.7960754727653848
+      ]
+    },
+    {
+      "id": "mjj-2013-bakabi",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "セミフルカビ単A",
+      "author": "秀才カビ",
+      "points": 0,
+      "payoff": 0.7999579618438415,
+      "variant_payoffs": [
+        0.7958074179312996,
+        0.7835039090190223,
+        0.7964281179525364,
+        0.8474640284848969
+      ]
+    },
+    {
+      "id": "mjj-2015-ayagen",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "55怪しい光ゲンガー",
+      "author": "8番道路ジム",
+      "points": 0,
+      "payoff": 0.8048456799407722,
+      "variant_payoffs": [
+        0.8238003764734481,
+        0.7959914330912184,
+        0.8189857159593034,
+        0.7578682802008797
+      ]
+    },
+    {
+      "id": "mjj-parameter-s55",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "S55族縛り",
+      "author": "ｺﾞｺﾞｺﾞｺﾞｺﾞｺﾞ",
+      "points": 0,
+      "payoff": 0.8061650776584853,
+      "variant_payoffs": [
+        0.7858145163927278,
+        0.8248235613886903,
+        0.8251192891408511,
+        0.8041620620910631
+      ]
+    },
+    {
+      "id": "mjj-2026-delhel",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "デルビル＆ヘルガー",
+      "author": "見習い番犬",
+      "points": 0,
+      "payoff": 0.8082680709127614,
+      "variant_payoffs": [
+        0.7414698804152995,
+        0.8565164764948298,
+        0.8419857501271398,
+        0.8561820885274792
+      ]
+    },
+    {
+      "id": "mjj-2018-girlspop",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "♀ポケモン縛り",
+      "author": "女の連帯感",
+      "points": 0,
+      "payoff": 0.8108460233596344,
+      "variant_payoffs": [
+        0.7837270769743939,
+        0.8332134784310204,
+        0.827073675567344,
+        0.8222006513697941
+      ]
+    },
+    {
+      "id": "mjj-2013-rainbow",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "全属性攻撃技入り",
+      "author": "オールバリエーション",
+      "points": 0,
+      "payoff": 0.8169675508663936,
+      "variant_payoffs": [
+        0.799691321078922,
+        0.8108121072456929,
+        0.8329128862970948,
+        0.8594030487770183
+      ]
+    },
+    {
+      "id": "mjj-2021-dog",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "犬統一パ",
+      "author": "いぬ",
+      "points": 0,
+      "payoff": 0.8177568988830068,
+      "variant_payoffs": [
+        0.8044608180773593,
+        0.8003965905632766,
+        0.8342887647174244,
+        0.8714018651697765
+      ]
+    },
+    {
+      "id": "mjj-2025-marashi",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "起死回生マグマラシ",
+      "author": "小さな大噴火",
+      "points": 0,
+      "payoff": 0.8217255384556046,
+      "variant_payoffs": [
+        0.8234575186145133,
+        0.8203398896508387,
+        0.8261081749622516,
+        0.8154955858013996
+      ]
+    },
+    {
+      "id": "mjj-2022-sa",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "頭文字サ縛り",
+      "author": "サ軍団・復刻版",
+      "points": 0,
+      "payoff": 0.8218128953218253,
+      "variant_payoffs": [
+        0.8068874001183606,
+        0.8254494662373024,
+        0.851312510739297,
+        0.8248414586159721
+      ]
+    },
+    {
+      "id": "mjj-2011-layer-2017",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "変則レベル編成",
+      "author": "多重層2017",
+      "points": 0,
+      "payoff": 0.8260610519136119,
+      "variant_payoffs": [
+        0.8202017080698837,
+        0.8261197996266634,
+        0.8395710065209199,
+        0.8280585187968099
+      ]
+    },
+    {
+      "id": "mjj-2023-nidori",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ニドリーナ入り",
+      "author": "ニドゲリーナ",
+      "points": 0,
+      "payoff": 0.8262705601203929,
+      "variant_payoffs": [
+        0.8026356637245705,
+        0.8319707933386625,
+        0.8657515541600345,
+        0.8384154900330716
+      ]
+    },
+    {
+      "id": "mjj-2020-freefree",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "50メロ悪夢バタフリー",
+      "author": "夢で逢い魔性",
+      "points": 0,
+      "payoff": 0.8291734574468894,
+      "variant_payoffs": [
+        0.8146322114425167,
+        0.8282534869842014,
+        0.8551210339816173,
+        0.8438424778491973
+      ]
+    },
+    {
+      "id": "mjj-2016-ukestar-2016-new",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "悪夢☆A＋ガン受け",
+      "author": "ユメスター",
+      "points": 0,
+      "payoff": 0.8303018428347415,
+      "variant_payoffs": [
+        0.8193739397682324,
+        0.8298224825654412,
+        0.8308644873332922,
+        0.8598389937188159
+      ]
+    },
+    {
+      "id": "mjj-2021-science",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "理科っぽいパ",
+      "author": "りかけいのパーティ",
+      "points": 0,
+      "payoff": 0.832612368252452,
+      "variant_payoffs": [
+        0.8201484221461341,
+        0.8370827304678681,
+        0.8518773351546064,
+        0.8376438665363134
+      ]
+    },
+    {
+      "id": "mjj-2023-triple",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "「３」縛り",
+      "author": "トリプルアタッカー改",
+      "points": 0,
+      "payoff": 0.8328738714761065,
+      "variant_payoffs": [
+        0.817988356799103,
+        0.8387074376885963,
+        0.859656553859893,
+        0.8341187624726819
+      ]
+    },
+    {
+      "id": "mjj-2016-ukestar-2023-new",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "つつくエア入り",
+      "author": "ユメスター'23",
+      "points": 0,
+      "payoff": 0.8365728441448679,
+      "variant_payoffs": [
+        0.8220822177229317,
+        0.8378237833393362,
+        0.8398340727054764,
+        0.8694514076538196
+      ]
+    },
+    {
+      "id": "mjj-2009-ebi",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "54遺伝子エビワラー",
+      "author": "因果応報",
+      "points": 0,
+      "payoff": 0.8379861783165571,
+      "variant_payoffs": [
+        0.8275730494868186,
+        0.8454183384459668,
+        0.8439052947571444,
+        0.8449710851631193
+      ]
+    },
+    {
+      "id": "mjj-2011-jiback-2011-new",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "55自爆カビ",
+      "author": "地雷カビ ～2011～",
+      "points": 0,
+      "payoff": 0.8444639260411482,
+      "variant_payoffs": [
+        0.8376990046768998,
+        0.8496860288841533,
+        0.8702122832879294,
+        0.8263111534130188
+      ]
+    },
+    {
+      "id": "mjj-2010-54quartet",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ヘライコウ＋54QA",
+      "author": "準・暴走四天王",
+      "points": 0,
+      "payoff": 0.8466263152891155,
+      "variant_payoffs": [
+        0.8361983707361453,
+        0.8478266581991342,
+        0.8691493236652443,
+        0.8495104732342027
+      ]
+    },
+    {
+      "id": "mjj-2022-105s",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "素早さ105族TA",
+      "author": "信号機イチマルゴ",
+      "points": 0,
+      "payoff": 0.8495897755198341,
+      "variant_payoffs": [
+        0.8535702770266104,
+        0.8554376519944709,
+        0.8537296252895387,
+        0.8231395021161185
+      ]
+    },
+    {
+      "id": "mjj-2010-molf-2019",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "モルフォン逆A",
+      "author": "命を懸けた忍の掟19",
+      "points": 0,
+      "payoff": 0.8545885133728416,
+      "variant_payoffs": [
+        0.9004679748496365,
+        0.8083330577180047,
+        0.8658008312093677,
+        0.813541876241203
+      ]
+    },
+    {
+      "id": "mjj-2021-bat",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "クロバット逆A",
+      "author": "お月見太鼓",
+      "points": 0,
+      "payoff": 0.864441315919341,
+      "variant_payoffs": [
+        0.8694487473994078,
+        0.8432026810444486,
+        0.8641994394053584,
+        0.8938073115695975
+      ]
+    },
+    {
+      "id": "mjj-2026-pau",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "パウワウ＆ジュゴン",
+      "author": "おやこじま",
+      "points": 0,
+      "payoff": 0.8708402611802248,
+      "variant_payoffs": [
+        0.8711199657524445,
+        0.8708611982232467,
+        0.8816918135929843,
+        0.8592009558221693
+      ]
+    },
+    {
+      "id": "mjj-2024-to",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "頭文字ト縛り",
+      "author": "ト軍団",
+      "points": 0,
+      "payoff": 0.8717928201540852,
+      "variant_payoffs": [
+        0.8576091307198667,
+        0.8784490162434677,
+        0.8902841752236249,
+        0.8778122447303625
+      ]
+    },
+    {
+      "id": "mjj-2020-ukeTA",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "爆発しないTA",
+      "author": "不発団",
+      "points": 0,
+      "payoff": 0.8744310047708133,
+      "variant_payoffs": [
+        0.861528320611449,
+        0.8920025827187436,
+        0.8908018111783941,
+        0.8573242002256765
+      ]
+    },
+    {
+      "id": "mjj-parameter-b65",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "B65族縛り",
+      "author": "華の65期生Bクラス",
+      "points": 0,
+      "payoff": 0.8779665846410348,
+      "variant_payoffs": [
+        0.8708270045664717,
+        0.8786094940129718,
+        0.8959949970002319,
+        0.8776912337367987
+      ]
+    },
+    {
+      "id": "mjj-2022-yume",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "金縛り・夢喰い・ニードル",
+      "author": "ゆめしばり",
+      "points": 0,
+      "payoff": 0.8782091318453764,
+      "variant_payoffs": [
+        0.8809085095475004,
+        0.8744057102903409,
+        0.8840117294841401,
+        0.8728150367776867
+      ]
+    },
+    {
+      "id": "mjj-2022-ra",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "頭文字ラ縛り",
+      "author": "ラ軍団・復刻版",
+      "points": 0,
+      "payoff": 0.8787499728467538,
+      "variant_payoffs": [
+        0.8704865512660261,
+        0.8770760481686416,
+        0.8883776257679169,
+        0.894505960163755
+      ]
+    },
+    {
+      "id": "mjj-2024-he",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "頭文字ヘ縛り",
+      "author": "ヘ軍団",
+      "points": 0,
+      "payoff": 0.8915351182148228,
+      "variant_payoffs": [
+        0.8812221156328485,
+        0.8778925098691169,
+        0.9235394851131447,
+        0.9143173082265114
+      ]
+    },
+    {
+      "id": "mjj-2011-gsmushi",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "アリアドスレディアン",
+      "author": "G.S.insector",
+      "points": 0,
+      "payoff": 0.8976734390204273,
+      "variant_payoffs": [
+        0.888819674938264,
+        0.9082070189728836,
+        0.9125270383424003,
+        0.885362717345977
+      ]
+    },
+    {
+      "id": "mjj-2017-night",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ヨルノズク逆A",
+      "author": "Nightbird",
+      "points": 0,
+      "payoff": 0.9032012514273199,
+      "variant_payoffs": [
+        0.9153437357752024,
+        0.8891673368406348,
+        0.913674343543358,
+        0.8884160302236308
+      ]
+    },
+    {
+      "id": "mjj-2013-gy",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "進化前＆進化後",
+      "author": "授業参観日",
+      "points": 0,
+      "payoff": 0.9063107908051965,
+      "variant_payoffs": [
+        0.902289628245372,
+        0.9034439471745934,
+        0.9252961928610198,
+        0.9037821761701116
+      ]
+    },
+    {
+      "id": "mjj-2021-GL",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "女性ジムリの切り札",
+      "author": "女帝の切り札",
+      "points": 0,
+      "payoff": 0.913634997623433,
+      "variant_payoffs": [
+        0.9085973805830007,
+        0.9084294533878979,
+        0.9426169588957372,
+        0.9084977702633524
+      ]
+    },
+    {
+      "id": "mjj-2010-jakten",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "ナッシー逆エース",
+      "author": "弱みは晒すもの",
+      "points": 0,
+      "payoff": 0.9214170311071858,
+      "variant_payoffs": [
+        0.9304888798509782,
+        0.9094967591023035,
+        0.9294758056985117,
+        0.9130072038755109
+      ]
+    },
+    {
+      "id": "mjj-2021-e",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "頭文字エ縛り",
+      "author": "エ軍団・復刻版",
+      "points": 0,
+      "payoff": 0.9302079209655121,
+      "variant_payoffs": [
+        0.9448263476761855,
+        0.9211166805381091,
+        0.9188832772493876,
+        0.9207325743079807
+      ]
+    },
+    {
+      "id": "mjj-2014-mew",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "名前3文字縛り",
+      "author": "3文字隊 ～2000～",
+      "points": 0,
+      "payoff": 0.9332753833934482,
+      "variant_payoffs": [
+        0.9369739190167439,
+        0.9307254106958486,
+        0.9310033522726361,
+        0.9307845982473378
+      ]
+    },
+    {
+      "id": "mjj-2025-su",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "頭文字ス縛り",
+      "author": "ス軍団",
+      "points": 0,
+      "payoff": 0.9420047730112254,
+      "variant_payoffs": [
+        0.9486925955180879,
+        0.9281388843992702,
+        0.9479637278756174,
+        0.9459434020191111
+      ]
+    },
+    {
+      "id": "mjj-2026-iseki",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "アルフの遺跡縛り",
+      "author": "アルフ遺跡研究員",
+      "points": 0,
+      "payoff": 0.9756909995370164,
+      "variant_payoffs": [
+        0.9797856355401158,
+        0.9706874218018462,
+        0.9755270675598154,
+        0.9749430576429597
+      ]
+    },
+    {
+      "id": "mjj-2021-sunaqa",
+      "source": "data/kodoku-r3/majinjima-new-2026.json",
+      "title": "砂嵐覚えないQA",
+      "author": "砂不足",
+      "points": 0,
+      "payoff": 0.9832345021245066,
+      "variant_payoffs": [
+        0.983124858848456,
+        0.9999406652342558,
+        0.96667867102028,
+        0.9666703890787034
+      ]
+    }
+  ]
+}

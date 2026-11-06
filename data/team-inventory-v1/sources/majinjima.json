@@ -1,10 +1,11 @@
 {
  "source": "majinjima-party-v1",
  "index": "https://majinjima.ma-jide.com/party/index.htm",
- "indexFingerprint": "91f7e5c768320b0d0429417346244af11baaffb56196b0541e9b9168e505a691",
+ "indexFingerprint": "8a7b290f1ca652b273324530896b1a01f0bac41b21397df1c78c9ce42f5b79ca",
  "retrieved": "2026-09-29",
  "selection": "index rows with the author genre colour #ffaaaa (かなりガチなパーティ)",
  "pageFingerprints": {
+  "2026/kabegon.htm": "c17cd710d340fb36e8b09ea53c742f220ac2a4afc9bc007abe0f69c0ed02c954",
   "2025/hapim.htm": "2e6c64f2a75beba555c790fb04c7e0a19c86864c0a75707b6521703a5c5fd9bd",
   "2024/kabiliz.htm": "9e2e89c5814bbffd6b2f1b8251f999d20e0e7a78f058180c46c0b1a132ba29fa",
   "2023/1geki.htm": "e20fcdf87c535811764bec079df5a20d7d4e0db64c375508551e8462735d7261",
@@ -42,6 +43,7 @@
   "105": "Pink Bow",
   "110": "Miracle Berry",
   "119": "Thick Club",
+  "139": "Charcoal",
   "140": "Berry Juice",
   "141": "Scope Lens",
   "147": "Leftovers",
@@ -50,6 +52,301 @@
   "175": "Gold Berry"
  },
  "entries": [
+  {
+   "id": "mjj-2026-kabegon",
+   "url": "https://majinjima.ma-jide.com/party/2026/kabegon.htm",
+   "name": "カベゴン",
+   "heading": "カベゴン",
+   "indexMembers": "55カビゴン 50ガラガラ 50スターミー 50ハピナス 50ヘラクロス 50ファイヤー",
+   "indexSummary": "寝言カビSAガチ",
+   "indexLogCount": "９",
+   "ohkoRule": false,
+   "primary": true,
+   "encoded": true,
+   "table": [
+    [
+     "55",
+     "カビゴン",
+     "捨て身タックル",
+     "鈍い",
+     "眠る",
+     "寝言",
+     "食べ残し",
+     "FFFF"
+    ],
+    [
+     "50",
+     "ガラガラ",
+     "ホネブーメラン",
+     "岩雪崩",
+     "目覚めるパワー蟲",
+     "剣の舞",
+     "太いホネ",
+     "DDFF"
+    ],
+    [
+     "50",
+     "スターミー",
+     "ハイドロポンプ",
+     "サイコキネシス",
+     "電磁波",
+     "自己再生",
+     "奇跡の実",
+     "1FFF"
+    ],
+    [
+     "50",
+     "ハピナス",
+     "冷凍ビーム",
+     "大文字",
+     "プレゼント",
+     "タマゴ産み",
+     "先制のツメ",
+     "1FFF"
+    ],
+    [
+     "50",
+     "ヘラクロス",
+     "メガホーン",
+     "地震",
+     "眠る",
+     "寝言",
+     "ピントレンズ",
+     "FFFF"
+    ],
+    [
+     "50",
+     "ファイヤー",
+     "大文字",
+     "日本晴れ",
+     "眠る",
+     "寝言",
+     "木炭",
+     "1FFF"
+    ]
+   ],
+   "cField": "1_x_143_55_F_F_F_F_63_63_63_63_63_39_175_157_215_0_0_0_0_3_3_3_3_0_0_147_x_105_50_D_D_F_F_63_63_63_63_63_156_158_238_15_0_0_0_0_3_3_3_3_0_0_119_x_121_50_1_F_F_F_63_0_63_63_63_57_95_87_106_0_0_0_0_3_3_3_3_0_0_110_x_242_50_1_F_F_F_63_0_63_63_63_59_127_218_136_0_0_0_0_3_3_3_3_0_0_74_x_214_50_F_F_F_F_63_63_63_63_63_225_90_157_215_0_0_0_0_3_3_3_3_0_0_141_x_146_50_1_F_F_F_63_0_63_63_63_127_242_157_215_0_0_0_0_3_3_3_3_0_0_139",
+   "sets": [
+    {
+     "name": "Snorlax",
+     "species": "Snorlax",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Double-Edge",
+      "Curse",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 55,
+     "happiness": 255
+    },
+    {
+     "name": "Marowak",
+     "species": "Marowak",
+     "item": "Thick Club",
+     "ability": "No Ability",
+     "moves": [
+      "Bonemerang",
+      "Rock Slide",
+      "Hidden Power Bug",
+      "Swords Dance"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 26,
+      "def": 26,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Starmie",
+     "species": "Starmie",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Hydro Pump",
+      "Psychic",
+      "Thunder Wave",
+      "Recover"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Blissey",
+     "species": "Blissey",
+     "item": "Quick Claw",
+     "ability": "No Ability",
+     "moves": [
+      "Ice Beam",
+      "Fire Blast",
+      "Present",
+      "Soft-Boiled"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "F",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Heracross",
+     "species": "Heracross",
+     "item": "Scope Lens",
+     "ability": "No Ability",
+     "moves": [
+      "Megahorn",
+      "Earthquake",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Moltres",
+     "species": "Moltres",
+     "item": "Charcoal",
+     "ability": "No Ability",
+     "moves": [
+      "Fire Blast",
+      "Sunny Day",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ],
+   "valid": true,
+   "errors": [],
+   "canonicalizeApplied": [
+    {
+     "severity": "fix",
+     "code": "gender-fill",
+     "mon": "snorlax",
+     "slot": 0,
+     "expected": "M"
+    },
+    {
+     "severity": "fix",
+     "code": "gender-fill",
+     "mon": "marowak",
+     "slot": 1,
+     "expected": "M"
+    },
+    {
+     "severity": "fix",
+     "code": "gender-fill",
+     "mon": "heracross",
+     "slot": 4,
+     "expected": "M"
+    }
+   ],
+   "notes": []
+  },
   {
    "id": "mjj-2025-hapim",
    "url": "https://majinjima.ma-jide.com/party/2025/hapim.htm",

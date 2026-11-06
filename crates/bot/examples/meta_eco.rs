@@ -16626,6 +16626,15 @@ fn cmd_eval_partybox(args: &[String]) {
     let max_turns: u16 = num(args, "--max-turns", 250);
     let ns: u32 = num(args, "--ns", 3);
     let seed: u64 = num(args, "--seed", 20261111);
+    let chall_file = flag(args, "--challengers");
+    let filter = flag(args, "--filter");
+    let out_report_path = flag(args, "--out").unwrap_or_else(|| {
+        if chall_file.as_deref().unwrap_or("").contains("majinjima") {
+            "data/kodoku-r3/majinjima-eval-report.json".to_string()
+        } else {
+            "data/partybox-v0/eval-report.json".to_string()
+        }
+    });
     let threads: usize = flag(args, "--threads")
         .map(|v| v.parse().unwrap())
         .unwrap_or_else(|| {
@@ -16668,54 +16677,99 @@ fn cmd_eval_partybox(args: &[String]) {
 
     let mut challengers: Vec<Challenger> = Vec::new();
 
-    if let Ok(txt) = std::fs::read_to_string(root.join("data/partybox-v0/teams.json")) {
-        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
-            if let Some(arr) = v["teams"].as_array() {
-                for t in arr {
-                    let id = t["id"].as_str().unwrap().to_string();
-                    let title = t["title"].as_str().unwrap_or("").to_string();
-                    let author = t["author"].as_str().unwrap_or("").to_string();
-                    let pts = t["points"].as_i64().unwrap_or(0);
-                    let raw = t["sets"].as_array().unwrap();
-                    let upgraded = normalize_team_dvs_evs(&dex, raw);
-                    if let Some(canon) = gen.canonize(&dex, &upgraded) {
-                        if let Ok(sets) = to_sets(&canon) {
-                            let r = CompiledRoster6::compile(&dex, &sets);
-                            challengers.push(Challenger {
-                                id,
-                                source: "PartyBox".to_string(),
-                                title,
-                                author,
-                                points: pts,
-                                roster: r,
-                            });
+    if let Some(ref cf) = chall_file {
+        if let Ok(txt) = std::fs::read_to_string(root.join(cf)) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                let teams_arr = v["teams"].as_array().or_else(|| v["entries"].as_array());
+                if let Some(arr) = teams_arr {
+                    for t in arr {
+                        let id = t["id"].as_str().unwrap_or("").to_string();
+                        let title = t["summary"]
+                            .as_str()
+                            .or_else(|| t["title"].as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let author = t["name"]
+                            .as_str()
+                            .or_else(|| t["author"].as_str())
+                            .unwrap_or("majinjima")
+                            .to_string();
+                        if let Some(ref f) = filter {
+                            if !id.contains(f) && !author.contains(f) && !title.contains(f) {
+                                continue;
+                            }
+                        }
+                        let pts = t["points"].as_i64().unwrap_or(0);
+                        if let Some(raw) = t["sets"].as_array() {
+                            let upgraded = normalize_team_dvs_evs(&dex, raw);
+                            if let Some(canon) = gen.canonize(&dex, &upgraded) {
+                                if let Ok(sets) = to_sets(&canon) {
+                                    let r = CompiledRoster6::compile(&dex, &sets);
+                                    challengers.push(Challenger {
+                                        id,
+                                        source: cf.clone(),
+                                        title,
+                                        author,
+                                        points: pts,
+                                        roster: r,
+                                    });
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-    }
-
-    if let Ok(txt) = std::fs::read_to_string(root.join("data/community-rentals-v0/teams.json")) {
-        if let Ok(v) = serde_json::from_str::<Value>(&txt) {
-            if let Some(arr) = v["teams"].as_array() {
-                for (idx, t) in arr.iter().enumerate() {
-                    let cban = t["cban"].as_i64().unwrap_or((idx + 1) as i64);
-                    let id = format!("rental-cban-{}", cban);
-                    let title = t["archetype"].as_str().unwrap_or("").to_string();
-                    if let Some(raw) = t["sets"].as_array() {
+    } else {
+        if let Ok(txt) = std::fs::read_to_string(root.join("data/partybox-v0/teams.json")) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(arr) = v["teams"].as_array() {
+                    for t in arr {
+                        let id = t["id"].as_str().unwrap().to_string();
+                        let title = t["title"].as_str().unwrap_or("").to_string();
+                        let author = t["author"].as_str().unwrap_or("").to_string();
+                        let pts = t["points"].as_i64().unwrap_or(0);
+                        let raw = t["sets"].as_array().unwrap();
                         let upgraded = normalize_team_dvs_evs(&dex, raw);
                         if let Some(canon) = gen.canonize(&dex, &upgraded) {
                             if let Ok(sets) = to_sets(&canon) {
                                 let r = CompiledRoster6::compile(&dex, &sets);
                                 challengers.push(Challenger {
                                     id,
-                                    source: "psense".to_string(),
+                                    source: "PartyBox".to_string(),
                                     title,
-                                    author: "psense".to_string(),
-                                    points: 0,
+                                    author,
+                                    points: pts,
                                     roster: r,
                                 });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Ok(txt) = std::fs::read_to_string(root.join("data/community-rentals-v0/teams.json")) {
+            if let Ok(v) = serde_json::from_str::<Value>(&txt) {
+                if let Some(arr) = v["teams"].as_array() {
+                    for (idx, t) in arr.iter().enumerate() {
+                        let cban = t["cban"].as_i64().unwrap_or((idx + 1) as i64);
+                        let id = format!("rental-cban-{}", cban);
+                        let title = t["archetype"].as_str().unwrap_or("").to_string();
+                        if let Some(raw) = t["sets"].as_array() {
+                            let upgraded = normalize_team_dvs_evs(&dex, raw);
+                            if let Some(canon) = gen.canonize(&dex, &upgraded) {
+                                if let Ok(sets) = to_sets(&canon) {
+                                    let r = CompiledRoster6::compile(&dex, &sets);
+                                    challengers.push(Challenger {
+                                        id,
+                                        source: "psense".to_string(),
+                                        title,
+                                        author: "psense".to_string(),
+                                        points: 0,
+                                        roster: r,
+                                    });
+                                }
                             }
                         }
                     }
@@ -16906,8 +16960,8 @@ fn cmd_eval_partybox(args: &[String]) {
         }).collect::<Vec<_>>(),
     });
 
-    write_json_atomic(&root.join("data/partybox-v0/eval-report.json"), &out_json);
-    println!("\nReport saved to data/partybox-v0/eval-report.json (elapsed: {:.1}s)", t_start.elapsed().as_secs_f64());
+    write_json_atomic(&root.join(&out_report_path), &out_json);
+    println!("\nReport saved to {} (elapsed: {:.1}s)", out_report_path, t_start.elapsed().as_secs_f64());
 }
 
 #[allow(dead_code)] // Historical pre-training-v3 bake; the command uses catalog_preview::run.
