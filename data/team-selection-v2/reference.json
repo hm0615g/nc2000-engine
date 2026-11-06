@@ -3,13 +3,13 @@
  "generator": "tools/build-team-products-v2.js",
  "protocol": "data/team-selection-v2/PROTOCOL.md",
  "counts": {
-  "records": 244,
-  "eligible": 226,
+  "records": 245,
+  "eligible": 227,
   "measured": 212,
   "selected": 33,
   "pending": 9,
   "notSelected": 170,
-  "prior": 411,
+  "prior": 468,
   "nashSupport": 4,
   "legacyNashV3Support": 5
  },
@@ -419,7 +419,7 @@
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
-   "variantCluster": "vc71",
+   "variantCluster": "vc72",
    "species": [
     "Machamp",
     "Skarmory",
@@ -607,7 +607,7 @@
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
-   "variantCluster": "vc70",
+   "variantCluster": "vc71",
    "species": [
     "Gengar",
     "Heracross",
@@ -1077,7 +1077,7 @@
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
-   "variantCluster": "vc72",
+   "variantCluster": "vc73",
    "species": [
     "Gengar",
     "Steelix",
@@ -1124,7 +1124,7 @@
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
-   "variantCluster": "vc68",
+   "variantCluster": "vc69",
    "species": [
     "Exeggutor",
     "Starmie",
@@ -1171,7 +1171,7 @@
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
-   "variantCluster": "vc73",
+   "variantCluster": "vc74",
    "species": [
     "Gengar",
     "Exeggutor",
@@ -1218,7 +1218,7 @@
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
-   "variantCluster": "vc75",
+   "variantCluster": "vc76",
    "species": [
     "Steelix",
     "Starmie",
@@ -1265,7 +1265,7 @@
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
-   "variantCluster": "vc69",
+   "variantCluster": "vc70",
    "species": [
     "Jynx",
     "Starmie",
@@ -1547,7 +1547,7 @@
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
-   "variantCluster": "vc74",
+   "variantCluster": "vc75",
    "species": [
     "Gengar",
     "Exeggutor",
@@ -1876,7 +1876,7 @@
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
-   "variantCluster": "vc76",
+   "variantCluster": "vc77",
    "species": [
     "Clefable",
     "Gengar",
@@ -3348,7 +3348,7 @@
    "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
-   "variantCluster": "vc67",
+   "variantCluster": "vc68",
    "species": [
     "Zapdos",
     "Tyranitar",
@@ -3808,7 +3808,7 @@
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
-   "variantCluster": "vc64",
+   "variantCluster": "vc65",
    "species": [
     "Snorlax",
     "Heracross",
@@ -3854,7 +3854,7 @@
    "priorWeight": 1,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
-   "variantCluster": "vc65",
+   "variantCluster": "vc66",
    "species": [
     "Porygon2",
     "Poliwrath",
@@ -3900,7 +3900,7 @@
    "priorWeight": 0.5,
    "nashWeight": 0,
    "legacyNashV3Weight": 0,
-   "variantCluster": "vc66",
+   "variantCluster": "vc67",
    "species": [
     "Vaporeon",
     "Porygon2",
@@ -4535,6 +4535,54 @@
     "Ditto"
    ],
    "levels": [
+    50
+   ]
+  },
+  {
+   "id": "mjj-2026-kabegon",
+   "family": "majinjima",
+   "origin": "human",
+   "source": {
+    "kind": "author-team-page",
+    "name": "魔人島 俺のパーティ軍団",
+    "url": "https://majinjima.ma-jide.com/party/2026/kabegon.htm",
+    "version": "カベゴン",
+    "indexName": "カベゴン",
+    "indexSummary": "寝言カビSAガチ",
+    "retrieved": "2026-09-29",
+    "fingerprint": "c17cd710d340fb36e8b09ea53c742f220ac2a4afc9bc007abe0f69c0ed02c954",
+    "encodedSource": true,
+    "primaryOfEntry": true
+   },
+   "eligibility": {
+    "status": "eligible",
+    "reasons": []
+   },
+   "measuredAs": null,
+   "v1Label": null,
+   "label": null,
+   "reason": null,
+   "evidence": null,
+   "catalog": false,
+   "drawWeight": 0,
+   "priorWeight": 1,
+   "nashWeight": 0,
+   "legacyNashV3Weight": 0,
+   "variantCluster": "vc64",
+   "species": [
+    "Snorlax",
+    "Marowak",
+    "Starmie",
+    "Blissey",
+    "Heracross",
+    "Moltres"
+   ],
+   "levels": [
+    55,
+    50,
+    50,
+    50,
+    50,
     50
    ]
   },
