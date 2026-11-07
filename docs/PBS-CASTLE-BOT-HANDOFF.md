@@ -98,11 +98,9 @@ node tools/pbs-discord-bot.js --token "$DISCORD_TOKEN" --name "NC2000" --pass "n
 
 ### Result semantics
 
-- The live PBS test showed that the result banner returned to a P2 client reflected the P1 result.
-- `tools/pbs-client.js` converts the PBS result to the bot perspective using `mySide` (`0 = P1`, `1 = P2`).
-- Thus, when the bot is P2, a P1 `WIN` is recorded as bot `LOSE`; the inverse mapping is applied for P1 `LOSE`.
-- The bot-perspective result is stored in `data/pbs-matches.jsonl` and used for opponent win/loss counters.
-
+- Completed Castle LLOG names the actual winner as `TRAINER_NAME WIN!` after Unicode normalization.
+- Result handling uses that winner name and does not infer WIN/LOSE from P1/P2 position.
+- Final `ACTION=LLOG` is consulted only for result classification and is not merged into reconstructed battle state by this fork-specific fix.
 
 ---
 
