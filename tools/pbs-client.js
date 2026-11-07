@@ -2169,35 +2169,47 @@ function appendDecisionLog(entry) {
 
 
 /**
- * Convert the PBS result banner into an outcome from this bot's point of view.
- *
- * PBS WIN/LOSE banners are P1-relative. Therefore a P2 bot must invert them.
- * mySide: 0 = P1, 1 = P2.
+ * Resolve the PBS result from the explicit winner name.
  */
-function resolveBotOutcomeFromFinishedHtml(html, mySide) {
-  const text = String(html || '');
-
-  const p1Won = text.includes('\uff37\uff29\uff2e\uff01');
-  const p1Lost = text.includes('\uff2c\uff2f\uff33\uff25');
-  const draw = text.includes('\uff24\uff32\uff21\uff37');
-
-  if (draw) return 'DRAW';
-
-  if (!p1Won && !p1Lost) {
-    return 'END';
-  }
-
-  if (mySide === 0) {
-    return p1Won ? 'WIN' : 'LOSE';
-  }
-
-  if (mySide === 1) {
-    return p1Won ? 'LOSE' : 'WIN';
-  }
-
-  return 'END';
+function escapeRegexLiteral(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function resolveBotOutcomeFromFinishedHtml(
+  html,
+  botName,
+  foeName
+) {
+  const text = String(html || '')
+    .replace(/<[^>]*>/g, ' ')
+    .normalize('NFKC')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (/(?:^|\s)DRAW(?:!|\s|$)/u.test(text)) return 'DRAW';
+
+  const wins = name => {
+    const n = String(name || '')
+      .normalize('NFKC')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!n) return false;
+
+    return new RegExp(
+      '(?:^|\\s)' +
+        escapeRegexLiteral(n) +
+        '\\s+WIN!(?=\\s|$)',
+      'u'
+    ).test(text);
+  };
+
+  const botWin = wins(botName);
+  const foeWin = wins(foeName);
+
+  if (botWin === foeWin) return 'END';
+  return botWin ? 'WIN' : 'LOSE';
+}
 // ------------------------------------------------------------------ Single Game Runner
 async function playOneGame(gameIdx) {
   const client = new PbsHttpClient();
@@ -2309,7 +2321,21 @@ async function playOneGame(gameIdx) {
           res = await client.get(`${ROOM_URL}?ACTION=TITLE`);
           continue;
         }
-        const outcome = resolveBotOutcomeFromFinishedHtml(page.html || '', mySide);
+        let resultHtml = page.html || '';
+        try {
+          const resultLog =
+            await client.get(`${ROOM_URL}?ACTION=LLOG`);
+          if (resultLog && resultLog.html) {
+            resultHtml += '\n' + resultLog.html;
+          }
+        } catch {}
+
+        const outcome =
+          resolveBotOutcomeFromFinishedHtml(
+            resultHtml,
+            NAME,
+            foeName
+          );
         log(`Game #${gameIdx + 1} finished (${outcome}) after ${decisions} decisions.`);
         finalizeMatchRecord(outcome);
         // Touch PS.cgi?ACTION=END if link is present so the room cleans up promptly

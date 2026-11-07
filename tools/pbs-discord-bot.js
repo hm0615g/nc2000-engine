@@ -923,21 +923,30 @@ async function runSelfTest() {
     }
   );
 
-  // PBS result banners are P1-relative; verify conversion to the bot's perspective.
-  const p1WinHtml =
-    '<html>' + String.fromCodePoint(0xff37, 0xff29, 0xff2e, 0xff01) + '</html>';
-  const p1LoseHtml =
-    '<html>' + String.fromCodePoint(0xff2c, 0xff2f, 0xff33, 0xff25) + '</html>';
-  const drawHtml =
-    '<html>' + String.fromCodePoint(0xff24, 0xff32, 0xff21, 0xff37) + '</html>';
+  const fwWin = String.fromCodePoint(
+    0xff37, 0xff29, 0xff2e, 0xff01
+  );
 
-  assert.strictEqual(resolveBotOutcomeFromFinishedHtml(p1WinHtml, 0), 'WIN');
-  assert.strictEqual(resolveBotOutcomeFromFinishedHtml(p1WinHtml, 1), 'LOSE');
-  assert.strictEqual(resolveBotOutcomeFromFinishedHtml(p1LoseHtml, 0), 'LOSE');
-  assert.strictEqual(resolveBotOutcomeFromFinishedHtml(p1LoseHtml, 1), 'WIN');
-  assert.strictEqual(resolveBotOutcomeFromFinishedHtml(drawHtml, 0), 'DRAW');
-  assert.strictEqual(resolveBotOutcomeFromFinishedHtml(drawHtml, 1), 'DRAW');
+  const roomEWinner =
+    '\u30df\u30dc\u30c4\u30c0\u30de';
 
+  assert.strictEqual(
+    resolveBotOutcomeFromFinishedHtml(
+      `<p>puniu3pbs ${fwWin}</p>`,
+      'puniu3pbs',
+      'human'
+    ),
+    'WIN'
+  );
+
+  assert.strictEqual(
+    resolveBotOutcomeFromFinishedHtml(
+      `<p>${roomEWinner} ${fwWin}</p>`,
+      'puniu3pbs',
+      roomEWinner
+    ),
+    'LOSE'
+  );
   const cfg = loadConfig({ 'dry-run-pbs': true, 'event-log': '', 'auto-pick-room-sec': '0' });
   cfg.eventLogPath = '';
   const bot = new CastleDiscordBot(cfg);
@@ -998,7 +1007,7 @@ async function runSelfTest() {
   assert.strictEqual(launchedMatches[1].roomLabel, '第3');
   assert.strictEqual(launchedMatches[1].tier, 'mercy');
 
-  console.log('[discord-bot] Self-test passed (第1=C, 第2=D, 第3=E, 第4=F, 第5=G, 第6=H + bot-perspective outcome conversion)!');
+  console.log('[discord-bot] Self-test passed (第1=C, 第2=D, 第3=E, 第4=F, 第5=G, 第6=H + winner-name outcome conversion)!');
 }
 
 async function main() {
