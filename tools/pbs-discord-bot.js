@@ -35,7 +35,17 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
-const { PbsHttpClient, classifyPage, resolveBotOutcomeFromFinishedHtml } = require('./pbs-client.js');
+const {
+  PbsHttpClient,
+  classifyPage,
+  resolveBotOutcomeFromFinishedHtml,
+  parseLlogHtml,
+  advanceLlogTrackerToTurn,
+  mergeLlogIntoSeenFoeMons,
+  buildAndSanitizePositionSpec,
+  resolveLegalPbsMoveOption,
+  recordOpponentObservation,
+} = require('./pbs-client.js');
 
 const REPO = path.resolve(__dirname, '..');
 
@@ -1007,7 +1017,357 @@ async function runSelfTest() {
   assert.strictEqual(launchedMatches[1].roomLabel, '第3');
   assert.strictEqual(launchedMatches[1].tier, 'mercy');
 
-  console.log('[discord-bot] Self-test passed (第1=C, 第2=D, 第3=E, 第4=F, 第5=G, 第6=H + winner-name outcome conversion)!');
+  // --- LLOG & PositionSpec State Reconstruction Self-Tests ---
+  const wasm = require(path.join(REPO, 'crates/wasm/pkg-node/nc2000_wasm.js'));
+  const wasmDex = new wasm.Dex();
+  const beliefPoolPath = path.join(REPO, 'data/belief-pool-v3/belief-pool.json');
+  const beliefPoolJson = fs.readFileSync(beliefPoolPath, 'utf8');
+
+  const previewSides = [
+    [
+      { species: 'Snorlax', speciesId: 'snorlax', level: 55, gender: 'M', item_flag: true },
+      { species: 'Zapdos', speciesId: 'zapdos', level: 50, gender: 'N', item_flag: true },
+      { species: 'Suicune', speciesId: 'suicune', level: 50, gender: 'N', item_flag: true },
+      { species: 'Marowak', speciesId: 'marowak', level: 50, gender: 'M', item_flag: true },
+      { species: 'Cloyster', speciesId: 'cloyster', level: 50, gender: 'M', item_flag: true },
+      { species: 'Misdreavus', speciesId: 'misdreavus', level: 50, gender: 'M', item_flag: true },
+    ],
+    [
+      { species: 'Raikou', speciesId: 'raikou', level: 50, gender: 'N', item_flag: true },
+      { species: 'Exeggutor', speciesId: 'exeggutor', level: 50, gender: 'M', item_flag: true },
+      { species: 'Tyranitar', speciesId: 'tyranitar', level: 55, gender: 'M', item_flag: true },
+      { species: 'Skarmory', speciesId: 'skarmory', level: 50, gender: 'M', item_flag: true },
+      { species: 'Miltank', speciesId: 'miltank', level: 50, gender: 'F', item_flag: true },
+      { species: 'Gengar', speciesId: 'gengar', level: 50, gender: 'M', item_flag: true },
+    ],
+  ];
+
+  // Test 1: <HR> turn progression, side conditions (reflect, safeguard, spikes), weather, and 5-turn expiration
+  const sampleLlog = `
+    <HR>
+    <P ALIGN="left">カビゴン をくりだした！<BR></P>
+    <P ALIGN="right">ライコウ をくりだした！<BR></P>
+    <HR>
+    <P ALIGN="right">ライコウ の リフレクター！<BR>ひかりのかべが あらわれた！<BR></P>
+    <P ALIGN="left">カビゴン の しんぴのまもり！<BR>しんぴのヴェールに つつまれた！<BR></P>
+    <HR>
+    <P ALIGN="right">ライコウ の あまごい！<BR>あめが ふりだした！<BR></P>
+    <P ALIGN="left">カビゴン の のしかかり！<BR>ライコウ は まひして 技が 出にくくなった！<BR></P>
+    <P ALIGN="center">あめが ふりつづいている<BR></P>
+    <HR>
+    <P ALIGN="left">カビゴン の はらだいこ！<BR>カビゴン の こうげきが ぐーんとあがった！<BR></P>
+    <P ALIGN="right">ライコウ は しびれて うごけない！<BR></P>
+    <P ALIGN="center">あめが ふりつづいている<BR></P>
+    <HR>
+    <P ALIGN="left">カビゴン の ねむる！<BR>カビゴン は けんこうになって ねむってしまった！<BR>カビゴン は はっかのみで めをさました！<BR></P>
+    <P ALIGN="right">ライコウ の １０まんボルト！<BR></P>
+    <P ALIGN="center">あめが ふりつづいている<BR></P>
+    <HR>
+    <P ALIGN="left">カビゴン の のしかかり！<BR></P>
+    <P ALIGN="right">ライコウ の ほえる！<BR>サンダー が ひきずりだされた！<BR></P>
+    <P ALIGN="center">あめが ふりつづいている<BR></P>
+  `;
+  const parsed5 = parseLlogHtml(sampleLlog, previewSides);
+  const parsedTurn6 = parseLlogHtml(sampleLlog + '<HR>', previewSides);
+  assert.strictEqual(parsed5.turn, 5);
+  assert.strictEqual(parsedTurn6.turn, 6);
+  // At Turn 5, Reflect & Safeguard started on Turn 1 are still active (5 - 1 = 4 < 5), rain has 4 upkeeps
+  assert.strictEqual(parsed5.sides[1].conditions.get('reflect'), 1);
+  assert.strictEqual(parsed5.sides[0].conditions.get('safeguard'), 1);
+  assert.strictEqual(parsed5.weather.key, 'raindance');
+  assert.strictEqual(parsed5.weather.upkeeps, 4);
+  // At Turn 6 (after 5th turn completed), Reflect & Safeguard started on Turn 1 must expire automatically
+  assert.strictEqual(parsedTurn6.sides[1].conditions.has('reflect'), false);
+  assert.strictEqual(parsedTurn6.sides[0].conditions.has('safeguard'), false);
+  // Snorlax was roared out for Zapdos on Turn 5 -> Zapdos is active at slot 1 with switchInTurn = 5, appearCount = 1
+  assert.strictEqual(parsed5.sides[0].activeSlot, 1);
+  assert.strictEqual(parsed5.sides[0].mons[1].switchInTurn, 5);
+  assert.strictEqual(parsed5.sides[0].mons[1].appearCount, 1);
+  assert.strictEqual(parsed5.sides[0].mons[0].itemCurrent, '');
+  assert.strictEqual(parsed5.sides[0].mons[0].itemOriginal, 'mintberry');
+  // Raikou was paralyzed on Turn 2 -> compPar = true
+  assert.strictEqual(parsed5.sides[1].mons[0].status, 'par');
+  assert.strictEqual(parsed5.sides[1].mons[0].compPar, true);
+
+  // Test 2: Side conditions & field effects update even when previewSides is empty (actorSlot unresolved)
+  const unresolvedHtml = `
+    <HR>
+    <HR>
+    <P ALIGN="right">フォレトス の まきびし！<BR></P>
+    <P ALIGN="left">スターミー の ひかりのかべ！<BR></P>
+    <HR>
+    <P ALIGN="right">フォレトス の すなあらし！<BR></P>
+  `;
+  const unresolvedParsed = parseLlogHtml(unresolvedHtml, [[], []]);
+  assert.strictEqual(unresolvedParsed.turn, 2);
+  assert.strictEqual(unresolvedParsed.sides[0].conditions.get('spikes'), 1);
+  assert.strictEqual(unresolvedParsed.sides[0].conditions.get('lightscreen'), 1);
+  assert.strictEqual(unresolvedParsed.weather.key, 'sandstorm');
+  assert.strictEqual(unresolvedParsed.sides[1].actedThisTurn, true);
+  assert.strictEqual(unresolvedParsed.sides[1].lastMove, 'sandstorm');
+
+  // Test 3: Volatiles, Encore/Disable, Toxic counter, Companions, Multi-turn moves, Baton Pass, and WASM PositionSpec validation
+  const complexLlog = `
+    <HR>
+    <P ALIGN="left">サンダー をくりだした！<BR></P>
+    <P ALIGN="right">ナッシー をくりだした！<BR></P>
+    <HR>
+    <P ALIGN="left">サンダー の みがわり！<BR>サンダー の みがわりが あらわれた！<BR></P>
+    <P ALIGN="right">ナッシー の やどりぎのタネ！<BR>サンダー に タネが うえつけられた！<BR></P>
+    <P ALIGN="left">サンダー の たべのこしで たいりょくが かいふくした！<BR></P>
+    <HR>
+    <P ALIGN="left">サンダー の かげぶんしん！<BR>サンダー の かいひりつが あがった！<BR></P>
+    <P ALIGN="right">ナッシー の どくどく！<BR>サンダー は もうどくを あびた！<BR></P>
+    <P ALIGN="left">サンダー は どくのダメージを うけた！<BR></P>
+    <HR>
+    <P ALIGN="left">サンダー の バトンタッチ！<BR></P>
+  `;
+  const complexParsed = parseLlogHtml(complexLlog, previewSides);
+  assert.strictEqual(complexParsed.turn, 3);
+  assert.strictEqual(complexParsed.sides[0].pendingBp, true);
+  assert.strictEqual(complexParsed.sides[0].mons[1].boosts[6], 1);
+  assert.strictEqual(complexParsed.sides[0].mons[1].volatiles.has('substitute'), true);
+  assert.strictEqual(complexParsed.sides[0].mons[1].volatiles.has('leechseed'), true);
+  assert.strictEqual(complexParsed.sides[0].mons[1].toxCounter, 1);
+
+  const makeFullSet = s => ({
+    name: s.species,
+    species: s.species,
+    level: s.level,
+    item: s.item,
+    ability: 'No Ability',
+    moves: s.moves,
+    gender: s.gender,
+    happiness: 255,
+    evs: { hp: 255, atk: 255, def: 255, spa: 255, spd: 255, spe: 255 },
+    ivs: { hp: 31, atk: 31, def: 31, spa: 31, spd: 31, spe: 31 },
+  });
+  const ownSets = [
+    { species: 'Snorlax', level: 55, gender: 'M', item: 'Mint Berry', moves: ['Body Slam', 'Belly Drum', 'Rest', 'Earthquake'] },
+    { species: 'Zapdos', level: 50, gender: 'N', item: 'Leftovers', moves: ['Thunderbolt', 'Substitute', 'Double Team', 'Baton Pass'] },
+    { species: 'Suicune', level: 50, gender: 'N', item: 'Leftovers', moves: ['Surf', 'Ice Beam', 'Rest', 'Sleep Talk'] },
+    { species: 'Marowak', level: 50, gender: 'M', item: 'Thick Club', moves: ['Earthquake', 'Rock Slide', 'Swords Dance', 'Hidden Power Bug'] },
+    { species: 'Cloyster', level: 50, gender: 'M', item: 'Leftovers', moves: ['Spikes', 'Surf', 'Explosion', 'Toxic'] },
+    { species: 'Misdreavus', level: 50, gender: 'M', item: 'Leftovers', moves: ['Mean Look', 'Perish Song', 'Protect', 'Thunderbolt'] },
+  ].map(makeFullSet);
+
+  const initSeenFoe = () => previewSides[1].map(pm => ({
+    species: pm.species,
+    speciesId: pm.speciesId,
+    level: pm.level,
+    gender: pm.gender,
+    itemFlag: pm.item_flag,
+    appeared: false,
+    fainted: false,
+    hp: null,
+    maxHp: null,
+    status: '',
+    itemOriginal: null,
+    itemCurrent: null,
+    noLeftovers: false,
+    damagedTurnsCount: 0,
+    revealedMoves: [],
+    uses: {},
+  }));
+
+  const seenFoeMons = initSeenFoe();
+  mergeLlogIntoSeenFoeMons({
+    llog: complexParsed,
+    foeSide: 1,
+    seenFoeMons,
+    previewSides,
+    battleTurn: null,
+    turnNum: 3,
+    isForceSwitch: true,
+    lastFoeActiveSlot: 1,
+  });
+
+  const specBp = buildAndSanitizePositionSpec({
+    mySide: 0,
+    turn: 3,
+    ownSets,
+    previewSides,
+    pickedRosterSlots: [1, 0, 2],
+    battleTurn: {
+      turn: 3,
+      sides: [
+        { speciesId: 'zapdos', hp: 120, maxHp: 197, status: 'tox' },
+        { speciesId: 'exeggutor', hp: 202, maxHp: 202, status: '' },
+      ],
+      options: [
+        { kind: 'switch', value: 'C2', slotIndex: 2, speciesId: 'snorlax', hp: 312, maxHp: 312 },
+        { kind: 'switch', value: 'C3', slotIndex: 3, speciesId: 'suicune', hp: 207, maxHp: 207 },
+      ],
+      trapped: false,
+    },
+    pdat: null,
+    llog: complexParsed,
+    seenFoeMons,
+    teamPreview: false,
+    forceSwitch: true,
+  });
+  // Mid-turn Baton Pass replacement must have upkeep_this_turn = false and pending_bp = true
+  assert.strictEqual(specBp.upkeep_this_turn, false);
+  assert.strictEqual(specBp.sides[0].pending_bp, true);
+  assert.strictEqual(specBp.sides[0].mons[1].tox_counter, 1);
+
+  // Validate with actual Rust WASM ProtocolSearcher (`#[serde(deny_unknown_fields)]` + `PositionSpec::check()`)
+  const searcher = new wasm.ProtocolSearcher(wasmDex, 0, beliefPoolJson, 42, 0.4);
+  searcher.setPosition(JSON.stringify(specBp));
+  searcher.step(16);
+  const bpBest = searcher.best();
+  assert.ok(bpBest.startsWith('switch '));
+  if (typeof searcher.free === 'function') searcher.free();
+
+  // Test 4: Final LLOG merge on match end (e.g., Selfdestruct / Explosion fainting on final turn)
+  const finalLlog = `
+    <HR>
+    <P ALIGN="left">カビゴン をくりだした！<BR></P>
+    <P ALIGN="right">ナッシー をくりだした！<BR></P>
+    <HR>
+    <P ALIGN="right">ナッシー の だいばくはつ！<BR>ナッシー は たおれた！<BR>カビゴン は たおれた！<BR></P>
+  `;
+  const finalParsed = parseLlogHtml(finalLlog, previewSides);
+  const finalSeen = initSeenFoe();
+  const finalMerged = mergeLlogIntoSeenFoeMons({
+    llog: finalParsed,
+    foeSide: 1,
+    seenFoeMons: finalSeen,
+    previewSides,
+    battleTurn: null,
+    turnNum: finalParsed.turn,
+    isForceSwitch: false,
+    lastFoeActiveSlot: 1,
+  });
+  const exeggutorObs = finalSeen[1];
+  assert.ok(exeggutorObs);
+  assert.strictEqual(exeggutorObs.appeared, true);
+  assert.strictEqual(exeggutorObs.fainted, true);
+  assert.strictEqual(exeggutorObs.hp, 0);
+  assert.ok(exeggutorObs.revealedMoves.includes('explosion'));
+  assert.strictEqual(exeggutorObs.uses.explosion, 1);
+
+  const oppDb = { schema: 'pbs-opponent-db-v1', updatedAt: null, players: {}, shells: {} };
+  recordOpponentObservation({
+    opponentDb: oppDb,
+    foeName: 'テスト相手',
+    foePreviewMons: previewSides[1],
+    seenFoeMons: finalSeen,
+    llogFoeMons: finalMerged.llogFoeMons,
+    outcome: 'WIN',
+  });
+  assert.strictEqual(oppDb.players['テスト相手'].games, 1);
+  const shellBuckets = Object.values(oppDb.players['テスト相手'].shells);
+  assert.strictEqual(shellBuckets.length, 1);
+  assert.strictEqual(shellBuckets[0].mons['exeggutor:50'].moves.explosion, 1);
+
+  // Test 5: resolveLegalPbsMoveOption diagnostic trace
+  const specMove = buildAndSanitizePositionSpec({
+    mySide: 0,
+    turn: 2,
+    ownSets,
+    previewSides,
+    pickedRosterSlots: [0, 1, 2],
+    battleTurn: {
+      turn: 2,
+      sides: [
+        { speciesId: 'snorlax', hp: 280, maxHp: 312, status: '' },
+        { speciesId: 'raikou', hp: 197, maxHp: 197, status: '' },
+      ],
+      options: [
+        { kind: 'move', value: 'W1', slotIndex: 1, moveId: 'bodyslam', pp: 23 },
+        { kind: 'move', value: 'W4', slotIndex: 4, moveId: 'earthquake', pp: 16 },
+        { kind: 'switch', value: 'C2', slotIndex: 2, speciesId: 'zapdos', hp: 197, maxHp: 197 },
+      ],
+      trapped: false,
+    },
+    pdat: null,
+    llog: parsed5,
+    seenFoeMons,
+    teamPreview: false,
+    forceSwitch: false,
+  });
+  const resolvedOpt = resolveLegalPbsMoveOption({
+    bestChoice: 'move bodyslam',
+    rootPolicy: { actions: [{ input: 'move bodyslam', visits: 100 }] },
+    spec: specMove,
+    pickedRosterSlots: [0, 1, 2],
+    options: [
+      { kind: 'move', value: 'W1', slotIndex: 1, moveId: 'bodyslam', pp: 23 },
+      { kind: 'move', value: 'W4', slotIndex: 4, moveId: 'earthquake', pp: 16 },
+    ],
+    ownSets,
+    isRandom: false,
+  });
+  assert.strictEqual(resolvedOpt.value, 'W1');
+  assert.strictEqual(resolvedOpt.mappingPath, 'direct:move-slot');
+  assert.strictEqual(resolvedOpt.matchedAction, 'move bodyslam');
+
+  // Verify normal move turn PositionSpec is accepted by WASM ProtocolSearcher
+  const searcherMove = new wasm.ProtocolSearcher(wasmDex, 0, beliefPoolJson, 43, 0.4);
+  searcherMove.setPosition(JSON.stringify(specMove));
+  searcherMove.step(16);
+  assert.ok(searcherMove.best().length > 0);
+  if (typeof searcherMove.free === 'function') searcherMove.free();
+
+  // Test 6: Encore/Disable, Sleep Talk called move (revealed without PP deduction), Mean Look trapped, and post-faint forceSwitch
+  const specialMechanicsLlog = `
+    <HR>
+    <P ALIGN="left">スイクン をくりだした！<BR></P>
+    <P ALIGN="right">ゲンガー をくりだした！<BR></P>
+    <HR>
+    <P ALIGN="right">ゲンガー の くろいまなざし！<BR>スイクン は にげられなくなった！<BR></P>
+    <P ALIGN="left">スイクン の ねむる！<BR>スイクン は けんこうになって ねむってしまった！<BR></P>
+    <HR>
+    <P ALIGN="right">ゲンガー の かなしばり！<BR>スイクン の ねむるを 封じた！<BR></P>
+    <P ALIGN="left">スイクン は ぐうぐう ねむっている<BR>スイクン の <B>ねごと</B>！<BR>スイクン の <B>れいとうビーム</B>！<BR></P>
+  `;
+  const specialParsed = parseLlogHtml(specialMechanicsLlog, previewSides);
+  assert.strictEqual(specialParsed.turn, 2);
+  // Sleep Talk deducted 1 PP from sleeptalk, 0 PP from icebeam, and revealed both
+  assert.strictEqual(specialParsed.sides[0].mons[2].uses.sleeptalk, 1);
+  assert.strictEqual(specialParsed.sides[0].mons[2].uses.icebeam, undefined);
+  assert.strictEqual(specialParsed.sides[0].mons[2].revealedMoves.has('sleeptalk'), true);
+  assert.strictEqual(specialParsed.sides[0].mons[2].revealedMoves.has('icebeam'), true);
+  assert.strictEqual(specialParsed.sides[0].mons[2].volatiles.has('trapped'), true);
+  assert.strictEqual(specialParsed.sides[0].mons[2].volatiles.get('disable').move, 'rest');
+
+  const specSpecial = buildAndSanitizePositionSpec({
+    mySide: 0,
+    turn: 3,
+    ownSets,
+    previewSides,
+    pickedRosterSlots: [2, 0, 1],
+    battleTurn: {
+      turn: 3,
+      sides: [
+        { speciesId: 'suicune', hp: 207, maxHp: 207, status: 'slp' },
+        { speciesId: 'gengar', hp: 130, maxHp: 167, status: '' },
+      ],
+      options: [
+        { kind: 'move', value: 'W1', slotIndex: 1, moveId: 'surf', pp: 24 },
+        { kind: 'move', value: 'W2', slotIndex: 2, moveId: 'icebeam', pp: 16 },
+        { kind: 'move', value: 'W3', slotIndex: 3, moveId: 'rest', pp: 15 },
+        { kind: 'move', value: 'W4', slotIndex: 4, moveId: 'sleeptalk', pp: 15 },
+      ],
+      trapped: false,
+    },
+    pdat: null,
+    llog: specialParsed,
+    seenFoeMons: initSeenFoe(),
+    teamPreview: false,
+    forceSwitch: false,
+  });
+  assert.strictEqual(specSpecial.trapped, true);
+  const restPpEntry = specSpecial.sides[0].mons[2].pp.find(p => p.move === 'rest');
+  assert.strictEqual(restPpEntry.disabled, true);
+  const searcherSpecial = new wasm.ProtocolSearcher(wasmDex, 0, beliefPoolJson, 44, 0.4);
+  searcherSpecial.setPosition(JSON.stringify(specSpecial));
+  searcherSpecial.step(16);
+  assert.ok(searcherSpecial.best().startsWith('move '));
+  if (typeof searcherSpecial.free === 'function') searcherSpecial.free();
+
+  console.log('[discord-bot] Self-test passed (第1=C..第6=H + LLOG/PositionSpec state machine + WASM validation)!');
 }
 
 async function main() {

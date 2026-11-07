@@ -100,7 +100,7 @@ node tools/pbs-discord-bot.js --token "$DISCORD_TOKEN" --name "NC2000" --pass "n
 
 - Completed Castle LLOG names the actual winner as `TRAINER_NAME WIN!` after Unicode normalization.
 - Result handling uses that winner name and does not infer WIN/LOSE from P1/P2 position.
-- Final `ACTION=LLOG` is consulted only for result classification and is not merged into reconstructed battle state by this fork-specific fix.
+- Final `ACTION=LLOG` is parsed through `parseLlogHtml()` and merged into `seenFoeMons` / `lastLlogFoeMons` before recording match outcomes and opponent observations so final-turn moves (e.g., `Selfdestruct` / `Explosion`), faints, PP uses, and item reveals are persisted.
 
 ---
 
