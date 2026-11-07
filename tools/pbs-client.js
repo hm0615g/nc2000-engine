@@ -70,6 +70,10 @@ if (args.help || args.h) {
   --opponent-db FILE   JSON path for persistent opponent memory & online adaptation
                        (default: data/pbs-opponent-db.json; --no-opponent-db to disable)
   --match-log FILE     JSONL path for completed match records (default: data/pbs-matches.jsonl)
+  --trace-dir DIR      Directory for per-match raw HTML + state trace bundles
+                       (default: data/pbs-traces; --no-trace to disable)
+  --anomaly-log FILE   JSONL path for automated parity check anomalies
+                       (default: data/pbs-anomalies.jsonl; --no-anomaly-log to disable)
   --no-human-delay     Disable human-like minimum pacing delays
   --random             Fast uniform-legal driver (no WASM search; useful for testing)
   --decision-log F     Append JSONL decision records to F
@@ -133,6 +137,22 @@ const MATCH_LOG_PATH = args['no-match-log']
       args['match-log'] && args['match-log'] !== true
         ? String(args['match-log'])
         : 'data/pbs-matches.jsonl'
+    );
+const TRACE_DIR_PATH = args['no-trace']
+  ? ''
+  : path.resolve(
+      REPO,
+      args['trace-dir'] && args['trace-dir'] !== true
+        ? String(args['trace-dir'])
+        : 'data/pbs-traces'
+    );
+const ANOMALY_LOG_PATH = args['no-anomaly-log']
+  ? ''
+  : path.resolve(
+      REPO,
+      args['anomaly-log'] && args['anomaly-log'] !== true
+        ? String(args['anomaly-log'])
+        : 'data/pbs-anomalies.jsonl'
     );
 
 const profileText = fs.readFileSync(path.join(REPO, 'data/search-profiles.json'), 'utf8');
@@ -626,15 +646,24 @@ function parsePreviewTtCell(ttHtml) {
     const beforeLv = line.split(/<b>|LV\s*\d+/i)[0] || line;
     const gender = beforeLv.includes('♂') ? 'M' : beforeLv.includes('♀') ? 'F' : '';
     const jpName = normJp(beforeLv);
-    const speciesId = JP_TO_SPECIES_ID[jpName] || 'pikachu';
+    const mappedSpId = JP_TO_SPECIES_ID[jpName] || null;
+    const speciesId = mappedSpId || 'pikachu';
     const spObj = dexData.species[speciesId];
-    mons.push({
+    const monObj = {
       species: spObj ? spObj.name : 'Pikachu',
       speciesId,
       level,
       gender,
       item_flag: itemFlag,
-    });
+    };
+    if (!mappedSpId && jpName) {
+      Object.defineProperty(monObj, '_unmappedJp', {
+        value: jpName,
+        enumerable: false,
+        configurable: true,
+      });
+    }
+    mons.push(monObj);
   }
   return mons;
 }
@@ -677,14 +706,22 @@ function parseBattleTurnHtml(html) {
         const pp = ppMatch ? parseInt(ppMatch[1], 10) : null;
         const moveNameJp = normJp(label.replace(/\[\s*\d+\s*\].*$/, ''));
         const moveId = JP_TO_MOVE_ID[moveNameJp] || null;
-        options.push({
+        const optObj = {
           value: value.toUpperCase(),
           label,
           kind: 'move',
           slotIndex,
           moveId,
           pp,
-        });
+        };
+        if (!moveId && moveNameJp) {
+          Object.defineProperty(optObj, '_unmappedJp', {
+            value: moveNameJp,
+            enumerable: false,
+            configurable: true,
+          });
+        }
+        options.push(optObj);
       } else if (/^C(\d)$/i.test(value)) {
         const slotIndex = parseInt(value.slice(1), 10); // 1..3
         const hpMatch = label.match(/\[\s*(\d+)\s*\/\s*(\d+)\s*\]/);
@@ -692,7 +729,7 @@ function parseBattleTurnHtml(html) {
         const maxHp = hpMatch ? parseInt(hpMatch[2], 10) : null;
         const spNameJp = normJp(label.replace(/\[\s*\d+\s*\/\s*\d+\s*\].*$/, ''));
         const speciesId = JP_TO_SPECIES_ID[spNameJp] || null;
-        options.push({
+        const optObj = {
           value: value.toUpperCase(),
           label,
           kind: 'switch',
@@ -700,7 +737,15 @@ function parseBattleTurnHtml(html) {
           speciesId,
           hp,
           maxHp,
-        });
+        };
+        if (!speciesId && spNameJp) {
+          Object.defineProperty(optObj, '_unmappedJp', {
+            value: spNameJp,
+            enumerable: false,
+            configurable: true,
+          });
+        }
+        options.push(optObj);
       } else {
         options.push({
           value,
@@ -728,8 +773,16 @@ function parseBattleTurnHtml(html) {
       if (lvM) sides[s].level = parseInt(lvM[1], 10);
       const beforeL = cell.replace(/L\d+.*$/i, '');
       sides[s].gender = beforeL.includes('♂') ? 'M' : beforeL.includes('♀') ? 'F' : '';
-      const spId = JP_TO_SPECIES_ID[normJp(beforeL)] || null;
+      const rawSpJp = normJp(beforeL);
+      const spId = JP_TO_SPECIES_ID[rawSpJp] || null;
       sides[s].speciesId = spId;
+      if (!spId && rawSpJp) {
+        Object.defineProperty(sides[s], '_unmappedJp', {
+          value: rawSpJp,
+          enumerable: false,
+          configurable: true,
+        });
+      }
     }
   }
 
@@ -768,23 +821,31 @@ function parsePdatHtml(html) {
     const level = parseInt(m[1], 10);
     const rawName = m[2].trim();
     const gender = rawName.includes('♂') ? 'M' : rawName.includes('♀') ? 'F' : '';
-    const speciesId = JP_TO_SPECIES_ID[normJp(rawName)] || null;
+    const rawSpJp = normJp(rawName);
+    const speciesId = JP_TO_SPECIES_ID[rawSpJp] || null;
     const hp = parseInt(m[3], 10);
     const maxHp = parseInt(m[4], 10);
     const status = parseStatusText(m[5]);
     const moves = [];
+    const unmappedMovesJp = [];
     for (let i = 6; i <= 9; i++) {
       const cell = m[i].replace(/<[^>]*>/g, '').trim();
       const mvMatch = cell.match(/^(.+?)\s*\(\s*(\d+)\s*\)$/);
       if (mvMatch) {
-        const mvId = JP_TO_MOVE_ID[normJp(mvMatch[1])] || null;
+        const mvJp = normJp(mvMatch[1]);
+        const mvId = JP_TO_MOVE_ID[mvJp] || null;
         const pp = parseInt(mvMatch[2], 10);
-        if (mvId) moves.push({ moveId: mvId, pp });
+        if (mvId) {
+          moves.push({ moveId: mvId, pp });
+        } else if (mvJp) {
+          unmappedMovesJp.push(mvJp);
+        }
       }
     }
     const rawItem = normJp(m[10] || '');
-    const item = rawItem && rawItem !== 'なし' ? (JP_TO_ITEM_ID[rawItem] || '') : '';
-    mons.push({
+    const mappedItem = rawItem && rawItem !== 'なし' ? (JP_TO_ITEM_ID[rawItem] || null) : '';
+    const item = mappedItem || '';
+    const monObj = {
       speciesId,
       level,
       gender,
@@ -793,7 +854,29 @@ function parsePdatHtml(html) {
       maxHp,
       item,
       moves,
-    });
+    };
+    if (!speciesId && rawSpJp) {
+      Object.defineProperty(monObj, '_unmappedJp', {
+        value: rawSpJp,
+        enumerable: false,
+        configurable: true,
+      });
+    }
+    if (unmappedMovesJp.length > 0) {
+      Object.defineProperty(monObj, '_unmappedMovesJp', {
+        value: unmappedMovesJp,
+        enumerable: false,
+        configurable: true,
+      });
+    }
+    if (rawItem && rawItem !== 'なし' && !mappedItem) {
+      Object.defineProperty(monObj, '_unmappedItemJp', {
+        value: rawItem,
+        enumerable: false,
+        configurable: true,
+      });
+    }
+    mons.push(monObj);
   }
 
   const remMatch = html.match(/相手の残り[：:]\s*(\d+)/);
@@ -1111,6 +1194,7 @@ function parseLlogHtml(html, previewSides = [[], []]) {
     hrCount: 0,
     upkeepThisTurn: false,
     events: [],
+    unrecognizedLines: [],
   };
 
   if (!html) return info;
@@ -1344,6 +1428,7 @@ function parseLlogHtml(html, previewSides = [[], []]) {
 
     if (align === 'center') {
       const turnNum = info.turn;
+      let recognizedCenter = false;
       if (
         normClean.includes(normJp('雨が降り続いている')) ||
         normClean.includes(normJp('あめがふりつづいている')) ||
@@ -1353,6 +1438,7 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         normClean.includes(normJp('すなあらしがふきあれている')) ||
         normClean.includes(normJp('砂嵐でダメージ'))
       ) {
+        recognizedCenter = true;
         info.upkeepThisTurn = true;
         if (info.weather && info.weather._lastUpkeepTurn !== turnNum) {
           info.weather.upkeeps = (info.weather.upkeeps || 0) + 1;
@@ -1370,7 +1456,20 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         normClean.includes(normJp('砂嵐はおさまった')) ||
         normClean.includes(normJp('すなあらしはおさまった'))
       ) {
+        recognizedCenter = true;
         info.weather = null;
+      }
+      if (
+        !recognizedCenter &&
+        clean &&
+        !/WIN!|ＷＩＮ！|LOSE|ＬＯＳＥ|DRAW|ＤＲＡＷ|ターン|対戦|バトル|引き分け/i.test(clean)
+      ) {
+        info.unrecognizedLines.push({
+          turn: turnNum,
+          side: null,
+          align: 'center',
+          line: rawClean,
+        });
       }
       continue;
     }
@@ -2131,6 +2230,37 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         info.sides[subj.side].faintedThisTurn = subj.slot;
         info.events.push({ type: 'faint', turn: turnNum, side: subj.side, slot: subj.slot });
       }
+
+      // 5g. Check whether this `<BR>` line was recognized by any state rule or known battle narrative
+      const isMoveLine =
+        blockMoveIds.length > 0 &&
+        Object.keys(JP_TO_MOVE_ID).some(jpMv => jpMv && normJp(lineClean).includes(jpMv));
+      const isBerryLine = CONSUMED_BERRIES_JP.some(([jpBerry]) => lineClean.includes(jpBerry));
+      const isKnownStateOrNarrative =
+        isMoveLine ||
+        isBerryLine ||
+        isMoveFailureText(lineClean) ||
+        /を繰り出した|をくりだした|ゆけっ|いけっ|出てこい|引っ込めた|ひっこめた|戻れ|もどれ|交代/.test(lineClean) ||
+        /引きずり出された|ひきずりだされた|吹き飛ばされた|ふきとばされた/.test(lineClean) ||
+        /眠っている|ねむっている|反動で動けない|はんどうでうごけない|しびれて動けない|しびれてうごけない|凍ってしまって|こおってしまって|ひるんで|メロメロ|かなしばり|わけもわからず/.test(lineClean) ||
+        /空高く飛び上がった|穴を掘った|光を吸収した|頭を引っ込めた|激しい風に包まれた|激しい光をまとった|力をためて/.test(lineClean) ||
+        /たべのこし|食べ残し|きあいのハチマキ|せんせいのツメ|を奪った|をうばった/.test(lineClean) ||
+        /あがった|さがった|上がった|下がった|あがらない|さがらない|上がらない|下がらない/.test(lineClean) ||
+        /もうどく|猛毒|どくをあびた|毒をあびた|どく状態|やけど|火傷|まひして|麻痺して|まひ状態|眠ってしまった|ねむってしまった|けんこうになって|健康になって|凍りついた|こおりついた|凍ってしまった|目を覚ました|めをさました|氷が溶けた|こおりがとけた|氷がとけた|どくのダメージ|毒のダメージ/.test(lineClean) ||
+        /こんらん|混乱|みがわり|身代わり|アンコール|解放された|カウントが|しめつけ|締め付け|渦の中に|うずのなかに|炎の渦|ほのおのうず|からみついて|はさまれた/.test(lineClean) ||
+        /たおれた|倒れた|みちづれ|道連れ/.test(lineClean) ||
+        /リフレクター|ひかりのかべ|光の壁|しんぴのまもり|神秘の守り|しんぴのヴェール|神秘のヴェール|しろいきり|白い霧|くろいきり|黒い霧|まきびし|すずの音|鈴の音|ほろびのうた|滅びの歌|タネが|種が|あくむ|悪夢|みやぶった|見破った|を封じた|にげられなくなった|逃げられなくなった|うらみ|ＰＰを|PPを|へんしん|変身|暗示|あんじ|ものまね|のろい|呪い|いかりのボルテージ|がまん|まるくなった|ちいさくなった|はりきって|張り切って/.test(lineClean) ||
+        /雨が降り|あめがふり|雨はやんだ|あめはやんだ|日差しが|ひざしが|砂嵐|すなあらし/.test(lineClean) ||
+        /ダメージ|急所に当たった|きゅうしょにあたった|効果はバツグン|こうかはばつぐん|効果はいまひとつ|こうかはいまひとつ|回当たった|かいあたった|体力を回復|たいりょくをかいふく|体力を吸い取った|たいりょくをすいとった|体力がいっぱい|たいりょくがいっぱい|反動を受けた|はんどうをうけた|は守っている|はまもっている|こらえた|こらえる体勢|はねている|何も起こらない|なにもおこらない|しかし決まらなかった|すでに|WIN!|ＷＩＮ！|LOSE|ＬＯＳＥ|DRAW|ＤＲＡＷ/.test(lineClean);
+
+      if (!isKnownStateOrNarrative && lineClean.length > 0) {
+        info.unrecognizedLines.push({
+          turn: turnNum,
+          side: sideIdx,
+          align,
+          line: lineClean,
+        });
+      }
     }
 
     // 6. Side condition end cues (Reflect, Light Screen, Safeguard)
@@ -2185,6 +2315,75 @@ function parseLlogHtml(html, previewSides = [[], []]) {
   }
 
   return info;
+}
+
+/**
+ * Convert a `parseLlogHtml` tracker object (containing `Map` and `Set` instances)
+ * into a plain JSON-serializable object for raw trace persistence and parity auditing.
+ */
+function serializeLlogTracker(llog) {
+  if (!llog) return null;
+  return {
+    turn: llog.turn,
+    hrCount: llog.hrCount,
+    upkeepThisTurn: Boolean(llog.upkeepThisTurn),
+    weather: llog.weather ? { ...llog.weather } : null,
+    events: Array.isArray(llog.events) ? llog.events.map(e => ({ ...e })) : [],
+    unrecognizedLines: Array.isArray(llog.unrecognizedLines)
+      ? llog.unrecognizedLines.map(u => ({ ...u }))
+      : [],
+    sides: (llog.sides || []).map(side => ({
+      activeSlot: side.activeSlot,
+      conditions:
+        side.conditions instanceof Map
+          ? Object.fromEntries(side.conditions.entries())
+          : { ...(side.conditions || {}) },
+      pendingBp: Boolean(side.pendingBp),
+      actedThisTurn: Boolean(side.actedThisTurn),
+      faintedThisTurn: side.faintedThisTurn ?? null,
+      faintedLastTurn: side.faintedLastTurn ?? null,
+      lastMove: side.lastMove ?? null,
+      mons: (side.mons || []).map(m => ({
+        appeared: Boolean(m.appeared),
+        appearCount: m.appearCount || 0,
+        switchInTurn: m.switchInTurn || 0,
+        active: Boolean(m.active),
+        fainted: Boolean(m.fainted),
+        status: m.status || '',
+        rest: Boolean(m.rest),
+        slept: m.slept || 0,
+        toxCounter: m.toxCounter ?? null,
+        compBrn: Boolean(m.compBrn),
+        compPar: Boolean(m.compPar),
+        boosts: [...(m.boosts || [0, 0, 0, 0, 0, 0, 0])],
+        uses: { ...(m.uses || {}) },
+        revealedMoves:
+          m.revealedMoves instanceof Set
+            ? [...m.revealedMoves]
+            : Array.isArray(m.revealedMoves)
+              ? [...m.revealedMoves]
+              : [],
+        itemOriginal: m.itemOriginal ?? null,
+        itemCurrent: m.itemCurrent ?? null,
+        itemGained: Boolean(m.itemGained),
+        volatiles:
+          m.volatiles instanceof Map
+            ? [...m.volatiles.values()].map(v => ({ ...v }))
+            : Array.isArray(m.volatiles)
+              ? m.volatiles.map(v => ({ ...v }))
+              : [],
+        locked: m.locked ? { ...m.locked } : null,
+        charging: m.charging ?? null,
+        mustRecharge: Boolean(m.mustRecharge),
+        transformedInto: m.transformedInto ? [...m.transformedInto] : null,
+        mimicOverlay: m.mimicOverlay ?? null,
+        lastMove: m.lastMove ?? null,
+        stallStreak: m.stallStreak || 0,
+        lastProtectTurn: m.lastProtectTurn || 0,
+        protectedThisTurn: Boolean(m.protectedThisTurn),
+      })),
+    })),
+  };
 }
 
 /**
@@ -2262,7 +2461,10 @@ function mergeLlogIntoSeenFoeMons({
       const prevHp = activeSeen.hp;
       activeSeen.hp = activeLlog?.fainted ? 0 : foeTop.hp;
       activeSeen.fainted = Boolean(activeLlog?.fainted || foeTop.hp <= 0);
-      activeSeen.status = activeSeen.fainted ? '' : (foeTop.status || '');
+      const rawTopStatus = foeTop.status || '';
+      activeSeen.status = activeSeen.fainted
+        ? ''
+        : (rawTopStatus === 'psn' && activeLlog?.status === 'tox' ? 'tox' : rawTopStatus);
 
       if (
         !isForceSwitch &&
@@ -3037,8 +3239,9 @@ function buildAndSanitizePositionSpec({
     }
   }
 
+  const sanitizeDiffs = [];
   if (teamPreview) {
-    return sanitizePositionSpec(spec);
+    return sanitizePositionSpec(spec, sanitizeDiffs);
   }
 
   // Apply PDAT authority for our own 3 picked mons
@@ -3065,7 +3268,8 @@ function buildAndSanitizePositionSpec({
         target.hp_num = Math.max(1, Math.min(pm.maxHp || 100, pm.hp));
         target.hp_den = Math.max(1, pm.maxHp || 100);
         target.hp_exact = pm.hp;
-        target.status = pm.status || '';
+        const pdatSt = pm.status || '';
+        target.status = pdatSt === 'psn' && target.status === 'tox' ? 'tox' : pdatSt;
       }
       target.item_now = pm.item || '';
     }
@@ -3147,6 +3351,12 @@ function buildAndSanitizePositionSpec({
             actMon.status = '';
           } else {
             // Normal move turn cannot have a fainted active mon
+            sanitizeDiffs.push({
+              path: `sides[${s}].mons[${activeSlot}].hp`,
+              from: topInfo.hp,
+              to: 1,
+              reason: 'fainted_active_on_move_turn',
+            });
             actMon.fainted = false;
             actMon.hp_num = 1;
             actMon.hp_den = topInfo.maxHp;
@@ -3157,7 +3367,8 @@ function buildAndSanitizePositionSpec({
           actMon.hp_num = Math.max(1, Math.min(topInfo.maxHp, topInfo.hp));
           actMon.hp_den = topInfo.maxHp;
           if (isMe) actMon.hp_exact = topInfo.hp;
-          actMon.status = topInfo.status || '';
+          const topSt = topInfo.status || '';
+          actMon.status = topSt === 'psn' && actMon.status === 'tox' ? 'tox' : topSt;
         }
       }
     }
@@ -3264,10 +3475,11 @@ function buildAndSanitizePositionSpec({
   }
   spec.sides[mySide].party = orderedParty.slice(0, 3);
 
-  return sanitizePositionSpec(spec);
+  return sanitizePositionSpec(spec, sanitizeDiffs);
 }
 
-function sanitizePositionSpec(spec) {
+function sanitizePositionSpec(spec, diffOut = null) {
+  const diffs = Array.isArray(diffOut) ? diffOut : [];
   for (let s = 0; s < 2; s++) {
     const side = spec.sides[s];
     if (spec.team_preview) {
@@ -3309,6 +3521,12 @@ function sanitizePositionSpec(spec) {
     }
 
     if (side.active === null || side.active < 0 || side.active >= side.mons.length) {
+      diffs.push({
+        path: `sides[${s}].active`,
+        from: side.active,
+        to: 0,
+        reason: 'active_out_of_range',
+      });
       side.active = 0;
     }
     for (let i = 0; i < side.mons.length; i++) {
@@ -3316,6 +3534,14 @@ function sanitizePositionSpec(spec) {
       m.active = i === side.active;
       m.hp_den = Math.max(1, m.hp_den || 100);
       if (m.active && !spec.force_switch) {
+        if (m.fainted) {
+          diffs.push({
+            path: `sides[${s}].mons[${i}].fainted`,
+            from: true,
+            to: false,
+            reason: 'fainted_active_outside_force_switch',
+          });
+        }
         m.fainted = false;
       }
       if (m.fainted) {
@@ -3340,11 +3566,36 @@ function sanitizePositionSpec(spec) {
         m.stall_streak = 0;
         m.protected_this_turn = false;
       } else {
-        m.hp_num = Math.max(1, Math.min(m.hp_den, m.hp_num || m.hp_den));
+        const clampedHpNum = Math.max(1, Math.min(m.hp_den, m.hp_num || m.hp_den));
+        if (m.hp_num !== clampedHpNum) {
+          diffs.push({
+            path: `sides[${s}].mons[${i}].hp_num`,
+            from: m.hp_num,
+            to: clampedHpNum,
+            reason: 'hp_num_out_of_range',
+          });
+        }
+        m.hp_num = clampedHpNum;
         if (m.hp_exact !== null && m.hp_exact !== undefined) {
+          if (m.hp_exact < 1) {
+            diffs.push({
+              path: `sides[${s}].mons[${i}].hp_exact`,
+              from: m.hp_exact,
+              to: 1,
+              reason: 'hp_exact_nonpositive_unfainted',
+            });
+          }
           m.hp_exact = Math.max(1, m.hp_exact);
         }
-        if (m.status === 'fnt') m.status = '';
+        if (m.status === 'fnt') {
+          diffs.push({
+            path: `sides[${s}].mons[${i}].status`,
+            from: 'fnt',
+            to: '',
+            reason: 'fnt_status_on_unfainted',
+          });
+          m.status = '';
+        }
       }
       if (m.active) {
         m.appeared = true;
@@ -3363,6 +3614,12 @@ function sanitizePositionSpec(spec) {
       }
     }
   }
+  Object.defineProperty(spec, '_sanitizeDiffs', {
+    value: diffs,
+    enumerable: false,
+    configurable: true,
+    writable: true,
+  });
   return spec;
 }
 
@@ -3638,6 +3895,47 @@ async function playOneGame(gameIdx) {
   let selectSubmitted = false;
   let lastTurnActedKey = '';
   const matchStartedAt = new Date().toISOString();
+  const roomTagMatch = ROOM_URL.match(/\/PBS\/_\/([^/]+)\//i);
+  const roomTag = roomTagMatch ? roomTagMatch[1].toUpperCase() : 'ROOM';
+  const matchId = `${matchStartedAt.replace(/[:.]/g, '-')}-${roomTag}-g${gameIdx + 1}`;
+  const traceFilePath = TRACE_DIR_PATH ? path.join(TRACE_DIR_PATH, `${matchId}.jsonl`) : '';
+  const traceEvents = [];
+
+  const appendTraceEvent = event => {
+    const rec = {
+      ts: new Date().toISOString(),
+      matchId,
+      ...event,
+    };
+    traceEvents.push(rec);
+    if (!traceFilePath) return;
+    try {
+      fs.mkdirSync(path.dirname(traceFilePath), { recursive: true });
+      fs.appendFileSync(traceFilePath, JSON.stringify(rec) + '\n', { mode: 0o600 });
+    } catch {
+      // Non-fatal trace persistence
+    }
+  };
+
+  appendTraceEvent({
+    type: 'match_start',
+    gameIdx,
+    roomUrl: ROOM_URL,
+    roomTag,
+    botName: NAME,
+    tier: TIER,
+    iters: ITERS,
+    c: PROFILE.c,
+    seed: SEED,
+    random: RANDOM,
+    team: {
+      id: team.id,
+      label: team.label,
+      tier: team.tier,
+      sets: team.sets,
+    },
+    pdCookie: encodedPd.cookieValue,
+  });
 
   const ensureSearcher = (side, forceRebuild = false) => {
     if (RANDOM) return null;
@@ -3677,7 +3975,41 @@ async function playOneGame(gameIdx) {
     return searcher;
   };
 
-  const finalizeMatchRecord = outcome => {
+  const finalizeMatchRecord = (outcome, finishDetails = {}) => {
+    appendTraceEvent({
+      type: 'finish',
+      finishTrigger: finishDetails.finishTrigger || 'FINISHED',
+      rawFinishHtml: finishDetails.rawFinishHtml ?? null,
+      rawFinalLlogHtml: finishDetails.rawFinalLlogHtml ?? null,
+      finalLlogSummary: finishDetails.finalLlogSummary ?? null,
+      outcome,
+      decisions,
+      mySide,
+      foeName: foeName || null,
+      pickedRosterSlots,
+      previewSides,
+      seenFoeMonsFinal: seenFoeMons ? JSON.parse(JSON.stringify(seenFoeMons)) : null,
+      errors: finishDetails.errors || [],
+    });
+
+    let parityReport = null;
+    try {
+      const { auditMatchTrace, appendAnomalyReport } = require('./pbs-parity-audit.js');
+      parityReport = auditMatchTrace(traceEvents, {
+        filePath: traceFilePath || null,
+        reparse: false,
+      });
+      if (parityReport && parityReport.anomalies && parityReport.anomalies.length > 0) {
+        appendAnomalyReport(parityReport, ANOMALY_LOG_PATH);
+        log(
+          `[PARITY_WARN] Match ${matchId}: ${parityReport.errorCount} error(s), ${parityReport.warnCount} warning(s) ` +
+          `(${parityReport.anomalies.map(a => a.code).join(', ')})`
+        );
+      }
+    } catch (err) {
+      log(`Parity audit execution warning: ${err.message || err}`);
+    }
+
     if (previewSides && mySide !== null) {
       const foeSide = 1 - mySide;
       const foePreviewMons = previewSides[foeSide];
@@ -3691,6 +4023,8 @@ async function playOneGame(gameIdx) {
       });
       saveOpponentDb(opponentDb, OPPONENT_DB_PATH);
       appendMatchLog({
+        matchId,
+        traceFile: traceFilePath ? path.relative(REPO, traceFilePath) : null,
         startedAt: matchStartedAt,
         finishedAt: new Date().toISOString(),
         roomUrl: ROOM_URL,
@@ -3706,6 +4040,9 @@ async function playOneGame(gameIdx) {
         pickedRosterSlots,
         foeRoster: foePreviewMons,
         seenFoeMons,
+        parityOk: parityReport ? parityReport.ok : null,
+        parityErrorCount: parityReport ? parityReport.errorCount : null,
+        parityWarnCount: parityReport ? parityReport.warnCount : null,
       });
     }
   };
@@ -3723,6 +4060,8 @@ async function playOneGame(gameIdx) {
         }
         let resultHtml = page.html || '';
         let finalLlogHtml = '';
+        let finalLlogObj = null;
+        const finishErrors = [];
         try {
           const resultLog =
             await client.get(`${ROOM_URL}?ACTION=LLOG`);
@@ -3730,29 +4069,33 @@ async function playOneGame(gameIdx) {
             finalLlogHtml = resultLog.html;
             resultHtml += '\n' + resultLog.html;
           }
-        } catch {}
+        } catch (err) {
+          finishErrors.push({ stage: 'fetch_final_llog', message: String(err.message || err) });
+        }
 
         // Merge final LLOG into persistent `seenFoeMons` & `lastLlogFoeMons` before recording match
         const llogHtmlToParse = finalLlogHtml || page.html || '';
         if (llogHtmlToParse && mySide !== null) {
           try {
-            const finalLlog = parseLlogHtml(llogHtmlToParse, previewSides || [[], []]);
+            finalLlogObj = parseLlogHtml(llogHtmlToParse, previewSides || [[], []]);
             const foeSide = 1 - mySide;
-            if (finalLlog && finalLlog.sides[foeSide]) {
+            if (finalLlogObj && finalLlogObj.sides[foeSide]) {
               const merged = mergeLlogIntoSeenFoeMons({
-                llog: finalLlog,
+                llog: finalLlogObj,
                 foeSide,
                 seenFoeMons,
                 previewSides,
                 battleTurn: null,
-                turnNum: finalLlog.turn || 1,
+                turnNum: finalLlogObj.turn || 1,
                 isForceSwitch: false,
                 lastFoeActiveSlot,
               });
               lastFoeActiveSlot = merged.lastFoeActiveSlot;
               lastLlogFoeMons = merged.llogFoeMons || lastLlogFoeMons;
             }
-          } catch {}
+          } catch (err) {
+            finishErrors.push({ stage: 'parse_final_llog', message: String(err.message || err) });
+          }
         }
 
         const outcome =
@@ -3762,7 +4105,13 @@ async function playOneGame(gameIdx) {
             foeName
           );
         log(`Game #${gameIdx + 1} finished (${outcome}) after ${decisions} decisions.`);
-        finalizeMatchRecord(outcome);
+        finalizeMatchRecord(outcome, {
+          finishTrigger: 'FINISHED',
+          rawFinishHtml: page.html || '',
+          rawFinalLlogHtml: finalLlogHtml || null,
+          finalLlogSummary: serializeLlogTracker(finalLlogObj),
+          errors: finishErrors,
+        });
         // Touch PS.cgi?ACTION=END if link is present so the room cleans up promptly
         if (/PS\.cgi\?ACTION=END/i.test(page.html || '')) {
           try { await client.get(`${ROOM_URL}?ACTION=END`); } catch {}
@@ -3777,6 +4126,11 @@ async function playOneGame(gameIdx) {
 
       if (page.kind === 'ERROR') {
         log(`PBS returned ERROR page: ${page.errorText}`);
+        appendTraceEvent({
+          type: 'error_page',
+          errorText: page.errorText,
+          rawErrorHtml: page.html || '',
+        });
         await sleep(POLL_MS);
         res = await client.get(ROOM_URL);
         continue;
@@ -3785,20 +4139,24 @@ async function playOneGame(gameIdx) {
       if (page.kind === 'ENTORY') {
         // If we had already entered and the room returned to ENTORY, the game ended
         if (enteredRoom && decisions > 0) {
+          let finalLlogHtml = '';
+          let finalLlogObj = null;
+          const finishErrors = [];
           if (mySide !== null) {
             try {
               const finalLogRes = await client.get(`${ROOM_URL}?ACTION=LLOG`);
               if (finalLogRes && finalLogRes.html) {
-                const finalLlog = parseLlogHtml(finalLogRes.html, previewSides || [[], []]);
+                finalLlogHtml = finalLogRes.html;
+                finalLlogObj = parseLlogHtml(finalLogRes.html, previewSides || [[], []]);
                 const foeSide = 1 - mySide;
-                if (finalLlog && finalLlog.sides[foeSide]) {
+                if (finalLlogObj && finalLlogObj.sides[foeSide]) {
                   const merged = mergeLlogIntoSeenFoeMons({
-                    llog: finalLlog,
+                    llog: finalLlogObj,
                     foeSide,
                     seenFoeMons,
                     previewSides,
                     battleTurn: null,
-                    turnNum: finalLlog.turn || 1,
+                    turnNum: finalLlogObj.turn || 1,
                     isForceSwitch: false,
                     lastFoeActiveSlot,
                   });
@@ -3806,11 +4164,22 @@ async function playOneGame(gameIdx) {
                   lastLlogFoeMons = merged.llogFoeMons || lastLlogFoeMons;
                 }
               }
-            } catch {}
+            } catch (err) {
+              finishErrors.push({ stage: 'entory_reset_final_llog', message: String(err.message || err) });
+            }
           }
-          log(`Game #${gameIdx + 1} finished (room reset to ENTORY) after ${decisions} decisions.`);
-          finalizeMatchRecord('END');
-          return { outcome: 'END', decisions, team: team.id, foeName };
+          const inferredOutcome = finalLlogHtml
+            ? resolveBotOutcomeFromFinishedHtml(finalLlogHtml, NAME, foeName)
+            : 'END';
+          log(`Game #${gameIdx + 1} finished (room reset to ENTORY, outcome=${inferredOutcome}) after ${decisions} decisions.`);
+          finalizeMatchRecord(inferredOutcome, {
+            finishTrigger: 'ENTORY_RESET',
+            rawFinishHtml: page.html || '',
+            rawFinalLlogHtml: finalLlogHtml || null,
+            finalLlogSummary: serializeLlogTracker(finalLlogObj),
+            errors: finishErrors,
+          });
+          return { outcome: inferredOutcome, decisions, team: team.id, foeName };
         }
 
         if (page.p1Waiting) {
@@ -3824,6 +4193,12 @@ async function playOneGame(gameIdx) {
           log(`Joining against waiting P1 "${page.p1Name}" as P2...`);
           mySide = 1;
           enteredRoom = true;
+          appendTraceEvent({
+            type: 'entry',
+            entrySide: 1,
+            p1WaitingName: page.p1Name || null,
+            rawEntryHtml: page.html || '',
+          });
           res = await client.postForm(ROOM_URL, {
             ACTION: 'ENTORY',
             NAME,
@@ -3846,6 +4221,12 @@ async function playOneGame(gameIdx) {
           mySide = 0;
           enteredRoom = true;
           hostWaitStartedAt = Date.now();
+          appendTraceEvent({
+            type: 'entry',
+            entrySide: 0,
+            p1WaitingName: null,
+            rawEntryHtml: page.html || '',
+          });
           res = await client.postForm(ROOM_URL, {
             ACTION: 'ENTORY',
             NAME,
@@ -3878,6 +4259,13 @@ async function playOneGame(gameIdx) {
         const formBody =
           `ACTION=RE&CBAN=1&PD=&sim=${encodeURIComponent(page.sim)}&CH=on&submit=%B7%E8%C4%EA`;
         const pdRes = await client.postForm('http://psense.lib.net/_/PDINPUT.cgi', formBody);
+        appendTraceEvent({
+          type: 'pdinput',
+          sim: page.sim,
+          formBody,
+          redirectLocation: pdRes.location || null,
+          rawPdinputHtml: pdRes.html || '',
+        });
         if (pdRes.location) {
           res = await client.get(new URL(pdRes.location, ROOM_URL).toString());
         } else {
@@ -3887,6 +4275,7 @@ async function playOneGame(gameIdx) {
       }
 
       if (page.kind === 'TEAM_PREVIEW_CHECK') {
+        const previewErrors = [];
         const parsedPreview = parseTeamPreviewHtml(page.html);
         // Determine whether we are P1 (0) or P2 (1)
         if (parsedPreview.p1Name === NAME && parsedPreview.p2Name !== NAME) {
@@ -3960,7 +4349,9 @@ async function playOneGame(gameIdx) {
                   choiceStr = compiledPreview[cpKey].choice;
                   previewSource = 'compiled-book';
                 }
-              } catch {}
+              } catch (err) {
+                previewErrors.push({ stage: 'compiled_preview_key', message: String(err.message || err) });
+              }
             }
             if (!choiceStr && !hasCustomShellMemory) {
               choiceStr = s.bakedPreview();
@@ -3975,6 +4366,7 @@ async function playOneGame(gameIdx) {
               } catch {}
             }
           } catch (err) {
+            previewErrors.push({ stage: 'preview_search', message: String(err.message || err) });
             log(`Preview search warning (using fallback pick): ${err.message || err}`);
           }
         }
@@ -3989,6 +4381,31 @@ async function playOneGame(gameIdx) {
 
         decisions++;
         const gameSeed = SEED * 1000 + gameIdx * 10 + mySide;
+        const checkFields = {
+          ACTION: 'CHECK',
+          SENTE: String(leadIdx + 1),
+          [`P${b1Idx + 1}`]: '1',
+          [`P${b2Idx + 1}`]: '1',
+        };
+
+        appendTraceEvent({
+          type: 'preview',
+          decision: decisions,
+          mySide,
+          foeName: foeName || null,
+          seed: gameSeed,
+          rawCheckHtml: page.html || '',
+          parsedPreview,
+          spec,
+          sanitizeDiffs: spec._sanitizeDiffs || [],
+          previewSource,
+          choiceStr,
+          pickedRosterSlots,
+          rootPolicy: previewPolicy,
+          checkFields,
+          errors: previewErrors,
+        });
+
         appendDecisionLog({
           gameIdx,
           decision: decisions,
@@ -4008,12 +4425,6 @@ async function playOneGame(gameIdx) {
           spec,
         });
 
-        const checkFields = {
-          ACTION: 'CHECK',
-          SENTE: String(leadIdx + 1),
-          [`P${b1Idx + 1}`]: '1',
-          [`P${b2Idx + 1}`]: '1',
-        };
         res = await client.postForm(ROOM_URL, checkFields);
         continue;
       }
@@ -4043,6 +4454,7 @@ async function playOneGame(gameIdx) {
       }
 
       if (page.kind === 'BATTLE_INPUT' || page.kind === 'BATTLE_CHANGE') {
+        const turnErrors = [];
         const isForceSwitch = page.kind === 'BATTLE_CHANGE';
         const battleTurn = parseBattleTurnHtml(page.html);
         const rawNowInt = battleTurn.nowVal === '' ? 0 : (parseInt(battleTurn.nowVal, 10) || 0);
@@ -4061,17 +4473,28 @@ async function playOneGame(gameIdx) {
         // Fetch PDAT and LLOG for richer board context (non-fatal if either fails)
         let pdat = null;
         let llog = null;
+        let rawPdatHtml = null;
+        let rawLlogHtml = null;
         try {
           const pdatRes = await client.get(`${ROOM_URL}?ACTION=PDAT`);
+          rawPdatHtml = pdatRes?.html ?? null;
           pdat = parsePdatHtml(pdatRes.html);
-        } catch {}
+        } catch (err) {
+          turnErrors.push({ stage: 'fetch_or_parse_pdat', message: String(err.message || err) });
+        }
         try {
           const llogRes = await client.get(`${ROOM_URL}?ACTION=LLOG`);
+          rawLlogHtml = llogRes?.html ?? null;
           llog = parseLlogHtml(llogRes.html, previewSides || [[], []]);
           if (llog && llog.sides[foeSide]) {
             lastLlogFoeMons = llog.sides[foeSide].mons;
           }
-        } catch {}
+        } catch (err) {
+          turnErrors.push({ stage: 'fetch_or_parse_llog', message: String(err.message || err) });
+        }
+
+        const seenFoeMonsBefore = seenFoeMons ? JSON.parse(JSON.stringify(seenFoeMons)) : null;
+        const lastFoeActiveSlotBefore = lastFoeActiveSlot;
 
         // Update persistent `seenFoeMons` with Castle leaks (exact HP/maxHp, item reveals, Leftovers absence)
         if (seenFoeMons && previewSides && previewSides[foeSide]) {
@@ -4130,6 +4553,7 @@ async function playOneGame(gameIdx) {
               rootPolicy = JSON.parse(s.rootPolicy());
             } catch {}
           } catch (err) {
+            turnErrors.push({ stage: 'battle_search', message: String(err.message || err) });
             log(`Turn ${spec.turn} (${actionType}) search fallback: ${err.message || err}`);
           }
         }
@@ -4155,6 +4579,46 @@ async function playOneGame(gameIdx) {
         decisions++;
         lastTurnActedKey = turnKey;
         const gameSeed = SEED * 1000 + gameIdx * 10 + mySide;
+        const postFields = {
+          ACTION: actionType,
+          MOVE: chosenMoveValue,
+          NOW: battleTurn.nowVal,
+        };
+
+        appendTraceEvent({
+          type: 'decision',
+          decision: decisions,
+          phase: actionType,
+          forceSwitch: isForceSwitch,
+          turn: spec.turn,
+          rawNowVal: battleTurn.nowVal,
+          mySide,
+          foeName: foeName || null,
+          seed: gameSeed,
+          iterations: RANDOM ? 0 : (battleTurn.options.length > 1 ? ITERS : 0),
+          c: PROFILE.c,
+          rawTurnHtml: page.html || '',
+          rawPdatHtml,
+          rawLlogHtml,
+          battleTurn,
+          pdat,
+          llogSummary: serializeLlogTracker(llog),
+          pickedRosterSlots,
+          lastFoeActiveSlotBefore,
+          lastFoeActiveSlotAfter: lastFoeActiveSlot,
+          seenFoeMonsBefore,
+          seenFoeMonsAfter: seenFoeMons ? JSON.parse(JSON.stringify(seenFoeMons)) : null,
+          spec,
+          sanitizeDiffs: spec._sanitizeDiffs || [],
+          bestChoice,
+          chosenMoveValue,
+          mappingPath: resolvedOption.mappingPath,
+          matchedAction: resolvedOption.matchedAction,
+          rootPolicy,
+          postFields,
+          errors: turnErrors,
+        });
+
         appendDecisionLog({
           gameIdx,
           decision: decisions,
@@ -4204,11 +4668,6 @@ async function playOneGame(gameIdx) {
           spec,
         });
 
-        const postFields = {
-          ACTION: actionType,
-          MOVE: chosenMoveValue,
-          NOW: battleTurn.nowVal,
-        };
         res = await client.postForm(ROOM_URL, postFields);
         continue;
       }
@@ -4248,6 +4707,7 @@ module.exports = {
   parseBattleTurnHtml,
   parsePdatHtml,
   parseLlogHtml,
+  serializeLlogTracker,
   advanceLlogTrackerToTurn,
   mergeLlogIntoSeenFoeMons,
   calcSetMaxHp,
@@ -4255,8 +4715,10 @@ module.exports = {
   buildDynamicBeliefPoolJson,
   recordOpponentObservation,
   buildAndSanitizePositionSpec,
+  sanitizePositionSpec,
   resolveLegalPbsMoveOption,
   selectLegalPbsMoveOption,
+  parseOrFallbackPreviewPick,
   encodeTeamForPbsCookie,
   encodeFormEucJp,
   resolveBotOutcomeFromFinishedHtml,

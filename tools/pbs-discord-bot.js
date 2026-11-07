@@ -39,13 +39,20 @@ const {
   PbsHttpClient,
   classifyPage,
   resolveBotOutcomeFromFinishedHtml,
+  parseTeamPreviewHtml,
+  parseBattleTurnHtml,
+  parsePdatHtml,
   parseLlogHtml,
+  serializeLlogTracker,
   advanceLlogTrackerToTurn,
   mergeLlogIntoSeenFoeMons,
   buildAndSanitizePositionSpec,
   resolveLegalPbsMoveOption,
   recordOpponentObservation,
 } = require('./pbs-client.js');
+const {
+  auditMatchTrace,
+} = require('./pbs-parity-audit.js');
 
 const REPO = path.resolve(__dirname, '..');
 
@@ -194,6 +201,14 @@ function loadConfig(cliArgs = {}) {
         ? String(cliArgs['event-log'])
         : (fileCfg.eventLogPath || 'data/discord-events.jsonl')
     ),
+    traceDir:
+      cliArgs['trace-dir'] !== undefined
+        ? String(cliArgs['trace-dir'])
+        : (fileCfg.traceDir !== undefined ? String(fileCfg.traceDir) : 'data/pbs-traces'),
+    anomalyLogPath:
+      cliArgs['anomaly-log'] !== undefined
+        ? String(cliArgs['anomaly-log'])
+        : (fileCfg.anomalyLogPath !== undefined ? String(fileCfg.anomalyLogPath) : 'data/pbs-anomalies.jsonl'),
   };
 }
 
@@ -718,6 +733,12 @@ class CastleDiscordBot {
       '--host-timeout-sec', String(this.config.hostTimeoutSec),
       '--seed', String(Date.now() % 1000000),
     ];
+    if (this.config.traceDir) {
+      cliArgs.push('--trace-dir', this.config.traceDir);
+    }
+    if (this.config.anomalyLogPath) {
+      cliArgs.push('--anomaly-log', this.config.anomalyLogPath);
+    }
 
     this.log(
       `Spawning pbs-client.js in ${displayRoom} (${roomLetter}: ${roomUrl}) [tier=${tier}, iters=${this.config.iters}]...`
@@ -1367,7 +1388,199 @@ async function runSelfTest() {
   assert.ok(searcherSpecial.best().startsWith('move '));
   if (typeof searcherSpecial.free === 'function') searcherSpecial.free();
 
-  console.log('[discord-bot] Self-test passed (第1=C..第6=H + LLOG/PositionSpec state machine + WASM validation)!');
+  // Test 7: Raw Trace Archiving & Cross-Source Parity Audit (`tools/pbs-parity-audit.js`)
+  const rawCheckHtml = `
+    <TABLE>
+      <TR><TH>puniu3pbs</TH><TD ROWSPAN="2">VS</TD><TH>テスト相手</TH></TR>
+      <TR>
+        <TD VAlign="middle">
+          カビゴン♂ LV55 ●<BR>
+          サンダー LV50 ●<BR>
+          スイクン LV50 ●<BR>
+          ガラガラ♂ LV50 ●<BR>
+          パルシェン♂ LV50 ●<BR>
+          ムウマ♂ LV50 ●<BR>
+        </TD>
+        <TD VAlign="middle">
+          ライコウ LV50 ●<BR>
+          ナッシー♂ LV50 ●<BR>
+          バンギラス♂ LV55 ●<BR>
+          エアームド♂ LV50 ●<BR>
+          ミルタンク♀ LV50 ●<BR>
+          ゲンガー♂ LV50 ●<BR>
+        </TD>
+      </TR>
+    </TABLE>
+  `;
+  const rawTurn2Html = `
+    <INPUT TYPE="hidden" NAME="NOW" VALUE="1">
+    <TABLE>
+      <TR><TD>カビゴン♂ L55</TD><TD>ライコウ L50</TD></TR>
+      <TR><TD>ＨＰ 280/312</TD><TD>ＨＰ 197/197</TD></TR>
+      <TR><TD>通常</TD><TD>通常</TD></TR>
+    </TABLE>
+    <SELECT NAME="MOVE">
+      <OPTION VALUE="W1">のしかかり [23]
+      <OPTION VALUE="W2">はらだいこ [16]
+      <OPTION VALUE="W3">ねむる [16]
+      <OPTION VALUE="W4">じしん [16]
+      <OPTION VALUE="C2">サンダー [197/197]
+      <OPTION VALUE="C3">スイクン [207/207]
+    </SELECT>
+  `;
+  const rawPdatTurn2Html = `
+    <TABLE>
+      <TR><TD>55</TD><TD>カビゴン♂</TD><TD>280／312</TD><TD>　</TD><TD>のしかかり(23)</TD><TD>はらだいこ(16)</TD><TD>ねむる(16)</TD><TD>じしん(16)</TD><TD>はっかのみ</TD></TR>
+      <TR><TD>50</TD><TD>サンダー</TD><TD>197／197</TD><TD>　</TD><TD>１０まんボルト(24)</TD><TD>みがわり(16)</TD><TD>かげぶんしん(24)</TD><TD>バトンタッチ(64)</TD><TD>たべのこし</TD></TR>
+      <TR><TD>50</TD><TD>スイクン</TD><TD>207／207</TD><TD>　</TD><TD>なみのり(24)</TD><TD>れいとうビーム(16)</TD><TD>ねむる(16)</TD><TD>ねごと(16)</TD><TD>たべのこし</TD></TR>
+    </TABLE>
+    相手の残り：3
+  `;
+  const rawLlogTurn2Html = `
+    <HR>
+    <P ALIGN="left">カビゴン をくりだした！<BR></P>
+    <P ALIGN="right">ライコウ をくりだした！<BR></P>
+    <HR>
+    <P ALIGN="right">ライコウ の リフレクター！<BR>ひかりのかべが あらわれた！<BR></P>
+    <P ALIGN="left">カビゴン の のしかかり！<BR></P>
+  `;
+  const parsedCheck = parseTeamPreviewHtml(rawCheckHtml);
+  const tracePreviewSides = [parsedCheck.p1Mons, parsedCheck.p2Mons];
+  const parsedTurn2Bt = parseBattleTurnHtml(rawTurn2Html);
+  const parsedTurn2Pdat = parsePdatHtml(rawPdatTurn2Html);
+  const parsedTurn2Llog = parseLlogHtml(rawLlogTurn2Html, tracePreviewSides);
+  const turn2SeenFoeBefore = initSeenFoe();
+  const turn2SeenFoe = JSON.parse(JSON.stringify(turn2SeenFoeBefore));
+  mergeLlogIntoSeenFoeMons({
+    llog: parsedTurn2Llog,
+    foeSide: 1,
+    seenFoeMons: turn2SeenFoe,
+    previewSides: tracePreviewSides,
+    battleTurn: parsedTurn2Bt,
+    turnNum: 2,
+    isForceSwitch: false,
+    lastFoeActiveSlot: 0,
+  });
+  const cleanSpecTurn2 = buildAndSanitizePositionSpec({
+    mySide: 0,
+    turn: 2,
+    ownSets,
+    previewSides: tracePreviewSides,
+    pickedRosterSlots: [0, 1, 2],
+    battleTurn: parsedTurn2Bt,
+    pdat: parsedTurn2Pdat,
+    llog: parsedTurn2Llog,
+    seenFoeMons: turn2SeenFoe,
+    teamPreview: false,
+    forceSwitch: false,
+  });
+  const previewSpec = buildAndSanitizePositionSpec({
+    mySide: 0,
+    turn: 0,
+    ownSets,
+    previewSides: tracePreviewSides,
+    pickedRosterSlots: [0, 1, 2],
+    battleTurn: null,
+    pdat: null,
+    llog: null,
+    seenFoeMons: turn2SeenFoeBefore,
+    teamPreview: true,
+    forceSwitch: false,
+  });
+
+  const cleanTrace = [
+    {
+      type: 'match_start',
+      matchId: 'selftest-clean',
+      botName: 'puniu3pbs',
+      team: { id: 'test-team', sets: ownSets },
+    },
+    {
+      type: 'preview',
+      matchId: 'selftest-clean',
+      decision: 1,
+      mySide: 0,
+      foeName: 'テスト相手',
+      rawCheckHtml,
+      pickedRosterSlots: [0, 1, 2],
+      spec: previewSpec,
+      sanitizeDiffs: previewSpec._sanitizeDiffs || [],
+      errors: [],
+    },
+    {
+      type: 'decision',
+      matchId: 'selftest-clean',
+      decision: 2,
+      turn: 2,
+      phase: 'INPUT',
+      forceSwitch: false,
+      mySide: 0,
+      foeName: 'テスト相手',
+      pickedRosterSlots: [0, 1, 2],
+      rawTurnHtml: rawTurn2Html,
+      rawPdatHtml: rawPdatTurn2Html,
+      rawLlogHtml: rawLlogTurn2Html,
+      battleTurn: parsedTurn2Bt,
+      pdat: parsedTurn2Pdat,
+      llogSummary: serializeLlogTracker(parsedTurn2Llog),
+      seenFoeMonsBefore: initSeenFoe(),
+      seenFoeMonsAfter: turn2SeenFoe,
+      lastFoeActiveSlotBefore: 0,
+      spec: cleanSpecTurn2,
+      sanitizeDiffs: cleanSpecTurn2._sanitizeDiffs || [],
+      bestChoice: 'move bodyslam',
+      matchedAction: 'move bodyslam',
+      mappingPath: 'direct:move-slot',
+      chosenMoveValue: 'W1',
+      postFields: { ACTION: 'INPUT', NOW: '1', MOVE: 'W1' },
+      errors: [],
+    },
+    {
+      type: 'finish',
+      matchId: 'selftest-clean',
+      outcome: 'WIN',
+      finishTrigger: 'FINISHED',
+      decisions: 2,
+      mySide: 0,
+      foeName: 'テスト相手',
+      rawFinishHtml: `<p>puniu3pbs ${fwWin}</p>`,
+      rawFinalLlogHtml: rawLlogTurn2Html,
+      errors: [],
+    },
+  ];
+
+  const cleanReport = auditMatchTrace(cleanTrace, { reparse: true, validateWasm: true });
+  assert.strictEqual(cleanReport.ok, true, `Expected clean trace to pass parity audit, got: ${JSON.stringify(cleanReport.anomalies)}`);
+  assert.strictEqual(cleanReport.errorCount, 0);
+  assert.strictEqual(cleanReport.warnCount, 0);
+
+  // Verify anomaly detection on corrupted trace (species mismatch, status mismatch, foeRemaining mismatch, PP mismatch, unrecognized LLOG line, fallback action)
+  const buggyTurnHtml = rawTurn2Html
+    .replace('<TD>ライコウ L50</TD>', '<TD>ナッシー♂ L50</TD>')
+    .replace('<TD>通常</TD><TD>通常</TD>', '<TD>まひ</TD><TD>通常</TD>')
+    .replace('のしかかり [23]', 'のしかかり [20]');
+  const buggyPdatHtml = rawPdatTurn2Html.replace('相手の残り：3', '相手の残り：1');
+  const buggyLlogHtml = rawLlogTurn2Html + '<P ALIGN="center">謎の未知のメッセージが発生した！<BR></P>';
+
+  const buggyTrace = JSON.parse(JSON.stringify(cleanTrace));
+  buggyTrace[2].rawTurnHtml = buggyTurnHtml;
+  buggyTrace[2].rawPdatHtml = buggyPdatHtml;
+  buggyTrace[2].rawLlogHtml = buggyLlogHtml;
+  buggyTrace[2].mappingPath = 'emergency-fallback:first-legal-option';
+  buggyTrace[2].sanitizeDiffs = [{ path: 'sides[0].active', from: null, to: 0, reason: 'no_active_mon' }];
+
+  const buggyReport = auditMatchTrace(buggyTrace, { reparse: true, validateWasm: true });
+  assert.strictEqual(buggyReport.ok, false);
+  const detectedCodes = new Set(buggyReport.anomalies.map(a => a.code));
+  assert.ok(detectedCodes.has('ACTIVE_SPECIES_MISMATCH'));
+  assert.ok(detectedCodes.has('ACTIVE_STATUS_MISMATCH'));
+  assert.ok(detectedCodes.has('PDAT_FOE_REMAINING_MISMATCH'));
+  assert.ok(detectedCodes.has('OWN_PP_TRACKING_MISMATCH'));
+  assert.ok(detectedCodes.has('LLOG_UNRECOGNIZED_LINE'));
+  assert.ok(detectedCodes.has('ACTION_MAPPING_FALLBACK'));
+  assert.ok(detectedCodes.has('SANITIZER_FORCED_CLAMP'));
+
+  console.log('[discord-bot] Self-test passed (第1=C..第6=H + LLOG/PositionSpec state machine + WASM validation + Parity Audit)!');
 }
 
 async function main() {

@@ -121,14 +121,21 @@ node tools/pbs-discord-bot.js --token "$DISCORD_TOKEN" --name "NC2000" --pass "n
 4. **Online Rematch Adaptation & Prior Logging**:
    - `data/pbs-opponent-db.json`: Persists each opponent's 6-mon shell, picked frequencies, revealed moves, items, `noLeftovers`, and `maxHp`, synthesizing an adapted candidate team (`OPPONENT_ADAPTED_*`) on rematches.
    - `data/pbs-matches.jsonl`: Appends a JSON summary after every game for offline prior expansion.
+5. **Raw Trace Archiving & Automatic Post-Match Parity Audit (`tools/pbs-parity-audit.js`)**:
+   - `data/pbs-traces/<matchId>.jsonl` (git-ignored): Automatically saves a complete per-match JSONL bundle containing raw `PS.cgi` HTML (`TEAM_PREVIEW_CHECK`, per-turn `BATTLE_INPUT`/`BATTLE_CHANGE`, `PDAT`, `LLOG`, `FINISHED`), reconstructed `ProtocolTracker` / `PositionSpec` states, sanitizer clamp diffs, and `<select Name="MOVE">` projection paths.
+   - At the end of every match, `tools/pbs-client.js` automatically runs `auditMatchTrace()` across independent information channels (Top Status Table vs `PDAT` vs `LLOG` vs `PositionSpec` vs Rust WASM `ProtocolSearcher.setPosition()`).
+   - If any parser desync, unrecognized Japanese log line, sanitizer forced clamp, or action fallback occurs, `[PARITY_WARN]` is printed and the structured anomaly report is appended to `data/pbs-anomalies.jsonl`.
 
 ---
 
 ## 6. Diagnostic Commands
 
 ```bash
-# Run offline state-machine & room-parser self-test
+# Run offline state-machine, room-parser & parity-audit self-test
 node tools/pbs-discord-bot.js --selftest
+
+# Re-parse and audit all archived raw match traces against current parser + WASM engine
+node tools/pbs-parity-audit.js data/pbs-traces
 
 # Passive observation mode (logs Discord events to console & data/discord-events.jsonl without replying)
 node tools/pbs-discord-bot.js --observe
