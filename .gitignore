@@ -49,4 +49,6 @@ data/pbs-matches.jsonl
 data/pbs-traces/
 data/pbs-anomalies.jsonl
 data/discord-events.jsonl
+data/pbs-castle-logs/
+data/pbs-castle-logs.zip
 
