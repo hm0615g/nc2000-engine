@@ -52,7 +52,7 @@ if (args.help || args.h) {
                        ASCII alphanumeric recommended for non-IE PBS cookie)
   --pass PASS          Entry password (default nc2pass)
   --msg MSG            Entry comment when hosting as P1 (default よろしくおねがいします)
-  --mode MODE          auto | host | join (default auto)
+  --mode MODE          auto | host | join (default host)
                          host: only enter as P1 when the room is empty
                          join: wait until a human P1 enters, then join as P2
                          auto: join as P2 if P1 is waiting, else enter as P1
@@ -91,7 +91,7 @@ const DISCORD_DAI_TO_LETTER = {
 };
 
 function resolveRoomUrl(raw) {
-  const s = String(raw || 'C').trim();
+  const s = String(raw || 'K').trim();
   if (/^https?:\/\//i.test(s)) return s.replace(/\?.*$/, '');
   const daiMatch = s.match(/^(?:第)?([1-6１-６一二三四五六])$/);
   if (daiMatch && DISCORD_DAI_TO_LETTER[daiMatch[1]]) {
@@ -101,11 +101,11 @@ function resolveRoomUrl(raw) {
   return `http://psense.lib.net/PBS/_/${letter}/PS.cgi`;
 }
 
-const ROOM_URL = resolveRoomUrl(args.room || 'C');
+const ROOM_URL = resolveRoomUrl(args.room || 'K');
 const NAME = String(args.name || 'nc2000bot');
 const PASS = String(args.pass || 'nc2pass');
 const MSG = String(args.msg || 'よろしくおねがいします');
-const MODE = String(args.mode || 'auto').toLowerCase();
+const MODE = String(args.mode || 'host').toLowerCase();
 const TIER = String(args.tier || 'default').toLowerCase();
 const DEFAULT_TEAM_BY_TIER = (TIER === 'mercy' || TIER === 'tiera' || TIER === 'tier-a' || TIER === 'sub')
   ? 'pool:tier-a'
@@ -119,6 +119,21 @@ const LTURN = Math.max(0, parseInt(args.lturn || '0', 10));
 const SEED = parseInt(args.seed || String(Date.now() & 0x7fffffff), 10);
 const RANDOM = Boolean(args.random);
 const QUIET = Boolean(args.quiet);
+const ENTRY_STATUS_IPC = Boolean(args['entry-status-ipc']);
+let entryStatusSent = false;
+
+function reportEntryStatus(status, reason) {
+  if (!ENTRY_STATUS_IPC || entryStatusSent) return;
+  if (!process.connected || typeof process.send !== 'function') return;
+  entryStatusSent = true;
+  try {
+    process.send({
+      type: 'PBS_ENTRY_STATUS',
+      status,
+      reason,
+    });
+  } catch {}
+}
 const DECISION_LOG = args['decision-log'] && args['decision-log'] !== true
   ? path.resolve(String(args['decision-log']))
   : '';
@@ -4129,6 +4144,21 @@ async function playOneGame(gameIdx) {
     while (true) {
       const page = classifyPage(res);
 
+      // Confirm entry only after PBS returns an entered-room state.
+      if (enteredRoom && !entryStatusSent && [
+        'WAITING_ENTRY',
+        'REDIRECT_PDINPUT',
+        'TEAM_PREVIEW_CHECK',
+        'TEAM_PREVIEW_SELECT',
+        'WAITING_SELECT',
+        'SELECT_DONE',
+        'WAITING_TURN',
+        'BATTLE_INPUT',
+        'BATTLE_CHANGE',
+      ].includes(page.kind)) {
+        reportEntryStatus('success', page.kind);
+      }
+
       if (page.kind === 'FINISHED') {
         if (!enteredRoom && page.reason === 'match_end_page') {
           res = await client.get(`${ROOM_URL}?ACTION=TITLE`);
@@ -4201,6 +4231,16 @@ async function playOneGame(gameIdx) {
       }
 
       if (page.kind === 'ERROR') {
+        if (ENTRY_STATUS_IPC && !entryStatusSent) {
+          reportEntryStatus('failed', 'pbs_error');
+          log(`PBS entry failed: ${page.errorText}`);
+          return {
+            outcome: 'ENTRY_FAILED',
+            decisions: 0,
+            team: team.id,
+            foeName: null,
+          };
+        }
         log(`PBS returned ERROR page: ${page.errorText}`);
         appendTraceEvent({
           type: 'error_page',
@@ -4210,6 +4250,25 @@ async function playOneGame(gameIdx) {
         await sleep(POLL_MS);
         res = await client.get(ROOM_URL);
         continue;
+      }
+
+      if (!enteredRoom && ENTRY_STATUS_IPC && MODE === 'host' && [
+        'BATTLE_INPUT',
+        'BATTLE_CHANGE',
+        'WAITING_TURN',
+        'TEAM_PREVIEW_CHECK',
+        'TEAM_PREVIEW_SELECT',
+        'WAITING_SELECT',
+        'SELECT_DONE',
+      ].includes(page.kind)) {
+        reportEntryStatus('failed', 'room_busy');
+        log(`PBS room is occupied by another battle (${page.kind}); entry rejected.`);
+        return {
+          outcome: 'ROOM_BUSY',
+          decisions: 0,
+          team: team.id,
+          foeName: null,
+        };
       }
 
       if (page.kind === 'ENTORY') {
@@ -4260,6 +4319,16 @@ async function playOneGame(gameIdx) {
 
         if (page.p1Waiting) {
           if (MODE === 'host') {
+            if (ENTRY_STATUS_IPC) {
+              reportEntryStatus('failed', 'room_busy');
+              log('PBS room is already occupied; entry rejected.');
+              return {
+                outcome: 'ROOM_BUSY',
+                decisions: 0,
+                team: team.id,
+                foeName: page.p1Name || null,
+              };
+            }
             log(`P1 (${page.p1Name}) is already in room, waiting (--mode host)...`);
             await sleep(POLL_MS);
             res = await client.get(ROOM_URL);
