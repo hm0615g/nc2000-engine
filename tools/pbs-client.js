@@ -1207,14 +1207,30 @@ function parseLlogHtml(html, previewSides = [[], []]) {
 
   if (!html) return info;
 
+  let p1Name = '';
+  let p2Name = '';
+  const nameRowMatch = html.match(
+    /<tr[^>]*>\s*<t[dh][^>]*>\s*([^<]*?)\s*<\/t[dh]>\s*<td[^>]*ROWSPAN="?2"?[^>]*>[\s\S]*?<\/td>\s*<t[dh][^>]*>\s*([^<]*?)\s*<\/t[dh]>\s*<\/tr>/i
+  );
+  if (nameRowMatch) {
+    p1Name = nameRowMatch[1].trim();
+    p2Name = nameRowMatch[2].trim();
+  }
+
   const findExplicitSlot = (sideIdx, text) => {
     const roster = (previewSides && previewSides[sideIdx]) || [];
     const normText = normJp(text);
-    for (let i = 0; i < roster.length; i++) {
-      const spId = roster[i].speciesId || toId(roster[i].species);
-      const jp = i18n.species[spId];
-      if (!jp) continue;
-      if (normText.includes(normJp(jp))) return i;
+    const sortedSlots = roster
+      .map((m, idx) => {
+        const spId = m.speciesId || toId(m.species);
+        const jp = i18n.species[spId] || '';
+        return { idx, jp, normJp: normJp(jp) };
+      })
+      .filter(e => e.jp)
+      .sort((a, b) => b.normJp.length - a.normJp.length);
+
+    for (const { idx, normJp: sJp } of sortedSlots) {
+      if (normText.includes(sJp)) return idx;
     }
     return null;
   };
@@ -1463,8 +1479,14 @@ function parseLlogHtml(html, previewSides = [[], []]) {
       if (
         normClean.includes(normJp('雨はやんだ')) ||
         normClean.includes(normJp('あめはやんだ')) ||
+        normClean.includes(normJp('雨が降り止んだ')) ||
+        normClean.includes(normJp('あめがふりやんだ')) ||
         normClean.includes(normJp('日差しが戻った')) ||
         normClean.includes(normJp('ひざしがもどった')) ||
+        normClean.includes(normJp('日差しが弱まった')) ||
+        normClean.includes(normJp('ひざしがよわまった')) ||
+        normClean.includes(normJp('日差しが元に戻った')) ||
+        normClean.includes(normJp('ひざしがもとにもどった')) ||
         normClean.includes(normJp('砂嵐はおさまった')) ||
         normClean.includes(normJp('すなあらしはおさまった')) ||
         normClean.includes(normJp('砂嵐がおさまった')) ||
@@ -1713,10 +1735,15 @@ function parseLlogHtml(html, previewSides = [[], []]) {
           const isChargeText =
             clean.includes('空高く飛び上がった') ||
             clean.includes('穴を掘った') ||
-            clean.includes('光を吸収した') ||
+            clean.includes('地下深く潜り込んだ') ||
+            clean.includes('光を吸収') ||
+            clean.includes('ひかりを吸収') ||
             clean.includes('頭を引っ込めた') ||
+            clean.includes('頭をひっこめた') ||
             clean.includes('激しい風に包まれた') ||
-            clean.includes('激しい光をまとった');
+            clean.includes('空気がうずまく') ||
+            clean.includes('激しい光をまとった') ||
+            clean.includes('激しい光が包む');
           const resolvedDamageInSameBlock =
             clean.includes('ダメージ') ||
             clean.includes('急所に当たった') ||
@@ -1937,7 +1964,7 @@ function parseLlogHtml(html, previewSides = [[], []]) {
     // 3b. Phaze drag (`ほえる` / `ふきとばし` -> `ひきずりだされた` / `ふきとばされた`)
     if (isDragBlock) {
       const dragClauseMatch = rawClean.match(
-        /([^\s！!<>]+?)\s*(?:が|は)\s*(?:引きずり出された|ひきずりだされた|吹き飛ばされた|ふきとばされた)/
+        /([^\s！!<>]+?)\s*(?:が|は)\s*(?:(?:戦闘に)?(?:引きずり出された|ひきずりだされた)|吹き飛ばされた|ふきとばされた)/
       );
       const dragTargetText = dragClauseMatch ? dragClauseMatch[1] : clean;
       const hasPhazeMove = blockMoveIds.includes('roar') || blockMoveIds.includes('whirlwind');
@@ -1957,7 +1984,16 @@ function parseLlogHtml(html, previewSides = [[], []]) {
       }
     }
 
-    const resolveLineSubject = lineText => {
+    const resolveLineSubject = (lineText, altSide = null) => {
+      if (altSide !== null) {
+        const exp = findExplicitSlot(altSide, lineText);
+        const slot = exp !== null ? exp : info.sides[altSide].activeSlot;
+        return {
+          side: altSide,
+          slot,
+          mon: slot !== null ? (info.sides[altSide].mons[slot] || null) : null,
+        };
+      }
       const foeExp = findExplicitSlot(foeIdx, lineText);
       const ownExp = findExplicitSlot(sideIdx, lineText);
       if (foeExp !== null && ownExp === null) {
@@ -1992,13 +2028,19 @@ function parseLlogHtml(html, previewSides = [[], []]) {
     }
 
     // 5. Line-by-line inspection (`<BR>` clauses) for items, stat-change text, status, volatiles, and faints
-    const lines = block
-      .split(/<BR\s*\/?>|\n/i)
-      .map(l => l.replace(/<[^>]*>/g, '').replace(/\s+/g, '').trim())
-      .filter(Boolean);
-
-    for (const lineClean of lines) {
-      const subj = resolveLineSubject(lineClean);
+    const rawLines = block.split(/<BR\s*\/?>|\n/i);
+    for (const rawLine of rawLines) {
+      const lineClean = rawLine.replace(/<[^>]*>/g, '').replace(/\s+/g, '').trim();
+      if (!lineClean) continue;
+      const altM = rawLine.match(/alt="([^"]*)"/i);
+      const alt = altM ? altM[1].replace(/&nbsp;/g, ' ').trim() : '';
+      let altSide = null;
+      if (alt) {
+        const altNorm = normJp(alt).replace(/の$/, '');
+        if (p1Name && altNorm === normJp(p1Name)) altSide = 0;
+        else if (p2Name && altNorm === normJp(p2Name)) altSide = 1;
+      }
+      const subj = resolveLineSubject(lineClean, altSide);
       const subjMon = subj.mon;
 
       // 5a. Item reveal & consumption cues (`たべのこし`, berries, Focus Band, Quick Claw)
@@ -2118,12 +2160,16 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         } else if (
           lineClean.includes('どくをあびた') ||
           lineClean.includes('毒をあびた') ||
-          lineClean.includes('どく状態になった')
+          lineClean.includes('どく状態になった') ||
+          lineClean.includes('毒におかされた') ||
+          lineClean.includes('どくにおかされた')
         ) {
           subjMon.status = 'psn';
         } else if (
           lineClean.includes('やけどを負った') ||
           lineClean.includes('火傷を負った') ||
+          lineClean.includes('やけどをおった') ||
+          lineClean.includes('火傷をおった') ||
           lineClean.includes('やけど状態になった')
         ) {
           subjMon.status = 'brn';
@@ -2147,7 +2193,9 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         } else if (
           lineClean.includes('凍りついた') ||
           lineClean.includes('こおりついた') ||
-          lineClean.includes('凍ってしまった')
+          lineClean.includes('凍ってしまった') ||
+          lineClean.includes('こおりづけになった') ||
+          lineClean.includes('凍りづけになった')
         ) {
           subjMon.status = 'frz';
         }
@@ -2157,8 +2205,9 @@ function parseLlogHtml(html, previewSides = [[], []]) {
           lineClean.includes('目を覚ました') ||
           lineClean.includes('めをさました') ||
           lineClean.includes('氷が溶けた') ||
+          lineClean.includes('氷がとけた') ||
           lineClean.includes('こおりがとけた') ||
-          lineClean.includes('氷がとけた')
+          lineClean.includes('こおりが溶けた')
         ) {
           cureMonStatus(subjMon);
         }
@@ -2238,10 +2287,13 @@ function parseLlogHtml(html, previewSides = [[], []]) {
       }
 
       // 5f. Faint detection (`|faint|`) across either side mentioned on this line
+      const isHpZero = /(?:HP|ＨＰ)\s*\d+\s*→\s*0\b/i.test(lineClean);
+      const isFaintLine = lineClean.includes('たおれた') || lineClean.includes('倒れた');
       if (
-        (lineClean.includes('たおれた') || lineClean.includes('倒れた')) &&
+        (isFaintLine || isHpZero) &&
         subj.slot !== null &&
-        subjMon
+        subjMon &&
+        !subjMon.fainted
       ) {
         subjMon.appeared = true;
         subjMon.appearCount = Math.max(1, subjMon.appearCount || 1);
@@ -2267,15 +2319,15 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         /を繰り出した|をくりだした|ゆけっ|いけっ|出てこい|引っ込めた|ひっこめた|戻れ|もどれ|交代/.test(lineClean) ||
         /引きずり出された|ひきずりだされた|吹き飛ばされた|ふきとばされた/.test(lineClean) ||
         /眠っている|ねむっている|眠りはじめた|ねむりはじめた|眠っていて|ねむっていて|反動で動けない|はんどうでうごけない|しびれて動けない|しびれてうごけない|痺れて動けない|痺れてうごけない|凍ってしまって|こおってしまって|凍っていて|こおっていて|ひるんで|メロメロ|かなしばり|わけもわからず/.test(lineClean) ||
-        /空高く飛び上がった|穴を掘った|光を吸収した|頭を引っ込めた|激しい風に包まれた|激しい光をまとった|力をためて/.test(lineClean) ||
+        /空高く飛び上がった|穴を掘った|地下深く潜り込んだ|光を吸収|ひかりを吸収|頭を引っ込めた|頭をひっこめた|激しい風に包まれた|空気がうずまく|激しい光をまとった|激しい光が包む|力をためて/.test(lineClean) ||
         /たべのこし|食べ残し|きあいのハチマキ|せんせいのツメ|を奪った|をうばった/.test(lineClean) ||
         /あがった|さがった|上がった|下がった|あがらない|さがらない|上がらない|下がらない/.test(lineClean) ||
-        /もうどく|猛毒|どくをあびた|毒をあびた|どく状態|やけど|火傷|まひして|麻痺して|まひした|麻痺した|まひ状態|眠ってしまった|ねむってしまった|けんこうになって|健康になって|凍りついた|こおりついた|こおりづけになった|凍ってしまった|目を覚ました|めをさました|氷が溶けた|こおりがとけた|氷がとけた|正気に戻った|しょうきにもどった|どくのダメージ|毒のダメージ/.test(lineClean) ||
+        /もうどく|猛毒|どくをあびた|毒をあびた|毒におかされた|どくにおかされた|どく状態|やけど|火傷|まひして|麻痺して|まひした|麻痺した|まひ状態|眠ってしまった|ねむってしまった|けんこうになって|健康になって|凍りついた|こおりついた|こおりづけになった|凍ってしまった|目を覚ました|めをさました|氷が溶けた|こおりがとけた|氷がとけた|正気に戻った|しょうきにもどった|どくのダメージ|毒のダメージ/.test(lineClean) ||
         /こんらん|混乱|みがわり|身代わり|分身|アンコール|解放された|カウントが|しめつけ|締め付け|渦の中に|うずのなかに|炎の渦|ほのおのうず|からみついて|はさまれた/.test(lineClean) ||
         /たおれた|倒れた|みちづれ|道連れ/.test(lineClean) ||
-        /リフレクター|ひかりのかべ|光の壁|しんぴのまもり|神秘の守り|しんぴのヴェール|神秘のヴェール|しろいきり|白い霧|くろいきり|黒い霧|すべての能力が元に戻った|まきびし|すずの音|鈴の音|ほろびのうた|滅びの歌|タネが|種が|あくむ|悪夢|みやぶった|見破った|を封じた|にげられなくなった|逃げられなくなった|もうにげられない|うらみ|ＰＰを|PPを|へんしん|変身|暗示|あんじ|ものまね|のろい|呪い|いかりのボルテージ|がまん|まるくなった|ちいさくなった|はりきって|張り切って/.test(lineClean) ||
-        /雨が降り|あめがふり|大雨になった|雨はやんだ|あめはやんだ|日差しが|ひざしが|砂嵐|すなあらし|すなあらしがふきあれる|すなあらしがおさまった/.test(lineClean) ||
-        /ダメージ|急所に当たった|きゅうしょにあたった|急所にあたった|効果はバツグン|こうかはばつぐん|効果抜群|こうかばつぐん|効果はいまひとつ|こうかはいまひとつ|効果はイマイチ|こうかはイマイチ|回当たった|かいあたった|体力を回復|たいりょくをかいふく|回復した|体力を吸い取った|たいりょくをすいとった|たいりょくをうばう|わかちあった|体力がいっぱい|たいりょくがいっぱい|反動を受けた|はんどうをうけた|反動をうけた|はんどうをうけた|は守っている|はまもっている|まもりの体勢|こらえた|こらえる体勢|はねている|ひるんだ|何も起こらない|なにもおこらない|しかし決まらなかった|すでに|強くなった|最大まであげた|たねをうえつけた|はかいのいでんし|たりなかった|交換できるポケモンがいなかった|WIN!|ＷＩＮ！|LOSE|ＬＯＳＥ|DRAW|ＤＲＡＷ|戻る|HP\s*\d+\s*→|ＨＰ\s*\d+\s*→|ほろんでしまう/.test(lineClean);
+        /リフレクター|ひかりのかべ|光の壁|しんぴのまもり|神秘の守り|しんぴのヴェール|神秘のヴェール|しろいきり|白い霧|くろいきり|黒い霧|すべての能力が元に戻った|まきびし|すずの音|鈴の音|ほろびのうた|滅びの歌|タネが|種が|あくむ|悪夢|みやぶった|見破った|を封じた|にげられなくなった|逃げられなくなった|もうにげられない|うらみ|ＰＰを|PPを|へんしん|変身|暗示|あんじ|ものまね|のろい|呪い|のろわれている|いかりのボルテージ|がまん|まるくなった|ちいさくなった|はりきって|張り切って/.test(lineClean) ||
+        /雨が降り|あめがふり|大雨になった|雨はやんだ|あめはやんだ|雨が降り止んだ|日差しが|ひざしが|砂嵐|すなあらし|すなあらしがふきあれる|すなあらしがおさまった|砂嵐がおさまった/.test(lineClean) ||
+        /ダメージ|急所に当たった|きゅうしょにあたった|急所にあたった|効果はバツグン|こうかはばつぐん|効果抜群|こうかばつぐん|効果はいまひとつ|こうかはいまひとつ|効果はイマイチ|こうかはイマイチ|回当たった|かいあたった|体力を回復|たいりょくをかいふく|回復した|体力を吸い取った|たいりょくをすいとった|たいりょくをうばう|わかちあった|体力がいっぱい|たいりょくがいっぱい|反動を受けた|はんどうをうけた|反動をうけた|はんどうをうけた|は守っている|はまもっている|まもりの体勢|こらえた|こらえる体勢|こらえている|はねている|ひるんだ|何も起こらない|なにもおこらない|しかし決まらなかった|すでに|強くなった|最大まであげた|たねをうえつけた|はかいのいでんし|たりなかった|交換できるポケモンがいなかった|タイプを自分に貼り付けた|激突した|一撃必殺|WIN!|ＷＩＮ！|LOSE|ＬＯＳＥ|DRAW|ＤＲＡＷ|戻る|HP\s*\d+\s*→|ＨＰ\s*\d+\s*→|ほろんでしまう/.test(lineClean);
 
       if (!isKnownStateOrNarrative && lineClean.length > 0) {
         info.unrecognizedLines.push({
