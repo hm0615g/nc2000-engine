@@ -179,17 +179,16 @@ AIコーディングアシスタント（Claude / Cursor / ChatGPT 等）にこ�
 
 ## 2. 城Discord (\`#2000-一撃なし\`) での動き
 
-### 部屋名の対応（城公認Discord仕様）
-- **\`第1\` / \`第一\`** ＝ **\`C\`** (\`http://psense.lib.net/PBS/_/C/PS.cgi\`)
-- **\`第2\` / \`第二\`** ＝ **\`D\`** (\`http://psense.lib.net/PBS/_/D/PS.cgi\`)
-- **\`第3\` / \`第三\`** ＝ **\`E\`** (\`http://psense.lib.net/PBS/_/E/PS.cgi\`)
+### ボット専用チャンネル & 部屋 K
+- **対戦受付チャンネル**: \`989231786288611388\`（城Discord専用チャンネル、スレッド対応）
+- **対戦部屋**: **\`第K\`** (\`http://psense.lib.net/PBS/_/K/PS.cgi\`)
 
 ### 対戦成立〜終了の流れ
 1. 待機中は城サーバー（\`psense.lib.net\`）へ一切アクセスしません。
-2. 誰かが \`@Bot 対戦希望します\`（または \`@Bot 手加減で対戦希望します\`）とメンションすると、即座にリプライで **\`応戦します\`** と返信します。
-3. 続けて相手が **\`第1へ\` / \`第2にて\` / \`では第三でお願いします\`** と投稿（またはサーバーの \`アナウンス [APP]\` が \`[第1]\`〜\`[第3]\` リンクを投稿）すると、Botが **\`よろしくお願いします\`** と投稿し、対応する部屋（\`C\` / \`D\` / \`E\`）へ即座に入室して1戦プレイします。
-   - ※最初のメンションに \`@Bot 第2でお願いします\` と部屋が書かれていた場合は即入室します。
-   - ※\`応戦します\` の後15秒間相手から部屋指定がない場合は、自動で \`第1\`〜\`第3\` の空き状況（または相手が既に入室している部屋）を確認し、Bot自ら \`第1にて\` → \`よろしくお願いします\` と投稿して入室します。
+2. 承認チャンネルで誰かが \`@Bot 対戦希望します\`（または \`@Bot 手加減で対戦希望します\`）とメンションすると、即座にリプライで **\`応戦します\`** と返信します。
+3. Bot は \`--mode host\` かつ \`--entry-status-ipc\` で **\`第K\`** 部屋へホスト入室を試行します。
+   - **入室確定時**: PBS上で入室が確認された瞬間に **\`よろしくお願いします\`** と部屋URL（\`http://psense.lib.net/PBS/_/K/PS.cgi?ACTION=TITLE\`）を投稿し、相手のP2エントリーを待機します。
+   - **部屋使用中 / 進行中**: 既に第K部屋で対戦が行われているか待機者がいる場合、即座に **\`現在部屋が利用できません\`** と返信して待機状態に戻ります。
 4. 試合が終わるとチャンネルに **\`ありがとうございました\`** と投稿します。
 
 ---
@@ -418,36 +417,31 @@ AIコーディングアシスタント（Claude / Cursor / ChatGPT 等）にこ�
     </section>
 
     <section>
-      <h2>3. 確定済み動作仕様（<code>#2000-一撃なし</code> 準拠）</h2>
+      <h2>3. 確定済み動作仕様（城Bot専用チャンネル・K部屋仕様）</h2>
       <table>
         <thead>
           <tr>
-            <th>城Discord表記</th>
-            <th>対応部屋</th>
-            <th>URL</th>
+            <th>設定項目</th>
+            <th>値</th>
+            <th>詳細</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><code>第1</code> / <code>第一</code></td>
-            <td><strong>C</strong></td>
-            <td><code>http://psense.lib.net/PBS/_/C/PS.cgi</code></td>
+            <td>受付チャンネル</td>
+            <td><code>989231786288611388</code></td>
+            <td>城Discordボット専用チャンネル（スレッド対応）</td>
           </tr>
           <tr>
-            <td><code>第2</code> / <code>第二</code></td>
-            <td><strong>D</strong></td>
-            <td><code>http://psense.lib.net/PBS/_/D/PS.cgi</code></td>
-          </tr>
-          <tr>
-            <td><code>第3</code> / <code>第三</code></td>
-            <td><strong>E</strong></td>
-            <td><code>http://psense.lib.net/PBS/_/E/PS.cgi</code></td>
+            <td>対戦部屋</td>
+            <td><strong>第K (K)</strong></td>
+            <td><code>http://psense.lib.net/PBS/_/K/PS.cgi</code></td>
           </tr>
         </tbody>
       </table>
       <ul>
-        <li><strong>呼び出し〜入室</strong>: <code>@Bot 対戦希望します</code> とメンションされると即座にリプライで <strong><code>応戦します</code></strong> と返し、相手が <code>第1へ</code> / <code>第2にて</code> / <code>では第三でお願いします</code> と投稿（または <code>アナウンス [APP]</code> が <code>[第1]</code>〜<code>[第3]</code> リンクを投稿）した瞬間に <strong><code>よろしくお願いします</code></strong> と投稿して該当部屋に入室します。</li>
-        <li><strong>自動部屋選択フォールバック</strong>: <code>応戦します</code> の後15秒間相手から部屋指定がない場合は、自動で <code>第1(C)</code>〜<code>第3(E)</code> の空き状況（または相手が待機中の部屋）をチェックし、Bot自ら <code>第1にて</code> → <code>よろしくお願いします</code> と投稿して入室します。</li>
+        <li><strong>呼び出し〜入室</strong>: <code>@Bot 対戦希望します</code> とメンションされると即座にリプライで <strong><code>応戦します</code></strong> と返し、<code>--mode host</code> かつ <code>--entry-status-ipc</code> で第K部屋に入室します。PBSへの入室が確認された瞬間に <strong><code>よろしくお願いします</code></strong> と部屋URL（<code>?ACTION=TITLE</code>）をDiscordに投稿します。</li>
+        <li><strong>部屋使用中・進行中保護</strong>: 第K部屋が既に他者の対戦中や待機中の場合、待たされることなく即座に <strong><code>現在部屋が利用できません</code></strong> と返信します。</li>
         <li><strong>2段階パーティ切り替え</strong>:
           <ul>
             <li><strong>通常時 (<code>default</code>)</strong>: <code>81,000</code> iterations + <strong>Nash均衡混合 (<code>pool:nash</code>、APEX4)</strong> + 定跡選出ブック</li>

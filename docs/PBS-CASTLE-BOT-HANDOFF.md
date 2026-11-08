@@ -72,28 +72,22 @@ node tools/pbs-discord-bot.js --token "$DISCORD_TOKEN" --name "NC2000" --pass "n
 
 ---
 
-## 4. Verified `#2000-一撃なし` Discord Protocol & Room Mapping
+## 4. Dedicated Castle Bot Channel & Room K Routing
 
-### Official Castle Discord Room Table (`http://psense.lib.net/PBS/chat/`)
+### Dedicated Bot Channel & Room Mapping
 
-| Castle Discord Name | Room Letter | `PS.cgi` URL |
+| Setting | Value | Description |
 |---|---|---|
-| `第1` / `第一` | `C` | `http://psense.lib.net/PBS/_/C/PS.cgi` |
-| `第2` / `第二` | `D` | `http://psense.lib.net/PBS/_/D/PS.cgi` |
-| `第3` / `第三` | `E` | `http://psense.lib.net/PBS/_/E/PS.cgi` |
-| `第4` / `第四` | `F` | `http://psense.lib.net/PBS/_/F/PS.cgi` |
-| `第5` / `第五` | `G` | `http://psense.lib.net/PBS/_/G/PS.cgi` |
-| `第6` / `第六` | `H` | `http://psense.lib.net/PBS/_/H/PS.cgi` |
+| **Bot Channel** | `989231786288611388` | Approved bot channel on Castle Discord (human matches take place in separate rooms; bot ignores non-bot channels) |
+| **Room Label** | `第K` (`K`) | `http://psense.lib.net/PBS/_/K/PS.cgi` (dedicated bot room) |
 
-*(Direct room letters `C`–`O` and full `PS.cgi` URLs are also accepted.)*
-
-### Match Flow in `#2000-一撃なし`
-1. **Challenge `@mention`**: A user posts e.g. `@Bot 対戦希望します` (or `@Bot 手加減で対戦希望します`).
+### Match Flow & Entry IPC Confirmation
+1. **Challenge `@mention`**: A user posts e.g. `@Bot 対戦希望します` (or `@Bot 手加減で対戦希望します`) in channel `989231786288611388` (or threads within it).
    - Bot immediately sends a Discord Reply: `応戦します`.
-2. **Room Resolution (3 paths)**:
-   - **Path A (Standard `#2000-一撃なし` flow)**: Challenger replies `第1へ` / `第2にて` / `では第三でお願いします` (which also triggers the server's `アナウンス [APP]` bot to post a `[第1]` through `[第6]` link). As soon as our bot sees either message, it posts `よろしくお願いします` and launches `tools/pbs-client.js` in that room (`C` through `H`).
-   - **Path B (Room included in initial `@mention`)**: If the challenger wrote `@Bot 第2で対戦希望します`, the bot replies `応戦します`, posts `よろしくお願いします`, and enters `第2 (D)` immediately.
-   - **Path C (Auto-pick fallback after `autoPickRoomAfterSec` = 15s)**: If 15 seconds pass after `応戦します` without the challenger naming a room, `probeCastleDiscordRooms()` checks `第1 (C)` through `第6 (H)` on `psense.lib.net`, picks the room where the challenger is waiting or the first empty room, posts `第1にて` + `よろしくお願いします` in Discord (triggering `アナウンス [APP]`), and enters that room.
+2. **Dedicated Room K Host & Entry Confirmation**:
+   - The bot launches `tools/pbs-client.js` in `--mode host` on Room K (`http://psense.lib.net/PBS/_/K/PS.cgi`) with `--entry-status-ipc`.
+   - **Entry Verified (`WAITING_ENTRY`)**: The bot confirms entry and posts `よろしくお願いします` along with `http://psense.lib.net/PBS/_/K/PS.cgi?ACTION=TITLE` to the Discord channel so the human opponent can enter as P2.
+   - **Room Busy / In-Progress Match**: If Room K is occupied by an ongoing battle or another player is waiting, the bot immediately replies `現在部屋が利用できません` without hanging.
 3. **Post-Match**: When the battle finishes (`WIN` / `LOSE`), the bot cleans up the room via `PS.cgi?ACTION=END` and posts `ありがとうございました` in the Discord channel.
 
 ### Result semantics
