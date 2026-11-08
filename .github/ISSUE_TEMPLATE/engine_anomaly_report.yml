@@ -1,0 +1,50 @@
+name: "Engine Anomaly Report (M2M Triage Verified)"
+description: "Report a verified core engine rule, damage formula, or search defect"
+title: "[Engine Anomaly]: "
+labels: ["engine-anomaly", "triage-verified"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Upstream Engine Bug Report SLA Contract
+        This repository guarantees the mathematical and deterministic correctness of the NC2000 game engine, rules, damage formulas, and MCTS convergence given a valid `PositionSpec` (`nc2000-position-v1`).
+
+        **Requirements before submitting**:
+        1. Subjective natural language impressions without deterministic evidence (e.g. *"A human wouldn't choose this move"*, screenshots, raw HTML logs) will be closed automatically.
+        2. You must run the triage CLI on the turn's state:
+           ```bash
+           node tools/diagnose-position.js --spec <spec.json> --expect-action "<HUMAN_ACTION>" --emit-repro repro-bundle.json
+           # Or from Castle match trace:
+           node tools/pbs-parity-audit.js data/pbs-traces/<matchId>.jsonl --turn <N> --expect-action "<HUMAN_ACTION>" --emit-repro repro-bundle.json
+           ```
+        3. Issues are accepted ONLY when the triage telemetry reports `verdict`:
+           - `CATEGORY_B1_RULE_INVALID_SPEC` (Rule violation or illegal move)
+           - `CATEGORY_B2_Q_VISIT_INVERSION` (Significant Q vs Visit inversion)
+           - `CATEGORY_B3_FLAT_ROOT_LOTTERY` (Search starvation or severe root saturation)
+        4. Issues with `CATEGORY_A*` (Adapter desync / sanitizer clamp) belong to the downstream adapter fork.
+        5. Issues with `CATEGORY_C*` (Nash indifference, belief-weighted risk mitigation, MCTS value preference) are intended game-theoretic behavior.
+
+  - type: textarea
+    id: triage_telemetry
+    attributes:
+      label: "Single-Line Triage Telemetry (`nc2000-triage-report-v1`)"
+      description: "Paste the exact JSON line printed on stdout by `tools/diagnose-position.js` or `tools/pbs-parity-audit.js`."
+      placeholder: '{"schema":"nc2000-triage-report-v1","engine_sha":"...","verdict":"CATEGORY_B1_...","bot_action":"...","expected_action":"..."}'
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro_bundle
+    attributes:
+      label: "Reproduction Bundle JSON (`repro-bundle.json`)"
+      description: "Paste the contents of `repro-bundle.json` generated via `--emit-repro`."
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: "Technical Context / Root Cause Hypothesis"
+      description: "Any technical notes on the engine damage formula or rule transition in question."
+    validations:
+      required: false

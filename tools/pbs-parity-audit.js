@@ -853,6 +853,10 @@ function runCli() {
   let outPath = path.join(REPO, 'data/pbs-anomalies.jsonl');
   let reparse = true;
   let strict = false;
+  let targetTurn = null;
+  let expectAction = null;
+  let emitRepro = null;
+  let iters = null;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -864,12 +868,79 @@ function runCli() {
       reparse = false;
     } else if (a === '--strict' || a === '--fail-on-error') {
       strict = true;
+    } else if (a === '--turn' && i + 1 < argv.length) {
+      targetTurn = parseInt(argv[++i], 10);
+    } else if (a === '--expect-action' && i + 1 < argv.length) {
+      expectAction = argv[++i];
+    } else if (a === '--emit-repro' && i + 1 < argv.length) {
+      emitRepro = path.resolve(argv[++i]);
+    } else if (a === '--iters' && i + 1 < argv.length) {
+      iters = argv[++i];
     } else if (!a.startsWith('--')) {
       inputs.push(a);
     }
   }
 
   const files = collectTraceFiles(inputs);
+
+  // Single-turn triage mode: Gate 1 check + delegate to tools/diagnose-position.js
+  if (targetTurn !== null) {
+    if (files.length === 0) {
+      console.error(JSON.stringify({ status: 'error', message: 'No match trace file provided for turn triage' }));
+      process.exit(1);
+    }
+    const file = files[0];
+    const events = loadTraceEventsFromFile(file);
+    const report = auditMatchTrace(events, { filePath: file, reparse });
+
+    // Gate 1 check: Filter anomalies occurring on or before targetTurn
+    const fatalAnomalies = report.anomalies.filter(
+      anom => anom.turn !== null && anom.turn <= targetTurn && (anom.severity === 'error' || anom.code.includes('SAN'))
+    );
+
+    if (fatalAnomalies.length > 0) {
+      console.log(
+        JSON.stringify({
+          schema: 'nc2000-triage-report-v1',
+          match_id: report.matchId,
+          turn: targetTurn,
+          verdict: 'CATEGORY_A1_ADAPTER_DESYNC',
+          upstream_report_allowed: false,
+          message: 'Adapter desync or sanitizer clamp detected on or before target turn. Fix downstream adapter before reporting upstream.',
+          anomalies: fatalAnomalies,
+        })
+      );
+      process.exit(0);
+    }
+
+    const decisionEv = events.find(e => e && e.type === 'decision' && e.turn === targetTurn);
+    if (!decisionEv || !decisionEv.spec) {
+      console.error(JSON.stringify({ status: 'error', message: `No decision event with PositionSpec found on turn ${targetTurn}` }));
+      process.exit(1);
+    }
+
+    // Write temp spec and invoke tools/diagnose-position.js
+    const tmpSpecPath = path.join('/tmp', `trace-${report.matchId}-turn${targetTurn}.json`);
+    fs.writeFileSync(tmpSpecPath, JSON.stringify(decisionEv.spec, null, 2));
+
+    const diagArgs = ['tools/diagnose-position.js', '--spec', tmpSpecPath];
+    if (expectAction) diagArgs.push('--expect-action', expectAction);
+    if (emitRepro) diagArgs.push('--emit-repro', emitRepro);
+    if (iters) diagArgs.push('--iters', iters);
+
+    const { execFileSync } = require('child_process');
+    try {
+      const diagOutput = execFileSync('node', diagArgs, { cwd: REPO, encoding: 'utf8' }).trim();
+      console.log(diagOutput);
+    } catch (err) {
+      console.error(JSON.stringify({ status: 'error', message: `diagnose-position failed: ${err.message}` }));
+      process.exit(1);
+    } finally {
+      try { fs.unlinkSync(tmpSpecPath); } catch {}
+    }
+    return;
+  }
+
   let totalDecisions = 0;
   let okMatches = 0;
   let totalErrors = 0;
