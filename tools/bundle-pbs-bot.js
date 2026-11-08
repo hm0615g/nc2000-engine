@@ -39,6 +39,8 @@ const FILES_TO_COPY = [
   'data/kodoku-r3/conclusion-equilibrium-deme.json',
   'data/belief-pool-v3/belief-pool.json',
   'data/compiled-preview-v1.json',
+  'tools/diagnose-position.js',
+  'engine-manifest.json',
 ];
 
 function copyRelFile(relPath) {

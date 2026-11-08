@@ -131,6 +131,12 @@ node tools/pbs-discord-bot.js --selftest
 # Re-parse and audit all archived raw match traces against current parser + WASM engine
 node tools/pbs-parity-audit.js data/pbs-traces
 
+# Triage a questionable turn choice (e.g. "a human would choose switch 2 on turn 12"):
+node tools/pbs-parity-audit.js data/pbs-traces/<matchId>.jsonl --turn 12 --expect-action "switch 2" --emit-repro repro-turn12.json
+
+# Check engine manifest and WASM cryptographic integrity:
+node tools/diagnose-position.js --self-check
+
 # Passive observation mode (logs Discord events to console & data/discord-events.jsonl without replying)
 node tools/pbs-discord-bot.js --observe
 
@@ -140,3 +146,38 @@ node tools/pbs-discord-bot.js --dry-run-pbs
 # Direct standalone Castle battle without Discord (e.g. in 第1 = Room C)
 node tools/pbs-client.js --room 第1 --name NC2000 --pass nc2pass --tier default --games 1
 ```
+
+---
+
+## 7. Governance, SLA Boundary & Behavior Triage Protocol
+
+### Operational Responsibility Boundary (Hard SLA Boundary)
+- **Downstream Fork (`hm0615g/nc2000-engine`) Ownership**:
+  - `tools/pbs-discord-bot.js`, `tools/pbs-client.js`, `tools/export-pdinput.js`, `tools/pbs-parity-audit.js`, `tools/calibrate-pbs-from-logs.js`, `data/pbs-opponent-db.json`.
+  - Responsible for live Castle credentials, HTML/DOM parsing, Discord Gateway, sanitizer clamps, and castle-specific information leak inference.
+- **Upstream Core Engine (`nc2000-engine`) Ownership**:
+  - `crates/wasm/pkg-node/`, `crates/core`, `crates/bot`, `data/*.json`, Web UI, and `tools/diagnose-position.js`.
+  - Guarantees deterministic correctness of game rules, damage formulas, legal move generation, and MCTS EV convergence given a valid `PositionSpec` (`nc2000-position-v1`).
+
+### Triage Protocol: "A Human Wouldn't Pick This Move"
+When a questionable move occurs in a live match:
+1. Run turn triage on the archived match trace:
+   ```bash
+   node tools/pbs-parity-audit.js data/pbs-traces/<matchId>.jsonl --turn <TURN> --expect-action "<HUMAN_ACTION>" --emit-repro repro-bundle.json
+   ```
+2. Inspect the emitted `nc2000-triage-report-v1` JSON telemetry:
+   - **`CATEGORY_A1_ADAPTER_DESYNC`**: `upstream_report_allowed: false`. The adapter suffered a parse mismatch or sanitizer clamp. Fix the adapter in the fork.
+   - **`CATEGORY_A2_LEAK_INFERENCE_DEFECT`**: The adapter's leak filter (`noLeftovers` or `maxHp`) incorrectly pruned the opponent's true set.
+   - **`CATEGORY_B1_RULE_INVALID_SPEC` / `CATEGORY_B2_Q_VISIT_INVERSION` / `CATEGORY_B3_FLAT_ROOT_LOTTERY`**: Genuine engine defect or search starvation. Report to upstream attaching `repro-bundle.json`.
+   - **`CATEGORY_C1_NASH_INDIFFERENCE` / `CATEGORY_C2_BELIEF_RISK_MITIGATION` / `CATEGORY_C3_HORIZON_DESPERATION` / `CATEGORY_C0_MCTS_VALUE_PREFERENCE`**: Normal MCTS / game-theoretic optimal play under hidden information. Not a bug.
+
+### Updating Core Engine from Upstream
+To sync the latest engine without merge conflicts on adapter scripts:
+- **Option A (SDK Bundle)**: Extract `dist/nc2000-core-sdk.zip` into repository root.
+- **Option B (Git Sparse Checkout)**:
+  ```bash
+  git fetch upstream
+  git checkout upstream/master -- crates/wasm/pkg-node data tools/diagnose-position.js engine-manifest.json
+  node tools/diagnose-position.js --self-check
+  ```
+
