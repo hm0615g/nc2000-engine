@@ -70,6 +70,10 @@ if (args.help || args.h) {
   --opponent-db FILE   JSON path for persistent opponent memory & online adaptation
                        (default: data/pbs-opponent-db.json; --no-opponent-db to disable)
   --match-log FILE     JSONL path for completed match records (default: data/pbs-matches.jsonl)
+  --trace-dir DIR      Directory for per-match raw HTML + state trace bundles
+                       (default: data/pbs-traces; --no-trace to disable)
+  --anomaly-log FILE   JSONL path for automated parity check anomalies
+                       (default: data/pbs-anomalies.jsonl; --no-anomaly-log to disable)
   --no-human-delay     Disable human-like minimum pacing delays
   --random             Fast uniform-legal driver (no WASM search; useful for testing)
   --decision-log F     Append JSONL decision records to F
@@ -133,6 +137,22 @@ const MATCH_LOG_PATH = args['no-match-log']
       args['match-log'] && args['match-log'] !== true
         ? String(args['match-log'])
         : 'data/pbs-matches.jsonl'
+    );
+const TRACE_DIR_PATH = args['no-trace']
+  ? ''
+  : path.resolve(
+      REPO,
+      args['trace-dir'] && args['trace-dir'] !== true
+        ? String(args['trace-dir'])
+        : 'data/pbs-traces'
+    );
+const ANOMALY_LOG_PATH = args['no-anomaly-log']
+  ? ''
+  : path.resolve(
+      REPO,
+      args['anomaly-log'] && args['anomaly-log'] !== true
+        ? String(args['anomaly-log'])
+        : 'data/pbs-anomalies.jsonl'
     );
 
 const profileText = fs.readFileSync(path.join(REPO, 'data/search-profiles.json'), 'utf8');
@@ -604,10 +624,18 @@ function parseTeamPreviewHtml(html) {
     result.p2Name = nameRowMatch[2].trim();
   }
 
-  const tdMatches = [...html.matchAll(/<td[^>]*VAlign="?middle"?[^>]*>([\s\S]*?)<\/td>/gi)];
-  if (tdMatches.length >= 2) {
-    result.p1Mons = parsePreviewTtCell(tdMatches[0][1]);
-    result.p2Mons = parsePreviewTtCell(tdMatches[1][1]);
+  const parts = html.split(/<td[^>]*VAlign="?middle"?[^>]*>/i);
+  if (parts.length >= 3) {
+    const p1Chunk = parts[1].split(/<\/td>|<td|<\/tr>/i)[0];
+    const p2Chunk = parts[2].split(/<\/td>|<td|<\/tr>/i)[0];
+    result.p1Mons = parsePreviewTtCell(p1Chunk);
+    result.p2Mons = parsePreviewTtCell(p2Chunk);
+  } else {
+    const tdMatches = [...html.matchAll(/<td[^>]*VAlign="?middle"?[^>]*>([\s\S]*?)<\/td>/gi)];
+    if (tdMatches.length >= 2) {
+      result.p1Mons = parsePreviewTtCell(tdMatches[0][1]);
+      result.p2Mons = parsePreviewTtCell(tdMatches[1][1]);
+    }
   }
   return result;
 }
@@ -626,15 +654,24 @@ function parsePreviewTtCell(ttHtml) {
     const beforeLv = line.split(/<b>|LV\s*\d+/i)[0] || line;
     const gender = beforeLv.includes('♂') ? 'M' : beforeLv.includes('♀') ? 'F' : '';
     const jpName = normJp(beforeLv);
-    const speciesId = JP_TO_SPECIES_ID[jpName] || 'pikachu';
+    const mappedSpId = JP_TO_SPECIES_ID[jpName] || null;
+    const speciesId = mappedSpId || 'pikachu';
     const spObj = dexData.species[speciesId];
-    mons.push({
+    const monObj = {
       species: spObj ? spObj.name : 'Pikachu',
       speciesId,
       level,
       gender,
       item_flag: itemFlag,
-    });
+    };
+    if (!mappedSpId && jpName) {
+      Object.defineProperty(monObj, '_unmappedJp', {
+        value: jpName,
+        enumerable: false,
+        configurable: true,
+      });
+    }
+    mons.push(monObj);
   }
   return mons;
 }
@@ -677,14 +714,22 @@ function parseBattleTurnHtml(html) {
         const pp = ppMatch ? parseInt(ppMatch[1], 10) : null;
         const moveNameJp = normJp(label.replace(/\[\s*\d+\s*\].*$/, ''));
         const moveId = JP_TO_MOVE_ID[moveNameJp] || null;
-        options.push({
+        const optObj = {
           value: value.toUpperCase(),
           label,
           kind: 'move',
           slotIndex,
           moveId,
           pp,
-        });
+        };
+        if (!moveId && moveNameJp) {
+          Object.defineProperty(optObj, '_unmappedJp', {
+            value: moveNameJp,
+            enumerable: false,
+            configurable: true,
+          });
+        }
+        options.push(optObj);
       } else if (/^C(\d)$/i.test(value)) {
         const slotIndex = parseInt(value.slice(1), 10); // 1..3
         const hpMatch = label.match(/\[\s*(\d+)\s*\/\s*(\d+)\s*\]/);
@@ -692,7 +737,7 @@ function parseBattleTurnHtml(html) {
         const maxHp = hpMatch ? parseInt(hpMatch[2], 10) : null;
         const spNameJp = normJp(label.replace(/\[\s*\d+\s*\/\s*\d+\s*\].*$/, ''));
         const speciesId = JP_TO_SPECIES_ID[spNameJp] || null;
-        options.push({
+        const optObj = {
           value: value.toUpperCase(),
           label,
           kind: 'switch',
@@ -700,7 +745,15 @@ function parseBattleTurnHtml(html) {
           speciesId,
           hp,
           maxHp,
-        });
+        };
+        if (!speciesId && spNameJp) {
+          Object.defineProperty(optObj, '_unmappedJp', {
+            value: spNameJp,
+            enumerable: false,
+            configurable: true,
+          });
+        }
+        options.push(optObj);
       } else {
         options.push({
           value,
@@ -728,8 +781,16 @@ function parseBattleTurnHtml(html) {
       if (lvM) sides[s].level = parseInt(lvM[1], 10);
       const beforeL = cell.replace(/L\d+.*$/i, '');
       sides[s].gender = beforeL.includes('♂') ? 'M' : beforeL.includes('♀') ? 'F' : '';
-      const spId = JP_TO_SPECIES_ID[normJp(beforeL)] || null;
+      const rawSpJp = normJp(beforeL);
+      const spId = JP_TO_SPECIES_ID[rawSpJp] || null;
       sides[s].speciesId = spId;
+      if (!spId && rawSpJp) {
+        Object.defineProperty(sides[s], '_unmappedJp', {
+          value: rawSpJp,
+          enumerable: false,
+          configurable: true,
+        });
+      }
     }
   }
 
@@ -768,23 +829,31 @@ function parsePdatHtml(html) {
     const level = parseInt(m[1], 10);
     const rawName = m[2].trim();
     const gender = rawName.includes('♂') ? 'M' : rawName.includes('♀') ? 'F' : '';
-    const speciesId = JP_TO_SPECIES_ID[normJp(rawName)] || null;
+    const rawSpJp = normJp(rawName);
+    const speciesId = JP_TO_SPECIES_ID[rawSpJp] || null;
     const hp = parseInt(m[3], 10);
     const maxHp = parseInt(m[4], 10);
     const status = parseStatusText(m[5]);
     const moves = [];
+    const unmappedMovesJp = [];
     for (let i = 6; i <= 9; i++) {
       const cell = m[i].replace(/<[^>]*>/g, '').trim();
       const mvMatch = cell.match(/^(.+?)\s*\(\s*(\d+)\s*\)$/);
       if (mvMatch) {
-        const mvId = JP_TO_MOVE_ID[normJp(mvMatch[1])] || null;
+        const mvJp = normJp(mvMatch[1]);
+        const mvId = JP_TO_MOVE_ID[mvJp] || null;
         const pp = parseInt(mvMatch[2], 10);
-        if (mvId) moves.push({ moveId: mvId, pp });
+        if (mvId) {
+          moves.push({ moveId: mvId, pp });
+        } else if (mvJp) {
+          unmappedMovesJp.push(mvJp);
+        }
       }
     }
     const rawItem = normJp(m[10] || '');
-    const item = rawItem && rawItem !== 'なし' ? (JP_TO_ITEM_ID[rawItem] || '') : '';
-    mons.push({
+    const mappedItem = rawItem && rawItem !== 'なし' ? (JP_TO_ITEM_ID[rawItem] || null) : '';
+    const item = mappedItem || '';
+    const monObj = {
       speciesId,
       level,
       gender,
@@ -793,7 +862,29 @@ function parsePdatHtml(html) {
       maxHp,
       item,
       moves,
-    });
+    };
+    if (!speciesId && rawSpJp) {
+      Object.defineProperty(monObj, '_unmappedJp', {
+        value: rawSpJp,
+        enumerable: false,
+        configurable: true,
+      });
+    }
+    if (unmappedMovesJp.length > 0) {
+      Object.defineProperty(monObj, '_unmappedMovesJp', {
+        value: unmappedMovesJp,
+        enumerable: false,
+        configurable: true,
+      });
+    }
+    if (rawItem && rawItem !== 'なし' && !mappedItem) {
+      Object.defineProperty(monObj, '_unmappedItemJp', {
+        value: rawItem,
+        enumerable: false,
+        configurable: true,
+      });
+    }
+    mons.push(monObj);
   }
 
   const remMatch = html.match(/相手の残り[：:]\s*(\d+)/);
@@ -937,183 +1028,991 @@ function inferHpTypeMaskFromMaxHp(speciesId, level, gender, observedMaxHp) {
   return intersection !== 0 ? intersection : 0xffff;
 }
 
+const TIMED_SIDE_CONDITIONS = new Set(['reflect', 'lightscreen', 'safeguard']);
+const THRASH_CLASS_MOVES = new Set(['thrash', 'petaldance', 'outrage']);
+const BIND_CLASS_MOVES = new Set(['wrap', 'bind', 'firespin', 'clamp', 'whirlpool']);
+const TWO_TURN_CHARGE_MOVES = new Set([
+  'fly',
+  'dig',
+  'solarbeam',
+  'skullbash',
+  'skyattack',
+  'razorwind',
+]);
+const PROTECT_CLASS_MOVES = new Set(['protect', 'detect', 'endure']);
+const NO_COPY_VOLATILE_KEYS = new Set([
+  'attract',
+  'defensecurl',
+  'destinybond',
+  'disable',
+  'encore',
+  'minimize',
+  'nightmare',
+  'partiallytrapped',
+  'rage',
+  'bide',
+  'furycutter',
+]);
+
 /**
- * Parse `?ACTION=LLOG` cumulative battle log HTML to extract public battle facts:
- * - appeared mons, fainted mons, move uses per mon, active boosts, weather,
- *   side conditions (Reflect, Light Screen, Spikes), key volatiles, and item reveals.
+ * Advance a `parseLlogHtml` tracker state (`info`) up to `targetTurn`, executing
+ * `ProtocolTracker` turn-boundary transitions (`|turn|N`) for each elapsed turn:
+ * - resets `upkeepThisTurn`, `actedThisTurn`, `pendingBp`
+ * - shifts `faintedThisTurn` -> `faintedLastTurn`
+ * - updates `stallStreak` / `lastProtectTurn` / `protectedThisTurn`
+ * - advances weather `upkeeps` and expires 5-turn weather (`upkeeps >= 5`)
+ * - expires 5-turn side conditions (`reflect`, `lightscreen`, `safeguard` when `t - start >= 5`)
+ * - ticks down active `perishsong` counters if not already ticked on the turn
  */
-function parseLlogHtml(html, previewSides) {
-  const info = {
-    sides: [
-      {
-        mons: (previewSides[0] || []).map(() => ({
-          appeared: false,
-          fainted: false,
-          status: '',
-          rest: false,
-          boosts: [0, 0, 0, 0, 0, 0, 0],
-          uses: {},
-          revealedMoves: new Set(),
-          itemOriginal: null,
-          itemCurrent: null,
-          volatiles: new Map(),
-        })),
-        activeSlot: null,
-        conditions: new Map(),
-      },
-      {
-        mons: (previewSides[1] || []).map(() => ({
-          appeared: false,
-          fainted: false,
-          status: '',
-          rest: false,
-          boosts: [0, 0, 0, 0, 0, 0, 0],
-          uses: {},
-          revealedMoves: new Set(),
-          itemOriginal: null,
-          itemCurrent: null,
-          volatiles: new Map(),
-        })),
-        activeSlot: null,
-        conditions: new Map(),
-      },
-    ],
-    weather: null,
-  };
+function advanceLlogTrackerToTurn(info, targetTurn) {
+  if (!info || typeof targetTurn !== 'number' || Number.isNaN(targetTurn)) return info;
+  const startTurn = Math.max(1, info.turn || 1);
+  if (targetTurn <= startTurn) return info;
 
-  if (!html) return info;
+  for (let t = startTurn + 1; t <= targetTurn; t++) {
+    const prevTurn = t - 1;
+    info.upkeepThisTurn = false;
 
-  const findSlot = (sideIdx, text) => {
-    const roster = previewSides[sideIdx] || [];
-    for (let i = 0; i < roster.length; i++) {
-      const spId = roster[i].speciesId;
-      const jp = i18n.species[spId];
-      if (!jp) continue;
-      if (normJp(text).includes(normJp(jp))) return i;
-    }
-    return info.sides[sideIdx].activeSlot;
-  };
-
-  const setActive = (sideIdx, slot) => {
-    if (slot === null || slot === undefined || slot < 0) return;
-    const side = info.sides[sideIdx];
-    if (side.activeSlot !== null && side.activeSlot !== slot && side.mons[side.activeSlot]) {
-      side.mons[side.activeSlot].boosts = [0, 0, 0, 0, 0, 0, 0];
-      side.mons[side.activeSlot].volatiles.clear();
-    }
-    side.activeSlot = slot;
-    if (side.mons[slot]) {
-      side.mons[slot].appeared = true;
-    }
-  };
-
-  const CONSUMED_BERRIES_JP = [
-    ['おうごんのきのみ', 'goldberry'],
-    ['きせきのきのみ', 'miracleberry'],
-    ['はっかのきのみ', 'mintberry'],
-    ['まひなおしのみ', 'przcureberry'],
-    ['こおりなおしのみ', 'iceberry'],
-    ['やけどなおしのみ', 'burntberry'],
-    ['どくけしのみ', 'psncureberry'],
-    ['にがきのみ', 'bitterberry'],
-    ['ふしぎのきのみ', 'mysteryberry'],
-    ['きのみジュース', 'berryjuice'],
-    ['きのみ', 'berry'],
-  ];
-
-  // Walk paragraph blocks `<P ALIGN="left|right">...</P>` or turn blocks
-  const pRegex = /<P\s+ALIGN="?(left|right)"?\s*>([\s\S]*?)(?=<P\s+ALIGN|<HR|<\/BODY|$)/gi;
-  let turnNum = 1;
-
-  for (const m of html.matchAll(pRegex)) {
-    const sideIdx = m[1].toLowerCase() === 'left' ? 0 : 1;
-    const foeIdx = 1 - sideIdx;
-    const block = m[2];
-    const clean = block.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-
-    // Check switch-in / send-out cues
-    if (
-      clean.includes('を繰り出した') ||
-      clean.includes('をくりだした') ||
-      clean.includes('ゆけっ！') ||
-      clean.includes('いけっ！') ||
-      clean.includes('出てこい')
-    ) {
-      const sendOutB = block.match(/<B>\s*([^<]+?)\s*<\/B>\s*を(?:繰り出した|くりだした)/i);
-      const slot = sendOutB ? findSlot(sideIdx, sendOutB[1]) : findSlot(sideIdx, clean);
-      if (slot !== null) setActive(sideIdx, slot);
+    if (info.weather) {
+      const wStart = info.weather.start_turn || 1;
+      if (wStart <= prevTurn && info.weather._lastUpkeepTurn !== prevTurn) {
+        info.weather.upkeeps = (info.weather.upkeeps || 0) + 1;
+        info.weather._lastUpkeepTurn = prevTurn;
+      }
+      if ((info.weather.upkeeps || 0) >= 5 || (t - wStart) >= 5) {
+        info.weather = null;
+      }
     }
 
-    // Check move usage: `<B>MOVE</B>` or `の MOVE ！`
-    const bMatches = [...block.matchAll(/<B>\s*([^<]+?)\s*<\/B>/gi)];
-    for (const bm of bMatches) {
-      const mvNorm = normJp(bm[1]);
-      const mvId = JP_TO_MOVE_ID[mvNorm];
-      if (mvId) {
-        const actorSlot = info.sides[sideIdx].activeSlot ?? findSlot(sideIdx, clean);
-        if (actorSlot !== null && info.sides[sideIdx].mons[actorSlot]) {
-          setActive(sideIdx, actorSlot);
-          const mon = info.sides[sideIdx].mons[actorSlot];
-          mon.uses[mvId] = (mon.uses[mvId] || 0) + 1;
-          mon.revealedMoves.add(mvId);
-          if (mvId === 'rest') {
-            mon.rest = true;
-            mon.status = 'slp';
-          } else if (mvId === 'raindance') {
-            info.weather = { key: 'raindance', upkeeps: 0 };
-          } else if (mvId === 'sunnyday') {
-            info.weather = { key: 'sunnyday', upkeeps: 0 };
-          } else if (mvId === 'sandstorm') {
-            info.weather = { key: 'sandstorm', upkeeps: 0 };
-          } else if (mvId === 'reflect') {
-            info.sides[sideIdx].conditions.set('reflect', turnNum);
-          } else if (mvId === 'lightscreen') {
-            info.sides[sideIdx].conditions.set('lightscreen', turnNum);
-          } else if (mvId === 'spikes') {
-            info.sides[foeIdx].conditions.set('spikes', turnNum);
-          } else if (mvId === 'substitute' && !clean.includes('うまくきまらなかった') && !clean.includes('失敗')) {
-            mon.volatiles.set('substitute', { key: 'substitute', start_turn: turnNum });
-          } else if (mvId === 'perishsong') {
-            for (const s of [0, 1]) {
-              const a = info.sides[s].activeSlot;
-              if (a !== null && info.sides[s].mons[a]) {
-                info.sides[s].mons[a].volatiles.set('perishsong', {
-                  key: 'perishsong',
-                  start_turn: turnNum,
-                  counter: 3,
-                });
-              }
+    for (const s of [0, 1]) {
+      const side = info.sides[s];
+      if (!side) continue;
+      side.actedThisTurn = false;
+      side.pendingBp = false;
+      side.faintedLastTurn = side.faintedThisTurn ?? null;
+      side.faintedThisTurn = null;
+
+      if (side.conditions) {
+        for (const [condKey, condStart] of [...side.conditions.entries()]) {
+          if (TIMED_SIDE_CONDITIONS.has(condKey) && (t - condStart) >= 5) {
+            side.conditions.delete(condKey);
+          }
+        }
+      }
+
+      const aSlot = side.activeSlot;
+      if (aSlot !== null && aSlot !== undefined && side.mons[aSlot]) {
+        const m = side.mons[aSlot];
+        if (m.protectedThisTurn) {
+          m.stallStreak = (m.stallStreak || 0) + 1;
+          m.lastProtectTurn = prevTurn;
+          m.protectedThisTurn = false;
+        } else if ((m.lastProtectTurn || 0) + 1 < Math.max(1, t)) {
+          m.stallStreak = 0;
+        }
+
+        if (m.volatiles && m.volatiles.has('perishsong')) {
+          const ps = m.volatiles.get('perishsong');
+          if (ps && (ps.start_turn || 1) <= prevTurn && ps._lastTickTurn !== prevTurn) {
+            ps.counter = Math.max(0, (ps.counter ?? 3) - 1);
+            ps._lastTickTurn = prevTurn;
+            if (ps.counter <= 0) {
+              m.volatiles.delete('perishsong');
             }
           }
         }
       }
     }
 
-    // Item reveal cues in LLOG (`たべのこしで体力を回復`, berries consumed, Focus Band, Quick Claw)
-    const itemSlot = findSlot(sideIdx, clean);
-    if (itemSlot !== null && info.sides[sideIdx].mons[itemSlot]) {
-      const mon = info.sides[sideIdx].mons[itemSlot];
-      if (clean.includes('たべのこし') || clean.includes('食べ残し')) {
-        mon.itemOriginal = mon.itemOriginal || 'leftovers';
-        mon.itemCurrent = 'leftovers';
-      } else if (clean.includes('きあいのハチマキ')) {
-        mon.itemOriginal = mon.itemOriginal || 'focusband';
-        mon.itemCurrent = 'focusband';
-      } else if (clean.includes('せんせいのツメ')) {
-        mon.itemOriginal = mon.itemOriginal || 'quickclaw';
-        mon.itemCurrent = 'quickclaw';
-      } else {
-        for (const [jpBerry, berryId] of CONSUMED_BERRIES_JP) {
-          if (clean.includes(jpBerry)) {
-            mon.itemOriginal = mon.itemOriginal || berryId;
-            mon.itemCurrent = '';
-            break;
+    info.turn = t;
+  }
+
+  return info;
+}
+
+/**
+ * Parse `?ACTION=LLOG` cumulative battle log HTML through an event-driven
+ * `ProtocolTracker`-equivalent state machine to reconstruct full public state:
+ * - `<HR>` turn progression (`turn = Math.max(1, hrCount - 1)` on standard PBS LLOG)
+ * - per-side: `activeSlot`, `conditions` (`reflect`, `lightscreen`, `safeguard`, `spikes`),
+ *   `pendingBp`, `actedThisTurn`, `faintedThisTurn`, `faintedLastTurn`, `lastMove`
+ * - per-mon: `appeared`, `appearCount`, `switchInTurn`, `active`, `fainted`, `status`,
+ *   `rest`, `slept`, `toxCounter`, `compBrn`, `compPar`, `boosts`, `volatiles`,
+ *   `uses`, `revealedMoves`, `locked`, `charging`, `mustRecharge`, `transformedInto`,
+ *   `mimicOverlay`, `lastMove`, `stallStreak`, `lastProtectTurn`, `protectedThisTurn`,
+ *   `itemOriginal`, `itemCurrent`, `itemGained`
+ * - field: `weather` (`{ key, upkeeps }`), `turn`, `upkeepThisTurn`
+ */
+function parseLlogHtml(html, previewSides = [[], []]) {
+  const createMonTrack = () => ({
+    appeared: false,
+    appearCount: 0,
+    switchInTurn: 0,
+    active: false,
+    fainted: false,
+    status: '',
+    rest: false,
+    slept: 0,
+    toxCounter: null,
+    compBrn: false,
+    compPar: false,
+    boosts: [0, 0, 0, 0, 0, 0, 0],
+    uses: {},
+    revealedMoves: new Set(),
+    itemOriginal: null,
+    itemCurrent: null,
+    itemGained: false,
+    volatiles: new Map(),
+    locked: null,
+    charging: null,
+    mustRecharge: false,
+    transformedInto: null,
+    mimicOverlay: null,
+    lastMove: null,
+    stallStreak: 0,
+    lastProtectTurn: 0,
+    protectedThisTurn: false,
+  });
+
+  const info = {
+    sides: [
+      {
+        mons: ((previewSides && previewSides[0]) || []).map(() => createMonTrack()),
+        activeSlot: null,
+        conditions: new Map(),
+        pendingBp: false,
+        actedThisTurn: false,
+        faintedThisTurn: null,
+        faintedLastTurn: null,
+        lastMove: null,
+      },
+      {
+        mons: ((previewSides && previewSides[1]) || []).map(() => createMonTrack()),
+        activeSlot: null,
+        conditions: new Map(),
+        pendingBp: false,
+        actedThisTurn: false,
+        faintedThisTurn: null,
+        faintedLastTurn: null,
+        lastMove: null,
+      },
+    ],
+    weather: null,
+    turn: 1,
+    hrCount: 0,
+    upkeepThisTurn: false,
+    events: [],
+    unrecognizedLines: [],
+  };
+
+  if (!html) return info;
+
+  let p1Name = '';
+  let p2Name = '';
+  const nameRowMatch = html.match(
+    /<tr[^>]*>\s*<t[dh][^>]*>\s*([^<]*?)\s*<\/t[dh]>\s*<td[^>]*ROWSPAN="?2"?[^>]*>[\s\S]*?<\/td>\s*<t[dh][^>]*>\s*([^<]*?)\s*<\/t[dh]>\s*<\/tr>/i
+  );
+  if (nameRowMatch) {
+    p1Name = nameRowMatch[1].trim();
+    p2Name = nameRowMatch[2].trim();
+  }
+
+  const findExplicitSlot = (sideIdx, text) => {
+    const roster = (previewSides && previewSides[sideIdx]) || [];
+    const normText = normJp(text);
+    const sortedSlots = roster
+      .map((m, idx) => {
+        const spId = m.speciesId || toId(m.species);
+        const jp = i18n.species[spId] || '';
+        return { idx, jp, normJp: normJp(jp) };
+      })
+      .filter(e => e.jp)
+      .sort((a, b) => b.normJp.length - a.normJp.length);
+
+    for (const { idx, normJp: sJp } of sortedSlots) {
+      if (normText.includes(sJp)) return idx;
+    }
+    return null;
+  };
+
+  const findSlot = (sideIdx, text) => {
+    const explicit = findExplicitSlot(sideIdx, text);
+    return explicit !== null ? explicit : info.sides[sideIdx].activeSlot;
+  };
+
+  const clearOnExit = mon => {
+    mon.boosts = [0, 0, 0, 0, 0, 0, 0];
+    mon.volatiles.clear();
+    mon.locked = null;
+    mon.charging = null;
+    mon.mustRecharge = false;
+    mon.transformedInto = null;
+    mon.mimicOverlay = null;
+    mon.lastMove = null;
+    mon.stallStreak = 0;
+    mon.protectedThisTurn = false;
+    mon.toxCounter = null;
+    mon.compBrn = false;
+    mon.compPar = false;
+    if (mon.status === 'tox') {
+      mon.status = 'psn';
+    }
+  };
+
+  const clearSourcedVols = (srcSide, srcSlot) => {
+    if (srcSlot === null || srcSlot === undefined) return;
+    for (const s of [0, 1]) {
+      for (const m of info.sides[s].mons) {
+        for (const [k, v] of [...m.volatiles.entries()]) {
+          if (
+            (k === 'trapped' || k === 'partiallytrapped') &&
+            Array.isArray(v.source) &&
+            v.source[0] === srcSide &&
+            v.source[1] === srcSlot
+          ) {
+            m.volatiles.delete(k);
           }
         }
       }
     }
+  };
 
-    // Parse stat comments `<!--actorSide targetSide slot statIdx delta ...//-->` embedded by PS.cgi
+  const cureMonStatus = mon => {
+    mon.status = '';
+    mon.rest = false;
+    mon.slept = 0;
+    mon.volatiles.delete('nightmare');
+  };
+
+  const applyBoostDelta = (mon, statIdx, delta) => {
+    if (!mon || delta === 0 || statIdx < 0 || statIdx > 6) return;
+    mon.boosts[statIdx] = Math.max(-6, Math.min(6, mon.boosts[statIdx] + delta));
+    if (statIdx === 4 && mon.status === 'par') {
+      mon.compPar = false;
+    }
+    if (statIdx === 0 && mon.status === 'brn') {
+      mon.compBrn = false;
+    }
+  };
+
+  const setActive = (sideIdx, slot, { isDrag = false, isInitialSendOut = false } = {}) => {
+    if (slot === null || slot === undefined || slot < 0) return;
+    const side = info.sides[sideIdx];
+    const targetMon = side.mons[slot];
+
+    // If already active and unfainted, do not treat as a fresh switch
+    if (side.activeSlot === slot && targetMon && targetMon.active && !targetMon.fainted) {
+      targetMon.appeared = true;
+      targetMon.appearCount = Math.max(1, targetMon.appearCount || 1);
+      return;
+    }
+
+    const bp = Boolean(side.pendingBp && !isDrag);
+    let inherit = null;
+
+    if (side.activeSlot !== null && side.activeSlot !== slot && side.mons[side.activeSlot]) {
+      const oldSlot = side.activeSlot;
+      const oldMon = side.mons[oldSlot];
+      oldMon.active = false;
+      if (bp) {
+        const copiedVols = new Map();
+        for (const [vk, vv] of oldMon.volatiles.entries()) {
+          const moveCondNoCopy = Boolean(dexData.moves[vk]?.condition?.noCopy);
+          if (!NO_COPY_VOLATILE_KEYS.has(vk) && !moveCondNoCopy) {
+            copiedVols.set(vk, { ...vv });
+          }
+        }
+        inherit = {
+          boosts: [...oldMon.boosts],
+          volatiles: copiedVols,
+          toxCounter: oldMon.toxCounter,
+          compBrn: oldMon.compBrn,
+          compPar: oldMon.compPar,
+        };
+      }
+      clearOnExit(oldMon);
+      clearSourcedVols(sideIdx, oldSlot);
+    }
+
+    side.pendingBp = false;
+    if (!isInitialSendOut) {
+      side.actedThisTurn = true;
+    }
+    side.activeSlot = slot;
+
+    if (targetMon) {
+      targetMon.appeared = true;
+      targetMon.appearCount = (targetMon.appearCount || 0) + 1;
+      targetMon.switchInTurn = isInitialSendOut ? 0 : info.turn;
+      targetMon.active = true;
+      if (inherit) {
+        targetMon.boosts = inherit.boosts;
+        targetMon.volatiles = inherit.volatiles;
+        targetMon.toxCounter = inherit.toxCounter;
+        targetMon.compBrn = inherit.compBrn;
+        targetMon.compPar = inherit.compPar;
+      }
+      if (targetMon.status === 'brn') targetMon.compBrn = true;
+      if (targetMon.status === 'par') targetMon.compPar = true;
+    }
+
+    info.events.push({
+      type: isDrag ? 'drag' : 'switch',
+      turn: info.turn,
+      side: sideIdx,
+      slot,
+      initial: isInitialSendOut,
+    });
+  };
+
+  const CONSUMED_BERRIES_JP = [
+    ['おうごんのきのみ', 'goldberry'],
+    ['おうごんのみ', 'goldberry'],
+    ['きせきのきのみ', 'miracleberry'],
+    ['きせきのみ', 'miracleberry'],
+    ['はっかのきのみ', 'mintberry'],
+    ['はっかのみ', 'mintberry'],
+    ['まひなおしのきのみ', 'przcureberry'],
+    ['まひなおしのみ', 'przcureberry'],
+    ['こおりなおしのきのみ', 'iceberry'],
+    ['こおりなおしのみ', 'iceberry'],
+    ['やけどなおしのきのみ', 'burntberry'],
+    ['やけどなおしのみ', 'burntberry'],
+    ['どくけしのきのみ', 'psncureberry'],
+    ['どくけしのみ', 'psncureberry'],
+    ['にがきのみ', 'bitterberry'],
+    ['ふしぎのきのみ', 'mysteryberry'],
+    ['ふしぎなきのみ', 'mysteryberry'],
+    ['きのみジュース', 'berryjuice'],
+    ['きのみ', 'berry'],
+  ];
+
+  const isMoveFailureText = clean =>
+    clean.includes('うまくきまらなかった') ||
+    clean.includes('うまく決まらなかった') ||
+    clean.includes('失敗した') ||
+    clean.includes('しかし外れた') ||
+    clean.includes('しかしはずれた') ||
+    clean.includes('外れた！') ||
+    clean.includes('はずれた！') ||
+    clean.includes('攻撃ははずれた') ||
+    clean.includes('攻撃は外れた') ||
+    clean.includes('ははずれた') ||
+    clean.includes('は外れた') ||
+    clean.includes('当たらなかった') ||
+    clean.includes('あたらなかった') ||
+    clean.includes('効果がない') ||
+    clean.includes('効果はない') ||
+    clean.includes('こうかがない') ||
+    clean.includes('にはきかない') ||
+    clean.includes('には効かない') ||
+    clean.includes('攻撃を守った') ||
+    clean.includes('攻撃をまもった') ||
+    clean.includes('攻撃を防いだ') ||
+    clean.includes('まもりきった') ||
+    clean.includes('守りきった');
+
+  // Tokenize `<HR>` and `<P ALIGN="left|right|center">...</P>` in document order
+  const tokenRegex = /(<HR[^>]*>)|<P\s+ALIGN="?(left|right|center)"?\s*>([\s\S]*?)(?=<P\s+ALIGN|<HR|<\/BODY|$)/gi;
+  let hrCount = 0;
+  let sawPBeforeFirstHr = false;
+  let firstPWasSendOutOnly = false;
+  let pCount = 0;
+  let inInitialSendOutPhase = false;
+
+  const computeTurnFromHr = () => {
+    if (!sawPBeforeFirstHr) {
+      return hrCount <= 1 ? 1 : Math.max(1, hrCount - 1);
+    }
+    if (firstPWasSendOutOnly) {
+      return hrCount === 0 ? 1 : Math.max(1, hrCount);
+    }
+    return hrCount + 1;
+  };
+
+  for (const m of html.matchAll(tokenRegex)) {
+    if (m[1]) {
+      hrCount++;
+      info.hrCount = hrCount;
+      if (pCount > 0) {
+        const nextTurn = computeTurnFromHr();
+        if (inInitialSendOutPhase && ((!sawPBeforeFirstHr && hrCount >= 2) || (sawPBeforeFirstHr && hrCount >= 1))) {
+          inInitialSendOutPhase = false;
+          info.sides[0].actedThisTurn = false;
+          info.sides[1].actedThisTurn = false;
+        }
+        if (nextTurn > info.turn) {
+          advanceLlogTrackerToTurn(info, nextTurn);
+        }
+      }
+      continue;
+    }
+
+    const align = m[2].toLowerCase();
+    const block = m[3];
+    const rawClean = block.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    const clean = rawClean.replace(/\s+/g, '');
+    const normClean = normJp(clean);
+
+    if (align === 'center') {
+      const turnNum = info.turn;
+      let recognizedCenter = false;
+      if (
+        normClean.includes(normJp('雨が降り')) ||
+        normClean.includes(normJp('あめがふり')) ||
+        normClean.includes(normJp('日差しが強い')) ||
+        normClean.includes(normJp('ひざしがつよい')) ||
+        normClean.includes(normJp('砂嵐が')) ||
+        normClean.includes(normJp('すなあらしが')) ||
+        normClean.includes(normJp('砂嵐でダメージ'))
+      ) {
+        recognizedCenter = true;
+        info.upkeepThisTurn = true;
+        if (info.weather && info.weather._lastUpkeepTurn !== turnNum) {
+          info.weather.upkeeps = (info.weather.upkeeps || 0) + 1;
+          info.weather._lastUpkeepTurn = turnNum;
+          if (info.weather.upkeeps >= 5) {
+            info.weather = null;
+          }
+        }
+      }
+      if (
+        normClean.includes(normJp('雨はやんだ')) ||
+        normClean.includes(normJp('あめはやんだ')) ||
+        normClean.includes(normJp('雨が降り止んだ')) ||
+        normClean.includes(normJp('あめがふりやんだ')) ||
+        normClean.includes(normJp('日差しが戻った')) ||
+        normClean.includes(normJp('ひざしがもどった')) ||
+        normClean.includes(normJp('日差しが弱まった')) ||
+        normClean.includes(normJp('ひざしがよわまった')) ||
+        normClean.includes(normJp('日差しが元に戻った')) ||
+        normClean.includes(normJp('ひざしがもとにもどった')) ||
+        normClean.includes(normJp('砂嵐はおさまった')) ||
+        normClean.includes(normJp('すなあらしはおさまった')) ||
+        normClean.includes(normJp('砂嵐がおさまった')) ||
+        normClean.includes(normJp('すなあらしがおさまった'))
+      ) {
+        recognizedCenter = true;
+        info.weather = null;
+      }
+      if (
+        !recognizedCenter &&
+        clean &&
+        !/WIN!|ＷＩＮ！|LOSE|ＬＯＳＥ|DRAW|ＤＲＡＷ|ターン|対戦|バトル|引き分け/i.test(clean)
+      ) {
+        info.unrecognizedLines.push({
+          turn: turnNum,
+          side: null,
+          align: 'center',
+          line: rawClean,
+        });
+      }
+      continue;
+    }
+
+    const sideIdx = align === 'left' ? 0 : 1;
+    const foeIdx = 1 - sideIdx;
+
+    const isSendOutBlock =
+      clean.includes('を繰り出した') ||
+      clean.includes('をくりだした') ||
+      clean.includes('ゆけっ！') ||
+      clean.includes('いけっ！') ||
+      clean.includes('出てこい');
+    const isDragBlock =
+      clean.includes('吹き飛ばされた') ||
+      clean.includes('ふきとばされた') ||
+      clean.includes('引きずり出された') ||
+      clean.includes('ひきずりだされた');
+    const hasMoveTag = [...block.matchAll(/<B>\s*([^<]+?)\s*<\/B>/gi)].some(
+      bm => Boolean(JP_TO_MOVE_ID[normJp(bm[1])])
+    );
+
+    if (pCount === 0 && hrCount === 0) {
+      sawPBeforeFirstHr = true;
+      firstPWasSendOutOnly = isSendOutBlock && !hasMoveTag;
+    }
+    pCount++;
+
+    // Determine the turn number for this `<P>` block based on `<HR>` count:
+    // Standard PBS LLOG has `HR #1` before initial send-out, `HR #2` before Turn 1,
+    // `HR #3` before Turn 2, etc. (`turn = Math.max(1, hrCount - 1)`).
+    let blockTurn = 1;
+    let isInitialSendOut = false;
+    if (!sawPBeforeFirstHr) {
+      if (hrCount <= 1) {
+        blockTurn = 1;
+        isInitialSendOut = isSendOutBlock && !hasMoveTag;
+        inInitialSendOutPhase = isInitialSendOut;
+      } else {
+        blockTurn = Math.max(1, hrCount - 1);
+        if (inInitialSendOutPhase) {
+          inInitialSendOutPhase = false;
+          info.sides[0].actedThisTurn = false;
+          info.sides[1].actedThisTurn = false;
+        }
+      }
+    } else if (firstPWasSendOutOnly) {
+      if (hrCount === 0) {
+        blockTurn = 1;
+        isInitialSendOut = isSendOutBlock && !hasMoveTag;
+        inInitialSendOutPhase = isInitialSendOut;
+      } else {
+        blockTurn = Math.max(1, hrCount);
+        if (inInitialSendOutPhase) {
+          inInitialSendOutPhase = false;
+          info.sides[0].actedThisTurn = false;
+          info.sides[1].actedThisTurn = false;
+        }
+      }
+    } else {
+      blockTurn = hrCount + 1;
+    }
+
+    if (blockTurn > info.turn) {
+      advanceLlogTrackerToTurn(info, blockTurn);
+    }
+    const turnNum = info.turn;
+
+    // 1. Check voluntary switch-in / send-out cues
+    if (isSendOutBlock && !isDragBlock) {
+      const sendOutB = block.match(/<B>\s*([^<]+?)\s*<\/B>\s*を(?:繰り出した|くりだした)/i);
+      const slot = sendOutB ? findSlot(sideIdx, sendOutB[1]) : findSlot(sideIdx, clean);
+      if (slot !== null) {
+        const initFlag = isInitialSendOut || (turnNum === 1 && info.sides[sideIdx].activeSlot === null);
+        setActive(sideIdx, slot, { isDrag: false, isInitialSendOut: initFlag });
+      }
+    }
+
+    // 2. Check `cant` cues (sleep, recharge, paralysis, freeze, flinch, attract, disable)
+    const activeSlotBeforeMove = info.sides[sideIdx].activeSlot ?? findSlot(sideIdx, clean);
+    const activeMonBeforeMove =
+      activeSlotBeforeMove !== null ? info.sides[sideIdx].mons[activeSlotBeforeMove] : null;
+
+    if (
+      clean.includes('ぐうぐう眠っている') ||
+      clean.includes('ぐうぐうねむっている') ||
+      clean.includes('眠っていて動けない') ||
+      clean.includes('ねむっていて動けない') ||
+      (clean.includes('眠っている') && !clean.includes('眠ってしまった') && !clean.includes('眠りはじめた'))
+    ) {
+      info.sides[sideIdx].actedThisTurn = true;
+      if (activeMonBeforeMove) {
+        activeMonBeforeMove.status = 'slp';
+        activeMonBeforeMove.slept = (activeMonBeforeMove.slept || 0) + 1;
+        activeMonBeforeMove.locked = null;
+        activeMonBeforeMove.charging = null;
+      }
+      info.events.push({ type: 'cant', turn: turnNum, side: sideIdx, reason: 'slp' });
+    } else if (clean.includes('反動で動けない') || clean.includes('はんどうでうごけない')) {
+      info.sides[sideIdx].actedThisTurn = true;
+      if (activeMonBeforeMove) {
+        activeMonBeforeMove.mustRecharge = false;
+        activeMonBeforeMove.charging = null;
+      }
+      info.events.push({ type: 'cant', turn: turnNum, side: sideIdx, reason: 'recharge' });
+    } else if (
+      clean.includes('しびれて動けない') ||
+      clean.includes('しびれてうごけない') ||
+      clean.includes('痺れて動けない') ||
+      clean.includes('痺れてうごけない') ||
+      clean.includes('凍ってしまって動けない') ||
+      clean.includes('こおってしまって') ||
+      clean.includes('ひるんで動けない') ||
+      clean.includes('ひるんで技が出せない') ||
+      clean.includes('メロメロで技が出せない') ||
+      clean.includes('かなしばりで出せない')
+    ) {
+      info.sides[sideIdx].actedThisTurn = true;
+      if (activeMonBeforeMove) {
+        activeMonBeforeMove.charging = null;
+      }
+      info.events.push({ type: 'cant', turn: turnNum, side: sideIdx, reason: 'cant' });
+    }
+
+    // Confusion self-hit aborts two-turn charging move
+    if (
+      clean.includes('わけもわからず自分を攻撃') ||
+      clean.includes('わけもわからずじぶんをこうげき')
+    ) {
+      info.sides[sideIdx].actedThisTurn = true;
+      if (activeMonBeforeMove) {
+        activeMonBeforeMove.charging = null;
+      }
+    }
+
+    // 3. Check move usage: `<B>MOVE</B>` (with plain-text fallback `の MOVE！`)
+    const bMatches = [...block.matchAll(/<B>\s*([^<]+?)\s*<\/B>/gi)];
+    const blockMoveIds = [];
+    for (const bm of bMatches) {
+      const mvId = JP_TO_MOVE_ID[normJp(bm[1])];
+      if (mvId) blockMoveIds.push(mvId);
+    }
+    if (blockMoveIds.length === 0) {
+      for (const pm of rawClean.matchAll(/(?:の|は)\s*([^\s！!]+?)\s*[！!]/g)) {
+        const mvId = JP_TO_MOVE_ID[normJp(pm[1])];
+        if (mvId) blockMoveIds.push(mvId);
+      }
+    }
+
+    let callerMoveId = null;
+    for (let mIdx = 0; mIdx < blockMoveIds.length; mIdx++) {
+      const mvId = blockMoveIds[mIdx];
+      const isCalledMove = mIdx > 0 && (
+        callerMoveId === 'sleeptalk' ||
+        callerMoveId === 'mirrormove' ||
+        callerMoveId === 'metronome'
+      );
+      if (mIdx === 0 && (mvId === 'sleeptalk' || mvId === 'mirrormove' || mvId === 'metronome')) {
+        callerMoveId = mvId;
+      }
+
+      const moveFailed = isMoveFailureText(clean);
+      const actorSlot = info.sides[sideIdx].activeSlot ?? findSlot(sideIdx, clean);
+      if (actorSlot !== null && info.sides[sideIdx].mons[actorSlot]) {
+        setActive(sideIdx, actorSlot);
+      }
+      const actorMon = actorSlot !== null ? info.sides[sideIdx].mons[actorSlot] : null;
+      const foeSlot = info.sides[foeIdx].activeSlot ?? findExplicitSlot(foeIdx, clean);
+      const foeMon = foeSlot !== null ? info.sides[foeIdx].mons[foeSlot] : null;
+
+      // Side-level move bookkeeping (always recorded regardless of actorSlot resolution)
+      info.sides[sideIdx].actedThisTurn = true;
+      info.sides[sideIdx].lastMove = mvId;
+      if (mvId === 'batonpass' && !moveFailed) {
+        info.sides[sideIdx].pendingBp = true;
+      }
+
+      // Per-mon move bookkeeping (`ProtocolTracker::on_move` + `Observer::scan_move`)
+      if (actorMon) {
+        actorMon.lastMove = mvId;
+        actorMon.volatiles.delete('destinybond');
+        if (mvId !== 'rage') actorMon.volatiles.delete('rage');
+        if (mvId !== 'furycutter') actorMon.volatiles.delete('furycutter');
+
+        if (!isCalledMove && mvId !== 'struggle' && mvId !== 'recharge') {
+          if (actorMon.charging === mvId) {
+            // Release turn of a 2-turn move: clear charging without double-deducting PP
+            actorMon.charging = null;
+          } else {
+            actorMon.charging = null;
+            if (actorMon.locked && actorMon.locked.move === mvId) {
+              // Continuation of thrash/petaldance/outrage/rollout: no extra PP deduction
+              const cap = mvId === 'rollout' ? 5 : 3;
+              const nextN = (actorMon.locked.n || 1) + 1;
+              actorMon.locked = ( moveFailed && mvId === 'rollout' ) || nextN >= cap
+                ? null
+                : { move: mvId, n: nextN };
+            } else {
+              actorMon.locked = null;
+              if (!actorMon.transformedInto) {
+                actorMon.uses[mvId] = (actorMon.uses[mvId] || 0) + 1;
+              }
+              if (THRASH_CLASS_MOVES.has(mvId) && !moveFailed) {
+                actorMon.locked = { move: mvId, n: 1 };
+              } else if (mvId === 'rollout' && !moveFailed) {
+                actorMon.locked = { move: mvId, n: 1 };
+              }
+            }
+          }
+        }
+
+        // Reveal move unless transformed, Mimic-copied, or foreign call (Metronome/Mirror Move)
+        const isForeignCall = isCalledMove && callerMoveId !== 'sleeptalk';
+        if (
+          !actorMon.transformedInto &&
+          actorMon.mimicOverlay !== mvId &&
+          !isForeignCall &&
+          mvId !== 'struggle' &&
+          mvId !== 'recharge'
+        ) {
+          actorMon.revealedMoves.add(mvId);
+        }
+
+        // Two-turn charging move initiation
+        if (TWO_TURN_CHARGE_MOVES.has(mvId) && !moveFailed) {
+          const instantSolarBeam = mvId === 'solarbeam' && info.weather?.key === 'sunnyday';
+          const isChargeText =
+            clean.includes('空高く飛び上がった') ||
+            clean.includes('穴を掘った') ||
+            clean.includes('地下深く潜り込んだ') ||
+            clean.includes('光を吸収') ||
+            clean.includes('ひかりを吸収') ||
+            clean.includes('頭を引っ込めた') ||
+            clean.includes('頭をひっこめた') ||
+            clean.includes('激しい風に包まれた') ||
+            clean.includes('空気がうずまく') ||
+            clean.includes('激しい光をまとった') ||
+            clean.includes('激しい光が包む');
+          const resolvedDamageInSameBlock =
+            clean.includes('ダメージ') ||
+            clean.includes('急所に当たった') ||
+            clean.includes('効果はバツグン') ||
+            clean.includes('効果はいまひとつ') ||
+            clean.includes('たおれた') ||
+            clean.includes('倒れた');
+          if (!instantSolarBeam && (isChargeText || !resolvedDamageInSameBlock)) {
+            actorMon.charging = mvId;
+          }
+        }
+
+        // Hyper Beam recharge
+        if (mvId === 'hyperbeam' && !moveFailed) {
+          actorMon.mustRecharge = true;
+        }
+
+        // Protect / Detect / Endure
+        if (PROTECT_CLASS_MOVES.has(mvId) && !moveFailed) {
+          actorMon.protectedThisTurn = true;
+        }
+
+        // Self-targeted move effects
+        if (!moveFailed) {
+          if (mvId === 'rest') {
+            actorMon.rest = true;
+            actorMon.status = 'slp';
+            actorMon.slept = 0;
+            actorMon.volatiles.delete('nightmare');
+          } else if (mvId === 'substitute') {
+            actorMon.volatiles.set('substitute', { key: 'substitute', start_turn: turnNum });
+          } else if (mvId === 'mist') {
+            actorMon.volatiles.set('mist', { key: 'mist', start_turn: turnNum });
+          } else if (mvId === 'focusenergy') {
+            actorMon.volatiles.set('focusenergy', { key: 'focusenergy', start_turn: turnNum });
+          } else if (mvId === 'defensecurl') {
+            actorMon.volatiles.set('defensecurl', { key: 'defensecurl', start_turn: turnNum });
+          } else if (mvId === 'minimize') {
+            actorMon.volatiles.set('minimize', { key: 'minimize', start_turn: turnNum });
+          } else if (mvId === 'bide') {
+            actorMon.volatiles.set('bide', { key: 'bide', start_turn: turnNum });
+          } else if (mvId === 'rage') {
+            actorMon.volatiles.set('rage', { key: 'rage', start_turn: turnNum });
+          } else if (mvId === 'destinybond') {
+            actorMon.volatiles.set('destinybond', { key: 'destinybond', start_turn: turnNum });
+          } else if (mvId === 'furycutter') {
+            const prevFc = actorMon.volatiles.get('furycutter');
+            const nextCount = prevFc ? Math.min(5, (prevFc.counter || 1) + 1) : 1;
+            actorMon.volatiles.set('furycutter', {
+              key: 'furycutter',
+              start_turn: prevFc ? prevFc.start_turn : turnNum,
+              counter: nextCount,
+            });
+          } else if (mvId === 'transform' && foeSlot !== null && foeMon) {
+            actorMon.transformedInto = [foeIdx, foeSlot];
+            actorMon.boosts = [...foeMon.boosts];
+          } else if (mvId === 'psychup' && foeMon) {
+            actorMon.boosts = [...foeMon.boosts];
+          } else if (mvId === 'mimic' && foeMon && foeMon.lastMove) {
+            actorMon.mimicOverlay = foeMon.lastMove;
+          } else if (mvId === 'curse') {
+            const rosterEntry = (previewSides && previewSides[sideIdx] && previewSides[sideIdx][actorSlot]) || null;
+            const spId = rosterEntry ? (rosterEntry.speciesId || toId(rosterEntry.species)) : null;
+            const isGhost = Boolean(spId && dexData.species[spId]?.types?.includes('Ghost'));
+            if (
+              (isGhost || clean.includes('のろいをかけた') || clean.includes('呪いをかけた')) &&
+              foeMon
+            ) {
+              foeMon.volatiles.set('curse', { key: 'curse', start_turn: turnNum });
+            }
+          }
+        } else if (mvId === 'furycutter') {
+          actorMon.volatiles.delete('furycutter');
+        }
+      }
+
+      // Side & Field effects (decoupled from actorSlot resolution!)
+      if (!moveFailed) {
+        if (mvId === 'raindance') {
+          info.weather = { key: 'raindance', upkeeps: 0, start_turn: turnNum, _lastUpkeepTurn: 0 };
+        } else if (mvId === 'sunnyday') {
+          info.weather = { key: 'sunnyday', upkeeps: 0, start_turn: turnNum, _lastUpkeepTurn: 0 };
+        } else if (mvId === 'sandstorm') {
+          info.weather = { key: 'sandstorm', upkeeps: 0, start_turn: turnNum, _lastUpkeepTurn: 0 };
+        } else if (mvId === 'reflect') {
+          if (!info.sides[sideIdx].conditions.has('reflect')) {
+            info.sides[sideIdx].conditions.set('reflect', turnNum);
+          }
+        } else if (mvId === 'lightscreen') {
+          if (!info.sides[sideIdx].conditions.has('lightscreen')) {
+            info.sides[sideIdx].conditions.set('lightscreen', turnNum);
+          }
+        } else if (mvId === 'safeguard') {
+          if (!info.sides[sideIdx].conditions.has('safeguard')) {
+            info.sides[sideIdx].conditions.set('safeguard', turnNum);
+          }
+        } else if (mvId === 'spikes') {
+          if (!info.sides[foeIdx].conditions.has('spikes')) {
+            info.sides[foeIdx].conditions.set('spikes', turnNum);
+          }
+        } else if (mvId === 'rapidspin') {
+          info.sides[sideIdx].conditions.delete('spikes');
+          if (actorMon) {
+            actorMon.volatiles.delete('leechseed');
+            actorMon.volatiles.delete('partiallytrapped');
+          }
+        } else if (mvId === 'haze') {
+          for (const s of [0, 1]) {
+            const a = info.sides[s].activeSlot;
+            if (a !== null && info.sides[s].mons[a]) {
+              info.sides[s].mons[a].boosts = [0, 0, 0, 0, 0, 0, 0];
+              info.sides[s].mons[a].compBrn = false;
+              info.sides[s].mons[a].compPar = false;
+            }
+          }
+        } else if (mvId === 'healbell') {
+          for (const m of info.sides[sideIdx].mons) {
+            if (!m.fainted) cureMonStatus(m);
+          }
+        } else if (mvId === 'perishsong') {
+          for (const s of [0, 1]) {
+            const a = info.sides[s].activeSlot;
+            if (a !== null && info.sides[s].mons[a] && !info.sides[s].mons[a].volatiles.has('perishsong')) {
+              info.sides[s].mons[a].volatiles.set('perishsong', {
+                key: 'perishsong',
+                start_turn: turnNum,
+                counter: 3,
+                _lastTickTurn: turnNum,
+              });
+            }
+          }
+        }
+
+        // Foe-targeted move volatiles & status effects
+        if (foeMon) {
+          const sourcePair = actorSlot !== null ? [sideIdx, actorSlot] : undefined;
+          if (mvId === 'leechseed') {
+            foeMon.volatiles.set('leechseed', {
+              key: 'leechseed',
+              start_turn: turnNum,
+              ...(sourcePair ? { source: sourcePair } : {}),
+            });
+          } else if (mvId === 'nightmare') {
+            foeMon.volatiles.set('nightmare', { key: 'nightmare', start_turn: turnNum });
+          } else if (mvId === 'attract') {
+            foeMon.volatiles.set('attract', {
+              key: 'attract',
+              start_turn: turnNum,
+              ...(sourcePair ? { source: sourcePair } : {}),
+            });
+          } else if (mvId === 'foresight') {
+            foeMon.volatiles.set('foresight', { key: 'foresight', start_turn: turnNum });
+          } else if (mvId === 'encore' && foeMon.lastMove) {
+            foeMon.volatiles.set('encore', {
+              key: 'encore',
+              start_turn: turnNum,
+              move: foeMon.lastMove,
+            });
+          } else if (mvId === 'disable') {
+            const disabledMv = blockMoveIds.find(id => id !== 'disable') || foeMon.lastMove;
+            if (disabledMv) {
+              foeMon.volatiles.set('disable', {
+                key: 'disable',
+                start_turn: turnNum,
+                move: disabledMv,
+              });
+            }
+          } else if (mvId === 'meanlook' || mvId === 'spiderweb') {
+            foeMon.volatiles.set('trapped', {
+              key: 'trapped',
+              start_turn: turnNum,
+              ...(sourcePair ? { source: sourcePair } : {}),
+            });
+          } else if (BIND_CLASS_MOVES.has(mvId)) {
+            foeMon.volatiles.set('partiallytrapped', {
+              key: 'partiallytrapped',
+              start_turn: turnNum,
+              move: mvId,
+              ...(sourcePair ? { source: sourcePair } : {}),
+            });
+          } else if (
+            mvId === 'confuseray' ||
+            mvId === 'supersonic' ||
+            mvId === 'sweetkiss' ||
+            mvId === 'swagger'
+          ) {
+            foeMon.volatiles.set('confusion', { key: 'confusion', start_turn: turnNum });
+            foeMon.locked = null;
+          } else if (mvId === 'toxic' && !foeMon.volatiles.has('substitute')) {
+            foeMon.status = 'tox';
+            foeMon.toxCounter = 0;
+          } else if (mvId === 'spite' && foeMon.lastMove) {
+            const spiteMatch = clean.match(/(\d+)\s*(?:減らした|へらした|減った|へった)/);
+            const spiteAmt = spiteMatch ? parseInt(spiteMatch[1], 10) : 4;
+            foeMon.uses[foeMon.lastMove] = (foeMon.uses[foeMon.lastMove] || 0) + spiteAmt;
+          }
+        }
+      } else if (
+        (clean.includes('守った') || clean.includes('まもった') || clean.includes('防いだ') || clean.includes('にはきかない')) &&
+        actorMon &&
+        actorMon.locked &&
+        actorMon.locked.move === 'rollout'
+      ) {
+        actorMon.locked = null;
+      }
+
+      info.events.push({
+        type: 'move',
+        turn: turnNum,
+        side: sideIdx,
+        slot: actorSlot,
+        move: mvId,
+        failed: moveFailed,
+        called: isCalledMove,
+      });
+    }
+
+    // 3b. Phaze drag (`ほえる` / `ふきとばし` -> `ひきずりだされた` / `ふきとばされた`)
+    if (isDragBlock) {
+      const dragClauseMatch = rawClean.match(
+        /([^\s！!<>]+?)\s*(?:が|は)\s*(?:(?:戦闘に)?(?:引きずり出された|ひきずりだされた)|吹き飛ばされた|ふきとばされた)/
+      );
+      const dragTargetText = dragClauseMatch ? dragClauseMatch[1] : clean;
+      const hasPhazeMove = blockMoveIds.includes('roar') || blockMoveIds.includes('whirlwind');
+      const primarySide = hasPhazeMove ? foeIdx : sideIdx;
+      const secondarySide = 1 - primarySide;
+      let dragSide = primarySide;
+      let dragSlot = findExplicitSlot(primarySide, dragTargetText);
+      if (dragSlot === null) {
+        const altSlot = findExplicitSlot(secondarySide, dragTargetText);
+        if (altSlot !== null) {
+          dragSide = secondarySide;
+          dragSlot = altSlot;
+        }
+      }
+      if (dragSlot !== null) {
+        setActive(dragSide, dragSlot, { isDrag: true, isInitialSendOut: false });
+      }
+    }
+
+    const resolveLineSubject = (lineText, altSide = null) => {
+      if (altSide !== null) {
+        const exp = findExplicitSlot(altSide, lineText);
+        const slot = exp !== null ? exp : info.sides[altSide].activeSlot;
+        return {
+          side: altSide,
+          slot,
+          mon: slot !== null ? (info.sides[altSide].mons[slot] || null) : null,
+        };
+      }
+      const foeExp = findExplicitSlot(foeIdx, lineText);
+      const ownExp = findExplicitSlot(sideIdx, lineText);
+      if (foeExp !== null && ownExp === null) {
+        return {
+          side: foeIdx,
+          slot: foeExp,
+          mon: info.sides[foeIdx].mons[foeExp] || null,
+        };
+      }
+      const sSlot = ownExp ?? info.sides[sideIdx].activeSlot;
+      return {
+        side: sideIdx,
+        slot: sSlot,
+        mon: sSlot !== null ? (info.sides[sideIdx].mons[sSlot] || null) : null,
+      };
+    };
+
+    // 4. Stat boost comments `<!--actorSide targetSide slot statIdx delta ...//-->`
+    let parsedCommentBoost = false;
     for (const cm of block.matchAll(/<!--([\d\s\-]+)\/\/-->/g)) {
       const nums = cm[1].trim().split(/\s+/).map(Number).filter(n => !Number.isNaN(n));
       if (nums.length >= 5 && (nums[1] === 0 || nums[1] === 1) && nums[3] >= 0 && nums[3] <= 6) {
@@ -1122,68 +2021,569 @@ function parseLlogHtml(html, previewSides) {
         const delta = nums[4];
         const aSlot = info.sides[targetSide].activeSlot;
         if (aSlot !== null && info.sides[targetSide].mons[aSlot] && delta !== 0 && Math.abs(delta) <= 6) {
-          const mon = info.sides[targetSide].mons[aSlot];
-          mon.boosts[statIdx] = Math.max(-6, Math.min(6, mon.boosts[statIdx] + delta));
+          applyBoostDelta(info.sides[targetSide].mons[aSlot], statIdx, delta);
+          parsedCommentBoost = true;
         }
-      } else {
-        const aSlot = info.sides[sideIdx].activeSlot;
-        if (aSlot !== null && info.sides[sideIdx].mons[aSlot] && (clean.includes('あがった') || clean.includes('さがった'))) {
-          const mon = info.sides[sideIdx].mons[aSlot];
-          const statNames = [
-            ['こうげき', 0],
-            ['ぼうぎょ', 1],
-            ['とくこう', 2],
-            ['とくぼう', 3],
-            ['すばやさ', 4],
-            ['めいちゅう', 5],
-            ['かいひ', 6],
-          ];
-          const delta = (clean.includes('ぐーんとあがった') || clean.includes('ぐ〜んとあがった')) ? 2
-            : clean.includes('あがった') ? 1
-            : (clean.includes('がくっとさがった') || clean.includes('がく〜んとさがった')) ? -2
-            : -1;
-          for (const [jpStat, idx] of statNames) {
-            if (clean.includes(jpStat)) {
-              mon.boosts[idx] = Math.max(-6, Math.min(6, mon.boosts[idx] + delta));
+      }
+    }
+
+    // 5. Line-by-line inspection (`<BR>` clauses) for items, stat-change text, status, volatiles, and faints
+    const rawLines = block.split(/<BR\s*\/?>|\n/i);
+    for (const rawLine of rawLines) {
+      const lineClean = rawLine.replace(/<[^>]*>/g, '').replace(/\s+/g, '').trim();
+      if (!lineClean) continue;
+      const altM = rawLine.match(/alt="([^"]*)"/i);
+      const alt = altM ? altM[1].replace(/&nbsp;/g, ' ').trim() : '';
+      let altSide = null;
+      if (alt) {
+        const altNorm = normJp(alt).replace(/の$/, '');
+        if (p1Name && altNorm === normJp(p1Name)) altSide = 0;
+        else if (p2Name && altNorm === normJp(p2Name)) altSide = 1;
+      }
+      const subj = resolveLineSubject(lineClean, altSide);
+      const subjMon = subj.mon;
+
+      // 5a. Item reveal & consumption cues (`たべのこし`, berries, Focus Band, Quick Claw)
+      if (subjMon) {
+        if (lineClean.includes('たべのこし') || lineClean.includes('食べ残し')) {
+          if (!subjMon.itemGained) subjMon.itemOriginal = subjMon.itemOriginal || 'leftovers';
+          subjMon.itemCurrent = 'leftovers';
+        } else if (lineClean.includes('きあいのハチマキ')) {
+          if (!subjMon.itemGained) subjMon.itemOriginal = subjMon.itemOriginal || 'focusband';
+          subjMon.itemCurrent = 'focusband';
+        } else if (lineClean.includes('せんせいのツメ')) {
+          if (!subjMon.itemGained) subjMon.itemOriginal = subjMon.itemOriginal || 'quickclaw';
+          subjMon.itemCurrent = 'quickclaw';
+        } else {
+          for (const [jpBerry, berryId] of CONSUMED_BERRIES_JP) {
+            if (lineClean.includes(jpBerry)) {
+              if (!subjMon.itemGained) subjMon.itemOriginal = subjMon.itemOriginal || berryId;
+              subjMon.itemCurrent = '';
+              if (berryId === 'bitterberry') {
+                subjMon.volatiles.delete('confusion');
+              } else if (berryId === 'miracleberry') {
+                subjMon.volatiles.delete('confusion');
+                cureMonStatus(subjMon);
+              } else if (
+                berryId === 'mintberry' ||
+                berryId === 'przcureberry' ||
+                berryId === 'iceberry' ||
+                berryId === 'burntberry' ||
+                berryId === 'psncureberry'
+              ) {
+                cureMonStatus(subjMon);
+              } else if (berryId === 'mysteryberry') {
+                for (const [uMv, uCnt] of Object.entries(subjMon.uses)) {
+                  if (uCnt > 0) {
+                    subjMon.uses[uMv] = Math.max(0, uCnt - 5);
+                    break;
+                  }
+                }
+              }
+              break;
             }
           }
         }
       }
-    }
 
-    // Faint detection
-    if (clean.includes('たおれた') || clean.includes('倒れた')) {
-      const slot = findSlot(sideIdx, clean);
-      if (slot !== null && info.sides[sideIdx].mons[slot]) {
-        info.sides[sideIdx].mons[slot].appeared = true;
-        info.sides[sideIdx].mons[slot].fainted = true;
-        info.sides[sideIdx].mons[slot].status = '';
-        info.sides[sideIdx].mons[slot].boosts = [0, 0, 0, 0, 0, 0, 0];
-        info.sides[sideIdx].mons[slot].volatiles.clear();
+      // 5b. Thief (`どろぼう`) item steal cues
+      if (lineClean.includes('を奪った') || lineClean.includes('をうばった')) {
+        const actorSlot = info.sides[sideIdx].activeSlot;
+        const foeSlot = info.sides[foeIdx].activeSlot;
+        for (const [jpName, itemId] of Object.entries(JP_TO_ITEM_ID)) {
+          if (jpName && lineClean.includes(jpName)) {
+            if (foeSlot !== null && info.sides[foeIdx].mons[foeSlot]) {
+              const victim = info.sides[foeIdx].mons[foeSlot];
+              if (!victim.itemGained) victim.itemOriginal = victim.itemOriginal || itemId;
+              victim.itemCurrent = '';
+            }
+            if (actorSlot !== null && info.sides[sideIdx].mons[actorSlot]) {
+              const thief = info.sides[sideIdx].mons[actorSlot];
+              thief.itemCurrent = itemId;
+              thief.itemGained = true;
+            }
+            break;
+          }
+        }
+      }
+
+      // 5c. Text fallback for stat boosts/drops when HTML comments are absent
+      if (
+        !parsedCommentBoost &&
+        subjMon &&
+        !blockMoveIds.includes('bellydrum') &&
+        (lineClean.includes('あがった') ||
+          lineClean.includes('さがった') ||
+          lineClean.includes('上がった') ||
+          lineClean.includes('下がった'))
+      ) {
+        const statNames = [
+          ['こうげき', 0],
+          ['攻撃', 0],
+          ['ぼうぎょ', 1],
+          ['防御', 1],
+          ['とくこう', 2],
+          ['特攻', 2],
+          ['とくぼう', 3],
+          ['特防', 3],
+          ['すばやさ', 4],
+          ['素早さ', 4],
+          ['めいちゅう', 5],
+          ['命中', 5],
+          ['かいひ', 6],
+          ['回避', 6],
+        ];
+        const delta =
+          lineClean.includes('さいだいまで') || lineClean.includes('最大まで') ? 12
+          : lineClean.includes('ぐーんとあがった') || lineClean.includes('ぐ〜んとあがった') || lineClean.includes('ぐーんと上がった') ? 2
+          : lineClean.includes('あがった') || lineClean.includes('上がった') ? 1
+          : lineClean.includes('がくっとさがった') || lineClean.includes('がく〜んとさがった') || lineClean.includes('がくっと下がった') ? -2
+          : -1;
+        const appliedStats = new Set();
+        for (const [jpStat, idx] of statNames) {
+          if (lineClean.includes(jpStat) && !appliedStats.has(idx)) {
+            appliedStats.add(idx);
+            applyBoostDelta(subjMon, idx, delta);
+          }
+        }
+      }
+
+      // 5d. Status infliction, cure, & residual damage cues
+      if (subjMon && !subjMon.fainted) {
+        if (
+          lineClean.includes('もうどくをあびた') ||
+          lineClean.includes('猛毒をあびた') ||
+          lineClean.includes('もうどく状態')
+        ) {
+          subjMon.status = 'tox';
+          subjMon.toxCounter = 0;
+        } else if (
+          lineClean.includes('どくをあびた') ||
+          lineClean.includes('毒をあびた') ||
+          lineClean.includes('どく状態になった') ||
+          lineClean.includes('毒におかされた') ||
+          lineClean.includes('どくにおかされた')
+        ) {
+          subjMon.status = 'psn';
+        } else if (
+          lineClean.includes('やけどを負った') ||
+          lineClean.includes('火傷を負った') ||
+          lineClean.includes('やけどをおった') ||
+          lineClean.includes('火傷をおった') ||
+          lineClean.includes('やけど状態になった')
+        ) {
+          subjMon.status = 'brn';
+          subjMon.compBrn = true;
+        } else if (
+          lineClean.includes('まひして技が出にくくなった') ||
+          lineClean.includes('麻痺して技が出にくくなった') ||
+          lineClean.includes('まひ状態になった') ||
+          lineClean.includes('まひした') ||
+          lineClean.includes('麻痺した')
+        ) {
+          subjMon.status = 'par';
+          subjMon.compPar = true;
+        } else if (
+          (lineClean.includes('眠ってしまった') || lineClean.includes('ねむってしまった')) &&
+          !blockMoveIds.includes('rest')
+        ) {
+          subjMon.status = 'slp';
+          subjMon.rest = false;
+          subjMon.slept = 0;
+        } else if (
+          lineClean.includes('凍りついた') ||
+          lineClean.includes('こおりついた') ||
+          lineClean.includes('凍ってしまった') ||
+          lineClean.includes('こおりづけになった') ||
+          lineClean.includes('凍りづけになった')
+        ) {
+          subjMon.status = 'frz';
+        }
+
+        // Wake / Thaw cures
+        if (
+          lineClean.includes('目を覚ました') ||
+          lineClean.includes('めをさました') ||
+          lineClean.includes('氷が溶けた') ||
+          lineClean.includes('氷がとけた') ||
+          lineClean.includes('こおりがとけた') ||
+          lineClean.includes('こおりが溶けた')
+        ) {
+          cureMonStatus(subjMon);
+        }
+
+        // Residual poison/burn damage tick increments Stadium `toxCounter` (`comp_res`)
+        if (
+          lineClean.includes('どくのダメージ') ||
+          lineClean.includes('毒のダメージ') ||
+          lineClean.includes('もうどくのダメージ') ||
+          lineClean.includes('猛毒のダメージ') ||
+          lineClean.includes('やけどのダメージ') ||
+          lineClean.includes('火傷のダメージ')
+        ) {
+          info.upkeepThisTurn = true;
+          if (subjMon.toxCounter !== null && subjMon.toxCounter !== undefined) {
+            subjMon.toxCounter += 1;
+          }
+        }
+      }
+
+      // 5e. Volatile start/end cues & Perish Song countdown
+      if (subjMon && !subjMon.fainted) {
+        if (lineClean.includes('こんらんした') || lineClean.includes('混乱した')) {
+          subjMon.volatiles.set('confusion', { key: 'confusion', start_turn: turnNum });
+          subjMon.locked = null;
+        } else if (
+          lineClean.includes('こんらんがとけた') ||
+          lineClean.includes('こんらんがなおった') ||
+          lineClean.includes('混乱が解けた') ||
+          lineClean.includes('混乱が治った') ||
+          lineClean.includes('正気に戻った') ||
+          lineClean.includes('しょうきにもどった')
+        ) {
+          subjMon.volatiles.delete('confusion');
+        }
+        if (
+          lineClean.includes('みがわりが消えた') ||
+          lineClean.includes('みがわりは消えてしまった') ||
+          lineClean.includes('みがわりが壊れた') ||
+          lineClean.includes('身代わりが消えた') ||
+          lineClean.includes('分身はきえてしまった') ||
+          lineClean.includes('分身は消えてしまった')
+        ) {
+          subjMon.volatiles.delete('substitute');
+        }
+        if (lineClean.includes('アンコールがとけた') || lineClean.includes('アンコールが終わった')) {
+          subjMon.volatiles.delete('encore');
+        }
+        if (lineClean.includes('かなしばりがとけた') || lineClean.includes('かなしばりから解放された')) {
+          subjMon.volatiles.delete('disable');
+        }
+        if (
+          lineClean.includes('締め付けから解放された') ||
+          lineClean.includes('しめつけから解放された') ||
+          lineClean.includes('から解放された') ||
+          lineClean.includes('渦から解放された')
+        ) {
+          subjMon.volatiles.delete('partiallytrapped');
+        }
+
+        const perishMatch = lineClean.match(/(?:ほろびのカウント|滅びのカウント|カウント)が([0-3])/);
+        if (perishMatch) {
+          info.upkeepThisTurn = true;
+          const cnt = parseInt(perishMatch[1], 10);
+          if (cnt <= 0) {
+            subjMon.volatiles.delete('perishsong');
+          } else {
+            const prevPs = subjMon.volatiles.get('perishsong');
+            subjMon.volatiles.set('perishsong', {
+              key: 'perishsong',
+              start_turn: prevPs ? prevPs.start_turn : turnNum,
+              counter: cnt,
+              _lastTickTurn: turnNum,
+            });
+          }
+        }
+      }
+
+      // 5f. Faint detection (`|faint|`) across either side mentioned on this line
+      const isHpZero = /(?:HP|ＨＰ)\s*\d+\s*→\s*0\b/i.test(lineClean);
+      const isFaintLine = lineClean.includes('たおれた') || lineClean.includes('倒れた');
+      if (
+        (isFaintLine || isHpZero) &&
+        subj.slot !== null &&
+        subjMon &&
+        !subjMon.fainted
+      ) {
+        subjMon.appeared = true;
+        subjMon.appearCount = Math.max(1, subjMon.appearCount || 1);
+        subjMon.fainted = true;
+        subjMon.status = '';
+        subjMon.rest = false;
+        subjMon.slept = 0;
+        clearOnExit(subjMon);
+        clearSourcedVols(subj.side, subj.slot);
+        info.sides[subj.side].faintedThisTurn = subj.slot;
+        info.events.push({ type: 'faint', turn: turnNum, side: subj.side, slot: subj.slot });
+      }
+
+      // 5g. Check whether this `<BR>` line was recognized by any state rule or known battle narrative
+      const isMoveLine =
+        blockMoveIds.length > 0 &&
+        Object.keys(JP_TO_MOVE_ID).some(jpMv => jpMv && normJp(lineClean).includes(jpMv));
+      const isBerryLine = CONSUMED_BERRIES_JP.some(([jpBerry]) => lineClean.includes(jpBerry));
+      const isKnownStateOrNarrative =
+        isMoveLine ||
+        isBerryLine ||
+        isMoveFailureText(lineClean) ||
+        /を繰り出した|をくりだした|ゆけっ|いけっ|出てこい|引っ込めた|ひっこめた|戻れ|もどれ|交代/.test(lineClean) ||
+        /引きずり出された|ひきずりだされた|吹き飛ばされた|ふきとばされた/.test(lineClean) ||
+        /眠っている|ねむっている|眠りはじめた|ねむりはじめた|眠っていて|ねむっていて|反動で動けない|はんどうでうごけない|しびれて動けない|しびれてうごけない|痺れて動けない|痺れてうごけない|凍ってしまって|こおってしまって|凍っていて|こおっていて|ひるんで|メロメロ|かなしばり|わけもわからず/.test(lineClean) ||
+        /空高く飛び上がった|穴を掘った|地下深く潜り込んだ|光を吸収|ひかりを吸収|頭を引っ込めた|頭をひっこめた|激しい風に包まれた|空気がうずまく|激しい光をまとった|激しい光が包む|力をためて/.test(lineClean) ||
+        /たべのこし|食べ残し|きあいのハチマキ|せんせいのツメ|を奪った|をうばった/.test(lineClean) ||
+        /あがった|さがった|上がった|下がった|あがらない|さがらない|上がらない|下がらない/.test(lineClean) ||
+        /もうどく|猛毒|どくをあびた|毒をあびた|毒におかされた|どくにおかされた|どく状態|やけど|火傷|まひして|麻痺して|まひした|麻痺した|まひ状態|眠ってしまった|ねむってしまった|けんこうになって|健康になって|凍りついた|こおりついた|こおりづけになった|凍ってしまった|目を覚ました|めをさました|氷が溶けた|こおりがとけた|氷がとけた|正気に戻った|しょうきにもどった|どくのダメージ|毒のダメージ/.test(lineClean) ||
+        /こんらん|混乱|みがわり|身代わり|分身|アンコール|解放された|カウントが|しめつけ|締め付け|渦の中に|うずのなかに|炎の渦|ほのおのうず|からみついて|はさまれた/.test(lineClean) ||
+        /たおれた|倒れた|みちづれ|道連れ/.test(lineClean) ||
+        /リフレクター|ひかりのかべ|光の壁|しんぴのまもり|神秘の守り|しんぴのヴェール|神秘のヴェール|しろいきり|白い霧|くろいきり|黒い霧|すべての能力が元に戻った|まきびし|すずの音|鈴の音|ほろびのうた|滅びの歌|タネが|種が|あくむ|悪夢|みやぶった|見破った|を封じた|にげられなくなった|逃げられなくなった|もうにげられない|うらみ|ＰＰを|PPを|へんしん|変身|暗示|あんじ|ものまね|のろい|呪い|のろわれている|いかりのボルテージ|がまん|まるくなった|ちいさくなった|はりきって|張り切って/.test(lineClean) ||
+        /雨が降り|あめがふり|大雨になった|雨はやんだ|あめはやんだ|雨が降り止んだ|日差しが|ひざしが|砂嵐|すなあらし|すなあらしがふきあれる|すなあらしがおさまった|砂嵐がおさまった/.test(lineClean) ||
+        /ダメージ|急所に当たった|きゅうしょにあたった|急所にあたった|効果はバツグン|こうかはばつぐん|効果抜群|こうかばつぐん|効果はいまひとつ|こうかはいまひとつ|効果はイマイチ|こうかはイマイチ|回当たった|かいあたった|体力を回復|たいりょくをかいふく|回復した|体力を吸い取った|たいりょくをすいとった|たいりょくをうばう|わかちあった|体力がいっぱい|たいりょくがいっぱい|反動を受けた|はんどうをうけた|反動をうけた|はんどうをうけた|は守っている|はまもっている|まもりの体勢|こらえた|こらえる体勢|こらえている|はねている|ひるんだ|何も起こらない|なにもおこらない|しかし決まらなかった|すでに|強くなった|最大まであげた|たねをうえつけた|はかいのいでんし|たりなかった|交換できるポケモンがいなかった|タイプを自分に貼り付けた|激突した|一撃必殺|WIN!|ＷＩＮ！|LOSE|ＬＯＳＥ|DRAW|ＤＲＡＷ|戻る|HP\s*\d+\s*→|ＨＰ\s*\d+\s*→|ほろんでしまう/.test(lineClean);
+
+      if (!isKnownStateOrNarrative && lineClean.length > 0) {
+        info.unrecognizedLines.push({
+          turn: turnNum,
+          side: sideIdx,
+          align,
+          line: lineClean,
+        });
       }
     }
 
-    // Confusion / Leech Seed / Substitute break cues
-    const activeSlot = info.sides[sideIdx].activeSlot;
-    if (activeSlot !== null && info.sides[sideIdx].mons[activeSlot]) {
-      const mon = info.sides[sideIdx].mons[activeSlot];
-      if (clean.includes('こんらんした')) {
-        mon.volatiles.set('confusion', { key: 'confusion', start_turn: turnNum });
-      } else if (clean.includes('こんらんがとけた') || clean.includes('こんらんがなおった')) {
-        mon.volatiles.delete('confusion');
-      }
-      if (clean.includes('みがわりが消えた') || clean.includes('みがわりは消えてしまった')) {
-        mon.volatiles.delete('substitute');
-      }
+    // 6. Side condition end cues (Reflect, Light Screen, Safeguard)
+    if (
+      clean.includes('リフレクター') &&
+      (clean.includes('消えた') || clean.includes('きえた') || clean.includes('なくなった') || clean.includes('とけた') || clean.includes('切れた'))
+    ) {
+      info.sides[sideIdx].conditions.delete('reflect');
+    }
+    if (
+      (clean.includes('ひかりのかべ') || clean.includes('光の壁')) &&
+      (clean.includes('消えた') || clean.includes('きえた') || clean.includes('なくなった') || clean.includes('とけた') || clean.includes('切れた'))
+    ) {
+      info.sides[sideIdx].conditions.delete('lightscreen');
+    }
+    if (
+      (clean.includes('しんぴのまもり') || clean.includes('神秘の守り')) &&
+      (clean.includes('消えた') || clean.includes('きえた') || clean.includes('なくなった') || clean.includes('とけた') || clean.includes('切れた') || clean.includes('解けた'))
+    ) {
+      info.sides[sideIdx].conditions.delete('safeguard');
     }
 
-    // Weather end cues
-    if (clean.includes('雨はやんだ') || clean.includes('日差しが戻った') || clean.includes('砂嵐はおさまった')) {
+    // 7. Weather upkeep & end cues
+    if (
+      clean.includes('雨が降り続いている') ||
+      clean.includes('あめがふりつづいている') ||
+      clean.includes('日差しが強い') ||
+      clean.includes('ひざしがつよい') ||
+      clean.includes('砂嵐が吹き荒れている') ||
+      clean.includes('すなあらしがふきあれている') ||
+      clean.includes('砂嵐でダメージ')
+    ) {
+      info.upkeepThisTurn = true;
+      if (info.weather && info.weather._lastUpkeepTurn !== turnNum) {
+        info.weather.upkeeps = (info.weather.upkeeps || 0) + 1;
+        info.weather._lastUpkeepTurn = turnNum;
+        if (info.weather.upkeeps >= 5) {
+          info.weather = null;
+        }
+      }
+    }
+    if (
+      clean.includes('雨はやんだ') ||
+      clean.includes('あめはやんだ') ||
+      clean.includes('日差しが戻った') ||
+      clean.includes('ひざしがもどった') ||
+      clean.includes('砂嵐はおさまった') ||
+      clean.includes('すなあらしはおさまった')
+    ) {
       info.weather = null;
     }
   }
 
   return info;
+}
+
+/**
+ * Convert a `parseLlogHtml` tracker object (containing `Map` and `Set` instances)
+ * into a plain JSON-serializable object for raw trace persistence and parity auditing.
+ */
+function serializeLlogTracker(llog) {
+  if (!llog) return null;
+  return {
+    turn: llog.turn,
+    hrCount: llog.hrCount,
+    upkeepThisTurn: Boolean(llog.upkeepThisTurn),
+    weather: llog.weather ? { ...llog.weather } : null,
+    events: Array.isArray(llog.events) ? llog.events.map(e => ({ ...e })) : [],
+    unrecognizedLines: Array.isArray(llog.unrecognizedLines)
+      ? llog.unrecognizedLines.map(u => ({ ...u }))
+      : [],
+    sides: (llog.sides || []).map(side => ({
+      activeSlot: side.activeSlot,
+      conditions:
+        side.conditions instanceof Map
+          ? Object.fromEntries(side.conditions.entries())
+          : { ...(side.conditions || {}) },
+      pendingBp: Boolean(side.pendingBp),
+      actedThisTurn: Boolean(side.actedThisTurn),
+      faintedThisTurn: side.faintedThisTurn ?? null,
+      faintedLastTurn: side.faintedLastTurn ?? null,
+      lastMove: side.lastMove ?? null,
+      mons: (side.mons || []).map(m => ({
+        appeared: Boolean(m.appeared),
+        appearCount: m.appearCount || 0,
+        switchInTurn: m.switchInTurn || 0,
+        active: Boolean(m.active),
+        fainted: Boolean(m.fainted),
+        status: m.status || '',
+        rest: Boolean(m.rest),
+        slept: m.slept || 0,
+        toxCounter: m.toxCounter ?? null,
+        compBrn: Boolean(m.compBrn),
+        compPar: Boolean(m.compPar),
+        boosts: [...(m.boosts || [0, 0, 0, 0, 0, 0, 0])],
+        uses: { ...(m.uses || {}) },
+        revealedMoves:
+          m.revealedMoves instanceof Set
+            ? [...m.revealedMoves]
+            : Array.isArray(m.revealedMoves)
+              ? [...m.revealedMoves]
+              : [],
+        itemOriginal: m.itemOriginal ?? null,
+        itemCurrent: m.itemCurrent ?? null,
+        itemGained: Boolean(m.itemGained),
+        volatiles:
+          m.volatiles instanceof Map
+            ? [...m.volatiles.values()].map(v => ({ ...v }))
+            : Array.isArray(m.volatiles)
+              ? m.volatiles.map(v => ({ ...v }))
+              : [],
+        locked: m.locked ? { ...m.locked } : null,
+        charging: m.charging ?? null,
+        mustRecharge: Boolean(m.mustRecharge),
+        transformedInto: m.transformedInto ? [...m.transformedInto] : null,
+        mimicOverlay: m.mimicOverlay ?? null,
+        lastMove: m.lastMove ?? null,
+        stallStreak: m.stallStreak || 0,
+        lastProtectTurn: m.lastProtectTurn || 0,
+        protectedThisTurn: Boolean(m.protectedThisTurn),
+      })),
+    })),
+  };
+}
+
+/**
+ * Merge parsed LLOG observations (and optional top status table) into persistent
+ * `seenFoeMons` so mid-game and end-of-game observations (`Selfdestruct`, `fainted`,
+ * `uses`, `revealedMoves`, `itemOriginal`, `noLeftovers`) are never lost.
+ */
+function mergeLlogIntoSeenFoeMons({
+  llog,
+  foeSide,
+  seenFoeMons,
+  previewSides,
+  battleTurn = null,
+  turnNum = 1,
+  isForceSwitch = false,
+  lastFoeActiveSlot = null,
+  onLeakLog = null,
+}) {
+  if (!Array.isArray(seenFoeMons) || seenFoeMons.length === 0) {
+    return { lastFoeActiveSlot, llogFoeMons: llog?.sides?.[foeSide]?.mons || null };
+  }
+
+  const foePreview = (previewSides && previewSides[foeSide]) || [];
+  const foeTop = battleTurn && battleTurn.sides ? battleTurn.sides[foeSide] : null;
+  let foeActiveSlot = null;
+  if (foeTop && foeTop.speciesId) {
+    foeActiveSlot = foePreview.findIndex(m => m.speciesId === foeTop.speciesId);
+  }
+  if (foeActiveSlot === null || foeActiveSlot < 0) {
+    foeActiveSlot = llog?.sides?.[foeSide]?.activeSlot ?? null;
+  }
+
+  for (let i = 0; i < seenFoeMons.length; i++) {
+    const seen = seenFoeMons[i];
+    const llogMon = llog?.sides?.[foeSide]?.mons?.[i] || null;
+    if (!seen || !llogMon) continue;
+
+    if (llogMon.appeared) seen.appeared = true;
+    if (llogMon.fainted) {
+      seen.fainted = true;
+      seen.hp = 0;
+      seen.status = '';
+    } else if (!foeTop && llogMon.status) {
+      seen.status = llogMon.status;
+    }
+
+    if (llogMon.itemOriginal) {
+      seen.itemOriginal = seen.itemOriginal || llogMon.itemOriginal;
+      seen.itemCurrent = llogMon.itemCurrent;
+      if (seen.itemOriginal === 'leftovers') seen.noLeftovers = false;
+    }
+
+    for (const mvId of llogMon.revealedMoves || []) {
+      if (!seen.revealedMoves.includes(mvId)) {
+        seen.revealedMoves.push(mvId);
+      }
+    }
+
+    if (llogMon.uses && Object.keys(llogMon.uses).length > 0) {
+      seen.uses = { ...(seen.uses || {}) };
+      for (const [mvId, cnt] of Object.entries(llogMon.uses)) {
+        seen.uses[mvId] = Math.max(seen.uses[mvId] || 0, cnt);
+      }
+    }
+  }
+
+  if (foeActiveSlot !== null && foeActiveSlot >= 0 && seenFoeMons[foeActiveSlot] && foeTop) {
+    const activeSeen = seenFoeMons[foeActiveSlot];
+    const activeLlog = llog?.sides?.[foeSide]?.mons?.[foeActiveSlot] || null;
+    activeSeen.appeared = true;
+    if (foeTop.maxHp !== null && foeTop.maxHp > 0) {
+      activeSeen.maxHp = foeTop.maxHp;
+    }
+    if (foeTop.hp !== null) {
+      const prevHp = activeSeen.hp;
+      activeSeen.hp = activeLlog?.fainted ? 0 : foeTop.hp;
+      activeSeen.fainted = Boolean(activeLlog?.fainted || foeTop.hp <= 0);
+      const rawTopStatus = foeTop.status || '';
+      activeSeen.status = activeSeen.fainted
+        ? ''
+        : (rawTopStatus === 'psn' && activeLlog?.status === 'tox' ? 'tox' : rawTopStatus);
+
+      if (
+        !isForceSwitch &&
+        turnNum >= 2 &&
+        activeSeen.itemFlag &&
+        !activeSeen.itemOriginal &&
+        activeSeen.maxHp &&
+        activeSeen.hp > 0 &&
+        activeSeen.hp < activeSeen.maxHp
+      ) {
+        activeSeen.damagedTurnsCount = (activeSeen.damagedTurnsCount || 0) + 1;
+        const hasResidualDamage =
+          activeSeen.status === 'psn' ||
+          activeSeen.status === 'tox' ||
+          activeSeen.status === 'brn' ||
+          activeLlog?.volatiles?.has('leechseed') ||
+          activeLlog?.volatiles?.has('nightmare') ||
+          activeLlog?.volatiles?.has('curse') ||
+          llog?.weather?.key === 'sandstorm';
+        const stayedInFromLastTurn = lastFoeActiveSlot === foeActiveSlot;
+        if (
+          activeSeen.damagedTurnsCount >= 2 ||
+          (stayedInFromLastTurn && !hasResidualDamage) ||
+          (!hasResidualDamage && prevHp !== null && prevHp < activeSeen.maxHp)
+        ) {
+          if (!activeSeen.noLeftovers) {
+            activeSeen.noLeftovers = true;
+            if (typeof onLeakLog === 'function') {
+              onLeakLog(
+                `Leak inference: Foe ${activeSeen.species} (${activeSeen.hp}/${activeSeen.maxHp}) lacks Leftovers.`
+              );
+            }
+          }
+        }
+      }
+    }
+    lastFoeActiveSlot = foeActiveSlot;
+  }
+
+  return {
+    lastFoeActiveSlot,
+    llogFoeMons: llog?.sides?.[foeSide]?.mons || null,
+  };
 }
 
 // ------------------------------------------------------------------ Opponent Memory DB & Dynamic Belief Adaptation
@@ -1629,17 +3029,87 @@ function buildAndSanitizePositionSpec({
   forceSwitch,
 }) {
   const foeSide = 1 - mySide;
+
+  // Synchronize LLOG tracker turn state with the decision point:
+  // - On a normal move request (`!forceSwitch`), `turn` is the new turn about to be played,
+  //   so if `llog` finished on an earlier turn, advance `llog` across the turn boundary.
+  // - On a forced switch (`forceSwitch`), if `llog` has `<HR>` boundaries, we are still inside
+  //   `llog.turn` (either mid-turn Baton Pass or end-of-turn faint replacement before next `|turn|`).
+  let effectiveTurn = teamPreview ? 0 : Math.max(1, turn || 1);
+  if (!teamPreview && llog) {
+    if (forceSwitch) {
+      if ((llog.hrCount || 0) >= 1) {
+        effectiveTurn = Math.max(1, llog.turn || 1);
+      } else if (effectiveTurn > (llog.turn || 1)) {
+        advanceLlogTrackerToTurn(llog, effectiveTurn);
+      }
+    } else {
+      effectiveTurn = Math.max(effectiveTurn, llog.turn || 1);
+      if (effectiveTurn > (llog.turn || 1)) {
+        advanceLlogTrackerToTurn(llog, effectiveTurn);
+      }
+    }
+  }
+
+  // Expire any timed side conditions or weather that have reached 5 turns at `effectiveTurn`
+  if (!teamPreview && llog) {
+    if (llog.weather) {
+      const wStart = llog.weather.start_turn || 1;
+      if ((llog.weather.upkeeps || 0) >= 5 || (effectiveTurn - wStart) >= 5) {
+        llog.weather = null;
+      }
+    }
+    for (const s of [0, 1]) {
+      const conds = llog.sides?.[s]?.conditions;
+      if (conds) {
+        for (const [ck, cStart] of [...conds.entries()]) {
+          if (TIMED_SIDE_CONDITIONS.has(ck) && (effectiveTurn - cStart) >= 5) {
+            conds.delete(ck);
+          }
+        }
+      }
+    }
+  }
+
+  const cleanWeather =
+    !teamPreview && llog && llog.weather
+      ? {
+          key: llog.weather.key,
+          upkeeps: Math.max(0, Math.min(4, llog.weather.upkeeps || 0)),
+        }
+      : null;
+
   const spec = {
     schema: 'nc2000-position-v1',
     side: mySide,
-    turn: teamPreview ? 0 : Math.max(1, turn || 1),
-    upkeep_this_turn: false,
+    turn: effectiveTurn,
+    upkeep_this_turn: Boolean(!teamPreview && llog?.upkeepThisTurn),
     own_sets: ownSets,
     sides: [
-      { mons: [], active: null, conditions: [], party: [] },
-      { mons: [], active: null, conditions: [], party: [] },
+      {
+        mons: [],
+        active: null,
+        conditions: [],
+        party: [],
+        pending_bp: false,
+        acted_this_turn: false,
+        fainted_this_turn: null,
+        fainted_last_turn: null,
+        last_move: null,
+      },
+      {
+        mons: [],
+        active: null,
+        conditions: [],
+        party: [],
+        pending_bp: false,
+        acted_this_turn: false,
+        fainted_this_turn: null,
+        fainted_last_turn: null,
+        last_move: null,
+      },
     ],
-    weather: teamPreview ? null : (llog && llog.weather ? llog.weather : null),
+    weather: cleanWeather,
     team_preview: Boolean(teamPreview),
     force_switch: Boolean(forceSwitch),
     trapped: false,
@@ -1648,6 +3118,18 @@ function buildAndSanitizePositionSpec({
   // Populate both sides' 6-mon rosters
   for (const s of [0, 1]) {
     const isMe = s === mySide;
+    const llogSide = llog && llog.sides ? llog.sides[s] : null;
+    if (!teamPreview && llogSide) {
+      spec.sides[s].pending_bp = Boolean(llogSide.pendingBp);
+      spec.sides[s].acted_this_turn = Boolean(llogSide.actedThisTurn);
+      spec.sides[s].fainted_this_turn =
+        llogSide.faintedThisTurn !== undefined ? llogSide.faintedThisTurn : null;
+      spec.sides[s].fainted_last_turn =
+        llogSide.faintedLastTurn !== undefined ? llogSide.faintedLastTurn : null;
+      spec.sides[s].last_move =
+        llogSide.lastMove && dexData.moves[llogSide.lastMove] ? llogSide.lastMove : null;
+    }
+
     const previewMons = (previewSides && previewSides[s] && previewSides[s].length === 6)
       ? previewSides[s]
       : ownSets.map(x => ({
@@ -1667,7 +3149,7 @@ function buildAndSanitizePositionSpec({
         item_flag: true,
       };
       const ownSet = isMe ? ownSets[i] : null;
-      const llogMon = llog && llog.sides[s] && llog.sides[s].mons[i] ? llog.sides[s].mons[i] : null;
+      const llogMon = llogSide && llogSide.mons[i] ? llogSide.mons[i] : null;
       const seenFoe = !isMe && seenFoeMons && seenFoeMons[i] ? seenFoeMons[i] : null;
 
       const speciesName = ownSet
@@ -1677,12 +3159,12 @@ function buildAndSanitizePositionSpec({
       const gender = pm.gender || (ownSet?.gender || 'M');
       const itemFlag = isMe ? Boolean(ownSet?.item) : Boolean(pm.item_flag);
 
-      const uses = [];
+      const usesMap = new Map();
       const revealedSet = new Set();
       if (llogMon) {
         for (const [mvId, count] of Object.entries(llogMon.uses || {})) {
-          if (dexData.moves[mvId]) {
-            uses.push({ move: mvId, n: count });
+          if (dexData.moves[mvId] && count > 0) {
+            usesMap.set(mvId, count);
           }
         }
         for (const mvId of llogMon.revealedMoves || []) {
@@ -1691,13 +3173,23 @@ function buildAndSanitizePositionSpec({
           }
         }
       }
-      if (seenFoe && seenFoe.revealedMoves) {
-        for (const mvId of seenFoe.revealedMoves) {
-          if (dexData.moves[mvId]) {
-            revealedSet.add(mvId);
+      if (seenFoe) {
+        if (seenFoe.uses) {
+          for (const [mvId, count] of Object.entries(seenFoe.uses)) {
+            if (dexData.moves[mvId] && count > 0) {
+              usesMap.set(mvId, Math.max(usesMap.get(mvId) || 0, count));
+            }
+          }
+        }
+        if (seenFoe.revealedMoves) {
+          for (const mvId of seenFoe.revealedMoves) {
+            if (dexData.moves[mvId]) {
+              revealedSet.add(mvId);
+            }
           }
         }
       }
+      const uses = [...usesMap.entries()].map(([move, n]) => ({ move, n }));
       const revealedMoves = [...revealedSet];
 
       const fainted = Boolean(!teamPreview && (llogMon?.fainted || seenFoe?.fainted));
@@ -1720,6 +3212,21 @@ function buildAndSanitizePositionSpec({
         }
       }
 
+      const cleanVolatiles = [];
+      if (!teamPreview && !fainted && llogMon?.volatiles) {
+        for (const v of llogMon.volatiles.values()) {
+          if (!v || !v.key) continue;
+          const cv = {
+            key: v.key,
+            start_turn: Math.max(0, v.start_turn || 0),
+          };
+          if (v.move && dexData.moves[v.move]) cv.move = v.move;
+          if (Array.isArray(v.source) && v.source.length === 2) cv.source = v.source;
+          if (v.counter !== undefined && v.counter !== null) cv.counter = v.counter;
+          cleanVolatiles.push(cv);
+        }
+      }
+
       const monEntry = {
         species: speciesName,
         level,
@@ -1727,19 +3234,49 @@ function buildAndSanitizePositionSpec({
         name: '',
         item_flag: itemFlag,
         appeared,
-        appear_count: appeared ? 1 : 0,
-        switch_in_turn: 0,
+        appear_count: !teamPreview ? Math.max(appeared ? 1 : 0, llogMon?.appearCount || 0) : 0,
+        switch_in_turn: !teamPreview ? Math.max(0, llogMon?.switchInTurn || 0) : 0,
         active: false,
         fainted,
         hp_num: hpNum,
         hp_den: hpDen,
         hp_exact: null,
         status: fainted ? '' : status,
-        rest: Boolean(!teamPreview && llogMon?.rest),
-        slept: 0,
-        boosts: !teamPreview && llogMon?.boosts ? [...llogMon.boosts] : [0, 0, 0, 0, 0, 0, 0],
-        volatiles: !teamPreview && llogMon?.volatiles ? [...llogMon.volatiles.values()] : [],
+        rest: Boolean(!teamPreview && !fainted && llogMon?.rest),
+        slept: !teamPreview && !fainted ? Math.max(0, llogMon?.slept || 0) : 0,
+        tox_counter:
+          !teamPreview && !fainted && llogMon?.toxCounter !== null && llogMon?.toxCounter !== undefined
+            ? llogMon.toxCounter
+            : null,
+        comp_brn: Boolean(!teamPreview && !fainted && llogMon?.compBrn),
+        comp_par: Boolean(!teamPreview && !fainted && llogMon?.compPar),
+        boosts: !teamPreview && !fainted && llogMon?.boosts ? [...llogMon.boosts] : [0, 0, 0, 0, 0, 0, 0],
+        volatiles: cleanVolatiles,
         uses,
+        locked:
+          !teamPreview && !fainted && llogMon?.locked && dexData.moves[llogMon.locked.move]
+            ? { move: llogMon.locked.move, n: llogMon.locked.n || 1 }
+            : null,
+        charging:
+          !teamPreview && !fainted && llogMon?.charging && dexData.moves[llogMon.charging]
+            ? llogMon.charging
+            : null,
+        must_recharge: Boolean(!teamPreview && !fainted && llogMon?.mustRecharge),
+        transformed_into:
+          !teamPreview && !fainted && Array.isArray(llogMon?.transformedInto)
+            ? llogMon.transformedInto
+            : null,
+        mimic_overlay:
+          !teamPreview && !fainted && llogMon?.mimicOverlay && dexData.moves[llogMon.mimicOverlay]
+            ? llogMon.mimicOverlay
+            : null,
+        last_move:
+          !teamPreview && !fainted && llogMon?.lastMove && dexData.moves[llogMon.lastMove]
+            ? llogMon.lastMove
+            : null,
+        stall_streak: !teamPreview && !fainted ? Math.max(0, llogMon?.stallStreak || 0) : 0,
+        last_protect_turn: !teamPreview && !fainted ? Math.max(0, llogMon?.lastProtectTurn || 0) : 0,
+        protected_this_turn: Boolean(!teamPreview && !fainted && llogMon?.protectedThisTurn),
         revealed_moves: isMe ? [] : revealedMoves,
       };
 
@@ -1749,10 +3286,15 @@ function buildAndSanitizePositionSpec({
         const itemCur = seenFoe?.itemCurrent !== undefined && seenFoe?.itemCurrent !== null
           ? seenFoe.itemCurrent
           : (llogMon?.itemCurrent !== undefined && llogMon?.itemCurrent !== null ? llogMon.itemCurrent : null);
+        if (llogMon?.itemGained) {
+          monEntry.item_gained = true;
+        }
         if (itemOrig && itemFlag) {
           monEntry.item_original = { known: true, item: itemOrig };
           const curStr = itemCur !== null ? itemCur : itemOrig;
           monEntry.item_current = { known: true, item: curStr ? curStr : null };
+        } else if (itemCur !== null && itemFlag) {
+          monEntry.item_current = { known: true, item: itemCur ? itemCur : null };
         }
         // Observer::from_position allows hp_type_mask != 0xFFFF iff revealed_moves has 'hiddenpower'
         if (revealedSet.has('hiddenpower') && seenFoe?.maxHp && seenFoe.maxHp > 0) {
@@ -1766,19 +3308,21 @@ function buildAndSanitizePositionSpec({
       spec.sides[s].mons.push(monEntry);
     }
 
-    if (!teamPreview && llog && llog.sides[s] && llog.sides[s].conditions) {
-      for (const [key, startTurn] of llog.sides[s].conditions.entries()) {
-        spec.sides[s].conditions.push({ key, start_turn: startTurn });
+    if (!teamPreview && llogSide && llogSide.conditions) {
+      for (const [key, startTurn] of llogSide.conditions.entries()) {
+        spec.sides[s].conditions.push({ key, start_turn: Math.max(1, startTurn || 1) });
       }
     }
   }
 
+  const sanitizeDiffs = [];
   if (teamPreview) {
-    return sanitizePositionSpec(spec);
+    return sanitizePositionSpec(spec, sanitizeDiffs);
   }
 
   // Apply PDAT authority for our own 3 picked mons
   const myMons = spec.sides[mySide].mons;
+  const pdatMonByRosterSlot = new Map();
   if (pdat && Array.isArray(pdat.mons)) {
     for (let cIdx = 0; cIdx < pdat.mons.length; cIdx++) {
       const pm = pdat.mons[cIdx];
@@ -1786,6 +3330,7 @@ function buildAndSanitizePositionSpec({
         ? pickedRosterSlots[cIdx]
         : myMons.findIndex(m => toId(m.species) === pm.speciesId);
       if (rSlot < 0 || rSlot >= myMons.length) continue;
+      pdatMonByRosterSlot.set(rSlot, pm);
       const target = myMons[rSlot];
       if (pm.hp <= 0 || pm.status === 'fnt') {
         target.fainted = true;
@@ -1799,7 +3344,8 @@ function buildAndSanitizePositionSpec({
         target.hp_num = Math.max(1, Math.min(pm.maxHp || 100, pm.hp));
         target.hp_den = Math.max(1, pm.maxHp || 100);
         target.hp_exact = pm.hp;
-        target.status = pm.status || '';
+        const pdatSt = pm.status || '';
+        target.status = pdatSt === 'psn' && target.status === 'tox' ? 'tox' : pdatSt;
       }
       target.item_now = pm.item || '';
     }
@@ -1881,6 +3427,12 @@ function buildAndSanitizePositionSpec({
             actMon.status = '';
           } else {
             // Normal move turn cannot have a fainted active mon
+            sanitizeDiffs.push({
+              path: `sides[${s}].mons[${activeSlot}].hp`,
+              from: topInfo.hp,
+              to: 1,
+              reason: 'fainted_active_on_move_turn',
+            });
             actMon.fainted = false;
             actMon.hp_num = 1;
             actMon.hp_den = topInfo.maxHp;
@@ -1891,30 +3443,86 @@ function buildAndSanitizePositionSpec({
           actMon.hp_num = Math.max(1, Math.min(topInfo.maxHp, topInfo.hp));
           actMon.hp_den = topInfo.maxHp;
           if (isMe) actMon.hp_exact = topInfo.hp;
-          actMon.status = topInfo.status || '';
+          const topSt = topInfo.status || '';
+          actMon.status = topSt === 'psn' && actMon.status === 'tox' ? 'tox' : topSt;
         }
       }
     }
   }
 
-  // Populate active move PPs from `<select Name="MOVE">` W1..W4 options
+  // Reconcile `upkeep_this_turn`, `fainted_this_turn`, and `trapped` with active state
   const myActiveSlot = spec.sides[mySide].active;
-  if (!forceSwitch && myActiveSlot !== null && myMons[myActiveSlot] && battleTurn) {
+  const myActMon = myActiveSlot !== null ? myMons[myActiveSlot] : null;
+  if (forceSwitch) {
+    const isMidTurnBatonPass = Boolean(
+      spec.sides[mySide].pending_bp && myActMon && !myActMon.fainted
+    );
+    if (isMidTurnBatonPass) {
+      spec.upkeep_this_turn = Boolean(llog?.upkeepThisTurn);
+      spec.sides[mySide].acted_this_turn = true;
+    } else {
+      // Post-faint replacement at end of turn: residual has already run
+      spec.upkeep_this_turn = true;
+      spec.sides[mySide].acted_this_turn = true;
+      if (myActMon && myActMon.fainted && spec.sides[mySide].fainted_this_turn === null) {
+        spec.sides[mySide].fainted_this_turn = myActiveSlot;
+      }
+    }
+  } else {
+    spec.upkeep_this_turn = false;
+    const hasTrapMechanics = Boolean(
+      myActMon &&
+      (
+        myActMon.locked ||
+        myActMon.charging ||
+        myActMon.must_recharge ||
+        (Array.isArray(myActMon.volatiles) &&
+          myActMon.volatiles.some(v => v.key === 'trapped' || v.key === 'partiallytrapped'))
+      )
+    );
+    spec.trapped = Boolean(battleTurn?.trapped || hasTrapMechanics);
+  }
+
+  // Populate active move PPs from `<select Name="MOVE">` W1..W4 options (with PDAT / uses fallback and Encore/Disable flags)
+  if (!forceSwitch && myActiveSlot !== null && myActMon && battleTurn) {
     const moveOpts = battleTurn.options.filter(o => o.kind === 'move');
     const ownSet = ownSets[myActiveSlot];
+    const pdatMon = pdatMonByRosterSlot.get(myActiveSlot) || null;
+    const encoreVol = Array.isArray(myActMon.volatiles)
+      ? myActMon.volatiles.find(v => v.key === 'encore' && v.move)
+      : null;
+    const disableVol = Array.isArray(myActMon.volatiles)
+      ? myActMon.volatiles.find(v => v.key === 'disable' && v.move)
+      : null;
+    const encoreBase = encoreVol ? (toId(encoreVol.move).startsWith('hiddenpower') ? 'hiddenpower' : toId(encoreVol.move)) : null;
+    const disableBase = disableVol ? (toId(disableVol.move).startsWith('hiddenpower') ? 'hiddenpower' : toId(disableVol.move)) : null;
+
     if (ownSet && Array.isArray(ownSet.moves)) {
       const ppRows = [];
       for (let mIdx = 0; mIdx < ownSet.moves.length; mIdx++) {
         const rawMove = ownSet.moves[mIdx];
-        let mId = toId(rawMove);
+        const mId = toId(rawMove);
         const baseMoveId = mId.startsWith('hiddenpower') ? 'hiddenpower' : mId;
         const dexMv = dexData.moves[mId] || dexData.moves[baseMoveId];
         const maxpp = dexMv ? Math.floor(dexMv.pp * 8 / 5) : 16;
         const wOpt = moveOpts.find(
           o => o.slotIndex === mIdx + 1 || o.moveId === baseMoveId || o.moveId === mId
         );
-        const curPp = wOpt ? (wOpt.pp ?? maxpp) : 0;
-        const disabled = !wOpt || curPp <= 0;
+        const pdatMv = pdatMon && Array.isArray(pdatMon.moves)
+          ? pdatMon.moves.find(pm => pm.moveId === baseMoveId || pm.moveId === mId)
+          : null;
+        const usedEntry = Array.isArray(myActMon.uses)
+          ? myActMon.uses.find(u => u.move === baseMoveId || u.move === mId)
+          : null;
+        const fallbackPp = pdatMv
+          ? pdatMv.pp
+          : Math.max(0, maxpp - (usedEntry ? usedEntry.n : 0));
+        const curPp = wOpt ? (wOpt.pp ?? fallbackPp) : fallbackPp;
+        const disabledByVol = Boolean(
+          (encoreBase && encoreBase !== baseMoveId) ||
+          (!encoreBase && disableBase && disableBase === baseMoveId)
+        );
+        const disabled = !wOpt || curPp <= 0 || disabledByVol;
         ppRows.push({
           move: mId,
           pp: Math.max(0, curPp),
@@ -1922,7 +3530,7 @@ function buildAndSanitizePositionSpec({
           disabled,
         });
       }
-      myMons[myActiveSlot].pp = ppRows;
+      myActMon.pp = ppRows;
     }
   }
 
@@ -1943,28 +3551,58 @@ function buildAndSanitizePositionSpec({
   }
   spec.sides[mySide].party = orderedParty.slice(0, 3);
 
-  return sanitizePositionSpec(spec);
+  return sanitizePositionSpec(spec, sanitizeDiffs);
 }
 
-function sanitizePositionSpec(spec) {
+function sanitizePositionSpec(spec, diffOut = null) {
+  const diffs = Array.isArray(diffOut) ? diffOut : [];
   for (let s = 0; s < 2; s++) {
     const side = spec.sides[s];
     if (spec.team_preview) {
       side.active = null;
       side.party = [];
+      side.conditions = [];
+      side.pending_bp = false;
+      side.acted_this_turn = false;
+      side.fainted_this_turn = null;
+      side.fainted_last_turn = null;
+      side.last_move = null;
       for (const m of side.mons) {
         m.active = false;
         m.fainted = false;
         m.appeared = false;
+        m.appear_count = 0;
+        m.switch_in_turn = 0;
         m.hp_den = Math.max(1, m.hp_den || 100);
         m.hp_num = m.hp_den;
         m.hp_exact = null;
         m.status = '';
+        m.rest = false;
+        m.slept = 0;
+        m.tox_counter = null;
+        m.comp_brn = false;
+        m.comp_par = false;
+        m.volatiles = [];
+        m.locked = null;
+        m.charging = null;
+        m.must_recharge = false;
+        m.transformed_into = null;
+        m.mimic_overlay = null;
+        m.last_move = null;
+        m.stall_streak = 0;
+        m.last_protect_turn = 0;
+        m.protected_this_turn = false;
       }
       continue;
     }
 
     if (side.active === null || side.active < 0 || side.active >= side.mons.length) {
+      diffs.push({
+        path: `sides[${s}].active`,
+        from: side.active,
+        to: 0,
+        reason: 'active_out_of_range',
+      });
       side.active = 0;
     }
     for (let i = 0; i < side.mons.length; i++) {
@@ -1972,6 +3610,14 @@ function sanitizePositionSpec(spec) {
       m.active = i === side.active;
       m.hp_den = Math.max(1, m.hp_den || 100);
       if (m.active && !spec.force_switch) {
+        if (m.fainted) {
+          diffs.push({
+            path: `sides[${s}].mons[${i}].fainted`,
+            from: true,
+            to: false,
+            reason: 'fainted_active_outside_force_switch',
+          });
+        }
         m.fainted = false;
       }
       if (m.fainted) {
@@ -1980,28 +3626,85 @@ function sanitizePositionSpec(spec) {
         m.hp_num = 0;
         if (m.hp_exact !== null && m.hp_exact !== undefined) m.hp_exact = 0;
         m.status = '';
+        m.rest = false;
+        m.slept = 0;
+        m.tox_counter = null;
+        m.comp_brn = false;
+        m.comp_par = false;
+        m.boosts = [0, 0, 0, 0, 0, 0, 0];
+        m.volatiles = [];
+        m.locked = null;
+        m.charging = null;
+        m.must_recharge = false;
+        m.transformed_into = null;
+        m.mimic_overlay = null;
+        m.last_move = null;
+        m.stall_streak = 0;
+        m.protected_this_turn = false;
       } else {
-        m.hp_num = Math.max(1, Math.min(m.hp_den, m.hp_num || m.hp_den));
+        const clampedHpNum = Math.max(1, Math.min(m.hp_den, m.hp_num || m.hp_den));
+        if (m.hp_num !== clampedHpNum) {
+          diffs.push({
+            path: `sides[${s}].mons[${i}].hp_num`,
+            from: m.hp_num,
+            to: clampedHpNum,
+            reason: 'hp_num_out_of_range',
+          });
+        }
+        m.hp_num = clampedHpNum;
         if (m.hp_exact !== null && m.hp_exact !== undefined) {
+          if (m.hp_exact < 1) {
+            diffs.push({
+              path: `sides[${s}].mons[${i}].hp_exact`,
+              from: m.hp_exact,
+              to: 1,
+              reason: 'hp_exact_nonpositive_unfainted',
+            });
+          }
           m.hp_exact = Math.max(1, m.hp_exact);
         }
-        if (m.status === 'fnt') m.status = '';
+        if (m.status === 'fnt') {
+          diffs.push({
+            path: `sides[${s}].mons[${i}].status`,
+            from: 'fnt',
+            to: '',
+            reason: 'fnt_status_on_unfainted',
+          });
+          m.status = '';
+        }
       }
       if (m.active) {
         m.appeared = true;
         m.appear_count = Math.max(1, m.appear_count || 1);
+        if (!m.fainted) {
+          if (m.status === 'tox' && (m.tox_counter === null || m.tox_counter === undefined)) {
+            m.tox_counter = 0;
+          }
+          if (m.status === 'brn' && !m.comp_brn && m.boosts[0] === 0) {
+            m.comp_brn = true;
+          }
+          if (m.status === 'par' && !m.comp_par && m.boosts[4] === 0) {
+            m.comp_par = true;
+          }
+        }
       }
     }
   }
+  Object.defineProperty(spec, '_sanitizeDiffs', {
+    value: diffs,
+    enumerable: false,
+    configurable: true,
+    writable: true,
+  });
   return spec;
 }
 
 // ------------------------------------------------------------------ Action Projection
 /**
  * Map a searcher choice (`move <id>` or `switch <1..3>`) onto a concrete `<option Value="...">`
- * from `PS.cgi`'s `<select Name="MOVE">`.
+ * from `PS.cgi`'s `<select Name="MOVE">`, returning `{ value, path }` or `null`.
  */
-function mapChoiceToPbsOption(choiceStr, spec, pickedRosterSlots, options, ownSets) {
+function mapChoiceToPbsOptionWithTrace(choiceStr, spec, pickedRosterSlots, options, ownSets) {
   if (!choiceStr || !Array.isArray(options) || options.length === 0) return null;
   const parts = String(choiceStr).trim().split(/\s+/);
   const mySide = spec.side;
@@ -2022,14 +3725,14 @@ function mapChoiceToPbsOption(choiceStr, spec, pickedRosterSlots, options, ownSe
       if (mIdx >= 0) {
         const wantVal = `W${mIdx + 1}`;
         const found = options.find(o => o.value === wantVal && (o.pp === null || o.pp > 0));
-        if (found) return found.value;
+        if (found) return { value: found.value, path: 'move-slot' };
       }
     }
     // 2. Match by parsed Japanese move ID on the `<option>`
     const byMoveId = options.find(
       o => o.kind === 'move' && (o.moveId === moveArg || o.moveId === baseMoveArg) && (o.pp === null || o.pp > 0)
     );
-    if (byMoveId) return byMoveId.value;
+    if (byMoveId) return { value: byMoveId.value, path: 'move-id' };
   }
 
   if (parts[0] === 'switch' && parts[1]) {
@@ -2043,26 +3746,30 @@ function mapChoiceToPbsOption(choiceStr, spec, pickedRosterSlots, options, ownSe
         if (cIdx >= 0) {
           const wantVal = `C${cIdx + 1}`;
           const found = options.find(o => o.value === wantVal && (o.pp === undefined || o.hp === null || o.hp > 0));
-          if (found) return found.value;
+          if (found) return { value: found.value, path: 'switch-slot' };
         }
       }
       // 2. Match by speciesId on the `<option>`
       const bySpecies = options.find(
         o => o.kind === 'switch' && o.speciesId === targetSpId && (o.hp === null || o.hp > 0)
       );
-      if (bySpecies) return bySpecies.value;
+      if (bySpecies) return { value: bySpecies.value, path: 'switch-species' };
     }
   }
 
   return null;
 }
 
+function mapChoiceToPbsOption(choiceStr, spec, pickedRosterSlots, options, ownSets) {
+  const res = mapChoiceToPbsOptionWithTrace(choiceStr, spec, pickedRosterSlots, options, ownSets);
+  return res ? res.value : null;
+}
+
 /**
- * Select a guaranteed-valid `<option Value="...">` from `PS.cgi`'s `<select Name="MOVE">`.
- * First tries `bestChoice`, then walks `rootPolicy.actions` in descending visit order,
- * and finally falls back to the first legal move/switch option in `<select Name="MOVE">`.
+ * Resolve a guaranteed-valid `<option Value="...">` from `PS.cgi`'s `<select Name="MOVE">`,
+ * returning `{ value, mappingPath, matchedAction }` for diagnostic logging.
  */
-function selectLegalPbsMoveOption({
+function resolveLegalPbsMoveOption({
   bestChoice,
   rootPolicy,
   spec,
@@ -2072,7 +3779,7 @@ function selectLegalPbsMoveOption({
   isRandom,
 }) {
   if (!Array.isArray(options) || options.length === 0) {
-    return 'W1';
+    return { value: 'W1', mappingPath: 'empty-default-w1', matchedAction: null };
   }
 
   const playableOptions = options.filter(o => {
@@ -2083,20 +3790,46 @@ function selectLegalPbsMoveOption({
   const pool = playableOptions.length > 0 ? playableOptions : options;
 
   if (isRandom) {
-    return pool[rngInt(pool.length)].value;
+    const picked = pool[rngInt(pool.length)];
+    return { value: picked.value, mappingPath: 'random', matchedAction: null };
   }
 
-  const direct = mapChoiceToPbsOption(bestChoice, spec, pickedRosterSlots, pool, ownSets);
-  if (direct) return direct;
+  const direct = mapChoiceToPbsOptionWithTrace(bestChoice, spec, pickedRosterSlots, pool, ownSets);
+  if (direct) {
+    return {
+      value: direct.value,
+      mappingPath: `direct:${direct.path}`,
+      matchedAction: bestChoice,
+    };
+  }
 
   if (rootPolicy && Array.isArray(rootPolicy.actions)) {
     for (const act of rootPolicy.actions) {
-      const mapped = mapChoiceToPbsOption(act.input, spec, pickedRosterSlots, pool, ownSets);
-      if (mapped) return mapped;
+      const mapped = mapChoiceToPbsOptionWithTrace(act.input, spec, pickedRosterSlots, pool, ownSets);
+      if (mapped) {
+        return {
+          value: mapped.value,
+          mappingPath: `policy-fallback:${mapped.path}`,
+          matchedAction: act.input,
+        };
+      }
     }
   }
 
-  return pool[0].value;
+  return {
+    value: pool[0].value,
+    mappingPath: 'first-playable-fallback',
+    matchedAction: null,
+  };
+}
+
+/**
+ * Select a guaranteed-valid `<option Value="...">` from `PS.cgi`'s `<select Name="MOVE">`.
+ * First tries `bestChoice`, then walks `rootPolicy.actions` in descending visit order,
+ * and finally falls back to the first legal move/switch option in `<select Name="MOVE">`.
+ */
+function selectLegalPbsMoveOption(params) {
+  return resolveLegalPbsMoveOption(params).value;
 }
 
 /**
@@ -2238,6 +3971,47 @@ async function playOneGame(gameIdx) {
   let selectSubmitted = false;
   let lastTurnActedKey = '';
   const matchStartedAt = new Date().toISOString();
+  const roomTagMatch = ROOM_URL.match(/\/PBS\/_\/([^/]+)\//i);
+  const roomTag = roomTagMatch ? roomTagMatch[1].toUpperCase() : 'ROOM';
+  const matchId = `${matchStartedAt.replace(/[:.]/g, '-')}-${roomTag}-g${gameIdx + 1}`;
+  const traceFilePath = TRACE_DIR_PATH ? path.join(TRACE_DIR_PATH, `${matchId}.jsonl`) : '';
+  const traceEvents = [];
+
+  const appendTraceEvent = event => {
+    const rec = {
+      ts: new Date().toISOString(),
+      matchId,
+      ...event,
+    };
+    traceEvents.push(rec);
+    if (!traceFilePath) return;
+    try {
+      fs.mkdirSync(path.dirname(traceFilePath), { recursive: true });
+      fs.appendFileSync(traceFilePath, JSON.stringify(rec) + '\n', { mode: 0o600 });
+    } catch {
+      // Non-fatal trace persistence
+    }
+  };
+
+  appendTraceEvent({
+    type: 'match_start',
+    gameIdx,
+    roomUrl: ROOM_URL,
+    roomTag,
+    botName: NAME,
+    tier: TIER,
+    iters: ITERS,
+    c: PROFILE.c,
+    seed: SEED,
+    random: RANDOM,
+    team: {
+      id: team.id,
+      label: team.label,
+      tier: team.tier,
+      sets: team.sets,
+    },
+    pdCookie: encodedPd.cookieValue,
+  });
 
   const ensureSearcher = (side, forceRebuild = false) => {
     if (RANDOM) return null;
@@ -2277,7 +4051,41 @@ async function playOneGame(gameIdx) {
     return searcher;
   };
 
-  const finalizeMatchRecord = outcome => {
+  const finalizeMatchRecord = (outcome, finishDetails = {}) => {
+    appendTraceEvent({
+      type: 'finish',
+      finishTrigger: finishDetails.finishTrigger || 'FINISHED',
+      rawFinishHtml: finishDetails.rawFinishHtml ?? null,
+      rawFinalLlogHtml: finishDetails.rawFinalLlogHtml ?? null,
+      finalLlogSummary: finishDetails.finalLlogSummary ?? null,
+      outcome,
+      decisions,
+      mySide,
+      foeName: foeName || null,
+      pickedRosterSlots,
+      previewSides,
+      seenFoeMonsFinal: seenFoeMons ? JSON.parse(JSON.stringify(seenFoeMons)) : null,
+      errors: finishDetails.errors || [],
+    });
+
+    let parityReport = null;
+    try {
+      const { auditMatchTrace, appendAnomalyReport } = require('./pbs-parity-audit.js');
+      parityReport = auditMatchTrace(traceEvents, {
+        filePath: traceFilePath || null,
+        reparse: false,
+      });
+      if (parityReport && parityReport.anomalies && parityReport.anomalies.length > 0) {
+        appendAnomalyReport(parityReport, ANOMALY_LOG_PATH);
+        log(
+          `[PARITY_WARN] Match ${matchId}: ${parityReport.errorCount} error(s), ${parityReport.warnCount} warning(s) ` +
+          `(${parityReport.anomalies.map(a => a.code).join(', ')})`
+        );
+      }
+    } catch (err) {
+      log(`Parity audit execution warning: ${err.message || err}`);
+    }
+
     if (previewSides && mySide !== null) {
       const foeSide = 1 - mySide;
       const foePreviewMons = previewSides[foeSide];
@@ -2291,6 +4099,8 @@ async function playOneGame(gameIdx) {
       });
       saveOpponentDb(opponentDb, OPPONENT_DB_PATH);
       appendMatchLog({
+        matchId,
+        traceFile: traceFilePath ? path.relative(REPO, traceFilePath) : null,
         startedAt: matchStartedAt,
         finishedAt: new Date().toISOString(),
         roomUrl: ROOM_URL,
@@ -2306,6 +4116,9 @@ async function playOneGame(gameIdx) {
         pickedRosterSlots,
         foeRoster: foePreviewMons,
         seenFoeMons,
+        parityOk: parityReport ? parityReport.ok : null,
+        parityErrorCount: parityReport ? parityReport.errorCount : null,
+        parityWarnCount: parityReport ? parityReport.warnCount : null,
       });
     }
   };
@@ -2322,13 +4135,44 @@ async function playOneGame(gameIdx) {
           continue;
         }
         let resultHtml = page.html || '';
+        let finalLlogHtml = '';
+        let finalLlogObj = null;
+        const finishErrors = [];
         try {
           const resultLog =
             await client.get(`${ROOM_URL}?ACTION=LLOG`);
           if (resultLog && resultLog.html) {
+            finalLlogHtml = resultLog.html;
             resultHtml += '\n' + resultLog.html;
           }
-        } catch {}
+        } catch (err) {
+          finishErrors.push({ stage: 'fetch_final_llog', message: String(err.message || err) });
+        }
+
+        // Merge final LLOG into persistent `seenFoeMons` & `lastLlogFoeMons` before recording match
+        const llogHtmlToParse = finalLlogHtml || page.html || '';
+        if (llogHtmlToParse && mySide !== null) {
+          try {
+            finalLlogObj = parseLlogHtml(llogHtmlToParse, previewSides || [[], []]);
+            const foeSide = 1 - mySide;
+            if (finalLlogObj && finalLlogObj.sides[foeSide]) {
+              const merged = mergeLlogIntoSeenFoeMons({
+                llog: finalLlogObj,
+                foeSide,
+                seenFoeMons,
+                previewSides,
+                battleTurn: null,
+                turnNum: finalLlogObj.turn || 1,
+                isForceSwitch: false,
+                lastFoeActiveSlot,
+              });
+              lastFoeActiveSlot = merged.lastFoeActiveSlot;
+              lastLlogFoeMons = merged.llogFoeMons || lastLlogFoeMons;
+            }
+          } catch (err) {
+            finishErrors.push({ stage: 'parse_final_llog', message: String(err.message || err) });
+          }
+        }
 
         const outcome =
           resolveBotOutcomeFromFinishedHtml(
@@ -2337,7 +4181,13 @@ async function playOneGame(gameIdx) {
             foeName
           );
         log(`Game #${gameIdx + 1} finished (${outcome}) after ${decisions} decisions.`);
-        finalizeMatchRecord(outcome);
+        finalizeMatchRecord(outcome, {
+          finishTrigger: 'FINISHED',
+          rawFinishHtml: page.html || '',
+          rawFinalLlogHtml: finalLlogHtml || null,
+          finalLlogSummary: serializeLlogTracker(finalLlogObj),
+          errors: finishErrors,
+        });
         // Touch PS.cgi?ACTION=END if link is present so the room cleans up promptly
         if (/PS\.cgi\?ACTION=END/i.test(page.html || '')) {
           try { await client.get(`${ROOM_URL}?ACTION=END`); } catch {}
@@ -2352,6 +4202,11 @@ async function playOneGame(gameIdx) {
 
       if (page.kind === 'ERROR') {
         log(`PBS returned ERROR page: ${page.errorText}`);
+        appendTraceEvent({
+          type: 'error_page',
+          errorText: page.errorText,
+          rawErrorHtml: page.html || '',
+        });
         await sleep(POLL_MS);
         res = await client.get(ROOM_URL);
         continue;
@@ -2360,9 +4215,47 @@ async function playOneGame(gameIdx) {
       if (page.kind === 'ENTORY') {
         // If we had already entered and the room returned to ENTORY, the game ended
         if (enteredRoom && decisions > 0) {
-          log(`Game #${gameIdx + 1} finished (room reset to ENTORY) after ${decisions} decisions.`);
-          finalizeMatchRecord('END');
-          return { outcome: 'END', decisions, team: team.id, foeName };
+          let finalLlogHtml = '';
+          let finalLlogObj = null;
+          const finishErrors = [];
+          if (mySide !== null) {
+            try {
+              const finalLogRes = await client.get(`${ROOM_URL}?ACTION=LLOG`);
+              if (finalLogRes && finalLogRes.html) {
+                finalLlogHtml = finalLogRes.html;
+                finalLlogObj = parseLlogHtml(finalLogRes.html, previewSides || [[], []]);
+                const foeSide = 1 - mySide;
+                if (finalLlogObj && finalLlogObj.sides[foeSide]) {
+                  const merged = mergeLlogIntoSeenFoeMons({
+                    llog: finalLlogObj,
+                    foeSide,
+                    seenFoeMons,
+                    previewSides,
+                    battleTurn: null,
+                    turnNum: finalLlogObj.turn || 1,
+                    isForceSwitch: false,
+                    lastFoeActiveSlot,
+                  });
+                  lastFoeActiveSlot = merged.lastFoeActiveSlot;
+                  lastLlogFoeMons = merged.llogFoeMons || lastLlogFoeMons;
+                }
+              }
+            } catch (err) {
+              finishErrors.push({ stage: 'entory_reset_final_llog', message: String(err.message || err) });
+            }
+          }
+          const inferredOutcome = finalLlogHtml
+            ? resolveBotOutcomeFromFinishedHtml(finalLlogHtml, NAME, foeName)
+            : 'END';
+          log(`Game #${gameIdx + 1} finished (room reset to ENTORY, outcome=${inferredOutcome}) after ${decisions} decisions.`);
+          finalizeMatchRecord(inferredOutcome, {
+            finishTrigger: 'ENTORY_RESET',
+            rawFinishHtml: page.html || '',
+            rawFinalLlogHtml: finalLlogHtml || null,
+            finalLlogSummary: serializeLlogTracker(finalLlogObj),
+            errors: finishErrors,
+          });
+          return { outcome: inferredOutcome, decisions, team: team.id, foeName };
         }
 
         if (page.p1Waiting) {
@@ -2376,6 +4269,12 @@ async function playOneGame(gameIdx) {
           log(`Joining against waiting P1 "${page.p1Name}" as P2...`);
           mySide = 1;
           enteredRoom = true;
+          appendTraceEvent({
+            type: 'entry',
+            entrySide: 1,
+            p1WaitingName: page.p1Name || null,
+            rawEntryHtml: page.html || '',
+          });
           res = await client.postForm(ROOM_URL, {
             ACTION: 'ENTORY',
             NAME,
@@ -2398,6 +4297,12 @@ async function playOneGame(gameIdx) {
           mySide = 0;
           enteredRoom = true;
           hostWaitStartedAt = Date.now();
+          appendTraceEvent({
+            type: 'entry',
+            entrySide: 0,
+            p1WaitingName: null,
+            rawEntryHtml: page.html || '',
+          });
           res = await client.postForm(ROOM_URL, {
             ACTION: 'ENTORY',
             NAME,
@@ -2430,6 +4335,13 @@ async function playOneGame(gameIdx) {
         const formBody =
           `ACTION=RE&CBAN=1&PD=&sim=${encodeURIComponent(page.sim)}&CH=on&submit=%B7%E8%C4%EA`;
         const pdRes = await client.postForm('http://psense.lib.net/_/PDINPUT.cgi', formBody);
+        appendTraceEvent({
+          type: 'pdinput',
+          sim: page.sim,
+          formBody,
+          redirectLocation: pdRes.location || null,
+          rawPdinputHtml: pdRes.html || '',
+        });
         if (pdRes.location) {
           res = await client.get(new URL(pdRes.location, ROOM_URL).toString());
         } else {
@@ -2439,6 +4351,7 @@ async function playOneGame(gameIdx) {
       }
 
       if (page.kind === 'TEAM_PREVIEW_CHECK') {
+        const previewErrors = [];
         const parsedPreview = parseTeamPreviewHtml(page.html);
         // Determine whether we are P1 (0) or P2 (1)
         if (parsedPreview.p1Name === NAME && parsedPreview.p2Name !== NAME) {
@@ -2475,6 +4388,7 @@ async function playOneGame(gameIdx) {
           noLeftovers: false,
           damagedTurnsCount: 0,
           revealedMoves: [],
+          uses: {},
         }));
 
         log(
@@ -2484,6 +4398,7 @@ async function playOneGame(gameIdx) {
 
         let choiceStr = null;
         let previewSource = 'fallback';
+        let previewPolicy = null;
         const spec = buildAndSanitizePositionSpec({
           mySide,
           turn: 0,
@@ -2510,7 +4425,9 @@ async function playOneGame(gameIdx) {
                   choiceStr = compiledPreview[cpKey].choice;
                   previewSource = 'compiled-book';
                 }
-              } catch {}
+              } catch (err) {
+                previewErrors.push({ stage: 'compiled_preview_key', message: String(err.message || err) });
+              }
             }
             if (!choiceStr && !hasCustomShellMemory) {
               choiceStr = s.bakedPreview();
@@ -2520,8 +4437,12 @@ async function playOneGame(gameIdx) {
               s.step(ITERS);
               choiceStr = s.best();
               previewSource = hasCustomShellMemory ? 'adapted-search' : 'search';
+              try {
+                previewPolicy = JSON.parse(s.rootPolicy());
+              } catch {}
             }
           } catch (err) {
+            previewErrors.push({ stage: 'preview_search', message: String(err.message || err) });
             log(`Preview search warning (using fallback pick): ${err.message || err}`);
           }
         }
@@ -2535,22 +4456,51 @@ async function playOneGame(gameIdx) {
         );
 
         decisions++;
-        appendDecisionLog({
-          gameIdx,
-          phase: 'preview',
-          side: mySide,
-          foeName,
-          previewSource,
-          choiceStr,
-          pickedRosterSlots,
-        });
-
+        const gameSeed = SEED * 1000 + gameIdx * 10 + mySide;
         const checkFields = {
           ACTION: 'CHECK',
           SENTE: String(leadIdx + 1),
           [`P${b1Idx + 1}`]: '1',
           [`P${b2Idx + 1}`]: '1',
         };
+
+        appendTraceEvent({
+          type: 'preview',
+          decision: decisions,
+          mySide,
+          foeName: foeName || null,
+          seed: gameSeed,
+          rawCheckHtml: page.html || '',
+          parsedPreview,
+          spec,
+          sanitizeDiffs: spec._sanitizeDiffs || [],
+          previewSource,
+          choiceStr,
+          pickedRosterSlots,
+          rootPolicy: previewPolicy,
+          checkFields,
+          errors: previewErrors,
+        });
+
+        appendDecisionLog({
+          gameIdx,
+          decision: decisions,
+          phase: 'preview',
+          turn: 0,
+          side: mySide,
+          foeName,
+          seed: gameSeed,
+          iterations: previewSource === 'search' || previewSource === 'adapted-search' ? ITERS : 0,
+          c: PROFILE.c,
+          previewSource,
+          bestChoice: choiceStr,
+          choiceStr,
+          pickedRosterSlots,
+          mappingPath: `preview:${previewSource}`,
+          rootPolicy: previewPolicy,
+          spec,
+        });
+
         res = await client.postForm(ROOM_URL, checkFields);
         continue;
       }
@@ -2580,9 +4530,11 @@ async function playOneGame(gameIdx) {
       }
 
       if (page.kind === 'BATTLE_INPUT' || page.kind === 'BATTLE_CHANGE') {
+        const turnErrors = [];
         const isForceSwitch = page.kind === 'BATTLE_CHANGE';
         const battleTurn = parseBattleTurnHtml(page.html);
-        const turnNum = battleTurn.nowVal === '' ? 1 : (parseInt(battleTurn.nowVal, 10) + 1);
+        const rawNowInt = battleTurn.nowVal === '' ? 0 : (parseInt(battleTurn.nowVal, 10) || 0);
+        const turnNum = isForceSwitch ? Math.max(1, rawNowInt) : (rawNowInt + 1);
         const actionType = isForceSwitch ? 'CHANGE' : 'INPUT';
         const turnKey = `${actionType}:${battleTurn.nowVal}:${battleTurn.options.map(o => o.value).join(',')}`;
 
@@ -2597,105 +4549,43 @@ async function playOneGame(gameIdx) {
         // Fetch PDAT and LLOG for richer board context (non-fatal if either fails)
         let pdat = null;
         let llog = null;
+        let rawPdatHtml = null;
+        let rawLlogHtml = null;
         try {
           const pdatRes = await client.get(`${ROOM_URL}?ACTION=PDAT`);
+          rawPdatHtml = pdatRes?.html ?? null;
           pdat = parsePdatHtml(pdatRes.html);
-        } catch {}
+        } catch (err) {
+          turnErrors.push({ stage: 'fetch_or_parse_pdat', message: String(err.message || err) });
+        }
         try {
           const llogRes = await client.get(`${ROOM_URL}?ACTION=LLOG`);
+          rawLlogHtml = llogRes?.html ?? null;
           llog = parseLlogHtml(llogRes.html, previewSides || [[], []]);
           if (llog && llog.sides[foeSide]) {
             lastLlogFoeMons = llog.sides[foeSide].mons;
           }
-        } catch {}
+        } catch (err) {
+          turnErrors.push({ stage: 'fetch_or_parse_llog', message: String(err.message || err) });
+        }
+
+        const seenFoeMonsBefore = seenFoeMons ? JSON.parse(JSON.stringify(seenFoeMons)) : null;
+        const lastFoeActiveSlotBefore = lastFoeActiveSlot;
 
         // Update persistent `seenFoeMons` with Castle leaks (exact HP/maxHp, item reveals, Leftovers absence)
         if (seenFoeMons && previewSides && previewSides[foeSide]) {
-          const foeTop = battleTurn.sides ? battleTurn.sides[foeSide] : null;
-          let foeActiveSlot = null;
-          if (foeTop && foeTop.speciesId) {
-            foeActiveSlot = previewSides[foeSide].findIndex(m => m.speciesId === foeTop.speciesId);
-          }
-          if (foeActiveSlot === null || foeActiveSlot < 0) {
-            foeActiveSlot = llog?.sides?.[foeSide]?.activeSlot ?? null;
-          }
-
-          for (let i = 0; i < 6; i++) {
-            const seen = seenFoeMons[i];
-            const llogMon = llog?.sides?.[foeSide]?.mons?.[i] || null;
-            if (!seen) continue;
-            if (llogMon) {
-              if (llogMon.appeared) seen.appeared = true;
-              if (llogMon.fainted) {
-                seen.fainted = true;
-                seen.hp = 0;
-                seen.status = '';
-              }
-              if (llogMon.itemOriginal) {
-                seen.itemOriginal = seen.itemOriginal || llogMon.itemOriginal;
-                seen.itemCurrent = llogMon.itemCurrent;
-                if (seen.itemOriginal === 'leftovers') seen.noLeftovers = false;
-              }
-              for (const mvId of llogMon.revealedMoves || []) {
-                if (!seen.revealedMoves.includes(mvId)) {
-                  seen.revealedMoves.push(mvId);
-                }
-              }
-            }
-          }
-
-          if (foeActiveSlot !== null && foeActiveSlot >= 0 && seenFoeMons[foeActiveSlot] && foeTop) {
-            const activeSeen = seenFoeMons[foeActiveSlot];
-            const activeLlog = llog?.sides?.[foeSide]?.mons?.[foeActiveSlot] || null;
-            activeSeen.appeared = true;
-            if (foeTop.maxHp !== null && foeTop.maxHp > 0) {
-              activeSeen.maxHp = foeTop.maxHp;
-            }
-            if (foeTop.hp !== null) {
-              const prevHp = activeSeen.hp;
-              activeSeen.hp = foeTop.hp;
-              activeSeen.fainted = foeTop.hp <= 0;
-              activeSeen.status = foeTop.hp <= 0 ? '' : (foeTop.status || '');
-
-              // Detect Leftovers absence (`noLeftovers`):
-              // At normal turn boundary (`BATTLE_INPUT`, `turnNum >= 2`), if the opponent's active
-              // Pokemon has `0 < hp < maxHp`, has `itemFlag = true`, has never shown Leftovers,
-              // and either was already damaged on a previous turn OR did not just switch in and has
-              // no end-of-turn residual damage source (poison, burn, leech seed, curse, nightmare, sandstorm),
-              // then it could not have been at 100% HP when Leftovers checked -> it does NOT hold Leftovers!
-              if (
-                !isForceSwitch &&
-                turnNum >= 2 &&
-                activeSeen.itemFlag &&
-                !activeSeen.itemOriginal &&
-                activeSeen.maxHp &&
-                foeTop.hp > 0 &&
-                foeTop.hp < activeSeen.maxHp
-              ) {
-                activeSeen.damagedTurnsCount = (activeSeen.damagedTurnsCount || 0) + 1;
-                const hasResidualDamage =
-                  activeSeen.status === 'psn' ||
-                  activeSeen.status === 'tox' ||
-                  activeSeen.status === 'brn' ||
-                  activeLlog?.volatiles?.has('leechseed') ||
-                  activeLlog?.volatiles?.has('nightmare') ||
-                  activeLlog?.volatiles?.has('curse') ||
-                  llog?.weather?.key === 'sandstorm';
-                const stayedInFromLastTurn = lastFoeActiveSlot === foeActiveSlot;
-                if (
-                  activeSeen.damagedTurnsCount >= 2 ||
-                  (stayedInFromLastTurn && !hasResidualDamage) ||
-                  (!hasResidualDamage && prevHp !== null && prevHp < activeSeen.maxHp)
-                ) {
-                  if (!activeSeen.noLeftovers) {
-                    activeSeen.noLeftovers = true;
-                    log(`Leak inference: Foe ${activeSeen.species} (${foeTop.hp}/${activeSeen.maxHp}) lacks Leftovers.`);
-                  }
-                }
-              }
-            }
-            lastFoeActiveSlot = foeActiveSlot;
-          }
+          const merged = mergeLlogIntoSeenFoeMons({
+            llog,
+            foeSide,
+            seenFoeMons,
+            previewSides,
+            battleTurn,
+            turnNum,
+            isForceSwitch,
+            lastFoeActiveSlot,
+            onLeakLog: log,
+          });
+          lastFoeActiveSlot = merged.lastFoeActiveSlot;
         }
 
         // If pickedRosterSlots was not set (e.g., resumed mid-game), infer from PDAT
@@ -2739,11 +4629,12 @@ async function playOneGame(gameIdx) {
               rootPolicy = JSON.parse(s.rootPolicy());
             } catch {}
           } catch (err) {
-            log(`Turn ${turnNum} (${actionType}) search fallback: ${err.message || err}`);
+            turnErrors.push({ stage: 'battle_search', message: String(err.message || err) });
+            log(`Turn ${spec.turn} (${actionType}) search fallback: ${err.message || err}`);
           }
         }
 
-        const chosenMoveValue = selectLegalPbsMoveOption({
+        const resolvedOption = resolveLegalPbsMoveOption({
           bestChoice,
           rootPolicy,
           spec,
@@ -2752,34 +4643,107 @@ async function playOneGame(gameIdx) {
           ownSets: team.sets,
           isRandom: RANDOM,
         });
+        const chosenMoveValue = resolvedOption.value;
 
         const chosenOptObj = battleTurn.options.find(o => o.value === chosenMoveValue);
         log(
-          `Turn ${turnNum} (${actionType}, NOW="${battleTurn.nowVal}"): ` +
+          `Turn ${spec.turn} (${actionType}, NOW="${battleTurn.nowVal}"): ` +
           `submitting MOVE=${chosenMoveValue} (${chosenOptObj ? chosenOptObj.label : ''})` +
-          (bestChoice ? ` [search: ${bestChoice}]` : '')
+          (bestChoice ? ` [search: ${bestChoice}, map: ${resolvedOption.mappingPath}]` : '')
         );
 
         decisions++;
         lastTurnActedKey = turnKey;
-        appendDecisionLog({
-          gameIdx,
-          phase: actionType,
-          turn: turnNum,
-          nowVal: battleTurn.nowVal,
-          side: mySide,
-          foeName,
-          bestChoice,
-          chosenMoveValue,
-          options: battleTurn.options,
-          rootPolicy,
-        });
-
+        const gameSeed = SEED * 1000 + gameIdx * 10 + mySide;
         const postFields = {
           ACTION: actionType,
           MOVE: chosenMoveValue,
           NOW: battleTurn.nowVal,
         };
+
+        appendTraceEvent({
+          type: 'decision',
+          decision: decisions,
+          phase: actionType,
+          forceSwitch: isForceSwitch,
+          turn: spec.turn,
+          rawNowVal: battleTurn.nowVal,
+          mySide,
+          foeName: foeName || null,
+          seed: gameSeed,
+          iterations: RANDOM ? 0 : (battleTurn.options.length > 1 ? ITERS : 0),
+          c: PROFILE.c,
+          rawTurnHtml: page.html || '',
+          rawPdatHtml,
+          rawLlogHtml,
+          battleTurn,
+          pdat,
+          llogSummary: serializeLlogTracker(llog),
+          pickedRosterSlots,
+          lastFoeActiveSlotBefore,
+          lastFoeActiveSlotAfter: lastFoeActiveSlot,
+          seenFoeMonsBefore,
+          seenFoeMonsAfter: seenFoeMons ? JSON.parse(JSON.stringify(seenFoeMons)) : null,
+          spec,
+          sanitizeDiffs: spec._sanitizeDiffs || [],
+          bestChoice,
+          chosenMoveValue,
+          mappingPath: resolvedOption.mappingPath,
+          matchedAction: resolvedOption.matchedAction,
+          rootPolicy,
+          postFields,
+          errors: turnErrors,
+        });
+
+        appendDecisionLog({
+          gameIdx,
+          decision: decisions,
+          phase: actionType,
+          turn: spec.turn,
+          nowVal: battleTurn.nowVal,
+          side: mySide,
+          foeName,
+          seed: gameSeed,
+          iterations: RANDOM ? 0 : (battleTurn.options.length > 1 ? ITERS : 0),
+          c: PROFILE.c,
+          active: [spec.sides[0].active, spec.sides[1].active],
+          party: [spec.sides[0].party, spec.sides[1].party],
+          hpStatus: spec.sides.map(s =>
+            s.mons.map(m => ({
+              species: m.species,
+              active: m.active,
+              fainted: m.fainted,
+              appeared: m.appeared,
+              appear_count: m.appear_count,
+              switch_in_turn: m.switch_in_turn,
+              hp_num: m.hp_num,
+              hp_den: m.hp_den,
+              hp_exact: m.hp_exact,
+              status: m.status,
+              rest: m.rest,
+              slept: m.slept,
+              tox_counter: m.tox_counter,
+              comp_brn: m.comp_brn,
+              comp_par: m.comp_par,
+            }))
+          ),
+          boosts: spec.sides.map(s =>
+            s.active !== null && s.mons[s.active] ? s.mons[s.active].boosts : [0, 0, 0, 0, 0, 0, 0]
+          ),
+          sideConditions: [spec.sides[0].conditions, spec.sides[1].conditions],
+          volatiles: spec.sides.map(s =>
+            s.active !== null && s.mons[s.active] ? s.mons[s.active].volatiles : []
+          ),
+          weather: spec.weather,
+          bestChoice,
+          chosenMoveValue,
+          mappingPath: resolvedOption.mappingPath,
+          matchedAction: resolvedOption.matchedAction,
+          options: battleTurn.options,
+          rootPolicy,
+          spec,
+        });
+
         res = await client.postForm(ROOM_URL, postFields);
         continue;
       }
@@ -2819,12 +4783,20 @@ module.exports = {
   parseBattleTurnHtml,
   parsePdatHtml,
   parseLlogHtml,
+  serializeLlogTracker,
+  advanceLlogTrackerToTurn,
+  mergeLlogIntoSeenFoeMons,
   calcSetMaxHp,
   inferHpTypeMaskFromMaxHp,
   buildDynamicBeliefPoolJson,
+  loadOpponentDb,
+  saveOpponentDb,
   recordOpponentObservation,
   buildAndSanitizePositionSpec,
+  sanitizePositionSpec,
+  resolveLegalPbsMoveOption,
   selectLegalPbsMoveOption,
+  parseOrFallbackPreviewPick,
   encodeTeamForPbsCookie,
   encodeFormEucJp,
   resolveBotOutcomeFromFinishedHtml,

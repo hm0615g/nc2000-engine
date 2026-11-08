@@ -16,5 +16,7 @@
   "pbsBaseUrl": "http://psense.lib.net/PBS/_/{ROOM}/PS.cgi",
   "observeOnly": false,
   "dryRunPbs": false,
-  "logAllChannelEvents": true
+  "logAllChannelEvents": true,
+  "traceDir": "data/pbs-traces",
+  "anomalyLogPath": "data/pbs-anomalies.jsonl"
 }

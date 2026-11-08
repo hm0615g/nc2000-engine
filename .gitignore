@@ -46,5 +46,9 @@ data/team-selection-v2/stage-a-3000/
 pbs-bot.config.json
 data/pbs-opponent-db.json
 data/pbs-matches.jsonl
+data/pbs-traces/
+data/pbs-anomalies.jsonl
 data/discord-events.jsonl
+data/pbs-castle-logs/
+data/pbs-castle-logs.zip
 
