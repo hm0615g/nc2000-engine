@@ -624,10 +624,18 @@ function parseTeamPreviewHtml(html) {
     result.p2Name = nameRowMatch[2].trim();
   }
 
-  const tdMatches = [...html.matchAll(/<td[^>]*VAlign="?middle"?[^>]*>([\s\S]*?)<\/td>/gi)];
-  if (tdMatches.length >= 2) {
-    result.p1Mons = parsePreviewTtCell(tdMatches[0][1]);
-    result.p2Mons = parsePreviewTtCell(tdMatches[1][1]);
+  const parts = html.split(/<td[^>]*VAlign="?middle"?[^>]*>/i);
+  if (parts.length >= 3) {
+    const p1Chunk = parts[1].split(/<\/td>|<td|<\/tr>/i)[0];
+    const p2Chunk = parts[2].split(/<\/td>|<td|<\/tr>/i)[0];
+    result.p1Mons = parsePreviewTtCell(p1Chunk);
+    result.p2Mons = parsePreviewTtCell(p2Chunk);
+  } else {
+    const tdMatches = [...html.matchAll(/<td[^>]*VAlign="?middle"?[^>]*>([\s\S]*?)<\/td>/gi)];
+    if (tdMatches.length >= 2) {
+      result.p1Mons = parsePreviewTtCell(tdMatches[0][1]);
+      result.p2Mons = parsePreviewTtCell(tdMatches[1][1]);
+    }
   }
   return result;
 }
@@ -1371,6 +1379,10 @@ function parseLlogHtml(html, previewSides = [[], []]) {
     clean.includes('しかしはずれた') ||
     clean.includes('外れた！') ||
     clean.includes('はずれた！') ||
+    clean.includes('攻撃ははずれた') ||
+    clean.includes('攻撃は外れた') ||
+    clean.includes('ははずれた') ||
+    clean.includes('は外れた') ||
     clean.includes('当たらなかった') ||
     clean.includes('あたらなかった') ||
     clean.includes('効果がない') ||
@@ -1430,12 +1442,12 @@ function parseLlogHtml(html, previewSides = [[], []]) {
       const turnNum = info.turn;
       let recognizedCenter = false;
       if (
-        normClean.includes(normJp('雨が降り続いている')) ||
-        normClean.includes(normJp('あめがふりつづいている')) ||
+        normClean.includes(normJp('雨が降り')) ||
+        normClean.includes(normJp('あめがふり')) ||
         normClean.includes(normJp('日差しが強い')) ||
         normClean.includes(normJp('ひざしがつよい')) ||
-        normClean.includes(normJp('砂嵐が吹き荒れている')) ||
-        normClean.includes(normJp('すなあらしがふきあれている')) ||
+        normClean.includes(normJp('砂嵐が')) ||
+        normClean.includes(normJp('すなあらしが')) ||
         normClean.includes(normJp('砂嵐でダメージ'))
       ) {
         recognizedCenter = true;
@@ -1454,7 +1466,9 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         normClean.includes(normJp('日差しが戻った')) ||
         normClean.includes(normJp('ひざしがもどった')) ||
         normClean.includes(normJp('砂嵐はおさまった')) ||
-        normClean.includes(normJp('すなあらしはおさまった'))
+        normClean.includes(normJp('すなあらしはおさまった')) ||
+        normClean.includes(normJp('砂嵐がおさまった')) ||
+        normClean.includes(normJp('すなあらしがおさまった'))
       ) {
         recognizedCenter = true;
         info.weather = null;
@@ -1556,7 +1570,9 @@ function parseLlogHtml(html, previewSides = [[], []]) {
     if (
       clean.includes('ぐうぐう眠っている') ||
       clean.includes('ぐうぐうねむっている') ||
-      (clean.includes('眠っている') && !clean.includes('眠ってしまった'))
+      clean.includes('眠っていて動けない') ||
+      clean.includes('ねむっていて動けない') ||
+      (clean.includes('眠っている') && !clean.includes('眠ってしまった') && !clean.includes('眠りはじめた'))
     ) {
       info.sides[sideIdx].actedThisTurn = true;
       if (activeMonBeforeMove) {
@@ -1576,6 +1592,8 @@ function parseLlogHtml(html, previewSides = [[], []]) {
     } else if (
       clean.includes('しびれて動けない') ||
       clean.includes('しびれてうごけない') ||
+      clean.includes('痺れて動けない') ||
+      clean.includes('痺れてうごけない') ||
       clean.includes('凍ってしまって動けない') ||
       clean.includes('こおってしまって') ||
       clean.includes('ひるんで動けない') ||
@@ -2113,7 +2131,9 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         } else if (
           lineClean.includes('まひして技が出にくくなった') ||
           lineClean.includes('麻痺して技が出にくくなった') ||
-          lineClean.includes('まひ状態になった')
+          lineClean.includes('まひ状態になった') ||
+          lineClean.includes('まひした') ||
+          lineClean.includes('麻痺した')
         ) {
           subjMon.status = 'par';
           subjMon.compPar = true;
@@ -2168,7 +2188,9 @@ function parseLlogHtml(html, previewSides = [[], []]) {
           lineClean.includes('こんらんがとけた') ||
           lineClean.includes('こんらんがなおった') ||
           lineClean.includes('混乱が解けた') ||
-          lineClean.includes('混乱が治った')
+          lineClean.includes('混乱が治った') ||
+          lineClean.includes('正気に戻った') ||
+          lineClean.includes('しょうきにもどった')
         ) {
           subjMon.volatiles.delete('confusion');
         }
@@ -2176,7 +2198,9 @@ function parseLlogHtml(html, previewSides = [[], []]) {
           lineClean.includes('みがわりが消えた') ||
           lineClean.includes('みがわりは消えてしまった') ||
           lineClean.includes('みがわりが壊れた') ||
-          lineClean.includes('身代わりが消えた')
+          lineClean.includes('身代わりが消えた') ||
+          lineClean.includes('分身はきえてしまった') ||
+          lineClean.includes('分身は消えてしまった')
         ) {
           subjMon.volatiles.delete('substitute');
         }
@@ -2242,16 +2266,16 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         isMoveFailureText(lineClean) ||
         /を繰り出した|をくりだした|ゆけっ|いけっ|出てこい|引っ込めた|ひっこめた|戻れ|もどれ|交代/.test(lineClean) ||
         /引きずり出された|ひきずりだされた|吹き飛ばされた|ふきとばされた/.test(lineClean) ||
-        /眠っている|ねむっている|反動で動けない|はんどうでうごけない|しびれて動けない|しびれてうごけない|凍ってしまって|こおってしまって|ひるんで|メロメロ|かなしばり|わけもわからず/.test(lineClean) ||
+        /眠っている|ねむっている|眠りはじめた|ねむりはじめた|眠っていて|ねむっていて|反動で動けない|はんどうでうごけない|しびれて動けない|しびれてうごけない|痺れて動けない|痺れてうごけない|凍ってしまって|こおってしまって|凍っていて|こおっていて|ひるんで|メロメロ|かなしばり|わけもわからず/.test(lineClean) ||
         /空高く飛び上がった|穴を掘った|光を吸収した|頭を引っ込めた|激しい風に包まれた|激しい光をまとった|力をためて/.test(lineClean) ||
         /たべのこし|食べ残し|きあいのハチマキ|せんせいのツメ|を奪った|をうばった/.test(lineClean) ||
         /あがった|さがった|上がった|下がった|あがらない|さがらない|上がらない|下がらない/.test(lineClean) ||
-        /もうどく|猛毒|どくをあびた|毒をあびた|どく状態|やけど|火傷|まひして|麻痺して|まひ状態|眠ってしまった|ねむってしまった|けんこうになって|健康になって|凍りついた|こおりついた|凍ってしまった|目を覚ました|めをさました|氷が溶けた|こおりがとけた|氷がとけた|どくのダメージ|毒のダメージ/.test(lineClean) ||
-        /こんらん|混乱|みがわり|身代わり|アンコール|解放された|カウントが|しめつけ|締め付け|渦の中に|うずのなかに|炎の渦|ほのおのうず|からみついて|はさまれた/.test(lineClean) ||
+        /もうどく|猛毒|どくをあびた|毒をあびた|どく状態|やけど|火傷|まひして|麻痺して|まひした|麻痺した|まひ状態|眠ってしまった|ねむってしまった|けんこうになって|健康になって|凍りついた|こおりついた|こおりづけになった|凍ってしまった|目を覚ました|めをさました|氷が溶けた|こおりがとけた|氷がとけた|正気に戻った|しょうきにもどった|どくのダメージ|毒のダメージ/.test(lineClean) ||
+        /こんらん|混乱|みがわり|身代わり|分身|アンコール|解放された|カウントが|しめつけ|締め付け|渦の中に|うずのなかに|炎の渦|ほのおのうず|からみついて|はさまれた/.test(lineClean) ||
         /たおれた|倒れた|みちづれ|道連れ/.test(lineClean) ||
-        /リフレクター|ひかりのかべ|光の壁|しんぴのまもり|神秘の守り|しんぴのヴェール|神秘のヴェール|しろいきり|白い霧|くろいきり|黒い霧|まきびし|すずの音|鈴の音|ほろびのうた|滅びの歌|タネが|種が|あくむ|悪夢|みやぶった|見破った|を封じた|にげられなくなった|逃げられなくなった|うらみ|ＰＰを|PPを|へんしん|変身|暗示|あんじ|ものまね|のろい|呪い|いかりのボルテージ|がまん|まるくなった|ちいさくなった|はりきって|張り切って/.test(lineClean) ||
-        /雨が降り|あめがふり|雨はやんだ|あめはやんだ|日差しが|ひざしが|砂嵐|すなあらし/.test(lineClean) ||
-        /ダメージ|急所に当たった|きゅうしょにあたった|効果はバツグン|こうかはばつぐん|効果はいまひとつ|こうかはいまひとつ|回当たった|かいあたった|体力を回復|たいりょくをかいふく|体力を吸い取った|たいりょくをすいとった|体力がいっぱい|たいりょくがいっぱい|反動を受けた|はんどうをうけた|は守っている|はまもっている|こらえた|こらえる体勢|はねている|何も起こらない|なにもおこらない|しかし決まらなかった|すでに|WIN!|ＷＩＮ！|LOSE|ＬＯＳＥ|DRAW|ＤＲＡＷ/.test(lineClean);
+        /リフレクター|ひかりのかべ|光の壁|しんぴのまもり|神秘の守り|しんぴのヴェール|神秘のヴェール|しろいきり|白い霧|くろいきり|黒い霧|すべての能力が元に戻った|まきびし|すずの音|鈴の音|ほろびのうた|滅びの歌|タネが|種が|あくむ|悪夢|みやぶった|見破った|を封じた|にげられなくなった|逃げられなくなった|もうにげられない|うらみ|ＰＰを|PPを|へんしん|変身|暗示|あんじ|ものまね|のろい|呪い|いかりのボルテージ|がまん|まるくなった|ちいさくなった|はりきって|張り切って/.test(lineClean) ||
+        /雨が降り|あめがふり|大雨になった|雨はやんだ|あめはやんだ|日差しが|ひざしが|砂嵐|すなあらし|すなあらしがふきあれる|すなあらしがおさまった/.test(lineClean) ||
+        /ダメージ|急所に当たった|きゅうしょにあたった|急所にあたった|効果はバツグン|こうかはばつぐん|効果抜群|こうかばつぐん|効果はいまひとつ|こうかはいまひとつ|効果はイマイチ|こうかはイマイチ|回当たった|かいあたった|体力を回復|たいりょくをかいふく|回復した|体力を吸い取った|たいりょくをすいとった|たいりょくをうばう|わかちあった|体力がいっぱい|たいりょくがいっぱい|反動を受けた|はんどうをうけた|反動をうけた|はんどうをうけた|は守っている|はまもっている|まもりの体勢|こらえた|こらえる体勢|はねている|ひるんだ|何も起こらない|なにもおこらない|しかし決まらなかった|すでに|強くなった|最大まであげた|たねをうえつけた|はかいのいでんし|たりなかった|交換できるポケモンがいなかった|WIN!|ＷＩＮ！|LOSE|ＬＯＳＥ|DRAW|ＤＲＡＷ|戻る|HP\s*\d+\s*→|ＨＰ\s*\d+\s*→|ほろんでしまう/.test(lineClean);
 
       if (!isKnownStateOrNarrative && lineClean.length > 0) {
         info.unrecognizedLines.push({
@@ -4713,6 +4737,8 @@ module.exports = {
   calcSetMaxHp,
   inferHpTypeMaskFromMaxHp,
   buildDynamicBeliefPoolJson,
+  loadOpponentDb,
+  saveOpponentDb,
   recordOpponentObservation,
   buildAndSanitizePositionSpec,
   sanitizePositionSpec,
