@@ -21,7 +21,6 @@ mimalloc = { version = "0.1.52", optional = true }
 [features]
 default = ["mi"]
 mi = ["dep:mimalloc"]
-hp-type-evidence = []
 
 [dev-dependencies]
 conformance = { path = "../conformance" }

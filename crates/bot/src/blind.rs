@@ -472,8 +472,6 @@ struct SampledWorld {
 /// the net).
 pub struct BlindSearch {
     cfg: RmConfig,
-    first_continuation: Option<crate::first_continuation::FirstContinuation>,
-    history_continuation: Option<crate::history_continuation::HistoryContinuation>,
     rng: SplitMix64,
     decision_seed: u64,
     /// Search resets omit the observer's protocol log.
@@ -520,42 +518,6 @@ pub struct BlindSearch {
 }
 
 impl BlindSearch {
-    pub fn enable_history_continuation(&mut self, shared: bool) {
-        assert_eq!(self.done, 0);
-        assert!(self.first_continuation.is_none());
-        assert!(!self.cfg.continuation_exp3_ix && !self.cfg.continuation_exp3_mean);
-        self.history_continuation = Some(crate::history_continuation::HistoryContinuation::new(
-            self.side, shared,
-        ));
-    }
-
-    pub fn enable_compact_history_continuation(&mut self, shared: bool) {
-        self.enable_history_continuation(shared);
-        self.history_continuation
-            .as_mut()
-            .unwrap()
-            .use_compact_index();
-    }
-
-    pub fn history_continuation(
-        &self,
-    ) -> Option<&crate::history_continuation::HistoryContinuation> {
-        self.history_continuation.as_ref()
-    }
-
-    pub fn enable_first_continuation(&mut self, shared: bool) {
-        assert!(self.history_continuation.is_none());
-        assert_eq!(self.done, 0);
-        assert!(!self.cfg.continuation_exp3_ix && !self.cfg.continuation_exp3_mean);
-        self.first_continuation = Some(crate::first_continuation::FirstContinuation::new(
-            self.side, shared,
-        ));
-    }
-
-    pub fn first_continuation(&self) -> Option<&crate::first_continuation::FirstContinuation> {
-        self.first_continuation.as_ref()
-    }
-
     pub fn set_opponent_preview_prior(&mut self, enabled: bool) {
         self.opponent_preview_prior = enabled;
     }
@@ -619,8 +581,6 @@ impl BlindSearch {
         let endgame = crate::smmcts::EndgameRootStats::new(&base, dex, side, &my_acts);
         let decision_seed = rng.0 ^ 0xa24baed4963ee407;
         BlindSearch {
-            first_continuation: None,
-            history_continuation: None,
             cfg,
             rng,
             decision_seed,
@@ -1013,51 +973,7 @@ impl BlindSearch {
             );
         }
         let mut joint = [0usize; 2];
-        let r = if let Some(policy) = self.history_continuation.as_mut() {
-            assert!(leaf.is_none());
-            crate::smmcts::run_iteration_with_root_child_value(
-                &self.cfg,
-                &mut self.rng,
-                &mut self.nodes,
-                &mut self.table,
-                &mut sim,
-                dex,
-                self.turn_cap,
-                root,
-                force,
-                &mut joint,
-                &mut 0,
-                &mut |sim, rng, rollout| {
-                    crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout)
-                },
-                trace,
-                None,
-                None,
-                Some(policy),
-            )
-        } else if let Some(policy) = self.first_continuation.as_mut() {
-            assert!(leaf.is_none());
-            crate::smmcts::run_iteration_with_root_child_value(
-                &self.cfg,
-                &mut self.rng,
-                &mut self.nodes,
-                &mut self.table,
-                &mut sim,
-                dex,
-                self.turn_cap,
-                root,
-                force,
-                &mut joint,
-                &mut 0,
-                &mut |sim, rng, rollout| {
-                    crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout)
-                },
-                trace,
-                None,
-                Some(policy),
-                None,
-            )
-        } else if let Some(leaf) = leaf {
+        let r = if let Some(leaf) = leaf {
             crate::smmcts::run_iteration_with_leaf(
                 &self.cfg,
                 &mut self.rng,
@@ -1317,51 +1233,7 @@ impl BlindSearch {
             force[1 - self.side] = forced_reply;
         }
         let mut joint = [0usize; 2];
-        let r = if let Some(policy) = self.history_continuation.as_mut() {
-            assert!(root_child_value.is_none());
-            crate::smmcts::run_iteration_with_root_child_value(
-                &self.cfg,
-                &mut self.rng,
-                &mut self.nodes,
-                &mut self.table,
-                &mut sim,
-                dex,
-                self.turn_cap,
-                root,
-                force,
-                &mut joint,
-                &mut 0,
-                &mut |sim, rng, rollout| {
-                    crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout)
-                },
-                trace,
-                None,
-                None,
-                Some(policy),
-            )
-        } else if let Some(policy) = self.first_continuation.as_mut() {
-            assert!(root_child_value.is_none());
-            crate::smmcts::run_iteration_with_root_child_value(
-                &self.cfg,
-                &mut self.rng,
-                &mut self.nodes,
-                &mut self.table,
-                &mut sim,
-                dex,
-                self.turn_cap,
-                root,
-                force,
-                &mut joint,
-                &mut 0,
-                &mut |sim, rng, rollout| {
-                    crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout)
-                },
-                trace,
-                None,
-                Some(policy),
-                None,
-            )
-        } else if let Some(evaluate) = root_child_value {
+        let r = if let Some(evaluate) = root_child_value {
             crate::smmcts::run_iteration_with_root_child_value(
                 &self.cfg,
                 &mut self.rng,
@@ -1379,8 +1251,6 @@ impl BlindSearch {
                 },
                 trace,
                 Some(evaluate),
-                None,
-                None,
             )
         } else if let Some(trace) = trace {
             crate::smmcts::run_iteration_with_leaf(
@@ -1694,55 +1564,6 @@ impl BlindSearch {
     /// Distinct states in the determinized tree (see `SkuctSearch::node_count`).
     pub fn node_count(&self) -> usize {
         self.nodes.len()
-    }
-
-    /// Evaluates a fixed root action without updating the tree or its search RNG.
-    #[allow(clippy::too_many_arguments)]
-    pub fn evaluate_frozen(
-        &self,
-        dex: &Dex,
-        belief: &Belief,
-        obs: &Observer,
-        action: SearchChoice,
-        policy: [crate::frozen::FrozenPolicy; 2],
-        seed: u64,
-        trace: &mut impl FnMut(crate::frozen::FrozenChoice<'_>),
-    ) -> crate::frozen::FrozenResult {
-        assert!(self.my_acts.contains(&action));
-        let mut forced = [None, None];
-        forced[self.side] = Some(action);
-        self.evaluate_frozen_joint(dex, belief, obs, forced, policy, seed, trace)
-    }
-
-    /// Forced opponent actions must be legal in every sampled determinization.
-    #[allow(clippy::too_many_arguments)]
-    pub fn evaluate_frozen_joint(
-        &self,
-        dex: &Dex,
-        belief: &Belief,
-        obs: &Observer,
-        forced: [Option<SearchChoice>; 2],
-        policy: [crate::frozen::FrozenPolicy; 2],
-        seed: u64,
-        trace: &mut impl FnMut(crate::frozen::FrozenChoice<'_>),
-    ) -> crate::frozen::FrozenResult {
-        let mut rng = SplitMix64::new(seed);
-        let pick = belief.sample(&mut rng);
-        let mut sim = belief.determinize_with(dex, &self.base, obs, pick, &mut rng);
-        if self.cfg.unseen_claw_root && sim.is_idle_move_request() {
-            sim.update_all_speeds(dex);
-        }
-        crate::frozen::evaluate_sim(
-            dex,
-            &self.cfg,
-            &mut sim,
-            &self.nodes,
-            &self.table,
-            forced,
-            policy,
-            &mut rng,
-            trace,
-        )
     }
 
     pub fn iterations(&self) -> u32 {
@@ -2374,25 +2195,6 @@ impl BlindSearch {
             return self.best();
         };
         draw_policy(&self.my_acts, &mixed.policy, draw)
-    }
-
-    /// Experimental fixed-budget best-arm rule: argmax empirical mean over
-    /// the same eligible root actions as [`Self::best`]. Allocation remains
-    /// caller-controlled (`step` for UCB, `step_forced` for a designed
-    /// schedule); M17a uses this to audit simple-regret alternatives without
-    /// changing the shipped argmax-visits policy.
-    pub fn best_mean(&self) -> Option<SearchChoice> {
-        let allowed = |a: usize| self.my_mask.as_ref().map_or(true, |m| m[a]);
-        let means = self.means();
-        (0..self.my_acts.len())
-            .filter(|&a| allowed(a) && !self.my_dominated[a])
-            .max_by(|&a, &b| means[a].total_cmp(&means[b]))
-            .or_else(|| {
-                (0..self.my_acts.len())
-                    .filter(|&a| allowed(a))
-                    .max_by(|&a, &b| means[a].total_cmp(&means[b]))
-            })
-            .map(|a| self.my_acts[a])
     }
 
     /// Whether the root decision is a team preview.
@@ -3093,52 +2895,6 @@ mod mixed_selection_tests {
         assert_eq!(states[0].visits(), states[1].visits());
         assert_eq!(states[0].means(), states[1].means());
         assert_eq!(states[0].node_count(), states[1].node_count());
-        let mut search = BlindSearch::new(
-            &b,
-            &dex,
-            RmConfig {
-                horizon: 1,
-                ..cfg.clone()
-            },
-            0,
-            771,
-        );
-        search.step(&dex, &belief, &obs, 256);
-        let before = (
-            search.visits().to_vec(),
-            search.means(),
-            search.node_count(),
-        );
-        let mut roots = std::collections::BTreeSet::new();
-        let mut coins = std::collections::BTreeSet::new();
-        for seed in 0..64 {
-            let mut first = true;
-            search.evaluate_frozen_joint(
-                &dex,
-                &belief,
-                &obs,
-                [None, None],
-                [crate::frozen::FrozenPolicy::MostVisited; 2],
-                seed,
-                &mut |choice| {
-                    if first {
-                        first = false;
-                        roots.insert(choice.node.expect("shared frozen root"));
-                        coins.insert(choice.battle.quick_claw_roll);
-                    }
-                },
-            );
-        }
-        assert_eq!(roots.len(), 1);
-        assert_eq!(coins.len(), 2);
-        assert_eq!(
-            before,
-            (
-                search.visits().to_vec(),
-                search.means(),
-                search.node_count()
-            )
-        );
         b.mid_turn = true;
         assert!(!b.is_idle_move_request());
         b.quick_claw_roll = false;

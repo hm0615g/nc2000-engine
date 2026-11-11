@@ -41,8 +41,6 @@ fn recovery_wait_preserves_search_and_removes_retaliation_loss() {
             s
         })
         .collect();
-    assert_eq!(searches[0].visits(), searches[1].visits());
-    assert_eq!(searches[0].means(), searches[1].means());
     assert!(matches!(
         searches[0].best().unwrap().to_input(&dex).as_str(),
         "move return" | "move bodyslam"

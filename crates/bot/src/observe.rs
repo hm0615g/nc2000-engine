@@ -183,8 +183,6 @@ pub struct Observer {
     /// The last line was a called move announcing its charge (`[from]` +
     /// `[still]`), awaiting the `-prepare` that confirms which move it is.
     pending_call: Option<(usize, MoveId)>,
-    hp_targets: [Option<(String, Vec<String>)>; 2],
-    hp_pending: Option<(usize, String, Vec<String>)>,
     revision: u64,
 }
 
@@ -275,18 +273,7 @@ impl Observer {
                 appeared: m.appeared,
             });
         }
-        let mut observer = Observer::from_mons(spec.side, mons);
-        for (side, team) in spec.sides.iter().enumerate() {
-            if let Some(slot) = team.active {
-                let mon = &team.mons[slot];
-                if mon.transformed_into.is_none() && !mon.volatiles.iter().any(|v| matches!(v.key.as_str(), "typechange" | "foresight")) {
-                    let species = dex.species.get(dex.species.id(&toid(&mon.species)).unwrap());
-                    let name = if mon.name.is_empty() { species.name.clone() } else { mon.name.clone() };
-                    observer.hp_targets[side] = Some((name, species.types.clone()));
-                }
-            }
-        }
-        Ok(observer)
+        Ok(Observer::from_mons(spec.side, mons))
     }
 
     /// M15 protocol mode: construct from preview-public facts parsed out of
@@ -308,8 +295,6 @@ impl Observer {
             called_charging: vec![None; n],
             called_locked: vec![None; n],
             pending_call: None,
-            hp_targets: [None, None],
-            hp_pending: None,
             revision: 0,
         }
     }
@@ -362,8 +347,6 @@ impl Observer {
             called_charging: vec![None; n],
             called_locked: vec![None; n],
             pending_call: None,
-            hp_targets: [None, None],
-            hp_pending: None,
             revision: 0,
         }
     }
@@ -379,12 +362,6 @@ impl Observer {
     /// Per opponent roster slot, aligned with `battle.sides[opp].roster`.
     pub fn mons(&self) -> &[MonObs] {
         &self.mons
-    }
-
-    pub fn without_hp_type_evidence(&self) -> Self {
-        let mut observer = self.clone();
-        for mon in &mut observer.mons { mon.hp_type_mask = u16::MAX; }
-        observer
     }
 
     /// Bumped whenever new information arrives (belief sync trigger).
@@ -457,8 +434,7 @@ impl Observer {
         // The charge announcement and its `-prepare` are adjacent; anything
         // in between means this was not a charging call after all.
         let pending = self.pending_call.take();
-        let hp_dirty = self.scan_hp_evidence(&parts, dex);
-        let dirty = match cmd {
+        match cmd {
             "-prepare" => {
                 let subject = parts.get(1).copied().unwrap_or("");
                 let named = parts.get(2).copied().unwrap_or("");
@@ -564,50 +540,7 @@ impl Observer {
                 false
             }
             _ => false,
-        };
-        dirty || hp_dirty
-    }
-
-    fn scan_hp_evidence(&mut self, parts: &[&str], dex: &Dex) -> bool {
-        if !cfg!(feature = "hp-type-evidence") { return false; }
-        let command = parts[0];
-        let subject = parts.get(1).copied().unwrap_or("");
-        let side = subject.as_bytes().get(1).and_then(|c| match c { b'1' => Some(0), b'2' => Some(1), _ => None });
-        match command {
-            "switch" | "drag" => {
-                self.hp_pending = None;
-                if let Some(side) = side {
-                    self.hp_targets[side] = subject.split_once(": ").zip(parts.get(2)).and_then(|((_, name), details)| {
-                        let species = dex.species.id(&toid(details.split(',').next()?))?;
-                        Some((name.to_string(), dex.species.get(species).types.clone()))
-                    });
-                }
-            }
-            "faint" | "-transform" => {
-                self.hp_pending = None;
-                if let Some(side) = side { self.hp_targets[side] = None; }
-            }
-            "-start" if parts.get(2).is_some_and(|s| matches!(toid(s).as_str(), "typechange" | "foresight")) => {
-                self.hp_pending = None;
-                if let Some(side) = side { self.hp_targets[side] = None; }
-            }
-            "move" | "turn" | "upkeep" | "cant" => self.hp_pending = None,
-            "-supereffective" | "-resisted" => {
-                if let Some((slot, name, types)) = self.hp_pending.take() {
-                    if side == Some(self.side) && subject.split_once(": ").is_some_and(|(_, n)| n == name) {
-                        let old = self.mons[slot].hp_type_mask;
-                        let mask = old & crate::hp_evidence::effect_mask(dex, &types, command == "-supereffective")
-                            & crate::hp_evidence::possible_types(dex, self.mons[slot].species, self.mons[slot].gender);
-                        if mask != 0 && mask != old {
-                            self.mons[slot].hp_type_mask = mask;
-                            return true;
-                        }
-                    }
-                }
-            }
-            _ => {}
         }
-        false
     }
 
     fn scan_move(&mut self, parts: &[&str], dex: &Dex) -> bool {
@@ -672,17 +605,6 @@ impl Observer {
         }
         if from.is_none() {
             self.called_locked[m] = None;
-        }
-        if dex.moves.key(id) == "hiddenpower" {
-            if let Some(target) = parts.get(3) {
-                if target.as_bytes().get(1) == Some(&(b'1' + self.side as u8)) {
-                    if let Some((name, types)) = &self.hp_targets[self.side] {
-                        if target.split_once(": ").is_some_and(|(_, n)| n == name) {
-                            self.hp_pending = Some((m, name.clone(), types.clone()));
-                        }
-                    }
-                }
-            }
         }
         if !self.mons[m].revealed_moves.contains(&id) {
             self.mons[m].revealed_moves.push(id);
@@ -749,7 +671,6 @@ mod tests {
             .collect()
     }
 
-    #[cfg(not(feature = "hp-type-evidence"))]
     #[test]
     fn hp_effectiveness_inference_is_disabled_by_default() {
         let dex = load_dex();
@@ -759,51 +680,6 @@ mod tests {
             obs.ingest_line(line, &dex);
         }
         assert_eq!(obs.mons[0].hp_type_mask, u16::MAX);
-    }
-
-    #[cfg(feature = "hp-type-evidence")]
-    #[test]
-    fn hp_evidence_intersects_and_respects_type_changes_and_callers() {
-        let dex = load_dex();
-        let mut obs = one_mon_observer(&dex, "Aerodactyl", "A");
-        for line in [
-            "|switch|p1a: Z|Zapdos, L50|100/100",
-            "|move|p2a: A|Hidden Power|p1a: Z",
-            "|-crit|p1a: Z",
-            "|-supereffective|p1a: Z",
-        ] { obs.ingest_line(line, &dex); }
-        assert_eq!(obs.mons[0].hp_type_mask, (1 << 13) | (1 << 4));
-        let revision = obs.revision();
-        for line in [
-            "|switch|p1a: S|Steelix, L50|100/100",
-            "|move|p2a: A|Hidden Power|p1a: S",
-            "|-resisted|p1a: S",
-        ] { obs.ingest_line(line, &dex); }
-        assert_eq!(obs.mons[0].hp_type_mask, 1 << 4);
-        assert!(obs.revision() > revision);
-        for prelude in [
-            "|-start|p1a: N|typechange|Ghost",
-            "|-transform|p1a: N|p2a: A",
-            "|-start|p1a: N|Foresight",
-        ] {
-            let mut obs = one_mon_observer(&dex, "Aerodactyl", "A");
-            for line in ["|switch|p1a: N|Snorlax, L50|100/100", prelude,
-                "|move|p2a: A|Hidden Power|p1a: N", "|-supereffective|p1a: N"] {
-                obs.ingest_line(line, &dex);
-            }
-            assert_eq!(obs.mons[0].hp_type_mask, u16::MAX);
-        }
-        let mut obs = one_mon_observer(&dex, "Aerodactyl", "A");
-        for line in [
-            "|switch|p1a: N|Snorlax, L50|100/100",
-            "|move|p2a: A|Hidden Power|p1a: N|[from] Metronome",
-            "|-supereffective|p1a: N",
-        ] { obs.ingest_line(line, &dex); }
-        assert_eq!(obs.mons[0].hp_type_mask, u16::MAX);
-        for line in ["|move|p2a: A|Hidden Power|p1a: N|[from] Sleep Talk", "|-supereffective|p1a: N"] {
-            obs.ingest_line(line, &dex);
-        }
-        assert_eq!(obs.mons[0].hp_type_mask, 1);
     }
 
     /// A caller charging a two-turn move must not credit the victim move to

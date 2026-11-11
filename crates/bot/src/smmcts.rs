@@ -97,8 +97,6 @@ pub struct RmConfig {
     pub mix_actions: usize,
     /// UCB1 exploration constant.
     pub c: f64,
-    pub continuation_exp3_ix: bool,
-    pub continuation_exp3_mean: bool,
     pub collapse_sleep_actions: bool,
     pub root_revisit_interval: u32,
     pub canonical_claw_key: bool,
@@ -936,8 +934,6 @@ impl Default for RmConfig {
             probe: 0.25,
             mix_actions: 3,
             c: 1.0,
-            continuation_exp3_ix: false,
-            continuation_exp3_mean: false,
             collapse_sleep_actions: false,
             root_revisit_interval: 0,
             canonical_claw_key: false,
@@ -972,71 +968,6 @@ pub(crate) struct Node {
     pub(crate) w: [Vec<f64>; 2],
     /// Team-preview node (always UCB1 + argmax).
     pub(crate) preview: bool,
-    continuation: Option<Box<ContinuationStats>>,
-}
-
-#[derive(Default)]
-struct ContinuationStats {
-    bandits: [Option<crate::exp3::Exp3Ix>; 2],
-    raw_count: u32,
-    raw_sum: f64,
-}
-
-fn record_raw_path(nodes: &mut [Node], path: &[usize], reward: f64) -> Vec<f64> {
-    for &index in path {
-        let stats = nodes[index]
-            .continuation
-            .get_or_insert_with(Default::default);
-        stats.raw_count += 1;
-        stats.raw_sum += reward;
-    }
-    path.iter()
-        .skip(1)
-        .map(|&index| {
-            let stats = nodes[index].continuation.as_ref().unwrap();
-            stats.raw_sum / f64::from(stats.raw_count)
-        })
-        .chain(std::iter::once(reward))
-        .collect()
-}
-
-#[cfg(test)]
-mod mean_update_tests {
-    use super::*;
-
-    #[test]
-    fn child_means_credit_raw_returns_once_without_averaging_averages() {
-        let mut nodes: Vec<_> = [(2, 1.), (4, 1.), (1, 0.)]
-            .into_iter()
-            .map(|(raw_count, raw_sum)| Node {
-                acts: [vec![], vec![]],
-                n: [vec![], vec![]],
-                w: [vec![], vec![]],
-                preview: false,
-                continuation: Some(Box::new(ContinuationStats {
-                    raw_count,
-                    raw_sum,
-                    ..Default::default()
-                })),
-            })
-            .collect();
-        assert_eq!(
-            record_raw_path(&mut nodes, &[0, 1, 2], 1.),
-            vec![0.4, 0.5, 1.]
-        );
-        assert_eq!(
-            nodes
-                .iter()
-                .map(|n| {
-                    let stats = n.continuation.as_ref().unwrap();
-                    (stats.raw_count, stats.raw_sum)
-                })
-                .collect::<Vec<_>>(),
-            vec![(3, 2.), (5, 2.), (2, 1.)]
-        );
-        assert_eq!(record_raw_path(&mut nodes, &[0], 0.25), vec![0.25]);
-        assert_eq!(nodes[0].continuation.as_ref().unwrap().raw_sum, 2.25);
-    }
 }
 
 pub enum SearchTrace<'a> {
@@ -1079,7 +1010,6 @@ impl Node {
             n: [vec![0; acts[0].len()], vec![0; acts[1].len()]],
             w: [vec![0.0; acts[0].len()], vec![0.0; acts[1].len()]],
             preview,
-            continuation: None,
             acts,
         }
     }
@@ -1395,7 +1325,7 @@ pub(crate) fn run_iteration_with_leaf(
 ) -> f64 {
     run_iteration_with_root_child_value(
         cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root, root_joint, depth_out, leaf,
-        trace, None, None, None,
+        trace, None,
     )
 }
 
@@ -1415,58 +1345,16 @@ pub(crate) fn run_iteration_with_root_child_value(
     leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
     mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
     mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
-    mut continuation: Option<&mut crate::first_continuation::FirstContinuation>,
-    mut history_policy: Option<&mut crate::history_continuation::HistoryContinuation>,
 ) -> f64 {
     let mut path_buf = [(0usize, 0usize, 0usize); 32];
     let mut path_len = 0usize;
     let mut path_overflow: Vec<(usize, usize, usize)> = Vec::new();
-    let mut exp3_path = Vec::new();
-    let mut mean_path = Vec::new();
     let mut node_idx = start;
-    let mut decision_depth = 0;
-    let mut own_root_action = None;
-    let mut shared_pending = None;
-    let mut history_cursor = 0;
-    let mut history_previous = None;
-    let mut history_pending = Vec::new();
 
     // ---- selection until a leaf: terminal, horizon, or unexpanded state
     let reward0 = loop {
-        let path_index = mean_path.len();
-        if cfg.continuation_exp3_mean {
-            mean_path.push(node_idx);
-        }
         let at_root = node_idx == start;
         let mut joint = [None, None];
-        let mut continuation_group = None;
-        let mut history_group = None;
-        if decision_depth > 0 {
-            if let Some(policy) = history_policy.as_deref_mut() {
-                history_cursor = policy.advance(
-                    history_cursor,
-                    history_previous,
-                    sim.request_state,
-                    &sim.log,
-                );
-                sim.set_log_enabled(false);
-                let acts = &nodes[node_idx].acts[policy.side()];
-                if acts.len() > 1 {
-                    history_group = Some(policy.group(history_cursor, acts));
-                }
-            }
-        }
-        if decision_depth == 1 && sim.is_idle_move_request() {
-            if let Some(policy) = continuation.as_deref_mut() {
-                let acts = &nodes[node_idx].acts[policy.side()];
-                if acts.len() > 1 {
-                    continuation_group = Some(policy.group(own_root_action, &sim.log, acts));
-                }
-            }
-        }
-        if decision_depth == 1 && continuation.is_some() {
-            sim.set_log_enabled(false);
-        }
         for s in 0..2 {
             let k = nodes[node_idx].acts[s].len();
             if k == 0 {
@@ -1481,46 +1369,6 @@ pub(crate) fn run_iteration_with_root_child_value(
                         nodes[node_idx].n[s][f] += 1;
                         f
                     }
-                    _ if history_group.is_some()
-                        && history_policy
-                            .as_ref()
-                            .is_some_and(|p| p.side() == s && p.shared()) =>
-                    {
-                        let action = history_policy.as_deref_mut().unwrap().select(
-                            history_group.unwrap(),
-                            cfg.c,
-                            rng,
-                        );
-                        nodes[node_idx].n[s][action] += 1;
-                        action
-                    }
-                    _ if continuation_group.is_some()
-                        && continuation
-                            .as_ref()
-                            .is_some_and(|p| p.side() == s && p.shared()) =>
-                    {
-                        let action = continuation.as_deref_mut().unwrap().select(
-                            continuation_group.unwrap(),
-                            cfg.c,
-                            rng,
-                        );
-                        nodes[node_idx].n[s][action] += 1;
-                        action
-                    }
-                    _ if (cfg.continuation_exp3_ix || cfg.continuation_exp3_mean)
-                        && !at_root
-                        && !nodes[node_idx].preview =>
-                    {
-                        let node = &mut nodes[node_idx];
-                        let stats = node.continuation.get_or_insert_with(Default::default);
-                        let draw = stats.bandits[s]
-                            .get_or_insert_with(|| crate::exp3::Exp3Ix::new(k))
-                            .sample(rng);
-                        let action = draw.action;
-                        node.n[s][action] += 1;
-                        exp3_path.push((node_idx, s, draw, path_index));
-                        action
-                    }
                     _ => select_ucb(cfg, rng, &mut nodes[node_idx], s),
                 };
                 if path_len < path_buf.len() {
@@ -1532,29 +1380,6 @@ pub(crate) fn run_iteration_with_root_child_value(
                 ai
             };
             joint[s] = Some(nodes[node_idx].acts[s][ai]);
-            if let Some(policy) = continuation.as_deref_mut() {
-                if s == policy.side() {
-                    if decision_depth == 0 {
-                        own_root_action = joint[s];
-                    }
-                    if let Some(group) = continuation_group {
-                        if !policy.shared() {
-                            policy.record_selection(group, ai);
-                        }
-                        shared_pending = Some((group, ai));
-                    }
-                }
-            }
-            if let Some(policy) = history_policy.as_deref_mut() {
-                if s == policy.side() {
-                    if let Some(group) = history_group {
-                        if !policy.shared() {
-                            policy.record_selection(group, ai);
-                        }
-                        history_pending.push((group, ai));
-                    }
-                }
-            }
             if at_root {
                 root_joint[s] = ai;
             }
@@ -1583,20 +1408,9 @@ pub(crate) fn run_iteration_with_root_child_value(
             crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
             break leaf(sim, rng, false);
         }
-        if decision_depth == 0 && continuation.is_some() {
-            sim.set_log_enabled(true);
-        }
-        if let Some(policy) = history_policy.as_deref() {
-            history_previous = joint[policy.side()];
-            sim.set_log_enabled(true);
-        }
         sim.apply_choices(dex, joint)
             .expect("cached legal choice rejected (state_key collision?)");
-        decision_depth += 1;
         if let Some(o) = sim.outcome() {
-            if continuation.is_some() || history_policy.is_some() {
-                sim.set_log_enabled(false);
-            }
             crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, Some(o)));
             break outcome_reward(o);
         }
@@ -1614,9 +1428,6 @@ pub(crate) fn run_iteration_with_root_child_value(
             }
         }
         if sim.turn > turn_cap {
-            if continuation.is_some() || history_policy.is_some() {
-                sim.set_log_enabled(false);
-            }
             if let Some(trace) = trace.as_deref_mut() {
                 trace(SearchTrace::Leaf {
                     battle: sim,
@@ -1638,18 +1449,12 @@ pub(crate) fn run_iteration_with_root_child_value(
                 let child = nodes.len();
                 nodes.push(Node::continuation(sim, dex, cfg));
                 table.insert(key, child);
-                if cfg.continuation_exp3_mean {
-                    mean_path.push(child);
-                }
                 if let Some(trace) = trace.as_deref_mut() {
                     trace(SearchTrace::Leaf {
                         battle: sim,
                         rng,
                         rollout: true,
                     });
-                }
-                if continuation.is_some() || history_policy.is_some() {
-                    sim.set_log_enabled(false);
                 }
                 crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(
                     sim,
@@ -1660,14 +1465,6 @@ pub(crate) fn run_iteration_with_root_child_value(
         }
     };
 
-    if let (Some(policy), Some((group, action))) = (continuation, shared_pending) {
-        policy.observe(group, action, reward0);
-    }
-    if let Some(policy) = history_policy {
-        for (group, action) in history_pending {
-            policy.observe(group, action, reward0);
-        }
-    }
     if let Some(trace) = trace {
         trace(SearchTrace::Result {
             battle: sim,
@@ -1702,18 +1499,6 @@ pub(crate) fn run_iteration_with_root_child_value(
     }
     for (ni, s, ai) in path_overflow {
         nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
-    }
-    let mean_updates = if cfg.continuation_exp3_mean {
-        record_raw_path(nodes, &mean_path, reward0)
-    } else {
-        Vec::new()
-    };
-    for (ni, s, draw, index) in exp3_path {
-        let value = mean_updates.get(index).copied().unwrap_or(reward0);
-        nodes[ni].continuation.as_mut().unwrap().bandits[s]
-            .as_mut()
-            .unwrap()
-            .observe(draw, if s == 0 { 1. - value } else { value });
     }
     root_reward0
 }
