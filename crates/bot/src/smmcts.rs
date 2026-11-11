@@ -970,6 +970,19 @@ pub(crate) struct Node {
     pub(crate) preview: bool,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct ObsInfoNode {
+    pub(crate) acts: Vec<SearchChoice>,
+    pub(crate) n: Vec<u32>,
+    pub(crate) w: Vec<f64>,
+}
+
+pub(crate) struct BlindContinuationCtx<'a> {
+    pub(crate) observer_side: usize,
+    pub(crate) obs_nodes: &'a mut Vec<ObsInfoNode>,
+    pub(crate) obs_table: &'a mut FxHashMap<u64, usize>,
+}
+
 pub enum SearchTrace<'a> {
     /// With multiple legal actions, visits include this selection; rewards exclude its backpropagation.
     Choice {
@@ -1213,6 +1226,318 @@ pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
     key
 }
 
+/// Information-set key for the observer side (`observer_side`) at continuation
+/// nodes in `BlindSearch`. Hashes only own state (with resampled hidden timers
+/// masked) and publicly observable opponent state so continuation trajectories
+/// across different determinizations share own-side UCB statistics.
+pub(crate) fn observer_continuation_key(
+    cfg: &RmConfig,
+    dex: &Dex,
+    b: &Battle,
+    observer_side: usize,
+    legal_acts: &[SearchChoice],
+) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = nc2000_engine::fxhash::FxHasher::default();
+    0x4F42_535F_494E_464Fu64.hash(&mut h);
+    let opp_side = 1 - observer_side;
+    (
+        observer_side as u8,
+        b.turn,
+        b.request_state,
+        b.mid_turn,
+        b.ended,
+    )
+        .hash(&mut h);
+    (b.field.weather, b.field.weather_state.duration).hash(&mut h);
+    legal_acts.hash(&mut h);
+
+    let own = &b.sides[observer_side];
+    (
+        own.active,
+        own.pokemon_left,
+        own.total_fainted,
+        &own.party,
+        own.last_move,
+        own.fainted_this_turn,
+        own.fainted_last_turn,
+        own.request,
+    )
+        .hash(&mut h);
+    for (cid, st) in &own.side_conditions {
+        (cid, st.duration).hash(&mut h);
+    }
+    let hp_buckets = if cfg.hp_buckets > 0 {
+        Some(cfg.hp_buckets)
+    } else {
+        None
+    };
+    let ids = [0usize, 1].map(|s| b.active_id(s));
+    let own_act_class = if cfg.threshold_key && cfg.hp_buckets > 0 {
+        ids[observer_side].map(|id| hp_class(b, dex, id, ids[opp_side]))
+    } else {
+        None
+    };
+    for &slot in &own.party {
+        let p = &own.roster[slot as usize];
+        let hp_repr = if p.is_active {
+            if let Some(c) = own_act_class {
+                ((p.maxhp as i64 * (2 * c + 1) / (2 * HP_CLASSES)).max(1)) as i32
+            } else {
+                p.hp
+            }
+        } else {
+            p.hp
+        };
+        let hp_bucket = match hp_buckets {
+            Some(bk) => (hp_repr as i64) * bk / p.maxhp.max(1) as i64,
+            None => hp_repr as i64,
+        };
+        (
+            slot,
+            p.species,
+            p.level,
+            hp_bucket,
+            p.status,
+            p.fainted,
+            p.is_active,
+            p.boosts,
+            p.item,
+            p.last_move,
+            p.trapped,
+        )
+            .hash(&mut h);
+        for ms in p.move_slots.iter() {
+            (ms.id, ms.pp > 0, ms.disabled).hash(&mut h);
+        }
+        for (vcid, vst) in p.volatiles.iter() {
+            (vcid, vst.id, vst.linked_status).hash(&mut h);
+        }
+    }
+
+    let opp = &b.sides[opp_side];
+    (
+        opp.active,
+        opp.pokemon_left,
+        opp.total_fainted,
+        opp.last_move,
+        opp.fainted_this_turn,
+        opp.fainted_last_turn,
+        opp.request,
+    )
+        .hash(&mut h);
+    for (cid, st) in &opp.side_conditions {
+        (cid, st.duration).hash(&mut h);
+    }
+    for (slot, p) in opp.roster.iter().enumerate() {
+        if !(p.is_active || p.previously_switched_in > 0 || p.fainted) {
+            continue;
+        }
+        let pub_hp_bucket = if p.fainted || p.hp <= 0 {
+            0i64
+        } else {
+            (p.hp as i64 * 16) / p.maxhp.max(1) as i64
+        };
+        (
+            slot as u8,
+            p.species,
+            p.level,
+            p.gender,
+            p.fainted,
+            p.is_active,
+            pub_hp_bucket,
+            p.status,
+            p.boosts,
+        )
+            .hash(&mut h);
+        (
+            p.types,
+            p.transformed,
+            p.trapped,
+            p.last_move,
+            p.move_this_turn_result,
+            p.move_last_turn_result,
+        )
+            .hash(&mut h);
+        for (vcid, _) in p.volatiles.iter() {
+            vcid.hash(&mut h);
+        }
+        for ms in p.base_move_slots.iter() {
+            if ms.used || ms.pp < ms.maxpp {
+                (ms.id, ms.maxpp.saturating_sub(ms.pp)).hash(&mut h);
+            }
+        }
+    }
+    h.finish()
+}
+
+/// Continuation state key for `BlindSearch`'s per-world `Node` table:
+/// - Unconditionally scrubs `quick_claw_roll` at idle move requests (`is_idle_move_request()`).
+/// - Masks hidden timer counters (non-Rest sleep `DK::Time`, confusion `DK::Time`,
+///   and `partiallytrapped`/`disable`/`encore` `duration`) to `1` on both sides.
+/// - Hashes only picked roster slots (`slot in side.party`) on the opponent side
+///   so unpicked opponent roster slots (`0..6`) do not fragment continuation nodes.
+pub(crate) fn opp_continuation_key(
+    cfg: &RmConfig,
+    dex: &Dex,
+    b: &mut Battle,
+    observer_side: usize,
+) -> u64 {
+    use nc2000_engine::state::{Status, DK};
+    use std::hash::{Hash, Hasher};
+
+    let idle_move = b.is_idle_move_request();
+    let hp_buckets = if cfg.hp_buckets > 0 {
+        Some(cfg.hp_buckets)
+    } else {
+        None
+    };
+    let omit_damage = cfg.hp_buckets > 0 && cfg.key_no_damage;
+
+    let ids = [0usize, 1].map(|s| b.active_id(s));
+    let classes = if cfg.threshold_key && cfg.hp_buckets > 0 {
+        [0usize, 1].map(|s| ids[s].map(|id| hp_class(b, dex, id, ids[1 - s])))
+    } else {
+        [None, None]
+    };
+    let mut saved_hp = [None, None];
+    for s in 0..2 {
+        if let (Some(id), Some(c)) = (ids[s], classes[s]) {
+            let slot = id.slot as usize;
+            let p = &mut b.sides[id.side as usize].roster[slot];
+            saved_hp[s] = Some((id, p.hp));
+            p.hp = ((p.maxhp as i64 * (2 * c + 1) / (2 * HP_CLASSES)).max(1)) as i32;
+        }
+    }
+
+    let c_conf = dex.conds_id("confusion");
+    let c_ptrap = dex.conds_id("partiallytrapped");
+    let c_dis = dex.conds_id("disable");
+    let c_enc = dex.conds_id("encore");
+
+    let mut saved_slp = [(0usize, 0usize, 0i64); 12];
+    let mut saved_slp_len = 0usize;
+    let mut saved_vol_time = [(0usize, 0usize, 0usize, 0i64); 12];
+    let mut saved_vol_time_len = 0usize;
+    let mut saved_vol_dur = [(0usize, 0usize, 0usize, None); 24];
+    let mut saved_vol_dur_len = 0usize;
+
+    for s in 0..2 {
+        for (slot, p) in b.sides[s].roster.iter_mut().enumerate() {
+            if p.status == Status::Slp {
+                let t = p.status_state.get_int(DK::Time);
+                if t > 0 {
+                    if saved_slp_len < saved_slp.len() {
+                        saved_slp[saved_slp_len] = (s, slot, t);
+                        saved_slp_len += 1;
+                    }
+                    p.status_state.set_int(DK::Time, 1);
+                }
+            }
+            for (vi, (vcid, vst)) in p.volatiles.iter_mut().enumerate() {
+                if Some(*vcid) == c_conf {
+                    let t = vst.get_int(DK::Time);
+                    if t > 0 {
+                        if saved_vol_time_len < saved_vol_time.len() {
+                            saved_vol_time[saved_vol_time_len] = (s, slot, vi, t);
+                            saved_vol_time_len += 1;
+                        }
+                        vst.set_int(DK::Time, 1);
+                    }
+                } else if Some(*vcid) == c_ptrap || Some(*vcid) == c_dis || Some(*vcid) == c_enc {
+                    if vst.duration.is_some() {
+                        if saved_vol_dur_len < saved_vol_dur.len() {
+                            saved_vol_dur[saved_vol_dur_len] = (s, slot, vi, vst.duration);
+                            saved_vol_dur_len += 1;
+                        }
+                        vst.duration = Some(1);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut h = nc2000_engine::fxhash::FxHasher::default();
+    0x4F50_505F_434F_4E54u64.hash(&mut h);
+    let qc = if idle_move { false } else { b.quick_claw_roll };
+    (
+        b.turn,
+        b.request_state,
+        b.mid_turn,
+        b.started,
+        b.ended,
+        &b.winner,
+        &b.field,
+        &b.queue,
+        &b.faint_queue,
+    )
+        .hash(&mut h);
+    (
+        b.effect_order,
+        b.last_successful_move_this_turn,
+        b.last_move_id,
+        qc,
+        b.speed_order,
+    )
+        .hash(&mut h);
+    if !omit_damage {
+        match hp_buckets {
+            Some(_) => (b.last_damage / 16).hash(&mut h),
+            None => b.last_damage.hash(&mut h),
+        }
+    }
+
+    for s in 0..2 {
+        let side = &b.sides[s];
+        (
+            side.name,
+            &side.party,
+            side.active,
+            side.pokemon_left,
+            side.total_fainted,
+            &side.side_conditions,
+            &side.slot_conditions,
+            side.handler_mask,
+        )
+            .hash(&mut h);
+        (
+            side.last_move,
+            side.fainted_this_turn,
+            side.fainted_last_turn,
+            side.request,
+            &side.choice,
+        )
+            .hash(&mut h);
+        if s == observer_side {
+            side.roster.len().hash(&mut h);
+            for p in side.roster.iter() {
+                p.hash_with(&mut h, hp_buckets);
+            }
+        } else {
+            side.party.len().hash(&mut h);
+            for &slot in side.party.iter() {
+                side.roster[slot as usize].hash_with(&mut h, hp_buckets);
+            }
+        }
+    }
+    let key = h.finish();
+
+    for &(s, slot, vi, dur) in &saved_vol_dur[..saved_vol_dur_len] {
+        b.sides[s].roster[slot].volatiles[vi].1.duration = dur;
+    }
+    for &(s, slot, vi, t) in &saved_vol_time[..saved_vol_time_len] {
+        b.sides[s].roster[slot].volatiles[vi].1.set_int(DK::Time, t);
+    }
+    for &(s, slot, t) in &saved_slp[..saved_slp_len] {
+        b.sides[s].roster[slot].status_state.set_int(DK::Time, t);
+    }
+    for entry in saved_hp.into_iter().flatten() {
+        let (id, hp) = entry;
+        b.sides[id.side as usize].roster[id.slot as usize].hp = hp;
+    }
+    key
+}
+
 /// UCB1 (untried-first, then mean + c·sqrt(ln N / n)).
 pub(crate) fn select_ucb(
     cfg: &RmConfig,
@@ -1343,12 +1668,49 @@ pub(crate) fn run_iteration_with_root_child_value(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
     leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
+    trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
+    root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
+) -> f64 {
+    run_iteration_with_blind_ctx(
+        cfg,
+        rng,
+        nodes,
+        table,
+        sim,
+        dex,
+        turn_cap,
+        start,
+        force_root,
+        root_joint,
+        depth_out,
+        leaf,
+        trace,
+        root_child_value,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_iteration_with_blind_ctx(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<Node>,
+    table: &mut FxHashMap<u64, usize>,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+    leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
     mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
     mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
+    mut blind_ctx: Option<&mut BlindContinuationCtx<'_>>,
 ) -> f64 {
-    let mut path_buf = [(0usize, 0usize, 0usize); 32];
+    let mut path_buf = [(0usize, 0usize, 0usize, usize::MAX); 32];
     let mut path_len = 0usize;
-    let mut path_overflow: Vec<(usize, usize, usize)> = Vec::new();
+    let mut path_overflow: Vec<(usize, usize, usize, usize)> = Vec::new();
     let mut node_idx = start;
 
     // ---- selection until a leaf: terminal, horizon, or unexpanded state
@@ -1364,18 +1726,66 @@ pub(crate) fn run_iteration_with_root_child_value(
                 // forced: skip the stats machinery
                 0
             } else {
+                let mut obs_node_idx = usize::MAX;
                 let ai = match force_root[s] {
                     Some(f) if at_root => {
                         nodes[node_idx].n[s][f] += 1;
                         f
                     }
-                    _ => select_ucb(cfg, rng, &mut nodes[node_idx], s),
+                    _ => {
+                        if !at_root && !nodes[node_idx].preview {
+                            if let Some(ctx) = blind_ctx.as_deref_mut() {
+                                if s == ctx.observer_side {
+                                    let obs_key = observer_continuation_key(
+                                        cfg,
+                                        dex,
+                                        sim,
+                                        s,
+                                        &nodes[node_idx].acts[s],
+                                    );
+                                    let oi = match ctx.obs_table.get(&obs_key) {
+                                        Some(&i) => i,
+                                        None => {
+                                            let i = ctx.obs_nodes.len();
+                                            ctx.obs_nodes.push(ObsInfoNode {
+                                                acts: nodes[node_idx].acts[s].clone(),
+                                                n: vec![0; k],
+                                                w: vec![0.0; k],
+                                            });
+                                            ctx.obs_table.insert(obs_key, i);
+                                            i
+                                        }
+                                    };
+                                    if ctx.obs_nodes[oi].acts.len() == k {
+                                        let node_obs = &mut ctx.obs_nodes[oi];
+                                        let pick = select_ucb_counts(
+                                            cfg.c,
+                                            rng,
+                                            &mut node_obs.n,
+                                            &node_obs.w,
+                                        );
+                                        nodes[node_idx].n[s][pick] += 1;
+                                        obs_node_idx = oi;
+                                        pick
+                                    } else {
+                                        select_ucb(cfg, rng, &mut nodes[node_idx], s)
+                                    }
+                                } else {
+                                    select_ucb(cfg, rng, &mut nodes[node_idx], s)
+                                }
+                            } else {
+                                select_ucb(cfg, rng, &mut nodes[node_idx], s)
+                            }
+                        } else {
+                            select_ucb(cfg, rng, &mut nodes[node_idx], s)
+                        }
+                    }
                 };
                 if path_len < path_buf.len() {
-                    path_buf[path_len] = (node_idx, s, ai);
+                    path_buf[path_len] = (node_idx, s, ai, obs_node_idx);
                     path_len += 1;
                 } else {
-                    path_overflow.push((node_idx, s, ai));
+                    path_overflow.push((node_idx, s, ai, obs_node_idx));
                 }
                 ai
             };
@@ -1438,7 +1848,10 @@ pub(crate) fn run_iteration_with_root_child_value(
             crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
             break leaf(sim, rng, false);
         }
-        let key = key_of(cfg, dex, sim);
+        let key = match blind_ctx.as_deref() {
+            Some(ctx) => opp_continuation_key(cfg, dex, sim, ctx.observer_side),
+            None => key_of(cfg, dex, sim),
+        };
         match table.get(&key) {
             Some(&child) => {
                 *depth_out += 1;
@@ -1474,7 +1887,7 @@ pub(crate) fn run_iteration_with_root_child_value(
 
     let mut path_nodes = [start; 32];
     let mut path_nodes_len = 0usize;
-    for &(ni, _, _) in &path_buf[..path_len] {
+    for &(ni, _, _, _) in &path_buf[..path_len] {
         if path_nodes_len == 0 || path_nodes[path_nodes_len - 1] != ni {
             if path_nodes_len < path_nodes.len() {
                 path_nodes[path_nodes_len] = ni;
@@ -1486,9 +1899,15 @@ pub(crate) fn run_iteration_with_root_child_value(
     let mut root_reward0 = reward0;
     for idx in (0..path_nodes_len).rev() {
         let ni = path_nodes[idx];
-        for &(p_ni, s, ai) in &path_buf[..path_len] {
+        for &(p_ni, s, ai, oi) in &path_buf[..path_len] {
             if p_ni == ni {
-                nodes[ni].w[s][ai] += if s == 0 { val0 } else { 1.0 - val0 };
+                let r_s = if s == 0 { val0 } else { 1.0 - val0 };
+                nodes[ni].w[s][ai] += r_s;
+                if oi != usize::MAX {
+                    if let Some(ctx) = blind_ctx.as_deref_mut() {
+                        ctx.obs_nodes[oi].w[ai] += r_s;
+                    }
+                }
             }
         }
         if ni == start {
@@ -1497,8 +1916,14 @@ pub(crate) fn run_iteration_with_root_child_value(
             val0 = nodes[ni].backed_up_value(val0);
         }
     }
-    for (ni, s, ai) in path_overflow {
-        nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
+    for (ni, s, ai, oi) in path_overflow {
+        let r_s = if s == 0 { reward0 } else { 1.0 - reward0 };
+        nodes[ni].w[s][ai] += r_s;
+        if oi != usize::MAX {
+            if let Some(ctx) = blind_ctx.as_deref_mut() {
+                ctx.obs_nodes[oi].w[ai] += r_s;
+            }
+        }
     }
     root_reward0
 }
@@ -1568,8 +1993,24 @@ pub struct SkuctSearch {
 /// alternative exists.
 pub(crate) fn certain_self_loss(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> bool {
     match c {
-        SearchChoice::Move(id) => {
-            b.sides[side].pokemon_left == 1 && dex.move_static(id).selfdestruct
+        SearchChoice::Move(id) if b.sides[side].pokemon_left == 1 && dex.move_static(id).selfdestruct => {
+            let Some(att) = b.active_id(side) else {
+                return false;
+            };
+            let me = b.poke(att);
+            // If the user is asleep with 0 sleep turns elapsed (guaranteed >= 1 turn of sleep in Stadium 2)
+            // and holds no sleep-curing berry, or frozen with a non-defrosting move while the foe is
+            // taking residual damage or cannot thaw it, selecting a self-KO move while guaranteed
+            // unable to execute it on this turn is not a certain self-KO.
+            if me.status == nc2000_engine::state::Status::Slp
+                && me.status_state.get_int(nc2000_engine::state::DK::Time) > 1
+                && !me
+                    .item
+                    .is_some_and(|i| matches!(dex.items.key(i), "mintberry" | "miracleberry"))
+            {
+                return false;
+            }
+            true
         }
         _ => false,
     }
@@ -1840,6 +2281,261 @@ fn faster_than_foe(b: &Battle, dex: &Dex, side: usize) -> bool {
         return false;
     }
     b.get_pokemon_action_speed(dex, me) > b.get_pokemon_action_speed(dex, foe)
+}
+
+pub(crate) fn public_max_foe_speed(b: &Battle, dex: &Dex, side: usize) -> (i32, bool) {
+    let Some(foe_id) = b.active_id(1 - side) else {
+        return (0, false);
+    };
+    let foe = b.poke(foe_id);
+    let sp = dex.species.get(foe.species);
+    let lv = i32::from(foe.level);
+    let unboosted_max = ((2 * i32::from(sp.base_stats.spe) + 30 + 63) * lv) / 100 + 5;
+    let has_par_drop = foe.status == nc2000_engine::state::Status::Par
+        && dex
+            .conds_id("parspeeddrop")
+            .is_some_and(|c| foe.has_volatile(c));
+    let max_spe = nc2000_engine::compact::get_stat_branchless(
+        unboosted_max,
+        foe.boosts[4],
+        4,
+        false,
+        false,
+        false,
+        has_par_drop,
+        false,
+        false,
+        false,
+        nc2000_engine::compact::ItemStatKind::None,
+    );
+    // Conservative upper bound: if the foe holds an item and its item is not
+    // publicly known to be something other than Quick Claw, treat Quick Claw
+    // as possible.
+    let may_have_quick_claw = foe.item.is_some();
+    (max_spe, may_have_quick_claw)
+}
+
+pub(crate) fn public_dominated_reason(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    c: SearchChoice,
+    rules: MaskRules,
+) -> Option<&'static str> {
+    use nc2000_engine::state::Status;
+    if certain_self_loss(b, dex, side, c) {
+        return Some("self-KO with the last mon");
+    }
+    let SearchChoice::Move(id) = c else {
+        return None;
+    };
+    let ms = dex.move_static(id);
+    let Some(att) = b.active_id(side) else {
+        return None;
+    };
+    let key = dex.moves.key(id);
+    let me = b.poke(att);
+    let my_speed = b.get_pokemon_action_speed(dex, att);
+    let (foe_max_speed, foe_may_qc) = public_max_foe_speed(b, dex, side);
+    let guaranteed_faster = !foe_may_qc && my_speed > foe_max_speed;
+
+    // 1. Operational Sleep Clause forfeit: if the foe already has a sleeping
+    // bench mon (or can switch while carrying a sleeping mon) and we are
+    // guaranteed to move first, inflicting sleep forfeits the game.
+    if ms.status.as_deref() == Some("slp")
+        && matches!(ms.target, "normal" | "allAdjacentFoes" | "allAdjacent")
+        && guaranteed_faster
+        && b.has_sleeping_pokemon(1 - side)
+    {
+        let opp = &b.sides[1 - side];
+        let bench_asleep = opp.party.iter().skip(1).any(|&slot| {
+            let p = &opp.roster[slot as usize];
+            !p.fainted && p.status == Status::Slp
+        });
+        if bench_asleep || foe_can_switch(b, side) {
+            return Some("inflicting sleep would forfeit under Sleep Clause");
+        }
+    }
+
+    // Wait-turn exceptions where a deliberate no-op is strategically valid:
+    if dex.conds_id("encore").is_some_and(|cond| me.has_volatile(cond))
+        && (dex
+            .conds_id("substitute")
+            .is_some_and(|cond| me.has_volatile(cond))
+            || me.boosts.iter().take(5).any(|&x| x > 0)
+            || b.active_id(1 - side).is_some_and(|f| b.poke(f).trapped))
+    {
+        return None;
+    }
+    if rules.destiny_bond_wait
+        && b.active_id(1 - side).is_some_and(|id| {
+            dex.conds_id("destinybond")
+                .is_some_and(|cond| b.poke(id).has_volatile(cond))
+        })
+    {
+        return None;
+    }
+    if b.active_id(1 - side)
+        .and_then(|id| {
+            dex.conds_id("perishsong")
+                .and_then(|cond| b.poke(id).volatile(cond))
+        })
+        .and_then(|v| v.duration)
+        == Some(1)
+    {
+        return None;
+    }
+    if rules.residual_damage_wait && foe_has_residual_damage(b, dex, side) {
+        return None;
+    }
+    if rules.own_recovery_wait
+        && !me.fainted
+        && me.hp > 0
+        && me.hp < me.maxhp
+        && me.item.is_some()
+        && me.item == dex.items.id("leftovers")
+    {
+        return None;
+    }
+
+    // 2. Own-state provable no-ops:
+    // Full-HP healing when guaranteed to move before the foe can deal damage:
+    if ms.heal.is_some()
+        || key == "rest"
+        || (rules.extended_noops && matches!(key, "moonlight" | "morningsun" | "synthesis"))
+    {
+        if me.hp >= me.maxhp
+            && guaranteed_faster
+            && (!rules.priority_heal || !foe_may_preempt_with_damage(b, dex, side, ms.priority))
+        {
+            return Some("healing at full HP, and faster");
+        }
+        return None;
+    }
+    // Own-side screen/safeguard/mist already active:
+    if let Some(sc) = ms.side_condition.as_deref() {
+        if ms.target != "foeSide"
+            && dex
+                .conds_id(sc)
+                .is_some_and(|cid| b.sides[side].has_side_condition(cid))
+        {
+            return Some("that side condition is already up");
+        }
+    }
+    // Phazing when foe has no living bench:
+    if ms.force_switch && !b.can_switch((1 - side) as u8) {
+        return Some("there is nobody left to phaze in");
+    }
+    // Baton Pass when our own side has no living bench:
+    if rules.extended_noops && ms.self_switch.is_some() && !b.can_switch(side as u8) {
+        return Some("Baton Pass fails with nobody left to switch to");
+    }
+    // Awake Sleep Talk / Snore when guaranteed faster than foe:
+    if rules.sleep_talk_awake
+        && ms.sleep_usable
+        && me.status != Status::Slp
+        && guaranteed_faster
+    {
+        return Some("Sleep Talk and Snore need the user asleep");
+    }
+    // Substitute when HP <= maxhp/4 or Substitute already up and guaranteed faster:
+    if key == "substitute" {
+        let up = dex
+            .conds_id("substitute")
+            .is_some_and(|sid| me.has_volatile(sid));
+        let me_has_heal_berry = me
+            .item
+            .is_some_and(|id| matches!(dex.items.key(id), "berry" | "goldberry"));
+        let foe_may_raise_hp = b.active_id(1 - side).is_some_and(|f| {
+            let fp = b.poke(f);
+            fp.transformed
+                || fp.move_slots.iter().any(|slot| !slot.shared)
+                || crate::belief::format_learnsets()
+                    .species(dex.species.key(fp.species))
+                    .map_or(true, |ls| {
+                        ls.moves.iter().any(|m| {
+                            matches!(
+                                m.as_str(),
+                                "painsplit" | "present" | "metronome" | "mirrormove" | "sketch"
+                            )
+                        })
+                    })
+        });
+        let no_hp = (me.hp <= me.maxhp / 4 || me.maxhp == 1)
+            && (guaranteed_faster || (!me_has_heal_berry && !foe_may_raise_hp));
+        let already_up = up
+            && guaranteed_faster
+            && !foe_may_preempt_with_damage(b, dex, side, ms.priority);
+        if no_hp || already_up {
+            return Some("Substitute is already up, or there is not enough HP to pay for one");
+        }
+    }
+    // Belly Drum when HP <= maxhp/2 or +6 Attack and guaranteed faster:
+    if rules.extended_noops && key == "bellydrum" {
+        let max_leftovers_gain = if me.item.is_some() && me.item == dex.items.id("leftovers") {
+            (me.maxhp / 16).max(1)
+        } else {
+            0
+        };
+        let foe_may_raise_hp = b.active_id(1 - side).is_some_and(|f| {
+            let fp = b.poke(f);
+            fp.transformed
+                || fp.move_slots.iter().any(|slot| !slot.shared)
+                || crate::belief::format_learnsets()
+                    .species(dex.species.key(fp.species))
+                    .map_or(true, |ls| {
+                        ls.moves.iter().any(|m| {
+                            matches!(
+                                m.as_str(),
+                                "painsplit" | "present" | "metronome" | "mirrormove" | "sketch"
+                            )
+                        })
+                    })
+        });
+        let hp_too_low_strict = (me.hp as f64) <= (me.maxhp as f64) / 2.0
+            && (guaranteed_faster
+                || (!foe_may_raise_hp
+                    && ((me.hp + max_leftovers_gain) as f64) <= (me.maxhp as f64) / 2.0));
+        let atk_capped_strict = me.boosts[0] >= 6 && guaranteed_faster;
+        if hp_too_low_strict || atk_capped_strict {
+            return Some("Belly Drum needs over half HP and uncapped Attack");
+        }
+    }
+    // Heal Bell when entire own party is healthy and guaranteed faster:
+    if rules.extended_noops
+        && key == "healbell"
+        && guaranteed_faster
+        && !foe_may_preempt_with_damage(b, dex, side, ms.priority)
+        && b.sides[side]
+            .party
+            .iter()
+            .all(|&slot| b.sides[side].roster[slot as usize].status == Status::None)
+    {
+        return Some("Heal Bell has no status to cure");
+    }
+    // Self-targeted stat boosts already at +6 when guaranteed faster:
+    if key == "curse" && !me.has_type(dex.known_types.ghost) {
+        if me.boosts[0] >= 6 && me.boosts[1] >= 6 && guaranteed_faster {
+            return Some("every stat this move moves is already capped");
+        }
+        return None;
+    }
+    if ms.has_boosts
+        && ms.target == "self"
+        && ms.status.is_none()
+        && ms.volatile_status.is_none()
+        && ms.heal.is_none()
+        && ms.self_effect.is_none()
+        && ms.secondaries.is_empty()
+        && guaranteed_faster
+        && ms.boosts.iter().all(|&(stat, amount)| {
+            let cur = me.boosts[stat];
+            (amount > 0 && cur >= 6) || (amount < 0 && cur <= -6) || amount == 0
+        })
+    {
+        return Some("every stat this move moves is already capped");
+    }
+    None
 }
 
 fn foe_may_preempt_with_damage(b: &Battle, dex: &Dex, side: usize, priority: i8) -> bool {

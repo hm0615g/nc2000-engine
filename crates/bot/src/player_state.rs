@@ -60,6 +60,7 @@ impl LocalPlayer {
             tracker.push_line(dex, line);
         }
         let mut observer = Observer::from_mons(side, tracker.observer_mons());
+        observer.set_mechanical_inference(true);
         for (slot, name) in tracker.names(1 - side).iter().enumerate() {
             if !name.is_empty() {
                 observer.set_name(slot, name);

@@ -79,6 +79,9 @@ pub struct PositionSpec {
     /// The active cannot switch out (Mean Look / Wrap family).
     #[serde(default)]
     pub trapped: bool,
+    /// The active may be trapped by an unknown opponent state (`maybeTrapped`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub maybe_trapped: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -274,6 +277,9 @@ pub struct MonSpec {
     /// PP marks: how often each move has been publicly used.
     #[serde(default)]
     pub uses: Vec<UseSpec>,
+    /// PP marks accumulated while Transformed into another mon (cleared on exit).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transformed_uses: Vec<UseSpec>,
     /// Own side: the request's per-move PP. Empty = derive from the set and
     /// the public use counts (the hand-entry default: "as printed, minus
     /// what has been seen").
@@ -323,10 +329,14 @@ pub struct MonSpec {
     /// original item.
     #[serde(default)]
     pub item_gained: bool,
+    /// Bitmask of passive items excluded by mechanical triggers (`observe::ITEM_*`).
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub excluded_items: u32,
 }
 
 fn unknown_hp_types() -> u16 { u16::MAX }
 fn all_hp_types(mask: &u16) -> bool { *mask == u16::MAX }
+fn is_zero_u32(v: &u32) -> bool { *v == 0 }
 
 fn full_hp() -> i32 {
     100
@@ -360,6 +370,7 @@ impl Default for MonSpec {
             boosts: [0; 7],
             volatiles: Vec::new(),
             uses: Vec::new(),
+            transformed_uses: Vec::new(),
             pp: Vec::new(),
             item_now: None,
             locked: None,
@@ -376,6 +387,7 @@ impl Default for MonSpec {
             item_original: ItemKnowledge::unknown(),
             item_current: ItemKnowledge::unknown(),
             item_gained: false,
+            excluded_items: 0,
         }
     }
 }
@@ -546,7 +558,11 @@ impl PositionSpec {
         } else if self.force_switch {
             req["forceSwitch"] = serde_json::json!([true]);
         } else {
-            req["active"] = serde_json::json!([{"moves": req_moves, "trapped": self.trapped}]);
+            let mut active_obj = serde_json::json!({"moves": req_moves, "trapped": self.trapped});
+            if self.maybe_trapped {
+                active_obj["maybeTrapped"] = serde_json::json!(true);
+            }
+            req["active"] = serde_json::json!([active_obj]);
         }
         Ok(req.to_string())
     }

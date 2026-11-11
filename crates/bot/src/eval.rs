@@ -427,12 +427,48 @@ pub fn best_hit_fraction(
     def: PokeId,
     couple_evasion: bool,
 ) -> f64 {
+    let dt = nc2000_engine::compact::dex_tables(dex);
+    let a_mon = b.poke(att);
+    let d_mon = b.poke(def);
+    let att_side = att.side as usize;
+    let last_mon = b.sides[att_side]
+        .party
+        .iter()
+        .filter(|&&slot| {
+            let p = &b.sides[att_side].roster[slot as usize];
+            !p.fainted && p.hp > 0
+        })
+        .count()
+        <= 1;
+    let def_sub_up = dex
+        .conds_id("substitute")
+        .is_some_and(|c| d_mon.has_volatile(c));
     let mut best = 0.0f64;
-    for ms in b.poke(att).move_slots.iter() {
+    for ms in a_mon.move_slots.iter() {
         if ms.pp <= 0 || ms.disabled {
             continue;
         }
-        best = best.max(expected_hit_fraction(b, dex, att, def, ms.id, couple_evasion));
+        let mspec = &dt.move_specs[ms.id.0 as usize];
+        if mspec.is_selfdestruct {
+            if last_mon || (def_sub_up && !mspec.bypasses_sub) {
+                continue;
+            }
+        }
+        let v_raw = expected_hit_fraction(b, dex, att, def, ms.id, couple_evasion);
+        let v = if mspec.is_selfdestruct {
+            let att_hp_frac = (a_mon.hp.max(0) as f64) / (a_mon.maxhp.max(1) as f64);
+            let def_hp_frac = (d_mon.hp.max(0) as f64) / (d_mon.maxhp.max(1) as f64);
+            let status_mult = if a_mon.status == Status::None {
+                1.0
+            } else {
+                0.65
+            };
+            let l_att = att_hp_frac * status_mult;
+            (v_raw.min(1.0) * (0.35 + 0.65 * def_hp_frac) - 0.75 * l_att).max(0.0)
+        } else {
+            v_raw
+        };
+        best = best.max(v);
     }
     best
 }

@@ -125,8 +125,11 @@ impl DmgKernel1D {
                 continue;
             }
             let mspec = &table.move_specs[att_idx][m_i];
-            if last_mon && mspec.is_selfdestruct {
-                continue;
+            if mspec.is_selfdestruct {
+                let def_sub_up = (cb.mons[def_idx].vol_flags & vol_bit::SUBSTITUTE) != 0;
+                if last_mon || (def_sub_up && !mspec.bypasses_sub) {
+                    continue;
+                }
             }
             let kern = Self::for_move(cb, table, att_side, att_slot, def_side, def_slot, m_i);
             if kern.max_dmg <= 0 {
@@ -135,7 +138,25 @@ impl DmgKernel1D {
             let p_ko = kern.ko_prob(def_hp);
             let frac = (kern.mean_dmg / (def_hp as f32)).min(1.0);
             let raw_frac = kern.mean_dmg / (table.mons[def_idx].maxhp.max(1) as f32);
-            let score = p_ko + frac + 1e-3 * raw_frac;
+            let score = if mspec.is_selfdestruct {
+                let att_hp_frac = (att_mon.hp().max(0) as f32)
+                    / (table.mons[att_idx].maxhp.max(1) as f32);
+                let def_hp_frac =
+                    (def_hp as f32) / (table.mons[def_idx].maxhp.max(1) as f32);
+                let status_mult = if att_mon.status_raw() == 0 {
+                    1.0f32
+                } else {
+                    0.65f32
+                };
+                let l_att = att_hp_frac * status_mult;
+                let v_eff = (frac * (0.35 + 0.65 * def_hp_frac) - 0.75 * l_att).max(0.0);
+                if v_eff <= 0.0 {
+                    continue;
+                }
+                v_eff * (p_ko + frac)
+            } else {
+                p_ko + frac + 1e-3 * raw_frac
+            };
             if score > best_score {
                 best_score = score;
                 best_kern = kern;

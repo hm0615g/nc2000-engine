@@ -381,6 +381,11 @@ class BattleDriver {
 		this.retries = 0;
 		this.ended = false;
 		this.turn = 0;
+		this.lastMoveActTurn = 0;
+		this.allowSameTurnMove = false;
+		this.faintsSeen = [0, 0];
+		this.sideActiveFainted = [false, false];
+		this.sidePendingBp = [false, false];
 		this.decisions = 0;
 		this.moveReqs = 0;
 		this.result = '';
@@ -417,6 +422,12 @@ class BattleDriver {
 		this.sentchoice = null;
 		this.sawPreviewLine = false;
 		this.retries = 0;
+		this.turn = 0;
+		this.lastMoveActTurn = 0;
+		this.allowSameTurnMove = false;
+		this.faintsSeen = [0, 0];
+		this.sideActiveFainted = [false, false];
+		this.sidePendingBp = [false, false];
 		if (this.actTimer) clearTimeout(this.actTimer);
 		this.actTimer = null;
 		this.awaitingReplay = false;
@@ -461,7 +472,44 @@ class BattleDriver {
 		if (cmd === 'inactive' && /timer is (now )?ON/i.test(line)) {
 			this.log(`timer confirmed: ${line.slice('|inactive|'.length)}`);
 		}
-		if (cmd === 'turn') this.turn = parseInt(line.split('|')[2], 10) || this.turn;
+		if (cmd === 'turn') {
+			this.turn = parseInt(line.split('|')[2], 10) || this.turn;
+			this.sidePendingBp[0] = false;
+			this.sidePendingBp[1] = false;
+		}
+		if (cmd === 'move') {
+			const parts = line.split('|');
+			const subj = parts[2] || '';
+			const s = subj.startsWith('p2') ? 1 : subj.startsWith('p1') ? 0 : -1;
+			if (s >= 0) {
+				const mId = toID(parts[3] || '');
+				const called = parts.slice(4).some(p => p.startsWith('[from] ') && toID(p.slice(7).replace(/^move:\s*/i, '')) !== mId);
+				if (mId === 'batonpass') this.sidePendingBp[s] = true;
+				else if (!called) this.sidePendingBp[s] = false;
+			}
+		}
+		if (cmd === '-fail' || cmd === '-miss') {
+			const subj = line.split('|')[2] || '';
+			const s = subj.startsWith('p2') ? 1 : subj.startsWith('p1') ? 0 : -1;
+			if (s >= 0) this.sidePendingBp[s] = false;
+		}
+		if (cmd === 'switch' || cmd === 'drag') {
+			const subj = line.split('|')[2] || '';
+			const s = subj.startsWith('p2') ? 1 : subj.startsWith('p1') ? 0 : -1;
+			if (s >= 0) {
+				this.sideActiveFainted[s] = false;
+				this.sidePendingBp[s] = false;
+			}
+		}
+		if (cmd === 'faint') {
+			const subj = line.split('|')[2] || '';
+			const s = subj.startsWith('p2') ? 1 : subj.startsWith('p1') ? 0 : -1;
+			if (s >= 0) {
+				this.faintsSeen[s]++;
+				this.sideActiveFainted[s] = true;
+				this.sidePendingBp[s] = false;
+			}
+		}
 		if (cmd === 'teampreview') this.sawPreviewLine = true;
 		if (cmd === 'win' || cmd === 'tie') {
 			const winner = cmd === 'win' ? line.split('|')[2] : '';
@@ -474,6 +522,7 @@ class BattleDriver {
 	}
 
 	onError(line) {
+		this.allowSameTurnMove = true;
 		// every |error| in a battle room is a choice rejection — target 0.
 		stats.rejections.push(`${this.room} d${this.decisions}: ${line}`);
 		this.log(`REJECTED: ${line}`);
@@ -517,6 +566,33 @@ class BattleDriver {
 		this.actTimer = setTimeout(() => this.act(), DEBOUNCE_MS);
 	}
 
+	requestWaitReason(req) {
+		if (!req || req.wait) return null;
+		const mySide = req.side && req.side.id === 'p2' ? 1 : 0;
+		const reqMons = (req.side && req.side.pokemon) || [];
+		const reqFaints = reqMons.filter(p => p.condition === '0 fnt' || String(p.condition || '').endsWith(' fnt')).length;
+		if (this.faintsSeen[mySide] < reqFaints) {
+			return `own faintsSeen (${this.faintsSeen[mySide]}) < reqFaints (${reqFaints})`;
+		}
+		if (req.teamPreview) {
+			if (!this.sawPreviewLine) return 'teampreview request before |poke| lines';
+			return null;
+		}
+		if (req.forceSwitch && req.forceSwitch[0]) {
+			if (!this.sideActiveFainted[mySide] && !this.sidePendingBp[mySide]) {
+				return 'forceSwitch before |faint| or Baton Pass |move|';
+			}
+			return null;
+		}
+		if (req.active) {
+			if (this.turn < 1) return 'move request before |turn| 1';
+			if (!this.allowSameTurnMove && this.turn <= this.lastMoveActTurn) {
+				return `move request before |turn| > ${this.lastMoveActTurn} (at turn ${this.turn})`;
+			}
+		}
+		return null;
+	}
+
 	act() {
 		if (this.ended || !this.pendingReq) return;
 		const reqStr = this.pendingReq;
@@ -530,15 +606,21 @@ class BattleDriver {
 		const rqid = req.rqid;
 
 		// |request| reaches the socket before the update lines that led to it
-		// (same ordering as the M15a sim stream); the debounce absorbs that,
-		// but the team-preview request additionally needs the |poke| lines.
-		if (!RANDOM && req.teamPreview && !this.sawPreviewLine) {
-			return this.holdForMoreLines('teampreview request before |poke| lines');
+		// (same ordering as the M15a sim stream); verify that the corresponding
+		// |poke| / |faint| / Baton Pass |move| / |turn| lines have arrived
+		// before draining lineBuffer or choosing.
+		const waitWhy = this.requestWaitReason(req);
+		if (waitWhy) {
+			return this.holdForMoreLines(waitWhy);
 		}
 
 		if (RANDOM) {
 			this.pendingReq = null;
 			if (req.wait) return;
+			if (req.active) {
+				this.lastMoveActTurn = this.turn;
+				this.allowSameTurnMove = false;
+			}
 			if (this.sentchoice) return; // rejoin replay: already answered
 			this.decisions++;
 			stats.decisions++;
@@ -564,11 +646,19 @@ class BattleDriver {
 		try {
 			owes = this.searcher.onRequest(reqStr);
 		} catch (e) {
-			// synthesis needs lines that haven't arrived yet — keep waiting
+			// synthesis needs lines that haven't arrived yet — rebuild cleanly
+			// from visibleLines on the next tick so partially-pushed lines are
+			// never double-ingested.
+			this.freeSearcher();
+			this.lineBuffer = this.visibleLines.slice();
 			return this.holdForMoreLines(`onRequest: ${e.message || e}`);
 		}
 		this.pendingReq = null;
 		this.retries = 0;
+		if (owes && req.active) {
+			this.lastMoveActTurn = this.turn;
+			this.allowSameTurnMove = false;
+		}
 
 		// resume proof: same request as before the drop -> the rebuilt state
 		// must be bit-identical to the pre-drop synthesis
