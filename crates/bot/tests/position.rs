@@ -463,3 +463,42 @@ fn impossible_hidden_power_evidence_is_rejected() {
     let spec = PositionSpec::parse(&value.to_string()).unwrap();
     assert!(agent.set_position(&dex, &spec).unwrap_err().contains("contradicts public gender"));
 }
+
+#[test]
+fn hand_entered_recharge_and_struggle_positions_analyze_without_drift() {
+    let dex = load_dex();
+    let cfg = RmConfig { rule: SelRule::Ucb, ..RmConfig::default() };
+
+    // 1. Hand-entered recharge turn (no explicit `pp` array): only `move recharge` is legal.
+    let mut rech = demo_position();
+    rech["sides"][0]["mons"][4]["must_recharge"] = json!(true);
+    let spec = PositionSpec::parse(&rech.to_string()).unwrap();
+    let mut agent = ProtocolAgent::new(&dex, 0, pool(), cfg.clone(), 21);
+    agent.set_position(&dex, &spec).unwrap();
+    agent.step(&dex, 60).unwrap();
+    assert_eq!(agent.legality_drift, 0);
+    let r = analysis::report(&agent, &dex, 0, 21);
+    let inputs: Vec<&str> =
+        r["actions"].as_array().unwrap().iter().map(|a| a["input"].as_str().unwrap()).collect();
+    assert_eq!(inputs, vec!["move recharge"]);
+
+    // 2. Hand-entered Struggle turn (all 4 moves exhausted via `uses`): `move struggle` + bench switches.
+    let mut strug = demo_position();
+    strug["sides"][0]["mons"][4]["uses"] = json!([
+        {"move": "bodyslam", "n": 24},
+        {"move": "earthquake", "n": 16},
+        {"move": "selfdestruct", "n": 8},
+        {"move": "curse", "n": 16}
+    ]);
+    let s_spec = PositionSpec::parse(&strug.to_string()).unwrap();
+    let mut s_agent = ProtocolAgent::new(&dex, 0, pool(), cfg, 22);
+    s_agent.set_position(&dex, &s_spec).unwrap();
+    s_agent.step(&dex, 60).unwrap();
+    assert_eq!(s_agent.legality_drift, 0);
+    let s_r = analysis::report(&s_agent, &dex, 0, 22);
+    let s_inputs: Vec<&str> =
+        s_r["actions"].as_array().unwrap().iter().map(|a| a["input"].as_str().unwrap()).collect();
+    assert!(s_inputs.contains(&"move struggle"), "{s_inputs:?}");
+    assert!(s_inputs.contains(&"switch 2"), "{s_inputs:?}");
+    assert!(s_inputs.contains(&"switch 3"), "{s_inputs:?}");
+}

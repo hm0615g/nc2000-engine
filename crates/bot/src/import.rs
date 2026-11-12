@@ -3283,6 +3283,233 @@ mod m17a_tests {
         assert_eq!(live.state_key128(), rebuilt.state_key128());
     }
 
+    #[test]
+    fn ppless_locked_and_struggle_requests_round_trip_without_zeroing_pp() {
+        let dex = conformance::load_dex();
+        let pool = MetaPool { teams: Vec::new() };
+
+        // 1. Non-transformed locked move (Rollout continuation: PS omits pp/maxpp).
+        let own = canonical_team(
+            &dex,
+            vec![
+                test_set("Miltank", 55, "Leftovers", &["Rollout", "Milk Drink", "Body Slam", "Heal Bell"]),
+                test_set("Snorlax", 50, "Mint Berry", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+                test_set("Starmie", 50, "Miracle Berry", &["Surf", "Psychic", "Thunder Wave", "Recover"]),
+                test_set("Exeggutor", 50, "Gold Berry", &["Psychic", "Giga Drain", "Sleep Powder", "Explosion"]),
+                test_set("Gengar", 50, "Mystery Berry", &["Thunderbolt", "Ice Punch", "Destiny Bond", "Explosion"]),
+                test_set("Cloyster", 50, "Pink Bow", &["Surf", "Spikes", "Explosion", "Icy Wind"]),
+            ],
+        );
+        let foe = canonical_team(
+            &dex,
+            vec![
+                test_set("Zapdos", 55, "Leftovers", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+                test_set("Cloyster", 50, "Mint Berry", &["Surf", "Spikes", "Toxic", "Explosion"]),
+                test_set("Exeggutor", 50, "Miracle Berry", &["Psychic", "Giga Drain", "Stun Spore", "Explosion"]),
+                test_set("Suicune", 50, "Gold Berry", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
+                test_set("Misdreavus", 50, "Mystery Berry", &["Thunder", "Mean Look", "Perish Song", "Protect"]),
+                test_set("Forretress", 50, "Pink Bow", &["Spikes", "Rapid Spin", "Explosion", "Hidden Power"]),
+            ],
+        );
+        let mut agent = ProtocolAgent::new(&dex, 0, pool.clone(), RmConfig::default(), 91);
+        agent.set_own_team(own.clone());
+        agent.pin_opponent(foe.clone());
+        for line in poke_lines(&dex, "p1", &own)
+            .into_iter()
+            .chain(poke_lines(&dex, "p2", &foe))
+        {
+            agent.push_line(&dex, &line);
+        }
+        for line in [
+            "|teampreview|3",
+            "|start",
+            "|switch|p1a: Miltank|Miltank, L55, F|202/202",
+            "|switch|p2a: Zapdos|Zapdos, L55|100/100",
+            "|turn|1",
+            "|move|p1a: Miltank|Rollout|p2a: Zapdos",
+            "|-supereffective|p2a: Zapdos",
+            "|-damage|p2a: Zapdos|82/100",
+            "|move|p2a: Zapdos|Thunderbolt|p1a: Miltank",
+            "|-damage|p1a: Miltank|118/202",
+            "|upkeep",
+            "|turn|2",
+        ] {
+            agent.push_line(&dex, line);
+        }
+        let rollout_req = serde_json::json!({
+            "active": [{
+                "moves": [{"move": "Rollout", "id": "rollout"}],
+                "trapped": true
+            }],
+            "side": {
+                "id": "p1",
+                "name": "p1",
+                "pokemon": [
+                    {"ident": "p1: Miltank", "details": "Miltank, L55, F", "condition": "130/202", "active": true, "item": "leftovers"},
+                    {"ident": "p1: Snorlax", "details": "Snorlax, L50, M", "condition": "266/266", "active": false, "item": "mintberry"},
+                    {"ident": "p1: Starmie", "details": "Starmie, L50", "condition": "166/166", "active": false, "item": "miracleberry"}
+                ]
+            },
+            "rqid": 2
+        })
+        .to_string();
+        assert!(agent.on_request(&dex, &rollout_req).unwrap());
+        let spec = agent.to_position_spec(&dex).unwrap();
+        let miltank_idx = spec.sides[0].active.unwrap();
+        assert_eq!(spec.sides[0].mons[miltank_idx].pp[0].pp, None);
+        assert_eq!(spec.sides[0].mons[miltank_idx].pp[0].maxpp, None);
+        let json = serde_json::to_string(&spec).unwrap();
+        let parsed = crate::position::PositionSpec::parse(&json).unwrap();
+        assert_eq!(serde_json::to_string(&parsed).unwrap(), json);
+        let round_req = Request::parse(&dex, &parsed.request_json(&dex).unwrap()).unwrap();
+        assert_eq!(round_req.legal_inputs(), vec!["move rollout".to_string()]);
+        let live = agent.resynthesize(&dex, 99).unwrap();
+        let rebuilt = crate::position::synthesize_spec(&dex, &parsed, &pool, Some(&foe), 99).unwrap();
+        assert_eq!(live.state_key128(), rebuilt.state_key128());
+        let rollout_id = dex.moves.id("rollout").unwrap();
+        let rebuilt_slot = rebuilt.poke(rebuilt.active_id(0).unwrap()).get_move_slot(rollout_id).unwrap();
+        assert_eq!((rebuilt_slot.pp, rebuilt_slot.maxpp), (31, 32));
+        let mut solver = ProtocolAgent::new(&dex, 0, pool.clone(), RmConfig::default(), 91);
+        solver.pin_opponent(foe.clone());
+        solver.set_position(&dex, &parsed).unwrap();
+        solver.step(&dex, 8).unwrap();
+        assert_eq!(solver.best(&dex).as_deref(), Some("move rollout"));
+        assert_eq!(solver.legality_drift, 0);
+
+        // 2. Transformed active locked move: preserves all 4 copied move slots across PositionSpec.
+        let own_ditto = canonical_team(
+            &dex,
+            vec![
+                test_set("Ditto", 50, "Leftovers", &["Transform"]),
+                test_set("Snorlax", 50, "Mint Berry", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+                test_set("Starmie", 50, "Miracle Berry", &["Surf", "Psychic", "Thunder Wave", "Recover"]),
+                test_set("Exeggutor", 50, "Gold Berry", &["Psychic", "Giga Drain", "Sleep Powder", "Explosion"]),
+                test_set("Gengar", 50, "Mystery Berry", &["Thunderbolt", "Ice Punch", "Destiny Bond", "Explosion"]),
+                test_set("Cloyster", 50, "Pink Bow", &["Surf", "Spikes", "Explosion", "Icy Wind"]),
+            ],
+        );
+        let foe_rollout = canonical_team(
+            &dex,
+            vec![
+                test_set("Miltank", 55, "Leftovers", &["Rollout", "Milk Drink", "Body Slam", "Heal Bell"]),
+                test_set("Zapdos", 55, "Mint Berry", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+                test_set("Cloyster", 50, "Miracle Berry", &["Surf", "Spikes", "Toxic", "Explosion"]),
+                test_set("Suicune", 50, "Gold Berry", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
+                test_set("Misdreavus", 50, "Mystery Berry", &["Thunder", "Mean Look", "Perish Song", "Protect"]),
+                test_set("Forretress", 50, "Pink Bow", &["Spikes", "Rapid Spin", "Explosion", "Hidden Power"]),
+            ],
+        );
+        let mut t_agent = ProtocolAgent::new(&dex, 0, pool.clone(), RmConfig::default(), 92);
+        t_agent.set_own_team(own_ditto.clone());
+        t_agent.pin_opponent(foe_rollout.clone());
+        for line in poke_lines(&dex, "p1", &own_ditto)
+            .into_iter()
+            .chain(poke_lines(&dex, "p2", &foe_rollout))
+        {
+            t_agent.push_line(&dex, &line);
+        }
+        for line in [
+            "|teampreview|3",
+            "|start",
+            "|switch|p1a: Ditto|Ditto, L50|154/154",
+            "|switch|p2a: Miltank|Miltank, L55, F|100/100",
+            "|turn|1",
+            "|move|p2a: Miltank|Body Slam|p1a: Ditto",
+            "|-damage|p1a: Ditto|90/154",
+            "|move|p1a: Ditto|Transform|p2a: Miltank",
+            "|-transform|p1a: Ditto|p2a: Miltank",
+            "|upkeep",
+            "|turn|2",
+            "|move|p1a: Ditto|Rollout|p2a: Miltank",
+            "|-damage|p2a: Miltank|94/100",
+            "|move|p2a: Miltank|Milk Drink|p2a: Miltank",
+            "|-heal|p2a: Miltank|100/100",
+            "|upkeep",
+            "|turn|3",
+        ] {
+            t_agent.push_line(&dex, line);
+        }
+        let ditto_locked_req = serde_json::json!({
+            "active": [{
+                "moves": [{"move": "Rollout", "id": "rollout"}],
+                "trapped": true
+            }],
+            "side": {
+                "id": "p1",
+                "name": "p1",
+                "pokemon": [
+                    {"ident": "p1: Ditto", "details": "Ditto, L50", "condition": "108/154", "active": true, "item": "leftovers"},
+                    {"ident": "p1: Snorlax", "details": "Snorlax, L50, M", "condition": "266/266", "active": false, "item": "mintberry"},
+                    {"ident": "p1: Starmie", "details": "Starmie, L50", "condition": "166/166", "active": false, "item": "miracleberry"}
+                ]
+            },
+            "rqid": 3
+        })
+        .to_string();
+        assert!(t_agent.on_request(&dex, &ditto_locked_req).unwrap());
+        let t_spec = t_agent.to_position_spec(&dex).unwrap();
+        let t_json = serde_json::to_string(&t_spec).unwrap();
+        let t_parsed = crate::position::PositionSpec::parse(&t_json).unwrap();
+        assert_eq!(serde_json::to_string(&t_parsed).unwrap(), t_json);
+        let t_live = t_agent.resynthesize(&dex, 101).unwrap();
+        let t_rebuilt = crate::position::synthesize_spec(&dex, &t_parsed, &pool, Some(&foe_rollout), 101).unwrap();
+        assert_eq!(t_live.state_key128(), t_rebuilt.state_key128());
+        assert_eq!(t_rebuilt.poke(t_rebuilt.active_id(0).unwrap()).move_slots.len(), 4);
+
+        // 3. Struggle request with live bench: keeps "move struggle" legal alongside switches.
+        let struggle_req = serde_json::json!({
+            "active": [{
+                "moves": [{"move": "Struggle", "id": "struggle"}],
+                "trapped": false
+            }],
+            "side": {
+                "id": "p1",
+                "name": "p1",
+                "pokemon": [
+                    {"ident": "p1: Miltank", "details": "Miltank, L55, F", "condition": "130/202", "active": true, "item": "leftovers"},
+                    {"ident": "p1: Snorlax", "details": "Snorlax, L50, M", "condition": "266/266", "active": false, "item": "mintberry"},
+                    {"ident": "p1: Starmie", "details": "Starmie, L50", "condition": "166/166", "active": false, "item": "miracleberry"}
+                ]
+            },
+            "rqid": 4
+        })
+        .to_string();
+        let mut s_agent = ProtocolAgent::new(&dex, 0, pool.clone(), RmConfig::default(), 93);
+        s_agent.set_own_team(own.clone());
+        s_agent.pin_opponent(foe.clone());
+        for line in poke_lines(&dex, "p1", &own)
+            .into_iter()
+            .chain(poke_lines(&dex, "p2", &foe))
+        {
+            s_agent.push_line(&dex, &line);
+        }
+        for line in [
+            "|teampreview|3",
+            "|start",
+            "|switch|p1a: Miltank|Miltank, L55, F|202/202",
+            "|switch|p2a: Zapdos|Zapdos, L55|100/100",
+            "|turn|1",
+        ] {
+            s_agent.push_line(&dex, line);
+        }
+        assert!(s_agent.on_request(&dex, &struggle_req).unwrap());
+        let s_spec = s_agent.to_position_spec(&dex).unwrap();
+        let s_json = serde_json::to_string(&s_spec).unwrap();
+        let s_parsed = crate::position::PositionSpec::parse(&s_json).unwrap();
+        let s_round_req = Request::parse(&dex, &s_parsed.request_json(&dex).unwrap()).unwrap();
+        assert_eq!(
+            s_round_req.legal_inputs(),
+            vec![
+                "move struggle".to_string(),
+                "switch 2".to_string(),
+                "switch 3".to_string()
+            ]
+        );
+        let s_live = s_agent.resynthesize(&dex, 103).unwrap();
+        let s_rebuilt = crate::position::synthesize_spec(&dex, &s_parsed, &pool, Some(&foe), 103).unwrap();
+        assert_eq!(s_live.state_key128(), s_rebuilt.state_key128());
+    }
+
     /// The M18 class-A `%`-HP invariant, as a pure property: whatever the
     /// stream announced, the imputed amount re-announces to the same string.
     /// This is the check the 2026-07-21 /48-on-a-/100-stream bug fails -- it
@@ -3530,8 +3757,8 @@ impl ProtocolTracker {
                     .iter()
                     .map(|am| PpSpec {
                         move_key: am.id.clone(),
-                        pp: am.pp.unwrap_or(0),
-                        maxpp: am.maxpp.unwrap_or(0),
+                        pp: am.pp,
+                        maxpp: am.maxpp,
                         disabled: am.disabled,
                     })
                     .collect();
