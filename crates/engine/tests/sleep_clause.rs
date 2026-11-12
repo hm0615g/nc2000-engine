@@ -1,11 +1,11 @@
+mod suite;
+
 use nc2000_engine::battle::{EffectHandle, Outcome, PokemonSet, RV};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::{Battle, PokeId, Status};
 
-fn dex() -> Dex {
-    let path =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/gen2stadium2.json");
-    Dex::from_json(&std::fs::read_to_string(path).unwrap()).unwrap()
+fn dex() -> &'static Dex {
+    suite::common::dex()
 }
 
 fn mk(species: &str, item: &str, moves: &[&str]) -> PokemonSet {

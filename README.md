@@ -42,7 +42,7 @@ Rust battle engine, imperfect-information search bot, WebAssembly/Preact client,
 - Web application & E2E suites: [`web/src/app.tsx`](web/src/app.tsx), [`web/src/data.ts`](web/src/data.ts), [`web/package.json`](web/package.json), [`web/tests/`](web/tests/)
 - PS local/websocket interop & preview cache helper: [`tools/ps-arena.js`](tools/ps-arena.js), [`tools/ps-client.js`](tools/ps-client.js), [`tools/preview-cache.js`](tools/preview-cache.js)
 - Core Engine SDK builder & deterministic position diagnosis CLI: [`tools/bundle-core-sdk.js`](tools/bundle-core-sdk.js), [`tools/diagnose-position.js`](tools/diagnose-position.js) (downstream environment adapters like Gym Leader's Castle live in the operational fork [`hm0615g/nc2000-engine`](https://github.com/hm0615g/nc2000-engine))
-- JAX/TPU package: [`tpu/README.md`](tpu/README.md), [`tpu/HANDOFF.md`](tpu/HANDOFF.md)
+- JAX/TPU package & Google Colab runner: [`tpu/README.md`](tpu/README.md), [`tpu/HANDOFF.md`](tpu/HANDOFF.md), [`tools/colab-tpu.sh`](tools/colab-tpu.sh), [`AGENTS.md`](AGENTS.md)
 - CI / GitHub Pages deployment contract: [`.github/workflows/pages.yml`](.github/workflows/pages.yml)
 
 ### Specifications & Reference Docs
@@ -72,6 +72,7 @@ done
 crates/wasm/build.sh
 cd web && npm run build && npm run test:worker && npm run test:evaluate-worker && npm run test:policy && npm run test:e2e
 
-# TPU test suite
+# TPU test suite (local 8-core TPU emulation, or remote Google Colab via tools/colab-tpu.sh)
 uv run --project tpu pytest tpu/tests -v
+./tools/colab-tpu.sh pytest
 ```

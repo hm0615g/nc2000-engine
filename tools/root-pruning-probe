@@ -18,7 +18,7 @@ corpora = {'selfplay': 'findings/policy-gap-v1/corpus.jsonl.gz',
 examples = ['public_mask_census', 'root_pruning_probe', 'root_pruning_duel']
 inputs = list(corpora.values()) + ['data/gen2stadium2.json', 'data/learnsets-gen2.json',
     'data/belief-pool-v3/belief-pool.json', 'data/team-pool-v2/team-pool.json',
-    'crates/bot/tests/blind.rs', 'tools/root-pruning-probe']
+    'crates/bot/tests/suite/blind.rs', 'tools/root-pruning-probe']
 
 
 def sha(raw):

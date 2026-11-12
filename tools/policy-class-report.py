@@ -73,7 +73,7 @@ min_b Σₐ p(a) L(s,a,b)
 <h2>実装済みの部分と、残る主課題</h2>
 <p><strong>保証された継続値がある有限モデルについて、混合を壊さず方策を改善するクラス共通の処理を実装・検証した。</strong>残る主課題は、通常のblind対戦の予算内で、実行可能な同一継続方策の値・誤差範囲を作ること。非定常な探索平均をそのまま証明済み区間として渡すことはできない。</p>
 <p>この結論は、従来の全ての強化実験が失敗した理由を一括して説明するものではない。今回は、出力時の分布の消失を構造的な原因として確定し、継続値・情報制約・固定閾値を別々の問題として切り分けた。公開botの変更・再公開、通常対戦の平均勝率向上の判定は行っていない。</p>
-<details><summary>データ・再現</summary><p><a href="summary.json">結果JSON</a> · <a href="certificates.jsonl">9局面の境界</a> · <a href="deployed-searches.jsonl">公開版36探索</a> · <a href="inputs.jsonl">汎用選択器入力</a> · <a href="outputs.jsonl">選択器出力</a> · <a href="evidence.tar.gz">コードと証拠一式</a></p><p><code>python3 tools/policy-class-study.py</code> で数値と対応関係を検査できる。新規の核となるコードは <code>crates/bot/src/root_policy/interval.rs</code>、全体方策の検査は <code>crates/bot/tests/interval_root_games.rs</code>。</p></details>
+<details><summary>データ・再現</summary><p><a href="summary.json">結果JSON</a> · <a href="certificates.jsonl">9局面の境界</a> · <a href="deployed-searches.jsonl">公開版36探索</a> · <a href="inputs.jsonl">汎用選択器入力</a> · <a href="outputs.jsonl">選択器出力</a> · <a href="evidence.tar.gz">コードと証拠一式</a></p><p><code>python3 tools/policy-class-study.py</code> で数値と対応関係を検査できる。新規の核となるコードは <code>crates/bot/src/root_policy/interval.rs</code>、全体方策の検査は <code>crates/bot/tests/suite/interval_root_games.rs</code>。</p></details>
 <p class="note">プレビュー一覧の登録名：nc2000-policy-class</p>
 <script>
 const k=document.getElementById('k'),p=document.getElementById('p');

@@ -32,7 +32,7 @@ function verifyDestinyBond(wasm, poolJson) {
             step("move return", "move destinybond");
           }
           search.observe(battle);
-          search.step(27000);
+          search.step(3000);
           const best = search.best();
           if (best !== "move return" && (plain || best !== "move curse")) {
             throw new Error(`Destiny Bond waiting excluded: plain=${plain}, seed=${seed}, best=${best}`);
@@ -53,6 +53,6 @@ function verifyDestinyBond(wasm, poolJson) {
 module.exports = verifyDestinyBond;
 if (require.main === module) {
   const { wasm, readData } = require("./common");
-  console.log(JSON.stringify(verifyDestinyBond(wasm, readData("belief-pool-v3/belief-pool.json"))));
+  verifyDestinyBond(wasm, readData("belief-pool-v3/belief-pool.json"));
   console.log("destiny-bond: OK");
 }

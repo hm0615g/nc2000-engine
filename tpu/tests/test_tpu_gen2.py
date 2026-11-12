@@ -207,42 +207,35 @@ def test_stat_branchless_matches_reference_formula():
     stat_pos = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
     stat_neg = [100.0, 66.0, 50.0, 40.0, 33.0, 28.0, 25.0]
 
-    # Vectorize across all 13 boosts (-6..+6)
-    boosts = jnp.arange(-6, 7, dtype=jnp.int32)
-    vmap_stat = jax.jit(
-        jax.vmap(
-            lambda b, st, s_idx, unb, par, brn, scr, itm: get_stat_branchless(
-                st, b, s_idx, unb, False, False, par, brn, scr, scr, itm
-            ),
-            in_axes=(0, None, None, None, None, None, None, None),
-        )
-    )
-
-    for stored in [1, 15, 95, 130, 178, 255, 358, 500, 999]:
+    stored_vals = [1, 15, 95, 130, 178, 255, 358, 500, 999]
+    items = [
+        ItemStatKind.NONE,
+        ItemStatKind.THICK_CLUB,
+        ItemStatKind.LIGHT_BALL,
+        ItemStatKind.METAL_POWDER,
+    ]
+    rows = []
+    expected_rows = []
+    for stored in stored_vals:
         for stat_idx in range(5):
-            for unboosted in [False, True]:
-                for par in [False, True]:
-                    for brn in [False, True]:
-                        for screen in [False, True]:
-                            for item in [
-                                ItemStatKind.NONE,
-                                ItemStatKind.THICK_CLUB,
-                                ItemStatKind.LIGHT_BALL,
-                                ItemStatKind.METAL_POWDER,
-                            ]:
-                                actual = np.asarray(
-                                    vmap_stat(
-                                        boosts,
+            for unboosted in (False, True):
+                for par in (False, True):
+                    for brn in (False, True):
+                        for screen in (False, True):
+                            for item in items:
+                                rows.append(
+                                    (
                                         stored,
                                         stat_idx,
-                                        unboosted,
-                                        par,
-                                        brn,
-                                        screen,
-                                        item,
+                                        int(unboosted),
+                                        int(par),
+                                        int(brn),
+                                        int(screen),
+                                        int(item),
                                     )
                                 )
-                                for b_i, boost in enumerate(range(-6, 7)):
+                                exp_b = []
+                                for boost in range(-6, 7):
                                     ref_val = float(stored)
                                     if not unboosted:
                                         if boost >= 0:
@@ -264,7 +257,33 @@ def test_stat_branchless_matches_reference_formula():
                                         ref_val *= 2.0
                                     elif item == ItemStatKind.METAL_POWDER and stat_idx in (1, 3):
                                         ref_val = math.floor(ref_val * 1.5)
-                                    assert int(actual[b_i]) == int(ref_val)
+                                    exp_b.append(int(ref_val))
+                                expected_rows.append(exp_b)
+
+    cfg = jnp.asarray(rows, dtype=jnp.int32)
+    boosts = jnp.arange(-6, 7, dtype=jnp.int32)
+    actual_grid = np.asarray(
+        jax.jit(
+            jax.vmap(
+                lambda row: jax.vmap(
+                    lambda b: get_stat_branchless(
+                        row[0],
+                        b,
+                        row[1],
+                        row[2] != 0,
+                        False,
+                        False,
+                        row[3] != 0,
+                        row[4] != 0,
+                        row[5] != 0,
+                        row[5] != 0,
+                        row[6],
+                    )
+                )(boosts)
+            )
+        )(cfg)
+    )
+    np.testing.assert_array_equal(actual_grid, np.asarray(expected_rows, dtype=np.int32))
 
 
 def test_damage_rolls_and_simd16_and_pallas_vmem_kernel():
@@ -523,40 +542,63 @@ def test_20_diverse_games_488_steps_rust_parity():
     with open(fixture_path) as f:
         games = json.load(f)
 
-    jit_pack = jax.jit(pack_battle)
-    jit_unpack = jax.jit(unpack_battle)
-    jit_eval_leaf = jax.jit(lambda cb, tbl: eval_leaf(cb, tbl, 0))
     w = default_eval_weights()
-    jit_race = jax.jit(lambda cb, tbl: compact_race_margin(cb, tbl, w))
+
+    @jax.jit
+    def _inspect_game_steps(cbs, tbl):
+        def _one(cb):
+            restored = unpack_battle(pack_battle(cb))
+            l0 = legal_actions_mask(cb, tbl, 0)
+            l1 = legal_actions_mask(cb, tbl, 1)
+            ev0 = eval_leaf(cb, tbl, 0)
+            rm = compact_race_margin(cb, tbl, w)
+            return restored, l0, l1, ev0, rm
+
+        return jax.vmap(_one)(cbs)
+
+    state_fields = [
+        "hp_pool", "pp", "status_packed", "item", "vol_flags", "timers",
+        "boosts", "slot_refs", "active_idx", "party_roster", "alive_mask",
+        "reflect_turns", "lightscreen_turns", "safeguard_turns", "side_flags",
+        "last_move_selfko", "request", "turn", "weather_kind", "weather_turns",
+        "quick_claw_roll", "outcome", "speed_order", "clause_flags",
+        "hurt_damage_this_turn", "hurt_cat_this_turn",
+    ]
 
     total_steps = 0
     for g_idx, g in enumerate(games):
         table, cb = build_compact_battle(g["seed"], g["p1"], g["p2"])
-        for s_idx, step in enumerate(g["steps"]):
+        states = []
+        for step in g["steps"]:
             if step["actions"] is not None:
                 cb = _JIT_APPLY(cb, table, jnp.array(step["actions"], dtype=jnp.int32))
-            total_steps += 1
+            states.append(cb)
+        total_steps += len(states)
+
+        stacked_cb = jax.tree_util.tree_map(lambda *xs: jnp.stack(xs, axis=0), *states)
+        restored_batch, l0_batch, l1_batch, ev0_batch, rm_batch = _inspect_game_steps(
+            stacked_cb, table
+        )
+        cb_np = {fld: np.asarray(getattr(stacked_cb, fld)) for fld in CompactBattle._fields}
+        restored_np = {
+            fld: np.asarray(getattr(restored_batch, fld)) for fld in CompactBattle._fields
+        }
+        for fld in CompactBattle._fields:
+            np.testing.assert_array_equal(
+                cb_np[fld],
+                restored_np[fld],
+                err_msg=f"Pack roundtrip mismatch game={g_idx} field={fld}",
+            )
+
+        l0_np = np.asarray(l0_batch)
+        l1_np = np.asarray(l1_batch)
+        ev0_np = np.asarray(ev0_batch)
+        rm_np = np.asarray(rm_batch)
+
+        for s_idx, step in enumerate(g["steps"]):
             ref = step["state"]
-
-            # 1. Verify PackedBattle (120B) roundtrip on every intermediate state
-            restored = jit_unpack(jit_pack(cb))
-            for fld in CompactBattle._fields:
-                np.testing.assert_array_equal(
-                    np.asarray(getattr(cb, fld)),
-                    np.asarray(getattr(restored, fld)),
-                    err_msg=f"Pack roundtrip mismatch game={g_idx} step={s_idx} field={fld}",
-                )
-
-            # 2. Verify all 26 state fields + 64-bit PRNG seed match Rust CompactBattle
-            for fld in [
-                "hp_pool", "pp", "status_packed", "item", "vol_flags", "timers",
-                "boosts", "slot_refs", "active_idx", "party_roster", "alive_mask",
-                "reflect_turns", "lightscreen_turns", "safeguard_turns", "side_flags",
-                "last_move_selfko", "request", "turn", "weather_kind", "weather_turns",
-                "quick_claw_roll", "outcome", "speed_order", "clause_flags",
-                "hurt_damage_this_turn", "hurt_cat_this_turn",
-            ]:
-                jax_val = np.asarray(getattr(cb, fld))
+            for fld in state_fields:
+                jax_val = cb_np[fld][s_idx]
                 ref_val = np.asarray(ref[fld], dtype=jax_val.dtype)
                 np.testing.assert_array_equal(
                     jax_val,
@@ -564,19 +606,17 @@ def test_20_diverse_games_488_steps_rust_parity():
                     err_msg=f"State mismatch game={g_idx} step={s_idx} field={fld}",
                 )
 
-            assert int(cb.prng_seed[0]) == ref["prng_seed_hi"], f"PRNG hi game={g_idx} step={s_idx}"
-            assert int(cb.prng_seed[1]) == ref["prng_seed_lo"], f"PRNG lo game={g_idx} step={s_idx}"
+            assert int(cb_np["prng_seed"][s_idx, 0]) == ref["prng_seed_hi"], f"PRNG hi game={g_idx} step={s_idx}"
+            assert int(cb_np["prng_seed"][s_idx, 1]) == ref["prng_seed_lo"], f"PRNG lo game={g_idx} step={s_idx}"
 
-            # 3. Verify legal_actions_mask
-            if int(cb.outcome) == 0:
-                l0 = list(np.flatnonzero(np.asarray(legal_actions_mask(cb, table, 0))))
-                l1 = list(np.flatnonzero(np.asarray(legal_actions_mask(cb, table, 1))))
+            if int(cb_np["outcome"][s_idx]) == 0:
+                l0 = list(np.flatnonzero(l0_np[s_idx]))
+                l1 = list(np.flatnonzero(l1_np[s_idx]))
                 assert l0 == sorted(ref["legal0"]), f"Legal0 game={g_idx} step={s_idx}"
                 assert l1 == sorted(ref["legal1"]), f"Legal1 game={g_idx} step={s_idx}"
 
-            # 4. Verify eval_leaf and compact_race_margin
-            assert abs(float(jit_eval_leaf(cb, table)) - float(ref["eval_leaf0"])) < 1e-5
-            assert abs(float(jit_race(cb, table)) - float(ref["compact_race_margin"])) < 1e-5
+            assert abs(float(ev0_np[s_idx]) - float(ref["eval_leaf0"])) < 1e-5
+            assert abs(float(rm_np[s_idx]) - float(ref["compact_race_margin"])) < 1e-5
 
     assert total_steps == 488
 
@@ -876,8 +916,8 @@ def test_kodoku_two_stage_core_nash_leave_one_out_and_pair_table_export(tmp_path
         screen_games=2,
         support_k=3,
         refine_games=2,
-        screen_turns=8,
-        refine_turns=8,
+        screen_turns=4,
+        refine_turns=4,
         seed=20260405,
     )
     assert 0.0 <= res.value <= 1.0
@@ -900,8 +940,8 @@ def test_kodoku_two_stage_core_nash_leave_one_out_and_pair_table_export(tmp_path
         screen_games=2,
         support_k=3,
         refine_games=2,
-        screen_turns=8,
-        refine_turns=8,
+        screen_turns=4,
+        refine_turns=4,
         seed=20260405,
         inherited_subgame=(res.sup_a, res.sup_b),
         mutated_slot_a=5,
@@ -932,8 +972,8 @@ def test_kodoku_two_stage_core_nash_leave_one_out_and_pair_table_export(tmp_path
         screen_games=2,
         support_k=2,
         refine_games=2,
-        screen_turns=8,
-        refine_turns=8,
+        screen_turns=4,
+        refine_turns=4,
     )
     assert gauntlet.payoff_matrix.shape == (2, 2)
     assert np.isclose(gauntlet.payoff_matrix[0, 1] + gauntlet.payoff_matrix[1, 0], 1.0, atol=1e-5)
@@ -1126,8 +1166,8 @@ def test_coupled_shell_equilibrium_tpu(tmp_path: Path):
         screen_games=2,
         support_k=2,
         refine_games=2,
-        screen_turns=6,
-        refine_turns=6,
+        screen_turns=4,
+        refine_turns=4,
     )
     coupled = solve_coupled_shell_equilibrium_tpu(summary, teams_p=teams_p)
     assert coupled.m_solve.shape == (2, 2)

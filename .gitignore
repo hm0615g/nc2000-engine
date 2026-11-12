@@ -51,4 +51,7 @@ data/pbs-anomalies.jsonl
 data/discord-events.jsonl
 data/pbs-castle-logs/
 data/pbs-castle-logs.zip
+.claude/settings.local.json
+.gemini/settings.local.json
+*.colab.log
 

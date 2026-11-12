@@ -4,10 +4,17 @@ use conformance::{
 };
 use nc2000_engine::{
     battle::{PokemonSet, SearchChoice},
+    dex::Dex,
     prng::Prng,
     replay::{Recorder, Replay},
     state::Battle,
 };
+use std::sync::OnceLock;
+
+fn shared_dex() -> &'static Dex {
+    static DEX: OnceLock<Dex> = OnceLock::new();
+    DEX.get_or_init(load_dex)
+}
 
 fn assert_same(a: &Battle, b: &Battle) {
     assert_eq!(a.state_key128(), b.state_key128());
@@ -17,24 +24,25 @@ fn assert_same(a: &Battle, b: &Battle) {
 
 #[test]
 fn frozen_compact_replay_remains_compatible() {
-    let mut dex = load_dex();
+    let dex = shared_dex();
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
         "../../../fixtures/replay/transition-compatible.json"
     )).unwrap();
     let code = fixture["code"].as_str().unwrap();
-    let replay = Replay::decode(&dex, code).unwrap();
-    assert_eq!(replay.encode(&dex).unwrap(), code);
-    let battle = replay.at(&dex, replay.rounds.len()).unwrap();
+    let replay = Replay::decode(dex, code).unwrap();
+    assert_eq!(replay.encode(dex).unwrap(), code);
+    let battle = replay.at(dex, replay.rounds.len()).unwrap();
     assert_eq!(battle.state_key128().to_string(), fixture["state_key128"]);
     assert_eq!(battle.prng.seed_str(), fixture["prng"]);
     assert_eq!(battle.turn as u64, fixture["turn"].as_u64().unwrap());
-    dex.replay_fingerprint[0] ^= 1;
-    assert_eq!(Replay::decode(&dex, code).err().as_deref(), Some("incompatible replay version"));
+    let mut other_dex = load_dex();
+    other_dex.replay_fingerprint[0] ^= 1;
+    assert_eq!(Replay::decode(&other_dex, code).err().as_deref(), Some("incompatible replay version"));
 }
 
 #[test]
 fn numbered_moves_record_the_effective_locked_action() {
-    let dex = load_dex();
+    let dex = shared_dex();
     let fixture =
         Fixture::load(&corpus_files(&repo_root().join("fixtures/corpus-v1/full"))[0]).unwrap();
     let mut mon = fixture.p1team[0].clone();
@@ -57,7 +65,7 @@ fn numbered_moves_record_the_effective_locked_action() {
 
 #[test]
 fn compact_replay_preserves_every_decision_state() {
-    let dex = load_dex();
+    let dex = shared_dex();
     let files = corpus_files(&repo_root().join("fixtures/corpus-v1/full"));
     for (i, path) in files.iter().enumerate() {
         let fixture = Fixture::load(path).unwrap();
@@ -117,7 +125,7 @@ fn compact_replay_preserves_every_decision_state() {
 
 #[test]
 fn replacements_and_baton_pass_fit_the_1000_turn_envelope() {
-    let dex = load_dex();
+    let dex = shared_dex();
     let mon = |species: &str, name: &str| PokemonSet {
         name: name.into(),
         species: species.into(),
@@ -171,7 +179,7 @@ fn replacements_and_baton_pass_fit_the_1000_turn_envelope() {
 
 #[test]
 fn only_committed_choices_are_recorded_and_corruption_is_rejected() {
-    let dex = load_dex();
+    let dex = shared_dex();
     let fixture =
         Fixture::load(&corpus_files(&repo_root().join("fixtures/corpus-v1/full"))[0]).unwrap();
     let teams = [fixture.p1team, fixture.p2team];

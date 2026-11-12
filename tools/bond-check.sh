@@ -3,7 +3,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 out=tmp/destiny-bond-check
 mkdir -p "$out"
-cargo test --release -p nc2000-bot --lib --test destiny_bond_wait --test perish_deadline --test mask_sleep_talk --test blind --test import
+cargo test --release -p nc2000-bot --lib
+for mod_filter in destiny_bond_wait perish_deadline mask_sleep_talk blind import; do
+    cargo test --release -p nc2000-bot --test bot_suite "suite::${mod_filter}::"
+done
 cargo build --release -p nc2000-bot --example destiny_bond_gate
 target/release/examples/destiny_bond_gate --fast --blind --proof --seed 71001 --seeds 8 > "$out/blind.jsonl"
 target/release/examples/destiny_bond_gate --fast --seed 71001 --seeds 8 > "$out/pinned.jsonl"

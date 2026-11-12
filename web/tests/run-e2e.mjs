@@ -4,7 +4,7 @@ import { preview } from "vite";
 const server = await preview({ preview: { host: "127.0.0.1", port: 0 } });
 const address = server.httpServer.address();
 if (!address || typeof address === "string") throw new Error("missing preview address");
-const tests = spawn("npx", ["playwright", "test", ...process.argv.slice(2)], {
+const tests = spawn(process.execPath, ["./node_modules/@playwright/test/cli.js", "test", ...process.argv.slice(2)], {
   stdio: "inherit",
   env: { ...process.env, NC2000_E2E_PORT: String(address.port) },
 });

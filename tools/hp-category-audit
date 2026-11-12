@@ -57,7 +57,7 @@ def main():
     summary['runtime_changed']=True
     summary['strength_vs_deployed']='unproved'
     summary['scope']='Damage-category correctness: 16 HP types at 35/70 power, artificial stat perturbations, exhaustive native one-turn damage distributions. Estimates remain approximate and exclude critical hits; no claim of exact mean damage, policy optimality or overall strength.'
-    files=['crates/bot/src/eval.rs','crates/bot/tests/support/hidden_power_damage.rs','crates/bot/tests/hidden_power_damage.rs','crates/bot/examples/hp_category_probe.rs','tools/hp-category-audit','data/gen2stadium2.json','crates/engine/src/battle/moveexec.rs']
+    files=['crates/bot/src/eval.rs','crates/bot/tests/support/hidden_power_damage.rs','crates/bot/tests/suite/hidden_power_damage.rs','crates/bot/examples/hp_category_probe.rs','tools/hp-category-audit','data/gen2stadium2.json','crates/engine/src/battle/moveexec.rs']
     files += [str(root/name) for name in ['before.json','after.json','before-source.json','before-tests.log','after-tests.log']]
     summary['hashes']={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files}
     print(json.dumps(summary,indent=2))
