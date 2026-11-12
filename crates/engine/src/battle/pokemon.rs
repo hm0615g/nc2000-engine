@@ -15,15 +15,16 @@ impl Battle {
     /// gen2stadium2 `pokemon.getStat(statName, unboosted, unmodified, fastReturn)`.
     /// `stat` is an index into stored_stats (0=atk..4=spe).
     pub fn get_stat(&self, dex: &Dex, id: PokeId, stat: usize, unboosted: bool, unmodified: bool, fast_return: bool) -> i32 {
+        let dt = crate::compact::dex_tables(dex);
         let p = self.poke(id);
         let boost = if unboosted { 0 } else { p.boosts[stat] };
         let has_par_drop = p.status == Status::Par
             && stat == 4
-            && crate::cond_id!(dex, "parspeeddrop").map(|c| p.has_volatile(c)).unwrap_or(false);
+            && dt.par_cond.is_some_and(|c| p.has_volatile(c));
         let has_brn_drop = !unmodified
             && p.status == Status::Brn
             && stat == 0
-            && crate::cond_id!(dex, "brnattackdrop").map(|c| p.has_volatile(c)).unwrap_or(false);
+            && dt.brn_cond.is_some_and(|c| p.has_volatile(c));
         if fast_return {
             return crate::compact::get_stat_branchless(
                 p.stored_stats[stat],
@@ -45,13 +46,13 @@ impl Battle {
                 (false, false)
             } else if stat == 1 {
                 (
-                    crate::cond_id!(dex, "reflect").map(|c| side.has_side_condition(c)).unwrap_or(false),
+                    dt.refl_cond.is_some_and(|c| side.has_side_condition(c)),
                     false,
                 )
             } else {
                 (
                     false,
-                    crate::cond_id!(dex, "lightscreen").map(|c| side.has_side_condition(c)).unwrap_or(false),
+                    dt.ls_cond.is_some_and(|c| side.has_side_condition(c)),
                 )
             }
         } else {

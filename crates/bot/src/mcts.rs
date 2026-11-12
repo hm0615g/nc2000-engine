@@ -294,6 +294,7 @@ impl Default for RolloutRules {
 }
 
 /// Unfinished rollouts return a leaf evaluation rather than a terminal outcome.
+#[inline]
 pub fn playout_value(
     sim: &mut Battle,
     dex: &Dex,
@@ -302,10 +303,18 @@ pub fn playout_value(
     rng: &mut SplitMix64,
     rules: RolloutRules,
 ) -> f64 {
-    let cutoff = match playout {
-        Playout::Uniform => turn_cap,
-        Playout::Heavy { turns, .. } => turn_cap.min(sim.turn.saturating_add(*turns)),
-    };
+    playout_value_cached(sim, dex, playout, turn_cap, rng, rules, None)
+}
+
+pub fn playout_value_cached(
+    sim: &mut Battle,
+    dex: &Dex,
+    playout: &Playout,
+    turn_cap: u16,
+    rng: &mut SplitMix64,
+    rules: RolloutRules,
+    roster_cache: Option<&nc2000_engine::compact::RosterCompactCache>,
+) -> f64 {
     if let Some(o) = sim.outcome() {
         set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
         return outcome_reward(o);
@@ -319,11 +328,17 @@ pub fn playout_value(
             set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
             return outcome_reward(o);
         }
-        if sim.turn > cutoff {
+        if sim.turn > turn_cap {
             set_last_sim_end(SimEndInfo::from_battle(sim, None));
             return match playout {
                 Playout::Uniform => hp_eval(sim),
-                Playout::Heavy { weights, .. } => eval::eval_leaf(sim, dex, weights),
+                Playout::Heavy { weights, .. } => {
+                    if rules.settlement.uses_blindspot_leaf() {
+                        eval::eval_leaf_blindspot_cached(sim, dex, weights, roster_cache)
+                    } else {
+                        eval::eval_leaf_cached(sim, dex, weights, roster_cache)
+                    }
+                }
             };
         }
         let mut picks = [None, None];
@@ -337,7 +352,33 @@ pub fn playout_value(
             .expect("legal_choices produced an illegal choice");
     }
 
-    let (table, mut cb) = nc2000_engine::compact::CompactBattle::from_battle(sim, dex);
+    if let Some(o) = sim.outcome() {
+        set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
+        return outcome_reward(o);
+    }
+    if sim.turn > turn_cap || matches!(playout, Playout::Heavy { turns: 0, .. }) {
+        set_last_sim_end(SimEndInfo::from_battle(sim, None));
+        return match playout {
+            Playout::Uniform => hp_eval(sim),
+            Playout::Heavy { weights, .. } => {
+                if rules.settlement.uses_blindspot_leaf() {
+                    eval::eval_leaf_blindspot_cached(sim, dex, weights, roster_cache)
+                } else {
+                    eval::eval_leaf_cached(sim, dex, weights, roster_cache)
+                }
+            }
+        };
+    }
+
+    let cutoff = match playout {
+        Playout::Uniform => turn_cap,
+        Playout::Heavy { turns, .. } => {
+            turn_cap.min(sim.turn.saturating_add(turns.saturating_sub(1)))
+        }
+    };
+
+    let (table, mut cb) =
+        nc2000_engine::compact::CompactBattle::from_battle_with_roster_cache(sim, dex, roster_cache);
     if !rules.baton_pass {
         cb.sides[0].side_flags |= 0x80;
     }
@@ -479,7 +520,7 @@ fn compact_perish_escape(
     }
     let att_slot = cb.sides[side].active_idx as usize;
     let att_idx = side * 3 + att_slot;
-    if (cb.mons[att_idx].vol_flags & vol_bit::PERISH_SONG) == 0 || cb.mons[att_idx].timers[3] != 1 {
+    if (cb.mons[att_idx].vol_flags & vol_bit::PERISH_SONG) == 0 || cb.mons[att_idx].perish_turns() != 1 {
         return None;
     }
     let foe_side = 1 - side;
@@ -516,9 +557,12 @@ fn compact_perish_combo(
     side: usize,
     cs: &[u8],
 ) -> Option<u8> {
-    use nc2000_engine::compact::vol_bit;
+    use nc2000_engine::compact::{role_bit, vol_bit};
     let me_slot = cb.sides[side].active_idx as usize;
     let me_idx = side * 3 + me_slot;
+    if (table.mons[me_idx].role_flags & role_bit::PERISH_PHAZE_TRAP) == 0 {
+        return None;
+    }
     let mut song = None;
     let mut phaze = None;
     let mut trap = None;
@@ -548,7 +592,7 @@ fn compact_perish_combo(
     let foe_bench = cb.sides[foe_side].alive_mask.count_ones() > 1;
     let me_trapped = (me.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0;
     if let Some(phaze_act) = phaze {
-        let counting = (me.vol_flags & vol_bit::PERISH_SONG) != 0 && me.timers[3] >= 2;
+        let counting = (me.vol_flags & vol_bit::PERISH_SONG) != 0 && me.perish_turns() >= 2;
         if me_trapped && counting && foe_bench {
             return Some(phaze_act);
         }
@@ -670,8 +714,11 @@ fn compact_side_has_usable_heal(
     side: usize,
     slot: usize,
 ) -> bool {
-    use nc2000_engine::compact::vol_bit;
+    use nc2000_engine::compact::{role_bit, vol_bit};
     let idx = side * 3 + slot;
+    if (table.mons[idx].role_flags & (role_bit::HALF_HEAL | role_bit::REST)) == 0 {
+        return false;
+    }
     let mon = &cb.mons[idx];
     if (mon.vol_flags & vol_bit::PERISH_SONG) != 0 {
         return false;
@@ -705,7 +752,7 @@ fn compact_blindspot_tactical_override(
     cs: &[u8],
     best_score: f64,
 ) -> Option<u8> {
-    use nc2000_engine::compact::vol_bit;
+    use nc2000_engine::compact::{role_bit, vol_bit};
     use nc2000_engine::state::Status;
 
     let att_slot = cb.sides[side].active_idx as usize;
@@ -722,15 +769,17 @@ fn compact_blindspot_tactical_override(
         && (table.mons[def_idx].is_mintberry || table.mons[def_idx].is_miracleberry);
     let foe_guaranteed_asleep =
         foe.status_raw() == Status::Slp as u8 && foe.status_counter() >= 2 && !foe_berry;
-    let mut foe_has_sleeptalk = false;
     let f_dis = (foe.vol_flags & vol_bit::DISABLE) != 0;
     let f_dis_slot = ((foe.slot_refs >> 4) & 0x03) as usize;
-    for m_i in 0..table.mons[def_idx].num_moves as usize {
-        if foe.pp[m_i] > 0 && !(f_dis && m_i == f_dis_slot) {
-            let ms = &table.move_specs[def_idx][m_i];
-            if ms.special_kind == 10 || ms.is_sleep_usable {
-                foe_has_sleeptalk = true;
-                break;
+    let mut foe_has_sleeptalk = false;
+    if (table.mons[def_idx].role_flags & role_bit::SLEEP_USABLE) != 0 {
+        for m_i in 0..table.mons[def_idx].num_moves as usize {
+            if foe.pp[m_i] > 0 && !(f_dis && m_i == f_dis_slot) {
+                let ms = &table.move_specs[def_idx][m_i];
+                if ms.special_kind == 10 || ms.is_sleep_usable {
+                    foe_has_sleeptalk = true;
+                    break;
+                }
             }
         }
     }
@@ -741,7 +790,10 @@ fn compact_blindspot_tactical_override(
         + foe.boosts[2].max(0) as i32
         + foe.boosts[3].max(0) as i32
         + 2 * (foe.boosts[6].max(0) as i32);
-    if foe_setup >= 2 && best_score < 0.48 {
+    if foe_setup >= 2
+        && best_score < 0.48
+        && (table.mons[att_idx].role_flags & role_bit::PHAZE_OR_HAZE) != 0
+    {
         let foe_imm_hit = if foe_guaranteed_asleep && !foe_has_sleeptalk {
             0.0
         } else {
@@ -916,7 +968,7 @@ fn compact_greedy_pick(
                     continue;
                 }
                 let m_slot = c as usize;
-                let raw_score = cb.expected_hit_fraction(
+                let (raw_score, accuracy) = cb.expected_hit_fraction_with_acc(
                     table, side, att_slot, def_side, def_slot, m_slot, true,
                 );
                 // R1: Do not waste a healthy Pokemon's Explosion/Self-Destruct into a surviving healer
@@ -934,8 +986,6 @@ fn compact_greedy_pick(
                     continue;
                 }
                 let mut score = if rules.capped_damage {
-                    let accuracy =
-                        cb.hit_probability(table, side, att_slot, def_side, def_slot, m_slot);
                     if accuracy > 0.0 {
                         (raw_score / accuracy).min(1.0) * accuracy
                     } else {
@@ -1021,8 +1071,14 @@ fn compact_greedy_pick(
                 return tac_act;
             }
         }
-        if rules.baton_pass && (cb.sides[side].side_flags & 0x80) == 0 {
-            use nc2000_engine::compact::vol_bit;
+        if rules.baton_pass
+            && (cb.sides[side].side_flags & 0x80) == 0
+            && (table.mons[att_idx].role_flags
+                & (nc2000_engine::compact::role_bit::BATON_PASS
+                    | nc2000_engine::compact::role_bit::SWAGGER))
+                != 0
+        {
+            use nc2000_engine::compact::{role_bit, vol_bit};
             use nc2000_engine::state::Status;
             let stay_score = best.map_or(0.0, |(_, s, _)| s);
             let me = &cb.mons[att_idx];
@@ -1032,63 +1088,68 @@ fn compact_greedy_pick(
                 let has_sub = (me.vol_flags & vol_bit::SUBSTITUTE) != 0;
                 let has_pos_boost =
                     me.boosts[0] > 0 || me.boosts[2] > 0 || me.boosts[4] > 0;
-                let me_faster = cb.mon_action_speed(table, side, att_slot)
-                    > cb.mon_action_speed(table, def_side, def_slot);
-                let foe_asleep = foe.status_raw() == Status::Slp as u8 && foe.status_counter() >= 2;
+                let mut me_faster_opt: Option<bool> = None;
                 // 1. If we already have a Substitute or boosts and a legal Baton Pass move, pass to a stronger bench threat.
-                if (has_sub || has_pos_boost) && (me_faster || foe_asleep || has_sub) {
-                    if let Some(&bp_c) = cs
-                        .iter()
-                        .find(|&&c| c < 4 && table.move_specs[att_idx][c as usize].special_kind == 18)
-                    {
-                        let mut best_recv_hit = 0.0f64;
-                        for slot in 0..3usize {
-                            if slot == att_slot || (cb.sides[side].alive_mask & (1 << slot)) == 0 {
-                                continue;
+                if (table.mons[att_idx].role_flags & role_bit::BATON_PASS) != 0
+                    && (has_sub || has_pos_boost)
+                {
+                    let foe_asleep =
+                        foe.status_raw() == Status::Slp as u8 && foe.status_counter() >= 2;
+                    let can_pass = has_sub
+                        || foe_asleep
+                        || *me_faster_opt.get_or_insert_with(|| {
+                            cb.mon_action_speed(table, side, att_slot)
+                                > cb.mon_action_speed(table, def_side, def_slot)
+                        });
+                    if can_pass {
+                        if let Some(&bp_c) = cs
+                            .iter()
+                            .find(|&&c| c < 4 && table.move_specs[att_idx][c as usize].special_kind == 18)
+                        {
+                            let mut best_recv_hit = 0.0f64;
+                            for slot in 0..3usize {
+                                if slot == att_slot || (cb.sides[side].alive_mask & (1 << slot)) == 0 {
+                                    continue;
+                                }
+                                let r_idx = side * 3 + slot;
+                                let r_mon = &cb.mons[r_idx];
+                                let r_st = r_mon.status_raw();
+                                if r_mon.hp() * 2 <= table.mons[r_idx].maxhp.max(1)
+                                    || r_st == Status::Slp as u8
+                                    || r_st == Status::Frz as u8
+                                {
+                                    continue;
+                                }
+                                let mut tmp = *cb;
+                                tmp.mons[r_idx].boosts = me.boosts;
+                                let rh = tmp.best_hit_fraction(table, side, slot, def_side, def_slot, true);
+                                if rh > best_recv_hit {
+                                    best_recv_hit = rh;
+                                }
                             }
-                            let r_idx = side * 3 + slot;
-                            let r_mon = &cb.mons[r_idx];
-                            let r_st = r_mon.status_raw();
-                            if r_mon.hp() * 2 <= table.mons[r_idx].maxhp.max(1)
-                                || r_st == Status::Slp as u8
-                                || r_st == Status::Frz as u8
-                            {
-                                continue;
+                            if best_recv_hit > stay_score + 0.15 && best_recv_hit >= 0.42 {
+                                return bp_c;
                             }
-                            let mut tmp = *cb;
-                            tmp.mons[r_idx].boosts = me.boosts;
-                            let rh = tmp.best_hit_fraction(table, side, slot, def_side, def_slot, true);
-                            if rh > best_recv_hit {
-                                best_recv_hit = rh;
-                            }
-                        }
-                        if best_recv_hit > stay_score + 0.15 && best_recv_hit >= 0.42 {
-                            return bp_c;
                         }
                     }
                 }
                 // 2. SwagSub: if faster against a confused foe (`timers[0] >= 2`) and we carry both
                 //    Substitute and Swagger, put up Substitute while the foe is confused.
-                if !has_sub
-                    && me_faster
+                if (table.mons[att_idx].role_flags & role_bit::SWAGGER) != 0
+                    && !has_sub
                     && (foe.vol_flags & vol_bit::CONFUSION) != 0
                     && foe.timers[0] >= 2
                     && me.hp() * 2 > table.mons[att_idx].maxhp.max(1)
+                    && *me_faster_opt.get_or_insert_with(|| {
+                        cb.mon_action_speed(table, side, att_slot)
+                            > cb.mon_action_speed(table, def_side, def_slot)
+                    })
                 {
-                    let has_swagger = (0..table.mons[att_idx].num_moves as usize).any(|m| {
-                        let ms = &table.move_specs[att_idx][m];
-                        !ms.boosts_self
-                            && ms.boosts[0].0 == 0
-                            && ms.boosts[0].1 > 0
-                            && (ms.primary_vol & vol_bit::CONFUSION) != 0
-                    });
-                    if has_swagger {
-                        if let Some(&sub_c) = cs
-                            .iter()
-                            .find(|&&c| c < 4 && table.move_specs[att_idx][c as usize].is_substitute)
-                        {
-                            return sub_c;
-                        }
+                    if let Some(&sub_c) = cs
+                        .iter()
+                        .find(|&&c| c < 4 && table.move_specs[att_idx][c as usize].is_substitute)
+                    {
+                        return sub_c;
                     }
                 }
             }
@@ -1470,6 +1531,39 @@ mod perish_rollout_tests {
             let pick = playout_pick(&b, &dex, &playout, 0, &cs, &mut r1, rules);
             assert_eq!(pick, mv(&dex, "meanlook"));
             assert_eq!(r0.next(), r1.next());
+        }
+    }
+
+    #[test]
+    fn playout_value_executes_exact_requested_rollout_turns() {
+        let (dex, b) = start(1);
+        assert_eq!(b.turn, 1);
+        for req_turns in [0u16, 1, 2, 8] {
+            let mut sim = b.clone();
+            let playout = Playout::Heavy {
+                eps: 0.0,
+                turns: req_turns,
+                weights: eval::EvalWeights::default(),
+            };
+            let mut rng = SplitMix64::new(42);
+            let _ = playout_value(
+                &mut sim,
+                &dex,
+                &playout,
+                100,
+                &mut rng,
+                RolloutRules::default(),
+            );
+            let end = last_sim_end();
+            if end.outcome == 0 {
+                assert_eq!(
+                    end.turn,
+                    1 + req_turns,
+                    "turns={req_turns} started at turn 1 must stop at turn {}, got {}",
+                    1 + req_turns,
+                    end.turn
+                );
+            }
         }
     }
 }

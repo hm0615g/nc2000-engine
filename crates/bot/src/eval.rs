@@ -405,15 +405,37 @@ fn matrix_game_value(cells: &[f64], k: [usize; 2]) -> f64 {
 
 /// Leaf value for search cutoffs. The calibrated probability is backed up
 /// directly at alpha 1; smaller alpha shrinks it toward 0.5.
+#[inline]
 pub fn eval_leaf(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
-    let (table, cb) = CompactBattle::from_battle(b, dex);
+    eval_leaf_cached(b, dex, w, None)
+}
+
+#[inline]
+pub fn eval_leaf_cached(
+    b: &Battle,
+    dex: &Dex,
+    w: &EvalWeights,
+    roster_cache: Option<&nc2000_engine::compact::RosterCompactCache>,
+) -> f64 {
+    let (table, cb) = CompactBattle::from_battle_with_roster_cache(b, dex, roster_cache);
     compact_eval_leaf(&cb, &table, w)
 }
 
 /// Leaf value with surgical balance-sheet blind-spot accounting (setup/boost
 /// liabilities, frozen asset impairment, healer poison liability).
+#[inline]
 pub fn eval_leaf_blindspot(b: &Battle, dex: &Dex, w: &EvalWeights) -> f64 {
-    let (table, cb) = CompactBattle::from_battle(b, dex);
+    eval_leaf_blindspot_cached(b, dex, w, None)
+}
+
+#[inline]
+pub fn eval_leaf_blindspot_cached(
+    b: &Battle,
+    dex: &Dex,
+    w: &EvalWeights,
+    roster_cache: Option<&nc2000_engine::compact::RosterCompactCache>,
+) -> f64 {
+    let (table, cb) = CompactBattle::from_battle_with_roster_cache(b, dex, roster_cache);
     compact_eval_leaf_blindspot(&cb, &table, w)
 }
 
@@ -427,12 +449,151 @@ pub fn best_hit_fraction(
     def: PokeId,
     couple_evasion: bool,
 ) -> f64 {
+    let dt = nc2000_engine::compact::dex_tables(dex);
+    let a = b.poke(att);
+    let d = b.poke(def);
+    let def_hp = d.hp.max(1) as f64;
+    let level_factor = (a.level as f64 * 2.0 / 5.0 + 2.0).floor();
+    let def_has_ghost = d.has_type(dex.known_types.ghost);
+    let def_foresight = def_has_ghost && dt.fore_cond.is_some_and(|id| d.has_volatile(id));
+    let def_has_flying = d.has_type(dex.known_types.flying);
+
+    let mut phys_stats: Option<(f64, f64)> = None;
+    let mut spec_stats: Option<(f64, f64)> = None;
     let mut best = 0.0f64;
-    for ms in b.poke(att).move_slots.iter() {
+
+    for ms in a.move_slots.iter() {
         if ms.pp <= 0 || ms.disabled {
             continue;
         }
-        best = best.max(expected_hit_fraction(b, dex, att, def, ms.id, couple_evasion));
+        let mspec = &dt.move_specs[ms.id.0 as usize];
+        let (move_type, is_physical, is_status, base_power) = match mspec.var_bp_kind {
+            1 => (
+                TypeId(mspec.move_type),
+                mspec.is_physical,
+                mspec.is_status,
+                a.happiness as i32 * 10 / 25,
+            ),
+            2 => (
+                TypeId(mspec.move_type),
+                mspec.is_physical,
+                mspec.is_status,
+                (255 - a.happiness as i32) * 10 / 25,
+            ),
+            3 => {
+                let hpt = a.hp_type;
+                let is_phys = (dt.special_type_mask & (1u32 << (hpt.0 & 31))) == 0;
+                (hpt, is_phys, false, a.hp_power)
+            }
+            4 => {
+                let ratio = ((a.hp as f64 * 48.0 / a.maxhp as f64).floor() as i32).max(1);
+                let bp = if ratio < 2 {
+                    200
+                } else if ratio < 5 {
+                    150
+                } else if ratio < 10 {
+                    100
+                } else if ratio < 17 {
+                    80
+                } else if ratio < 33 {
+                    40
+                } else {
+                    20
+                };
+                (TypeId(mspec.move_type), mspec.is_physical, mspec.is_status, bp)
+            }
+            _ => (
+                TypeId(mspec.move_type),
+                mspec.is_physical,
+                mspec.is_status,
+                mspec.base_power as i32,
+            ),
+        };
+
+        if mspec.fixed_damage == 0 && (is_status || base_power <= 0) {
+            continue;
+        }
+
+        let mt = move_type.0;
+        let row = &dt.type_chart[(mt as usize).min(19)];
+        let immune = if (mt == dt.normal_type || mt == dt.fighting_type) && def_foresight {
+            false
+        } else if mt == dt.ground_type {
+            def_has_flying
+        } else {
+            d.types.iter().any(|t| row[(t.0 as usize).min(19)] == -9)
+        };
+        if immune {
+            continue;
+        }
+
+        let mut eff = 1.0f64;
+        for t in d.types.iter() {
+            match row[(t.0 as usize).min(19)] {
+                1 => eff *= 2.0,
+                -1 => eff *= 0.5,
+                _ => {}
+            }
+        }
+
+        let acc = if couple_evasion {
+            nc2000_engine::compact::hit_probability_branchless(
+                mspec.base_acc_pct,
+                mspec.always_hit,
+                a.boosts[5],
+                d.boosts[6],
+                mspec.ignore_accuracy,
+                mspec.ignore_evasion,
+                mspec.ignore_positive_evasion,
+            )
+        } else if mspec.always_hit {
+            1.0
+        } else {
+            mspec.base_acc_pct as f64 / 100.0
+        };
+
+        let raw = if mspec.fixed_damage != 0 {
+            if mspec.fixed_damage < 0 {
+                a.level as f64
+            } else {
+                mspec.fixed_damage as f64
+            }
+        } else {
+            let (atk, mut defense) = if is_physical {
+                *phys_stats.get_or_insert_with(|| {
+                    (
+                        b.get_stat(dex, att, 0, false, false, false) as f64,
+                        b.get_stat(dex, def, 1, false, false, false) as f64,
+                    )
+                })
+            } else {
+                *spec_stats.get_or_insert_with(|| {
+                    (
+                        b.get_stat(dex, att, 2, false, false, false) as f64,
+                        b.get_stat(dex, def, 3, false, false, false) as f64,
+                    )
+                })
+            };
+            if mspec.is_selfdestruct && is_physical {
+                defense = (defense / 2.0).floor().max(1.0);
+            }
+            let core = (level_factor * base_power as f64 * atk / defense / 50.0).floor() + 2.0;
+            let stab = if a.types.has(move_type) { 1.5 } else { 1.0 };
+            let hits = mspec.multihit_mean_x2 as f64 * 0.5;
+            core * stab * eff * (236.0 / 255.0) * hits
+        };
+
+        best = best.max(raw * acc / def_hp);
+    }
+
+    if cfg!(debug_assertions) {
+        let mut ref_best = 0.0f64;
+        for ms in a.move_slots.iter() {
+            if ms.pp > 0 && !ms.disabled {
+                ref_best = ref_best.max(expected_hit_fraction(b, dex, att, def, ms.id, couple_evasion));
+            }
+        }
+        debug_assert_eq!(best.to_bits(), ref_best.to_bits());
     }
     best
 }
@@ -2269,7 +2430,7 @@ pub fn extract_eval_features_with_eff(
     // =========================================================================
     // x[16..32]: Non-negative Multi-Body Vulnerability / Discount Features (monotonic <= 0 for `side`)
     // =========================================================================
-    let perish_turns = own_mon.timers[3];
+    let perish_turns = own_mon.perish_turns();
     let perish_urgency = if (own_mon.vol_flags & vol_bit::PERISH_SONG) != 0 && perish_turns > 0 {
         (4.0 - (perish_turns.min(3) as f32)) / 3.0
     } else {

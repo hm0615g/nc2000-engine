@@ -558,17 +558,11 @@ impl Battle {
             forced_passes = can_switch_out - forced_switches;
         }
         let choice = &mut self.sides[side_n].choice;
-        let mut actions = std::mem::take(&mut choice.actions);
-        let mut switch_ins = std::mem::take(&mut choice.switch_ins);
-        actions.clear();
-        switch_ins.clear();
-        *choice = Choice {
-            cant_undo: false,
-            error: false,
-            actions,
-            forced_switches_left: forced_switches,
-            forced_passes_left: forced_passes,
-            switch_ins,
-        };
+        choice.cant_undo = false;
+        choice.error = false;
+        choice.actions.clear();
+        choice.forced_switches_left = forced_switches;
+        choice.forced_passes_left = forced_passes;
+        choice.switch_ins.clear();
     }
 }

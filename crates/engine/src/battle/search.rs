@@ -25,7 +25,158 @@ use crate::state::*;
 
 use super::EngineError;
 
-use crate::fxhash::FxHasher;
+use crate::fxhash::{FxHasher, PolyRecorder, PolyStep};
+
+#[derive(Clone, Copy, Debug, Default)]
+struct CachedMonPrefix {
+    valid: bool,
+    species: u16,
+    hp_type: u8,
+    hp_power: i32,
+    stored_stats: [i32; 5],
+    maxhp: i32,
+    init_base_moves: MoveSlots,
+    full_step: PolyStep,
+    step_a: PolyStep,
+    step_b: PolyStep,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct CachedBenchMon {
+    valid: bool,
+    fainted: bool,
+    position: u8,
+    status: u8,
+    species: u16,
+    hp: i32,
+    previously_switched_in: i32,
+    status_effect_order: u32,
+    item: Option<crate::dex::ItemId>,
+    last_item: Option<crate::dex::ItemId>,
+    step: PolyStep,
+}
+
+/// Precomputed per-world polynomial hash steps and compact roster metadata
+/// accelerating `Battle::search_key_with_cache`, `Battle::reset_search_sim`,
+/// and `CompactBattle::from_battle_with_roster_cache` with zero key/value drift.
+#[derive(Clone, Debug)]
+pub struct BattleSearchCache {
+    pub hp_buckets: Option<i64>,
+    pub omit_damage_bookkeeping: bool,
+    pub selected: bool,
+    pub picked_mask: [u8; 2],
+    pub any_quick_claw: bool,
+    prefix_steps: [[CachedMonPrefix; 6]; 2],
+    bench_steps: [[CachedBenchMon; 6]; 2],
+    pub roster_compact: crate::compact::RosterCompactCache,
+}
+
+impl BattleSearchCache {
+    pub fn new(
+        battle: &Battle,
+        dex: &Dex,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+    ) -> Self {
+        let selected = battle.started
+            && battle.turn > 0
+            && battle.request_state != RequestState::TeamPreview
+            && !battle
+                .queue
+                .iter()
+                .any(|action| matches!(action.choice, ActionKind::Team { .. } | ActionKind::Start));
+        let mut picked_mask = [0u8; 2];
+        for s in 0..2 {
+            if selected {
+                for &slot in &battle.sides[s].party {
+                    if slot < 8 {
+                        picked_mask[s] |= 1u8 << slot;
+                    }
+                }
+            } else {
+                picked_mask[s] = 0xFF;
+            }
+        }
+        let any_quick_claw = dex.known_items.quickclaw.is_some_and(|qc| {
+            battle.sides.iter().enumerate().any(|(s, side)| {
+                side.roster.iter().enumerate().any(|(slot, p)| {
+                    p.item == Some(qc) && (!selected || (picked_mask[s] & (1u8 << slot.min(7))) != 0)
+                })
+            })
+        });
+
+        let mut prefix_steps = [[CachedMonPrefix::default(); 6]; 2];
+        let mut bench_steps = [[CachedBenchMon::default(); 6]; 2];
+
+        for s in 0..2 {
+            for (slot, p) in battle.sides[s].roster.iter().take(6).enumerate() {
+                if !p.transformed {
+                    let mut rec_full = PolyRecorder::new();
+                    p.hash_static_prefix_full(&mut rec_full);
+                    let mut rec_a = PolyRecorder::new();
+                    p.hash_static_prefix_a(&mut rec_a);
+                    let mut rec_b = PolyRecorder::new();
+                    p.hash_static_prefix_b(&mut rec_b);
+                    prefix_steps[s][slot] = CachedMonPrefix {
+                        valid: true,
+                        species: p.species.0,
+                        hp_type: p.hp_type.0,
+                        hp_power: p.hp_power,
+                        stored_stats: p.stored_stats,
+                        maxhp: p.maxhp,
+                        init_base_moves: p.base_move_slots,
+                        full_step: rec_full.step(),
+                        step_a: rec_a.step(),
+                        step_b: rec_b.step(),
+                    };
+                }
+                if selected
+                    && !p.is_started
+                    && !p.is_active
+                    && !p.transformed
+                    && p.volatiles.is_empty()
+                {
+                    let mut rec_u = PolyRecorder::new();
+                    p.hash_state_with_options(&mut rec_u, hp_buckets, omit_damage_bookkeeping);
+                    bench_steps[s][slot] = CachedBenchMon {
+                        valid: true,
+                        fainted: p.fainted,
+                        position: p.position,
+                        status: p.status as u8,
+                        species: p.species.0,
+                        hp: p.hp,
+                        previously_switched_in: p.previously_switched_in,
+                        status_effect_order: p.status_state.effect_order,
+                        item: p.item,
+                        last_item: p.last_item,
+                        step: rec_u.step(),
+                    };
+                }
+            }
+        }
+
+        let roster_compact = crate::compact::RosterCompactCache::from_battle(battle, dex);
+        Self {
+            hp_buckets,
+            omit_damage_bookkeeping,
+            selected,
+            picked_mask,
+            any_quick_claw,
+            prefix_steps,
+            bench_steps,
+            roster_compact,
+        }
+    }
+
+    #[inline]
+    pub fn picked_masks_opt(&self) -> [Option<u8>; 2] {
+        if self.selected {
+            [Some(self.picked_mask[0]), Some(self.picked_mask[1])]
+        } else {
+            [None, None]
+        }
+    }
+}
 
 /// A single side's choice, compact and `Copy` (fits in search tree nodes).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -148,6 +299,7 @@ impl Battle {
 
     /// Search-only key with the same field walk as the stable state keys.
     /// Damage bookkeeping may be omitted only when it cannot affect future play.
+    #[inline]
     pub fn search_key(&self, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
         use std::hash::Hasher;
         let mut h = crate::fxhash::SearchHasher::default();
@@ -155,11 +307,55 @@ impl Battle {
         h.finish()
     }
 
+    #[inline]
     pub fn search_key_canonical_claw(&self, dex: &Dex, hp_buckets: Option<i64>, omit_damage_bookkeeping: bool) -> u64 {
         use std::hash::Hasher;
         let mut h = crate::fxhash::SearchHasher::default();
         self.state_hash_into(&mut h, hp_buckets, omit_damage_bookkeeping, !self.quick_claw_roll_observable(dex));
         h.finish()
+    }
+
+    /// Exact search key accelerated by [`BattleSearchCache`] (collapsing unpicked
+    /// roster Pokemon and static Pokemon prefixes into `O(1)` polynomial ring steps).
+    #[inline]
+    pub fn search_key_with_cache(
+        &self,
+        dex: &Dex,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+        canonical_claw: bool,
+        cache: &BattleSearchCache,
+    ) -> u64 {
+        if cache.hp_buckets != hp_buckets || cache.omit_damage_bookkeeping != omit_damage_bookkeeping
+        {
+            return if canonical_claw {
+                self.search_key_canonical_claw(dex, hp_buckets, omit_damage_bookkeeping)
+            } else {
+                self.search_key(hp_buckets, omit_damage_bookkeeping)
+            };
+        }
+        let omit_qc = if canonical_claw {
+            if !cache.any_quick_claw {
+                true
+            } else {
+                !self.quick_claw_roll_observable(dex)
+            }
+        } else {
+            false
+        };
+        use std::hash::Hasher;
+        let mut h = crate::fxhash::SearchHasher::default();
+        self.state_hash_into_cached(&mut h, hp_buckets, omit_damage_bookkeeping, omit_qc, cache);
+        let out = h.finish();
+        if cfg!(debug_assertions) {
+            let expected = if canonical_claw {
+                self.search_key_canonical_claw(dex, hp_buckets, omit_damage_bookkeeping)
+            } else {
+                self.search_key(hp_buckets, omit_damage_bookkeeping)
+            };
+            debug_assert_eq!(out, expected, "BattleSearchCache key mismatch");
+        }
+        out
     }
 
     pub fn type_key(&self) -> u64 {
@@ -236,6 +432,7 @@ impl Battle {
         })
     }
 
+    #[inline]
     fn state_hash_into<H: crate::fxhash::StateHasher>(
         &self,
         h: &mut H,
@@ -309,6 +506,186 @@ impl Battle {
         (active_pokemon, active_target, last_move_id, pending_boosts).hash(h);
     }
 
+    #[cold]
+    #[inline(never)]
+    fn hash_mon_uncached_fallback(
+        p: &Pokemon,
+        h: &mut crate::fxhash::SearchHasher,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+    ) {
+        p.hash_state_with_options(h, hp_buckets, omit_damage_bookkeeping);
+    }
+
+    #[inline]
+    fn state_hash_into_cached(
+        &self,
+        h: &mut crate::fxhash::SearchHasher,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+        omit_quick_claw_roll: bool,
+        cache: &BattleSearchCache,
+    ) {
+        use std::hash::Hash;
+        let Battle {
+            preview_level_caps,
+            prng: _,
+            turn,
+            request_state,
+            mid_turn,
+            started,
+            ended,
+            winner,
+            field,
+            sides,
+            queue,
+            faint_queue,
+            log: _,
+            log_enabled: _,
+            effect_order,
+            event_depth,
+            last_move_line: _,
+            last_successful_move_this_turn,
+            last_damage,
+            quick_claw_roll,
+            speed_order,
+            format_data,
+            sent_log_pos: _,
+            event_stack,
+            effect_stack,
+            active_move,
+            active_pokemon,
+            active_target,
+            last_move_id,
+            pending_boosts,
+            listener_pool: _,
+            battle_mask: _,
+        } = self;
+        (turn, request_state, mid_turn, started, ended, winner).hash(h);
+        if *preview_level_caps != [Some(super::MAX_TOTAL_LEVEL); 2] {
+            preview_level_caps.hash(h);
+        }
+        field.weather.hash(h);
+        field.weather_state.hash_state(h);
+        field.pseudo_weather.len().hash(h);
+        for (cid, st) in field.pseudo_weather.iter() {
+            cid.hash(h);
+            st.hash_state(h);
+        }
+        for (side_i, side) in sides.iter().enumerate() {
+            let Side {
+                name,
+                roster,
+                party,
+                active,
+                pokemon_left,
+                total_fainted,
+                side_conditions,
+                slot_conditions,
+                handler_mask,
+                last_move,
+                fainted_this_turn,
+                fainted_last_turn,
+                request,
+                choice,
+            } = side;
+            name.hash(h);
+            roster.len().hash(h);
+            for (slot, p) in roster.iter().enumerate() {
+                if slot < 6 {
+                    let u = &cache.bench_steps[side_i][slot];
+                    if u.valid
+                        && !p.is_active
+                        && !p.is_started
+                        && p.previously_switched_in == u.previously_switched_in
+                        && p.position == u.position
+                        && p.fainted == u.fainted
+                        && !p.transformed
+                        && p.status as u8 == u.status
+                        && p.status_state.effect_order == u.status_effect_order
+                        && p.species.0 == u.species
+                        && p.hp == u.hp
+                        && p.item == u.item
+                        && p.last_item == u.last_item
+                        && p.volatiles.is_empty()
+                    {
+                        h.apply_step(u.step);
+                        continue;
+                    }
+                    let pr = &cache.prefix_steps[side_i][slot];
+                    if pr.valid
+                        && !p.transformed
+                        && p.species.0 == pr.species
+                        && p.stored_stats == pr.stored_stats
+                        && p.hp_type.0 == pr.hp_type
+                        && p.hp_power == pr.hp_power
+                        && p.maxhp == pr.maxhp
+                    {
+                        if p.base_move_slots == pr.init_base_moves {
+                            h.apply_step(pr.full_step);
+                        } else {
+                            h.apply_step(pr.step_a);
+                            p.base_move_slots.hash_state(h);
+                            h.apply_step(pr.step_b);
+                        }
+                        p.hash_dynamic_body(h, hp_buckets, omit_damage_bookkeeping);
+                        continue;
+                    }
+                }
+                Self::hash_mon_uncached_fallback(p, h, hp_buckets, omit_damage_bookkeeping);
+            }
+            (party, active, pokemon_left, total_fainted).hash(h);
+            (side_conditions, slot_conditions, handler_mask).hash(h);
+            (last_move, fainted_this_turn, fainted_last_turn).hash(h);
+            (request, choice).hash(h);
+        }
+        (queue, faint_queue, effect_order, event_depth).hash(h);
+        last_successful_move_this_turn.hash(h);
+        if !omit_damage_bookkeeping {
+            match hp_buckets {
+                None => last_damage.hash(h),
+                Some(_) => (last_damage / 16).hash(h),
+            }
+        }
+        (
+            if omit_quick_claw_roll {
+                false
+            } else {
+                *quick_claw_roll
+            },
+            speed_order,
+        )
+            .hash(h);
+        format_data.hash_state(h);
+        (event_stack.len(), effect_stack.len(), active_move.is_some()).hash(h);
+        (active_pokemon, active_target, last_move_id, pending_boosts).hash(h);
+    }
+
+    /// Populate `out` with all legal choices for `side_n`, avoiding heap allocation
+    /// for all move/switch requests (at most 6 actions in 3v3 singles).
+    pub fn legal_choices_into(
+        &mut self,
+        dex: &Dex,
+        side_n: usize,
+        out: &mut smallvec::SmallVec<[SearchChoice; 6]>,
+    ) {
+        out.clear();
+        if self.ended {
+            return;
+        }
+        let Some(request) = self.sides[side_n].request_state() else {
+            return;
+        };
+        match request {
+            RequestKind::TeamPreview => {
+                out.extend(self.legal_team_choices(side_n));
+            }
+            RequestKind::Move => self.legal_move_choices_into(dex, side_n, out),
+            RequestKind::Switch => self.legal_forced_switch_choices_into(side_n, out),
+            RequestKind::Wait => {}
+        }
+    }
+
     /// All legal choices for one side at the current request point. Empty ⇔
     /// the side has nothing to submit (waiting side, or battle ended).
     ///
@@ -375,12 +752,25 @@ impl Battle {
 
     /// Mirrors `choose_move` + `choose_switch` legality on a move request.
     fn legal_move_choices(&mut self, dex: &Dex, side_n: usize) -> Vec<SearchChoice> {
+        let mut buf = smallvec::SmallVec::<[SearchChoice; 6]>::new();
+        self.legal_move_choices_into(dex, side_n, &mut buf);
+        buf.into_vec()
+    }
+
+    fn legal_move_choices_into(
+        &mut self,
+        dex: &Dex,
+        side_n: usize,
+        out: &mut smallvec::SmallVec<[SearchChoice; 6]>,
+    ) {
         let Some(active) = self.active_id(side_n) else {
-            return vec![SearchChoice::Pass];
+            out.push(SearchChoice::Pass);
+            return;
         };
         if self.poke(active).fainted {
             // only reachable defensively; PS would have made a switch request
-            return vec![SearchChoice::Pass];
+            out.push(SearchChoice::Pass);
+            return;
         }
 
         // locked moves preempt everything (thrash/rollout/recharge/...)
@@ -393,11 +783,11 @@ impl Battle {
                 .id(&locked_id)
                 .or_else(|| dex.moves.id("recharge"))
                 .expect("locked move id interned");
-            return vec![SearchChoice::Move(id)];
+            out.push(SearchChoice::Move(id));
+            return;
         }
 
         let moves = &self.poke(active).move_slots;
-        let mut out = Vec::with_capacity(moves.len() + self.sides[side_n].party.len().saturating_sub(1));
         for slot in moves {
             let choice = SearchChoice::Move(slot.id);
             if !slot.disabled && slot.pp > 0 && !out.contains(&choice) {
@@ -418,13 +808,21 @@ impl Battle {
                 }
             }
         }
-        out
     }
 
     /// Mirrors `choose_switch`/`choose_pass` legality on a forced switch.
     fn legal_forced_switch_choices(&self, side_n: usize) -> Vec<SearchChoice> {
+        let mut buf = smallvec::SmallVec::<[SearchChoice; 6]>::new();
+        self.legal_forced_switch_choices_into(side_n, &mut buf);
+        buf.into_vec()
+    }
+
+    fn legal_forced_switch_choices_into(
+        &self,
+        side_n: usize,
+        out: &mut smallvec::SmallVec<[SearchChoice; 6]>,
+    ) {
         let side = &self.sides[side_n];
-        let mut out = Vec::new();
         if side.choice.forced_switches_left > 0 {
             for pos in 1..side.party.len() {
                 let slot = side.party[pos];
@@ -438,7 +836,6 @@ impl Battle {
         if out.is_empty() && side.choice.forced_passes_left > 0 {
             out.push(SearchChoice::Pass);
         }
-        out
     }
 
     /// Submit one side's choice (advances the battle when it was the last

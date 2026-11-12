@@ -960,12 +960,12 @@ impl Default for RmConfig {
 }
 
 pub(crate) struct Node {
-    /// Legal actions per side at this state (empty = side owes nothing).
-    pub(crate) acts: [Vec<SearchChoice>; 2],
+    /// Legal actions per side at this state (empty = side owes nothing; <= 6 for all move/switch states).
+    pub(crate) acts: [nc2000_engine::smallvec::SmallVec<[SearchChoice; 6]>; 2],
     /// Per-action sample counts (UCB1).
-    pub(crate) n: [Vec<u32>; 2],
+    pub(crate) n: [nc2000_engine::smallvec::SmallVec<[u32; 6]>; 2],
     /// Per-action reward sums (UCB1).
-    pub(crate) w: [Vec<f64>; 2],
+    pub(crate) w: [nc2000_engine::smallvec::SmallVec<[f64; 6]>; 2],
     /// Team-preview node (always UCB1 + argmax).
     pub(crate) preview: bool,
 }
@@ -997,18 +997,21 @@ impl Node {
     }
 
     fn build(sim: &mut Battle, dex: &Dex, collapse_sleep: bool) -> Node {
-        let mut acts = [sim.legal_choices(dex, 0), sim.legal_choices(dex, 1)];
+        use nc2000_engine::smallvec::{smallvec, SmallVec};
+        let mut acts = [SmallVec::new(), SmallVec::new()];
+        sim.legal_choices_into(dex, 0, &mut acts[0]);
+        sim.legal_choices_into(dex, 1, &mut acts[1]);
         if collapse_sleep {
             for side in 0..2 {
-                collapse_sleep_choices(sim, dex, side, &mut acts[side]);
+                collapse_sleep_choices_smallvec(sim, dex, side, &mut acts[side]);
             }
         }
         let preview = acts
             .iter()
             .any(|a| matches!(a.first(), Some(SearchChoice::Team(_))));
         Node {
-            n: [vec![0; acts[0].len()], vec![0; acts[1].len()]],
-            w: [vec![0.0; acts[0].len()], vec![0.0; acts[1].len()]],
+            n: [smallvec![0; acts[0].len()], smallvec![0; acts[1].len()]],
+            w: [smallvec![0.0; acts[0].len()], smallvec![0.0; acts[1].len()]],
             preview,
             acts,
         }
@@ -1093,6 +1096,37 @@ pub fn collapse_sleep_choices(b: &Battle, dex: &Dex, side: usize, choices: &mut 
     });
 }
 
+fn collapse_sleep_choices_smallvec(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    choices: &mut nc2000_engine::smallvec::SmallVec<[SearchChoice; 6]>,
+) {
+    let Some(id) = b.active_id(side) else { return };
+    let p = b.poke(id);
+    if p.status != nc2000_engine::state::Status::Slp
+        || p.status_state.get_int(nc2000_engine::state::DK::Time) <= 1
+        || p.item
+            .is_some_and(|item| matches!(dex.items.key(item), "mintberry" | "miracleberry"))
+    {
+        return;
+    }
+    let mut priorities = [false; 256];
+    choices.retain(|action| {
+        let SearchChoice::Move(id) = *action else {
+            return true;
+        };
+        let ms = dex.move_static(id);
+        if ms.sleep_usable || ms.callbacks.iter().any(|key| key == "beforeTurnCallback") {
+            return true;
+        }
+        let priority = (i16::from(ms.priority) + 128) as usize;
+        let first = !priorities[priority];
+        priorities[priority] = true;
+        first
+    });
+}
+
 struct ProbeStats {
     /// Per-side probed action indices (into the root's action lists).
     support: [Vec<usize>; 2],
@@ -1147,13 +1181,7 @@ pub(crate) const HP_CLASSES: i64 = 12;
 pub(crate) fn hp_class(b: &Battle, dex: &Dex, def: PokeId, att: Option<PokeId>) -> i64 {
     let hits = match att {
         Some(att) => {
-            let best = b
-                .poke(att)
-                .move_slots
-                .iter()
-                .filter(|m| m.pp > 0 && !m.disabled)
-                .map(|m| crate::eval::expected_hit_fraction(b, dex, att, def, m.id, true))
-                .fold(0.0_f64, f64::max);
+            let best = crate::eval::best_hit_fraction(b, dex, att, def, true);
             if best <= 0.0 {
                 6
             } else {
@@ -1167,8 +1195,23 @@ pub(crate) fn hp_class(b: &Battle, dex: &Dex, def: PokeId, att: Option<PokeId>) 
     (hits - 1) * 2 + can_sub
 }
 
+#[inline]
+pub(crate) fn build_search_cache(
+    cfg: &RmConfig,
+    dex: &Dex,
+    b: &Battle,
+) -> nc2000_engine::battle::BattleSearchCache {
+    let (buckets, omit_damage) = if cfg.hp_buckets <= 0 {
+        (None, false)
+    } else {
+        (Some(cfg.hp_buckets), cfg.key_no_damage)
+    };
+    nc2000_engine::battle::BattleSearchCache::new(b, dex, buckets, omit_damage)
+}
+
 /// Public shim so the `key_shape` probe can hash a state the way the search
 /// does without exposing the descent internals.
+#[inline]
 pub fn key_for_test(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
     key_of(cfg, dex, b)
 }
@@ -1178,9 +1221,22 @@ pub fn key_for_test(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
 /// class per bucket; bench mons keep the uniform grid, since they are not the
 /// ones being hit and a damage estimate per bench mon would be paid on every
 /// descent step. The battle is restored before returning.
+#[inline]
 pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
+    key_of_cached(cfg, dex, b, None)
+}
+
+#[inline]
+pub(crate) fn key_of_cached(
+    cfg: &RmConfig,
+    dex: &Dex,
+    b: &mut Battle,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
+) -> u64 {
     let hash = |b: &Battle, buckets, omit_damage| {
-        if cfg.canonical_claw_key {
+        if let Some(c) = cache {
+            b.search_key_with_cache(dex, buckets, omit_damage, cfg.canonical_claw_key, c)
+        } else if cfg.canonical_claw_key {
             b.search_key_canonical_claw(dex, buckets, omit_damage)
         } else {
             b.search_key(buckets, omit_damage)
@@ -1290,7 +1346,27 @@ pub(crate) fn run_iteration(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
 ) -> f64 {
-    run_iteration_with_leaf(
+    run_iteration_cached(
+        cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root, root_joint, depth_out, None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_iteration_cached(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<Node>,
+    table: &mut FxHashMap<u64, usize>,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
+) -> f64 {
+    run_iteration_with_root_child_value_cached(
         cfg,
         rng,
         nodes,
@@ -1302,8 +1378,10 @@ pub(crate) fn run_iteration(
         force_root,
         root_joint,
         depth_out,
-        &mut |sim, rng, rollout| default_leaf(cfg, sim, dex, turn_cap, rng, rollout),
+        &mut |sim, rng, rollout| default_leaf_cached(cfg, sim, dex, turn_cap, rng, rollout, cache),
         None,
+        None,
+        cache,
     )
 }
 
@@ -1323,9 +1401,32 @@ pub(crate) fn run_iteration_with_leaf(
     leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
     trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
 ) -> f64 {
-    run_iteration_with_root_child_value(
+    run_iteration_with_root_child_value_cached(
         cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root, root_joint, depth_out, leaf,
-        trace, None,
+        trace, None, None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_iteration_with_leaf_cached(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<Node>,
+    table: &mut FxHashMap<u64, usize>,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+    leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
+    trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
+) -> f64 {
+    run_iteration_with_root_child_value_cached(
+        cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root, root_joint, depth_out, leaf,
+        trace, None, cache,
     )
 }
 
@@ -1343,8 +1444,45 @@ pub(crate) fn run_iteration_with_root_child_value(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
     leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
+    trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
+    root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
+) -> f64 {
+    run_iteration_with_root_child_value_cached(
+        cfg,
+        rng,
+        nodes,
+        table,
+        sim,
+        dex,
+        turn_cap,
+        start,
+        force_root,
+        root_joint,
+        depth_out,
+        leaf,
+        trace,
+        root_child_value,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_iteration_with_root_child_value_cached(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<Node>,
+    table: &mut FxHashMap<u64, usize>,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+    leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
     mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
     mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
 ) -> f64 {
     let mut path_buf = [(0usize, 0usize, 0usize); 32];
     let mut path_len = 0usize;
@@ -1386,12 +1524,15 @@ pub(crate) fn run_iteration_with_root_child_value(
         }
         if let Some(trace) = trace.as_deref_mut() {
             let node = &nodes[node_idx];
+            let t_acts = [node.acts[0].to_vec(), node.acts[1].to_vec()];
+            let t_n = [node.n[0].to_vec(), node.n[1].to_vec()];
+            let t_w = [node.w[0].to_vec(), node.w[1].to_vec()];
             trace(SearchTrace::Choice {
                 battle: sim,
                 node: node_idx,
-                actions: &node.acts,
-                visits: &node.n,
-                rewards: &node.w,
+                actions: &t_acts,
+                visits: &t_n,
+                rewards: &t_w,
                 chosen: joint,
             });
         }
@@ -1438,7 +1579,7 @@ pub(crate) fn run_iteration_with_root_child_value(
             crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
             break leaf(sim, rng, false);
         }
-        let key = key_of(cfg, dex, sim);
+        let key = key_of_cached(cfg, dex, sim, cache);
         match table.get(&key) {
             Some(&child) => {
                 *depth_out += 1;
@@ -1503,14 +1644,26 @@ pub(crate) fn run_iteration_with_root_child_value(
     root_reward0
 }
 
+#[inline]
 pub(crate) fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
+    leaf_eval_cached(cfg, sim, dex, None)
+}
+
+#[inline]
+pub(crate) fn leaf_eval_cached(
+    cfg: &RmConfig,
+    sim: &Battle,
+    dex: &Dex,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
+) -> f64 {
+    let rc = cache.map(|c| &c.roster_compact);
     match &cfg.playout {
         Playout::Uniform => crate::mcts::hp_eval(sim),
         Playout::Heavy { weights, .. } => {
             if cfg.settlement.uses_blindspot_leaf() {
-                crate::eval::eval_leaf_blindspot(sim, dex, weights)
+                crate::eval::eval_leaf_blindspot_cached(sim, dex, weights, rc)
             } else {
-                crate::eval::eval_leaf(sim, dex, weights)
+                crate::eval::eval_leaf_cached(sim, dex, weights, rc)
             }
         }
     }
@@ -1524,10 +1677,31 @@ pub(crate) fn default_leaf(
     rng: &mut SplitMix64,
     rollout: bool,
 ) -> f64 {
+    default_leaf_cached(cfg, sim, dex, turn_cap, rng, rollout, None)
+}
+
+#[inline]
+pub(crate) fn default_leaf_cached(
+    cfg: &RmConfig,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    rng: &mut SplitMix64,
+    rollout: bool,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
+) -> f64 {
     if rollout {
-        playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_rules())
+        crate::mcts::playout_value_cached(
+            sim,
+            dex,
+            &cfg.playout,
+            turn_cap,
+            rng,
+            cfg.rollout_rules(),
+            cache.map(|c| &c.roster_compact),
+        )
     } else {
-        leaf_eval(cfg, sim, dex)
+        leaf_eval_cached(cfg, sim, dex, cache)
     }
 }
 
@@ -1547,6 +1721,7 @@ pub struct SkuctSearch {
     cfg: RmConfig,
     rng: SplitMix64,
     root: Battle,
+    cache: nc2000_engine::battle::BattleSearchCache,
     scratch: Option<Box<Battle>>,
     turn_cap: u16,
     nodes: Vec<Node>,
@@ -2443,10 +2618,11 @@ impl SkuctSearch {
         }
         let mut root = battle.clone();
         root.set_log_enabled(false);
+        let cache = build_search_cache(&cfg, dex, &root);
         let turn_cap = root.turn.saturating_add(cfg.horizon);
         let nodes = vec![Node::at(&mut root, dex)];
         let mut table = FxHashMap::default();
-        table.insert(key_of(&cfg, dex, &mut root), 0usize);
+        table.insert(key_of_cached(&cfg, dex, &mut root, Some(&cache)), 0usize);
         let root_dominated = [0usize, 1].map(|s| {
             nodes[0].acts[s]
                 .iter()
@@ -2459,6 +2635,7 @@ impl SkuctSearch {
             cfg,
             rng,
             root,
+            cache,
             scratch: None,
             turn_cap,
             nodes,
@@ -2550,9 +2727,10 @@ impl SkuctSearch {
     /// rollout/backprop). Returns the side-0 reward and the root joint's
     /// action indices — `RmAgent`'s late-tree stage-game seeding needs both.
     pub fn step_one(&mut self, dex: &Dex) -> (f64, [usize; 2]) {
+        let picked = self.cache.picked_masks_opt();
         let mut sim = match self.scratch.take() {
             Some(mut sim) => {
-                sim.as_mut().clone_from(&self.root);
+                sim.reset_search_sim(&self.root, [true, true], picked);
                 sim
             }
             None => Box::new(self.root.clone()),
@@ -2561,7 +2739,7 @@ impl SkuctSearch {
         sim.reseed(self.rng.next());
         let mut joint = [0usize; 2];
         let mut depth = 0u32;
-        let r = run_iteration(
+        let r = run_iteration_cached(
             &self.cfg,
             &mut self.rng,
             &mut self.nodes,
@@ -2573,6 +2751,7 @@ impl SkuctSearch {
             [None, None],
             &mut joint,
             &mut depth,
+            Some(&self.cache),
         );
         std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
         self.scratch = Some(sim);
@@ -2585,9 +2764,10 @@ impl SkuctSearch {
     /// One probe iteration with the root joint forced (`RmAgent`'s matrix
     /// estimation phase).
     fn step_forced(&mut self, dex: &Dex, force: [usize; 2]) -> f64 {
+        let picked = self.cache.picked_masks_opt();
         let mut sim = match self.scratch.take() {
             Some(mut sim) => {
-                sim.as_mut().clone_from(&self.root);
+                sim.reset_search_sim(&self.root, [true, true], picked);
                 sim
             }
             None => Box::new(self.root.clone()),
@@ -2596,7 +2776,7 @@ impl SkuctSearch {
         sim.reseed(self.rng.next());
         let mut joint = [0usize; 2];
         let mut depth = 0u32;
-        let r = run_iteration(
+        let r = run_iteration_cached(
             &self.cfg,
             &mut self.rng,
             &mut self.nodes,
@@ -2608,6 +2788,7 @@ impl SkuctSearch {
             [Some(force[0]), Some(force[1])],
             &mut joint,
             &mut depth,
+            Some(&self.cache),
         );
         std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
         self.scratch = Some(sim);
@@ -2625,10 +2806,11 @@ impl SkuctSearch {
         n: u32,
         leaf: &mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64,
     ) -> u32 {
+        let picked = self.cache.picked_masks_opt();
         for _ in 0..n {
             let mut sim = match self.scratch.take() {
                 Some(mut sim) => {
-                    sim.as_mut().clone_from(&self.root);
+                    sim.reset_search_sim(&self.root, [true, true], picked);
                     sim
                 }
                 None => Box::new(self.root.clone()),
@@ -2637,7 +2819,7 @@ impl SkuctSearch {
             sim.reseed(self.rng.next());
             let mut joint = [0usize; 2];
             let mut depth = 0u32;
-            let r = run_iteration_with_leaf(
+            let r = run_iteration_with_leaf_cached(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.nodes,
@@ -2651,6 +2833,7 @@ impl SkuctSearch {
                 &mut depth,
                 leaf,
                 None,
+                Some(&self.cache),
             );
             std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
             self.scratch = Some(sim);
@@ -2802,7 +2985,7 @@ impl RmAgent {
             }
         }
 
-        let acts = ts.nodes[0].acts[side].clone();
+        let acts = ts.nodes[0].acts[side].to_vec();
 
         // preview root (or argmax ablation): most-visited action, point mass
         if !mixed_root {

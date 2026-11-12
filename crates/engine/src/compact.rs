@@ -621,6 +621,36 @@ impl CompactMon {
         self.status_packed = (status_disc & 0x07) | ((counter & 0x1F) << 3);
     }
 
+    #[inline(always)]
+    pub const fn perish_turns(&self) -> u8 {
+        self.timers[3] & 0x07
+    }
+
+    #[inline(always)]
+    pub fn set_perish_turns(&mut self, turns: u8) {
+        self.timers[3] = (self.timers[3] & !0x07) | (turns.min(7) & 0x07);
+    }
+
+    #[inline(always)]
+    pub const fn stall_counter(&self) -> u8 {
+        (self.timers[3] >> 3) & 0x07
+    }
+
+    #[inline(always)]
+    pub fn set_stall_counter(&mut self, count: u8) {
+        self.timers[3] = (self.timers[3] & 0x07) | ((count.min(7) & 0x07) << 3);
+    }
+
+    #[inline(always)]
+    pub const fn encore_slot(&self) -> u8 {
+        (self.slot_refs >> 2) & 0x03
+    }
+
+    #[inline(always)]
+    pub fn set_encore_slot(&mut self, slot: u8) {
+        self.slot_refs = (self.slot_refs & !(0x03 << 2)) | ((slot & 0x03) << 2);
+    }
+
     /// Apply damage to either Substitute (`hp_pool[1]`) or main HP (`hp_pool[0]`)
     /// using branchless array indexing. Returns actual damage dealt.
     #[inline(always)]
@@ -705,6 +735,18 @@ pub struct CompactBattle {
 const _: () = assert!(std::mem::size_of::<CompactBattle>() == 192);
 const _: () = assert!(std::mem::align_of::<CompactBattle>() == 64);
 
+/// Precomputed per-Pokemon move-role bitflags on [`StaticMonSpec::role_flags`].
+pub mod role_bit {
+    pub const HALF_HEAL: u8 = 1 << 0;
+    pub const REST: u8 = 1 << 1;
+    pub const SLEEP_USABLE: u8 = 1 << 2;
+    pub const PERISH_PHAZE_TRAP: u8 = 1 << 3;
+    pub const BATON_PASS: u8 = 1 << 4;
+    pub const PROTECT: u8 = 1 << 5;
+    pub const SWAGGER: u8 = 1 << 6;
+    pub const PHAZE_OR_HAZE: u8 = 1 << 7;
+}
+
 /// Immutable per-Pokemon reference data stored in [`MatchTable`].
 #[derive(Clone, Copy, Debug, Default)]
 pub struct StaticMonSpec {
@@ -726,6 +768,7 @@ pub struct StaticMonSpec {
     pub num_types: u8,
     pub level: u8,
     pub num_moves: u8,
+    pub role_flags: u8,
     pub item_stat_kind: ItemStatKind,
     /// Boosted type (`0..18`, or `0xFF` if held item is not a 1.1x type booster).
     pub item_boost_type: u8,
@@ -773,6 +816,8 @@ pub struct CompactMoveSpec {
     pub is_sleep_usable: bool,
     pub can_sleep_talk: bool,
     pub is_protect: bool,
+    pub is_endure: bool,
+    pub blocked_by_protect: bool,
     pub is_substitute: bool,
     pub drain_half: bool,
     pub recoil_quarter: bool,
@@ -854,6 +899,7 @@ pub struct CompactDexTables {
     pub fore_cond: Option<crate::dex::CondId>,
     pub prot_cond: Option<crate::dex::CondId>,
     pub end_cond: Option<crate::dex::CondId>,
+    pub stall_cond: Option<crate::dex::CondId>,
     pub enc_cond: Option<crate::dex::CondId>,
     pub dis_cond: Option<crate::dex::CondId>,
     pub perish_cond: Option<crate::dex::CondId>,
@@ -960,6 +1006,7 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
     let authentic_bit = dex.flag_bit("authentic");
     let nosleeptalk_bit = dex.flag_bit("nosleeptalk");
     let charge_bit = dex.flag_bit("charge");
+    let protect_bit = dex.flag_bit("protect");
 
     let mut move_specs = Vec::with_capacity(dex.moves.len());
     for m_raw in 0..dex.moves.len() {
@@ -1102,6 +1149,8 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
             is_sleep_usable: ms.sleep_usable,
             can_sleep_talk: (ms.flags & (nosleeptalk_bit | charge_bit)) == 0,
             is_protect: matches!(mkey, "protect" | "detect"),
+            is_endure: mkey == "endure",
+            blocked_by_protect: (ms.flags & protect_bit) != 0,
             is_substitute: mkey == "substitute",
             drain_half: ms.drain.is_some(),
             recoil_quarter: ms.recoil.is_some(),
@@ -1178,6 +1227,7 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
         fore_cond: dex.conds_id("foresight"),
         prot_cond: dex.conds_id("protect"),
         end_cond: dex.conds_id("endure"),
+        stall_cond: dex.conds_id("stall"),
         enc_cond: dex.conds_id("encore"),
         dis_cond: dex.conds_id("disable"),
         perish_cond: dex.conds_id("perishsong"),
@@ -1324,9 +1374,211 @@ const COMPACT_TYPE_BOOST_ITEMS: [(&str, &str); 18] = [
     ("twistedspoon", "Psychic"),
 ];
 
+#[derive(Clone, Copy, Debug)]
+pub struct CachedRosterMon {
+    pub spec: StaticMonSpec,
+    pub move_specs: [CompactMoveSpec; 4],
+    guard_maxhp: i32,
+    guard_stored_stats: [i32; 5],
+    guard_types: crate::dex::TypeList,
+    guard_item: Option<ItemId>,
+    guard_hp_type: crate::dex::TypeId,
+    guard_hp_power: i32,
+    guard_happiness: u8,
+    guard_maxpp: [i32; 4],
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct RosterCompactCache {
+    pub entries: [[Option<CachedRosterMon>; 6]; 2],
+}
+
+impl RosterCompactCache {
+    pub fn from_battle(battle: &Battle, dex: &Dex) -> Self {
+        let dt = dex_tables(dex);
+        let mut entries = [[None; 6]; 2];
+        for side_n in 0..2usize {
+            for (slot, p) in battle.sides[side_n].roster.iter().take(6).enumerate() {
+                if p.transformed {
+                    continue;
+                }
+                let (spec, move_specs) = build_static_mon_spec(p, dex, dt);
+                let mut guard_maxpp = [0i32; 4];
+                for m_i in 0..(spec.num_moves as usize) {
+                    guard_maxpp[m_i] = p.move_slots[m_i].maxpp;
+                }
+                entries[side_n][slot] = Some(CachedRosterMon {
+                    spec,
+                    move_specs,
+                    guard_maxhp: p.maxhp,
+                    guard_stored_stats: p.stored_stats,
+                    guard_types: p.types,
+                    guard_item: p.item,
+                    guard_hp_type: p.hp_type,
+                    guard_hp_power: p.hp_power,
+                    guard_happiness: p.happiness,
+                    guard_maxpp,
+                });
+            }
+        }
+        Self { entries }
+    }
+}
+
+#[inline]
+fn build_static_mon_spec(
+    p: &crate::state::Pokemon,
+    dex: &Dex,
+    dt: &CompactDexTables,
+) -> (StaticMonSpec, [CompactMoveSpec; 4]) {
+    let maxhp = p.maxhp.max(1) as i16;
+    let mut type_mask = 0u32;
+    for ty in p.types.iter() {
+        type_mask |= 1u32 << (ty.0 & 31);
+    }
+    let item_spec = p
+        .item
+        .and_then(|i| dt.item_specs.get(i.0 as usize).copied())
+        .unwrap_or(CompactItemSpec {
+            boost_type: 0xFF,
+            ..CompactItemSpec::default()
+        });
+
+    let return_bp = (p.happiness as i32 * 10 / 25) as i16;
+    let mut moves = [MoveId(0); 4];
+    let mut max_pp = [0u8; 4];
+    let mut move_specs = [CompactMoveSpec::default(); 4];
+    let mut role_flags = 0u8;
+    let num_moves = p.move_slots.len().min(4) as u8;
+    for m_i in 0..num_moves as usize {
+        let slot = p.move_slots[m_i];
+        moves[m_i] = slot.id;
+        max_pp[m_i] = slot.maxpp.clamp(0, 64) as u8;
+
+        let mut cm = dt.move_specs[slot.id.0 as usize];
+        match cm.var_bp_kind {
+            1 => cm.base_power = return_bp,
+            2 => cm.base_power = ((255 - p.happiness as i32) * 10 / 25) as i16,
+            3 => {
+                let hpt = p.hp_type.0;
+                cm.move_type = hpt;
+                cm.base_power = p.hp_power as i16;
+                cm.is_physical = (dt.special_type_mask & (1u32 << (hpt & 31))) == 0;
+                cm.is_water = hpt == dt.water_type;
+                cm.is_fire = hpt == dt.fire_type;
+            }
+            _ => {}
+        }
+        if cm.is_half_heal {
+            role_flags |= role_bit::HALF_HEAL;
+        }
+        if cm.is_rest {
+            role_flags |= role_bit::REST;
+        }
+        if cm.special_kind == 10 || cm.is_sleep_usable {
+            role_flags |= role_bit::SLEEP_USABLE;
+        }
+        if matches!(cm.special_kind, 7 | 19 | 26) {
+            role_flags |= role_bit::PERISH_PHAZE_TRAP;
+        }
+        if cm.special_kind == 18 {
+            role_flags |= role_bit::BATON_PASS;
+        }
+        if cm.is_protect {
+            role_flags |= role_bit::PROTECT;
+        }
+        if !cm.boosts_self
+            && cm.boosts[0].0 == 0
+            && cm.boosts[0].1 > 0
+            && (cm.primary_vol & vol_bit::CONFUSION) != 0
+        {
+            role_flags |= role_bit::SWAGGER;
+        }
+        if matches!(cm.special_kind, 7 | 27) {
+            role_flags |= role_bit::PHAZE_OR_HAZE;
+        }
+        move_specs[m_i] = cm;
+    }
+
+    let stored_stats = [
+        p.stored_stats[0] as i16,
+        p.stored_stats[1] as i16,
+        p.stored_stats[2] as i16,
+        p.stored_stats[3] as i16,
+        p.stored_stats[4] as i16,
+    ];
+    let item_stat_kind = ItemStatKind::classify(dex, p.species, p.item);
+    let mut static_fp = 0xcbf29ce484222325u64;
+    let w0 = (p.species.0 as u64)
+        | ((p.level as u64) << 16)
+        | ((maxhp as u16 as u64) << 24)
+        | ((type_mask as u64) << 40)
+        | ((item_stat_kind as u64) << 60)
+        | ((item_spec.boost_type as u64) << 52);
+    let w1 = (stored_stats[0] as u16 as u64)
+        | ((stored_stats[1] as u16 as u64) << 12)
+        | ((stored_stats[2] as u16 as u64) << 24)
+        | ((stored_stats[3] as u16 as u64) << 36)
+        | ((stored_stats[4] as u16 as u64) << 48)
+        | ((p.hp_type.0 as u64) << 60);
+    let w2 = (moves[0].0 as u64)
+        | ((moves[1].0 as u64) << 16)
+        | ((moves[2].0 as u64) << 32)
+        | ((moves[3].0 as u64) << 48);
+    let w3 = (move_specs[0].base_power as u16 as u64)
+        | ((move_specs[1].base_power as u16 as u64) << 16)
+        | ((move_specs[2].base_power as u16 as u64) << 32)
+        | ((move_specs[3].base_power as u16 as u64) << 48);
+    for w in [w0, w1, w2, w3] {
+        static_fp = static_fp.wrapping_add(w).wrapping_mul(0xf1357aea2e62a9c5);
+    }
+
+    let spec = StaticMonSpec {
+        static_fp,
+        type_mask,
+        species: p.species,
+        maxhp,
+        quantum_1_8: (maxhp / 8).max(1),
+        quantum_1_16: (maxhp / 16).max(1),
+        stored_stats,
+        moves,
+        max_pp,
+        types: [p.types.t[0].0, p.types.t[1].0],
+        num_types: p.types.n,
+        level: p.level,
+        num_moves,
+        role_flags,
+        item_stat_kind,
+        item_boost_type: item_spec.boost_type,
+        is_quick_claw: item_spec.is_quick_claw,
+        is_leftovers: item_spec.is_leftovers,
+        is_brightpowder: item_spec.is_brightpowder,
+        is_focusband: item_spec.is_focusband,
+        is_mintberry: item_spec.is_mintberry,
+        is_miracleberry: item_spec.is_miracleberry,
+        is_goldberry: item_spec.is_goldberry,
+        is_berry: item_spec.is_berry,
+        is_mysteryberry: item_spec.is_mysteryberry,
+        is_scope_lens: item_spec.is_scope_lens,
+    };
+    (spec, move_specs)
+}
+
 impl CompactBattle {
     /// Extract a `(MatchTable, CompactBattle)` pair from an existing `Battle`.
+    #[inline]
     pub fn from_battle(battle: &Battle, dex: &Dex) -> (MatchTable, CompactBattle) {
+        Self::from_battle_with_roster_cache(battle, dex, None)
+    }
+
+    /// Extract a `(MatchTable, CompactBattle)` pair using an optional per-world
+    /// [`RosterCompactCache`] to bypass static species/stat/item/move compilation.
+    #[inline]
+    pub fn from_battle_with_roster_cache(
+        battle: &Battle,
+        dex: &Dex,
+        roster_cache: Option<&RosterCompactCache>,
+    ) -> (MatchTable, CompactBattle) {
         let dt = dex_tables(dex);
 
         let mut static_mons = [StaticMonSpec::default(); 6];
@@ -1359,120 +1611,61 @@ impl CompactBattle {
                     alive_mask |= 1 << p_idx;
                 }
 
-                let maxhp = p.maxhp.max(1) as i16;
-                let mut type_mask = 0u32;
-                for ty in p.types.iter() {
-                    type_mask |= 1u32 << (ty.0 & 31);
-                }
-                let item_spec = p
-                    .item
-                    .and_then(|i| dt.item_specs.get(i.0 as usize).copied())
-                    .unwrap_or(CompactItemSpec {
-                        boost_type: 0xFF,
-                        ..CompactItemSpec::default()
+                let num_moves = p.move_slots.len().min(4) as u8;
+                let cached_hit = roster_cache
+                    .and_then(|rc| rc.entries[side_n].get(roster_slot as usize))
+                    .and_then(|opt| opt.as_ref())
+                    .filter(|cm| {
+                        !p.transformed
+                            && p.species == cm.spec.species
+                            && p.level == cm.spec.level
+                            && p.maxhp == cm.guard_maxhp
+                            && p.stored_stats == cm.guard_stored_stats
+                            && p.types == cm.guard_types
+                            && p.item == cm.guard_item
+                            && p.hp_type == cm.guard_hp_type
+                            && p.hp_power == cm.guard_hp_power
+                            && p.happiness == cm.guard_happiness
+                            && num_moves == cm.spec.num_moves
+                            && (0..num_moves as usize).all(|m_i| {
+                                let sl = p.move_slots[m_i];
+                                sl.id == cm.spec.moves[m_i] && sl.maxpp == cm.guard_maxpp[m_i]
+                            })
                     });
+                if let Some(cm) = cached_hit {
+                    static_mons[c_idx] = cm.spec;
+                    move_specs[c_idx] = cm.move_specs;
+                } else {
+                    let (spec, ms) = build_static_mon_spec(p, dex, dt);
+                    static_mons[c_idx] = spec;
+                    move_specs[c_idx] = ms;
+                }
+                let moves = static_mons[c_idx].moves;
 
-                let return_bp = (p.happiness as i32 * 10 / 25) as i16;
-                let mut moves = [MoveId(0); 4];
-                let mut max_pp = [0u8; 4];
                 let mut pp = [0u8; 4];
                 let mut vol_flags = 0u16;
                 let mut slot_refs = 0u8;
-                let num_moves = p.move_slots.len().min(4) as u8;
                 for m_i in 0..num_moves as usize {
                     let slot = p.move_slots[m_i];
-                    moves[m_i] = slot.id;
-                    max_pp[m_i] = slot.maxpp.clamp(0, 64) as u8;
                     pp[m_i] = slot.pp.clamp(0, 64) as u8;
                     if slot.disabled {
                         vol_flags |= vol_bit::DISABLE;
                         slot_refs = (slot_refs & !(0x03 << 4)) | (((m_i as u8) & 0x03) << 4);
                     }
-
-                    let mut cm = dt.move_specs[slot.id.0 as usize];
-                    match cm.var_bp_kind {
-                        1 => cm.base_power = return_bp,
-                        2 => cm.base_power = ((255 - p.happiness as i32) * 10 / 25) as i16,
-                        3 => {
-                            let hpt = p.hp_type.0;
-                            cm.move_type = hpt;
-                            cm.base_power = p.hp_power as i16;
-                            cm.is_physical = (dt.special_type_mask & (1u32 << (hpt & 31))) == 0;
-                            cm.is_water = hpt == dt.water_type;
-                            cm.is_fire = hpt == dt.fire_type;
-                        }
-                        _ => {}
-                    }
-                    move_specs[c_idx][m_i] = cm;
                 }
-
-                let stored_stats = [
-                    p.stored_stats[0] as i16,
-                    p.stored_stats[1] as i16,
-                    p.stored_stats[2] as i16,
-                    p.stored_stats[3] as i16,
-                    p.stored_stats[4] as i16,
-                ];
-                let item_stat_kind = ItemStatKind::classify(dex, p.species, p.item);
-                let mut static_fp = 0xcbf29ce484222325u64;
-                let w0 = (p.species.0 as u64)
-                    | ((p.level as u64) << 16)
-                    | ((maxhp as u16 as u64) << 24)
-                    | ((type_mask as u64) << 40)
-                    | ((item_stat_kind as u64) << 60)
-                    | ((item_spec.boost_type as u64) << 52);
-                let w1 = (stored_stats[0] as u16 as u64)
-                    | ((stored_stats[1] as u16 as u64) << 12)
-                    | ((stored_stats[2] as u16 as u64) << 24)
-                    | ((stored_stats[3] as u16 as u64) << 36)
-                    | ((stored_stats[4] as u16 as u64) << 48)
-                    | ((p.hp_type.0 as u64) << 60);
-                let w2 = (moves[0].0 as u64)
-                    | ((moves[1].0 as u64) << 16)
-                    | ((moves[2].0 as u64) << 32)
-                    | ((moves[3].0 as u64) << 48);
-                let w3 = (move_specs[c_idx][0].base_power as u16 as u64)
-                    | ((move_specs[c_idx][1].base_power as u16 as u64) << 16)
-                    | ((move_specs[c_idx][2].base_power as u16 as u64) << 32)
-                    | ((move_specs[c_idx][3].base_power as u16 as u64) << 48);
-                for w in [w0, w1, w2, w3] {
-                    static_fp = static_fp.wrapping_add(w).wrapping_mul(0xf1357aea2e62a9c5);
-                }
-
-                static_mons[c_idx] = StaticMonSpec {
-                    static_fp,
-                    type_mask,
-                    species: p.species,
-                    maxhp,
-                    quantum_1_8: (maxhp / 8).max(1),
-                    quantum_1_16: (maxhp / 16).max(1),
-                    stored_stats,
-                    moves,
-                    max_pp,
-                    types: [p.types.t[0].0, p.types.t[1].0],
-                    num_types: p.types.n,
-                    level: p.level,
-                    num_moves,
-                    item_stat_kind,
-                    item_boost_type: item_spec.boost_type,
-                    is_quick_claw: item_spec.is_quick_claw,
-                    is_leftovers: item_spec.is_leftovers,
-                    is_brightpowder: item_spec.is_brightpowder,
-                    is_focusband: item_spec.is_focusband,
-                    is_mintberry: item_spec.is_mintberry,
-                    is_miracleberry: item_spec.is_miracleberry,
-                    is_goldberry: item_spec.is_goldberry,
-                    is_berry: item_spec.is_berry,
-                    is_mysteryberry: item_spec.is_mysteryberry,
-                    is_scope_lens: item_spec.is_scope_lens,
-                };
 
                 let mut sub_hp = 0i16;
                 let mut conf_turns = 0u8;
                 let mut enc_turns = 0u8;
                 let mut dis_turns = 0u8;
                 let mut perish_turns = 0u8;
+                let mut stall_cnt = 0u8;
                 let mut res_counter_packed = 0u8;
+                if let Some(last_m) = p.last_move_encore.or(p.last_move) {
+                    if let Some(m_i) = (0..num_moves as usize).find(|&i| moves[i] == last_m) {
+                        slot_refs = (slot_refs & !0x43) | ((m_i as u8) & 0x03) | 0x40;
+                    }
+                }
 
                 if !p.volatiles.is_empty() {
                     for &(cid, ref vst) in &p.volatiles {
@@ -1505,15 +1698,43 @@ impl CompactBattle {
                             vol_flags |= vol_bit::PROTECT;
                         } else if scid == dt.end_cond {
                             vol_flags |= vol_bit::ENDURE;
+                        } else if scid == dt.stall_cond {
+                            let c = vst
+                                .get(DK::Counter)
+                                .map(|v| v.as_f64().floor().max(0.0) as u32)
+                                .unwrap_or(127);
+                            stall_cnt = if c >= 127 {
+                                1
+                            } else if c >= 63 {
+                                2
+                            } else if c >= 31 {
+                                3
+                            } else if c >= 15 {
+                                4
+                            } else if c >= 7 {
+                                5
+                            } else if c >= 3 {
+                                6
+                            } else {
+                                7
+                            };
                         } else if scid == dt.enc_cond {
                             vol_flags |= vol_bit::ENCORE;
                             enc_turns = vst.duration.unwrap_or(0).clamp(0, 255) as u8;
+                            if let Some(enc_mid) = vst.get_move() {
+                                if let Some(m_i) =
+                                    (0..num_moves as usize).find(|&i| moves[i] == enc_mid)
+                                {
+                                    slot_refs =
+                                        (slot_refs & !(0x03 << 2)) | (((m_i as u8) & 0x03) << 2);
+                                }
+                            }
                         } else if scid == dt.dis_cond {
                             vol_flags |= vol_bit::DISABLE;
                             dis_turns = vst.duration.unwrap_or(0).clamp(0, 255) as u8;
                         } else if scid == dt.perish_cond {
                             vol_flags |= vol_bit::PERISH_SONG;
-                            perish_turns = vst.duration.unwrap_or(0).clamp(0, 255) as u8;
+                            perish_turns = vst.duration.unwrap_or(0).clamp(0, 7) as u8;
                         } else if scid == dt.res_cond {
                             res_counter_packed =
                                 (vst.get_int(DK::Counter).clamp(0, 15) as u8) | 0x10;
@@ -1538,10 +1759,12 @@ impl CompactBattle {
                     status_packed: 0,
                     item: p.item.map(|i| (i.0 & 0x7F) as u8 + 1).unwrap_or(0),
                     vol_flags,
-                    timers: [conf_turns, enc_turns, dis_turns, perish_turns],
+                    timers: [conf_turns, enc_turns, dis_turns, 0],
                     boosts: p.boosts,
                     slot_refs,
                 };
+                c_mon.set_perish_turns(perish_turns);
+                c_mon.set_stall_counter(stall_cnt);
                 c_mon.set_status(p.status as u8, status_counter);
                 compact_mons[c_idx] = c_mon;
             }
@@ -1688,6 +1911,12 @@ impl CompactBattle {
             match_fp_lo: fp as u16,
             prng_seed: battle.prng.lcg.seed(),
         };
+        if cfg!(debug_assertions) && roster_cache.is_some() {
+            let (exp_t, exp_cb) = Self::from_battle_with_roster_cache(battle, dex, None);
+            debug_assert_eq!(table.match_fingerprint, exp_t.match_fingerprint);
+            debug_assert_eq!(cb.search_hash(), exp_cb.search_hash());
+            debug_assert_eq!(cb.prng_seed, exp_cb.prng_seed);
+        }
         (table, cb)
     }
 
@@ -1806,9 +2035,9 @@ impl CompactBattle {
     }
 
     /// Expected fraction of `(def_side, def_slot)`'s current HP removed by move slot `m_slot`
-    /// of `(att_side, att_slot)`. Mirrors `nc2000_bot::eval::expected_hit_fraction` bit-for-bit.
+    /// of `(att_side, att_slot)`, paired with its effective hit probability `acc`.
     #[inline]
-    pub fn expected_hit_fraction(
+    pub fn expected_hit_fraction_with_acc(
         &self,
         table: &MatchTable,
         att_side: usize,
@@ -1817,7 +2046,7 @@ impl CompactBattle {
         def_slot: usize,
         m_slot: usize,
         couple_evasion: bool,
-    ) -> f64 {
+    ) -> (f64, f64) {
         let att_idx = att_side * 3 + att_slot;
         let def_idx = def_side * 3 + def_slot;
         let mspec = &table.move_specs[att_idx][m_slot];
@@ -1847,14 +2076,14 @@ impl CompactBattle {
         };
 
         if mspec.fixed_damage == 0 && (mspec.is_status || base_power <= 0) {
-            return 0.0;
+            return (0.0, 0.0);
         }
 
         let foresight = (def_mon.vol_flags & vol_bit::FORESIGHT) != 0;
         let (type_mod, is_immune) =
             table.effectiveness_ext(mspec.move_type, def_spec, foresight);
         if is_immune {
-            return 0.0;
+            return (0.0, 0.0);
         }
 
         let acc = if couple_evasion {
@@ -1909,7 +2138,32 @@ impl CompactBattle {
             core * stab * eff * (236.0 / 255.0) * hits
         };
 
-        raw * acc / (def_mon.hp().max(1) as f64)
+        (raw * acc / (def_mon.hp().max(1) as f64), acc)
+    }
+
+    /// Expected fraction of `(def_side, def_slot)`'s current HP removed by move slot `m_slot`
+    /// of `(att_side, att_slot)`. Mirrors `nc2000_bot::eval::expected_hit_fraction` bit-for-bit.
+    #[inline]
+    pub fn expected_hit_fraction(
+        &self,
+        table: &MatchTable,
+        att_side: usize,
+        att_slot: usize,
+        def_side: usize,
+        def_slot: usize,
+        m_slot: usize,
+        couple_evasion: bool,
+    ) -> f64 {
+        self.expected_hit_fraction_with_acc(
+            table,
+            att_side,
+            att_slot,
+            def_side,
+            def_slot,
+            m_slot,
+            couple_evasion,
+        )
+        .0
     }
 
     /// Best expected hit fraction over `(att_side, att_slot)`'s usable move slots against `(def_side, def_slot)`.
@@ -1924,27 +2178,136 @@ impl CompactBattle {
         couple_evasion: bool,
     ) -> f64 {
         let att_idx = att_side * 3 + att_slot;
+        let def_idx = def_side * 3 + def_slot;
         let att_mon = &self.mons[att_idx];
-        let num_moves = table.mons[att_idx].num_moves as usize;
+        let att_spec = &table.mons[att_idx];
+        let def_mon = &self.mons[def_idx];
+        let def_spec = &table.mons[def_idx];
+        let num_moves = att_spec.num_moves as usize;
         let is_disabled = (att_mon.vol_flags & vol_bit::DISABLE) != 0;
         let dis_slot = ((att_mon.slot_refs >> 4) & 0x03) as usize;
+        let foresight = (def_mon.vol_flags & vol_bit::FORESIGHT) != 0;
+        let level_factor = (att_spec.level as f64 * 2.0 / 5.0 + 2.0).floor();
+        let def_hp = def_mon.hp().max(1) as f64;
+        let mut phys_stats: Option<(f64, f64)> = None;
+        let mut spec_stats: Option<(f64, f64)> = None;
         let mut best = 0.0f64;
+
         for m_i in 0..num_moves {
             if att_mon.pp[m_i] == 0 || (is_disabled && m_i == dis_slot) {
                 continue;
             }
-            let v = self.expected_hit_fraction(
-                table,
-                att_side,
-                att_slot,
-                def_side,
-                def_slot,
-                m_i,
-                couple_evasion,
-            );
+            let mspec = &table.move_specs[att_idx][m_i];
+            let base_power = if mspec.var_bp_kind == 4 {
+                let ratio =
+                    ((att_mon.hp() as f64 * 48.0 / att_spec.maxhp.max(1) as f64).floor() as i32)
+                        .max(1);
+                if ratio < 2 {
+                    200
+                } else if ratio < 5 {
+                    150
+                } else if ratio < 10 {
+                    100
+                } else if ratio < 17 {
+                    80
+                } else if ratio < 33 {
+                    40
+                } else {
+                    20
+                }
+            } else {
+                mspec.base_power as i32
+            };
+            if mspec.fixed_damage == 0 && (mspec.is_status || base_power <= 0) {
+                continue;
+            }
+            let (type_mod, is_immune) =
+                table.effectiveness_ext(mspec.move_type, def_spec, foresight);
+            if is_immune {
+                continue;
+            }
+            let acc = if couple_evasion {
+                hit_probability_branchless(
+                    mspec.base_acc_pct,
+                    mspec.always_hit,
+                    att_mon.boosts[5],
+                    def_mon.boosts[6],
+                    mspec.ignore_accuracy,
+                    mspec.ignore_evasion,
+                    mspec.ignore_positive_evasion,
+                )
+            } else if mspec.always_hit {
+                1.0
+            } else {
+                mspec.base_acc_pct as f64 / 100.0
+            };
+            let raw = if mspec.fixed_damage != 0 {
+                if mspec.fixed_damage < 0 {
+                    att_spec.level as f64
+                } else {
+                    mspec.fixed_damage as f64
+                }
+            } else {
+                let (atk, mut defense) = if mspec.is_physical {
+                    *phys_stats.get_or_insert_with(|| {
+                        (
+                            self.mon_stat(table, att_side, att_slot, 0, false, false) as f64,
+                            self.mon_stat(table, def_side, def_slot, 1, false, false) as f64,
+                        )
+                    })
+                } else {
+                    *spec_stats.get_or_insert_with(|| {
+                        (
+                            self.mon_stat(table, att_side, att_slot, 2, false, false) as f64,
+                            self.mon_stat(table, def_side, def_slot, 3, false, false) as f64,
+                        )
+                    })
+                };
+                if mspec.is_selfdestruct && mspec.is_physical {
+                    defense = (defense / 2.0).floor().max(1.0);
+                }
+                let core = (level_factor * base_power as f64 * atk / defense / 50.0).floor() + 2.0;
+                let stab = if (att_spec.type_mask & (1u32 << (mspec.move_type & 31))) != 0 {
+                    1.5
+                } else {
+                    1.0
+                };
+                let eff = match type_mod {
+                    2 => 4.0,
+                    1 => 2.0,
+                    -1 => 0.5,
+                    -2 => 0.25,
+                    _ => 1.0,
+                };
+                let hits = mspec.multihit_mean_x2 as f64 * 0.5;
+                core * stab * eff * (236.0 / 255.0) * hits
+            };
+            let v = raw * acc / def_hp;
             if v > best {
                 best = v;
             }
+        }
+
+        if cfg!(debug_assertions) {
+            let mut ref_best = 0.0f64;
+            for m_i in 0..num_moves {
+                if att_mon.pp[m_i] == 0 || (is_disabled && m_i == dis_slot) {
+                    continue;
+                }
+                let v = self.expected_hit_fraction(
+                    table,
+                    att_side,
+                    att_slot,
+                    def_side,
+                    def_slot,
+                    m_i,
+                    couple_evasion,
+                );
+                if v > ref_best {
+                    ref_best = v;
+                }
+            }
+            debug_assert_eq!(best.to_bits(), ref_best.to_bits());
         }
         best
     }
@@ -2073,7 +2436,7 @@ impl CompactBattle {
             | vol_bit::PERISH_SONG;
         let saved_vols = self.mons[old_idx].vol_flags & pass_mask;
         let saved_conf_t = self.mons[old_idx].timers[0];
-        let saved_perish_t = self.mons[old_idx].timers[3];
+        let saved_perish_t = self.mons[old_idx].perish_turns();
 
         // Clear volatile state and boosts on outgoing active Pokemon.
         self.mons[old_idx].boosts = [0; 7];
@@ -2089,7 +2452,7 @@ impl CompactBattle {
         });
         self.mons[old_idx].vol_flags = keep_status_drops;
         self.mons[old_idx].timers = [0; 4];
-        self.mons[old_idx].slot_refs &= !0x80;
+        self.mons[old_idx].slot_refs = 0;
 
         // Switching out releases Mean Look / Spider Web trap on the opposing active Pokemon.
         if !baton_pass {
@@ -2105,7 +2468,7 @@ impl CompactBattle {
             self.mons[new_idx].hp_pool[1] = saved_sub;
             self.mons[new_idx].vol_flags |= saved_vols;
             self.mons[new_idx].timers[0] = saved_conf_t;
-            self.mons[new_idx].timers[3] = saved_perish_t;
+            self.mons[new_idx].set_perish_turns(saved_perish_t);
         }
         if self.mons[new_idx].status_raw() == Status::Par as u8 {
             self.mons[new_idx].vol_flags |= vol_bit::PAR_SPEED_DROP;
@@ -2156,6 +2519,15 @@ impl CompactBattle {
             return;
         }
 
+        let mut move_slot = move_slot;
+        if (self.mons[att_idx].vol_flags & vol_bit::ENCORE) != 0 {
+            let enc_slot = self.mons[att_idx].encore_slot() as usize;
+            if enc_slot < table.mons[att_idx].num_moves as usize
+                && self.mons[att_idx].pp[enc_slot] > 0
+            {
+                move_slot = enc_slot;
+            }
+        }
         let mut mspec = table.move_specs[att_idx][move_slot];
         let st_raw = self.mons[att_idx].status_raw();
 
@@ -2210,11 +2582,13 @@ impl CompactBattle {
         // Clear Destiny Bond when the user attempts a move.
         self.mons[att_idx].vol_flags &= !vol_bit::DESTINY_BOND;
 
-        // Deduct PP.
+        // Deduct PP and record last executed move slot.
         if self.mons[att_idx].pp[move_slot] == 0 {
             return;
         }
         self.mons[att_idx].pp[move_slot] -= 1;
+        self.mons[att_idx].slot_refs =
+            (self.mons[att_idx].slot_refs & !0x43) | ((move_slot as u8) & 0x03) | 0x40;
 
         // Sleep-usable moves (Sleep Talk, Snore) fail when the user is awake.
         if mspec.is_sleep_usable && !sleeping {
@@ -2267,8 +2641,20 @@ impl CompactBattle {
             self.exec_after_move_self(table, side);
             return;
         }
-        if mspec.is_protect {
-            self.mons[att_idx].vol_flags |= vol_bit::PROTECT;
+        if mspec.is_protect || mspec.is_endure {
+            if !moved_second {
+                let sc = self.mons[att_idx].stall_counter();
+                let ok = sc == 0 || rng.random_chance((127u32 >> (sc - 1).min(6)).max(1), 255);
+                if ok {
+                    let bit = if mspec.is_protect {
+                        vol_bit::PROTECT
+                    } else {
+                        vol_bit::ENDURE
+                    };
+                    self.mons[att_idx].vol_flags |= bit;
+                    self.mons[att_idx].set_stall_counter((sc + 1).min(7));
+                }
+            }
             self.exec_after_move_self(table, side);
             return;
         }
@@ -2283,8 +2669,8 @@ impl CompactBattle {
             return;
         }
 
-        // Target Protect check.
-        if (self.mons[def_idx].vol_flags & vol_bit::PROTECT) != 0 {
+        // Target Protect check (only for moves flagged `protect` in Gen 2).
+        if mspec.blocked_by_protect && (self.mons[def_idx].vol_flags & vol_bit::PROTECT) != 0 {
             self.exec_after_move_self(table, side);
             return;
         }
@@ -2310,35 +2696,50 @@ impl CompactBattle {
 
         if !mspec.is_status && (mspec.base_power > 0 || matches!(mspec.special_kind, 11..=15) || mspec.fixed_damage != 0) {
             let def_had_dbond = (self.mons[def_idx].vol_flags & vol_bit::DESTINY_BOND) != 0;
+            let def_endure = (self.mons[def_idx].vol_flags & vol_bit::ENDURE) != 0
+                && (self.mons[def_idx].sub_hp() == 0 || mspec.bypasses_sub);
+            let max_endure_dmg = (self.mons[def_idx].hp() - 1).max(0);
             let mut dealt = 0i16;
             if mspec.special_kind == 11 {
                 // Counter: double last physical damage taken this turn.
                 if self.hurt_cat_this_turn[side] == 1 && self.hurt_damage_this_turn[side] > 0 {
-                    let dmg = (self.hurt_damage_this_turn[side] as i32 * 2).min(9999) as i16;
+                    let mut dmg = (self.hurt_damage_this_turn[side] as i32 * 2).min(9999) as i16;
+                    if def_endure {
+                        dmg = dmg.min(max_endure_dmg);
+                    }
                     dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
                 }
             } else if mspec.special_kind == 12 {
                 // Mirror Coat: double last special damage taken this turn.
                 if self.hurt_cat_this_turn[side] == 2 && self.hurt_damage_this_turn[side] > 0 {
-                    let dmg = (self.hurt_damage_this_turn[side] as i32 * 2).min(9999) as i16;
+                    let mut dmg = (self.hurt_damage_this_turn[side] as i32 * 2).min(9999) as i16;
+                    if def_endure {
+                        dmg = dmg.min(max_endure_dmg);
+                    }
                     dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
                 }
             } else if mspec.special_kind == 14 || mspec.fixed_damage != 0 {
                 // Seismic Toss / Night Shade / Fixed Damage.
                 let (_, is_immune) = table.effectiveness_ext(mspec.move_type, &table.mons[def_idx], def_foresight);
                 if !is_immune {
-                    let dmg = if mspec.fixed_damage > 0 {
+                    let mut dmg = if mspec.fixed_damage > 0 {
                         mspec.fixed_damage
                     } else {
                         table.mons[att_idx].level as i16
                     };
+                    if def_endure {
+                        dmg = dmg.min(max_endure_dmg);
+                    }
                     dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
                 }
             } else if mspec.special_kind == 15 {
                 // Super Fang: halves target's current HP (min 1).
                 let (_, is_immune) = table.effectiveness_ext(mspec.move_type, &table.mons[def_idx], def_foresight);
                 if !is_immune {
-                    let dmg = (self.mons[def_idx].hp() / 2).max(1);
+                    let mut dmg = (self.mons[def_idx].hp() / 2).max(1);
+                    if def_endure {
+                        dmg = dmg.min(max_endure_dmg);
+                    }
                     dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
                 }
             } else {
@@ -2377,11 +2778,15 @@ impl CompactBattle {
                 };
 
                 let (type_mod, is_immune) = table.effectiveness_ext(mspec.move_type, &table.mons[def_idx], def_foresight);
-                let weather = match self.weather_kind {
-                    1 => CompactWeather::Rain,
-                    2 => CompactWeather::Sun,
-                    3 => CompactWeather::Sandstorm,
-                    _ => CompactWeather::None,
+                let weather = if self.weather_turns > 0 {
+                    match self.weather_kind {
+                        1 => CompactWeather::Rain,
+                        2 => CompactWeather::Sun,
+                        3 => CompactWeather::Sandstorm,
+                        _ => CompactWeather::None,
+                    }
+                } else {
+                    CompactWeather::None
                 };
                 let has_type_boost = (self.mons[att_idx].item != 0)
                     & (table.mons[att_idx].item_boost_type == mspec.move_type);
@@ -2411,7 +2816,11 @@ impl CompactBattle {
                     if mspec.multihit_mean_x2 > 2 {
                         final_dmg = (final_dmg * (mspec.multihit_mean_x2 as i32)) / 2;
                     }
-                    dealt = self.mons[def_idx].apply_damage_branchless(final_dmg.min(9999) as i16, mspec.bypasses_sub);
+                    let mut hit_dmg = final_dmg.min(9999) as i16;
+                    if def_endure {
+                        hit_dmg = hit_dmg.min(max_endure_dmg);
+                    }
+                    dealt = self.mons[def_idx].apply_damage_branchless(hit_dmg, mspec.bypasses_sub);
                     self.hurt_damage_this_turn[foe_side] = dealt.max(0) as u16;
                     self.hurt_cat_this_turn[foe_side] = if mspec.is_physical { 1 } else { 2 };
 
@@ -2557,7 +2966,7 @@ impl CompactBattle {
             self.mons[idx].set_status(Status::Slp as u8, turns);
         } else if status_code == Status::Frz as u8 {
             if (target_tmask & (1u32 << (table.ice_type & 31))) != 0
-                || self.weather_kind == CompactWeather::Sun as u8
+                || (self.weather_turns > 0 && self.weather_kind == CompactWeather::Sun as u8)
             {
                 return;
             }
@@ -2689,6 +3098,41 @@ impl CompactBattle {
                     }
                 }
             }
+            8 => {
+                // Encore: locks target into its last move for 3..6 turns when target has no Sub.
+                if self.mons[def_idx].sub_hp() == 0
+                    && (self.mons[def_idx].vol_flags & vol_bit::ENCORE) == 0
+                    && (self.mons[def_idx].slot_refs & 0x40) != 0
+                {
+                    let lm = (self.mons[def_idx].slot_refs & 0x03) as usize;
+                    if lm < table.mons[def_idx].num_moves as usize
+                        && self.mons[def_idx].pp[lm] > 0
+                        && table.move_specs[def_idx][lm].special_kind != 8
+                    {
+                        self.mons[def_idx].vol_flags |= vol_bit::ENCORE;
+                        self.mons[def_idx].timers[1] = (3 + rng.random(4)) as u8;
+                        self.mons[def_idx].set_encore_slot(lm as u8);
+                    }
+                }
+            }
+            9 => {
+                // Disable: disables target's last move for 2..7 turns when target has no Sub.
+                if self.mons[def_idx].sub_hp() == 0
+                    && (self.mons[def_idx].vol_flags & vol_bit::DISABLE) == 0
+                    && (self.mons[def_idx].slot_refs & 0x40) != 0
+                {
+                    let lm = (self.mons[def_idx].slot_refs & 0x03) as usize;
+                    if lm < table.mons[def_idx].num_moves as usize
+                        && self.mons[def_idx].pp[lm] > 0
+                    {
+                        self.mons[def_idx].vol_flags |= vol_bit::DISABLE;
+                        self.mons[def_idx].timers[2] = (2 + rng.random(6)) as u8;
+                        self.mons[def_idx].slot_refs =
+                            (self.mons[def_idx].slot_refs & !(0x03 << 4))
+                                | (((lm as u8) & 0x03) << 4);
+                    }
+                }
+            }
             17 => {
                 // Pain Split: average HP when target has no Substitute.
                 if self.mons[def_idx].sub_hp() == 0 {
@@ -2770,7 +3214,7 @@ impl CompactBattle {
                     for &idx in &[att_idx, def_idx] {
                         if (self.mons[idx].vol_flags & vol_bit::PERISH_SONG) == 0 {
                             self.mons[idx].vol_flags |= vol_bit::PERISH_SONG;
-                            self.mons[idx].timers[3] = 4;
+                            self.mons[idx].set_perish_turns(4);
                         }
                     }
                 }
@@ -2882,19 +3326,23 @@ impl CompactBattle {
             }
         }
 
-        // Perish Song countdown & Leftovers recovery in speed order.
+        // Freeze thaw, Perish Song countdown, Leftovers, Encore/Disable, and Stall reset in speed order.
         for &side in &order {
             let idx = side * 3 + self.sides[side].active_idx as usize;
             if self.mons[idx].hp() <= 0 {
                 continue;
             }
+            if self.mons[idx].status_raw() == Status::Frz as u8 && rng.random_chance(25, 256) {
+                self.mons[idx].set_status(Status::None as u8, 0);
+            }
             if (self.mons[idx].vol_flags & vol_bit::PERISH_SONG) != 0 {
-                let rem = self.mons[idx].timers[3].saturating_sub(1);
-                self.mons[idx].timers[3] = rem;
+                let rem = self.mons[idx].perish_turns().saturating_sub(1);
+                self.mons[idx].set_perish_turns(rem);
                 if rem == 0 {
                     self.mons[idx].hp_pool[0] = 0;
                     self.mons[idx].status_packed = Status::Fnt as u8;
                     self.mons[idx].vol_flags = 0;
+                    self.mons[idx].timers = [0; 4];
                     continue;
                 }
             }
@@ -2903,6 +3351,29 @@ impl CompactBattle {
                 self.mons[idx].hp_pool[0] =
                     (self.mons[idx].hp() + spec.quantum_1_16).min(spec.maxhp);
             }
+            if (self.mons[idx].vol_flags & vol_bit::ENCORE) != 0 {
+                let enc_slot = self.mons[idx].encore_slot() as usize;
+                let rem = self.mons[idx].timers[1].saturating_sub(1);
+                self.mons[idx].timers[1] = rem;
+                if rem == 0
+                    || enc_slot >= spec.num_moves as usize
+                    || self.mons[idx].pp[enc_slot] == 0
+                {
+                    self.mons[idx].vol_flags &= !vol_bit::ENCORE;
+                    self.mons[idx].timers[1] = 0;
+                }
+            }
+            if (self.mons[idx].vol_flags & vol_bit::DISABLE) != 0 {
+                let rem = self.mons[idx].timers[2].saturating_sub(1);
+                self.mons[idx].timers[2] = rem;
+                if rem == 0 {
+                    self.mons[idx].vol_flags &= !vol_bit::DISABLE;
+                }
+            }
+            if (self.mons[idx].vol_flags & (vol_bit::PROTECT | vol_bit::ENDURE)) == 0 {
+                self.mons[idx].set_stall_counter(0);
+            }
+            self.mons[idx].vol_flags &= !(vol_bit::PROTECT | vol_bit::ENDURE | vol_bit::FLINCH);
         }
 
         // Decrement Reflect / Light Screen / Safeguard timers.
@@ -3065,10 +3536,21 @@ impl CompactBattle {
         let num_moves = table.mons[idx].num_moves as usize;
         let is_disabled = (mon.vol_flags & vol_bit::DISABLE) != 0;
         let dis_slot = ((mon.slot_refs >> 4) & 0x03) as usize;
-        for m in 0..num_moves {
-            if mon.pp[m] > 0 && !(is_disabled && m == dis_slot) {
-                out[n] = m as u8;
-                n += 1;
+        if (mon.vol_flags & vol_bit::ENCORE) != 0 {
+            let enc_slot = mon.encore_slot() as usize;
+            if enc_slot < num_moves
+                && mon.pp[enc_slot] > 0
+                && !(is_disabled && enc_slot == dis_slot)
+            {
+                out[0] = enc_slot as u8;
+                n = 1;
+            }
+        } else {
+            for m in 0..num_moves {
+                if mon.pp[m] > 0 && !(is_disabled && m == dis_slot) {
+                    out[n] = m as u8;
+                    n += 1;
+                }
             }
         }
         if n == 0 {
@@ -3416,5 +3898,106 @@ mod tests {
             assert_eq!(cb.hurt_cat_this_turn, [0, 0]);
             assert_eq!(cb.speed_order, 0);
         }
+    }
+
+    #[test]
+    fn compact_protect_decay_self_moves_freeze_thaw_and_encore_lock() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../data/gen2stadium2.json");
+        let json = std::fs::read_to_string(&path).unwrap();
+        let dex = Dex::from_json(&json).unwrap();
+        let mk = |species: &str, level: u8, item: &str, moves: &[&str]| -> crate::battle::PokemonSet {
+            serde_json::from_value(serde_json::json!({
+                "name": species, "species": species, "item": item, "ability": "No Ability",
+                "moves": moves, "level": level,
+                "evs": {"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},
+                "ivs": {"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},
+                "happiness": 255
+            }))
+            .unwrap()
+        };
+        let p1 = vec![
+            mk("Jolteon", 50, "Leftovers", &["Protect", "Thunderbolt", "Agility", "Baton Pass"]),
+            mk("Marowak", 55, "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance", "Rest"]),
+            mk("Cloyster", 50, "Leftovers", &["Surf", "Ice Beam", "Spikes", "Explosion"]),
+        ];
+        let p2 = vec![
+            mk("Alakazam", 50, "Leftovers", &["Psychic", "Encore", "Disable", "Recover"]),
+            mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+            mk("Skarmory", 50, "Leftovers", &["Drill Peck", "Whirlwind", "Curse", "Rest"]),
+        ];
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        b.choose(&dex, 0, "team 1,2,3").unwrap();
+        b.choose(&dex, 1, "team 1,2,3").unwrap();
+
+        // 1. Protect sets stall counter in Battle and imports into CompactBattle; consecutive Protect decays.
+        let mut b_prot = b.clone();
+        b_prot.choose(&dex, 0, "move 1").unwrap(); // Protect
+        b_prot.choose(&dex, 1, "move 1").unwrap(); // Psychic (blocked)
+        let (table, cb_imported) = CompactBattle::from_battle(&b_prot, &dex);
+        assert_eq!(cb_imported.mons[0].stall_counter(), 1);
+        assert_eq!(cb_imported.mons[0]. hp(), table.mons[0].maxhp);
+
+        let mut fail_seen = false;
+        for seed in 1..=64u64 {
+            let mut cb_try = cb_imported;
+            cb_try.prng_seed = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            let hp_before = cb_try.mons[0].hp();
+            cb_try.step_turn(&table, [0, 0]); // 2nd consecutive Protect vs Psychic
+            if cb_try.mons[0].hp() < hp_before {
+                fail_seen = true;
+                assert_eq!(cb_try.mons[0].stall_counter(), 0);
+                break;
+            }
+        }
+        assert!(fail_seen, "2nd consecutive Protect must not succeed 100% of the time");
+
+        // 2. Opponent Protect does NOT block self-targeted moves (Swords Dance / Baton Pass / Curse).
+        let (table2, mut cb2) = CompactBattle::from_battle(&b, &dex);
+        // Jolteon Protect (0) vs Alakazam Recover/Curse test: switch P2 to Snorlax first, then Jolteon Protect vs Snorlax Curse.
+        cb2.step_turn(&table2, [2, 5]); // Jolteon Agility (+2 Spe), P2 switches to Snorlax (slot 1)
+        assert_eq!(cb2.mons[0].boosts[4], 2);
+        cb2.step_turn(&table2, [0, 2]); // Jolteon Protect vs Snorlax Curse (+1 Atk/+1 Def/-1 Spe)
+        assert_eq!(cb2.mons[4].boosts[0], 1, "Snorlax Curse must bypass Jolteon Protect");
+        assert_eq!(cb2.mons[4].boosts[1], 1);
+        // Next turn: Jolteon Baton Pass (move 3) passes +2 Spe to Marowak even if Snorlax uses Curse.
+        cb2.step_turn(&table2, [3, 2]);
+        let recv_slot = cb2.sides[0].active_idx as usize;
+        assert_ne!(recv_slot, 0);
+        assert_eq!(cb2.mons[recv_slot].boosts[4], 2);
+
+        // 3. Encore imported from Battle locks legal_actions to the encored move slot and expires.
+        let mut b_enc = b.clone();
+        b_enc.choose(&dex, 0, "move 3").unwrap(); // Jolteon Agility (slot 2)
+        b_enc.choose(&dex, 1, "move 2").unwrap(); // Alakazam Encore -> locks Jolteon into Agility
+        let (t_enc, mut cb_enc) = CompactBattle::from_battle(&b_enc, &dex);
+        assert_ne!(cb_enc.mons[0].vol_flags & vol_bit::ENCORE, 0);
+        assert_eq!(cb_enc.mons[0].encore_slot(), 2);
+        let mut acts = [0u8; 7];
+        let n = cb_enc.legal_actions(&t_enc, 0, &mut acts);
+        // Only move 2 (Agility) plus bench switches (5, 6) are legal!
+        assert_eq!(&acts[..n], &[2, 5, 6]);
+        for _ in 0..8 {
+            if (cb_enc.mons[0].vol_flags & vol_bit::ENCORE) == 0 {
+                break;
+            }
+            cb_enc.step_turn(&t_enc, [2, 3]);
+        }
+        assert_eq!(cb_enc.mons[0].vol_flags & vol_bit::ENCORE, 0);
+
+        // 4. Freeze 25/256 residual thaw occurs across seeds.
+        let (t_frz, cb_frz_base) = CompactBattle::from_battle(&b, &dex);
+        let mut thawed = false;
+        for seed in 1..=128u64 {
+            let mut cb_frz = cb_frz_base;
+            cb_frz.mons[0].set_status(Status::Frz as u8, 0);
+            cb_frz.prng_seed = seed.wrapping_mul(0xD1B5_4A32_D192_ED03);
+            cb_frz.step_turn(&t_frz, [1, 3]); // frozen Jolteon vs Alakazam Recover
+            if cb_frz.mons[0].status_raw() == Status::None as u8 {
+                thawed = true;
+                break;
+            }
+        }
+        assert!(thawed, "Frozen Pokemon must have 25/256 residual thaw chance in CompactBattle");
     }
 }

@@ -77,6 +77,12 @@ impl<const POLYNOMIAL: bool> WordHasher<POLYNOMIAL> {
         };
     }
 
+    #[inline(always)]
+    pub fn apply_step(&mut self, step: PolyStep) {
+        debug_assert!(POLYNOMIAL);
+        self.0 = self.0.wrapping_mul(step.mul).wrapping_add(step.add);
+    }
+
     /// Execute `f` into a stack word batch and fold all emitted words in parallel
     /// using `M_POW` when `POLYNOMIAL == true`.
     /// Because `f` invokes the exact stdlib `Hash` methods and `batch.idx` reduces
@@ -107,6 +113,156 @@ impl<const POLYNOMIAL: bool> WordHasher<POLYNOMIAL> {
         }
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct PolyStep {
+    pub mul: u64,
+    pub add: u64,
+}
+
+impl Default for PolyStep {
+    #[inline(always)]
+    fn default() -> Self {
+        Self { mul: 1, add: 0 }
+    }
+}
+
+pub struct PolyRecorder {
+    mul: u64,
+    add: u64,
+}
+
+impl Default for PolyRecorder {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PolyRecorder {
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self { mul: 1, add: 0 }
+    }
+
+    #[inline(always)]
+    pub const fn step(&self) -> PolyStep {
+        PolyStep {
+            mul: self.mul,
+            add: self.add,
+        }
+    }
+
+    #[inline(always)]
+    fn add_word(&mut self, word: u64) {
+        self.mul = self.mul.wrapping_mul(WordHasher::<true>::M);
+        self.add = self.add.wrapping_add(word).wrapping_mul(WordHasher::<true>::M);
+    }
+}
+
+impl std::hash::Hasher for PolyRecorder {
+    #[inline(always)]
+    fn finish(&self) -> u64 {
+        self.add.rotate_left(26)
+    }
+
+    #[inline(always)]
+    fn write(&mut self, bytes: &[u8]) {
+        let len = bytes.len();
+        let mut i = 0;
+        while i + 8 <= len {
+            let w = u64::from_le_bytes([
+                bytes[i],
+                bytes[i + 1],
+                bytes[i + 2],
+                bytes[i + 3],
+                bytes[i + 4],
+                bytes[i + 5],
+                bytes[i + 6],
+                bytes[i + 7],
+            ]);
+            self.add_word(w);
+            i += 8;
+        }
+        let rem = &bytes[i..];
+        let rem_len = rem.len();
+        if rem_len != 0 {
+            let tail = match rem_len {
+                1 => rem[0] as u64,
+                2 => u16::from_le_bytes([rem[0], rem[1]]) as u64,
+                3 => (u16::from_le_bytes([rem[0], rem[1]]) as u64) | ((rem[2] as u64) << 16),
+                4 => u32::from_le_bytes([rem[0], rem[1], rem[2], rem[3]]) as u64,
+                5 => {
+                    (u32::from_le_bytes([rem[0], rem[1], rem[2], rem[3]]) as u64)
+                        | ((rem[4] as u64) << 32)
+                }
+                6 => {
+                    (u32::from_le_bytes([rem[0], rem[1], rem[2], rem[3]]) as u64)
+                        | ((u16::from_le_bytes([rem[4], rem[5]]) as u64) << 32)
+                }
+                7 => {
+                    (u32::from_le_bytes([rem[0], rem[1], rem[2], rem[3]]) as u64)
+                        | ((u16::from_le_bytes([rem[4], rem[5]]) as u64) << 32)
+                        | ((rem[6] as u64) << 48)
+                }
+                _ => unreachable!(),
+            };
+            self.add_word(tail ^ (rem_len as u64));
+        }
+    }
+
+    #[inline(always)]
+    fn write_u8(&mut self, i: u8) {
+        self.add_word(i as u64);
+    }
+    #[inline(always)]
+    fn write_u16(&mut self, i: u16) {
+        self.add_word(i as u64);
+    }
+    #[inline(always)]
+    fn write_u32(&mut self, i: u32) {
+        self.add_word(i as u64);
+    }
+    #[inline(always)]
+    fn write_u64(&mut self, i: u64) {
+        self.add_word(i);
+    }
+    #[inline(always)]
+    fn write_u128(&mut self, i: u128) {
+        self.add_word(i as u64);
+        self.add_word((i >> 64) as u64);
+    }
+    #[inline(always)]
+    fn write_usize(&mut self, i: usize) {
+        self.add_word(i as u64);
+    }
+    #[inline(always)]
+    fn write_i8(&mut self, i: i8) {
+        self.add_word(i as u8 as u64);
+    }
+    #[inline(always)]
+    fn write_i16(&mut self, i: i16) {
+        self.add_word(i as u16 as u64);
+    }
+    #[inline(always)]
+    fn write_i32(&mut self, i: i32) {
+        self.add_word(i as u32 as u64);
+    }
+    #[inline(always)]
+    fn write_i64(&mut self, i: i64) {
+        self.add_word(i as u64);
+    }
+    #[inline(always)]
+    fn write_i128(&mut self, i: i128) {
+        self.write_u128(i as u128);
+    }
+    #[inline(always)]
+    fn write_isize(&mut self, i: isize) {
+        self.add_word(i as usize as u64);
+    }
+}
+
+impl StateHasher for PolyRecorder {}
 
 pub struct PolyBatch<const CAP: usize> {
     pub words: [u64; CAP],
