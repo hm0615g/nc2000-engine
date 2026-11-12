@@ -1924,28 +1924,16 @@ impl CompactBattle {
         couple_evasion: bool,
     ) -> f64 {
         let att_idx = att_side * 3 + att_slot;
-        let def_idx = def_side * 3 + def_slot;
         let att_mon = &self.mons[att_idx];
-        let def_mon = &self.mons[def_idx];
         let num_moves = table.mons[att_idx].num_moves as usize;
         let is_disabled = (att_mon.vol_flags & vol_bit::DISABLE) != 0;
         let dis_slot = ((att_mon.slot_refs >> 4) & 0x03) as usize;
-        let last_mon = self.sides[att_side].alive_mask.count_ones() <= 1;
-        let def_sub_up = (def_mon.vol_flags & vol_bit::SUBSTITUTE) != 0;
         let mut best = 0.0f64;
         for m_i in 0..num_moves {
             if att_mon.pp[m_i] == 0 || (is_disabled && m_i == dis_slot) {
                 continue;
             }
-            let mspec = &table.move_specs[att_idx][m_i];
-            if mspec.is_selfdestruct {
-                // Under Stadium 2 Self-KO Clause, last-mon Self-Destruct / Explosion is an immediate loss.
-                // Into an active Substitute, Self-Destruct sacrifices 100% of the user only to break a 25% Sub.
-                if last_mon || (def_sub_up && !mspec.bypasses_sub) {
-                    continue;
-                }
-            }
-            let v_raw = self.expected_hit_fraction(
+            let v = self.expected_hit_fraction(
                 table,
                 att_side,
                 att_slot,
@@ -1954,19 +1942,6 @@ impl CompactBattle {
                 m_i,
                 couple_evasion,
             );
-            let v = if mspec.is_selfdestruct {
-                let att_spec = &table.mons[att_idx];
-                let def_spec = &table.mons[def_idx];
-                let att_hp_frac =
-                    (att_mon.hp().max(0) as f64) / (att_spec.maxhp.max(1) as f64);
-                let def_hp_frac =
-                    (def_mon.hp().max(0) as f64) / (def_spec.maxhp.max(1) as f64);
-                let status_mult = if att_mon.status_raw() == 0 { 1.0 } else { 0.65 };
-                let l_att = att_hp_frac * status_mult;
-                (v_raw.min(1.0) * (0.35 + 0.65 * def_hp_frac) - 0.75 * l_att).max(0.0)
-            } else {
-                v_raw
-            };
             if v > best {
                 best = v;
             }
@@ -2022,8 +1997,6 @@ impl CompactBattle {
         let mut rng = Prng::new(self.prng_seed);
         self.hurt_damage_this_turn = [0, 0];
         self.hurt_cat_this_turn = [0, 0];
-        self.sides[0].last_move_selfko = u8::MAX;
-        self.sides[1].last_move_selfko = u8::MAX;
 
         // Clear single-turn Protect/Endure/Flinch flags at start of turn.
         for side in 0..2usize {
@@ -2274,8 +2247,6 @@ impl CompactBattle {
             self.mons[att_idx].status_packed = Status::Fnt as u8;
             self.sides[side].last_move_selfko = move_slot as u8;
             self.sides[foe_side].last_move_selfko = u8::MAX;
-        } else {
-            self.sides[side].last_move_selfko = u8::MAX;
         }
 
         // Handle common status self-moves (Rest, Recover/Soft-Boiled, Protect, Substitute).
@@ -3445,58 +3416,5 @@ mod tests {
             assert_eq!(cb.hurt_cat_this_turn, [0, 0]);
             assert_eq!(cb.speed_order, 0);
         }
-    }
-
-    #[test]
-    fn selfdestruct_last_mon_and_substitute_gating_plus_nonsticky_selfko() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../data/gen2stadium2.json");
-        let json = std::fs::read_to_string(&path).unwrap();
-        let dex = Dex::from_json(&json).unwrap();
-        let mk = |species: &str, level: u8, item: &str, moves: &[&str]| -> crate::battle::PokemonSet {
-            serde_json::from_value(serde_json::json!({
-                "name": species, "species": species, "item": item, "ability": "No Ability",
-                "moves": moves, "level": level,
-                "evs": {"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},
-                "ivs": {"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},
-                "happiness": 255
-            }))
-            .unwrap()
-        };
-        let p1 = vec![
-            mk("Snorlax", 55, "Leftovers", &["Self-Destruct", "Splash"]),
-            mk("Cloyster", 50, "Leftovers", &["Surf"]),
-        ];
-        let p2 = vec![
-            mk("Suicune", 55, "Leftovers", &["Surf", "Substitute"]),
-            mk("Raikou", 50, "Leftovers", &["Thunderbolt"]),
-        ];
-        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
-        b.choose(&dex, 0, "team 1,2").unwrap();
-        b.choose(&dex, 1, "team 1,2").unwrap();
-        let (table, mut cb) = CompactBattle::from_battle(&b, &dex);
-
-        // In 2v2 at 100% HP, Self-Destruct is discounted by attacker life equity
-        let raw_sd = cb.expected_hit_fraction(&table, 0, 0, 1, 0, 0, true);
-        let best_2v2 = cb.best_hit_fraction(&table, 0, 0, 1, 0, true);
-        assert!(raw_sd > 1.0);
-        assert!(best_2v2 < raw_sd && best_2v2 > 0.0);
-
-        // Against an active Substitute, Self-Destruct is gated to 0.0
-        cb.mons[3].vol_flags |= vol_bit::SUBSTITUTE;
-        cb.mons[3].hp_pool[1] = 50;
-        assert_eq!(cb.best_hit_fraction(&table, 0, 0, 1, 0, true), 0.0);
-        cb.mons[3].vol_flags &= !vol_bit::SUBSTITUTE;
-        cb.mons[3].hp_pool[1] = 0;
-
-        // When last mon alive (1v2 or 1v1), Self-Destruct is gated to 0.0
-        cb.sides[0].alive_mask = 0b001;
-        assert_eq!(cb.best_hit_fraction(&table, 0, 0, 1, 0, true), 0.0);
-
-        // Verify last_move_selfko is cleared at start of next turn
-        cb.sides[0].alive_mask = 0b011;
-        cb.sides[0].last_move_selfko = 0;
-        cb.step_turn(&table, [1, 0]); // Snorlax uses Splash (non-selfdestruct)
-        assert_eq!(cb.sides[0].last_move_selfko, u8::MAX);
     }
 }

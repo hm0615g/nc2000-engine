@@ -9,56 +9,6 @@ pub(crate) const TYPES: [&str; 16] = [
     "Grass", "Electric", "Psychic", "Ice", "Dragon", "Dark",
 ];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Effectiveness {
-    Immune,
-    Resisted,
-    Neutral,
-    SuperEffective,
-}
-
-pub(crate) fn types_with_effectiveness(
-    dex: &Dex,
-    def_species: SpeciesId,
-    foresight: bool,
-    eff: Effectiveness,
-) -> u16 {
-    let def_types = dex.species_types(def_species);
-    let mut mask = 0u16;
-    for (idx, &att_name) in TYPES.iter().enumerate() {
-        let Some(att_id) = dex.type_id(att_name) else {
-            continue;
-        };
-        let mut immune = false;
-        let mut total_mod = 0i32;
-        for def_t in def_types.iter() {
-            if dex.type_immune(att_id, def_t) {
-                let bypassed = foresight
-                    && dex.type_name(def_t) == "Ghost"
-                    && matches!(att_name, "Normal" | "Fighting");
-                if !bypassed {
-                    immune = true;
-                    break;
-                }
-            }
-            total_mod += dex.eff(att_id, def_t);
-        }
-        let actual = if immune {
-            Effectiveness::Immune
-        } else if total_mod > 0 {
-            Effectiveness::SuperEffective
-        } else if total_mod < 0 {
-            Effectiveness::Resisted
-        } else {
-            Effectiveness::Neutral
-        };
-        if actual == eff {
-            mask |= 1 << idx;
-        }
-    }
-    mask
-}
-
 pub(crate) fn modeled_type(dex: &Dex, p: &Pokemon) -> Option<usize> {
     let slot = p
         .base_move_slots
@@ -213,8 +163,6 @@ mod tests {
                             revealed_moves: vec![dex.moves.id("hiddenpower").unwrap()],
                             hp_type_mask: 1 << index,
                             item: ItemObs::default(),
-                            excluded_items: 0,
-                            max_spe_stat: u16::MAX,
                             appeared: true,
                         };
                         let corrected = project(&dex, p, &obs, &mut SplitMix64::new(1))
@@ -265,8 +213,6 @@ mod tests {
             revealed_moves: vec![dex.moves.id("hiddenpower").unwrap()],
             hp_type_mask: u16::MAX,
             item: ItemObs::default(),
-            excluded_items: 0,
-            max_spe_stat: u16::MAX,
             appeared: true,
         };
         for mask in [u16::MAX, 1 << 15] {

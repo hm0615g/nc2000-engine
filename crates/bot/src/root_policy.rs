@@ -361,16 +361,6 @@ pub fn solve_bayesian_equilibrium_with_priors(
 
     let mut raw_worlds: Vec<(f64, usize, Vec<f64>)> = Vec::with_capacity(types.len());
     let mut total_weight = 0.0_f64;
-    let total_root_visits: f64 = actions.iter().map(|&i| f64::from(global_visits[i])).sum();
-    let root_grand_mean = if total_root_visits > 0.0 {
-        actions
-            .iter()
-            .map(|&i| f64::from(global_visits[i]) * global_means[i].clamp(0.0, 1.0))
-            .sum::<f64>()
-            / total_root_visits
-    } else {
-        0.5
-    };
 
     for (t_idx, t) in types.iter().enumerate() {
         let m = t.replies;
@@ -432,14 +422,12 @@ pub fn solve_bayesian_equilibrium_with_priors(
         }
         let m_act = active_cols.len();
         let mut values = vec![0.5f64; n * m_act];
-        let kappa_row = (0.008 * f64::from(world_n)).clamp(4.0, 16.0);
-        let kappa_cell = (0.032 * f64::from(world_n)).clamp(6.0, 64.0);
+        const KAPPA_ROW: f64 = 16.0;
+        const KAPPA_CELL: f64 = 64.0;
         for r in 0..n {
             let own = actions[r];
             let g_mean = global_means[own].clamp(0.0, 1.0);
-            let n_own = f64::from(global_visits[own]);
-            let g_shrunk = (n_own * g_mean + 16.0 * root_grand_mean) / (n_own + 16.0);
-            let mu_row = (row_w[r] + kappa_row * g_shrunk) / (f64::from(row_n[r]) + kappa_row);
+            let mu_row = (row_w[r] + KAPPA_ROW * g_mean) / (f64::from(row_n[r]) + KAPPA_ROW);
             for (c_idx, &j) in active_cols.iter().enumerate() {
                 let mu_col = if col_n[j] > 0 {
                     col_w[j] / f64::from(col_n[j])
@@ -457,7 +445,7 @@ pub fn solve_bayesian_equilibrium_with_priors(
                 };
                 let cn = f64::from(cell_n[r * m + j]);
                 let cw = cell_w[r * m + j];
-                values[r * m_act + c_idx] = (cw + kappa_cell * mu_prior) / (cn + kappa_cell);
+                values[r * m_act + c_idx] = (cw + KAPPA_CELL * mu_prior) / (cn + KAPPA_CELL);
             }
         }
         let w_k = f64::from(world_n);
@@ -562,7 +550,7 @@ pub fn solve_bayesian_equilibrium_with_priors(
     let max_p = best_x.iter().copied().fold(0.0_f64, f64::max);
     let mut purified_x: Vec<f64> = best_x
         .iter()
-        .map(|&p| if p >= 0.15 * max_p { p } else { 0.0 })
+        .map(|&p| if p >= 0.05 * max_p { p } else { 0.0 })
         .collect();
     let p_sum: f64 = purified_x.iter().sum();
     if p_sum > 0.0 {
@@ -574,7 +562,7 @@ pub fn solve_bayesian_equilibrium_with_priors(
 
     let eq_guarantee = guarantee(&type_matrices, &purified_x);
     let mut policy = vec![0.0; k_total];
-    if eq_guarantee > best_pure_value + 0.015 {
+    if eq_guarantee > best_pure_value + 0.005 {
         for (r, &own) in actions.iter().enumerate() {
             policy[own] = purified_x[r];
         }

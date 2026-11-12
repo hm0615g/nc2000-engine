@@ -76,7 +76,7 @@ use crate::observe::Observer;
 use crate::preview::{MetaPool, TableSet};
 use crate::prior::BeliefPrior;
 use crate::rng::SplitMix64;
-use crate::smmcts::{key_of, Node, RmConfig, SkuctSearch};
+use crate::smmcts::{key_of, run_iteration, Node, RmConfig, SkuctSearch};
 
 struct GameState {
     local: Option<crate::player_state::LocalPlayer>,
@@ -413,25 +413,14 @@ enum ForcedRoot {
     TypeProbe,
 }
 
-const MIN_SUBSAMPLED_WORLDS: usize = 24;
-const MAX_SUBSAMPLED_WORLDS: usize = 192;
+const MAX_SUBSAMPLED_WORLDS: usize = 24;
 const WORLD_WARMUP_SAMPLES: u32 = 96;
 const CELL_WARMUP_SAMPLES: u32 = 6;
-
-#[inline]
-fn target_world_count(done: u32) -> usize {
-    if done < 320 {
-        return MIN_SUBSAMPLED_WORLDS;
-    }
-    let w = (1.15 * (done as f64).powf(0.60)).ceil() as usize;
-    w.clamp(MIN_SUBSAMPLED_WORLDS, MAX_SUBSAMPLED_WORLDS)
-}
 
 struct RootTypeStats {
     samples: u32,
     late_samples: u32,
     replies: usize,
-    #[allow(dead_code)]
     reply_acts: Vec<SearchChoice>,
     cells: Vec<(u32, f64)>,
     late_cells: Vec<(u32, f64)>,
@@ -484,7 +473,6 @@ struct SampledWorld {
 pub struct BlindSearch {
     cfg: RmConfig,
     rng: SplitMix64,
-    #[allow(dead_code)]
     decision_seed: u64,
     /// Search resets omit the observer's protocol log.
     base: Battle,
@@ -492,8 +480,6 @@ pub struct BlindSearch {
     det_cache: FxHashMap<(Option<usize>, u64, [u8; 6], bool), CachedDetRoot>,
     det_cache_obs_rev: u64,
     world_pool: Vec<SampledWorld>,
-    world_cursor: usize,
-    floor_forced_n: u32,
     bayesian_row_q: Option<Vec<f64>>,
     turn_cap: u16,
     side: usize,
@@ -514,9 +500,6 @@ pub struct BlindSearch {
     /// Per-determinization roots + everything below (state-keyed).
     nodes: Vec<Node>,
     table: FxHashMap<u64, usize>,
-    /// Own-side continuation information-set UCB table (shared across determinizations).
-    obs_nodes: Vec<crate::smmcts::ObsInfoNode>,
-    obs_table: FxHashMap<u64, usize>,
     done: u32,
     /// Diagnostic columns use SearchChoice because legal reply lists vary by type.
     joint: Vec<(usize, SearchChoice, u32, f64)>,
@@ -547,21 +530,12 @@ impl BlindSearch {
         search
     }
 
-    fn use_public_exclusions(&mut self, dex: &Dex) {
-        // Compute dominance using ONLY public observations and strict speed/item
-        // upper bounds so the search never explores guaranteed self-forfeits
-        // (Operational Sleep Clause) or provable own-state no-ops, while never
-        // assuming hidden foe set details.
-        for (i, &c) in self.my_acts.iter().enumerate() {
-            self.my_dominated[i] = crate::smmcts::public_dominated_reason(
-                &self.base,
-                dex,
-                self.side,
-                c,
-                self.cfg.mask_rules,
-            )
-            .is_some();
-        }
+    fn use_public_exclusions(&mut self, _dex: &Dex) {
+        // A guessed world is not a universal proof of uselessness. Even a
+        // last-mon self-KO selection can win if sleep/flinch prevents the
+        // move and residual damage then KOs the foe. Keep heuristic root
+        // exclusions empty; request legality and preview rules are separate.
+        self.my_dominated.fill(false);
     }
 
     /// Full-world research API. Product callers use `from_observation`.
@@ -615,8 +589,6 @@ impl BlindSearch {
             det_cache: FxHashMap::default(),
             det_cache_obs_rev: u64::MAX,
             world_pool: Vec::new(),
-            world_cursor: 0,
-            floor_forced_n: 0,
             bayesian_row_q: None,
             turn_cap,
             side,
@@ -629,8 +601,6 @@ impl BlindSearch {
             my_acts,
             nodes: Vec::new(),
             table: FxHashMap::default(),
-            obs_nodes: Vec::new(),
-            obs_table: FxHashMap::default(),
             done: 0,
             joint: Vec::new(),
             joint_index: FxHashMap::default(),
@@ -672,23 +642,20 @@ impl BlindSearch {
         }
         let type_key = root_type_key(sim);
         let opp = 1 - self.side;
+        let reply_acts = self.nodes[root].acts[opp].clone();
+        let replies = reply_acts.len();
         let my_len = self.my_acts.len();
-        let ti = match self.root_type_index.entry(type_key) {
-            std::collections::hash_map::Entry::Occupied(entry) => *entry.get(),
-            std::collections::hash_map::Entry::Vacant(entry) => {
-                let reply_acts = self.nodes[root].acts[opp].clone();
-                let replies = reply_acts.len();
-                self.root_types.push(RootTypeStats {
-                    samples: 0,
-                    late_samples: 0,
-                    replies,
-                    reply_acts,
-                    cells: vec![(0, 0.); my_len * replies],
-                    late_cells: vec![(0, 0.); my_len * replies],
-                });
-                *entry.insert(self.root_types.len() - 1)
-            }
-        };
+        let ti = *self.root_type_index.entry(type_key).or_insert_with(|| {
+            self.root_types.push(RootTypeStats {
+                samples: 0,
+                late_samples: 0,
+                replies,
+                reply_acts,
+                cells: vec![(0, 0.); my_len * replies],
+                late_cells: vec![(0, 0.); my_len * replies],
+            });
+            self.root_types.len() - 1
+        });
         if !self.cfg.unseen_claw_root {
             self.root_node_type.insert(root, ti);
         }
@@ -806,9 +773,6 @@ impl BlindSearch {
         if self.det_cache_obs_rev != obs_rev {
             self.det_cache.clear();
             self.world_pool.clear();
-            self.world_cursor = 0;
-            self.obs_nodes.clear();
-            self.obs_table.clear();
             self.det_cache_obs_rev = obs_rev;
         }
         if self.base.queue.is_empty() && !belief.has_active_pick_draws(obs) {
@@ -892,13 +856,9 @@ impl BlindSearch {
         if self.det_cache_obs_rev != obs_rev {
             self.det_cache.clear();
             self.world_pool.clear();
-            self.world_cursor = 0;
-            self.obs_nodes.clear();
-            self.obs_table.clear();
             self.det_cache_obs_rev = obs_rev;
         }
-        let target_worlds = target_world_count(self.done);
-        if self.is_preview() || self.world_pool.len() < target_worlds {
+        if self.is_preview() || self.world_pool.len() < MAX_SUBSAMPLED_WORLDS {
             let pick = belief.sample(&mut self.rng);
             let (mut sim, root, type_index) =
                 self.determinize_and_resolve_root(dex, belief, obs, pick);
@@ -913,11 +873,9 @@ impl BlindSearch {
                     pick,
                 });
             }
-            belief.resample_timers_from_prng(dex, &mut sim);
             return (sim, root, type_index, pick);
         }
-        let w_idx = self.world_cursor % self.world_pool.len();
-        self.world_cursor = self.world_cursor.wrapping_add(1);
+        let w_idx = (self.done as usize) % self.world_pool.len();
         let (root, type_index, pick) = {
             let w = &self.world_pool[w_idx];
             (w.root, w.type_index, w.pick)
@@ -934,10 +892,9 @@ impl BlindSearch {
         let qc = prng.random_chance(60, 256);
         sim.reseed(prng.seed());
         sim.quick_claw_roll = qc;
-        if sim.is_idle_move_request() {
+        if self.cfg.unseen_claw_root && sim.is_idle_move_request() {
             sim.update_all_speeds(dex);
         }
-        belief.resample_timers_from_prng(dex, &mut sim);
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         (sim, root, type_index, pick)
     }
@@ -956,35 +913,31 @@ impl BlindSearch {
             }
         }
         let (mut sim, root, type_index, pick) = self.next_determinized_world(dex, belief, obs);
-        let min_floor_pick = if !self.is_preview()
-            && self.cfg.root_revisit_interval == 0
-            && self.done >= 512
-            && self.floor_forced_n * 5 < self.done
-        {
-            let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
-            let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
-            let elig: Vec<usize> = (0..self.my_acts.len())
-                .filter(|&i| allowed(i) && (!safe || !self.my_dominated[i]))
-                .collect();
-            let n_elig = (elig.len().max(1)) as u32;
-            let stats = &self.root_types[type_index];
-            let replies = stats.replies;
-            let max_floor = (96 / (self.root_types.len().max(2) as u32)).clamp(8, 32);
-            let world_floor = (stats.samples / (3 * n_elig)).min(max_floor);
-            elig.into_iter()
-                .filter_map(|i| {
-                    let row_start = i * replies;
-                    let w_n: u32 = stats
-                        .cells
-                        .get(row_start..row_start + replies)
-                        .map_or(0, |row| row.iter().map(|&(n, _)| n).sum());
-                    (w_n < world_floor).then_some((w_n, self.my_n[i], i))
-                })
-                .min_by_key(|&(w_n, g_n, _)| (w_n, g_n))
-                .map(|(_, _, i)| i)
-        } else {
-            None
-        };
+        let min_floor_pick =
+            if !self.is_preview() && self.cfg.root_revisit_interval == 0 && self.done >= 512 {
+                let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
+                let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
+                let elig: Vec<usize> = (0..self.my_acts.len())
+                    .filter(|&i| allowed(i) && (!safe || !self.my_dominated[i]))
+                    .collect();
+                let n_elig = (elig.len().max(1)) as u32;
+                let stats = &self.root_types[type_index];
+                let replies = stats.replies;
+                let world_floor = (stats.samples / (3 * n_elig)).min(48);
+                elig.into_iter()
+                    .filter_map(|i| {
+                        let row_start = i * replies;
+                        let w_n: u32 = stats
+                            .cells
+                            .get(row_start..row_start + replies)
+                            .map_or(0, |row| row.iter().map(|&(n, _)| n).sum());
+                        (w_n < world_floor).then_some((w_n, self.my_n[i], i))
+                    })
+                    .min_by_key(|&(w_n, g_n, _)| (w_n, g_n))
+                    .map(|(_, _, i)| i)
+            } else {
+                None
+            };
         let my_pick = if self.cfg.root_revisit_interval > 0
             && !self.is_preview()
             && self.done > 0
@@ -997,27 +950,15 @@ impl BlindSearch {
             self.my_n[action] += 1;
             action
         } else if let Some(action) = min_floor_pick {
-            self.floor_forced_n += 1;
             self.my_n[action] += 1;
             action
         } else {
-            let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
-            let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
-            let effective_mask_buf: Option<Vec<bool>> = if safe && self.my_dominated.iter().any(|&d| d) {
-                Some(
-                    (0..self.my_acts.len())
-                        .map(|i| allowed(i) && !self.my_dominated[i])
-                        .collect(),
-                )
-            } else {
-                None
-            };
             select_global_with_prior(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.my_n,
                 &self.my_w,
-                effective_mask_buf.as_deref().or(self.my_mask.as_deref()),
+                self.my_mask.as_deref(),
                 self.bayesian_row_q.as_deref(),
             )
         };
@@ -1032,13 +973,8 @@ impl BlindSearch {
             );
         }
         let mut joint = [0usize; 2];
-        let mut blind_ctx = crate::smmcts::BlindContinuationCtx {
-            observer_side: self.side,
-            obs_nodes: &mut self.obs_nodes,
-            obs_table: &mut self.obs_table,
-        };
         let r = if let Some(leaf) = leaf {
-            crate::smmcts::run_iteration_with_blind_ctx(
+            crate::smmcts::run_iteration_with_leaf(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.nodes,
@@ -1052,11 +988,9 @@ impl BlindSearch {
                 &mut 0,
                 leaf,
                 None,
-                None,
-                Some(&mut blind_ctx),
             )
         } else if let Some(trace) = trace {
-            crate::smmcts::run_iteration_with_blind_ctx(
+            crate::smmcts::run_iteration_with_leaf(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.nodes,
@@ -1083,11 +1017,9 @@ impl BlindSearch {
                     }
                 },
                 Some(trace),
-                None,
-                Some(&mut blind_ctx),
             )
         } else {
-            crate::smmcts::run_iteration_with_blind_ctx(
+            run_iteration(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.nodes,
@@ -1099,12 +1031,6 @@ impl BlindSearch {
                 force,
                 &mut joint,
                 &mut 0,
-                &mut |sim, rng, rollout| {
-                    crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout)
-                },
-                None,
-                None,
-                Some(&mut blind_ctx),
             )
         };
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
@@ -1307,13 +1233,8 @@ impl BlindSearch {
             force[1 - self.side] = forced_reply;
         }
         let mut joint = [0usize; 2];
-        let mut blind_ctx = crate::smmcts::BlindContinuationCtx {
-            observer_side: self.side,
-            obs_nodes: &mut self.obs_nodes,
-            obs_table: &mut self.obs_table,
-        };
         let r = if let Some(evaluate) = root_child_value {
-            crate::smmcts::run_iteration_with_blind_ctx(
+            crate::smmcts::run_iteration_with_root_child_value(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.nodes,
@@ -1330,10 +1251,9 @@ impl BlindSearch {
                 },
                 trace,
                 Some(evaluate),
-                Some(&mut blind_ctx),
             )
         } else if let Some(trace) = trace {
-            crate::smmcts::run_iteration_with_blind_ctx(
+            crate::smmcts::run_iteration_with_leaf(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.nodes,
@@ -1349,11 +1269,9 @@ impl BlindSearch {
                     crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout)
                 },
                 Some(trace),
-                None,
-                Some(&mut blind_ctx),
             )
         } else {
-            crate::smmcts::run_iteration_with_blind_ctx(
+            run_iteration(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.nodes,
@@ -1365,12 +1283,6 @@ impl BlindSearch {
                 force,
                 &mut joint,
                 &mut 0,
-                &mut |sim, rng, rollout| {
-                    crate::smmcts::default_leaf(&self.cfg, sim, dex, self.turn_cap, rng, rollout)
-                },
-                None,
-                None,
-                Some(&mut blind_ctx),
             )
         };
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
@@ -1399,8 +1311,6 @@ impl BlindSearch {
         );
         let opp = 1 - self.side;
         let acts = &self.nodes[root].acts[opp];
-        let n_types = self.root_types.len().max(1) as u32;
-        let type_warmup = (WORLD_WARMUP_SAMPLES / n_types.clamp(1, 6)).max(16);
         let stats = &mut self.root_types[type_index];
         stats.samples += 1;
         if joint[opp] < stats.replies {
@@ -1408,7 +1318,7 @@ impl BlindSearch {
             let cell = &mut stats.cells[cell_idx];
             cell.0 += 1;
             cell.1 += mine;
-            if stats.samples > type_warmup && cell.0 > CELL_WARMUP_SAMPLES {
+            if stats.samples > WORLD_WARMUP_SAMPLES && cell.0 > CELL_WARMUP_SAMPLES {
                 stats.late_samples += 1;
                 let late_cell = &mut stats.late_cells[cell_idx];
                 late_cell.0 += 1;
@@ -1927,44 +1837,29 @@ impl BlindSearch {
                     }
                 }
             }
-            let legacy_idx = if self.cfg.endgame_rules.decision_any() {
-                self.endgame.select_best(
-                    self.cfg.endgame_rules,
-                    &self.my_acts,
-                    &self.my_n,
-                    &eff_n,
-                    &self.my_w,
-                    eligible,
-                    |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
-                )?
-            } else {
-                (0..self.my_acts.len())
-                    .filter(|&i| eligible(i))
-                    .max_by(|&a, &b| {
-                        eff_n[a]
-                            .cmp(&eff_n[b])
-                            .then_with(|| self.my_w[a].total_cmp(&self.my_w[b]))
-                    })?
-            };
-            if !self.nodes.is_empty() && self.done >= 128 {
+            if !self.nodes.is_empty() && self.done >= 64 {
                 if let Some(eq) = self.bayesian_equilibrium() {
-                    let max_eff_n = eff_n.iter().copied().max().unwrap_or(0);
-                    if let Some(a_star) = (0..self.my_acts.len())
-                        .filter(|&i| eligible(i) && eff_n[i].saturating_mul(4) >= max_eff_n)
-                        .max_by(|&a, &b| {
-                            eq.policy[a]
-                                .total_cmp(&eq.policy[b])
-                                .then_with(|| eq.pure_guarantees[a].total_cmp(&eq.pure_guarantees[b]))
-                                .then_with(|| eff_n[a].cmp(&eff_n[b]))
-                        })
-                    {
-                        if eq.pure_guarantees[a_star] > eq.pure_guarantees[legacy_idx] + 0.025 {
-                            return Some(self.my_acts[a_star]);
-                        }
+                    let draw =
+                        SplitMix64::new(self.decision_seed ^ u64::from(self.done)).next_f64();
+                    if let Some(choice) = draw_policy(&self.my_acts, &eq.policy, draw) {
+                        return Some(choice);
                     }
                 }
             }
-            return Some(self.my_acts[legacy_idx]);
+            if self.cfg.endgame_rules.decision_any() {
+                return self
+                    .endgame
+                    .select_best(
+                        self.cfg.endgame_rules,
+                        &self.my_acts,
+                        &self.my_n,
+                        &eff_n,
+                        &self.my_w,
+                        eligible,
+                        |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
+                    )
+                    .map(|i| self.my_acts[i]);
+            }
         }
         if self.is_preview() {
             return (0..self.my_acts.len())
@@ -2006,23 +1901,13 @@ impl BlindSearch {
         let eligible: Vec<bool> = (0..self.my_acts.len())
             .map(|i| allowed(i) && (!safe || !self.my_dominated[i]))
             .collect();
-        let ordinary =
-            (0..self.my_acts.len()).any(|i| eligible[i] && self.my_n[i] > self.joint_probe_n[i]);
-        let eff_n: Vec<u32> = (0..self.my_acts.len())
-            .map(|i| {
-                if ordinary {
-                    self.my_n[i] - self.joint_probe_n[i]
-                } else {
-                    self.my_n[i]
-                }
-            })
-            .collect();
         let total_late: u64 = self
             .root_types
             .iter()
             .map(|t| u64::from(t.late_samples))
             .sum();
         let use_late = total_late >= 512;
+        let mut pooled_late: FxHashMap<(usize, SearchChoice), (u32, f64)> = FxHashMap::default();
         let mut late_row_n = vec![0u32; self.my_acts.len()];
         let mut late_row_w = vec![0.0f64; self.my_acts.len()];
         if use_late {
@@ -2035,6 +1920,12 @@ impl BlindSearch {
                         continue;
                     }
                     let own = i / t.replies;
+                    let reply = i % t.replies;
+                    if let Some(&opp_act) = t.reply_acts.get(reply) {
+                        let entry = pooled_late.entry((own, opp_act)).or_insert((0, 0.0));
+                        entry.0 += n;
+                        entry.1 += sum;
+                    }
                     if own < late_row_n.len() {
                         late_row_n[own] += n;
                         late_row_w[own] += sum;
@@ -2043,11 +1934,10 @@ impl BlindSearch {
             }
         }
         let mut types: Vec<crate::root_policy::RootType> = Vec::with_capacity(self.root_types.len());
-        let mut within_world_priors: Vec<Vec<crate::root_policy::RootCell>> =
+        let mut pooled_priors: Vec<Vec<crate::root_policy::RootCell>> =
             Vec::with_capacity(self.root_types.len());
         for t in &self.root_types {
-            let using_late_for_t = use_late && t.late_samples >= 16;
-            let (samples, src_cells) = if using_late_for_t {
+            let (samples, src_cells) = if use_late && t.late_samples >= 16 {
                 (t.late_samples, &t.late_cells)
             } else {
                 (t.samples, &t.cells)
@@ -2066,27 +1956,38 @@ impl BlindSearch {
                     mean: sum / f64::from(n),
                 })
                 .collect();
-            let priors: Vec<crate::root_policy::RootCell> = if using_late_for_t {
-                t.cells
-                    .iter()
-                    .enumerate()
-                    .filter(|&(i, &(n, _))| n > 0 && eligible.get(i / t.replies).copied().unwrap_or(false))
-                    .map(|(i, &(n, sum))| crate::root_policy::RootCell {
-                        own: i / t.replies,
-                        reply: i % t.replies,
-                        samples: n,
-                        mean: sum / f64::from(n),
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
+            let mut priors = Vec::new();
+            for own in 0..self.my_acts.len() {
+                if !eligible[own] {
+                    continue;
+                }
+                for (reply, &opp_act) in t.reply_acts.iter().enumerate() {
+                    if let Some(&(ln, lw)) = pooled_late.get(&(own, opp_act)).filter(|&&(n, _)| n >= 8) {
+                        priors.push(crate::root_policy::RootCell {
+                            own,
+                            reply,
+                            samples: ln,
+                            mean: lw / f64::from(ln),
+                        });
+                    } else if let Some(&idx) = self.joint_index.get(&(own, opp_act)) {
+                        let (_, _, jn, jw) = self.joint[idx];
+                        if jn > 0 {
+                            priors.push(crate::root_policy::RootCell {
+                                own,
+                                reply,
+                                samples: jn,
+                                mean: jw / f64::from(jn),
+                            });
+                        }
+                    }
+                }
+            }
             types.push(crate::root_policy::RootType {
                 samples,
                 replies: t.replies,
                 cells,
             });
-            within_world_priors.push(priors);
+            pooled_priors.push(priors);
         }
         let mut means = self.means();
         if use_late {
@@ -2098,10 +1999,10 @@ impl BlindSearch {
         }
         crate::root_policy::solve_bayesian_equilibrium_with_priors(
             &eligible,
-            &eff_n,
+            &self.my_n,
             &means,
             &types,
-            &within_world_priors,
+            &pooled_priors,
         )
     }
 
@@ -2354,7 +2255,7 @@ fn select_global_with_prior(
             let (na, wa) = (n[a] as f64, w[a]);
             let raw_mean = wa / na;
             let mean_a = match bayesian_q.and_then(|q| q.get(a).copied()) {
-                Some(qa) => 0.75 * raw_mean + 0.25 * qa,
+                Some(qa) => qa,
                 None => raw_mean,
             };
             let v = mean_a + cfg.c * (ln_total / na).sqrt();
@@ -3139,197 +3040,5 @@ mod mixed_selection_tests {
         assert_eq!(cached.node_count(), uncached.node_count());
         assert_eq!(cached.root_matrix(), uncached.root_matrix());
         assert_eq!(cached.root_replies(), uncached.root_replies());
-    }
-
-    #[test]
-    fn public_dominance_masks_sleep_clause_and_full_hp_rest_only_when_guaranteed_faster() {
-        let dex = conformance::load_dex();
-        let set = |species: &str, moves: &[&str], item: &str| -> nc2000_engine::battle::PokemonSet {
-            serde_json::from_value(serde_json::json!({
-                "species": species,
-                "name": species,
-                "level": 50,
-                "item": item,
-                "moves": moves
-            }))
-            .unwrap()
-        };
-        // Fast Jolteon (base 130 Spe) vs un-itemed Slowpoke (base 15 Spe) + sleeping bench Snorlax
-        let mut b = Battle::from_fixture(
-            &dex,
-            "1,2,3,4",
-            &[
-                set("Jolteon", &["Thunderbolt", "Rest", "Sleep Talk", "Lovely Kiss"], ""),
-                set("Zapdos", &["Thunder"], ""),
-            ],
-            &[
-                set("Slowpoke", &["Water Gun"], ""),
-                set("Snorlax", &["Tackle"], ""),
-            ],
-        )
-        .unwrap();
-        b.set_log_enabled(true);
-        b.choose(&dex, 0, "team 1,2").unwrap();
-        b.choose(&dex, 1, "team 1,2").unwrap();
-        // Put opponent bench Snorlax to sleep publicly so Sleep Clause is active
-        let opp_bench = nc2000_engine::state::PokeId { side: 1, slot: 1 };
-        b.restore_status(&dex, opp_bench, nc2000_engine::state::Status::Slp, None);
-
-        let pos = crate::player_state::ObservedPosition::reconstructed(b.clone());
-        let search = BlindSearch::from_observation(&pos, &dex, RmConfig::default(), 0, 42);
-        let acts = search.actions();
-        let dom = search.dominated();
-        let rest_id = dex.moves.id("rest").unwrap();
-        let st_id = dex.moves.id("sleeptalk").unwrap();
-        let lk_id = dex.moves.id("lovelykiss").unwrap();
-        let tb_id = dex.moves.id("thunderbolt").unwrap();
-        for (i, &c) in acts.iter().enumerate() {
-            match c {
-                SearchChoice::Move(m) if m == rest_id || m == st_id || m == lk_id => {
-                    assert!(dom[i], "expected move {:?} to be publicly dominated", dex.moves.key(m));
-                }
-                SearchChoice::Move(m) if m == tb_id => {
-                    assert!(!dom[i], "Thunderbolt must not be dominated");
-                }
-                _ => {}
-            }
-        }
-    }
-
-    #[test]
-    fn progressive_world_widening_grows_beyond_24_and_resamples_hidden_timers() {
-        let dex = conformance::load_dex();
-        assert_eq!(target_world_count(100), 24);
-        assert!(target_world_count(1000) > 60);
-        assert!(target_world_count(4000) > 150);
-        assert_eq!(target_world_count(10000), 192);
-
-        let pool = crate::preview::load_meta_pool(std::path::Path::new(
-            "../../data/meta-pool-v0/meta-pool.json",
-        ));
-        let t0 = &pool.teams[0].sets;
-        let t1 = &pool.teams[1].sets;
-        let mut battle = Battle::from_fixture(&dex, "10,20,30,40", t0, t1).unwrap();
-        battle.set_log_enabled(true);
-        let mut obs = Observer::new(&battle, 0);
-        let mut belief = Belief::new(&dex, &pool, &obs);
-        let c0 = battle.legal_choices(&dex, 0)[0];
-        let c1 = battle.legal_choices(&dex, 1)[0];
-        battle.apply_choices(&dex, [Some(c0), Some(c1)]).unwrap();
-        obs.observe(&battle, &dex);
-        belief.sync(&dex, &obs);
-
-        // Put active mon to non-Rest sleep with 0 elapsed ticks; verify resampling draws across {2, 3, 4}
-        let p0 = battle.active_id(0).unwrap();
-        battle.restore_status(&dex, p0, nc2000_engine::state::Status::Slp, Some(nc2000_engine::state::PokeId { side: 1, slot: 0 }));
-        let mut timers = crate::belief::HiddenTimerObs::default();
-        timers.sides[0] = vec![crate::belief::HiddenTimerMonObs {
-            slept: 0,
-            rest: false,
-            ..Default::default()
-        }; 6];
-        timers.sides[1] = vec![crate::belief::HiddenTimerMonObs::default(); 6];
-        belief.set_timer_observations(timers);
-
-        let mut seen_times = std::collections::BTreeSet::new();
-        let mut rng = SplitMix64::new(12345);
-        for _ in 0..40 {
-            let det = belief.determinize(&dex, &battle, &obs, &mut rng);
-            let t = det.poke(p0).status_state.get_int(nc2000_engine::state::DK::Time);
-            seen_times.insert(t);
-        }
-        assert_eq!(seen_times.into_iter().collect::<Vec<_>>(), vec![2, 3, 4]);
-    }
-
-    #[test]
-    fn best_is_deterministic_and_masks_last_mon_selfdestruct() {
-        let dex = conformance::load_dex();
-        let set = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
-            serde_json::from_value(serde_json::json!({
-                "species": species,
-                "name": species,
-                "level": 50,
-                "moves": moves
-            }))
-            .unwrap()
-        };
-        let mut b = Battle::from_fixture(
-            &dex,
-            "1,2,3,4",
-            &[set("Snorlax", &["Self-Destruct", "Return"])],
-            &[set("Suicune", &["Surf", "Rest"])],
-        )
-        .unwrap();
-        b.set_log_enabled(true);
-        b.choose(&dex, 0, "team 1").unwrap();
-        b.choose(&dex, 1, "team 1").unwrap();
-
-        let pos = crate::player_state::ObservedPosition::reconstructed(b.clone());
-        let search = BlindSearch::from_observation(&pos, &dex, RmConfig::default(), 0, 99);
-        let sd_id = dex.moves.id("selfdestruct").unwrap();
-        let ret_id = dex.moves.id("return").unwrap();
-        for (i, &c) in search.actions().iter().enumerate() {
-            if c == SearchChoice::Move(sd_id) {
-                assert!(search.dominated()[i], "1v1 Self-Destruct must be publicly dominated");
-            }
-            if c == SearchChoice::Move(ret_id) {
-                assert!(!search.dominated()[i], "Return must not be dominated");
-            }
-        }
-        assert_eq!(search.best(), Some(SearchChoice::Move(ret_id)));
-    }
-
-    #[test]
-    fn continuation_keys_merge_across_hidden_bench_and_resampled_timers() {
-        let dex = conformance::load_dex();
-        let pool = crate::preview::load_meta_pool(std::path::Path::new(
-            "../../data/meta-pool-v0/meta-pool.json",
-        ));
-        let t0 = &pool.teams[0].sets;
-        let t1 = &pool.teams[1].sets;
-        let mut b1 = Battle::from_fixture(&dex, "1,2,3,4", t0, t1).unwrap();
-        let mut b2 = Battle::from_fixture(&dex, "1,2,3,4", t0, t1).unwrap();
-        let c0 = b1.legal_choices(&dex, 0)[0];
-        let c1_a = b1.legal_choices(&dex, 1)[0];
-        let c1_b = b1
-            .legal_choices(&dex, 1)
-            .into_iter()
-            .find(|&c| {
-                let SearchChoice::Team(p_a) = c1_a else { return false };
-                let SearchChoice::Team(p_b) = c else { return false };
-                p_b[0] == p_a[0] && p_b[1..] != p_a[1..]
-            })
-            .unwrap();
-        b1.apply_choices(&dex, [Some(c0), Some(c1_a)]).unwrap();
-        b2.apply_choices(&dex, [Some(c0), Some(c1_b)]).unwrap();
-
-        let cfg = RmConfig::default();
-        let acts1 = b1.legal_choices(&dex, 0);
-        let acts2 = b2.legal_choices(&dex, 0);
-        assert_eq!(acts1, acts2);
-
-        // Different unrevealed opponent bench (slots 1,2 vs 3,4) must produce the same observer_continuation_key
-        let ok1 = crate::smmcts::observer_continuation_key(&cfg, &dex, &b1, 0, &acts1);
-        let ok2 = crate::smmcts::observer_continuation_key(&cfg, &dex, &b2, 0, &acts2);
-        assert_eq!(ok1, ok2);
-
-        // Different resampled sleep timer durations (2 vs 4) must produce the same observer and opp continuation keys
-        let p0 = b1.active_id(0).unwrap();
-        b1.restore_status(&dex, p0, nc2000_engine::state::Status::Slp, None);
-        b1.poke_mut(p0).status_state.set_int(nc2000_engine::state::DK::Time, 2);
-        let mut b1_long = b1.clone();
-        b1_long.poke_mut(p0).status_state.set_int(nc2000_engine::state::DK::Time, 4);
-
-        let acts_slp = b1.legal_choices(&dex, 0);
-        assert_eq!(
-            crate::smmcts::observer_continuation_key(&cfg, &dex, &b1, 0, &acts_slp),
-            crate::smmcts::observer_continuation_key(&cfg, &dex, &b1_long, 0, &acts_slp)
-        );
-        assert_eq!(
-            crate::smmcts::opp_continuation_key(&cfg, &dex, &mut b1, 0),
-            crate::smmcts::opp_continuation_key(&cfg, &dex, &mut b1_long, 0)
-        );
-        assert_eq!(b1.poke(p0).status_state.get_int(nc2000_engine::state::DK::Time), 2);
-        assert_eq!(b1_long.poke(p0).status_state.get_int(nc2000_engine::state::DK::Time), 4);
     }
 }

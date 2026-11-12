@@ -102,8 +102,6 @@ struct TrackMon {
     vols: Vec<TVol>,
     /// PP-mark deductions by move id.
     uses: Vec<(MoveId, i32)>,
-    /// PP-mark deductions while Transformed (cleared on exit).
-    transformed_uses: Vec<(MoveId, i32)>,
     /// Mechanics-inferred thrash/rollout lock: (move, uses so far).
     locked: Option<(MoveId, i32)>,
     /// Two-turn move charge pending release.
@@ -141,7 +139,6 @@ impl TrackMon {
             boosts: [0; 7],
             vols: Vec::new(),
             uses: Vec::new(),
-            transformed_uses: Vec::new(),
             locked: None,
             charging: None,
             must_recharge: false,
@@ -161,18 +158,10 @@ impl TrackMon {
         }
     }
 
-    fn deduct_transformed(&mut self, id: MoveId) {
-        match self.transformed_uses.iter_mut().find(|(m, _)| *m == id) {
-            Some((_, n)) => *n += 1,
-            None => self.transformed_uses.push((id, 1)),
-        }
-    }
-
     /// Everything a switch-out clears (mirrors `clear_volatile`).
     fn clear_on_exit(&mut self) {
         self.boosts = [0; 7];
         self.vols.clear();
-        self.transformed_uses.clear();
         self.locked = None;
         self.charging = None;
         self.must_recharge = false;
@@ -258,9 +247,6 @@ pub struct ProtocolTracker {
     weather: Option<(String, u16)>,
     turn: u16,
     upkeep_this_turn: bool,
-    /// Transient active move context `(side, slot, move_id, is_crit)` for
-    /// attributing `|-crit|` and `|-activate|...|Substitute|[damage]` hits.
-    cur_move: Option<(usize, usize, MoveId, bool)>,
 }
 
 /// Locking (thrash-class) move keys: `lockedmove` continuation turns emit
@@ -271,44 +257,8 @@ const BIND_CLASS: [&str; 5] = ["wrap", "bind", "firespin", "clamp", "whirlpool"]
 
 impl ProtocolTracker {
     pub(crate) fn set_hp_observations(&self, belief: &mut Belief, side: usize) {
-        belief.set_hp_observations(
-            self.sides[side]
-                .mons
-                .iter()
-                .map(|m| if m.fainted { (0, m.hp_den) } else { (m.pixels, m.hp_den) })
-                .collect(),
-        );
-        let turn = self.turn;
-        let map_side = |s: usize| -> Vec<crate::belief::HiddenTimerMonObs> {
-            self.sides[s]
-                .mons
-                .iter()
-                .map(|m| {
-                    let elapsed_of = |key: &str| {
-                        m.vols
-                            .iter()
-                            .find(|v| v.key == key)
-                            .map(|v| turn.saturating_sub(v.start_turn) as i32)
-                    };
-                    let confusion_ticks = m
-                        .vols
-                        .iter()
-                        .find(|v| v.key == "confusion")
-                        .map(|v| v.counter.unwrap_or(0));
-                    crate::belief::HiddenTimerMonObs {
-                        slept: m.slept,
-                        rest: m.rest,
-                        confusion_ticks,
-                        partiallytrapped_elapsed: elapsed_of("partiallytrapped"),
-                        disable_elapsed: elapsed_of("disable"),
-                        encore_elapsed: elapsed_of("encore"),
-                    }
-                })
-                .collect()
-        };
-        belief.set_timer_observations(crate::belief::HiddenTimerObs {
-            sides: [map_side(0), map_side(1)],
-        });
+        belief.set_hp_observations(self.sides[side].mons.iter()
+            .map(|m| if m.fainted { (0, m.hp_den) } else { (m.pixels, m.hp_den) }).collect());
     }
     pub fn new(side: usize) -> ProtocolTracker {
         ProtocolTracker {
@@ -317,7 +267,6 @@ impl ProtocolTracker {
             weather: None,
             turn: 0,
             upkeep_this_turn: false,
-            cur_move: None,
         }
     }
 
@@ -339,8 +288,6 @@ impl ProtocolTracker {
                 revealed_moves: Vec::new(),
                 hp_type_mask: u16::MAX,
                 item: Default::default(),
-                excluded_items: 0,
-                max_spe_stat: u16::MAX,
                 appeared: m.appeared,
             })
             .collect()
@@ -398,16 +345,8 @@ impl ProtocolTracker {
         }
         let side = (b[1] - b'1') as usize;
         let rest = &s[2..];
-        let has_pos = rest.starts_with(|c: char| c.is_ascii_lowercase());
         let rest = rest.strip_prefix(|c: char| c.is_ascii_lowercase()).unwrap_or(rest);
         let name = rest.strip_prefix(": ")?;
-        if has_pos {
-            if let Some(act) = self.sides[side].active {
-                if self.sides[side].mons.get(act).is_some_and(|m| m.name == name) {
-                    return Some((side, act));
-                }
-            }
-        }
         let slot = self.sides[side].mons.iter().position(|m| m.name == name)?;
         Some((side, slot))
     }
@@ -423,7 +362,7 @@ impl ProtocolTracker {
     }
 
     /// Parse "Species, L50, M" details.
-    pub(crate) fn parse_details(dex: &Dex, details: &str) -> Option<(SpeciesId, u8, Gender)> {
+    fn parse_details(dex: &Dex, details: &str) -> Option<(SpeciesId, u8, Gender)> {
         let mut species_name = details;
         let mut level = 100u8;
         let mut gender = Gender::N;
@@ -502,7 +441,6 @@ impl ProtocolTracker {
             "turn" => {
                 self.turn = arg(1).parse().unwrap_or(self.turn + 1);
                 self.upkeep_this_turn = false;
-                self.cur_move = None;
                 for s in self.sides.iter_mut() {
                     s.acted_this_turn = false;
                     s.pending_bp = false;
@@ -525,7 +463,6 @@ impl ProtocolTracker {
                 if let Some((s, m)) = self.subject(arg(1)) {
                     let turn = self.turn;
                     let side = &mut self.sides[s];
-                    side.pending_bp = false;
                     side.fainted_this_turn = Some(m);
                     let mon = &mut side.mons[m];
                     mon.fainted = true;
@@ -567,24 +504,10 @@ impl ProtocolTracker {
                     }
                     // a confusion self-hit replaces the turn's move: a
                     // pending two-turn charge is lost (its release would
-                    // otherwise stay imputed as the only legal choice), and
-                    // the side's action for the turn is spent.
+                    // otherwise stay imputed as the only legal choice)
                     if parts.iter().any(|p| *p == "[from] confusion") {
-                        self.sides[s].acted_this_turn = true;
                         self.sides[s].mons[m].charging = None;
                     }
-                    if cmd == "-damage"
-                        && !parts.iter().any(|p| p.starts_with("[from] "))
-                    {
-                        if let Some(cm) = &mut self.cur_move {
-                            cm.3 = false;
-                        }
-                    }
-                }
-            }
-            "-crit" => {
-                if let Some(cm) = &mut self.cur_move {
-                    cm.3 = true;
                 }
             }
             "-status" => {
@@ -612,9 +535,7 @@ impl ProtocolTracker {
                 }
             }
             "-cureteam" => {
-                let side_opt = Self::side_subject(arg(1))
-                    .or_else(|| self.subject(arg(1)).map(|(s, _)| s));
-                if let Some(s) = side_opt {
+                if let Some((s, _)) = self.subject(arg(1)) {
                     for mon in self.sides[s].mons.iter_mut() {
                         if !mon.fainted {
                             cure(mon);
@@ -751,7 +672,6 @@ impl ProtocolTracker {
                     let tb = self.sides[t.0].mons[t.1].boosts;
                     let mon = &mut self.sides[s].mons[m];
                     mon.transformed_into = Some(t);
-                    mon.transformed_uses.clear();
                     mon.boosts = tb;
                 }
             }
@@ -761,10 +681,8 @@ impl ProtocolTracker {
                 }
             }
             "-miss" | "-fail" => {
-                // rollout's lock, fury cutter's streak, and a pending Baton
-                // Pass switch all end on a whiff/failure
+                // rollout's lock and fury cutter's streak end on a whiff
                 if let Some((s, m)) = self.subject(arg(1)) {
-                    self.sides[s].pending_bp = false;
                     let mon = &mut self.sides[s].mons[m];
                     if let Some((lm, _)) = mon.locked {
                         if dex.moves.key(lm) == "rollout" {
@@ -869,7 +787,6 @@ impl ProtocolTracker {
         self.sides[s].acted_this_turn = true;
         let name = parts.get(2).copied().unwrap_or("");
         let Some(mid) = dex.moves.id(&toid(name)) else { return };
-        self.cur_move = Some((s, m, mid, false));
         let key = dex.moves.key(mid);
         // `[from] <other move>` = a called move (Sleep Talk / Mirror Move —
         // no PP of its own). `[from] <the same move>` = a special execution
@@ -883,18 +800,14 @@ impl ProtocolTracker {
             Some(k) => k.as_str() != key,
             None => false,
         };
-        if called {
-            if key == "batonpass" {
-                self.sides[s].pending_bp = true;
-            }
-            return; // Sleep Talk / Mirror Move calls: no last_move overwrite, no PP, no lock changes
-        }
         {
             let side = &mut self.sides[s];
             side.side_last_move = Some(mid);
-            side.pending_bp = key == "batonpass";
             let mon = &mut side.mons[m];
             mon.last_move = Some(mid);
+            if key == "batonpass" {
+                side.pending_bp = true;
+            }
             // single-move volatiles expire at the user's next move
             mon.vols.retain(|v| v.key != "destinybond");
             if key != "rage" {
@@ -903,6 +816,9 @@ impl ProtocolTracker {
             if key != "furycutter" {
                 mon.vols.retain(|v| v.key != "furycutter");
             }
+        }
+        if called {
+            return; // Sleep Talk / Mirror Move calls: no PP, no lock changes
         }
         if matches!(key, "struggle" | "recharge") {
             return;
@@ -927,13 +843,11 @@ impl ProtocolTracker {
             }
             mon.locked = None;
         }
-        // A transformed mon is executing the copied set. Track its PP usage
-        // on `transformed_uses` so the active transformed slots reflect exact
-        // 5-PP depletion without polluting `uses` (base-set evidence).
+        // A transformed mon is executing the copied set. Preserve copied
+        // move lifecycle above/below, but do not retain its PP mark as
+        // evidence about the submitted base set after switching back.
         if mon.transformed_into.is_none() {
             mon.deduct(mid);
-        } else {
-            mon.deduct_transformed(mid);
         }
         if THRASH_CLASS.contains(&key) || key == "rollout" {
             mon.locked = Some((mid, 1));
@@ -1006,15 +920,9 @@ impl ProtocolTracker {
                 .or(self.sides[s].mons[m].last_move),
             _ => None,
         };
-        let source = if key == "substitute" {
-            Some((s, m))
-        } else {
-            self.sides[1 - s].active.map(|a| (1 - s, a))
-        };
+        let source = self.sides[1 - s].active.map(|a| (1 - s, a));
         let mon = &mut self.sides[s].mons[m];
-        if key == "substitute" {
-            mon.vols.retain(|v| v.key != "substitute");
-        } else if mon.vols.iter().any(|v| v.key == key) {
+        if mon.vols.iter().any(|v| v.key == key) {
             return;
         }
         mon.vols.push(TVol { key, start_turn: turn, move_id, source, counter: None });
@@ -1024,24 +932,6 @@ impl ProtocolTracker {
         let Some((s, m)) = self.subject(parts.get(1).copied().unwrap_or("")) else { return };
         let what = parts.get(2).copied().unwrap_or("");
         let turn = self.turn;
-        if what == "confusion" {
-            let mon = &mut self.sides[s].mons[m];
-            if let Some(v) = mon.vols.iter_mut().find(|v| v.key == "confusion") {
-                *v.counter.get_or_insert(0) += 1;
-            }
-            return;
-        }
-        if what == "Substitute" && parts.contains(&"[damage]") {
-            let dmg = self.estimate_sub_damage(dex, s, m);
-            let mon = &mut self.sides[s].mons[m];
-            if let Some(v) = mon.vols.iter_mut().find(|v| v.key == "substitute") {
-                *v.counter.get_or_insert(0) += dmg as i64;
-            }
-            if let Some(cm) = &mut self.cur_move {
-                cm.3 = false;
-            }
-            return;
-        }
         if what == "trapped" {
             let source = self.sides[1 - s].active.map(|a| (1 - s, a));
             let mon = &mut self.sides[s].mons[m];
@@ -1075,12 +965,7 @@ impl ProtocolTracker {
         if what == "item: Mystery Berry" {
             if let Some(mid) = parts.get(3).and_then(|n| dex.moves.id(&toid(n))) {
                 let mon = &mut self.sides[s].mons[m];
-                let list = if mon.transformed_into.is_some() {
-                    &mut mon.transformed_uses
-                } else {
-                    &mut mon.uses
-                };
-                if let Some((_, n)) = list.iter_mut().find(|(id, _)| *id == mid) {
+                if let Some((_, n)) = mon.uses.iter_mut().find(|(id, _)| *id == mid) {
                     *n = (*n - 5).max(0);
                 }
             }
@@ -1095,14 +980,9 @@ impl ProtocolTracker {
                     parts.get(4).and_then(|n| n.parse::<i32>().ok()),
                 ) {
                     let mon = &mut self.sides[s].mons[m];
-                    let list = if mon.transformed_into.is_some() {
-                        &mut mon.transformed_uses
-                    } else {
-                        &mut mon.uses
-                    };
-                    match list.iter_mut().find(|(id, _)| *id == mid) {
+                    match mon.uses.iter_mut().find(|(id, _)| *id == mid) {
                         Some((_, u)) => *u += n,
-                        None => list.push((mid, n)),
+                        None => mon.uses.push((mid, n)),
                     }
                 }
                 return;
@@ -1148,120 +1028,6 @@ impl ProtocolTracker {
                 });
             }
         }
-    }
-
-    /// Estimate damage dealt to a surviving Substitute on `(def_s, def_m)`
-    /// from the most recent `|move|` line (`self.cur_move`).
-    fn estimate_sub_damage(&self, dex: &Dex, def_s: usize, def_m: usize) -> i32 {
-        let Some((atk_s, atk_m, mid, is_crit)) = self.cur_move else {
-            return 1;
-        };
-        let atk = &self.sides[atk_s].mons[atk_m];
-        let def = &self.sides[def_s].mons[def_m];
-        let mkey = dex.moves.key(mid);
-        match mkey {
-            "dragonrage" => return 40,
-            "sonicboom" => return 20,
-            "seismictoss" | "nightshade" => return i32::from(atk.level).max(1),
-            "psywave" => return (i32::from(atk.level) * 3 / 4).max(1),
-            "superfang" => {
-                let def_sp = dex.species.get(def.species);
-                let maxhp = ((2 * i32::from(def_sp.base_stats.hp) + 30 + 63) * i32::from(def.level))
-                    / 100
-                    + i32::from(def.level)
-                    + 10;
-                let cur_hp = (def.pixels * maxhp / def.hp_den.max(1)).max(1);
-                return (cur_hp / 2).max(1);
-            }
-            _ => {}
-        }
-        let ms = dex.move_static(mid);
-        let bp = if mkey.starts_with("hiddenpower") {
-            70
-        } else if mkey == "present" {
-            60
-        } else if mkey == "magnitude" {
-            70
-        } else if mkey == "return" || mkey == "frustration" {
-            102
-        } else if ms.base_power > 0 {
-            ms.base_power
-        } else {
-            return 1;
-        };
-        let is_phys = matches!(ms.category, nc2000_engine::dex::Category::Physical);
-        let (atk_species, atk_level) = match atk.transformed_into {
-            Some((ts, tslot)) => (self.sides[ts].mons[tslot].species, atk.level),
-            None => (atk.species, atk.level),
-        };
-        let (def_species, def_level) = match def.transformed_into {
-            Some((ts, tslot)) => (self.sides[ts].mons[tslot].species, def.level),
-            None => (def.species, def.level),
-        };
-        let atk_bs = &dex.species.get(atk_species).base_stats;
-        let def_bs = &dex.species.get(def_species).base_stats;
-        let stat_at = |base: u16, lv: u8| -> i32 {
-            ((2 * i32::from(base) + 30 + 63) * i32::from(lv)) / 100 + 5
-        };
-        let mut a = stat_at(if is_phys { atk_bs.atk } else { atk_bs.spa }, atk_level);
-        let mut d = stat_at(if is_phys { def_bs.def } else { def_bs.spd }, def_level);
-        if mkey == "explosion" || mkey == "selfdestruct" {
-            d = (d / 2).max(1);
-        }
-        let atk_stage = atk.boosts[if is_phys { 0 } else { 2 }];
-        let def_stage = def.boosts[if is_phys { 1 } else { 3 }];
-        let apply_stage = |val: i32, st: i8| -> i32 {
-            if st >= 0 {
-                val * (2 + i32::from(st)) / 2
-            } else {
-                val * 2 / (2 - i32::from(st))
-            }
-        };
-        let ignore_boosts = is_crit && atk_stage <= def_stage;
-        if !ignore_boosts {
-            a = apply_stage(a, atk_stage).clamp(1, 999);
-            d = apply_stage(d, def_stage).clamp(1, 999);
-            if is_phys && atk.comp_brn {
-                a = (a / 2).max(1);
-            }
-            let screen_key = if is_phys { "reflect" } else { "lightscreen" };
-            if self.sides[def_s].conds.iter().any(|(k, _)| k == screen_key) {
-                d *= 2;
-            }
-        }
-        if a > 255 || d > 255 {
-            a = (a / 4).max(1);
-            d = (d / 4).max(1);
-        }
-        let lv = i32::from(atk.level);
-        let mut base = ((2 * lv / 5 + 2) * bp * a / d.max(1)) / 50;
-        if is_crit {
-            base *= 2;
-        }
-        base = base.min(997) + 2;
-        if let Some((w, _)) = &self.weather {
-            match (w.as_str(), ms.move_type) {
-                ("raindance", t) if t == dex.known_types.water => base = base * 3 / 2,
-                ("raindance", t) if t == dex.known_types.fire => base /= 2,
-                ("sunnyday", t) if t == dex.known_types.fire => base = base * 3 / 2,
-                ("sunnyday", t) if t == dex.known_types.water => base /= 2,
-                _ => {}
-            }
-        }
-        let atk_types = dex.species_types(atk_species);
-        if atk_types.has(ms.move_type) {
-            base += base / 2;
-        }
-        let def_types = dex.species_types(def_species);
-        for dt in def_types.iter() {
-            let e = dex.eff(ms.move_type, dt);
-            if e > 0 {
-                base *= 2;
-            } else if e < 0 {
-                base /= 2;
-            }
-        }
-        (base * 236 / 255).max(1)
     }
 }
 
@@ -1309,7 +1075,6 @@ pub struct Request {
     pub force_switch: bool,
     pub wait: bool,
     pub trapped: bool,
-    pub maybe_trapped: bool,
     pub active_moves: Vec<ReqMove>,
     pub pokemon: Vec<ReqMon>,
 }
@@ -1353,7 +1118,6 @@ impl Request {
             .transpose()?;
         if let Some(active) = v["active"].as_array().and_then(|a| a.first()) {
             req.trapped = active["trapped"].as_bool().unwrap_or(false);
-            req.maybe_trapped = active["maybeTrapped"].as_bool().unwrap_or(false);
             if let Some(moves) = active["moves"].as_array() {
                 for m in moves {
                     req.active_moves.push(ReqMove {
@@ -1662,15 +1426,6 @@ impl ProtocolTracker {
                         t.fainted = true;
                         t.hp = was_hp;
                     }
-                    let p = b.poke_mut(id);
-                    for &(mid, n) in &tm.transformed_uses {
-                        for ms in p.move_slots.iter_mut() {
-                            if move_matches(dex, ms.id, mid) {
-                                ms.pp = (ms.pp - n).max(0);
-                                ms.used = true;
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -1734,63 +1489,34 @@ impl ProtocolTracker {
         if !req.force_switch && !req.active_moves.is_empty() {
             if let Some(active) = b.active_id(me) {
                 let p = b.poke_mut(active);
-                if p.transformed && req.active_moves.iter().all(|rm| rm.maxpp == Some(5)) {
-                    let old_slots = p.move_slots;
-                    let mut new_slots = nc2000_engine::state::MoveSlots::default();
-                    for rm in &req.active_moves {
-                        if let Some(mid) = dex.moves.id(&toid(&rm.id)) {
-                            let resolved = old_slots
-                                .iter()
-                                .find(|ms| move_matches(dex, ms.id, mid))
-                                .map(|ms| ms.id)
-                                .unwrap_or(mid);
-                            let pp = rm.pp.unwrap_or(5);
-                            let maxpp = rm.maxpp.unwrap_or(5);
-                            new_slots.push(MoveSlot {
-                                id: resolved,
-                                pp,
-                                maxpp,
-                                disabled: rm.disabled,
-                                used: pp < maxpp,
-                                shared: false,
-                            });
-                        }
-                    }
-                    if !new_slots.is_empty() {
-                        p.move_slots = new_slots;
-                    }
-                } else {
-                    for rm in &req.active_moves {
-                        if let Some(mid) = dex.moves.id(&toid(&rm.id)) {
-                            for ms in p.move_slots.iter_mut() {
-                                if move_matches(dex, ms.id, mid) {
-                                    if let Some(pp) = rm.pp {
-                                        ms.pp = pp;
-                                    }
-                                    if let Some(maxpp) = rm.maxpp {
-                                        ms.maxpp = maxpp;
-                                    }
-                                    ms.disabled = rm.disabled;
+                for rm in &req.active_moves {
+                    if let Some(mid) = dex.moves.id(&toid(&rm.id)) {
+                        for ms in p.move_slots.iter_mut() {
+                            if move_matches(dex, ms.id, mid) {
+                                if let Some(pp) = rm.pp {
+                                    ms.pp = pp;
                                 }
+                                if let Some(maxpp) = rm.maxpp {
+                                    ms.maxpp = maxpp;
+                                }
+                                ms.disabled = rm.disabled;
                             }
-                            if !p.transformed {
-                                // mirror into shared base slots (PS shares objects)
-                                for ms in p.base_move_slots.iter_mut() {
-                                    if move_matches(dex, ms.id, mid) {
-                                        if let Some(pp) = rm.pp {
-                                            ms.pp = pp;
-                                        }
-                                        if let Some(maxpp) = rm.maxpp {
-                                            ms.maxpp = maxpp;
-                                        }
-                                    }
+                        }
+                        // mirror into shared base slots (PS shares objects)
+                        for ms in p.base_move_slots.iter_mut() {
+                            if move_matches(dex, ms.id, mid) {
+                                if let Some(pp) = rm.pp {
+                                    ms.pp = pp;
+                                }
+                                if let Some(maxpp) = rm.maxpp {
+                                    ms.maxpp = maxpp;
                                 }
                             }
                         }
                     }
                 }
                 p.trapped = req.trapped;
-                p.maybe_trapped = req.maybe_trapped;
+                p.maybe_trapped = false;
             }
         }
 
@@ -2003,17 +1729,6 @@ impl ProtocolTracker {
                         }
                     }
                 }
-                "substitute" => {
-                    let creator = src_id(v.source).unwrap_or(id);
-                    let init_hp = (b.poke(creator).base_maxhp / 4).max(1);
-                    let rem_hp = (init_hp - v.counter.unwrap_or(0) as i32).clamp(1, init_hp);
-                    b.add_volatile(dex, id, "substitute", Some(creator), EffectHandle::None);
-                    if let Some(c) = dex.conds_id("substitute") {
-                        if let Some(vs) = b.poke_mut(id).volatile_mut(c) {
-                            vs.set_int(DK::Hp, rem_hp as i64);
-                        }
-                    }
-                }
                 key => {
                     let src = src_id(v.source);
                     b.add_volatile(dex, id, key, src, EffectHandle::None);
@@ -2022,12 +1737,7 @@ impl ProtocolTracker {
             // hidden rolled durations: clamp under the publicly elapsed turns
             if let Some(c) = dex.conds_id(&v.key) {
                 if let Some(vs) = b.poke_mut(id).volatile_mut(c) {
-                    if v.key == "confusion" {
-                        if let Some(t) = vs.get(DK::Time).map(|val| val.as_int()) {
-                            let ticks = v.counter.unwrap_or(0);
-                            vs.set_int(DK::Time, (t - ticks).max(1));
-                        }
-                    } else if v.key != "perishsong" {
+                    if v.key != "perishsong" {
                         if let Some(d) = vs.duration {
                             vs.duration = Some((d - elapsed).max(1));
                         }
@@ -2336,11 +2046,10 @@ impl ProtocolAgent {
                 return Err("no |poke| preview lines seen before first request".to_string());
             }
             let mut obs = Observer::from_mons(self.side, self.tracker.observer_mons());
-            obs.set_mechanical_inference(self.pinned_sets.is_none());
-            for line in &self.history {
-                obs.ingest_line(line, dex);
-            }
             sync_names(&mut obs, &self.tracker);
+            for line in std::mem::take(&mut self.history) {
+                obs.ingest_line(&line, dex);
+            }
             let mut belief = match &self.pinned_sets {
                 Some(sets) => Belief::pinned_checked(dex, "opponent", sets, &obs)?,
                 None => Belief::with_fallback_policy(dex, &self.pool, &obs, self.fallback_policy),
@@ -2348,7 +2057,6 @@ impl ProtocolAgent {
             if let (Some(prior), None) = (self.prior.clone(), &self.pinned_sets) {
                 belief.set_prior(prior);
             }
-            self.history.clear();
             self.observer = Some(obs);
             self.belief = Some(belief);
         }
@@ -2410,7 +2118,6 @@ impl ProtocolAgent {
             if allowed.iter().any(|&a| a) {
                 search.mask_actions(&allowed);
             }
-            search.prune_preview_aliases(dex);
             // baked pair tables, restricted to the legal picks
             let pick = if self.pinned_sets.is_some() {
                 filtered_open_preview(&self.tables, &battle, self.side, &levels, &mut self.rng)
@@ -2449,7 +2156,6 @@ impl ProtocolAgent {
             if legal.len() == 1 {
                 self.forced = Some(legal[0].clone());
             }
-            search.prune_rest_aliases(dex);
         }
         self.battle = Some(battle);
         self.search = Some(search);
@@ -2526,21 +2232,6 @@ impl ProtocolAgent {
         Ok(search.step_with_leaf(dex, belief, obs, n, leaf))
     }
 
-    fn best_legal_from_search(&self, dex: &Dex, legal: &[String]) -> Option<String> {
-        let s = self.search.as_ref()?;
-        let acts = s.actions();
-        let visits = s.visits();
-        let means = s.means();
-        acts.iter()
-            .zip(visits.iter().zip(means.iter()))
-            .filter_map(|(&a, (&v, &m))| {
-                let inp = ps_input(dex, a);
-                legal.contains(&inp).then_some((inp, v, m))
-            })
-            .max_by(|a, b| a.1.cmp(&b.1).then_with(|| a.2.total_cmp(&b.2)))
-            .map(|(inp, _, _)| inp)
-    }
-
     /// Current best choice, projected onto the request-legal set (never
     /// submits something PS rejects).
     pub fn best(&mut self, dex: &Dex) -> Option<String> {
@@ -2560,8 +2251,7 @@ impl ProtocolAgent {
             return Some(best);
         }
         self.projections += 1;
-        self.best_legal_from_search(dex, &legal)
-            .or_else(|| legal.first().cloned())
+        Some(legal[0].clone())
     }
 
     /// Execution distribution in request syntax. Project the whole policy
@@ -2578,31 +2268,10 @@ impl ProtocolAgent {
         let legal = req.legal_inputs();
         if legal.is_empty() { return None; }
         let projected = policy.actions().iter().any(|row| !legal.contains(&row.input));
-        if !projected {
-            return Some(policy);
-        }
-        let legal_mass: f64 = policy
-            .actions()
-            .iter()
-            .filter(|row| legal.contains(&row.input))
-            .map(|row| row.probability)
-            .sum();
-        if legal_mass > 0.0 {
-            DecisionPolicy::new(
-                "request-projected",
-                policy
-                    .actions()
-                    .iter()
-                    .filter(|row| legal.contains(&row.input))
-                    .map(|row| (row.input.clone(), row.probability)),
-            )
-            .ok()
-        } else {
-            let fallback = self
-                .best_legal_from_search(dex, &legal)
-                .unwrap_or_else(|| legal[0].clone());
-            Some(DecisionPolicy::pure("request-projected", fallback))
-        }
+        DecisionPolicy::new(if projected { "request-projected" } else { policy.source() },
+            policy.actions().iter().map(|row| (
+                if legal.contains(&row.input) { row.input.clone() } else { legal[0].clone() }, row.probability,
+            ))).ok()
     }
 
     /// JSON belief info (mirrors the wasm `BlindSearcher.beliefInfo`).
@@ -2672,7 +2341,6 @@ fn ps_input(dex: &Dex, c: SearchChoice) -> String {
 
 fn sync_names(obs: &mut Observer, tracker: &ProtocolTracker) {
     let opp = 1 - tracker.side;
-    obs.set_opp_active(tracker.sides[opp].active);
     for (slot, name) in tracker.names(opp).into_iter().enumerate() {
         if !name.is_empty() {
             obs.set_name(slot, name);
@@ -2805,103 +2473,6 @@ mod m17a_tests {
             .map(|(id, _)| dex.moves.key(*id))
             .collect();
         assert_eq!(uses, ["transform"]);
-        let t_uses: Vec<_> = tracker.sides[0].mons[0]
-            .transformed_uses
-            .iter()
-            .map(|(id, n)| (dex.moves.key(*id), *n))
-            .collect();
-        assert_eq!(t_uses, [("solarbeam", 1), ("thrash", 1)]);
-    }
-
-    #[test]
-    fn confusion_self_hit_marks_side_acted_and_sleep_talk_preserves_last_move() {
-        let dex = conformance::load_dex();
-        let mut tracker = ProtocolTracker::new(0);
-        for line in [
-            "|poke|p1|Jolteon, L50, M|",
-            "|poke|p2|Snorlax, L50, M|",
-            "|switch|p1a: Jolteon|Jolteon, L50, M|100/100",
-            "|switch|p2a: Snorlax|Snorlax, L50, M|100/100",
-            "|turn|1",
-            "|-activate|p2a: Snorlax|confusion",
-            "|-damage|p2a: Snorlax|90/100|[from] confusion",
-        ] {
-            tracker.push_line(&dex, line);
-        }
-        assert!(tracker.sides[1].acted_this_turn);
-
-        // Sleep Talk calling Earthquake must not overwrite `last_move` (sleep_talk)
-        tracker.push_line(&dex, "|turn|2");
-        tracker.push_line(&dex, "|move|p2a: Snorlax|Sleep Talk|p2a: Snorlax");
-        tracker.push_line(
-            &dex,
-            "|move|p2a: Snorlax|Earthquake|p1a: Jolteon|[from] move: Sleep Talk",
-        );
-        let sleep_talk = dex.moves.id("sleeptalk").unwrap();
-        assert_eq!(tracker.sides[1].mons[0].last_move, Some(sleep_talk));
-        assert_eq!(tracker.sides[1].side_last_move, Some(sleep_talk));
-    }
-
-    #[test]
-    fn failed_baton_pass_clears_pending_bp_and_sub_tracks_creator_and_damage() {
-        let dex = conformance::load_dex();
-        let mut tracker = ProtocolTracker::new(0);
-        for line in [
-            "|poke|p1|Jolteon, L55, M|",
-            "|poke|p1|Marowak, L50, M|",
-            "|poke|p2|Snorlax, L50, M|",
-            "|switch|p1a: Jolteon|Jolteon, L55, M|100/100",
-            "|switch|p2a: Snorlax|Snorlax, L50, M|100/100",
-            "|turn|1",
-            "|move|p1a: Jolteon|Baton Pass|p1a: Jolteon",
-            "|-fail|p1a: Jolteon",
-        ] {
-            tracker.push_line(&dex, line);
-        }
-        assert!(!tracker.sides[0].pending_bp);
-
-        // Create Substitute on Jolteon, absorb a Seismic Toss (50 dmg), Baton Pass to Marowak
-        for line in [
-            "|turn|2",
-            "|move|p1a: Jolteon|Substitute|p1a: Jolteon",
-            "|-start|p1a: Jolteon|Substitute",
-            "|-damage|p1a: Jolteon|75/100",
-            "|move|p2a: Snorlax|Seismic Toss|p1a: Jolteon",
-            "|-activate|p1a: Jolteon|Substitute|[damage]",
-            "|turn|3",
-            "|move|p1a: Jolteon|Baton Pass|p1a: Jolteon",
-            "|switch|p1a: Marowak|Marowak, L50, M|100/100",
-        ] {
-            tracker.push_line(&dex, line);
-        }
-        let sub = tracker.sides[0].mons[1]
-            .vols
-            .iter()
-            .find(|v| v.key == "substitute")
-            .expect("inherited substitute");
-        assert_eq!(sub.source, Some((0, 0)));
-        assert_eq!(sub.counter, Some(50));
-    }
-
-    #[test]
-    fn duplicate_nicknames_resolve_active_mon_on_both_sides() {
-        let dex = conformance::load_dex();
-        let mut tracker = ProtocolTracker::new(0);
-        for line in [
-            "|poke|p1|Snorlax, L50, M|",
-            "|poke|p1|Zapdos, L50|",
-            "|poke|p2|Exeggutor, L50, M|",
-            "|switch|p1a: Dup|Snorlax, L50, M|100/100",
-            "|switch|p2a: Exeggutor|Exeggutor, L50, M|100/100",
-            "|turn|1",
-            "|switch|p1a: Dup|Zapdos, L50|100/100",
-            "|move|p2a: Exeggutor|Psychic|p1a: Dup",
-            "|-damage|p1a: Dup|60/100",
-        ] {
-            tracker.push_line(&dex, line);
-        }
-        assert_eq!(tracker.sides[0].mons[0].pixels, 100);
-        assert_eq!(tracker.sides[0].mons[1].pixels, 60);
     }
 
     /// The M18 class-A `%`-HP invariant, as a pure property: whatever the
@@ -3004,11 +2575,6 @@ impl TrackMon {
                 .iter()
                 .map(|&(m, n)| UseSpec { move_key: move_key(dex, m), n })
                 .collect(),
-            transformed_uses: self
-                .transformed_uses
-                .iter()
-                .map(|&(m, n)| UseSpec { move_key: move_key(dex, m), n })
-                .collect(),
             locked: self.locked.map(|(m, n)| UseSpec { move_key: move_key(dex, m), n }),
             charging: self.charging.map(|m| move_key(dex, m)),
             must_recharge: self.must_recharge,
@@ -3066,9 +2632,6 @@ impl TrackMon {
         }
         for u in &m.uses {
             tm.uses.push((move_id_of(dex, &u.move_key)?, u.n));
-        }
-        for u in &m.transformed_uses {
-            tm.transformed_uses.push((move_id_of(dex, &u.move_key)?, u.n));
         }
         tm.locked = match &m.locked {
             Some(u) => Some((move_id_of(dex, &u.move_key)?, u.n)),
@@ -3131,13 +2694,7 @@ impl ProtocolTracker {
             let Some(slot) = self.sides[me]
                 .mons
                 .iter()
-                .enumerate()
-                .find(|(slot, m)| {
-                    !sides[me].party.contains(slot)
-                        && m.species == rm.species
-                        && m.level == rm.level
-                })
-                .map(|(slot, _)| slot)
+                .position(|m| m.species == rm.species && m.level == rm.level)
             else {
                 continue;
             };
@@ -3170,7 +2727,6 @@ impl ProtocolTracker {
             m.item_current =
                 ItemKnowledge::from_obs(mo.item.current.map(|x| x.map(|i| dex.items.key(i))));
             m.item_gained = mo.item.gained;
-            m.excluded_items = mo.excluded_items;
         }
         PositionSpec {
             schema: SCHEMA.to_string(),
@@ -3186,7 +2742,6 @@ impl ProtocolTracker {
             team_preview: req.team_preview,
             force_switch: req.force_switch,
             trapped: req.trapped,
-            maybe_trapped: req.maybe_trapped,
         }
     }
 

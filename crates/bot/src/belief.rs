@@ -384,54 +384,8 @@ impl LoadoutDraw {
     }
 }
 
-#[derive(Clone, Debug)]
-struct RepairedShell {
-    refs: Vec<Pokemon>,
-    #[allow(dead_code)]
-    exact_slot_mask: u8,
-}
-
-#[derive(Clone, Debug)]
-struct ShellDraw {
-    entries: Vec<(RepairedShell, f64)>,
-    total: f64,
-}
-
-impl ShellDraw {
-    #[inline]
-    fn draw_index(&self, rng: &mut SplitMix64) -> usize {
-        if self.entries.len() == 1 {
-            return 0;
-        }
-        let mut u = rng.next_f64() * self.total;
-        for (i, (_, weight)) in self.entries.iter().enumerate() {
-            u -= *weight;
-            if u < 0.0 {
-                return i;
-            }
-        }
-        self.entries.len() - 1
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub(crate) struct HiddenTimerMonObs {
-    pub slept: i32,
-    pub rest: bool,
-    pub confusion_ticks: Option<i64>,
-    pub partiallytrapped_elapsed: Option<i32>,
-    pub disable_elapsed: Option<i32>,
-    pub encore_elapsed: Option<i32>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub(crate) struct HiddenTimerObs {
-    pub sides: [Vec<HiddenTimerMonObs>; 2],
-}
-
 pub struct Belief {
     hp_observations: Option<Vec<(i32, i32)>>,
-    timer_observations: Option<HiddenTimerObs>,
     cands: Vec<Candidate>,
     /// Pool indices of the candidates consistent with all observations so
     /// far. Monotonically non-increasing.
@@ -449,104 +403,12 @@ pub struct Belief {
     pick_draws: Option<(u64, Vec<Option<PickDistribution>>)>,
     draws: Option<Vec<Option<MoveDraw>>>,
     loadout_draws: Option<Vec<Option<LoadoutDraw>>>,
-    shell_draws: Option<ShellDraw>,
     synced: Option<u64>,
 }
 
 impl Belief {
     pub(crate) fn set_hp_observations(&mut self, hp: Vec<(i32, i32)>) {
         self.hp_observations = Some(hp);
-    }
-
-    pub(crate) fn set_timer_observations(&mut self, timers: HiddenTimerObs) {
-        self.timer_observations = Some(timers);
-    }
-
-    pub(crate) fn resample_timers_from_prng(&self, dex: &Dex, sim: &mut Battle) {
-        use nc2000_engine::state::{Status, DK};
-        let Some(timers) = &self.timer_observations else {
-            return;
-        };
-        let c_conf = dex.conds_id("confusion");
-        let c_trap = dex.conds_id("partiallytrapped");
-        let c_dis = dex.conds_id("disable");
-        let c_enc = dex.conds_id("encore");
-        for s in 0..2 {
-            for (slot, tm) in timers.sides[s].iter().enumerate() {
-                if slot >= sim.sides[s].roster.len() {
-                    break;
-                }
-                if sim.sides[s].roster[slot].fainted {
-                    continue;
-                }
-                if sim.sides[s].roster[slot].status == Status::Slp && !tm.rest {
-                    let lo = (2 - tm.slept).max(1) as u32;
-                    let hi = (4 - tm.slept).max(1) as u32;
-                    let rem = if lo == hi {
-                        lo as i64
-                    } else {
-                        sim.prng.random_range(lo, hi + 1) as i64
-                    };
-                    sim.sides[s].roster[slot].status_state.set_int(DK::Time, rem);
-                }
-                if let (Some(k), Some(cid)) = (tm.confusion_ticks, c_conf) {
-                    if sim.sides[s].roster[slot].has_volatile(cid) {
-                        let lo = (2 - k).max(1) as u32;
-                        let hi = (5 - k).max(1) as u32;
-                        let rem = if lo == hi {
-                            lo as i64
-                        } else {
-                            sim.prng.random_range(lo, hi + 1) as i64
-                        };
-                        if let Some(vs) = sim.sides[s].roster[slot].volatile_mut(cid) {
-                            vs.set_int(DK::Time, rem);
-                        }
-                    }
-                }
-                if let (Some(e), Some(cid)) = (tm.partiallytrapped_elapsed, c_trap) {
-                    if sim.sides[s].roster[slot].has_volatile(cid) {
-                        let lo = (3 - e).max(1) as u32;
-                        let hi = (5 - e).max(1) as u32;
-                        let rem = if lo == hi {
-                            lo as i32
-                        } else {
-                            sim.prng.random_range(lo, hi + 1) as i32
-                        };
-                        if let Some(vs) = sim.sides[s].roster[slot].volatile_mut(cid) {
-                            vs.duration = Some(rem);
-                        }
-                    }
-                }
-                if let (Some(e), Some(cid)) = (tm.disable_elapsed, c_dis) {
-                    if sim.sides[s].roster[slot].has_volatile(cid) {
-                        let lo = (2 - e).max(1) as u32;
-                        let hi = (5 - e).max(1) as u32;
-                        let rem = if lo == hi {
-                            lo as i32
-                        } else {
-                            sim.prng.random_range(lo, hi + 1) as i32
-                        };
-                        if let Some(vs) = sim.sides[s].roster[slot].volatile_mut(cid) {
-                            vs.duration = Some(rem);
-                        }
-                    }
-                }
-                if let (Some(e), Some(cid)) = (tm.encore_elapsed, c_enc) {
-                    if sim.sides[s].roster[slot].has_volatile(cid) {
-                        let lo = (3 - e).max(1) as u32;
-                        let hi = (6 - e).max(1) as u32;
-                        let rem = if lo == hi {
-                            lo as i32
-                        } else {
-                            sim.prng.random_range(lo, hi + 1) as i32
-                        };
-                        if let Some(vs) = sim.sides[s].roster[slot].volatile_mut(cid) {
-                            vs.duration = Some(rem);
-                        }
-                    }
-                }
-            }
-        }
     }
     /// Build the candidate set and apply the preview filter. Call at team
     /// preview, right after `Observer::new`.
@@ -577,7 +439,6 @@ impl Belief {
             .collect();
         let mut b = Belief {
             hp_observations: None,
-            timer_observations: None,
             cands,
             alive: Vec::new(),
             fallback: None,
@@ -588,7 +449,6 @@ impl Belief {
             pick_draws: None,
             draws: None,
             loadout_draws: None,
-            shell_draws: None,
             synced: None,
         };
         b.refilter(dex, obs);
@@ -643,7 +503,6 @@ impl Belief {
             .ok_or_else(|| "pinned opponent team does not match the public preview".to_string())?;
         Ok(Belief {
             hp_observations: None,
-            timer_observations: None,
             cands: vec![Candidate {
                 id: id.to_string(),
                 weight: None,
@@ -659,7 +518,6 @@ impl Belief {
             pick_draws: None,
             draws: None,
             loadout_draws: None,
-            shell_draws: None,
             synced: Some(obs.revision()),
         })
     }
@@ -675,7 +533,6 @@ impl Belief {
         let refs = battle.sides[obs.opp()].roster.clone();
         Belief {
             hp_observations: None,
-            timer_observations: None,
             cands: vec![Candidate {
                 id: "opponent".to_string(),
                 weight: None,
@@ -691,7 +548,6 @@ impl Belief {
             pick_draws: None,
             draws: None,
             loadout_draws: None,
-            shell_draws: None,
             synced: Some(obs.revision()),
         }
     }
@@ -971,7 +827,6 @@ impl Belief {
     ) -> Battle {
         let mut out = battle.clone();
         self.determinize_in_place(dex, &mut out, obs, pick, rng);
-        self.resample_timers_from_prng(dex, &mut out);
         out
     }
 
@@ -1184,7 +1039,6 @@ impl Belief {
             let roster = self.build_fallback(dex, obs);
             self.draws = self.build_draws(dex, obs, &roster);
             self.loadout_draws = self.build_loadout_draws(dex, obs, &roster);
-            self.shell_draws = self.build_shell_draws(dex, obs, &roster);
             let mut rng = SplitMix64::new(0);
             self.fallback_visible = obs.mons().iter().any(|m| m.hp_type_mask != u16::MAX).then(|| {
                 roster.iter().zip(obs.mons()).map(|(p, mo)| {
@@ -1195,195 +1049,8 @@ impl Belief {
         } else {
             self.draws = None;
             self.loadout_draws = None;
-            self.shell_draws = None;
         }
         self.synced = Some(obs.revision());
-    }
-
-    fn build_shell_draws(
-        &self,
-        dex: &Dex,
-        obs: &Observer,
-        fallback_roster: &[Pokemon],
-    ) -> Option<ShellDraw> {
-        if self.pinned
-            || self.draws.is_some()
-            || self.fallback_policy != FallbackPolicy::Bayesian
-            || obs.mons().len() != 6
-            || fallback_roster.len() != 6
-        {
-            return None;
-        }
-        let obs_mons = obs.mons();
-        // (score, Candidate_index, per_slot_zero_contradiction_mon)
-        let mut cands_scored: Vec<(f64, usize, [Option<Pokemon>; 6])> = Vec::new();
-        for (ci, cand) in self.cands.iter().enumerate() {
-            if cand.sets.len() != 6 {
-                continue;
-            }
-            let mut k_sp = 0usize;
-            let mut sum_mv = 0usize;
-            let mut max_mv = 0usize;
-            let mut sum_it = 0usize;
-            let mut sum_lv = 0usize;
-            let mut sum_hp = 0usize;
-            let mut slot_mons: [Option<Pokemon>; 6] = Default::default();
-            for (slot, mo) in obs_mons.iter().enumerate() {
-                let Some(source) = cand
-                    .sets
-                    .iter()
-                    .find(|s| dex.species.id(&toid(&s.species)) == Some(mo.species))
-                else {
-                    continue;
-                };
-                k_sp += 1;
-                if source.level != mo.level {
-                    sum_lv += 1;
-                }
-                let src_moves: Vec<MoveId> = source
-                    .moves
-                    .iter()
-                    .filter_map(|m| dex.moves.id(&toid(m)))
-                    .collect();
-                let d_mv = mo
-                    .revealed_moves
-                    .iter()
-                    .filter(|&&rev| !src_moves.iter().any(|&m| move_matches(dex, m, rev)))
-                    .count();
-                sum_mv += d_mv;
-                if d_mv > max_mv {
-                    max_mv = d_mv;
-                }
-                let src_item = dex.items.id(&toid(&source.item));
-                let item_ok = src_item.is_some() == mo.preview_has_item
-                    && match mo.item.original {
-                        Some(orig) => src_item == orig,
-                        None => {
-                            mo.item.gained
-                                || src_item.is_none_or(|id| {
-                                    (mo.excluded_items & crate::observe::excluded_item_bit(dex, id))
-                                        == 0
-                                })
-                        }
-                    };
-                if !item_ok {
-                    sum_it += 1;
-                }
-                // Check if this slot has zero contradiction and can be built directly
-                if d_mv == 0 && item_ok && source.level == mo.level {
-                    let mut set = source.clone();
-                    set.name.clear();
-                    if let Ok(built) =
-                        Battle::from_fixture(dex, "1,2,3,4", &[set.clone()], &[set])
-                    {
-                        let mon = &built.sides[0].roster[0];
-                        if mon.gender == mo.gender
-                            && crate::hp_evidence::consistent(dex, mon, mo.hp_type_mask)
-                        {
-                            slot_mons[slot] = Some(mon.clone());
-                        } else {
-                            sum_hp += 1;
-                        }
-                    }
-                }
-            }
-            let d_sp = 6usize.saturating_sub(k_sp);
-            if k_sp >= 5 && max_mv <= 2 && (d_sp + sum_mv + sum_it) <= 2 {
-                let pi = cand.weight.unwrap_or(1.0).max(1e-6);
-                let log_l = pi.ln()
-                    - 1.6 * (d_sp as f64)
-                    - 1.25 * (sum_mv as f64)
-                    - 0.85 * (sum_it as f64)
-                    - 0.45 * (sum_lv as f64)
-                    - 0.65 * (sum_hp as f64);
-                let w = log_l.exp();
-                if w.is_finite() && w > 0.0 {
-                    cands_scored.push((w, ci, slot_mons));
-                }
-            }
-        }
-        if cands_scored.is_empty() {
-            return None;
-        }
-        cands_scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        let top_w = cands_scored[0].0;
-        let mut entries: Vec<(RepairedShell, f64)> = Vec::new();
-        let align_to_fallback = |mut mon: Pokemon, fb_mon: &Pokemon| -> Pokemon {
-            let fb_slots = &fb_mon.base_move_slots;
-            let cand_slots = mon.base_move_slots;
-            if cand_slots.len() != fb_slots.len() || cand_slots.is_empty() {
-                return mon;
-            }
-            let n = cand_slots.len();
-            let mut aligned: [Option<MoveSlot>; 4] = [None; 4];
-            let mut used_cand = [false; 4];
-            for (c_idx, cs) in cand_slots.iter().enumerate() {
-                if let Some(f_idx) =
-                    (0..n).find(|&fi| aligned[fi].is_none() && fb_slots[fi].id == cs.id)
-                {
-                    aligned[f_idx] = Some(*cs);
-                    used_cand[c_idx] = true;
-                }
-            }
-            for (c_idx, cs) in cand_slots.iter().enumerate() {
-                if used_cand[c_idx] {
-                    continue;
-                }
-                if dex.moves.key(cs.id).starts_with("hiddenpower") {
-                    if let Some(f_idx) = (0..n).find(|&fi| {
-                        aligned[fi].is_none()
-                            && dex.moves.key(fb_slots[fi].id).starts_with("hiddenpower")
-                    }) {
-                        aligned[f_idx] = Some(*cs);
-                        used_cand[c_idx] = true;
-                    }
-                }
-            }
-            for (c_idx, cs) in cand_slots.iter().enumerate() {
-                if used_cand[c_idx] {
-                    continue;
-                }
-                if let Some(f_idx) = (0..n).find(|&fi| aligned[fi].is_none()) {
-                    aligned[f_idx] = Some(*cs);
-                }
-            }
-            let mut nb = MoveSlots::default();
-            for fi in 0..n {
-                if let Some(slot) = aligned[fi] {
-                    nb.push(slot);
-                }
-            }
-            mon.base_move_slots = nb;
-            mon.move_slots = nb;
-            mon
-        };
-        for (w, _, mut slot_mons) in cands_scored.into_iter().take(4) {
-            if w < top_w * 0.15 {
-                break;
-            }
-            let mut refs = Vec::with_capacity(6);
-            let mut exact_slot_mask = 0u8;
-            for slot in 0..6 {
-                if let Some(mon) = slot_mons[slot].take() {
-                    refs.push(align_to_fallback(mon, &fallback_roster[slot]));
-                    exact_slot_mask |= 1 << slot;
-                } else {
-                    refs.push(fallback_roster[slot].clone());
-                }
-            }
-            entries.push((
-                RepairedShell {
-                    refs,
-                    exact_slot_mask,
-                },
-                w,
-            ));
-        }
-        if entries.is_empty() {
-            return None;
-        }
-        let total = entries.iter().map(|(_, w)| *w).sum();
-        Some(ShellDraw { entries, total })
     }
 
     // ------------------------------------------------- M18 marginal sampling
@@ -1565,35 +1232,22 @@ impl Belief {
         let active = |slot: usize| match self.fallback_policy {
             FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian => {
                 let r = &battle.sides[opp].roster[slot];
-                !r.fainted
-                    && (r.is_active
-                        || r.previously_switched_in > 0
-                        || battle.active_id(opp).is_none())
+                !r.fainted && (r.is_active || battle.active_id(opp).is_none())
             }
             _ => true,
         };
-        let has_loadout = self.loadout_draws.as_ref().is_some_and(|plans| {
-            plans
-                .iter()
-                .enumerate()
-                .any(|(slot, plan)| plan.is_some() && active(slot))
-        });
-        let has_shell = self.shell_draws.is_some()
-            && battle.sides[opp]
-                .roster
-                .iter()
-                .any(|r| r.is_active || r.previously_switched_in > 0);
-        if self.draws.is_none() && !has_loadout && !has_shell {
+        if self.draws.is_none()
+            && self.loadout_draws.as_ref().is_none_or(|plans| {
+                !plans
+                    .iter()
+                    .enumerate()
+                    .any(|(slot, plan)| plan.is_some() && active(slot))
+            })
+        {
             return Some(0);
         }
         let fallback = self.fallback.as_deref()?;
         let mut key = 0u64;
-        if has_shell {
-            if let Some(shell) = self.shell_draws.as_ref() {
-                let s_idx = shell.draw_index(rng);
-                key |= ((s_idx as u64 + 1) & 0xFF) << 48;
-            }
-        }
         for slot in 0..fallback.len() {
             if !active(slot) {
                 continue;
@@ -1624,37 +1278,16 @@ impl Belief {
         let active = |slot: usize| match self.fallback_policy {
             FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian => {
                 let r = &battle.sides[opp].roster[slot];
-                !r.fainted
-                    && (r.is_active
-                        || r.previously_switched_in > 0
-                        || battle.active_id(opp).is_none())
+                !r.fainted && (r.is_active || battle.active_id(opp).is_none())
             }
             _ => true,
         };
-        let has_loadout = self.loadout_draws.as_ref().is_some_and(|plans| {
-            plans
-                .iter()
-                .enumerate()
-                .any(|(slot, plan)| plan.is_some() && active(slot))
-        });
-        let has_shell = self.shell_draws.is_some()
-            && battle.sides[opp]
-                .roster
-                .iter()
-                .any(|r| r.is_active || r.previously_switched_in > 0);
-        if self.draws.is_none() && !has_loadout && !has_shell {
+        if self.draws.is_none() && self.loadout_draws.as_ref().is_none_or(|plans| {
+            !plans.iter().enumerate().any(|(slot, plan)| plan.is_some() && active(slot))
+        }) {
             return None;
         }
-        let mut roster = if has_shell {
-            if let Some(shell) = self.shell_draws.as_ref() {
-                let s_idx = shell.draw_index(rng);
-                shell.entries[s_idx].0.refs.clone()
-            } else {
-                self.fallback.as_deref()?.to_vec()
-            }
-        } else {
-            self.fallback.as_deref()?.to_vec()
-        };
+        let mut roster = self.fallback.as_deref()?.to_vec();
         for (slot, mon) in roster.iter_mut().enumerate() {
             if !active(slot) {
                 continue;
@@ -1874,12 +1507,7 @@ impl Belief {
         };
         let matches_item = |s: &PokemonSet| match mo.item.original {
             Some(item) => dex.items.id(&toid(&s.item)) == item,
-            None => {
-                mo.item.gained
-                    || dex.items.id(&toid(&s.item)).is_none_or(|id| {
-                        (mo.excluded_items & crate::observe::excluded_item_bit(dex, id)) == 0
-                    })
-            }
+            None => true,
         };
 
         let mut moves: Vec<String> = mo
@@ -2184,16 +1812,7 @@ impl Belief {
         let strict_item = |source: &PokemonSet| {
             let item = dex.items.id(&toid(&source.item));
             item.is_some() == mo.preview_has_item
-                && match mo.item.original {
-                    Some(known) => known == item,
-                    None => {
-                        mo.item.gained
-                            || item.is_none_or(|id| {
-                                (mo.excluded_items & crate::observe::excluded_item_bit(dex, id))
-                                    == 0
-                            })
-                    }
-                }
+                && mo.item.original.is_none_or(|known| known == item)
         };
         let resolve_item = |source_item: &str, use_strict: bool| -> String {
             if use_strict {
@@ -2503,7 +2122,15 @@ impl Belief {
             }
 
             let pool_len = move_scores.len().min(open_slots + 3);
-            if pool_len > open_slots && !carriers.is_empty() {
+            let has_novel_baton_pass = move_scores
+                .iter()
+                .take(pool_len)
+                .any(|(id, _, _, _, _)| dex.moves.key(*id) == "batonpass")
+                || mo
+                    .revealed_moves
+                    .iter()
+                    .any(|&id| dex.moves.key(id) == "batonpass");
+            if pool_len > open_slots && has_novel_baton_pass {
                 let template_set = carriers
                     .iter()
                     .max_by(|(sa, wa), (sb, wb)| {
@@ -2581,7 +2208,7 @@ impl Belief {
                     b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
                 });
                 if let Some(best_w) = combos.first().map(|x| x.1) {
-                    const MAX_NOVEL_LOADOUTS: usize = 3;
+                    const MAX_NOVEL_LOADOUTS: usize = 2;
                     for (idxs, w) in combos
                         .into_iter()
                         .filter(|(idxs, w)| {
@@ -2898,19 +2525,12 @@ fn build_refs(dex: &Dex, sets: &[PokemonSet], mons: &[MonObs]) -> Option<Vec<Pok
 
 fn consistent(dex: &Dex, refs: &[Pokemon], mons: &[MonObs]) -> bool {
     refs.iter().zip(mons).all(|(r, mo)| {
-        crate::hp_evidence::consistent(dex, r, mo.hp_type_mask)
-            && mo
-                .revealed_moves
-                .iter()
-                .all(|m| r.base_move_slots.iter().any(|s| move_matches(dex, s.id, *m)))
+        crate::hp_evidence::consistent(dex, r, mo.hp_type_mask) && mo.revealed_moves
+            .iter()
+            .all(|m| r.base_move_slots.iter().any(|s| move_matches(dex, s.id, *m)))
             && match mo.item.original {
                 Some(orig) => r.item == orig,
-                None => {
-                    mo.item.gained
-                        || r.item.is_none_or(|id| {
-                            (mo.excluded_items & crate::observe::excluded_item_bit(dex, id)) == 0
-                        })
-                }
+                None => true,
             }
     })
 }
@@ -3168,7 +2788,6 @@ mod fallback_tests {
         let pool: MetaPool = serde_json::from_str(META_POOL_JSON).unwrap();
         Belief {
             hp_observations: None,
-            timer_observations: None,
             cands: pool
                 .teams
                 .into_iter()
@@ -3183,7 +2802,6 @@ mod fallback_tests {
             pick_draws: None,
             draws: None,
             loadout_draws: None,
-            shell_draws: None,
             synced: None,
         }
     }
@@ -3198,8 +2816,6 @@ mod fallback_tests {
             hp_type_mask: u16::MAX,
             revealed_moves: revealed.iter().map(|m| dex.moves.id(m).unwrap()).collect(),
             item: ItemObs::default(),
-            excluded_items: 0,
-            max_spe_stat: u16::MAX,
             appeared: false,
         }
     }
@@ -4093,37 +3709,6 @@ mod fallback_tests {
                 mvs.contains(&"agility") && mvs.contains(&"attract") && mvs.contains(&"batonpass"),
                 "every Tier B completion for Agility+Attract Jolteon must retain Baton Pass: {mvs:?}"
             );
-        }
-
-        // Verify coupled minimum-mismatch shell mixture on a 1-tech-move variant of a pool team
-        let mut tech_sets = pool.teams[0].sets.clone();
-        // Replace one move on slot 0 with a non-pool tech move ("Confuse Ray" or "Swagger")
-        tech_sets[0].moves[3] = "Swagger".to_string();
-        let mut tech_battle = Battle::from_fixture(&dex, "1,2,3,4", &pool.teams[0].sets, &tech_sets).unwrap();
-        tech_battle.set_log_enabled(true);
-        tech_battle.sides[1].roster[0].is_active = true;
-        let mut tech_obs = Observer::new(&tech_battle, 0);
-        tech_obs.observe(&tech_battle, &dex);
-        for mv in &tech_sets[0].moves {
-            tech_obs.ingest_line(
-                &format!("|move|p2a: {}|{}|p1a: Target", tech_sets[0].species, mv),
-                &dex,
-            );
-        }
-        let mut tech_belief = Belief::new(&dex, &pool, &tech_obs);
-        tech_belief.sync(&dex, &tech_obs);
-        assert_eq!(tech_belief.alive().len(), 0, "exact pool match must be eliminated by tech move");
-        assert!(
-            tech_belief.shell_draws.is_some(),
-            "coupled minimum-mismatch shell draw must activate for d_total == 1 near-pool team"
-        );
-        for seed in 0..16 {
-            let mut rng_probe = SplitMix64::new(seed);
-            let fb_key = tech_belief.predict_fallback_draws(None, &tech_battle, 1, &mut rng_probe);
-            assert!(fb_key.is_some());
-            let mut rng_actual = SplitMix64::new(seed);
-            let _ = tech_belief.sample_fallback_refs(None, &mut rng_actual, &tech_battle, 1);
-            assert_eq!(rng_probe.0, rng_actual.0);
         }
     }
 }
