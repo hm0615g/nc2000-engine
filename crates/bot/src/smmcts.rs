@@ -430,7 +430,11 @@ impl EndgameRootStats {
         if elig.is_empty() {
             return None;
         }
-        let legacy_idx = *elig.iter().max_by_key(|&&i| effective_visits[i])?;
+        let legacy_idx = *elig.iter().max_by(|&&a, &&b| {
+            effective_visits[a]
+                .cmp(&effective_visits[b])
+                .then_with(|| rewards[a].total_cmp(&rewards[b]))
+        })?;
         let n_max = elig.iter().map(|&i| total_visits[i]).max().unwrap_or(0);
         let mut metrics: Vec<EndgameActionMetrics> = (0..k)
             .map(|i| {
@@ -779,7 +783,11 @@ impl EndgameRootStats {
         if !rules.decision_any() {
             return (0..k)
                 .filter(|&i| eligible(i))
-                .max_by_key(|&i| effective_visits[i]);
+                .max_by(|&a, &b| {
+                    effective_visits[a]
+                        .cmp(&effective_visits[b])
+                        .then_with(|| rewards[a].total_cmp(&rewards[b]))
+                });
         }
         self.analyze(
             rules,
@@ -1426,30 +1434,24 @@ pub(crate) fn opp_continuation_key(
         for (slot, p) in b.sides[s].roster.iter_mut().enumerate() {
             if p.status == Status::Slp {
                 let t = p.status_state.get_int(DK::Time);
-                if t > 0 {
-                    if saved_slp_len < saved_slp.len() {
-                        saved_slp[saved_slp_len] = (s, slot, t);
-                        saved_slp_len += 1;
-                    }
+                if t > 0 && saved_slp_len < saved_slp.len() {
+                    saved_slp[saved_slp_len] = (s, slot, t);
+                    saved_slp_len += 1;
                     p.status_state.set_int(DK::Time, 1);
                 }
             }
             for (vi, (vcid, vst)) in p.volatiles.iter_mut().enumerate() {
                 if Some(*vcid) == c_conf {
                     let t = vst.get_int(DK::Time);
-                    if t > 0 {
-                        if saved_vol_time_len < saved_vol_time.len() {
-                            saved_vol_time[saved_vol_time_len] = (s, slot, vi, t);
-                            saved_vol_time_len += 1;
-                        }
+                    if t > 0 && saved_vol_time_len < saved_vol_time.len() {
+                        saved_vol_time[saved_vol_time_len] = (s, slot, vi, t);
+                        saved_vol_time_len += 1;
                         vst.set_int(DK::Time, 1);
                     }
                 } else if Some(*vcid) == c_ptrap || Some(*vcid) == c_dis || Some(*vcid) == c_enc {
-                    if vst.duration.is_some() {
-                        if saved_vol_dur_len < saved_vol_dur.len() {
-                            saved_vol_dur[saved_vol_dur_len] = (s, slot, vi, vst.duration);
-                            saved_vol_dur_len += 1;
-                        }
+                    if vst.duration.is_some() && saved_vol_dur_len < saved_vol_dur.len() {
+                        saved_vol_dur[saved_vol_dur_len] = (s, slot, vi, vst.duration);
+                        saved_vol_dur_len += 1;
                         vst.duration = Some(1);
                     }
                 }
@@ -1756,7 +1758,7 @@ pub(crate) fn run_iteration_with_blind_ctx(
                                             i
                                         }
                                     };
-                                    if ctx.obs_nodes[oi].acts.len() == k {
+                                    if ctx.obs_nodes[oi].acts == nodes[node_idx].acts[s] {
                                         let node_obs = &mut ctx.obs_nodes[oi];
                                         let pick = select_ucb_counts(
                                             cfg.c,
@@ -1932,7 +1934,12 @@ pub(crate) fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
     match &cfg.playout {
         Playout::Uniform => crate::mcts::hp_eval(sim),
         Playout::Heavy { weights, .. } => {
-            if cfg.settlement.uses_blindspot_leaf() {
+            if cfg.settlement.uses_blindspot_leaf()
+                && !matches!(
+                    sim.request_state,
+                    nc2000_engine::state::RequestState::TeamPreview
+                )
+            {
                 crate::eval::eval_leaf_blindspot(sim, dex, weights)
             } else {
                 crate::eval::eval_leaf(sim, dex, weights)
@@ -2322,6 +2329,17 @@ pub(crate) fn public_dominated_reason(
     c: SearchChoice,
     rules: MaskRules,
 ) -> Option<&'static str> {
+    public_dominated_reason_with(b, dex, side, c, rules, None)
+}
+
+pub(crate) fn public_dominated_reason_with(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    c: SearchChoice,
+    rules: MaskRules,
+    foe_may_qc_override: Option<bool>,
+) -> Option<&'static str> {
     use nc2000_engine::state::Status;
     if certain_self_loss(b, dex, side, c) {
         return Some("self-KO with the last mon");
@@ -2336,7 +2354,8 @@ pub(crate) fn public_dominated_reason(
     let key = dex.moves.key(id);
     let me = b.poke(att);
     let my_speed = b.get_pokemon_action_speed(dex, att);
-    let (foe_max_speed, foe_may_qc) = public_max_foe_speed(b, dex, side);
+    let (foe_max_speed, raw_foe_may_qc) = public_max_foe_speed(b, dex, side);
+    let foe_may_qc = foe_may_qc_override.unwrap_or(raw_foe_may_qc);
     let guaranteed_faster = !foe_may_qc && my_speed > foe_max_speed;
 
     // 1. Operational Sleep Clause forfeit: if the foe already has a sleeping
@@ -2425,6 +2444,10 @@ pub(crate) fn public_dominated_reason(
     // Phazing when foe has no living bench:
     if ms.force_switch && !b.can_switch((1 - side) as u8) {
         return Some("there is nobody left to phaze in");
+    }
+    // Perish Song / Destiny Bond from the last mon:
+    if matches!(key, "perishsong" | "destinybond") && b.sides[side].pokemon_left == 1 {
+        return Some("Perish Song and Destiny Bond fail from the last mon");
     }
     // Baton Pass when our own side has no living bench:
     if rules.extended_noops && ms.self_switch.is_some() && !b.can_switch(side as u8) {
@@ -3126,17 +3149,6 @@ impl SkuctSearch {
         if cfg.key_no_damage && battle.damage_bookkeeping_observable(dex) {
             cfg.key_no_damage = false;
         }
-        if matches!(
-            battle.request_state,
-            nc2000_engine::state::RequestState::TeamPreview
-        ) && matches!(
-            cfg.settlement,
-            crate::accounting::LeafSettlementMode::BlindSpotLeaf
-                | crate::accounting::LeafSettlementMode::BlindSpotRollout
-                | crate::accounting::LeafSettlementMode::BlindSpotBoth
-        ) {
-            cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
-        }
         let mut root = battle.clone();
         root.set_log_enabled(false);
         let turn_cap = root.turn.saturating_add(cfg.horizon);
@@ -3438,8 +3450,18 @@ impl SkuctSearch {
         }
         (0..node.acts[side].len())
             .filter(|&a| !sui.get(a).copied().unwrap_or(false))
-            .max_by_key(|&a| node.n[side][a])
-            .or_else(|| (0..node.acts[side].len()).max_by_key(|&a| node.n[side][a]))
+            .max_by(|&a, &b| {
+                node.n[side][a]
+                    .cmp(&node.n[side][b])
+                    .then_with(|| node.w[side][a].total_cmp(&node.w[side][b]))
+            })
+            .or_else(|| {
+                (0..node.acts[side].len()).max_by(|&a, &b| {
+                    node.n[side][a]
+                        .cmp(&node.n[side][b])
+                        .then_with(|| node.w[side][a].total_cmp(&node.w[side][b]))
+                })
+            })
             .map(|a| node.acts[side][a])
     }
 
@@ -3502,19 +3524,10 @@ impl RmAgent {
 
         // preview root (or argmax ablation): most-visited action, point mass
         if !mixed_root {
-            let best = if self.cfg.endgame_rules.decision_any() && !ts.is_preview() {
-                ts.best(side)
-                    .and_then(|c| acts.iter().position(|&a| a == c))
-                    .unwrap_or_else(|| {
-                        (0..acts.len())
-                            .max_by_key(|&a| ts.nodes[0].n[side][a])
-                            .unwrap()
-                    })
-            } else {
-                (0..acts.len())
-                    .max_by_key(|&a| ts.nodes[0].n[side][a])
-                    .unwrap()
-            };
+            let best = ts
+                .best(side)
+                .and_then(|c| acts.iter().position(|&a| a == c))
+                .unwrap_or(0);
             let mut probs = vec![0.0; acts.len()];
             probs[best] = 1.0;
             self.rng = ts.rng;
@@ -3523,7 +3536,14 @@ impl RmAgent {
 
         // ---- probe phase: round-robin the top-m×top-m root joint cells,
         // seeded with the late-tree on-policy samples
-        let support = [0, 1].map(|s| top_actions(&ts.nodes[0], s, self.cfg.mix_actions));
+        let support = [0, 1].map(|s| {
+            top_actions(
+                &ts.nodes[0],
+                s,
+                &ts.root_dominated[s],
+                self.cfg.mix_actions,
+            )
+        });
         let mut stats = ProbeStats::new(support);
         let [m0, m1] = stats.dims();
         for cell in 0..m0 * m1 {
@@ -3575,9 +3595,10 @@ impl RmAgent {
         // visit statistics (hundreds of samples vs ~tens per matrix cell),
         // so a purified point mass defers to argmax-visits.
         if probs.iter().filter(|&&p| p > 0.0).count() == 1 {
-            let best = (0..acts.len())
-                .max_by_key(|&a| ts.nodes[0].n[side][a])
-                .unwrap();
+            let best = ts
+                .best(side)
+                .and_then(|c| acts.iter().position(|&a| a == c))
+                .unwrap_or(0);
             probs.iter_mut().for_each(|p| *p = 0.0);
             probs[best] = 1.0;
         }
@@ -3597,12 +3618,20 @@ impl RmAgent {
     }
 }
 
-/// The side's top-`m` root actions by visit count (all of them when the
-/// side owes ≤ m actions; empty when it owes none).
-fn top_actions(root: &Node, side: usize, m: usize) -> Vec<usize> {
+/// The side's top-`m` non-dominated root actions by visit count (all of them
+/// when the side owes ≤ m actions; falls back to all actions only when every
+/// action is dominated).
+fn top_actions(root: &Node, side: usize, dominated: &[bool], m: usize) -> Vec<usize> {
     let k = root.acts[side].len();
-    let mut idx: Vec<usize> = (0..k).collect();
-    idx.sort_by(|&a, &b| root.n[side][b].cmp(&root.n[side][a]));
+    let safe = (0..k).any(|a| !dominated.get(a).copied().unwrap_or(false));
+    let mut idx: Vec<usize> = (0..k)
+        .filter(|&a| !safe || !dominated.get(a).copied().unwrap_or(false))
+        .collect();
+    idx.sort_by(|&a, &b| {
+        root.n[side][b]
+            .cmp(&root.n[side][a])
+            .then_with(|| root.w[side][b].total_cmp(&root.w[side][a]))
+    });
     idx.truncate(m.max(1));
     idx
 }

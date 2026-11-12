@@ -958,6 +958,75 @@ impl Belief {
         self.determinize_with(dex, battle, obs, self.sample(rng), rng)
     }
 
+    /// Whether the opponent mon at `foe_slot` can possibly be holding Quick Claw
+    /// under public observations and the active `Belief` support.
+    pub(crate) fn foe_may_have_quick_claw(
+        &self,
+        dex: &Dex,
+        obs: &Observer,
+        foe_slot: usize,
+    ) -> bool {
+        let Some(qc_id) = dex.known_items.quickclaw else {
+            return false;
+        };
+        let Some(mo) = obs.mons().get(foe_slot) else {
+            return false;
+        };
+        if !mo.preview_has_item {
+            return false;
+        }
+        if let Some(cur) = mo.item.current {
+            return cur == Some(qc_id);
+        }
+        if !mo.item.gained {
+            if let Some(orig) = mo.item.original {
+                return orig == Some(qc_id);
+            }
+        }
+        if !self.alive.is_empty() {
+            return self.alive.iter().any(|&i| {
+                self.cands[i]
+                    .refs
+                    .as_ref()
+                    .and_then(|r| r.get(foe_slot))
+                    .is_some_and(|p| p.item == Some(qc_id))
+            });
+        }
+        if self
+            .fallback
+            .as_ref()
+            .and_then(|r| r.get(foe_slot))
+            .is_some_and(|p| p.item == Some(qc_id))
+        {
+            return true;
+        }
+        if self
+            .loadout_draws
+            .as_ref()
+            .and_then(|d| d.get(foe_slot)?.as_ref())
+            .is_some_and(|ld| ld.entries.iter().any(|(p, _)| p.item == Some(qc_id)))
+        {
+            return true;
+        }
+        if self.shell_draws.as_ref().is_some_and(|sd| {
+            sd.entries
+                .iter()
+                .any(|(sh, _)| sh.refs.get(foe_slot).is_some_and(|p| p.item == Some(qc_id)))
+        }) {
+            return true;
+        }
+        self.bayesian_prior_carriers(dex, mo, obs.mons())
+            .into_iter()
+            .any(|(s, _)| {
+                dex.items.id(&toid(&s.item)) == Some(qc_id)
+                    && mo.revealed_moves.iter().all(|&rev| {
+                        s.moves
+                            .iter()
+                            .any(|m| dex.moves.id(&toid(m)) == Some(rev))
+                    })
+            })
+    }
+
     /// `determinize` with an explicit candidate (`None` = fallback roster).
     /// Panics only on API misuse (a pick outside `alive()` / fallback not
     /// yet built) — `determinize` itself can never hit that.
