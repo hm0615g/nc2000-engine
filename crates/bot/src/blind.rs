@@ -249,7 +249,7 @@ impl BlindAgent {
             if let Some(mixture) = self.adaptive_mixture.as_mut() {
                 let mut search =
                     BlindSearch::with_rng(battle, dex, self.cfg.clone(), side, self.rng.clone());
-                search.use_public_exclusions_observed(dex, &g.observer, &g.belief);
+                search.use_public_exclusions(dex);
                 if self.root_pruning {
                     search.prune_dominated();
                 }
@@ -307,9 +307,7 @@ fn search_choose(
     opp_preview_prior: bool,
 ) -> SearchChoice {
     let mut bs = BlindSearch::with_rng(battle, dex, cfg.clone(), side, rng.clone());
-    if g.local.is_some() {
-        bs.use_public_exclusions_observed(dex, &g.observer, &g.belief);
-    }
+    if g.local.is_some() { bs.use_public_exclusions(dex); }
     bs.prune_preview_aliases(dex);
     if opp_preview_prior {
         bs.set_opponent_preview_prior(true);
@@ -566,28 +564,6 @@ impl BlindSearch {
         }
     }
 
-    pub fn use_public_exclusions_observed(
-        &mut self,
-        dex: &Dex,
-        obs: &Observer,
-        belief: &Belief,
-    ) {
-        let foe_may_qc_override = self.base.active_id(1 - self.side).map(|foe_id| {
-            belief.foe_may_have_quick_claw(dex, obs, foe_id.slot as usize)
-        });
-        for (i, &c) in self.my_acts.iter().enumerate() {
-            self.my_dominated[i] = crate::smmcts::public_dominated_reason_with(
-                &self.base,
-                dex,
-                self.side,
-                c,
-                self.cfg.mask_rules,
-                foe_may_qc_override,
-            )
-            .is_some();
-        }
-    }
-
     /// Full-world research API. Product callers use `from_observation`.
     pub fn new(battle: &Battle, dex: &Dex, cfg: RmConfig, side: usize, seed: u64) -> BlindSearch {
         Self::with_rng(battle, dex, cfg, side, SplitMix64::new(seed))
@@ -602,6 +578,17 @@ impl BlindSearch {
     ) -> BlindSearch {
         if cfg.key_no_damage && battle.damage_bookkeeping_observable(dex) {
             cfg.key_no_damage = false;
+        }
+        if matches!(
+            battle.request_state,
+            nc2000_engine::state::RequestState::TeamPreview
+        ) && matches!(
+            cfg.settlement,
+            crate::accounting::LeafSettlementMode::BlindSpotLeaf
+                | crate::accounting::LeafSettlementMode::BlindSpotRollout
+                | crate::accounting::LeafSettlementMode::BlindSpotBoth
+        ) {
+            cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
         }
         let mut base = battle.clone();
         base.set_log_enabled(false);
@@ -1016,16 +1003,15 @@ impl BlindSearch {
         } else {
             let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
             let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
-            let effective_mask_buf: Option<Vec<bool>> =
-                if safe && self.my_dominated.iter().any(|&d| d) {
-                    Some(
-                        (0..self.my_acts.len())
-                            .map(|i| allowed(i) && !self.my_dominated[i])
-                            .collect(),
-                    )
-                } else {
-                    None
-                };
+            let effective_mask_buf: Option<Vec<bool>> = if safe && self.my_dominated.iter().any(|&d| d) {
+                Some(
+                    (0..self.my_acts.len())
+                        .map(|i| allowed(i) && !self.my_dominated[i])
+                        .collect(),
+                )
+            } else {
+                None
+            };
             select_global_with_prior(
                 &self.cfg,
                 &mut self.rng,
@@ -1293,33 +1279,17 @@ impl BlindSearch {
                         self.joint_probe_n[own] += 1;
                         (own, Some(reply), true)
                     }
-                    None => {
-                        let allowed =
-                            |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
-                        let safe =
-                            (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
-                        let effective_mask_buf: Option<Vec<bool>> =
-                            if safe && self.my_dominated.iter().any(|&d| d) {
-                                Some(
-                                    (0..self.my_acts.len())
-                                        .map(|i| allowed(i) && !self.my_dominated[i])
-                                        .collect(),
-                                )
-                            } else {
-                                None
-                            };
-                        (
-                            select_global(
-                                &self.cfg,
-                                &mut self.rng,
-                                &mut self.my_n,
-                                &self.my_w,
-                                effective_mask_buf.as_deref().or(self.my_mask.as_deref()),
-                            ),
-                            None,
-                            false,
-                        )
-                    }
+                    None => (
+                        select_global(
+                            &self.cfg,
+                            &mut self.rng,
+                            &mut self.my_n,
+                            &self.my_w,
+                            self.my_mask.as_deref(),
+                        ),
+                        None,
+                        false,
+                    ),
                 }
             }
         };
@@ -1984,19 +1954,12 @@ impl BlindSearch {
                         .max_by(|&a, &b| {
                             eq.policy[a]
                                 .total_cmp(&eq.policy[b])
-                                .then_with(|| {
-                                    eq.pure_guarantees[a].total_cmp(&eq.pure_guarantees[b])
-                                })
+                                .then_with(|| eq.pure_guarantees[a].total_cmp(&eq.pure_guarantees[b]))
                                 .then_with(|| eff_n[a].cmp(&eff_n[b]))
                         })
                     {
                         if eq.pure_guarantees[a_star] > eq.pure_guarantees[legacy_idx] + 0.025 {
-                            let mean_a = self.my_w[a_star] / (self.my_n[a_star].max(1) as f64);
-                            let mean_leg =
-                                self.my_w[legacy_idx] / (self.my_n[legacy_idx].max(1) as f64);
-                            if a_star == eq.best_pure_action && mean_a + 0.005 >= mean_leg {
-                                return Some(self.my_acts[a_star]);
-                            }
+                            return Some(self.my_acts[a_star]);
                         }
                     }
                 }
@@ -3368,163 +3331,5 @@ mod mixed_selection_tests {
         );
         assert_eq!(b1.poke(p0).status_state.get_int(nc2000_engine::state::DK::Time), 2);
         assert_eq!(b1_long.poke(p0).status_state.get_int(nc2000_engine::state::DK::Time), 4);
-    }
-
-    #[test]
-    fn observed_public_exclusions_ignore_imputed_leftovers_and_preserve_leftovers_wait_except_forfeit() {
-        let dex = conformance::load_dex();
-        let pool = crate::preview::load_meta_pool(std::path::Path::new(
-            "../../data/meta-pool-v0/meta-pool.json",
-        ));
-        let set = |species: &str, moves: &[&str], item: &str| -> nc2000_engine::battle::PokemonSet {
-            serde_json::from_value(serde_json::json!({
-                "species": species,
-                "name": species,
-                "level": 50,
-                "item": item,
-                "moves": moves
-            }))
-            .unwrap()
-        };
-        let mut b = Battle::from_fixture(
-            &dex,
-            "1,2,3,4",
-            &[
-                set(
-                    "Jolteon",
-                    &["Thunderbolt", "Rest", "Sleep Talk", "Lovely Kiss"],
-                    "Leftovers",
-                ),
-                set("Zapdos", &["Thunder"], "Leftovers"),
-            ],
-            &[
-                set("Cloyster", &["Surf"], "Leftovers"),
-                set("Snorlax", &["Return"], "Leftovers"),
-            ],
-        )
-        .unwrap();
-        b.set_log_enabled(true);
-        let mut obs = Observer::new(&b, 0);
-        let mut belief = Belief::new(&dex, &pool, &obs);
-        b.choose(&dex, 0, "team 1,2").unwrap();
-        b.choose(&dex, 1, "team 1,2").unwrap();
-        let opp_bench = nc2000_engine::state::PokeId { side: 1, slot: 1 };
-        b.restore_status(&dex, opp_bench, nc2000_engine::state::Status::Slp, None);
-        obs.observe(&b, &dex);
-        belief.sync(&dex, &obs);
-
-        assert!(
-            !belief.foe_may_have_quick_claw(&dex, &obs, 0),
-            "Cloyster is not a Quick Claw carrier in the meta pool"
-        );
-
-        let pos = crate::player_state::ObservedPosition::reconstructed(b.clone());
-        let mut search = BlindSearch::from_observation(&pos, &dex, RmConfig::default(), 0, 42);
-        search.use_public_exclusions_observed(&dex, &obs, &belief);
-        let rest_id = dex.moves.id("rest").unwrap();
-        let st_id = dex.moves.id("sleeptalk").unwrap();
-        let lk_id = dex.moves.id("lovelykiss").unwrap();
-        let tb_id = dex.moves.id("thunderbolt").unwrap();
-        for (i, &c) in search.actions().iter().enumerate() {
-            match c {
-                SearchChoice::Move(m) if m == rest_id || m == st_id || m == lk_id => {
-                    assert!(
-                        search.dominated()[i],
-                        "move {:?} should be dominated even when foe holds imputed Leftovers",
-                        dex.moves.key(m)
-                    );
-                }
-                SearchChoice::Move(m) if m == tb_id => {
-                    assert!(!search.dominated()[i]);
-                }
-                _ => {}
-            }
-        }
-
-        // Chip Jolteon below full HP while holding Leftovers and verify
-        // Sleep Clause Lovely Kiss remains dominated as a forfeit guard,
-        // while `own_recovery_wait` preserves non-forfeit wait moves.
-        let p0 = b.active_id(0).unwrap();
-        b.poke_mut(p0).hp -= 10;
-        let pos2 = crate::player_state::ObservedPosition::reconstructed(b.clone());
-        let mut search2 = BlindSearch::from_observation(&pos2, &dex, RmConfig::default(), 0, 42);
-        search2.use_public_exclusions_observed(&dex, &obs, &belief);
-        for (i, &c) in search2.actions().iter().enumerate() {
-            match c {
-                SearchChoice::Move(m) if m == lk_id => {
-                    assert!(
-                        search2.dominated()[i],
-                        "Sleep Clause Lovely Kiss must remain dominated at <100% HP with Leftovers"
-                    );
-                }
-                SearchChoice::Move(m) if m == st_id => {
-                    assert!(
-                        !search2.dominated()[i],
-                        "own_recovery_wait relaxes non-forfeit no-ops when holding Leftovers at <100% HP"
-                    );
-                }
-                _ => {}
-            }
-        }
-    }
-
-    #[test]
-    fn safewin_and_modal_mix_leg_are_not_overridden_by_pure_equilibrium() {
-        let dex = conformance::load_dex();
-        let set = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
-            serde_json::from_value(serde_json::json!({
-                "species": species,
-                "name": species,
-                "level": 50,
-                "moves": moves
-            }))
-            .unwrap()
-        };
-        let mut b = Battle::from_fixture(
-            &dex,
-            "1,2,3,4",
-            &[set("Jolteon", &["Thunderbolt", "Thunder", "Quick Attack"])],
-            &[set("Suicune", &["Surf", "Ice Beam", "Rest"])],
-        )
-        .unwrap();
-        b.set_log_enabled(true);
-        b.choose(&dex, 0, "team 1").unwrap();
-        b.choose(&dex, 1, "team 1").unwrap();
-
-        let mut search = BlindSearch::new(&b, &dex, RmConfig::default(), 0, 77);
-        search.done = 256;
-        search.nodes.push(crate::smmcts::Node::at(&mut b.clone(), &dex));
-        // Action 0 has the highest visit count and empirical mean (SafeWin).
-        search.my_n = vec![150, 60, 46];
-        search.my_w = vec![150.0 * 0.90, 60.0 * 0.86, 46.0 * 0.50];
-        search.endgame.w2 = vec![150.0 * 0.81, 60.0 * 0.74, 46.0 * 0.25];
-        search.endgame.win_n = vec![135, 51, 20];
-        search.endgame.loss_n = vec![0, 2, 10];
-        search.endgame.win_turns = vec![135.0 * 3.0, 51.0 * 2.0, 20.0 * 4.0];
-        search.endgame.survive_turns = vec![150.0 * 3.0, 60.0 * 2.0, 46.0 * 4.0];
-
-        // Even if root_types had a synthetic matrix favoring Action 1's column guarantee,
-        // SafeWin regime and the empirical mean guard keep Action 0 (`Thunderbolt`).
-        let reply_acts = b.clone().legal_choices(&dex, 1);
-        let cells = vec![
-            (50, 50.0 * 0.80),
-            (50, 50.0 * 0.95),
-            (50, 50.0 * 0.95),
-            (20, 20.0 * 0.86),
-            (20, 20.0 * 0.86),
-            (20, 20.0 * 0.86),
-            (15, 15.0 * 0.50),
-            (15, 15.0 * 0.50),
-            (16, 16.0 * 0.50),
-        ];
-        search.root_types.push(RootTypeStats {
-            samples: 256,
-            late_samples: 256,
-            replies: reply_acts.len(),
-            reply_acts,
-            late_cells: cells.clone(),
-            cells,
-        });
-        assert_eq!(search.best(), Some(search.actions()[0]));
     }
 }

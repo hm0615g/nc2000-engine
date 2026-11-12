@@ -588,7 +588,6 @@ impl WasmBlindSearcher {
         let seed = self.rng.next();
         let position = self.local.position(&self.dex, &mut self.belief, &self.observer, &mut self.rng).map_err(js_err)?;
         let mut search = BlindSearch::from_observation(&position, &self.dex, self.cfg.clone(), self.side, seed);
-        search.use_public_exclusions_observed(&self.dex, &self.observer, &self.belief);
         if search.is_preview() {
             search.prune_preview_aliases(&self.dex);
             // Pinned (open sheet): both sheets public — resolve the pair

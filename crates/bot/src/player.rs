@@ -140,7 +140,7 @@ fn player_request(battle: &Battle, dex: &Dex, side: usize, choices: &[SearchChoi
                     .any(|m| m["id"] == key && m["disabled"] == false && m["pp"] != 0)
                 {
                     moves.retain(|m| m["id"] != key);
-                    moves.push(json!({"id": key, "pp": 1, "maxpp": 1, "disabled": false}));
+                    moves.push(json!({"id": key, "disabled": false}));
                 }
             }
             let trapped = !choices.iter().any(|c| matches!(c, SearchChoice::Switch(_)));

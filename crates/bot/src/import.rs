@@ -2388,7 +2388,6 @@ impl ProtocolAgent {
         // search + preview policy
         let mut search =
             BlindSearch::from_observation(&crate::player_state::ObservedPosition::reconstructed(battle.clone()), dex, self.cfg.clone(), self.side, self.rng.next());
-        search.use_public_exclusions_observed(dex, obs, belief);
         search.set_opponent_preview_prior(self.pick_preview);
         self.baked = None;
         self.forced = None;
