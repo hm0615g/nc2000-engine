@@ -79,6 +79,9 @@ pub struct PositionSpec {
     /// The active cannot switch out (Mean Look / Wrap family).
     #[serde(default)]
     pub trapped: bool,
+    /// PS `maybeTrapped` flag when present on the active request.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub maybe_trapped: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -294,6 +297,9 @@ pub struct MonSpec {
     /// `[side, slot]` this mon is Transformed into.
     #[serde(default)]
     pub transformed_into: Option<[usize; 2]>,
+    /// Public PP deductions accrued on copied slots while Transformed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transformed_uses: Vec<UseSpec>,
     /// The move Mimic wrote into its slot.
     #[serde(default)]
     pub mimic_overlay: Option<String>,
@@ -327,6 +333,7 @@ pub struct MonSpec {
 
 fn unknown_hp_types() -> u16 { u16::MAX }
 fn all_hp_types(mask: &u16) -> bool { *mask == u16::MAX }
+fn is_false(b: &bool) -> bool { !*b }
 
 fn full_hp() -> i32 {
     100
@@ -366,6 +373,7 @@ impl Default for MonSpec {
             charging: None,
             must_recharge: false,
             transformed_into: None,
+            transformed_uses: Vec::new(),
             mimic_overlay: None,
             last_move: None,
             stall_streak: 0,
@@ -546,7 +554,11 @@ impl PositionSpec {
         } else if self.force_switch {
             req["forceSwitch"] = serde_json::json!([true]);
         } else {
-            req["active"] = serde_json::json!([{"moves": req_moves, "trapped": self.trapped}]);
+            let mut active_obj = serde_json::json!({"moves": req_moves, "trapped": self.trapped});
+            if self.maybe_trapped {
+                active_obj["maybeTrapped"] = serde_json::json!(true);
+            }
+            req["active"] = serde_json::json!([active_obj]);
         }
         Ok(req.to_string())
     }

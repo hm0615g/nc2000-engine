@@ -360,6 +360,15 @@ const stats = {
 };
 
 // ---------------------------------------------------------- battle driver
+function countFaints(pokemon) {
+	if (!Array.isArray(pokemon)) return 0;
+	let n = 0;
+	for (const p of pokemon) {
+		if (p && typeof p.condition === 'string' && p.condition.endsWith(' fnt')) n++;
+	}
+	return n;
+}
+
 class BattleDriver {
 	constructor(client, room, battleIdx) {
 		this.client = client;
@@ -377,6 +386,11 @@ class BattleDriver {
 		this.errRecoveries = 0;
 		this.sentchoice = null;
 		this.sawPreviewLine = false;
+		this.lastMoveActTurn = 0;
+		this.allowSameTurnMove = false;
+		this.faintsSeen = [0, 0];
+		this.sideActiveFainted = [false, false];
+		this.sidePendingBp = [false, false];
 		this.actTimer = null;
 		this.retries = 0;
 		this.ended = false;
@@ -416,6 +430,12 @@ class BattleDriver {
 		this.errRecoveries = 0;
 		this.sentchoice = null;
 		this.sawPreviewLine = false;
+		this.turn = 0;
+		this.lastMoveActTurn = 0;
+		this.allowSameTurnMove = false;
+		this.faintsSeen = [0, 0];
+		this.sideActiveFainted = [false, false];
+		this.sidePendingBp = [false, false];
 		this.retries = 0;
 		if (this.actTimer) clearTimeout(this.actTimer);
 		this.actTimer = null;
@@ -461,8 +481,43 @@ class BattleDriver {
 		if (cmd === 'inactive' && /timer is (now )?ON/i.test(line)) {
 			this.log(`timer confirmed: ${line.slice('|inactive|'.length)}`);
 		}
-		if (cmd === 'turn') this.turn = parseInt(line.split('|')[2], 10) || this.turn;
+		if (cmd === 'turn') {
+			this.turn = parseInt(line.split('|')[2], 10) || this.turn;
+			this.sidePendingBp = [false, false];
+		}
 		if (cmd === 'teampreview') this.sawPreviewLine = true;
+		if (cmd === 'switch' || cmd === 'drag') {
+			const subj = line.split('|')[2] || '';
+			const s = subj.startsWith('p2') ? 1 : subj.startsWith('p1') ? 0 : -1;
+			if (s >= 0) {
+				this.sideActiveFainted[s] = false;
+				this.sidePendingBp[s] = false;
+			}
+		} else if (cmd === 'faint') {
+			const subj = line.split('|')[2] || '';
+			const s = subj.startsWith('p2') ? 1 : subj.startsWith('p1') ? 0 : -1;
+			if (s >= 0) {
+				this.faintsSeen[s]++;
+				this.sideActiveFainted[s] = true;
+				this.sidePendingBp[s] = false;
+			}
+		} else if (cmd === 'move') {
+			const parts = line.split('|');
+			const subj = parts[2] || '';
+			const s = subj.startsWith('p2') ? 1 : subj.startsWith('p1') ? 0 : -1;
+			if (s >= 0) {
+				const moveId = toID(parts[3] || '');
+				const fromTag = parts.find(p => p.startsWith('[from] '));
+				const fromMove = fromTag ? toID(fromTag.slice(7).replace(/^move:\s*/i, '')) : '';
+				const called = !!fromMove && fromMove !== moveId;
+				if (moveId === 'batonpass') this.sidePendingBp[s] = true;
+				else if (!called) this.sidePendingBp[s] = false;
+			}
+		} else if (cmd === '-fail' || cmd === '-miss') {
+			const subj = line.split('|')[2] || '';
+			const s = subj.startsWith('p2') ? 1 : subj.startsWith('p1') ? 0 : -1;
+			if (s >= 0) this.sidePendingBp[s] = false;
+		}
 		if (cmd === 'win' || cmd === 'tie') {
 			const winner = cmd === 'win' ? line.split('|')[2] : '';
 			this.result = cmd === 'tie' ? 'T' : toID(winner) === toID(NAME) ? 'W' : 'L';
@@ -477,6 +532,7 @@ class BattleDriver {
 		// every |error| in a battle room is a choice rejection — target 0.
 		stats.rejections.push(`${this.room} d${this.decisions}: ${line}`);
 		this.log(`REJECTED: ${line}`);
+		this.allowSameTurnMove = true;
 		// recovery: after [Unavailable choice] PS re-sends an updated
 		// |request| and the normal pendingReq flow re-chooses. Any other
 		// rejection leaves the request open with no re-send — re-pose the
@@ -497,6 +553,30 @@ class BattleDriver {
 			this.pendingReq = this.lastReq;
 			this.scheduleAct();
 		}
+	}
+
+	requestWaitReason(req) {
+		if (this.awaitingReplay) return 'rejoin room replay pending';
+		if (req.wait) return null;
+		if (req.teamPreview) {
+			return this.sawPreviewLine ? null : 'teampreview request before |poke| lines';
+		}
+		const sideIdx = req.side && req.side.id === 'p2' ? 1 : 0;
+		const reqFaints = countFaints(req.side && req.side.pokemon);
+		if (reqFaints > this.faintsSeen[sideIdx]) {
+			return `request faints (${reqFaints}) ahead of |faint| lines (${this.faintsSeen[sideIdx]})`;
+		}
+		if (req.forceSwitch) {
+			if (!this.sideActiveFainted[sideIdx] && !this.sidePendingBp[sideIdx]) {
+				return 'forceSwitch request before |faint| or Baton Pass |move| line';
+			}
+			return null;
+		}
+		if (this.turn < 1) return 'move request before |turn| 1';
+		if (this.turn === this.lastMoveActTurn && !this.allowSameTurnMove) {
+			return `move request before |turn| > ${this.lastMoveActTurn}`;
+		}
+		return null;
 	}
 
 	scheduleAct() {
@@ -530,20 +610,26 @@ class BattleDriver {
 		const rqid = req.rqid;
 
 		// |request| reaches the socket before the update lines that led to it
-		// (same ordering as the M15a sim stream); the debounce absorbs that,
-		// but the team-preview request additionally needs the |poke| lines.
-		if (!RANDOM && req.teamPreview && !this.sawPreviewLine) {
-			return this.holdForMoreLines('teampreview request before |poke| lines');
+		// (same ordering as the M15a sim stream); guard against acting before
+		// the accompanying turn/faint/switch lines have arrived.
+		const waitWhy = this.requestWaitReason(req);
+		if (waitWhy) {
+			return this.holdForMoreLines(waitWhy);
 		}
 
 		if (RANDOM) {
 			this.pendingReq = null;
+			this.retries = 0;
 			if (req.wait) return;
 			if (this.sentchoice) return; // rejoin replay: already answered
 			this.decisions++;
 			stats.decisions++;
 			if (this.maybeDrop(req, 'pre')) return;
 			const choice = randomChoice(req);
+			if (!req.teamPreview && !req.forceSwitch) {
+				this.lastMoveActTurn = this.turn;
+				this.allowSameTurnMove = false;
+			}
 			this.client.send(`${this.room}|/choose ${choice}${rqid !== undefined ? `|${rqid}` : ''}`);
 			this.recordDecision(req, choice, null, null, 'random');
 			this.maybeDrop(req, 'post');
@@ -564,7 +650,11 @@ class BattleDriver {
 		try {
 			owes = this.searcher.onRequest(reqStr);
 		} catch (e) {
-			// synthesis needs lines that haven't arrived yet — keep waiting
+			// synthesis needs lines that haven't arrived yet — reset the
+			// searcher onto the full visible history so already-shifted lines
+			// are cleanly replayed once the rest of the frame arrives.
+			this.freeSearcher();
+			this.lineBuffer = this.visibleLines.slice();
 			return this.holdForMoreLines(`onRequest: ${e.message || e}`);
 		}
 		this.pendingReq = null;
@@ -610,6 +700,10 @@ class BattleDriver {
 		stats.thinkMsSum += think;
 		stats.thinkN++;
 		if (!choice) throw new Error('searcher returned no choice');
+		if (!req.teamPreview && !req.forceSwitch) {
+			this.lastMoveActTurn = this.turn;
+			this.allowSameTurnMove = false;
+		}
 		this.client.send(`${this.room}|/choose ${choice}${rqid !== undefined ? `|${rqid}` : ''}`);
 		let policy = null;
 		try { policy = JSON.parse(this.searcher.rootPolicy()); } catch { /* diagnostic only */ }
