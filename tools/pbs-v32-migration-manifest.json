@@ -1,0 +1,4124 @@
+{
+  "schema": "pbs-v32-migration-source-inventory-v1",
+  "reference_sha256": "79dff80a4689bdb3869fa8649887f5108e4ebf6a30ff146b68d9fa2c69540e4e",
+  "installed_client_sha256": "8a74c713d5564bb933ddb4f30c8b0cf8c401948fc8fde21a31b9b8c99382722a",
+  "reference_lines": 2223,
+  "named_functions": [
+    {
+      "name": "usage",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        32,
+        57
+      ],
+      "source_sha256": "3e0000469efdd30581d7f134351e539bf45a52caefa4a746123137bc066fe1c6",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Converter CLI help only.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "parseArgs",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        59,
+        90
+      ],
+      "source_sha256": "f962609ae50a8d0ef4a40854f589f75b59370f1b69478426e5f75638b9e235df",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Converter CLI option decoding, not PBS message decoding.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "ensureDir",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        92,
+        92
+      ],
+      "source_sha256": "3bb16fcebd06e0040b40ab52f61c21011b71b9a57cca1f5fe1349aeeda1fdf1c",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Output directory creation only.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "readFileBytes",
+      "category": "SOURCE_DECODE",
+      "source_lines": [
+        93,
+        93
+      ],
+      "source_sha256": "95e6debf7b0f08a96cd30ecaee716b42c21097dc8fae54d6e3814fe1cce7dae9",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "decodeHtmlFile",
+      "category": "SOURCE_DECODE",
+      "source_lines": [
+        95,
+        113
+      ],
+      "source_sha256": "ab9a9def0b4a30cc7649de3af08db5bba7827c197c2042121140a0f14653e189",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "mojibakeScore",
+      "category": "SOURCE_DECODE",
+      "source_lines": [
+        115,
+        121
+      ],
+      "source_sha256": "aa63a3636c75685c5ffa7539f982c8013864ca6ca3dc75388defe23558f4ffd1",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "htmlDecode",
+      "category": "SOURCE_DECODE",
+      "source_lines": [
+        123,
+        133
+      ],
+      "source_sha256": "f491dac84192f058e02dba3e87cff1452a8f1fc5a6c1cda4e70df1e16de4ec42",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "stripTagsToText",
+      "category": "SOURCE_DECODE",
+      "source_lines": [
+        135,
+        145
+      ],
+      "source_sha256": "4fe2c5a3067996bdc08af032d019f613a5db4678bd19beff49c567e016ff217a",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "normalizeJa",
+      "category": "SOURCE_DECODE",
+      "source_lines": [
+        147,
+        154
+      ],
+      "source_sha256": "efe0e033c410631f8f7dda63fa9347ef220466d1c552590de1ebe81db697ed97",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "normalizeNameKey",
+      "category": "SOURCE_DECODE",
+      "source_lines": [
+        155,
+        157
+      ],
+      "source_sha256": "8a8fa4edb14d94790956224245aadfb0b0969cf6e749339fdd9e0e62b786de9f",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "jpTypeToPs",
+      "category": "NAME_DICTIONARIES",
+      "source_lines": [
+        213,
+        216
+      ],
+      "source_sha256": "6237370a34928eaa2b46886368e32e3351b00c2e8499e4b595e4cb80068d2726",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "jpSpeciesToPs",
+      "category": "NAME_DICTIONARIES",
+      "source_lines": [
+        228,
+        234
+      ],
+      "source_sha256": "d9bed20e933967016e00eedd7a26c36d2f374c933bb693bc5d99b632cc2399b2",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "jpMoveToPs",
+      "category": "NAME_DICTIONARIES",
+      "source_lines": [
+        235,
+        240
+      ],
+      "source_sha256": "c8ffc94202dc0450bdfd89a974b311fbf4c713c530a19b040773849a68e1626a",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "jpItemToPs",
+      "category": "NAME_DICTIONARIES",
+      "source_lines": [
+        241,
+        244
+      ],
+      "source_sha256": "622b2d5a4f224815de4516451c4444d0fa79dd23b70c9a4fddf6197c600e8fb3",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "loadJaDict",
+      "category": "NAME_DICTIONARIES",
+      "source_lines": [
+        246,
+        267
+      ],
+      "source_sha256": "0bc5b9e4f221a8f2cea3df794290c7f29a2c974dc26b13aa6a29c59e0a2dd23a",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "slug",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        269,
+        276
+      ],
+      "source_sha256": "0b8e535c66a976336d8c865e45bf95a8157fc545b1e6d19cd179ef43ef0f94f2",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Output battle/file identifier formatting only.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "safeFile",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        277,
+        277
+      ],
+      "source_sha256": "123b6ab9a0a5d57de188384e2428575e17405552028cc398701747a78d4baf7e",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Output filename escaping only.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "listHtmlFiles",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        279,
+        291
+      ],
+      "source_sha256": "6fd798a9bd9502ef384229f04caca2442192f8e425831a1f0997ee004ae00663",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Input file enumeration, not battle-message interpretation.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "walk",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        281,
+        287
+      ],
+      "source_sha256": "c82738b824fe5bbec268d1a2d1dd4e0e44e0b92d0095816ef1188108c3912f39",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Recursive file enumeration only.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "extractSavedUrl",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        293,
+        296
+      ],
+      "source_sha256": "fd10438eb26d1cfc2bd56e70dcda9bc274be081ceeb917aa84d2b3c41a9b1a45",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Saved-file URL metadata used for output identity/time.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "fileStemFromSavedUrl",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        297,
+        302
+      ],
+      "source_sha256": "8028bed99194d17784303bb6f8504a88f8cb8478d3828e0006961ebf5b850aea",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Output filename/battle-id source only.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "sha256Hex",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        304,
+        304
+      ],
+      "source_sha256": "c88b534c96cb9a81d5a4ae2a616883bc6f0d165d88d86dd54f167a34deaecbb1",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Saved-file fingerprint and output identity only.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "roomFromSavedUrl",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        306,
+        310
+      ],
+      "source_sha256": "3fa7473b52b2a5b2145bf3af9a03b0c7dc2deaa5ef505718312edddc7245c374",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Output synthetic room tag; not live room routing.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "stemHasPbsTimestamp",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        312,
+        314
+      ],
+      "source_sha256": "6864ad5d62794a857c816aae30ea6484f9c17cdc78e2ff2640027b28efc7bef0",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Output battle-id timestamp detection only.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "syntheticTimestampSeconds",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        316,
+        319
+      ],
+      "source_sha256": "d54157f0ef1fb91c13a9969810df1391d877b5b07495c675b2e9d2a80d93ff34",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Synthetic viewer timestamp only.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "timestampSecondsFromPbsStem",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        321,
+        349
+      ],
+      "source_sha256": "f53a888d2db111d12da96dbe77beda32afe295512da85356e4d3d57a7c0e7f44",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Viewer wall-clock timestamp conversion only.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "parsePreview",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        351,
+        365
+      ],
+      "source_sha256": "1bc0bdb32fa3f21a2a532d26d47ef4519888914506727c0a25c6bc6d981a6ddb",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "parseTeamRow",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        367,
+        378
+      ],
+      "source_sha256": "367a58224edaccfe630eeb4b9db5ac3137b1f4a1e9753f90ba8fcb12a3974d74",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "invalidPreviewLevels",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        380,
+        390
+      ],
+      "source_sha256": "9c3ae7e79ec15cdfdbb25688da69a4a358d4c4ea3dba86a0886a8d7795c50ab2",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "pokemonIdent",
+      "category": "PROTOCOL_IDENTITY_HELPERS",
+      "source_lines": [
+        392,
+        392
+      ],
+      "source_sha256": "58e7a357913acd03a922ae2b356840201ba1bdec8f5f3fb695daddf784d1c544",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "pokemonDetails",
+      "category": "PROTOCOL_IDENTITY_HELPERS",
+      "source_lines": [
+        393,
+        397
+      ],
+      "source_sha256": "01e97ba74b28dfb0db2092ba411f33636c31af3e57a326838cc6cff4783830e3",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "sideName",
+      "category": "PROTOCOL_IDENTITY_HELPERS",
+      "source_lines": [
+        398,
+        398
+      ],
+      "source_sha256": "67c5e851ecf2a554395d96515934b6e27821f4a030fce1a179df1e42225be1fc",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "playerSideName",
+      "category": "PROTOCOL_IDENTITY_HELPERS",
+      "source_lines": [
+        399,
+        399
+      ],
+      "source_sha256": "74d948c9a8d3b0fc13d4f3c0ced0ede6ce956acd9f338b264ab48abd779a6a04",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "percentFromAbs",
+      "category": "HP_AND_CAUSES",
+      "source_lines": [
+        401,
+        407
+      ],
+      "source_sha256": "194e29fcebb34593c7dfc7d90d1f47bad1a303bdf3c91e483d73858c5e2d4d69",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "parseParagraphs",
+      "category": "LOG_STRUCTURE_AND_LIFECYCLE",
+      "source_lines": [
+        512,
+        526
+      ],
+      "source_sha256": "6648f0985b212e70a1a52469017f744d30e4d929641fec745a20bca4c21b13a7",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "parseSegments",
+      "category": "LOG_STRUCTURE_AND_LIFECYCLE",
+      "source_lines": [
+        528,
+        532
+      ],
+      "source_sha256": "48da43d178a7fc7292096e0987c077254c1eaa29fbe5bedd18a789425dbffa23",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "inferSideForParagraph",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        534,
+        538
+      ],
+      "source_sha256": "29d383c0b5487be860b33dcf6e978e354e2dff548199ed847d7d132a5680cd06",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "other",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        539,
+        539
+      ],
+      "source_sha256": "7bb32a66d642dfaf727c09497f8e26dcbd4f37e99d75f8727d4f9bd804fedc3b",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "parseSwitchLine",
+      "category": "LOG_STRUCTURE_AND_LIFECYCLE",
+      "source_lines": [
+        541,
+        558
+      ],
+      "source_sha256": "b3d13a24a4fa9298d6dfdea860f9e2f55417ed1017b6e07f84cec7166d9c82e1",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "parseWin",
+      "category": "LOG_STRUCTURE_AND_LIFECYCLE",
+      "source_lines": [
+        560,
+        564
+      ],
+      "source_sha256": "ccbdd120d560652422aa0c187162268d6cbb34d30d7b9bf6ef4848688adeecdd",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "truncateHtmlAtFirstWin",
+      "category": "LOG_STRUCTURE_AND_LIFECYCLE",
+      "source_lines": [
+        566,
+        570
+      ],
+      "source_sha256": "95173eadd53e92952ef38e0a1958ae1286b2cad511277ed192370b25a1c4ce22",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "parseMoveStart",
+      "category": "MOVE_START_AND_CALLS",
+      "source_lines": [
+        572,
+        580
+      ],
+      "source_sha256": "401061f3ba4088083b1454a7acbb680cede978d881051d0b0735829356694fc4",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "parseHpLine",
+      "category": "HP_AND_CAUSES",
+      "source_lines": [
+        582,
+        586
+      ],
+      "source_sha256": "d3f04c7b92a96fd711c4b9307b967282347166bbf1776429083247a835176896",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "parseFaintLine",
+      "category": "LOG_STRUCTURE_AND_LIFECYCLE",
+      "source_lines": [
+        588,
+        591
+      ],
+      "source_sha256": "d33770f067fb45212ad5af16d6a919f03d35fa5366f4ee4bcbc5633b4d66d9db",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "addMoveLine",
+      "category": "MOVE_START_AND_CALLS",
+      "source_lines": [
+        593,
+        603
+      ],
+      "source_sha256": "50fe938c9897cea376a8034594b450ec29ebe41a2cc75236e73789dcd4ba1982",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "determineTargetForMove",
+      "category": "MOVE_START_AND_CALLS",
+      "source_lines": [
+        605,
+        611
+      ],
+      "source_sha256": "fc6243ecc242bd96a1ce40e37aaac1672850f7612c311838db992f361dedb7cf",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "parseBattle",
+      "category": "LOG_STRUCTURE_AND_LIFECYCLE",
+      "source_lines": [
+        613,
+        756
+      ],
+      "source_sha256": "5d74a5a1ebed61b5228047224581332ad31f385ba5ab8bdc517fb95d2aa9b759",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "warn",
+      "category": "DIAGNOSTICS_AND_VALIDATION",
+      "source_lines": [
+        641,
+        641
+      ],
+      "source_sha256": "36d7bd6cbf093865513b6f615c1c5603c4a371364d7330ed25886cd202526126",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "fail",
+      "category": "DIAGNOSTICS_AND_VALIDATION",
+      "source_lines": [
+        642,
+        642
+      ],
+      "source_sha256": "3941ab854f6348048766ce1a279a92b886f5eafa08c88ded3f9e4567731a17d6",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "unknownLine",
+      "category": "DIAGNOSTICS_AND_VALIDATION",
+      "source_lines": [
+        643,
+        643
+      ],
+      "source_sha256": "ca59e7c2fd996aef6216fa9c0e0e2c4068ba30444664bc558188268ede2fdbdf",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "statAuditLine",
+      "category": "DIAGNOSTICS_AND_VALIDATION",
+      "source_lines": [
+        644,
+        644
+      ],
+      "source_sha256": "13766ea63134d87505a16d82350f80bca56bccfa4b3ceffd7ad25d32676791f8",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "automaticRepairLine",
+      "category": "DIAGNOSTICS_AND_VALIDATION",
+      "source_lines": [
+        645,
+        645
+      ],
+      "source_sha256": "9971db3a21dadd5a536c3e278e22c9fb02989cee2c818f1ea01e92836d8535d8",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "processSegment",
+      "category": "LOG_STRUCTURE_AND_LIFECYCLE",
+      "source_lines": [
+        758,
+        2089
+      ],
+      "source_sha256": "1989ba9d905d0cecbdd12321c9f1c213b65658e0a15e0635acf99b51430e78c5",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "startResidualBlock",
+      "category": "LOG_STRUCTURE_AND_LIFECYCLE",
+      "source_lines": [
+        765,
+        770
+      ],
+      "source_sha256": "e3b9ca1cf6a411f297002f4ce9fda74766e80d558803f06c3a74917de9243d6e",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "emitPerishSongSuccess",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        772,
+        782
+      ],
+      "source_sha256": "8f162203e69d5f063b0175b136b48e6457186ac8897937b719270d2a3844e1b4",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "preparePresentRecovery",
+      "category": "HP_AND_CAUSES",
+      "source_lines": [
+        784,
+        810
+      ],
+      "source_sha256": "824099319511bfa2d2b7f4622a1abe2c9643c63b179e96730735e1c6223378bd",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "processTextLine",
+      "category": "LOG_STRUCTURE_AND_LIFECYCLE",
+      "source_lines": [
+        812,
+        1053
+      ],
+      "source_sha256": "71058d88e4ae38d3996e9774ac432af5984a027ef3f9f7bfc89ef4ca6020837f",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "emitFaintOnce",
+      "category": "LOG_STRUCTURE_AND_LIFECYCLE",
+      "source_lines": [
+        897,
+        905
+      ],
+      "source_sha256": "44d3b5777e7a8b82f92df4e2f55e960bf46462f5a4abab19082526ff5d32d6a4",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "parseGenericStatChangeLine",
+      "category": "STAT_CHANGES",
+      "source_lines": [
+        1055,
+        1076
+      ],
+      "source_sha256": "2de69fc4864ac027b55bd524a94363b416bcb914e03519db25437dccd43d3e29",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "statProtocolLineFromChange",
+      "category": "STAT_CHANGES",
+      "source_lines": [
+        1078,
+        1084
+      ],
+      "source_sha256": "cee7271af9a484217ba13a495f7ec0aba9ef639f830b0e0e34868d7e70fc9fc6",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "findRecentSameStatProtocol",
+      "category": "STAT_CHANGES",
+      "source_lines": [
+        1086,
+        1092
+      ],
+      "source_sha256": "925e41e148058d00eef867efd2ce3b031e7cf93400a61b7ad4eaeb0d1fed24b6",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "recordSpecialStatExpectation",
+      "category": "STAT_CHANGES",
+      "source_lines": [
+        1094,
+        1102
+      ],
+      "source_sha256": "efd0569997d578e0b7d8f10e11582e7ee627e1cd54fc6b8c0b49d373641bae91",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "handleGenericStatChange",
+      "category": "STAT_CHANGES",
+      "source_lines": [
+        1104,
+        1114
+      ],
+      "source_sha256": "79433e1c8f3191388ca9eee8f54a7f3b586880fea4d3ed0bb52cc382755161d8",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "parseStatProtocolLine",
+      "category": "STAT_CHANGES",
+      "source_lines": [
+        1116,
+        1120
+      ],
+      "source_sha256": "c3de92a4d76f06340dca839f2ccda2c4d64730e95264b63b7de30bae8849a660",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "statLineInfoFromProtocol",
+      "category": "STAT_CHANGES",
+      "source_lines": [
+        1122,
+        1124
+      ],
+      "source_sha256": "d1e61d87dc65d88856d6d2b629b0545f97b0bf1c98ff32ce380529cda564ea84",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "auditSegmentStatCoverage",
+      "category": "STAT_CHANGES",
+      "source_lines": [
+        1126,
+        1167
+      ],
+      "source_sha256": "e19c5d7ab0f0a71335c637b839cb5e22a2e1711584ca9603d9c080a08daa1a76",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "lastMoveLineIs",
+      "category": "MOVE_START_AND_CALLS",
+      "source_lines": [
+        1169,
+        1174
+      ],
+      "source_sha256": "07e683dd177958149e564020763f51d17fe5b3a8d2b9627a551a4c4048ba4bbb",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "processMoveStart",
+      "category": "MOVE_START_AND_CALLS",
+      "source_lines": [
+        1176,
+        1201
+      ],
+      "source_sha256": "5301cecba7ea6a9ef0646cb012c7d99daeb3a85a7d0a7de3e80d1ae554d5b93a",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "isLiveActive",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        1203,
+        1208
+      ],
+      "source_sha256": "51f446680bfb7516506afe224245420e2717ba5290a92fa6f2f26c1da1aba520",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "sideForOwnedSpeciesInLine",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        1211,
+        1221
+      ],
+      "source_sha256": "ab485f7c3f19474b5ddc3234f097237dc2023170c7cf3333e498f1ad82ad1111",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "sideForSpeciesInLine",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        1223,
+        1236
+      ],
+      "source_sha256": "f0ae03ee58e2ca10093d93e0caf9588d8ee0a30f8c35ad4b40ca15f5dfd6980e",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "sideForFaintLine",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        1240,
+        1258
+      ],
+      "source_sha256": "cbdcfe79135f8c043f6828a692897a6f26ad77b0d408125e87ac2c626f2f9e6c",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "sideForHpLine",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        1260,
+        1282
+      ],
+      "source_sha256": "0abf69c6280f6a46e7c8b99d27a5e6379522fdc14f1e8f8ed6ba05bc53309f5f",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "sideForPainSplitHpLine",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        1284,
+        1290
+      ],
+      "source_sha256": "1720f482c81e100f6e16974691420c7491b85ab537abe7e12add9a127d9b46d8",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "sideForLeechHpLine",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        1292,
+        1299
+      ],
+      "source_sha256": "e10e95d33c8cc110d768d5e61460c856b23aa73f719e24b3e7a75a07e571cfb3",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "processPresentRecoveryHpLine",
+      "category": "HP_AND_CAUSES",
+      "source_lines": [
+        1301,
+        1382
+      ],
+      "source_sha256": "744cd558a0534d09d0e7c14bb41784505df2ae3ff3ba6757963f19ff77119fc9",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "processHpLine",
+      "category": "HP_AND_CAUSES",
+      "source_lines": [
+        1384,
+        1495
+      ],
+      "source_sha256": "803bc252299f70492700121e42b6a73c222353ad98696c909316d9a960dab102",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "maybeEmitMustRechargeAfterHyperBeamDamage",
+      "category": "PREPARATION_AND_RECHARGE",
+      "source_lines": [
+        1497,
+        1503
+      ],
+      "source_sha256": "25c39bd81cf036ab179d735075b7452e6ead7a1cc66521c778bcb8628d887e5a",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "emitPainSplitEntries",
+      "category": "HP_AND_CAUSES",
+      "source_lines": [
+        1505,
+        1520
+      ],
+      "source_sha256": "245986bde007e0a68d2b64f350aa772fa4e6f861e38ce36af1b5fff17cd71110",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "subjectSpecies",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        1522,
+        1522
+      ],
+      "source_sha256": "aec39c7f9bbfa3f01594ffc275c0cd3c6e0b88fdc77afe3747e39aabf44b3475",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "statusLine",
+      "category": "STATUS_AND_CANT",
+      "source_lines": [
+        1523,
+        1532
+      ],
+      "source_sha256": "93205e93d197291b875f8889b80f9ca973d73939809b1480d091ddb9ee28856f",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "startVolatile",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1533,
+        1545
+      ],
+      "source_sha256": "07246834b3446755783107a6aebe1d6b2d6de01343bcd063ce1dded01f2edce2",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "sleepingDisplay",
+      "category": "STATUS_AND_CANT",
+      "source_lines": [
+        1546,
+        1552
+      ],
+      "source_sha256": "0083517faa17fe911efba6017cfa609b86824c739c67c07725133430744b2283",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "activateVolatile",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1554,
+        1565
+      ],
+      "source_sha256": "563ecbd591fb38bf305853cb35d12c15025f0c5dbbbefee58e14f38bc0da572b",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "cureByWake",
+      "category": "STATUS_AND_CANT",
+      "source_lines": [
+        1566,
+        1579
+      ],
+      "source_sha256": "2acf5056f0f503302142f0e45495228120dee9e7407432607ac3a0add9729194",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "cureFreeze",
+      "category": "STATUS_AND_CANT",
+      "source_lines": [
+        1581,
+        1590
+      ],
+      "source_sha256": "7bf02dd348e28b9c461002e68ea3a4ccd743a66d98b54226f1dee75d29a176f4",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "confusionEnd",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1591,
+        1597
+      ],
+      "source_sha256": "671a133a28b73425acdf63aef21a7badbe8ba7452acef097ce253eda4f9f29d6",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "encoreStart",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1598,
+        1604
+      ],
+      "source_sha256": "ad4de74ea66fcd0fa3ef131fce0e3a80dee1986f5439b0ea9a3e641e012cfa95",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "encoreEnd",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1605,
+        1611
+      ],
+      "source_sha256": "fa137b457561e3c71de809f5f8e79f21e25c1d645f6ba9bd255032ee6a46b139",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "disableStart",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1612,
+        1634
+      ],
+      "source_sha256": "6bb02fe1035c805515bf914d20a310105261418f3329e096e8ac38d4c635f8c8",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "disableCant",
+      "category": "STATUS_AND_CANT",
+      "source_lines": [
+        1635,
+        1661
+      ],
+      "source_sha256": "e2fcc9c7c416dae4a96b7e60aa28fb30521bec152c01d21dc721eae50c729194",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "nightmareStart",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1662,
+        1671
+      ],
+      "source_sha256": "c65ab64d3e2ce15555a68b34773ded5aac05b9a387733309316c3199ca4f5b75",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "conversionTypeChange",
+      "category": "FORM_AND_TYPE",
+      "source_lines": [
+        1672,
+        1685
+      ],
+      "source_sha256": "3f17389ca4f554e50441b20ccdd6921a7f913b8077b313237351bed09f0a893b",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "isStatCapLine",
+      "category": "STAT_CHANGES",
+      "source_lines": [
+        1686,
+        1688
+      ],
+      "source_sha256": "7bee45d9358947840f85ff3a160e781bfea267f3ad24d18d5d13f78ff3929299",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "retargetLastMoveLine",
+      "category": "MOVE_START_AND_CALLS",
+      "source_lines": [
+        1689,
+        1700
+      ],
+      "source_sha256": "38f2171e547b8d19a14e3f5f557f3c61e1a048ad6b13a5cce1d896015ceb2a25",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "ghostCurseStart",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1701,
+        1717
+      ],
+      "source_sha256": "895c9dab7e6cee8e2217efa9efb3f3512dbeefd1d7e7bb16e1b1233e6c4586fe",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "subjectBeforeWa",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        1721,
+        1723
+      ],
+      "source_sha256": "bc7ad05b049ca9448621384f29574ce29408f394426edd2829390daabc71fcb6",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "ownedIdentFromSubject",
+      "category": "PREVIEW_AND_IDENTITY",
+      "source_lines": [
+        1725,
+        1731
+      ],
+      "source_sha256": "791ce666b732033ffe80c57c9a68b62269a14ad21826f8fb5ccd8e5b00bad538",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "weatherStart",
+      "category": "FIELD_AND_WEATHER",
+      "source_lines": [
+        1733,
+        1736
+      ],
+      "source_sha256": "eaf85894e360f2f16b501cf45caa2c3d704bb30c1efdb3bcc5899ada0c6ecee0",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "protectSuccess",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1738,
+        1742
+      ],
+      "source_sha256": "a304f5492e56f34390c431f6a7e8c0f39b4c7cbf96be538407d39bf5a6e1f999",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "substituteSuccess",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1744,
+        1752
+      ],
+      "source_sha256": "ce32277d92700e989ea3ff31ffaa6a7b3d5d44c4e4abb7c8c3565cf90e50ab17",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "destinyBondPrepare",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1754,
+        1758
+      ],
+      "source_sha256": "60134363b03158eb2ffc57c94b282a95b32ee5b8bd7a8ced4ceb3c1ab17e5fff",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "spikesSuccess",
+      "category": "FIELD_AND_WEATHER",
+      "source_lines": [
+        1760,
+        1768
+      ],
+      "source_sha256": "fd1cfc0127b361b1510ca836001090718fd94b1e81a4fa87a38f3f04773ef205",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "reflectSuccess",
+      "category": "FIELD_AND_WEATHER",
+      "source_lines": [
+        1770,
+        1775
+      ],
+      "source_sha256": "67baf146e4255b6ec74297d5400bbe8b2826f0b5c6f2dff520dd78d7882b44b8",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "lightScreenSuccess",
+      "category": "FIELD_AND_WEATHER",
+      "source_lines": [
+        1777,
+        1782
+      ],
+      "source_sha256": "5a35bfec974ffb862b211471c0fc99e38359df2b34c2f9d720a8495acd825b6f",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "healBellSuccess",
+      "category": "STATUS_AND_CANT",
+      "source_lines": [
+        1784,
+        1792
+      ],
+      "source_sha256": "47bb8f5cd1c7c66ba460328933e9d3752a7ef5351e4e4671f3af7b66f36c0881",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "bellyDrumSuccess",
+      "category": "STAT_CHANGES",
+      "source_lines": [
+        1794,
+        1801
+      ],
+      "source_sha256": "a5f41d5f9fbe28b1de34415ed017edac0e22aae83fa627464836f53abd6fdd34",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "focusEnergyStart",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1803,
+        1809
+      ],
+      "source_sha256": "e4c55301744ecfd66dd4bf21c39526a790f81bb2edbca8fe661f622d3ec0e6d3",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "prepareTwoTurnMove",
+      "category": "PREPARATION_AND_RECHARGE",
+      "source_lines": [
+        1811,
+        1827
+      ],
+      "source_sha256": "03e90bb2cd517faf1a470ad69523262540fff72650f3e128708409896cc59a8b",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "ohkoSuccess",
+      "category": "MOVE_OUTCOMES",
+      "source_lines": [
+        1829,
+        1838
+      ],
+      "source_sha256": "eecb8358be8b96da8e54c11f77f7acf74d1c17de15b481b7d5594035b990481d",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "endureActivate",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1840,
+        1846
+      ],
+      "source_sha256": "2a7b7425f7e28526f69a3b4c44af4d758cbe9d0939630f447f14c9f81b744837",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "transformSuccess",
+      "category": "FORM_AND_TYPE",
+      "source_lines": [
+        1848,
+        1866
+      ],
+      "source_sha256": "023887f01f02374bbad0cea4f22c96e92bf83938962f5f302fc5d3624bf29207",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "transformFailed",
+      "category": "FORM_AND_TYPE",
+      "source_lines": [
+        1868,
+        1875
+      ],
+      "source_sha256": "2cc9187d323a2fd1d534192fdecb45a8cf04453bcf738aea60509b94511110a4",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "berserkGene",
+      "category": "ITEMS",
+      "source_lines": [
+        1877,
+        1887
+      ],
+      "source_sha256": "ca96a5da0e8064fa8f282dec11b46567bcbac352d1b8df1762fa14f93601e5e0",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "itemCureConfusion",
+      "category": "ITEMS",
+      "source_lines": [
+        1888,
+        1899
+      ],
+      "source_sha256": "5edc67acf1191dd930cbf95c0f2bb5fc85046e90ec7ecc83c36f2ad2c9e32c11",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "itemCure",
+      "category": "ITEMS",
+      "source_lines": [
+        1901,
+        1913
+      ],
+      "source_sha256": "82aa47fba1870ab11d5fbb8a6758aefebf39d8d50e1465fa0fa63df7fa1c9f01",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "cantForSubject",
+      "category": "STATUS_AND_CANT",
+      "source_lines": [
+        1914,
+        1920
+      ],
+      "source_sha256": "7d236461a0e7c57b76a205b516077a2252dd80f88b08cee6da70f11e95e45468",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "lightScreenEnd",
+      "category": "FIELD_AND_WEATHER",
+      "source_lines": [
+        1922,
+        1927
+      ],
+      "source_sha256": "967b95550c3e78241de57b948c253c0cf792993d7ca508020ef6fd8314a82bb1",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "addCritToLastTarget",
+      "category": "MOVE_OUTCOMES",
+      "source_lines": [
+        1928,
+        1930
+      ],
+      "source_sha256": "ae0f4b6afa76bb86b5ae5a558ea4659f334bc29d692dba03c534e44419dcb939",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "addEffectivenessToLastTarget",
+      "category": "MOVE_OUTCOMES",
+      "source_lines": [
+        1931,
+        1933
+      ],
+      "source_sha256": "dbb275cdf3611764f01a7afd5552d8e7d79f7ae68cbb534ad6daee86d18dda58",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "addImmuneOrFail",
+      "category": "MOVE_OUTCOMES",
+      "source_lines": [
+        1934,
+        1936
+      ],
+      "source_sha256": "605622651e697d301528d6e6960ea8aa6e981387cca3ed27540508be147972df",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "markLastMoveFlag",
+      "category": "MOVE_START_AND_CALLS",
+      "source_lines": [
+        1937,
+        1944
+      ],
+      "source_sha256": "d1e68723def0a291a2c16d320e035cc6c8cf0371ae338ce6a1a9571c2ce5393f",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "addMiss",
+      "category": "MOVE_OUTCOMES",
+      "source_lines": [
+        1945,
+        1950
+      ],
+      "source_sha256": "ad0f9e019e9ee95af30ae4c163d5d638a0ca173d7c415e0dbafde86112c97b1b",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "addProtectActivate",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1951,
+        1953
+      ],
+      "source_sha256": "f0dfd1abe80e18e692efcbfe58111f6c30889c4c6fea283d43e39141af73b6f2",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "protectFailed",
+      "category": "MOVE_OUTCOMES",
+      "source_lines": [
+        1954,
+        1957
+      ],
+      "source_sha256": "b8369f9dd911d84c488aa549759941ffeefd065b812e8f6e7be590e248828d31",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "addFailForLastMoveUser",
+      "category": "MOVE_OUTCOMES",
+      "source_lines": [
+        1959,
+        1962
+      ],
+      "source_sha256": "a597cb3cc01ddd4470baf796dced5bb1dbba740badf2bebe3cc6cbdf527a1fc7",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "substituteWeakFail",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        1965,
+        1973
+      ],
+      "source_sha256": "0f03370cfbe5ac51e92f3f8bbef98126ed768ef164d8c9e02fc5a82528601590",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "thiefItem",
+      "category": "ITEMS",
+      "source_lines": [
+        1975,
+        1994
+      ],
+      "source_sha256": "cacb9556dbbdcaef20f31774a4747bf5d30cd8e3eb7db65057e9a3b2038b5d19",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "rapidSpinRelease",
+      "category": "FIELD_AND_WEATHER",
+      "source_lines": [
+        1996,
+        2007
+      ],
+      "source_sha256": "70dc155b7dd2ecf8e3f9cc44e213ff142b489c2bcfb552b6fc9be999adcdb5a2",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "addSubHit",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        2008,
+        2013
+      ],
+      "source_sha256": "a7845329e59f3762984cc17d18e82691c4168fb4519d5c7eae2ca09696bb9ab5",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "addSubBreak",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        2014,
+        2022
+      ],
+      "source_sha256": "e0ea66cf05e276fb0cb53ab4d231211d1f014a2b05f132cf4f817c6466031a91",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "statDrop",
+      "category": "STAT_CHANGES",
+      "source_lines": [
+        2023,
+        2029
+      ],
+      "source_sha256": "0eb675834159352a12c8d9d36f44f4765168bfca819fbbabe3fe7a3c768f3b2e",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "statBoost",
+      "category": "STAT_CHANGES",
+      "source_lines": [
+        2030,
+        2036
+      ],
+      "source_sha256": "628c194889caf8988a543956f230b87e60e513384db997a4713e7be4ac90e182",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "leechSeedStart",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        2037,
+        2049
+      ],
+      "source_sha256": "4c4f8e0b4e229712a983606a29d229d21f7d5dca6689de5506725af667c1d5d6",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "trapStart",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        2050,
+        2056
+      ],
+      "source_sha256": "5f36e0ba7f3ebc8ea7669b98be05a6bb4f061209520a89d2617c737d93d73398",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "destinyBondActivate",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        2057,
+        2064
+      ],
+      "source_sha256": "241faf8b8ca8c6117d5dc59224c4ee9eae0298a6c19e2127b0aa8a6cd523cefe",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "perishCount",
+      "category": "VOLATILES_AND_COUNTS",
+      "source_lines": [
+        2065,
+        2081
+      ],
+      "source_sha256": "339514e10055263000695be3e3cacf4170bf05bbf151a8d4f6fab693dba91579",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "hashCode",
+      "category": "OUTPUT_FILE_AND_TIME_ONLY",
+      "source_lines": [
+        2091,
+        2095
+      ],
+      "source_sha256": "3995e3496e42e7c34c87fec7537b3317328b5cfe88958a1ed463636b6267776b",
+      "state_migration": "OUTPUT_OR_TRANSPORT_ONLY",
+      "exclusion_reason": "Hash helper; does not interpret battle state.",
+      "integration_status": "NOT_A_STATE_MAPPING"
+    },
+    {
+      "name": "validateRaw",
+      "category": "DIAGNOSTICS_AND_VALIDATION",
+      "source_lines": [
+        2097,
+        2107
+      ],
+      "source_sha256": "f66c9b52e5ce7df497a9d976e0399866efad20dae6548d59224ab1a29dd9e9b1",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "main",
+      "category": "DIAGNOSTICS_AND_VALIDATION",
+      "source_lines": [
+        2109,
+        2219
+      ],
+      "source_sha256": "ce927506b8561a2f8d4d7214ef5d58d2831031f8d7476d05fa565ab1c5f56d5f",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    }
+  ],
+  "state_class_methods": [
+    {
+      "name": "BattleState.constructor",
+      "category": "BATTLE_STATE_STORAGE",
+      "source_lines": [
+        410,
+        451
+      ],
+      "source_sha256": "e0a4bc5b1d943c7b2293eaaf39fe97747dd4508f03f7dc2b2325ee9d55059c5c",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "BattleState.resolveSideFromPlayer",
+      "category": "BATTLE_STATE_STORAGE",
+      "source_lines": [
+        452,
+        456
+      ],
+      "source_sha256": "c8555e8f8daa158ed99d98c523571bb7a2d37339e141f13390c244f399de8857",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "BattleState.sideFromAlt",
+      "category": "BATTLE_STATE_STORAGE",
+      "source_lines": [
+        457,
+        462
+      ],
+      "source_sha256": "a550daceaffcd5a0fc98773e167c8d41bfd8cdf8ebe00f126b9731dc84339269",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "BattleState.getMonByJp",
+      "category": "BATTLE_STATE_STORAGE",
+      "source_lines": [
+        463,
+        468
+      ],
+      "source_sha256": "a2a758a5e13185da1dfb8020e8d5b69ddebd1679d826312de03644b87f24e1bc",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "BattleState.getMonState",
+      "category": "BATTLE_STATE_STORAGE",
+      "source_lines": [
+        469,
+        469
+      ],
+      "source_sha256": "1f1c13d8876ab1f067949cd901a37cc1e162dd16c93f7acf092f70a8309dc62d",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "BattleState.setMaxIfNeeded",
+      "category": "BATTLE_STATE_STORAGE",
+      "source_lines": [
+        470,
+        473
+      ],
+      "source_sha256": "12743c6cb7e0e9a920d45ab656491638630ee33667303614d67221b55e1faa9f",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "BattleState.updateHp",
+      "category": "BATTLE_STATE_STORAGE",
+      "source_lines": [
+        474,
+        481
+      ],
+      "source_sha256": "3ea13ed811c7ef4a56376739296573d215e421ffab6eee5a872dfc992a86726b",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "BattleState.hpText",
+      "category": "BATTLE_STATE_STORAGE",
+      "source_lines": [
+        482,
+        486
+      ],
+      "source_sha256": "a44273f74405a2f8db46349c2463c1644bf6725fe5363694cb06719cba0c430d",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "BattleState.clearNightmare",
+      "category": "BATTLE_STATE_STORAGE",
+      "source_lines": [
+        487,
+        489
+      ],
+      "source_sha256": "c8e5d0413da34e9b9f2b4e1748131f2597a69876346c975379fb8d253cba26bd",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "BattleState.switchIn",
+      "category": "BATTLE_STATE_STORAGE",
+      "source_lines": [
+        490,
+        499
+      ],
+      "source_sha256": "e4cc985ccb94702639b0cbb5f1c09bbd6980d51bd4ecc9b868eb48aae82dc3dd",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    },
+    {
+      "name": "BattleState.dragIn",
+      "category": "BATTLE_STATE_STORAGE",
+      "source_lines": [
+        500,
+        509
+      ],
+      "source_sha256": "3cdd587dc599f8302b31468ae38ec95cc17f0d13b283e1bb0fc46b13637b4880",
+      "state_migration": "REQUIRED",
+      "exclusion_reason": null,
+      "integration_status": "MAPPING_NOT_CLOSED"
+    }
+  ],
+  "name_dictionaries": [
+    {
+      "name": "SPECIES",
+      "source_lines": [
+        159,
+        187
+      ],
+      "state_migration": "REQUIRED"
+    },
+    {
+      "name": "MOVES",
+      "source_lines": [
+        189,
+        205
+      ],
+      "state_migration": "REQUIRED"
+    },
+    {
+      "name": "TYPE_MAP",
+      "source_lines": [
+        207,
+        212
+      ],
+      "state_migration": "REQUIRED"
+    },
+    {
+      "name": "ITEM_MAP",
+      "source_lines": [
+        218,
+        226
+      ],
+      "state_migration": "REQUIRED"
+    }
+  ],
+  "condition_location_index": [
+    {
+      "line": 70,
+      "owner": "parseArgs",
+      "source": "if (a === '--help' || a === '-h') { args.help = true; continue; }"
+    },
+    {
+      "line": 71,
+      "owner": "parseArgs",
+      "source": "if (a === '--recursive') { args.recursive = true; continue; }"
+    },
+    {
+      "line": 72,
+      "owner": "parseArgs",
+      "source": "if (a === '--include-incomplete') { args.includeIncomplete = true; continue; }"
+    },
+    {
+      "line": 73,
+      "owner": "parseArgs",
+      "source": "if (a === '--strict') { args.strict = true; continue; }"
+    },
+    {
+      "line": 74,
+      "owner": "parseArgs",
+      "source": "if (a === '--allow-no-dict') { args.allowNoDict = true; continue; }"
+    },
+    {
+      "line": 75,
+      "owner": "parseArgs",
+      "source": "if (a === '--input-dir') { args.inputDir = argv[++i]; continue; }"
+    },
+    {
+      "line": 76,
+      "owner": "parseArgs",
+      "source": "if (a === '--out-dir') { args.outDir = argv[++i]; continue; }"
+    },
+    {
+      "line": 77,
+      "owner": "parseArgs",
+      "source": "if (a === '--dict') { args.dict = argv[++i]; continue; }"
+    },
+    {
+      "line": 78,
+      "owner": "parseArgs",
+      "source": "if (a === '--ja-dict') { args.jaDict = argv[++i]; continue; }"
+    },
+    {
+      "line": 79,
+      "owner": "parseArgs",
+      "source": "if (a === '--battle-prefix') { args.battlePrefix = argv[++i]; continue; }"
+    },
+    {
+      "line": 80,
+      "owner": "parseArgs",
+      "source": "if (a === '--missing-timestamp-policy') {"
+    },
+    {
+      "line": 82,
+      "owner": "parseArgs",
+      "source": "if (!['fail', 'skip', 'synthetic'].includes(args.missingTimestampPolicy)) {"
+    },
+    {
+      "line": 100,
+      "owner": "decodeHtmlFile",
+      "source": "if (m) charset = m[1].toLowerCase();"
+    },
+    {
+      "line": 108,
+      "owner": "decodeHtmlFile",
+      "source": "if (!best || score < best.score) best = {text, encoding: enc, score};"
+    },
+    {
+      "line": 111,
+      "owner": "decodeHtmlFile",
+      "source": "if (!best) best = {text: buf.toString('utf8'), encoding: 'utf-8', score: 999};"
+    },
+    {
+      "line": 230,
+      "owner": "jpSpeciesToPs",
+      "source": "if (SPECIES[key]) return SPECIES[key];"
+    },
+    {
+      "line": 232,
+      "owner": "jpSpeciesToPs",
+      "source": "if (SPECIES[normalizeJa(jp)]) return SPECIES[normalizeJa(jp)];"
+    },
+    {
+      "line": 237,
+      "owner": "jpMoveToPs",
+      "source": "if (MOVES[key]) return MOVES[key];"
+    },
+    {
+      "line": 238,
+      "owner": "jpMoveToPs",
+      "source": "if (MOVES[normalizeJa(jp)]) return MOVES[normalizeJa(jp)];"
+    },
+    {
+      "line": 247,
+      "owner": "loadJaDict",
+      "source": "if (!file || !fs.existsSync(file)) return null;"
+    },
+    {
+      "line": 252,
+      "owner": "loadJaDict",
+      "source": "if (!data) throw new Error('ja-dict does not define window.NC2000_JA_NAMES: ' + file);"
+    },
+    {
+      "line": 256,
+      "owner": "loadJaDict",
+      "source": "if (!SPECIES[key]) SPECIES[key] = base;"
+    },
+    {
+      "line": 260,
+      "owner": "loadJaDict",
+      "source": "if (!MOVES[key]) MOVES[key] = en;"
+    },
+    {
+      "line": 264,
+      "owner": "loadJaDict",
+      "source": "if (!ITEM_MAP[key]) ITEM_MAP[key] = en;"
+    },
+    {
+      "line": 284,
+      "owner": "walk",
+      "source": "if (ent.isDirectory()) { if (recursive) walk(p); continue; }"
+    },
+    {
+      "line": 285,
+      "owner": "walk",
+      "source": "if (ent.isFile() && /\\.html?$/i.test(ent.name)) out.push(p);"
+    },
+    {
+      "line": 300,
+      "owner": "fileStemFromSavedUrl",
+      "source": "if (m) return m[1];"
+    },
+    {
+      "line": 323,
+      "owner": "timestampSecondsFromPbsStem",
+      "source": "if (!m) throw new Error('PBS battle timestamp not found in battle id/stem: ' + stem);"
+    },
+    {
+      "line": 337,
+      "owner": "timestampSecondsFromPbsStem",
+      "source": "if ("
+    },
+    {
+      "line": 353,
+      "owner": "parsePreview",
+      "source": "if (!tableM) throw new Error('preview table not found');"
+    },
+    {
+      "line": 356,
+      "owner": "parsePreview",
+      "source": "if (!firstRow) throw new Error('player row not found');"
+    },
+    {
+      "line": 359,
+      "owner": "parsePreview",
+      "source": "if (sideCells.length < 2) throw new Error('team cells not found');"
+    },
+    {
+      "line": 370,
+      "owner": "parseTeamRow",
+      "source": "if (!m) throw new Error('team row parse failed: ' + txt);"
+    },
+    {
+      "line": 376,
+      "owner": "parseTeamRow",
+      "source": "if (!species) throw new Error('unknown species in team row: ' + txt);"
+    },
+    {
+      "line": 384,
+      "owner": "invalidPreviewLevels",
+      "source": "if (!Number.isFinite(mon.level) || mon.level < 50 || mon.level > 55) {"
+    },
+    {
+      "line": 395,
+      "owner": "pokemonDetails",
+      "source": "if (mon.gender) s += ', ' + mon.gender;"
+    },
+    {
+      "line": 402,
+      "owner": "percentFromAbs",
+      "source": "if (current <= 0) return '0 fnt';"
+    },
+    {
+      "line": 404,
+      "owner": "percentFromAbs",
+      "source": "if (pct < 1) pct = 1;"
+    },
+    {
+      "line": 405,
+      "owner": "percentFromAbs",
+      "source": "if (pct > 100) pct = 100;"
+    },
+    {
+      "line": 453,
+      "owner": "BattleState.resolveSideFromPlayer",
+      "source": "if (player === this.players.p1) return 'p1';"
+    },
+    {
+      "line": 454,
+      "owner": "BattleState.resolveSideFromPlayer",
+      "source": "if (player === this.players.p2) return 'p2';"
+    },
+    {
+      "line": 459,
+      "owner": "BattleState.sideFromAlt",
+      "source": "if (t === this.players.p1) return 'p1';"
+    },
+    {
+      "line": 460,
+      "owner": "BattleState.sideFromAlt",
+      "source": "if (t === this.players.p2) return 'p2';"
+    },
+    {
+      "line": 466,
+      "owner": "BattleState.getMonByJp",
+      "source": "if (!mon) return null;"
+    },
+    {
+      "line": 472,
+      "owner": "BattleState.setMaxIfNeeded",
+      "source": "if (st && !st.maxHp && maxHp) st.maxHp = maxHp;"
+    },
+    {
+      "line": 476,
+      "owner": "BattleState.updateHp",
+      "source": "if (!st) return;"
+    },
+    {
+      "line": 477,
+      "owner": "BattleState.updateHp",
+      "source": "if (maxHp) st.maxHp = maxHp;"
+    },
+    {
+      "line": 479,
+      "owner": "BattleState.updateHp",
+      "source": "if (status !== undefined) st.status = status || st.status || '';"
+    },
+    {
+      "line": 480,
+      "owner": "BattleState.updateHp",
+      "source": "if (current <= 0) st.fainted = true;"
+    },
+    {
+      "line": 484,
+      "owner": "BattleState.hpText",
+      "source": "if (!st || st.hpAbs === null || !st.maxHp) return '100/100' + (st && st.status ? ' ' + st.status : '');"
+    },
+    {
+      "line": 488,
+      "owner": "BattleState.clearNightmare",
+      "source": "if (side && species && this.nightmare[side]) this.nightmare[side].delete(species);"
+    },
+    {
+      "line": 493,
+      "owner": "BattleState.switchIn",
+      "source": "if (previousActive && previousActive !== mon.species) this.clearNightmare(side, previousActive);"
+    },
+    {
+      "line": 503,
+      "owner": "BattleState.dragIn",
+      "source": "if (previousActive && previousActive !== mon.species) this.clearNightmare(side, previousActive);"
+    },
+    {
+      "line": 522,
+      "owner": "parseParagraphs",
+      "source": "if (!text) continue;"
+    },
+    {
+      "line": 536,
+      "owner": "inferSideForParagraph",
+      "source": "if (fromAlt) return fromAlt;"
+    },
+    {
+      "line": 548,
+      "owner": "parseSwitchLine",
+      "source": "if (!line.startsWith(prefix)) continue;"
+    },
+    {
+      "line": 551,
+      "owner": "parseSwitchLine",
+      "source": "if (m) return {kind: 'switch', side, speciesJp: m[2]};"
+    },
+    {
+      "line": 553,
+      "owner": "parseSwitchLine",
+      "source": "if (m) return {kind: 'switch', side, speciesJp: m[1]};"
+    },
+    {
+      "line": 556,
+      "owner": "parseSwitchLine",
+      "source": "if (m) return {kind: 'drag-species', speciesJp: m[1]};"
+    },
+    {
+      "line": 562,
+      "owner": "parseWin",
+      "source": "if (m) return normalizeJa(stripTagsToText(m[1]));"
+    },
+    {
+      "line": 568,
+      "owner": "truncateHtmlAtFirstWin",
+      "source": "if (!m) return html;"
+    },
+    {
+      "line": 574,
+      "owner": "parseMoveStart",
+      "source": "if (!m) return null;"
+    },
+    {
+      "line": 578,
+      "owner": "parseMoveStart",
+      "source": "if (!move) return null;"
+    },
+    {
+      "line": 584,
+      "owner": "parseHpLine",
+      "source": "if (!m) return null;"
+    },
+    {
+      "line": 595,
+      "owner": "addMoveLine",
+      "source": "if (!userSpecies) throw new Error('active user missing for ' + side + ' move ' + move);"
+    },
+    {
+      "line": 608,
+      "owner": "determineTargetForMove",
+      "source": "if (selfMoves.has(move)) return {targetSide: side, targetSpecies: state.active[side]};"
+    },
+    {
+      "line": 632,
+      "owner": "parseBattle",
+      "source": "if (missingTimestamp) {"
+    },
+    {
+      "line": 633,
+      "owner": "parseBattle",
+      "source": "if (args.missingTimestampPolicy === 'fail') throw new Error(missingTimestampReason);"
+    },
+    {
+      "line": 647,
+      "owner": "parseBattle",
+      "source": "if (missingTimestamp) {"
+    },
+    {
+      "line": 661,
+      "owner": "parseBattle",
+      "source": "if (args.missingTimestampPolicy === 'skip') state.rejectBattleReason = msg;"
+    },
+    {
+      "line": 665,
+      "owner": "parseBattle",
+      "source": "if (invalidLevels.length) {"
+    },
+    {
+      "line": 703,
+      "owner": "parseBattle",
+      "source": "if (!leadSeg) throw new Error('initial lead segment not found');"
+    },
+    {
+      "line": 706,
+      "owner": "parseBattle",
+      "source": "if (sw && sw.kind === 'switch') {"
+    },
+    {
+      "line": 707,
+      "owner": "parseBattle",
+      "source": "if (!sw.side) { fail('lead player side unresolved: ' + para.text); continue; }"
+    },
+    {
+      "line": 709,
+      "owner": "parseBattle",
+      "source": "if (!mon) { fail('lead species not found: ' + para.text); continue; }"
+    },
+    {
+      "line": 719,
+      "owner": "parseBattle",
+      "source": "if (!seg || !seg.text) continue;"
+    },
+    {
+      "line": 720,
+      "owner": "parseBattle",
+      "source": "if (/戻る\\s*$/.test(seg.text) && !/！/.test(seg.text) && !/HP/.test(seg.text)) continue;"
+    },
+    {
+      "line": 721,
+      "owner": "parseBattle",
+      "source": "if (/ＷＩＮ/.test(seg.text) && seg.paras.length === 0) continue;"
+    },
+    {
+      "line": 729,
+      "owner": "parseBattle",
+      "source": "if (turnLines.length <= 2) continue;"
+    },
+    {
+      "line": 733,
+      "owner": "parseBattle",
+      "source": "if (!segHasWin) lines.push('|upkeep');"
+    },
+    {
+      "line": 736,
+      "owner": "parseBattle",
+      "source": "if (si < segments.length - 1 && !segHasWin) lines.push(`|turn|${currentTurn}`);"
+    },
+    {
+      "line": 739,
+      "owner": "parseBattle",
+      "source": "if (winName) {"
+    },
+    {
+      "line": 753,
+      "owner": "parseBattle",
+      "source": "if (unknown.length) warnings.push('unknown/unhandled text lines: ' + unknown.length);"
+    },
+    {
+      "line": 766,
+      "owner": "startResidualBlock",
+      "source": "if (!residualBlockOpen) {"
+    },
+    {
+      "line": 767,
+      "owner": "startResidualBlock",
+      "source": "if (out[out.length - 1] !== '|') out.push('|');"
+    },
+    {
+      "line": 776,
+      "owner": "emitPerishSongSuccess",
+      "source": "if (sp) {"
+    },
+    {
+      "line": 787,
+      "owner": "preparePresentRecovery",
+      "source": "if (!hpLines.length) return;"
+    },
+    {
+      "line": 793,
+      "owner": "preparePresentRecovery",
+      "source": "if (hpLines.length !== 1) structureErrors.push(`HP lines=${hpLines.length}`);"
+    },
+    {
+      "line": 794,
+      "owner": "preparePresentRecovery",
+      "source": "if (invalidMarkers.length) structureErrors.push('damage/miss marker in recovery paragraph');"
+    },
+    {
+      "line": 795,
+      "owner": "preparePresentRecovery",
+      "source": "if (state.lastMove !== 'Present' || state.lastMoveUserSide !== moveSide) structureErrors.push('last move is not the current Present');"
+    },
+    {
+      "line": 796,
+      "owner": "preparePresentRecovery",
+      "source": "if (state.lastMoveTargetSide !== expectedTargetSide) structureErrors.push(`target side=${state.lastMoveTargetSide || '(none)'} expected=${expectedTargetSide}`);"
+    },
+    {
+      "line": 797,
+      "owner": "preparePresentRecovery",
+      "source": "if (!expectedTargetSpecies || state.lastMoveTargetSpecies !== expectedTargetSpecies) structureErrors.push('target is not the current opposing active Pokemon');"
+    },
+    {
+      "line": 807,
+      "owner": "preparePresentRecovery",
+      "source": "if (structureErrors.length) {"
+    },
+    {
+      "line": 814,
+      "owner": "processTextLine",
+      "source": "if (!line || line === '戻る') return true;"
+    },
+    {
+      "line": 815,
+      "owner": "processTextLine",
+      "source": "if (/ＷＩＮ/.test(line)) return true;"
+    },
+    {
+      "line": 816,
+      "owner": "processTextLine",
+      "source": "if (line === 'すなあらしがふきあれる！') { startResidualBlock(); out.push('|-weather|Sandstorm|[upkeep]'); return true; }"
+    },
+    {
+      "line": 817,
+      "owner": "processTextLine",
+      "source": "if (line === 'すなあらしがおさまった') { startResidualBlock(); out.push('|-weather|none'); return true; }"
+    },
+    {
+      "line": 818,
+      "owner": "processTextLine",
+      "source": "if (line === '日差しが強い！') { startResidualBlock(); out.push('|-weather|SunnyDay|[upkeep]'); return true; }"
+    },
+    {
+      "line": 819,
+      "owner": "processTextLine",
+      "source": "if (line === '日差しが強くなった。') return weatherStart('SunnyDay');"
+    },
+    {
+      "line": 820,
+      "owner": "processTextLine",
+      "source": "if (line === '日差しが元に戻った。' || line === '日差しが弱まった') { startResidualBlock(); out.push('|-weather|none'); return true; }"
+    },
+    {
+      "line": 821,
+      "owner": "processTextLine",
+      "source": "if (line === '大雨になった。') return weatherStart('RainDance');"
+    },
+    {
+      "line": 822,
+      "owner": "processTextLine",
+      "source": "if (line === '雨が降り続いている') { startResidualBlock(); out.push('|-weather|RainDance|[upkeep]'); return true; }"
+    },
+    {
+      "line": 823,
+      "owner": "processTextLine",
+      "source": "if (line === '雨が降り止んだ。') { startResidualBlock(); out.push('|-weather|none'); return true; }"
+    },
+    {
+      "line": 824,
+      "owner": "processTextLine",
+      "source": "if (/すなあらしがふきはじめた/.test(line)) return weatherStart('Sandstorm');"
+    },
+    {
+      "line": 825,
+      "owner": "processTextLine",
+      "source": "if (/特殊攻撃に強くなった。$/.test(line)) return lightScreenSuccess(line, para);"
+    },
+    {
+      "line": 826,
+      "owner": "processTextLine",
+      "source": "if (line === '一撃必殺！！') return ohkoSuccess(line);"
+    },
+    {
+      "line": 830,
+      "owner": "processTextLine",
+      "source": "if (sw) {"
+    },
+    {
+      "line": 831,
+      "owner": "processTextLine",
+      "source": "if (sw.kind === 'switch') {"
+    },
+    {
+      "line": 832,
+      "owner": "processTextLine",
+      "source": "if (state.splitBeforeNextSwitch) {"
+    },
+    {
+      "line": 838,
+      "owner": "processTextLine",
+      "source": "} else if (state.timestampBeforeNextSwitch) {"
+    },
+    {
+      "line": 843,
+      "owner": "processTextLine",
+      "source": "if (!sw.side) { hooks.fail('switch player side unresolved: ' + line); return true; }"
+    },
+    {
+      "line": 845,
+      "owner": "processTextLine",
+      "source": "if (!mon) { hooks.fail('switch species unresolved: ' + line); return true; }"
+    },
+    {
+      "line": 849,
+      "owner": "processTextLine",
+      "source": "if (sw.kind === 'drag-species') {"
+    },
+    {
+      "line": 852,
+      "owner": "processTextLine",
+      "source": "if (!mon) { hooks.fail('drag species unresolved: ' + line); return true; }"
+    },
+    {
+      "line": 860,
+      "owner": "processTextLine",
+      "source": "if (moveStart) {"
+    },
+    {
+      "line": 865,
+      "owner": "processTextLine",
+      "source": "if (!species || state.active[side] !== species) {"
+    },
+    {
+      "line": 868,
+      "owner": "processTextLine",
+      "source": "if (species && state.active[os] === species) {"
+    },
+    {
+      "line": 876,
+      "owner": "processTextLine",
+      "source": "if (moveStart.move === 'Present') preparePresentRecovery(moveSide, para, idx);"
+    },
+    {
+      "line": 882,
+      "owner": "processTextLine",
+      "source": "if (hp) {"
+    },
+    {
+      "line": 883,
+      "owner": "processTextLine",
+      "source": "if (state.pendingPresentRecovery && state.pendingPresentRecovery.para === para) {"
+    },
+    {
+      "line": 891,
+      "owner": "processTextLine",
+      "source": "if (faint) {"
+    },
+    {
+      "line": 894,
+      "owner": "processTextLine",
+      "source": "if (!side || !species) { hooks.fail('faint side/species unresolved: ' + line); return true; }"
+    },
+    {
+      "line": 896,
+      "owner": "processTextLine",
+      "source": "if (st && st.fainted && state.active[side] !== species) return true;"
+    },
+    {
+      "line": 899,
+      "owner": "emitFaintOnce",
+      "source": "if (fst && fst.fainted && state.active[fSide] !== fSpecies) return false;"
+    },
+    {
+      "line": 900,
+      "owner": "emitFaintOnce",
+      "source": "if (fst) { fst.hpAbs = 0; fst.fainted = true; fst.active = false; fst.status = ''; }"
+    },
+    {
+      "line": 902,
+      "owner": "emitFaintOnce",
+      "source": "if (state.active[fSide] === fSpecies) state.active[fSide] = null;"
+    },
+    {
+      "line": 907,
+      "owner": "processTextLine",
+      "source": "if (isSelfKo && side === state.lastMoveUserSide && state.lastMoveTargetSide && state.lastMoveTargetSpecies) {"
+    },
+    {
+      "line": 910,
+      "owner": "processTextLine",
+      "source": "if (tst && tst.hpAbs === 0) emitFaintOnce(state.lastMoveTargetSide, state.lastMoveTargetSpecies);"
+    },
+    {
+      "line": 914,
+      "owner": "processTextLine",
+      "source": "if (state.pendingPerishZeroFaint && state.pendingPerishZeroFaint.species === species && state.pendingPerishZeroFaint.side === side) state.pendingPerishZeroFaint = null;"
+    },
+    {
+      "line": 915,
+      "owner": "processTextLine",
+      "source": "if (!state.splitBeforeNextSwitch) state.timestampBeforeNextSwitch = true;"
+    },
+    {
+      "line": 920,
+      "owner": "processTextLine",
+      "source": "if (/は麻痺した！$/.test(line)) return statusLine(line, para, 'par');"
+    },
+    {
+      "line": 921,
+      "owner": "processTextLine",
+      "source": "if (/はメロメロになった！$/.test(line)) return startVolatile(line, para, 'Attract');"
+    },
+    {
+      "line": 922,
+      "owner": "processTextLine",
+      "source": "if (/は眠ってしまった！$/.test(line) || /は眠りはじめた！/.test(line)) {"
+    },
+    {
+      "line": 925,
+      "owner": "processTextLine",
+      "source": "if (/は混乱した！$/.test(line)) return startVolatile(line, para, 'confusion');"
+    },
+    {
+      "line": 926,
+      "owner": "processTextLine",
+      "source": "if (/は猛毒におかされた！$/.test(line)) return statusLine(line, para, 'tox');"
+    },
+    {
+      "line": 927,
+      "owner": "processTextLine",
+      "source": "if (/は毒におかされた！$/.test(line)) return statusLine(line, para, 'psn');"
+    },
+    {
+      "line": 928,
+      "owner": "processTextLine",
+      "source": "if (/は火傷した！$/.test(line) || /は火傷をおった！$/.test(line) || /はやけどをおった！$/.test(line)) return statusLine(line, para, 'brn');"
+    },
+    {
+      "line": 929,
+      "owner": "processTextLine",
+      "source": "if (/は凍ってしまった！$/.test(line) || /はこおりづけになった！$/.test(line)) return statusLine(line, para, 'frz');"
+    },
+    {
+      "line": 930,
+      "owner": "processTextLine",
+      "source": "if (/は目を覚ました！$/.test(line)) return cureByWake(line, para);"
+    },
+    {
+      "line": 931,
+      "owner": "processTextLine",
+      "source": "if (/の氷がとけた！$/.test(line)) return cureFreeze(line, para);"
+    },
+    {
+      "line": 932,
+      "owner": "processTextLine",
+      "source": "if (/は正気に戻った！$/.test(line)) return confusionEnd(line, para);"
+    },
+    {
+      "line": 933,
+      "owner": "processTextLine",
+      "source": "if (/でめをさました！$/.test(line)) return itemCure(line, para, 'slp');"
+    },
+    {
+      "line": 934,
+      "owner": "processTextLine",
+      "source": "if (/でどくをなおした！$/.test(line)) return itemCure(line, para, 'tox');"
+    },
+    {
+      "line": 935,
+      "owner": "processTextLine",
+      "source": "if (/でまひをなおした！$/.test(line)) return itemCure(line, para, 'par');"
+    },
+    {
+      "line": 936,
+      "owner": "processTextLine",
+      "source": "if (/でこおりをとかした！$/.test(line)) return itemCure(line, para, 'frz');"
+    },
+    {
+      "line": 937,
+      "owner": "processTextLine",
+      "source": "if (/でやけどをなおした！$/.test(line)) return itemCure(line, para, 'brn');"
+    },
+    {
+      "line": 938,
+      "owner": "processTextLine",
+      "source": "if (/でこんらんを回復した！$/.test(line)) return itemCureConfusion(line, para);"
+    },
+    {
+      "line": 941,
+      "owner": "processTextLine",
+      "source": "if (/は眠っていて動けない！$/.test(line)) return true;"
+    },
+    {
+      "line": 942,
+      "owner": "processTextLine",
+      "source": "if (/はからだが痺れて動けない！$/.test(line)) return cantForSubject(line, para, 'par');"
+    },
+    {
+      "line": 943,
+      "owner": "processTextLine",
+      "source": "if (/はひるんだ！$/.test(line)) return cantForSubject(line, para, 'flinch');"
+    },
+    {
+      "line": 944,
+      "owner": "processTextLine",
+      "source": "if (/はメロメロで技がだせなかった！$/.test(line)) return cantForSubject(line, para, 'Attract');"
+    },
+    {
+      "line": 945,
+      "owner": "processTextLine",
+      "source": "if (/は凍って動けない！$/.test(line) || /は凍っていて動けない！$/.test(line)) return cantForSubject(line, para, 'frz');"
+    },
+    {
+      "line": 946,
+      "owner": "processTextLine",
+      "source": "if (/は反動で動けない！$/.test(line)) return cantForSubject(line, para, 'recharge');"
+    },
+    {
+      "line": 947,
+      "owner": "processTextLine",
+      "source": "if (/^しかし.+?は封じられている！$/.test(line)) return disableCant(line);"
+    },
+    {
+      "line": 950,
+      "owner": "processTextLine",
+      "source": "if (/はぐうぐう眠っている$/.test(line)) return sleepingDisplay(line, para);"
+    },
+    {
+      "line": 951,
+      "owner": "processTextLine",
+      "source": "if (/は混乱している$/.test(line)) { const subj = subjectSpecies(line, /^(.*?)は混乱している$/); if (subj) activateVolatile(subj, para, 'confusion'); return true; }"
+    },
+    {
+      "line": 952,
+      "owner": "processTextLine",
+      "source": "if (/はこらえている！$/.test(line)) return endureActivate(line, para);"
+    },
+    {
+      "line": 953,
+      "owner": "processTextLine",
+      "source": "if (/はわけもわからず自分を攻撃した！$/.test(line)) { const subj = subjectSpecies(line, /^(.*?)はわけもわからず自分を攻撃した！$/); if (subj) { const side = sideForOwnedSpeciesInLine(state, para, subj); const species = jpSpeciesToPs(subj); if (side && species) state.pendingHpCause = 'confusion'; } return true; }"
+    },
+    {
+      "line": 954,
+      "owner": "processTextLine",
+      "source": "if (/は.*にメロメロだ！$/.test(line)) { const subj = subjectSpecies(line, /^(.*?)は.*にメロメロだ！$/); if (subj) activateVolatile(subj, para, 'move: Attract'); return true; }"
+    },
+    {
+      "line": 955,
+      "owner": "processTextLine",
+      "source": "if (/はアンコールをうけた！$/.test(line)) return encoreStart(line, para);"
+    },
+    {
+      "line": 956,
+      "owner": "processTextLine",
+      "source": "if (/のアンコール状態がとけた。$/.test(line)) return encoreEnd(line, para);"
+    },
+    {
+      "line": 957,
+      "owner": "processTextLine",
+      "source": "if (/^.+?は.+?の.+?を封じた！$/.test(line)) return disableStart(line, para);"
+    },
+    {
+      "line": 958,
+      "owner": "processTextLine",
+      "source": "if (/はあくむをみはじめた！$/.test(line)) return nightmareStart(line, para);"
+    },
+    {
+      "line": 959,
+      "owner": "processTextLine",
+      "source": "if (/はあくむにうなされている！$/.test(line)) { state.pendingHpCause = 'nightmare'; return true; }"
+    },
+    {
+      "line": 960,
+      "owner": "processTextLine",
+      "source": "if (/^.+?は.+?タイプを自分に貼り付けた$/.test(line)) return conversionTypeChange(line, para);"
+    },
+    {
+      "line": 963,
+      "owner": "processTextLine",
+      "source": "if (/急所にあたった！/.test(line)) { addCritToLastTarget(); return true; }"
+    },
+    {
+      "line": 964,
+      "owner": "processTextLine",
+      "source": "if (/効果抜群だ！/.test(line)) { addEffectivenessToLastTarget('supereffective'); return true; }"
+    },
+    {
+      "line": 965,
+      "owner": "processTextLine",
+      "source": "if (/効果はイマイチのようだ/.test(line)) { addEffectivenessToLastTarget('resisted'); return true; }"
+    },
+    {
+      "line": 966,
+      "owner": "processTextLine",
+      "source": "if (/には効果がないようだ/.test(line) || /には効かないようだ/.test(line)) { addImmuneOrFail(line, para); return true; }"
+    },
+    {
+      "line": 967,
+      "owner": "processTextLine",
+      "source": "if (/(しかし)? .+?の攻撃ははずれた。$/.test(line) || /^.+?の攻撃ははずれた。$/.test(line)) { addMiss(); return true; }"
+    },
+    {
+      "line": 968,
+      "owner": "processTextLine",
+      "source": "if (/しかし.*はまもっている！/.test(line)) { addProtectActivate(); return true; }"
+    },
+    {
+      "line": 969,
+      "owner": "processTextLine",
+      "source": "if (/分身が攻撃を受けた！/.test(line)) { addSubHit(); return true; }"
+    },
+    {
+      "line": 970,
+      "owner": "processTextLine",
+      "source": "if (/分身はきえてしまった/.test(line)) { addSubBreak(); return true; }"
+    },
+    {
+      "line": 972,
+      "owner": "processTextLine",
+      "source": "if (/の持っていた.*はかいのいでんし.*さどうした！/.test(line)) return berserkGene(line, para);"
+    },
+    {
+      "line": 975,
+      "owner": "processTextLine",
+      "source": "if (/はたべのこしでＨＰを回復/.test(line)) { startResidualBlock(); state.pendingHpCause = 'leftovers'; return true; }"
+    },
+    {
+      "line": 976,
+      "owner": "processTextLine",
+      "source": "if (/はおうごんのみでＨＰを回復した！/.test(line)) { state.pendingHpCause = 'goldberry'; return true; }"
+    },
+    {
+      "line": 977,
+      "owner": "processTextLine",
+      "source": "if (/はきのみジュースでＨＰを回復した！/.test(line)) { state.pendingHpCause = 'berryjuice'; return true; }"
+    },
+    {
+      "line": 978,
+      "owner": "processTextLine",
+      "source": "if (/はきのみでＨＰを回復した！/.test(line)) { hooks.warn('nonstandard NC2000 item Berry detected: ' + line); state.pendingHpCause = 'berry'; return true; }"
+    },
+    {
+      "line": 979,
+      "owner": "processTextLine",
+      "source": "if (/は攻撃の反動をうけた！/.test(line)) {"
+    },
+    {
+      "line": 981,
+      "owner": "processTextLine",
+      "source": "if (state.lastMoveTargetSide && state.lastMoveTargetSpecies) state.pendingHpOf = pokemonIdent(state.lastMoveTargetSide, state.lastMoveTargetSpecies);"
+    },
+    {
+      "line": 984,
+      "owner": "processTextLine",
+      "source": "if (/は毒のダメージを受けている！/.test(line)) { startResidualBlock(); state.pendingHpCause = 'psn'; return true; }"
+    },
+    {
+      "line": 985,
+      "owner": "processTextLine",
+      "source": "if (/は火傷のダメージを受けている！/.test(line) || /はやけどのダメージを受けている！/.test(line)) { startResidualBlock(); state.pendingHpCause = 'brn'; return true; }"
+    },
+    {
+      "line": 986,
+      "owner": "processTextLine",
+      "source": "if (/はすなあらしのダメージを受けている！/.test(line)) { startResidualBlock(); state.pendingHpCause = 'sandstorm'; return true; }"
+    },
+    {
+      "line": 987,
+      "owner": "processTextLine",
+      "source": "if (/はまきびしのダメージをうけた！/.test(line)) { state.pendingHpCause = 'spikes'; return true; }"
+    },
+    {
+      "line": 988,
+      "owner": "processTextLine",
+      "source": "if (/はＨＰを回復した。/.test(line)) { state.pendingHpCause = state.lastMove === 'Rest' ? 'rest-heal' : 'heal'; return true; }"
+    },
+    {
+      "line": 989,
+      "owner": "processTextLine",
+      "source": "if (/体力を吸い取った！/.test(line)) { state.pendingHpCause = 'drain-heal'; return true; }"
+    },
+    {
+      "line": 990,
+      "owner": "processTextLine",
+      "source": "if (/のろいが.*のたいりょくをうばう！/.test(line) || /のろいで.*のたいりょくがうばわれる！/.test(line) || /はのろいで体力を奪われている！/.test(line)) {"
+    },
+    {
+      "line": 994,
+      "owner": "processTextLine",
+      "source": "if (/やどりぎが.*のたいりょくをうばう！/.test(line)) {"
+    },
+    {
+      "line": 1001,
+      "owner": "processTextLine",
+      "source": "if (targetSide && targetSpecies) {"
+    },
+    {
+      "line": 1005,
+      "owner": "processTextLine",
+      "source": "if (sourceSide && sourceSpecies) sourceIdent = pokemonIdent(sourceSide, sourceSpecies);"
+    },
+    {
+      "line": 1013,
+      "owner": "processTextLine",
+      "source": "if (/ははりきっている！$/.test(line)) return focusEnergyStart(line, para);"
+    },
+    {
+      "line": 1014,
+      "owner": "processTextLine",
+      "source": "if (/はいきおいあまって地面に激突した！$/.test(line)) { state.pendingHpCause = 'jump-kick-crash'; return true; }"
+    },
+    {
+      "line": 1015,
+      "owner": "processTextLine",
+      "source": "if (/のまわりを空気がうずまく。$/.test(line)) return prepareTwoTurnMove(line, para, 'Razor Wind', /^(.*?)のまわりを空気がうずまく。$/);"
+    },
+    {
+      "line": 1016,
+      "owner": "processTextLine",
+      "source": "if (/はひかりを吸収している。$/.test(line)) return prepareTwoTurnMove(line, para, 'Solar Beam', /^(.*?)はひかりを吸収している。$/);"
+    },
+    {
+      "line": 1017,
+      "owner": "processTextLine",
+      "source": "if (/を激しい光が包む！$/.test(line)) return prepareTwoTurnMove(line, para, 'Sky Attack', /^(.*?)を激しい光が包む！$/);"
+    },
+    {
+      "line": 1018,
+      "owner": "processTextLine",
+      "source": "if (/はＨＰの１／４を消費して分身をつくりだした！/.test(line)) return substituteSuccess(line, para);"
+    },
+    {
+      "line": 1019,
+      "owner": "processTextLine",
+      "source": "if (/は物理攻撃に強くなった。/.test(line)) return reflectSuccess(line, para);"
+    },
+    {
+      "line": 1020,
+      "owner": "processTextLine",
+      "source": "if (/にたねをうえつけた！$/.test(line)) return leechSeedStart(line, para);"
+    },
+    {
+      "line": 1021,
+      "owner": "processTextLine",
+      "source": "if (/はもうにげられない！$/.test(line)) return trapStart(line, para);"
+    },
+    {
+      "line": 1022,
+      "owner": "processTextLine",
+      "source": "if (/は相手をみちづれにしようとしている。/.test(line)) return destinyBondPrepare(line, para);"
+    },
+    {
+      "line": 1023,
+      "owner": "processTextLine",
+      "source": "if (/は.*をみちづれにした！$/.test(line)) return destinyBondActivate(line, para);"
+    },
+    {
+      "line": 1024,
+      "owner": "processTextLine",
+      "source": "if (/おたがいのポケモンは３ターン後にほろんでしまう！/.test(line)) return emitPerishSongSuccess();"
+    },
+    {
+      "line": 1025,
+      "owner": "processTextLine",
+      "source": "if (/ほろびのカウントが([0-9０-９])になった！$/.test(line)) return perishCount(line, para);"
+    },
+    {
+      "line": 1026,
+      "owner": "processTextLine",
+      "source": "if (/はまきびしをまいた！/.test(line)) return spikesSuccess(line, para);"
+    },
+    {
+      "line": 1027,
+      "owner": "processTextLine",
+      "source": "if (/は.*の攻撃から解放された！$/.test(line)) return rapidSpinRelease(line, para);"
+    },
+    {
+      "line": 1028,
+      "owner": "processTextLine",
+      "source": "if (/はたいりょくを削って相手にのろいをかけた！/.test(line)) return ghostCurseStart(line, para);"
+    },
+    {
+      "line": 1029,
+      "owner": "processTextLine",
+      "source": "if (isStatCapLine(line)) return true;"
+    },
+    {
+      "line": 1030,
+      "owner": "processTextLine",
+      "source": "if (/しかし交換できるポケモンがいなかった。/.test(line)) { addFailForLastMoveUser(); return true; }"
+    },
+    {
+      "line": 1031,
+      "owner": "processTextLine",
+      "source": "if (/しかしＨＰがたりなかった！/.test(line)) { substituteWeakFail(); return true; }"
+    },
+    {
+      "line": 1032,
+      "owner": "processTextLine",
+      "source": "if (/すべての能力が元に戻った！/.test(line)) { out.push('|-clearallboost'); return true; }"
+    },
+    {
+      "line": 1033,
+      "owner": "processTextLine",
+      "source": "if (/^.+?は.+?から.+?を奪った！$/.test(line)) return thiefItem(line, para);"
+    },
+    {
+      "line": 1034,
+      "owner": "processTextLine",
+      "source": "if (/しかし、うまくきまらなかった。/.test(line)) {"
+    },
+    {
+      "line": 1035,
+      "owner": "processTextLine",
+      "source": "if (state.pendingBellyDrum) state.pendingBellyDrum = null;"
+    },
+    {
+      "line": 1036,
+      "owner": "processTextLine",
+      "source": "if (state.lastMove === 'Transform') transformFailed(); else protectFailed();"
+    },
+    {
+      "line": 1039,
+      "owner": "processTextLine",
+      "source": "if (/はまもりの体勢にはいった！/.test(line)) return protectSuccess(line, para);"
+    },
+    {
+      "line": 1040,
+      "owner": "processTextLine",
+      "source": "if (/はこらえる体勢にはいった！/.test(line)) return true;"
+    },
+    {
+      "line": 1041,
+      "owner": "processTextLine",
+      "source": "if (/は.*にへんしんした！$/.test(line)) return transformSuccess(line, para);"
+    },
+    {
+      "line": 1042,
+      "owner": "processTextLine",
+      "source": "if (/にかかっていた.*リフレクター.*効果がきれた/.test(line)) { out.push(`|-sideend|${playerSideName(state, inferSideForParagraph(state, para))}|Reflect`); return true; }"
+    },
+    {
+      "line": 1043,
+      "owner": "processTextLine",
+      "source": "if (/にかかっていた.*ひかりのかべ.*効果がきれた/.test(line)) return lightScreenEnd(line, para);"
+    },
+    {
+      "line": 1044,
+      "owner": "processTextLine",
+      "source": "if (/はたいりょくを削ってこうげきを最大まであげた！/.test(line)) return bellyDrumSuccess(line, para);"
+    },
+    {
+      "line": 1045,
+      "owner": "processTextLine",
+      "source": "if (/味方のすべての状態異常が回復した！/.test(line)) return healBellSuccess(line, para);"
+    },
+    {
+      "line": 1046,
+      "owner": "processTextLine",
+      "source": "if (/おたがいの体力をわかちあった！/.test(line)) { state.pendingHpCause = 'pain-split'; state.pendingPainSplit = {entries: []}; return true; }"
+    },
+    {
+      "line": 1049,
+      "owner": "processTextLine",
+      "source": "if (statChange) return handleGenericStatChange(statChange, para, line);"
+    },
+    {
+      "line": 1057,
+      "owner": "parseGenericStatChangeLine",
+      "source": "if (!m) return null;"
+    },
+    {
+      "line": 1072,
+      "owner": "parseGenericStatChangeLine",
+      "source": "if (!stat) return null;"
+    },
+    {
+      "line": 1081,
+      "owner": "statProtocolLineFromChange",
+      "source": "if (!side || !species) return null;"
+    },
+    {
+      "line": 1088,
+      "owner": "findRecentSameStatProtocol",
+      "source": "if (out[i] === protocolLine || out[i].startsWith(protocolLine + '|')) return i;"
+    },
+    {
+      "line": 1089,
+      "owner": "findRecentSameStatProtocol",
+      "source": "if (out[i].startsWith('|turn|') || out[i].startsWith('|t:|')) break;"
+    },
+    {
+      "line": 1095,
+      "owner": "recordSpecialStatExpectation",
+      "source": "if (!subj) return;"
+    },
+    {
+      "line": 1098,
+      "owner": "recordSpecialStatExpectation",
+      "source": "if (!side || !species) return;"
+    },
+    {
+      "line": 1106,
+      "owner": "handleGenericStatChange",
+      "source": "if (!protocolLine) { hooks.fail('stat change unresolved: ' + line); return true; }"
+    },
+    {
+      "line": 1109,
+      "owner": "handleGenericStatChange",
+      "source": "if (existingAt >= 0) {"
+    },
+    {
+      "line": 1118,
+      "owner": "parseStatProtocolLine",
+      "source": "if (!m) return null;"
+    },
+    {
+      "line": 1127,
+      "owner": "auditSegmentStatCoverage",
+      "source": "if (!hooks.statAuditLine) return;"
+    },
+    {
+      "line": 1131,
+      "owner": "auditSegmentStatCoverage",
+      "source": "if (info) segStats.push({...info, outIndex: i});"
+    },
+    {
+      "line": 1139,
+      "owner": "auditSegmentStatCoverage",
+      "source": "if (used.has(cand.outIndex)) continue;"
+    },
+    {
+      "line": 1140,
+      "owner": "auditSegmentStatCoverage",
+      "source": "if (cand.line === exp.protocolLine || cand.line.startsWith(exp.protocolLine + '|')) { exact = cand.outIndex; break; }"
+    },
+    {
+      "line": 1142,
+      "owner": "auditSegmentStatCoverage",
+      "source": "if (exact >= 0) {"
+    },
+    {
+      "line": 1148,
+      "owner": "auditSegmentStatCoverage",
+      "source": "if (expected) {"
+    },
+    {
+      "line": 1150,
+      "owner": "auditSegmentStatCoverage",
+      "source": "if (used.has(cand.outIndex)) continue;"
+    },
+    {
+      "line": 1154,
+      "owner": "auditSegmentStatCoverage",
+      "source": "if (sameIdentStat || sameStatAmountKind || sameIdentKind) { mismatch = cand; break; }"
+    },
+    {
+      "line": 1157,
+      "owner": "auditSegmentStatCoverage",
+      "source": "if (mismatch) {"
+    },
+    {
+      "line": 1165,
+      "owner": "auditSegmentStatCoverage",
+      "source": "if (!used.has(cand.outIndex)) hooks.statAuditLine(prefix + `extra\tactual=${cand.line}`);"
+    },
+    {
+      "line": 1171,
+      "owner": "lastMoveLineIs",
+      "source": "if (out[i].startsWith('|move|')) return out[i].includes('|' + move + '|');"
+    },
+    {
+      "line": 1177,
+      "owner": "processMoveStart",
+      "source": "if (!moveStart.move) { hooks.fail('unknown move: ' + moveStart.moveJp + ' line=' + line); return true; }"
+    },
+    {
+      "line": 1182,
+      "owner": "processMoveStart",
+      "source": "if (fromSleepTalk) {"
+    },
+    {
+      "line": 1186,
+      "owner": "processMoveStart",
+      "source": "if (fromMetronome) {"
+    },
+    {
+      "line": 1191,
+      "owner": "processMoveStart",
+      "source": "if (moveStart.move === 'Sleep Talk') {"
+    },
+    {
+      "line": 1194,
+      "owner": "processMoveStart",
+      "source": "if (moveStart.move === 'Metronome') {"
+    },
+    {
+      "line": 1197,
+      "owner": "processMoveStart",
+      "source": "if (moveStart.move === 'Giga Drain' || moveStart.move === 'Absorb' || moveStart.move === 'Mega Drain') {"
+    },
+    {
+      "line": 1198,
+      "owner": "processMoveStart",
+      "source": "if (targetSide && targetSpecies) state.pendingDrainOf = pokemonIdent(targetSide, targetSpecies);"
+    },
+    {
+      "line": 1204,
+      "owner": "isLiveActive",
+      "source": "if (!side || !species) return false;"
+    },
+    {
+      "line": 1205,
+      "owner": "isLiveActive",
+      "source": "if (state.active[side] !== species) return false;"
+    },
+    {
+      "line": 1213,
+      "owner": "sideForOwnedSpeciesInLine",
+      "source": "if (!species) return null;"
+    },
+    {
+      "line": 1216,
+      "owner": "sideForOwnedSpeciesInLine",
+      "source": "if (isLiveActive(state, altSide, species)) return altSide;"
+    },
+    {
+      "line": 1217,
+      "owner": "sideForOwnedSpeciesInLine",
+      "source": "if (isLiveActive(state, os, species)) return os;"
+    },
+    {
+      "line": 1218,
+      "owner": "sideForOwnedSpeciesInLine",
+      "source": "if (state.monState[altSide].has(species)) return altSide;"
+    },
+    {
+      "line": 1219,
+      "owner": "sideForOwnedSpeciesInLine",
+      "source": "if (state.monState[os].has(species)) return os;"
+    },
+    {
+      "line": 1225,
+      "owner": "sideForSpeciesInLine",
+      "source": "if (!species) return null;"
+    },
+    {
+      "line": 1227,
+      "owner": "sideForSpeciesInLine",
+      "source": "if (state.lastMoveTargetSide && state.lastMoveTargetSpecies === species && isLiveActive(state, state.lastMoveTargetSide, species)) return state.lastMoveTargetSide;"
+    },
+    {
+      "line": 1228,
+      "owner": "sideForSpeciesInLine",
+      "source": "if (state.lastMoveUserSide && isLiveActive(state, state.lastMoveUserSide, species)) return state.lastMoveUserSide;"
+    },
+    {
+      "line": 1230,
+      "owner": "sideForSpeciesInLine",
+      "source": "if (isLiveActive(state, altSide, species)) return altSide;"
+    },
+    {
+      "line": 1232,
+      "owner": "sideForSpeciesInLine",
+      "source": "if (isLiveActive(state, os, species)) return os;"
+    },
+    {
+      "line": 1233,
+      "owner": "sideForSpeciesInLine",
+      "source": "if (state.monState[altSide].has(species)) return altSide;"
+    },
+    {
+      "line": 1234,
+      "owner": "sideForSpeciesInLine",
+      "source": "if (state.monState[os].has(species)) return os;"
+    },
+    {
+      "line": 1242,
+      "owner": "sideForFaintLine",
+      "source": "if (!species) return null;"
+    },
+    {
+      "line": 1243,
+      "owner": "sideForFaintLine",
+      "source": "if (state.pendingPerishZeroFaint && state.pendingPerishZeroFaint.species === species && isLiveActive(state, state.pendingPerishZeroFaint.side, species)) {"
+    },
+    {
+      "line": 1251,
+      "owner": "sideForFaintLine",
+      "source": "if (isLiveActive(state, altSide, species)) return altSide;"
+    },
+    {
+      "line": 1252,
+      "owner": "sideForFaintLine",
+      "source": "if (isLiveActive(state, os, species)) return os;"
+    },
+    {
+      "line": 1253,
+      "owner": "sideForFaintLine",
+      "source": "if (state.lastMoveTargetSide && state.lastMoveTargetSpecies === species && isLiveActive(state, state.lastMoveTargetSide, species)) return state.lastMoveTargetSide;"
+    },
+    {
+      "line": 1254,
+      "owner": "sideForFaintLine",
+      "source": "if (state.lastMoveUserSide && isLiveActive(state, state.lastMoveUserSide, species)) return state.lastMoveUserSide;"
+    },
+    {
+      "line": 1255,
+      "owner": "sideForFaintLine",
+      "source": "if (state.monState[altSide].has(species)) return altSide;"
+    },
+    {
+      "line": 1256,
+      "owner": "sideForFaintLine",
+      "source": "if (state.monState[os].has(species)) return os;"
+    },
+    {
+      "line": 1262,
+      "owner": "sideForHpLine",
+      "source": "if (!species) return null;"
+    },
+    {
+      "line": 1269,
+      "owner": "sideForHpLine",
+      "source": "if (state.monState[altSide].has(species)) return altSide;"
+    },
+    {
+      "line": 1273,
+      "owner": "sideForHpLine",
+      "source": "if (isLiveActive(state, altSide, species)) return altSide;"
+    },
+    {
+      "line": 1274,
+      "owner": "sideForHpLine",
+      "source": "if (isLiveActive(state, os, species)) return os;"
+    },
+    {
+      "line": 1277,
+      "owner": "sideForHpLine",
+      "source": "if (state.lastMoveTargetSide && state.lastMoveTargetSpecies === species && isLiveActive(state, state.lastMoveTargetSide, species)) return state.lastMoveTargetSide;"
+    },
+    {
+      "line": 1278,
+      "owner": "sideForHpLine",
+      "source": "if (state.lastMoveUserSide && isLiveActive(state, state.lastMoveUserSide, species)) return state.lastMoveUserSide;"
+    },
+    {
+      "line": 1280,
+      "owner": "sideForHpLine",
+      "source": "if (state.monState[os].has(species)) return os;"
+    },
+    {
+      "line": 1286,
+      "owner": "sideForPainSplitHpLine",
+      "source": "if (!species) return null;"
+    },
+    {
+      "line": 1287,
+      "owner": "sideForPainSplitHpLine",
+      "source": "if (state.lastMoveUserSide && state.active[state.lastMoveUserSide] === species) return state.lastMoveUserSide;"
+    },
+    {
+      "line": 1288,
+      "owner": "sideForPainSplitHpLine",
+      "source": "if (state.lastMoveTargetSide && state.lastMoveTargetSpecies === species) return state.lastMoveTargetSide;"
+    },
+    {
+      "line": 1295,
+      "owner": "sideForLeechHpLine",
+      "source": "if (!species) return null;"
+    },
+    {
+      "line": 1296,
+      "owner": "sideForLeechHpLine",
+      "source": "if (hp && hp.to < hp.from && leech.targetSide && leech.targetSpecies === species) return leech.targetSide;"
+    },
+    {
+      "line": 1297,
+      "owner": "sideForLeechHpLine",
+      "source": "if (hp && hp.to >= hp.from && leech.sourceSide && state.active[leech.sourceSide] === species) return leech.sourceSide;"
+    },
+    {
+      "line": 1304,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (!pending || pending.para !== para) {"
+    },
+    {
+      "line": 1308,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (pending.invalid) return true;"
+    },
+    {
+      "line": 1313,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (!species) failures.push('HP species is unknown');"
+    },
+    {
+      "line": 1314,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (species !== targetSpecies) failures.push(`HP species=${species || '(unknown)'} expected=${targetSpecies || '(none)'}`);"
+    },
+    {
+      "line": 1315,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (targetSide !== other(moveSide)) failures.push(`target side=${targetSide || '(none)'} is not opponent of ${moveSide}`);"
+    },
+    {
+      "line": 1316,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (!isLiveActive(state, targetSide, targetSpecies)) failures.push('resolved target is not the current live opposing active Pokemon');"
+    },
+    {
+      "line": 1319,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (!st) failures.push('resolved target has no tracked HP state');"
+    },
+    {
+      "line": 1326,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (!Number.isInteger(actualBefore) || !Number.isInteger(actualAfter) || actualBefore <= 0 || actualAfter <= 0) {"
+    },
+    {
+      "line": 1329,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (actualAfter < actualBefore) failures.push(`reversed values do not describe healing: corrected=${actualBefore}->${actualAfter}`);"
+    },
+    {
+      "line": 1331,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (st) {"
+    },
+    {
+      "line": 1332,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (st.hpAbs !== null && st.hpAbs !== actualBefore) {"
+    },
+    {
+      "line": 1335,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (st.maxHp && actualAfter > st.maxHp) {"
+    },
+    {
+      "line": 1338,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (st.hpAbs === null) {"
+    },
+    {
+      "line": 1339,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (st.maxHp) {"
+    },
+    {
+      "line": 1340,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (actualBefore !== actualAfter || actualAfter !== st.maxHp) {"
+    },
+    {
+      "line": 1345,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "} else if (actualBefore === actualAfter) {"
+    },
+    {
+      "line": 1353,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (failures.length) {"
+    },
+    {
+      "line": 1358,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (!st.maxHp) st.maxHp = actualAfter;"
+    },
+    {
+      "line": 1364,
+      "owner": "processPresentRecoveryHpLine",
+      "source": "if (hooks.automaticRepairLine) {"
+    },
+    {
+      "line": 1394,
+      "owner": "processHpLine",
+      "source": "if (!side || !species) { hooks.fail('HP side/species unresolved: ' + line); return true; }"
+    },
+    {
+      "line": 1395,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'pain-split' && state.pendingPainSplit) {"
+    },
+    {
+      "line": 1398,
+      "owner": "processHpLine",
+      "source": "if (stPs) {"
+    },
+    {
+      "line": 1399,
+      "owner": "processHpLine",
+      "source": "if (!stPs.maxHp || hp.from > stPs.maxHp) stPs.maxHp = Math.max(hp.from, hp.to);"
+    },
+    {
+      "line": 1403,
+      "owner": "processHpLine",
+      "source": "if (state.pendingPainSplit.entries.length >= 2) {"
+    },
+    {
+      "line": 1412,
+      "owner": "processHpLine",
+      "source": "if (!st.maxHp || hp.from > st.maxHp) st.maxHp = Math.max(hp.from, hp.to);"
+    },
+    {
+      "line": 1420,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'recoil') type = '-damage';"
+    },
+    {
+      "line": 1422,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'recoil') {"
+    },
+    {
+      "line": 1425,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'jump-kick-crash') suffix = '';"
+    },
+    {
+      "line": 1426,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'leech') {"
+    },
+    {
+      "line": 1428,
+      "owner": "processHpLine",
+      "source": "if (type === '-damage') {"
+    },
+    {
+      "line": 1435,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'drain-heal') suffix = '|[from] drain' + (state.pendingDrainOf ? '|[of] ' + state.pendingDrainOf : '');"
+    },
+    {
+      "line": 1436,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'confusion') suffix = '|[from] confusion';"
+    },
+    {
+      "line": 1437,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'psn') suffix = '|[from] psn';"
+    },
+    {
+      "line": 1438,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'brn') suffix = '|[from] brn';"
+    },
+    {
+      "line": 1439,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'nightmare') suffix = '|[from] Nightmare';"
+    },
+    {
+      "line": 1440,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'curse') suffix = '|[from] Curse';"
+    },
+    {
+      "line": 1441,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'sandstorm') suffix = '|[from] Sandstorm';"
+    },
+    {
+      "line": 1442,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'spikes') suffix = '|[from] Spikes';"
+    },
+    {
+      "line": 1443,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'leftovers') suffix = '|[from] item: Leftovers';"
+    },
+    {
+      "line": 1444,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'heal') suffix = '';"
+    },
+    {
+      "line": 1445,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'rest-heal') suffix = '|[silent]';"
+    },
+    {
+      "line": 1447,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'goldberry') {"
+    },
+    {
+      "line": 1451,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'berryjuice') {"
+    },
+    {
+      "line": 1455,
+      "owner": "processHpLine",
+      "source": "if (state.pendingHpCause === 'berry') {"
+    },
+    {
+      "line": 1460,
+      "owner": "processHpLine",
+      "source": "if (hp.to <= 0) {"
+    },
+    {
+      "line": 1465,
+      "owner": "processHpLine",
+      "source": "if (causeBefore === 'leech' && type === '-damage') {"
+    },
+    {
+      "line": 1471,
+      "owner": "processHpLine",
+      "source": "if (causeBefore !== 'leech' || type === '-heal') state.pendingLeech = null;"
+    },
+    {
+      "line": 1472,
+      "owner": "processHpLine",
+      "source": "if (!(state.lastMove === 'Giga Drain' || state.lastMove === 'Absorb' || state.lastMove === 'Mega Drain') || causeBefore === 'drain-heal') state.pendingDrainOf = null;"
+    },
+    {
+      "line": 1479,
+      "owner": "processHpLine",
+      "source": "if (state.pendingBellyDrum && state.pendingBellyDrum.side === side && state.pendingBellyDrum.species === species) {"
+    },
+    {
+      "line": 1483,
+      "owner": "processHpLine",
+      "source": "if ((causeBefore === 'leech' && type === '-heal') || causeBefore === 'drain-heal') {"
+    },
+    {
+      "line": 1484,
+      "owner": "processHpLine",
+      "source": "if (out[out.length - 1] !== '|') out.push('|');"
+    },
+    {
+      "line": 1486,
+      "owner": "processHpLine",
+      "source": "if (causeBefore === 'leech' && type === '-damage') {"
+    },
+    {
+      "line": 1492,
+      "owner": "processHpLine",
+      "source": "if (causeBefore !== 'leech' || type === '-heal') state.pendingLeech = null;"
+    },
+    {
+      "line": 1493,
+      "owner": "processHpLine",
+      "source": "if (!(state.lastMove === 'Giga Drain' || state.lastMove === 'Absorb' || state.lastMove === 'Mega Drain') || causeBefore === 'drain-heal') state.pendingDrainOf = null;"
+    },
+    {
+      "line": 1498,
+      "owner": "maybeEmitMustRechargeAfterHyperBeamDamage",
+      "source": "if (state.lastMove !== 'Hyper Beam') return;"
+    },
+    {
+      "line": 1499,
+      "owner": "maybeEmitMustRechargeAfterHyperBeamDamage",
+      "source": "if (causeBefore) return;"
+    },
+    {
+      "line": 1500,
+      "owner": "maybeEmitMustRechargeAfterHyperBeamDamage",
+      "source": "if (state.lastMoveTargetSide !== side || state.lastMoveTargetSpecies !== species) return;"
+    },
+    {
+      "line": 1501,
+      "owner": "maybeEmitMustRechargeAfterHyperBeamDamage",
+      "source": "if (!state.lastMoveUserSide || !state.active[state.lastMoveUserSide]) return;"
+    },
+    {
+      "line": 1507,
+      "owner": "emitPainSplitEntries",
+      "source": "if (state.lastMoveTargetSide && state.lastMoveTargetSpecies) {"
+    },
+    {
+      "line": 1527,
+      "owner": "statusLine",
+      "source": "if (!side || !species) { hooks.fail('status unresolved: ' + line); return true; }"
+    },
+    {
+      "line": 1537,
+      "owner": "startVolatile",
+      "source": "if (!side || !species) { hooks.fail('volatile unresolved: ' + line); return true; }"
+    },
+    {
+      "line": 1539,
+      "owner": "startVolatile",
+      "source": "if (volatile === 'Attract') {"
+    },
+    {
+      "line": 1542,
+      "owner": "startVolatile",
+      "source": "if (ofSpecies) state.attractOf[side].set(species, pokemonIdent(ofSide, ofSpecies));"
+    },
+    {
+      "line": 1550,
+      "owner": "sleepingDisplay",
+      "source": "if (side && species) out.push(`|cant|${pokemonIdent(side, species)}|slp`);"
+    },
+    {
+      "line": 1557,
+      "owner": "activateVolatile",
+      "source": "if (side && species) {"
+    },
+    {
+      "line": 1558,
+      "owner": "activateVolatile",
+      "source": "if (volatile === 'move: Attract') {"
+    },
+    {
+      "line": 1570,
+      "owner": "cureByWake",
+      "source": "if (side && species) {"
+    },
+    {
+      "line": 1573,
+      "owner": "cureByWake",
+      "source": "if (state.nightmare[side] && state.nightmare[side].has(species)) {"
+    },
+    {
+      "line": 1585,
+      "owner": "cureFreeze",
+      "source": "if (side && species) {"
+    },
+    {
+      "line": 1595,
+      "owner": "confusionEnd",
+      "source": "if (side && species) out.push(`|-end|${pokemonIdent(side, species)}|confusion`);"
+    },
+    {
+      "line": 1602,
+      "owner": "encoreStart",
+      "source": "if (side && species) out.push(`|-start|${pokemonIdent(side, species)}|Encore`);"
+    },
+    {
+      "line": 1609,
+      "owner": "encoreEnd",
+      "source": "if (side && species) out.push(`|-end|${pokemonIdent(side, species)}|Encore`);"
+    },
+    {
+      "line": 1622,
+      "owner": "disableStart",
+      "source": "if (!targetSide || state.active[targetSide] !== targetSpecies) {"
+    },
+    {
+      "line": 1625,
+      "owner": "disableStart",
+      "source": "if (!sourceSide || !sourceSpecies || !targetSide || !targetSpecies || !move) {"
+    },
+    {
+      "line": 1640,
+      "owner": "disableCant",
+      "source": "if (!move || !side || !species) {"
+    },
+    {
+      "line": 1648,
+      "owner": "disableCant",
+      "source": "if (parts[1] === 'move' && parts[2] === ident && parts[3] === move) {"
+    },
+    {
+      "line": 1653,
+      "owner": "disableCant",
+      "source": "if (out[i].startsWith('|turn|') || out[i].startsWith('|t:|')) break;"
+    },
+    {
+      "line": 1655,
+      "owner": "disableCant",
+      "source": "if (!removedMoveLine) {"
+    },
+    {
+      "line": 1666,
+      "owner": "nightmareStart",
+      "source": "if (side && species) {"
+    },
+    {
+      "line": 1679,
+      "owner": "conversionTypeChange",
+      "source": "if (side && species && type) {"
+    },
+    {
+      "line": 1692,
+      "owner": "retargetLastMoveLine",
+      "source": "if (parts[1] === 'move' && parts[2] === userIdent && parts[3] === move) {"
+    },
+    {
+      "line": 1697,
+      "owner": "retargetLastMoveLine",
+      "source": "if (out[i].startsWith('|turn|') || out[i].startsWith('|t:|')) break;"
+    },
+    {
+      "line": 1707,
+      "owner": "ghostCurseStart",
+      "source": "if (userSide && userSpecies && targetSide && targetSpecies) {"
+    },
+    {
+      "line": 1729,
+      "owner": "ownedIdentFromSubject",
+      "source": "if (!side || !species) return null;"
+    },
+    {
+      "line": 1740,
+      "owner": "protectSuccess",
+      "source": "if (info) out.push(`|-singleturn|${info.ident}|Protect`);"
+    },
+    {
+      "line": 1746,
+      "owner": "substituteSuccess",
+      "source": "if (info) {"
+    },
+    {
+      "line": 1749,
+      "owner": "substituteSuccess",
+      "source": "if (st) st.substitute = true;"
+    },
+    {
+      "line": 1756,
+      "owner": "destinyBondPrepare",
+      "source": "if (info) out.push(`|-singlemove|${info.ident}|Destiny Bond`);"
+    },
+    {
+      "line": 1762,
+      "owner": "spikesSuccess",
+      "source": "if (info) {"
+    },
+    {
+      "line": 1787,
+      "owner": "healBellSuccess",
+      "source": "if (side && species) {"
+    },
+    {
+      "line": 1796,
+      "owner": "bellyDrumSuccess",
+      "source": "if (info) {"
+    },
+    {
+      "line": 1807,
+      "owner": "focusEnergyStart",
+      "source": "if (side && species) out.push(`|-start|${pokemonIdent(side, species)}|move: Focus Energy`);"
+    },
+    {
+      "line": 1815,
+      "owner": "prepareTwoTurnMove",
+      "source": "if (!side || !species) return true;"
+    },
+    {
+      "line": 1825,
+      "owner": "prepareTwoTurnMove",
+      "source": "if (fromMetronome) state.metronomePending = null;"
+    },
+    {
+      "line": 1831,
+      "owner": "ohkoSuccess",
+      "source": "if (fromMetronome) {"
+    },
+    {
+      "line": 1844,
+      "owner": "endureActivate",
+      "source": "if (side && species) out.push(`|-activate|${pokemonIdent(side, species)}|move: Endure`);"
+    },
+    {
+      "line": 1849,
+      "owner": "transformSuccess",
+      "source": "if (state.lastMove !== 'Transform') return true;"
+    },
+    {
+      "line": 1850,
+      "owner": "transformSuccess",
+      "source": "if (!state.lastMoveUserSide || !state.active[state.lastMoveUserSide]) return true;"
+    },
+    {
+      "line": 1854,
+      "owner": "transformSuccess",
+      "source": "if (!targetSide || !targetSpecies) {"
+    },
+    {
+      "line": 1858,
+      "owner": "transformSuccess",
+      "source": "if (targetPs) {"
+    },
+    {
+      "line": 1860,
+      "owner": "transformSuccess",
+      "source": "if (state.active[s] === targetPs) { targetSide = s; targetSpecies = targetPs; break; }"
+    },
+    {
+      "line": 1864,
+      "owner": "transformSuccess",
+      "source": "if (targetSide && targetSpecies) out.push(`|-transform|${userIdent}|${pokemonIdent(targetSide, targetSpecies)}`);"
+    },
+    {
+      "line": 1869,
+      "owner": "transformFailed",
+      "source": "if (state.lastMoveTargetSide && state.lastMoveTargetSpecies) {"
+    },
+    {
+      "line": 1881,
+      "owner": "berserkGene",
+      "source": "if (side && species) {"
+    },
+    {
+      "line": 1894,
+      "owner": "itemCureConfusion",
+      "source": "if (side && species) {"
+    },
+    {
+      "line": 1907,
+      "owner": "itemCure",
+      "source": "if (side && species) {"
+    },
+    {
+      "line": 1918,
+      "owner": "cantForSubject",
+      "source": "if (side && species) out.push(`|cant|${pokemonIdent(side, species)}|${reason}`);"
+    },
+    {
+      "line": 1929,
+      "owner": "addCritToLastTarget",
+      "source": "if (state.lastMoveTargetSide && state.lastMoveTargetSpecies) out.push(`|-crit|${pokemonIdent(state.lastMoveTargetSide, state.lastMoveTargetSpecies)}`);"
+    },
+    {
+      "line": 1932,
+      "owner": "addEffectivenessToLastTarget",
+      "source": "if (state.lastMoveTargetSide && state.lastMoveTargetSpecies) out.push(`|-${kind}|${pokemonIdent(state.lastMoveTargetSide, state.lastMoveTargetSpecies)}`);"
+    },
+    {
+      "line": 1935,
+      "owner": "addImmuneOrFail",
+      "source": "if (state.lastMoveTargetSide && state.lastMoveTargetSpecies) out.push(`|-immune|${pokemonIdent(state.lastMoveTargetSide, state.lastMoveTargetSpecies)}`);"
+    },
+    {
+      "line": 1939,
+      "owner": "markLastMoveFlag",
+      "source": "if (out[i].startsWith('|move|')) {"
+    },
+    {
+      "line": 1940,
+      "owner": "markLastMoveFlag",
+      "source": "if (!out[i].includes(flag)) out[i] += flag;"
+    },
+    {
+      "line": 1946,
+      "owner": "addMiss",
+      "source": "if (state.lastMoveUserSide) {"
+    },
+    {
+      "line": 1952,
+      "owner": "addProtectActivate",
+      "source": "if (state.lastMoveTargetSide && state.lastMoveTargetSpecies) out.push(`|-activate|${pokemonIdent(state.lastMoveTargetSide, state.lastMoveTargetSpecies)}|Protect`);"
+    },
+    {
+      "line": 1956,
+      "owner": "protectFailed",
+      "source": "if (ident) out.push(`|-fail|${ident}`);"
+    },
+    {
+      "line": 1961,
+      "owner": "addFailForLastMoveUser",
+      "source": "if (ident) out.push(`|-fail|${ident}`);"
+    },
+    {
+      "line": 1967,
+      "owner": "substituteWeakFail",
+      "source": "if (ident) {"
+    },
+    {
+      "line": 1969,
+      "owner": "substituteWeakFail",
+      "source": "if (st) st.substitute = false;"
+    },
+    {
+      "line": 1977,
+      "owner": "thiefItem",
+      "source": "if (!m) return true;"
+    },
+    {
+      "line": 1988,
+      "owner": "thiefItem",
+      "source": "if (!thiefSide || !thiefSpecies || !victimSide || !victimSpecies || !item) {"
+    },
+    {
+      "line": 2002,
+      "owner": "rapidSpinRelease",
+      "source": "if (clearSide && state.spikes[clearSide]) {"
+    },
+    {
+      "line": 2009,
+      "owner": "addSubHit",
+      "source": "if (state.lastMoveTargetSide && state.lastMoveTargetSpecies) {"
+    },
+    {
+      "line": 2010,
+      "owner": "addSubHit",
+      "source": "if (/分身はきえてしまった/.test(seg.text)) return;"
+    },
+    {
+      "line": 2015,
+      "owner": "addSubBreak",
+      "source": "if (state.lastMoveTargetSide && state.lastMoveTargetSpecies) {"
+    },
+    {
+      "line": 2016,
+      "owner": "addSubBreak",
+      "source": "if (out.__subBreakEmitted) return;"
+    },
+    {
+      "line": 2020,
+      "owner": "addSubBreak",
+      "source": "if (st) st.substitute = false;"
+    },
+    {
+      "line": 2027,
+      "owner": "statDrop",
+      "source": "if (side && species) out.push(`|-unboost|${pokemonIdent(side, species)}|${stat}|${amount}`);"
+    },
+    {
+      "line": 2034,
+      "owner": "statBoost",
+      "source": "if (side && species) out.push(`|-boost|${pokemonIdent(side, species)}|${stat}|${amount}`);"
+    },
+    {
+      "line": 2041,
+      "owner": "leechSeedStart",
+      "source": "if (species && state.lastMoveTargetSide && state.lastMoveTargetSpecies === species) side = state.lastMoveTargetSide;"
+    },
+    {
+      "line": 2042,
+      "owner": "leechSeedStart",
+      "source": "if (!side) side = sideForSpeciesInLine(state, para, subj);"
+    },
+    {
+      "line": 2043,
+      "owner": "leechSeedStart",
+      "source": "if (side && species) {"
+    },
+    {
+      "line": 2046,
+      "owner": "leechSeedStart",
+      "source": "if (sourceSide) state.leechSeededBy[side].set(species, {sourceSide});"
+    },
+    {
+      "line": 2054,
+      "owner": "trapStart",
+      "source": "if (side && species) out.push(`|-activate|${pokemonIdent(side, species)}|trapped`);"
+    },
+    {
+      "line": 2059,
+      "owner": "destinyBondActivate",
+      "source": "if (!m) return true;"
+    },
+    {
+      "line": 2062,
+      "owner": "destinyBondActivate",
+      "source": "if (side && species) out.push(`|-activate|${pokemonIdent(side, species)}|move: Destiny Bond`);"
+    },
+    {
+      "line": 2067,
+      "owner": "perishCount",
+      "source": "if (!m) return true;"
+    },
+    {
+      "line": 2071,
+      "owner": "perishCount",
+      "source": "if (side && species) {"
+    },
+    {
+      "line": 2072,
+      "owner": "perishCount",
+      "source": "if (count > 0) out.push(`|-start|${pokemonIdent(side, species)}|perish${count}`);"
+    },
+    {
+      "line": 2074,
+      "owner": "perishCount",
+      "source": "if (out[out.length - 1] !== '|') out.push('|');"
+    },
+    {
+      "line": 2100,
+      "owner": "validateRaw",
+      "source": "if (!lines.includes('|init|battle')) warnings.push('missing |init|battle');"
+    },
+    {
+      "line": 2101,
+      "owner": "validateRaw",
+      "source": "if (!lines.some(l => l.startsWith('|title|'))) warnings.push('missing |title|');"
+    },
+    {
+      "line": 2102,
+      "owner": "validateRaw",
+      "source": "if (!lines.some(l => l.startsWith('|teampreview|'))) warnings.push('missing |teampreview|');"
+    },
+    {
+      "line": 2103,
+      "owner": "validateRaw",
+      "source": "if (!lines.some(l => l === '|start')) warnings.push('missing |start');"
+    },
+    {
+      "line": 2104,
+      "owner": "validateRaw",
+      "source": "if (!lines.some(l => l.startsWith('|switch|'))) warnings.push('no switch lines');"
+    },
+    {
+      "line": 2105,
+      "owner": "validateRaw",
+      "source": "if (/(undefined|NaN|null)/.test(raw)) warnings.push('raw contains undefined/NaN/null');"
+    },
+    {
+      "line": 2111,
+      "owner": "main",
+      "source": "if (args.help) { usage(); return; }"
+    },
+    {
+      "line": 2112,
+      "owner": "main",
+      "source": "if (!args.inputDir || !args.outDir) { usage(); process.exit(2); }"
+    },
+    {
+      "line": 2113,
+      "owner": "main",
+      "source": "if (!fs.existsSync(args.inputDir) || !fs.statSync(args.inputDir).isDirectory()) throw new Error('input-dir not found or not a directory: ' + args.inputDir);"
+    },
+    {
+      "line": 2114,
+      "owner": "main",
+      "source": "if (!args.allowNoDict && !args.dict) throw new Error('--dict raw_log.dict is required unless --allow-no-dict is set');"
+    },
+    {
+      "line": 2117,
+      "owner": "main",
+      "source": "if (!args.jaDict && args.dict) {"
+    },
+    {
+      "line": 2119,
+      "owner": "main",
+      "source": "if (fs.existsSync(candidate)) args.jaDict = candidate;"
+    },
+    {
+      "line": 2121,
+      "owner": "main",
+      "source": "if (args.jaDict) jaDictLoaded = loadJaDict(args.jaDict);"
+    },
+    {
+      "line": 2122,
+      "owner": "main",
+      "source": "if (args.dict) {"
+    },
+    {
+      "line": 2123,
+      "owner": "main",
+      "source": "if (!fs.existsSync(args.dict)) throw new Error('dict not found: ' + args.dict);"
+    },
+    {
+      "line": 2126,
+      "owner": "main",
+      "source": "if (!dictText.includes(must)) throw new Error('dict does not look like raw_log.dict; missing token: ' + must);"
+    },
+    {
+      "line": 2152,
+      "owner": "main",
+      "source": "if (status === 'converted' && seenBattleIds.has(res.battleId)) {"
+    },
+    {
+      "line": 2154,
+      "owner": "main",
+      "source": "if (prev.sourceFingerprint === res.sourceFingerprint) {"
+    },
+    {
+      "line": 2162,
+      "owner": "main",
+      "source": "if (status === 'converted') {"
+    },
+    {
+      "line": 2166,
+      "owner": "main",
+      "source": "} else if (status === 'skipped') {"
+    },
+    {
+      "line": 2173,
+      "owner": "main",
+      "source": "if (hasWarnings) {"
+    },
+    {
+      "line": 2218,
+      "owner": "main",
+      "source": "if (summary.failed) process.exitCode = 1;"
+    },
+    {
+      "line": 2221,
+      "owner": "(module)",
+      "source": "if (require.main === module) {"
+    }
+  ],
+  "connection_status": {
+    "complete_converter_source": "PRESERVED_WITH_EXACT_HASH",
+    "reference_bridge": "19_SAVED_SNAPSHOTS_BYTE_IDENTICAL_AS_REPORTED",
+    "production_v32_connection": "BENCH_HP_ADAPTER_ONLY",
+    "protocol_to_position": "OFFLINE_CANDIDATE_ONLY",
+    "complete_semantic_migration": "NOT_COMPLETE"
+  },
+  "unresolved_integration_requirements": [
+    "Classify every recognized event by actual consumer and resulting state.",
+    "Retain absolute HP and its provenance before percentage conversion.",
+    "Align normal requests and mid-turn switches without inventing upkeep.",
+    "Do not treat unmodified default fields as evidence of absence.",
+    "Use item events, not monState.itemUsed, for consumption evidence.",
+    "Use perish-count events, not initial state.perish.count, for current count.",
+    "Preserve type-change, preparation and called-move event parameters.",
+    "Carry unknown/errors/repair and rejection information to diagnostics.",
+    "Do not union erroneous move histories or take maximum false use counts.",
+    "Check the installed WASM interface; source references alone are not proof."
+  ],
+  "notes": [
+    "Only output/transport helpers are exempt from battle-state mapping.",
+    "No function is deleted from the pinned reference file.",
+    "main and parseBattle are mixed functions; their input validation is retained.",
+    "This inventory records scope, not successful migration or battle coverage.",
+    "Condition locations are source excerpts; multiline tests remain in the reference."
+  ]
+}

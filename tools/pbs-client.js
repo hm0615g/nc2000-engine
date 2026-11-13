@@ -10,12 +10,10 @@
  * Design invariants:
  *   1. Native UI preservation: operates purely as an HTTP/Cookie CGI participant
  *      (`ACTION=ENTORY` -> `PDINPUT.cgi` -> `CHECK`/`SELECT` -> `INPUT`/`CHANGE`).
- *   2. Zero-crash guarantee: PBS server mechanics are treated as a black box.
- *      Every network call retries on timeout/reset; every board state is
- *      sanitized into a declarative `nc2000-position-v1` snapshot; every WASM
- *      call is guarded by `try / catch`; and every submitted move/switch is
- *      projected strictly onto the actual `<select Name="MOVE">` `<option>`
- *      values offered by `PS.cgi` on that turn.
+ *   2. Battle decisions use the Castle observation adapter and unchanged WASM.
+ *      Inconsistent input or an unmapped action stops the match with evidence.
+ *      Action POSTs are attempted once after checking the current raw sources;
+ *      uncertain responses are reconciled by reading, never by resending.
  *
  * Usage:
  *   node tools/pbs-client.js --room K --name nc2000bot --team pool:nash [options]
@@ -23,9 +21,12 @@
 'use strict';
 
 const fs = require('fs');
+const assert = require('node:assert/strict');
 const path = require('path');
 const net = require('net');
 const { encodeTeamForPdinput, PDINPUT_ITEM_CODES } = require('./export-pdinput');
+const {readDecisionForm} = require('./pbs-v32-decision-boundary');
+const {captureStableBundle, createSubmissionGuard} = require('./pbs-castle-submission');
 
 const REPO = path.join(__dirname, '..');
 
@@ -75,7 +76,7 @@ if (args.help || args.h) {
   --anomaly-log FILE   JSONL path for automated parity check anomalies
                        (default: data/pbs-anomalies.jsonl; --no-anomaly-log to disable)
   --no-human-delay     Disable human-like minimum pacing delays
-  --random             Fast uniform-legal driver (no WASM search; useful for testing)
+  --random             Uniform legal driver (WASM input validation, no search)
   --decision-log F     Append JSONL decision records to F
   --quiet              Minimal console logging`);
   process.exit(0);
@@ -606,6 +607,9 @@ function classifyPage(res) {
   if (/name="?ACTION"?\s+value="?SELECT"?/i.test(html)) {
     return { kind: 'TEAM_PREVIEW_SELECT', html };
   }
+  if (/name="?ACTION"?\s+value="?BATONN"?/i.test(html)) {
+    return { kind: 'BATTLE_BATONN', html };
+  }
   if (/name="?ACTION"?\s+value="?CHANGE"?/i.test(html)) {
     return { kind: 'BATTLE_CHANGE', html };
   }
@@ -613,6 +617,25 @@ function classifyPage(res) {
     return { kind: 'BATTLE_INPUT', html };
   }
 
+  // Castle-specific non-actionable waiting pages captured from room K.
+  // Do not submit a form or consider these states unknown-page failures.
+  const castleRefreshMeta = /<meta\b[^>]*\bhttp-equiv\s*=\s*["']?\s*refresh(?:["'\s>])/i.test(html);
+  const castleRefreshForm = /<form\b[^>]*\baction\s*=\s*["']?(?:\.\/)?PS\.cgi(?:["'\s>])/i.test(html);
+  const castleEntryWaiting = castleRefreshMeta
+    && /<title>[^<]*\u30a8\u30f3\u30c8\u30ea\u30fc\u5f85\u3061[^<]*<\/title>/i.test(html)
+    && /\u5bfe\u6226\u8005\u3092\u5f85\u3063\u3066\u3044\u307e\u3059/.test(html)
+    && /Please\s+wait\s*!/i.test(html);
+  if (castleEntryWaiting) return {kind: 'WAITING_ENTRY', html};
+  const castleSelectWaitInputs = html.match(/<input\b[^>]*>/gi) || [];
+  const castleSelectWaitForms = html.match(/<form\b[^>]*>/gi) || [];
+  const castleSelectWaiting = castleRefreshMeta && castleRefreshForm
+    && /\u4f7f\u7528\u30dd\u30b1\u30e2\u30f3\u9078\u629e/.test(html)
+    && castleSelectWaitForms.length === 1 && castleSelectWaitInputs.length === 1
+    && /\btype\s*=\s*["']?submit(?:["'\s>])/i.test(castleSelectWaitInputs[0])
+    && /\bvalue\s*=\s*["']?\u66f4\u65b0(?:["'\s>])/i.test(castleSelectWaitInputs[0])
+    && !/\bname\s*=/i.test(castleSelectWaitInputs[0])
+    && !/<(?:input|button)\b[^>]*\bname\s*=\s*["']?ACTION\b/i.test(html);
+  if (castleSelectWaiting) return {kind: 'WAITING_SELECT', html};
   return { kind: 'UNKNOWN', html };
 }
 
@@ -1157,6 +1180,17 @@ function advanceLlogTrackerToTurn(info, targetTurn) {
  * - field: `weather` (`{ key, upkeeps }`), `turn`, `upkeepThisTurn`
  */
 function parseLlogHtml(html, previewSides = [[], []]) {
+  const isEffectExpiryBold = function isEffectExpiryBold(block, bm) {
+  const compact = text => String(text)
+    .replace(/<[^>]*>/g, '')
+    .normalize('NFKC')
+    .replace(/[\u200b-\u200d\ufeff\u2060]/g, '')
+    .replace(/\s+/g, '');
+  const prefix = compact(block.slice(0, bm.index));
+  const suffix = compact(block.slice(bm.index + bm[0].length));
+  return prefix.endsWith('\u306b\u304b\u304b\u3063\u3066\u3044\u305f') &&
+    /^\u306e\u52b9\u679c\u304c(?:\u304d\u308c\u305f|\u5207\u308c\u305f|\u304d\u3048\u305f|\u6d88\u3048\u305f|\u306a\u304f\u306a\u3063\u305f|\u3068\u3051\u305f|\u89e3\u3051\u305f)/u.test(suffix);
+};
   const createMonTrack = () => ({
     appeared: false,
     appearCount: 0,
@@ -1219,6 +1253,8 @@ function parseLlogHtml(html, previewSides = [[], []]) {
   };
 
   if (!html) return info;
+  const pendingCalledMove = [null,null];
+  const pendingTransform = [null,null];
 
   let p1Name = '';
   let p2Name = '';
@@ -1312,6 +1348,10 @@ function parseLlogHtml(html, previewSides = [[], []]) {
     if (slot === null || slot === undefined || slot < 0) return;
     const side = info.sides[sideIdx];
     const targetMon = side.mons[slot];
+    if (side.activeSlot !== null && side.activeSlot !== slot) {
+      pendingCalledMove[sideIdx] = null;
+      pendingTransform[sideIdx] = null;
+    }
 
     // If already active and unfainted, do not treat as a fresh switch
     if (side.activeSlot === slot && targetMon && targetMon.active && !targetMon.fainted) {
@@ -1455,6 +1495,8 @@ function parseLlogHtml(html, previewSides = [[], []]) {
           info.sides[1].actedThisTurn = false;
         }
         if (nextTurn > info.turn) {
+          pendingCalledMove[0] = pendingCalledMove[1] = null;
+          pendingTransform[0] = pendingTransform[1] = null;
           advanceLlogTrackerToTurn(info, nextTurn);
         }
       }
@@ -1583,6 +1625,8 @@ function parseLlogHtml(html, previewSides = [[], []]) {
     }
 
     if (blockTurn > info.turn) {
+      pendingCalledMove[0] = pendingCalledMove[1] = null;
+      pendingTransform[0] = pendingTransform[1] = null;
       advanceLlogTrackerToTurn(info, blockTurn);
     }
     const turnNum = info.turn;
@@ -1655,7 +1699,7 @@ function parseLlogHtml(html, previewSides = [[], []]) {
     }
 
     // 3. Check move usage: `<B>MOVE</B>` (with plain-text fallback `の MOVE！`)
-    const bMatches = [...block.matchAll(/<B>\s*([^<]+?)\s*<\/B>/gi)];
+    const bMatches = [...block.matchAll(/<B>\s*([^<]+?)\s*<\/B>/gi)].filter(bm => !isEffectExpiryBold(block, bm));
     const blockMoveIds = [];
     for (const bm of bMatches) {
       const mvId = JP_TO_MOVE_ID[normJp(bm[1])];
@@ -1671,11 +1715,15 @@ function parseLlogHtml(html, previewSides = [[], []]) {
     let callerMoveId = null;
     for (let mIdx = 0; mIdx < blockMoveIds.length; mIdx++) {
       const mvId = blockMoveIds[mIdx];
-      const isCalledMove = mIdx > 0 && (
+      const previousCaller = pendingCalledMove[sideIdx];
+      const inheritedCall = mIdx === 0 && previousCaller &&
+        previousCaller.turn === turnNum &&
+        previousCaller.slot === info.sides[sideIdx].activeSlot;
+      const isCalledMove = Boolean(inheritedCall) || (mIdx > 0 && (
         callerMoveId === 'sleeptalk' ||
         callerMoveId === 'mirrormove' ||
         callerMoveId === 'metronome'
-      );
+      ));
       if (mIdx === 0 && (mvId === 'sleeptalk' || mvId === 'mirrormove' || mvId === 'metronome')) {
         callerMoveId = mvId;
       }
@@ -1686,6 +1734,19 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         setActive(sideIdx, actorSlot);
       }
       const actorMon = actorSlot !== null ? info.sides[sideIdx].mons[actorSlot] : null;
+      const releasingCharge = Boolean(actorMon &&
+        actorMon.charging === mvId &&
+        TWO_TURN_CHARGE_MOVES.has(mvId));
+      if ((mvId === 'sleeptalk' ||
+           mvId === 'mirrormove' ||
+           mvId === 'metronome') &&
+          !moveFailed && actorSlot !== null) {
+        pendingCalledMove[sideIdx] = {
+          turn: turnNum, slot: actorSlot, move: mvId
+        };
+      } else if (isCalledMove) {
+        pendingCalledMove[sideIdx] = null;
+      }
       const foeSlot = info.sides[foeIdx].activeSlot ?? findExplicitSlot(foeIdx, clean);
       const foeMon = foeSlot !== null ? info.sides[foeIdx].mons[foeSlot] : null;
 
@@ -1731,7 +1792,10 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         }
 
         // Reveal move unless transformed, Mimic-copied, or foreign call (Metronome/Mirror Move)
-        const isForeignCall = isCalledMove && callerMoveId !== 'sleeptalk';
+        const effectiveCallerMoveId =
+          inheritedCall ? previousCaller.move : callerMoveId;
+        const isForeignCall =
+          isCalledMove && effectiveCallerMoveId !== 'sleeptalk';
         if (
           !actorMon.transformedInto &&
           actorMon.mimicOverlay !== mvId &&
@@ -1743,7 +1807,8 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         }
 
         // Two-turn charging move initiation
-        if (TWO_TURN_CHARGE_MOVES.has(mvId) && !moveFailed) {
+        if (TWO_TURN_CHARGE_MOVES.has(mvId) &&
+            !moveFailed && !releasingCharge) {
           const instantSolarBeam = mvId === 'solarbeam' && info.weather?.key === 'sunnyday';
           const isChargeText =
             clean.includes('空高く飛び上がった') ||
@@ -1811,8 +1876,12 @@ function parseLlogHtml(html, previewSides = [[], []]) {
               counter: nextCount,
             });
           } else if (mvId === 'transform' && foeSlot !== null && foeMon) {
-            actorMon.transformedInto = [foeIdx, foeSlot];
-            actorMon.boosts = [...foeMon.boosts];
+            pendingTransform[sideIdx] = {
+              turn: turnNum,
+              actorSlot,
+              foeSide: foeIdx,
+              foeSlot
+            };
           } else if (mvId === 'psychup' && foeMon) {
             actorMon.boosts = [...foeMon.boosts];
           } else if (mvId === 'mimic' && foeMon && foeMon.lastMove) {
@@ -1974,6 +2043,29 @@ function parseLlogHtml(html, previewSides = [[], []]) {
       });
     }
 
+    const awaitingTransform = pendingTransform[sideIdx];
+    if (awaitingTransform) {
+      if (isMoveFailureText(clean)) {
+        pendingTransform[sideIdx] = null;
+      } else if (/(?:\u3078\u3093\u3057\u3093\u3057\u305f|\u5909\u8eab\u3057\u305f)/.test(clean)) {
+        const srcMon =
+          info.sides[sideIdx].mons[awaitingTransform.actorSlot];
+        const targetMon =
+          info.sides[awaitingTransform.foeSide].mons[awaitingTransform.foeSlot];
+        if (srcMon && targetMon &&
+            info.sides[sideIdx].activeSlot === awaitingTransform.actorSlot) {
+          srcMon.transformedInto = [
+            awaitingTransform.foeSide,
+            awaitingTransform.foeSlot
+          ];
+          srcMon.boosts = [...targetMon.boosts];
+        }
+        pendingTransform[sideIdx] = null;
+      }
+    }
+    if (blockMoveIds.length === 0 && isMoveFailureText(clean)) {
+      pendingCalledMove[sideIdx] = null;
+    }
     // 3b. Phaze drag (`ほえる` / `ふきとばし` -> `ひきずりだされた` / `ふきとばされた`)
     if (isDragBlock) {
       const dragClauseMatch = rawClean.match(
@@ -2146,11 +2238,13 @@ function parseLlogHtml(html, previewSides = [[], []]) {
           ['かいひ', 6],
           ['回避', 6],
         ];
+        // Classify magnitude from the battle message, not the move name.
+        const stageLine = normJp(lineClean).replace(/[\u301c\uff5e]/g, '\u30fc');
         const delta =
-          lineClean.includes('さいだいまで') || lineClean.includes('最大まで') ? 12
-          : lineClean.includes('ぐーんとあがった') || lineClean.includes('ぐ〜んとあがった') || lineClean.includes('ぐーんと上がった') ? 2
-          : lineClean.includes('あがった') || lineClean.includes('上がった') ? 1
-          : lineClean.includes('がくっとさがった') || lineClean.includes('がく〜んとさがった') || lineClean.includes('がくっと下がった') ? -2
+          /(?:\u3055\u3044\u3060\u3044\u307e\u3067|\u6700\u5927\u307e\u3067)/.test(stageLine) ? 12
+          : /\u3050\u3050?\u30fc\u3093\u3068(?:\u3042\u304c\u3063\u305f|\u4e0a\u304c\u3063\u305f)/.test(stageLine) ? 2
+          : /(?:\u3042\u304c\u3063\u305f|\u4e0a\u304c\u3063\u305f)/.test(stageLine) ? 1
+          : /\u304c\u304f(?:\u3063|\u30fc\u3093)\u3068(?:\u3055\u304c\u3063\u305f|\u4e0b\u304c\u3063\u305f)/.test(stageLine) ? -2
           : -1;
         const appliedStats = new Set();
         for (const [jpStat, idx] of statNames) {
@@ -2166,6 +2260,8 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         if (
           lineClean.includes('もうどくをあびた') ||
           lineClean.includes('猛毒をあびた') ||
+          lineClean.includes('\u731b\u6bd2\u306b\u304a\u304b\u3055\u308c\u305f') ||
+          lineClean.includes('\u3082\u3046\u3069\u304f\u306b\u304a\u304b\u3055\u308c\u305f') ||
           lineClean.includes('もうどく状態')
         ) {
           subjMon.status = 'tox';
@@ -2183,6 +2279,8 @@ function parseLlogHtml(html, previewSides = [[], []]) {
           lineClean.includes('火傷を負った') ||
           lineClean.includes('やけどをおった') ||
           lineClean.includes('火傷をおった') ||
+          lineClean.includes('\u706b\u50b7\u3057\u305f') ||
+          lineClean.includes('\u3084\u3051\u3069\u3057\u305f') ||
           lineClean.includes('やけど状態になった')
         ) {
           subjMon.status = 'brn';
@@ -2197,7 +2295,10 @@ function parseLlogHtml(html, previewSides = [[], []]) {
           subjMon.status = 'par';
           subjMon.compPar = true;
         } else if (
-          (lineClean.includes('眠ってしまった') || lineClean.includes('ねむってしまった')) &&
+          (lineClean.includes('\u7720\u3063\u3066\u3057\u307e\u3063\u305f') ||
+           lineClean.includes('\u306d\u3080\u3063\u3066\u3057\u307e\u3063\u305f') ||
+           lineClean.includes('\u7720\u308a\u306f\u3058\u3081\u305f') ||
+           lineClean.includes('\u306d\u3080\u308a\u306f\u3058\u3081\u305f')) &&
           !blockMoveIds.includes('rest')
         ) {
           subjMon.status = 'slp';
@@ -2266,7 +2367,18 @@ function parseLlogHtml(html, previewSides = [[], []]) {
         ) {
           subjMon.volatiles.delete('substitute');
         }
-        if (lineClean.includes('アンコールがとけた') || lineClean.includes('アンコールが終わった')) {
+        // The target may receive Encore without a recognized preceding move.
+        if (/\u30a2\u30f3\u30b3\u30fc\u30eb\u3092(?:\u3046\u3051\u305f|\u53d7\u3051\u305f)/.test(lineClean) &&
+            !subjMon.volatiles.has('encore')) {
+          subjMon.volatiles.set('encore', {
+            key: 'encore',
+            start_turn: turnNum,
+            ...(subjMon.lastMove ? { move: subjMon.lastMove } : {}),
+          });
+        }
+        if (lineClean.includes('\u30a2\u30f3\u30b3\u30fc\u30eb\u304c\u3068\u3051\u305f') ||
+            lineClean.includes('\u30a2\u30f3\u30b3\u30fc\u30eb\u304c\u7d42\u308f\u3063\u305f') ||
+            lineClean.includes('\u30a2\u30f3\u30b3\u30fc\u30eb\u72b6\u614b\u304c\u3068\u3051\u305f')) {
           subjMon.volatiles.delete('encore');
         }
         if (lineClean.includes('かなしばりがとけた') || lineClean.includes('かなしばりから解放された')) {
@@ -2355,19 +2467,19 @@ function parseLlogHtml(html, previewSides = [[], []]) {
     // 6. Side condition end cues (Reflect, Light Screen, Safeguard)
     if (
       clean.includes('リフレクター') &&
-      (clean.includes('消えた') || clean.includes('きえた') || clean.includes('なくなった') || clean.includes('とけた') || clean.includes('切れた'))
+      (clean.includes('消えた') || clean.includes('きえた') || clean.includes('なくなった') || clean.includes('とけた') || (clean.includes('切れた') || clean.includes('\u304d\u308c\u305f')))
     ) {
       info.sides[sideIdx].conditions.delete('reflect');
     }
     if (
       (clean.includes('ひかりのかべ') || clean.includes('光の壁')) &&
-      (clean.includes('消えた') || clean.includes('きえた') || clean.includes('なくなった') || clean.includes('とけた') || clean.includes('切れた'))
+      (clean.includes('消えた') || clean.includes('きえた') || clean.includes('なくなった') || clean.includes('とけた') || (clean.includes('切れた') || clean.includes('\u304d\u308c\u305f')))
     ) {
       info.sides[sideIdx].conditions.delete('lightscreen');
     }
     if (
       (clean.includes('しんぴのまもり') || clean.includes('神秘の守り')) &&
-      (clean.includes('消えた') || clean.includes('きえた') || clean.includes('なくなった') || clean.includes('とけた') || clean.includes('切れた') || clean.includes('解けた'))
+      (clean.includes('消えた') || clean.includes('きえた') || clean.includes('なくなった') || clean.includes('とけた') || (clean.includes('切れた') || clean.includes('\u304d\u308c\u305f')) || clean.includes('解けた'))
     ) {
       info.sides[sideIdx].conditions.delete('safeguard');
     }
@@ -2403,6 +2515,16 @@ function parseLlogHtml(html, previewSides = [[], []]) {
     }
   }
 
+  for (const side of [0,1]) {
+    if (pendingTransform[side]) {
+      info.unrecognizedLines.push({
+        turn: info.turn,
+        side,
+        align: side === 0 ? 'left' : 'right',
+        line: 'Transform outcome not yet confirmed by LLOG'
+      });
+    }
+  }
   return info;
 }
 
@@ -2672,7 +2794,7 @@ function recordOpponentObservation({
         species: dexData.species[spId]?.name || pm.species,
         speciesId: spId,
         level: pm.level || 50,
-        gender: pm.gender || 'M',
+        gender: pm.gender ?? 'M',
         itemFlag: Boolean(pm.item_flag),
         pickedCount: 0,
         maxHps: {},
@@ -2970,7 +3092,7 @@ function buildDynamicBeliefPoolJson({
         item: finalItem,
         ability: 'No Ability',
         moves: mergedMoves.slice(0, 4),
-        gender: pm.gender || bestTemplate?.gender || 'M',
+        gender: pm.gender ?? bestTemplate?.gender ?? 'M',
         happiness: 255,
         evs: bestTemplate?.evs
           ? { ...bestTemplate.evs }
@@ -3149,7 +3271,7 @@ function buildAndSanitizePositionSpec({
           species: x.species,
           speciesId: toId(x.species),
           level: x.level || 55,
-          gender: x.gender || 'M',
+          gender: x.gender ?? 'M',
           item_flag: Boolean(x.item),
         }));
 
@@ -3169,7 +3291,7 @@ function buildAndSanitizePositionSpec({
         ? ownSet.species
         : (dexData.species[pm.speciesId]?.name || pm.species || 'Pikachu');
       const level = ownSet ? (ownSet.level || 55) : (pm.level || 55);
-      const gender = pm.gender || (ownSet?.gender || 'M');
+      const gender = pm.gender ?? (ownSet?.gender ?? 'M');
       const itemFlag = isMe ? Boolean(ownSet?.item) : Boolean(pm.item_flag);
 
       const usesMap = new Map();
@@ -3889,12 +4011,140 @@ function parseOrFallbackPreviewPick(choiceStr, ownSets, isRandom) {
   return [0, 1, 2];
 }
 
+/**
+ * Interpret a Castle input request without sending a network request.
+ */
+function interpretBattleRequest(page) {
+  const kind = page && page.kind;
+
+  if (![
+    'BATTLE_INPUT',
+    'BATTLE_CHANGE',
+    'BATTLE_BATONN'
+  ].includes(kind)) {
+    throw new Error(
+      'Not a supported battle input page: ' + kind
+    );
+  }
+
+  const battleTurn = parseBattleTurnHtml(page.html || '');
+
+  const isBatonPass = kind === 'BATTLE_BATONN';
+  const isForceSwitch = kind !== 'BATTLE_INPUT';
+
+  const actionType = isBatonPass
+    ? 'BATONN'
+    : (isForceSwitch ? 'CHANGE' : 'INPUT');
+
+  const rawNowInt = battleTurn.nowVal === ''
+    ? 0
+    : (parseInt(battleTurn.nowVal, 10) || 0);
+
+  const turnNum = isForceSwitch
+    ? Math.max(1, rawNowInt)
+    : rawNowInt + 1;
+
+  // BATONN is a switch request, but its ACTION must remain BATONN.
+  // Never invent an option if the form is unrecognized.
+  if (isBatonPass) {
+    if (!/^[0-9]+$/.test(battleTurn.nowVal)) {
+      throw new Error(
+        'BATONN page has no valid NOW field'
+      );
+    }
+
+    if (
+      !battleTurn.options.length ||
+      battleTurn.options.some(
+        o => o.kind !== 'switch' ||
+             !/^C[1-3]$/.test(o.value)
+      )
+    ) {
+      throw new Error(
+        'BATONN page has missing or unrecognized switch options'
+      );
+    }
+
+    if (!battleTurn.options.some(
+      o => o.hp === null || o.hp > 0
+    )) {
+      throw new Error(
+        'BATONN page has no selectable living switch target'
+      );
+    }
+  }
+
+  return {
+    battleTurn,
+    isForceSwitch,
+    actionType,
+    turnNum
+  };
+}
+
 // ------------------------------------------------------------------ WASM Initialization
 let wasm = null;
 let wasmDex = null;
-if (!RANDOM) {
+function ensureObservationRuntime() {
+  if (wasm && wasmDex) return;
   wasm = require(path.join(REPO, 'crates/wasm/pkg-node/nc2000_wasm.js'));
   wasmDex = new wasm.Dex();
+}
+if (!RANDOM) ensureObservationRuntime();
+
+function assertRepositoryOutput(filename) {
+  if (!filename) return;
+  const target = path.resolve(filename);
+  const root = fs.realpathSync(REPO);
+  const relative = path.relative(root, target);
+  assert.ok(relative && relative !== '..' && !relative.startsWith('..' + path.sep) &&
+    !path.isAbsolute(relative), 'OUTPUT_OUTSIDE_REPOSITORY:' + target);
+  let existing = target;
+  while (true) {
+    try { fs.lstatSync(existing); break; }
+    catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      existing = path.dirname(existing);
+    }
+  }
+  const resolved = fs.realpathSync(existing);
+  const actualRelative = path.relative(root, resolved);
+  assert.ok(actualRelative === '' || (actualRelative !== '..' &&
+    !actualRelative.startsWith('..' + path.sep) && !path.isAbsolute(actualRelative)),
+  'OUTPUT_SYMLINK_OUTSIDE_REPOSITORY:' + target);
+}
+
+function chooseObservedAction(prepared, {isRandom, iterations, chooseIndex = rngInt}) {
+  assert.equal(prepared?.status, 'READY', 'OBSERVATION_NOT_READY');
+  const {searcher: current, built} = prepared;
+  assert.ok(current && built && Array.isArray(built.expectedNativeInputs) &&
+    built.expectedNativeInputs.length > 0, 'NO_OBSERVED_LEGAL_ACTION');
+  assert.ok(Number.isSafeInteger(iterations) && iterations > 0, 'INVALID_SEARCH_BUDGET');
+  let bestChoice, mappingPath;
+  if (isRandom) {
+    const index = chooseIndex(built.expectedNativeInputs.length);
+    assert.ok(Number.isSafeInteger(index) && index >= 0 && index < built.expectedNativeInputs.length);
+    bestChoice = built.expectedNativeInputs[index];
+    mappingPath = 'observed:random';
+  } else if (built.expectedNativeInputs.length === 1) {
+    bestChoice = built.expectedNativeInputs[0];
+    mappingPath = 'observed:only-option';
+  } else {
+    current.step(iterations);
+    bestChoice = current.best();
+    mappingPath = 'observed:search';
+  }
+  assert.ok(built.expectedNativeInputs.includes(bestChoice), 'UNMAPPED_SEARCH_ACTION');
+  const mapping = built.mapNativeInput(bestChoice);
+  const options = built.ui.battleTurn.options.filter(row => row.value === mapping.value);
+  assert.equal(options.length, 1, 'CASTLE_OPTION_NOT_UNIQUE');
+  assert.equal(options[0].kind, mapping.kind, 'CASTLE_OPTION_KIND_MISMATCH');
+  const rootPolicy = JSON.parse(current.rootPolicy());
+  const metrics = JSON.parse(current.metrics());
+  assert.equal(metrics.projections, 0, 'ACTION_PROJECTION_BLOCKED');
+  assert.equal(metrics.legalityDrift, 0, 'ACTION_LEGALITY_DRIFT');
+  return {bestChoice, mapping, mappingPath, rootPolicy, metrics,
+    iterations: rootPolicy.iterations};
 }
 
 function log(msg) {
@@ -3957,9 +4207,12 @@ function resolveBotOutcomeFromFinishedHtml(
   return botWin ? 'WIN' : 'LOSE';
 }
 // ------------------------------------------------------------------ Single Game Runner
-async function playOneGame(gameIdx) {
-  const client = new PbsHttpClient();
-  const team = pickTeam();
+async function playOneGame(gameIdx, dependencies = {}) {
+  for (const filename of [DECISION_LOG, OPPONENT_DB_PATH, MATCH_LOG_PATH, TRACE_DIR_PATH, ANOMALY_LOG_PATH]) {
+    assertRepositoryOutput(filename);
+  }
+  const client = dependencies.httpClient || new PbsHttpClient();
+  const team = dependencies.team || pickTeam();
   const encodedPd = encodeTeamForPbsCookie(team);
   client.setCookie('PD0', encodedPd.cookieValue);
   client.setCookie('PBS', `${NAME}_${PASS}`);
@@ -3982,7 +4235,8 @@ async function playOneGame(gameIdx) {
   let hostWaitStartedAt = null;
   let pdRegistered = false;
   let selectSubmitted = false;
-  let lastTurnActedKey = '';
+  let observationSession = null;
+  let unknownPageStreak = 0;
   const matchStartedAt = new Date().toISOString();
   const roomTagMatch = ROOM_URL.match(/\/PBS\/_\/([^/]+)\//i);
   const roomTag = roomTagMatch ? roomTagMatch[1].toUpperCase() : 'ROOM';
@@ -3997,6 +4251,7 @@ async function playOneGame(gameIdx) {
       ...event,
     };
     traceEvents.push(rec);
+    if (dependencies.onTraceEvent) dependencies.onTraceEvent(rec);
     if (!traceFilePath) return;
     try {
       fs.mkdirSync(path.dirname(traceFilePath), { recursive: true });
@@ -4005,6 +4260,32 @@ async function playOneGame(gameIdx) {
       // Non-fatal trace persistence
     }
   };
+
+  const submissionGuard = createSubmissionGuard({
+    matchId, classifyPage, readDecisionForm,
+    getBundle: () => captureStableBundle({http: client, roomUrl: ROOM_URL, classifyPage}),
+    getPage: () => client.get(ROOM_URL),
+    getFinishedPage: async () => {
+      const terminal = await client.get(`${ROOM_URL}?ACTION=LLOG`);
+      assert.ok(terminal.statusCode >= 200 && terminal.statusCode < 300 &&
+        typeof terminal.html === 'string' && terminal.html.length, 'FINAL_LLOG_HTTP_FAILED');
+      assert.ok(previewSides && (mySide === 0 || mySide === 1) && foeName,
+        'FINAL_LLOG_MATCH_IDENTITY_REQUIRED');
+      const lastPreview = parseTeamPreviewHtml(terminal.html);
+      const names = [lastPreview.p1Name, lastPreview.p2Name];
+      assert.equal(names[mySide], NAME, 'FINAL_LLOG_OWN_NAME_MISMATCH');
+      assert.equal(names[1 - mySide], foeName, 'FINAL_LLOG_FOE_NAME_MISMATCH');
+      const identities = mons => mons.map(mon => ({species: mon.speciesId,
+        level: mon.level, gender: mon.gender, item: mon.item_flag}));
+      assert.deepEqual([lastPreview.p1Mons, lastPreview.p2Mons].map(identities),
+        previewSides.map(identities), 'FINAL_LLOG_PREVIEW_MISMATCH');
+      assert.ok(['WIN', 'LOSE', 'DRAW'].includes(
+        resolveBotOutcomeFromFinishedHtml(terminal.html, NAME, foeName)), 'FINAL_LLOG_OUTCOME_REQUIRED');
+      return terminal;
+    },
+    postOnce: fields => client.postForm(ROOM_URL, fields, {maxAttempts: 1}),
+    onEvent: appendTraceEvent,
+  });
 
   appendTraceEvent({
     type: 'match_start',
@@ -4023,7 +4304,6 @@ async function playOneGame(gameIdx) {
       tier: team.tier,
       sets: team.sets,
     },
-    pdCookie: encodedPd.cookieValue,
   });
 
   const ensureSearcher = (side, forceRebuild = false) => {
@@ -4038,6 +4318,7 @@ async function playOneGame(gameIdx) {
         maxHp: m?.maxHp || null,
         noLeftovers: Boolean(m?.noLeftovers),
         itemOriginal: m?.itemOriginal || null,
+        revealedMoves: m?.revealedMoves || [],
       })),
     });
 
@@ -4141,6 +4422,7 @@ async function playOneGame(gameIdx) {
 
     while (true) {
       const page = classifyPage(res);
+      if (page.kind !== 'UNKNOWN') unknownPageStreak = 0;
 
       // Confirm entry only after PBS returns an entered-room state.
       if (enteredRoom && !entryStatusSent && [
@@ -4183,7 +4465,7 @@ async function playOneGame(gameIdx) {
           try {
             finalLlogObj = parseLlogHtml(llogHtmlToParse, previewSides || [[], []]);
             const foeSide = 1 - mySide;
-            if (finalLlogObj && finalLlogObj.sides[foeSide]) {
+            if (!observationSession && finalLlogObj && finalLlogObj.sides[foeSide]) {
               const merged = mergeLlogIntoSeenFoeMons({
                 llog: finalLlogObj,
                 foeSide,
@@ -4263,7 +4545,7 @@ async function playOneGame(gameIdx) {
                 finalLlogHtml = finalLogRes.html;
                 finalLlogObj = parseLlogHtml(finalLogRes.html, previewSides || [[], []]);
                 const foeSide = 1 - mySide;
-                if (finalLlogObj && finalLlogObj.sides[foeSide]) {
+                if (!observationSession && finalLlogObj && finalLlogObj.sides[foeSide]) {
                   const merged = mergeLlogIntoSeenFoeMons({
                     llog: finalLlogObj,
                     foeSide,
@@ -4424,7 +4706,7 @@ async function playOneGame(gameIdx) {
           species: pm.species,
           speciesId: pm.speciesId,
           level: pm.level || 50,
-          gender: pm.gender || 'M',
+          gender: pm.gender ?? 'M',
           itemFlag: Boolean(pm.item_flag),
           appeared: false,
           fainted: false,
@@ -4495,7 +4777,9 @@ async function playOneGame(gameIdx) {
           }
         }
 
-        pickedRosterSlots = parseOrFallbackPreviewPick(choiceStr, team.sets, RANDOM);
+        pickedRosterSlots = dependencies.previewPick
+          ? dependencies.previewPick({choiceStr, ownSets: team.sets, isRandom: RANDOM})
+          : parseOrFallbackPreviewPick(choiceStr, team.sets, RANDOM);
         const [leadIdx, b1Idx, b2Idx] = pickedRosterSlots;
         log(
           `Preview pick: Lead=#${leadIdx + 1} (${team.sets[leadIdx].species}), ` +
@@ -4577,227 +4861,133 @@ async function playOneGame(gameIdx) {
         continue;
       }
 
-      if (page.kind === 'BATTLE_INPUT' || page.kind === 'BATTLE_CHANGE') {
-        const turnErrors = [];
-        const isForceSwitch = page.kind === 'BATTLE_CHANGE';
-        const battleTurn = parseBattleTurnHtml(page.html);
-        const rawNowInt = battleTurn.nowVal === '' ? 0 : (parseInt(battleTurn.nowVal, 10) || 0);
-        const turnNum = isForceSwitch ? Math.max(1, rawNowInt) : (rawNowInt + 1);
-        const actionType = isForceSwitch ? 'CHANGE' : 'INPUT';
-        const turnKey = `${actionType}:${battleTurn.nowVal}:${battleTurn.options.map(o => o.value).join(',')}`;
-
-        if (mySide === null) {
-          mySide = 0;
-        }
-        const foeSide = 1 - mySide;
-        if (!foeName && battleTurn.sides && battleTurn.sides[foeSide]?.trainerName) {
-          foeName = battleTurn.sides[foeSide].trainerName;
-        }
-
-        // Fetch PDAT and LLOG for richer board context (non-fatal if either fails)
-        let pdat = null;
-        let llog = null;
-        let rawPdatHtml = null;
-        let rawLlogHtml = null;
+      if (page.kind === 'BATTLE_INPUT' || page.kind === 'BATTLE_CHANGE' || page.kind === 'BATTLE_BATONN') {
+        let bundle = null, prepared = null;
         try {
-          const pdatRes = await client.get(`${ROOM_URL}?ACTION=PDAT`);
-          rawPdatHtml = pdatRes?.html ?? null;
-          pdat = parsePdatHtml(pdatRes.html);
-        } catch (err) {
-          turnErrors.push({ stage: 'fetch_or_parse_pdat', message: String(err.message || err) });
-        }
-        try {
-          const llogRes = await client.get(`${ROOM_URL}?ACTION=LLOG`);
-          rawLlogHtml = llogRes?.html ?? null;
-          llog = parseLlogHtml(llogRes.html, previewSides || [[], []]);
-          if (llog && llog.sides[foeSide]) {
-            lastLlogFoeMons = llog.sides[foeSide].mons;
+          assert.ok((mySide === 0 || mySide === 1) && previewSides && pickedRosterSlots,
+            'OBSERVATION_INITIAL_CONTEXT_REQUIRED');
+          bundle = await captureStableBundle({http: client, roomUrl: ROOM_URL,
+            classifyPage, initialResponse: res});
+          ensureObservationRuntime();
+          if (!observationSession) {
+            const workDir = path.join(REPO, 'pbs-work', 'observations', matchId);
+            assertRepositoryOutput(workDir);
+            const createSession = dependencies.createObservationSession ||
+              require('./pbs-castle-observation').createObservationSession;
+            observationSession = createSession({
+              repoRoot: REPO, workDir, client: module.exports, wasm, dex: wasmDex, dexData,
+              dictionaryPath: path.join(REPO, 'tools/pbs-castle-dictionary.js'),
+              side: mySide, matchId, ownSets: team.sets, previewSides, pickedRosterSlots,
+              seed: SEED * 1000 + gameIdx * 10 + mySide, c: PROFILE.c,
+              poolJson: beliefPoolJson,
+              poolProvider: ({seenFoeMons: observed, foeSide}) => buildDynamicBeliefPoolJson({
+                foePreviewMons: previewSides[foeSide], foeName,
+                seenFoeMons: observed, opponentDb,
+              }),
+            });
+            // Preview's searcher is no longer a battle input authority.
+            if (searcher) {
+              searcher.free();
+              searcher = null;
+              searcherBeliefSignature = '';
+            }
           }
-        } catch (err) {
-          turnErrors.push({ stage: 'fetch_or_parse_llog', message: String(err.message || err) });
-        }
-
-        const seenFoeMonsBefore = seenFoeMons ? JSON.parse(JSON.stringify(seenFoeMons)) : null;
-        const lastFoeActiveSlotBefore = lastFoeActiveSlot;
-
-        // Update persistent `seenFoeMons` with Castle leaks (exact HP/maxHp, item reveals, Leftovers absence)
-        if (seenFoeMons && previewSides && previewSides[foeSide]) {
-          const merged = mergeLlogIntoSeenFoeMons({
-            llog,
-            foeSide,
-            seenFoeMons,
-            previewSides,
-            battleTurn,
-            turnNum,
-            isForceSwitch,
-            lastFoeActiveSlot,
-            onLeakLog: log,
+          const seenFoeMonsBefore = seenFoeMons ? JSON.parse(JSON.stringify(seenFoeMons)) : null;
+          const lastFoeActiveSlotBefore = lastFoeActiveSlot;
+          prepared = observationSession.prepare(bundle);
+          assert.equal(prepared.status, 'READY', 'OBSERVATION_NOT_READY');
+          const {built, spec, report} = prepared;
+          const {battleTurn, actionType, isForceSwitch} = built.ui;
+          const decisionPolicy = dependencies.decisionPolicy || {isRandom: RANDOM, iterations: ITERS};
+          const selected = chooseObservedAction(prepared, decisionPolicy);
+          const {bestChoice, rootPolicy, mappingPath, mapping} = selected;
+          const chosenMoveValue = mapping.value;
+          const postFields = {ACTION: actionType, MOVE: chosenMoveValue, NOW: battleTurn.nowVal};
+          const form = readDecisionForm(bundle.rawTurnHtml);
+          assert.equal(postFields.ACTION, form.action, 'PREPARED_ACTION_FORM_MISMATCH');
+          assert.equal(postFields.NOW, form.now, 'PREPARED_NOW_FORM_MISMATCH');
+          seenFoeMons = JSON.parse(JSON.stringify(prepared.seenFoeMons));
+          lastFoeActiveSlot = prepared.lastFoeActiveSlot;
+          // No union with the legacy parser's possibly corrected-away events.
+          lastLlogFoeMons = null;
+          decisions++;
+          const gameSeed = SEED * 1000 + gameIdx * 10 + mySide;
+          log(`Turn ${spec.turn} (${actionType}, NOW="${battleTurn.nowVal}"): ` +
+            `selected MOVE=${chosenMoveValue} [${mappingPath}: ${bestChoice}]`);
+          appendTraceEvent({
+            type: 'decision', decision: decisions, phase: actionType,
+            forceSwitch: isForceSwitch, turn: spec.turn, rawNowVal: battleTurn.nowVal,
+            mySide, foeName: foeName || null, seed: gameSeed,
+            iterations: selected.iterations,
+            requestedIterations: decisionPolicy.isRandom ? 0 : decisionPolicy.iterations,
+            c: PROFILE.c, rawTurnHtml: bundle.rawTurnHtml, rawPdatHtml: bundle.rawPdatHtml,
+            rawLlogHtml: bundle.rawLlogHtml, battleTurn, pdat: built.pdat,
+            llogSummary: null, pickedRosterSlots, lastFoeActiveSlotBefore,
+            lastFoeActiveSlotAfter: lastFoeActiveSlot, seenFoeMonsBefore,
+            seenFoeMonsAfter: JSON.parse(JSON.stringify(seenFoeMons)), spec,
+            sanitizeDiffs: [], bestChoice, chosenMoveValue, mappingPath,
+            matchedAction: bestChoice, rootPolicy, postFields, errors: [],
+            observationReport: report, observationSourceHashes: prepared.sourceHashes,
+            observationRoute: 'CASTLE_OBSERVATION_UNCHANGED_CORE',
+            sentToCastle: false,
           });
-          lastFoeActiveSlot = merged.lastFoeActiveSlot;
+          appendDecisionLog({
+            gameIdx, decision: decisions, phase: actionType, turn: spec.turn,
+            nowVal: battleTurn.nowVal, side: mySide, foeName, seed: gameSeed,
+            iterations: selected.iterations,
+            requestedIterations: decisionPolicy.isRandom ? 0 : decisionPolicy.iterations,
+            c: PROFILE.c, bestChoice, chosenMoveValue, mappingPath, matchedAction: bestChoice,
+            options: battleTurn.options, rootPolicy, spec,
+            observationReport: report, observationSourceHashes: prepared.sourceHashes,
+          });
+          const submitted = await submissionGuard.submit({bundle, fields: postFields});
+          res = submitted.response;
+        } catch (error) {
+          appendTraceEvent({
+            type: 'observation_stopped', stage: 'battle_observation_or_submission',
+            message: String(error?.message || error),
+            rawTurnHtml: bundle?.rawTurnHtml ?? page.html ?? null,
+            rawPdatHtml: bundle?.rawPdatHtml ?? null,
+            rawLlogHtml: bundle?.rawLlogHtml ?? null,
+            observationReport: prepared?.report ?? null,
+            submission: error?.submission ?? submissionGuard.snapshot(),
+            automaticFallback: false, automaticInitialization: false,
+          });
+          throw error;
+        } finally {
+          if (prepared?.searcher) prepared.searcher.free();
         }
-
-        // If pickedRosterSlots was not set (e.g., resumed mid-game), infer from PDAT
-        if (!pickedRosterSlots && pdat && pdat.mons.length > 0) {
-          const inferred = [];
-          for (const pm of pdat.mons) {
-            const idx = team.sets.findIndex(
-              (s, i) => !inferred.includes(i) && toId(s.species) === pm.speciesId
-            );
-            if (idx >= 0) inferred.push(idx);
-          }
-          for (let i = 0; i < 6 && inferred.length < 3; i++) {
-            if (!inferred.includes(i)) inferred.push(i);
-          }
-          pickedRosterSlots = inferred.slice(0, 3);
-        }
-
-        let bestChoice = null;
-        let rootPolicy = null;
-        const spec = buildAndSanitizePositionSpec({
-          mySide,
-          turn: turnNum,
-          ownSets: team.sets,
-          previewSides,
-          pickedRosterSlots,
-          battleTurn,
-          pdat,
-          llog,
-          seenFoeMons,
-          teamPreview: false,
-          forceSwitch: isForceSwitch,
-        });
-
-        if (!RANDOM && battleTurn.options.length > 1) {
-          try {
-            const s = ensureSearcher(mySide, false);
-            s.setPosition(JSON.stringify(spec));
-            s.step(ITERS);
-            bestChoice = s.best();
-            try {
-              rootPolicy = JSON.parse(s.rootPolicy());
-            } catch {}
-          } catch (err) {
-            turnErrors.push({ stage: 'battle_search', message: String(err.message || err) });
-            log(`Turn ${spec.turn} (${actionType}) search fallback: ${err.message || err}`);
-          }
-        }
-
-        const resolvedOption = resolveLegalPbsMoveOption({
-          bestChoice,
-          rootPolicy,
-          spec,
-          pickedRosterSlots,
-          options: battleTurn.options,
-          ownSets: team.sets,
-          isRandom: RANDOM,
-        });
-        const chosenMoveValue = resolvedOption.value;
-
-        const chosenOptObj = battleTurn.options.find(o => o.value === chosenMoveValue);
-        log(
-          `Turn ${spec.turn} (${actionType}, NOW="${battleTurn.nowVal}"): ` +
-          `submitting MOVE=${chosenMoveValue} (${chosenOptObj ? chosenOptObj.label : ''})` +
-          (bestChoice ? ` [search: ${bestChoice}, map: ${resolvedOption.mappingPath}]` : '')
-        );
-
-        decisions++;
-        lastTurnActedKey = turnKey;
-        const gameSeed = SEED * 1000 + gameIdx * 10 + mySide;
-        const postFields = {
-          ACTION: actionType,
-          MOVE: chosenMoveValue,
-          NOW: battleTurn.nowVal,
-        };
-
-        appendTraceEvent({
-          type: 'decision',
-          decision: decisions,
-          phase: actionType,
-          forceSwitch: isForceSwitch,
-          turn: spec.turn,
-          rawNowVal: battleTurn.nowVal,
-          mySide,
-          foeName: foeName || null,
-          seed: gameSeed,
-          iterations: RANDOM ? 0 : (battleTurn.options.length > 1 ? ITERS : 0),
-          c: PROFILE.c,
-          rawTurnHtml: page.html || '',
-          rawPdatHtml,
-          rawLlogHtml,
-          battleTurn,
-          pdat,
-          llogSummary: serializeLlogTracker(llog),
-          pickedRosterSlots,
-          lastFoeActiveSlotBefore,
-          lastFoeActiveSlotAfter: lastFoeActiveSlot,
-          seenFoeMonsBefore,
-          seenFoeMonsAfter: seenFoeMons ? JSON.parse(JSON.stringify(seenFoeMons)) : null,
-          spec,
-          sanitizeDiffs: spec._sanitizeDiffs || [],
-          bestChoice,
-          chosenMoveValue,
-          mappingPath: resolvedOption.mappingPath,
-          matchedAction: resolvedOption.matchedAction,
-          rootPolicy,
-          postFields,
-          errors: turnErrors,
-        });
-
-        appendDecisionLog({
-          gameIdx,
-          decision: decisions,
-          phase: actionType,
-          turn: spec.turn,
-          nowVal: battleTurn.nowVal,
-          side: mySide,
-          foeName,
-          seed: gameSeed,
-          iterations: RANDOM ? 0 : (battleTurn.options.length > 1 ? ITERS : 0),
-          c: PROFILE.c,
-          active: [spec.sides[0].active, spec.sides[1].active],
-          party: [spec.sides[0].party, spec.sides[1].party],
-          hpStatus: spec.sides.map(s =>
-            s.mons.map(m => ({
-              species: m.species,
-              active: m.active,
-              fainted: m.fainted,
-              appeared: m.appeared,
-              appear_count: m.appear_count,
-              switch_in_turn: m.switch_in_turn,
-              hp_num: m.hp_num,
-              hp_den: m.hp_den,
-              hp_exact: m.hp_exact,
-              status: m.status,
-              rest: m.rest,
-              slept: m.slept,
-              tox_counter: m.tox_counter,
-              comp_brn: m.comp_brn,
-              comp_par: m.comp_par,
-            }))
-          ),
-          boosts: spec.sides.map(s =>
-            s.active !== null && s.mons[s.active] ? s.mons[s.active].boosts : [0, 0, 0, 0, 0, 0, 0]
-          ),
-          sideConditions: [spec.sides[0].conditions, spec.sides[1].conditions],
-          volatiles: spec.sides.map(s =>
-            s.active !== null && s.mons[s.active] ? s.mons[s.active].volatiles : []
-          ),
-          weather: spec.weather,
-          bestChoice,
-          chosenMoveValue,
-          mappingPath: resolvedOption.mappingPath,
-          matchedAction: resolvedOption.matchedAction,
-          options: battleTurn.options,
-          rootPolicy,
-          spec,
-        });
-
-        res = await client.postForm(ROOM_URL, postFields);
         continue;
       }
 
-      // Unknown or transitional page: wait and poll ROOM_URL
-      log(`Unhandled page state (${page.kind}), polling ${ROOM_URL}...`);
+      // Unknown/transitional pages: preserve evidence and fail
+      // after repeated failures instead of polling indefinitely.
+      unknownPageStreak++;
+
+      if (
+        unknownPageStreak === 1 ||
+        unknownPageStreak === 12
+      ) {
+        appendTraceEvent({
+          type: 'unhandled_page',
+          pageKind: page.kind,
+          streak: unknownPageStreak,
+          statusCode: res.statusCode,
+          location: res.location || null,
+          rawUnknownHtml: page.html || ''
+        });
+      }
+
+      if (unknownPageStreak >= 12) {
+        throw new Error(
+          `Unknown PBS page state persisted for ${unknownPageStreak} polls; raw HTML preserved in trace`
+        );
+      }
+
+      log(
+        `Unhandled page state (${page.kind}), polling ${ROOM_URL}... (${unknownPageStreak}/12)`
+      );
+
       await sleep(POLL_MS);
       res = await client.get(ROOM_URL);
     }
@@ -4826,9 +5016,13 @@ if (require.main === module) {
 
 module.exports = {
   PbsHttpClient,
+  playOneGame,
+  chooseObservedAction,
+  assertRepositoryOutput,
   classifyPage,
   parseTeamPreviewHtml,
   parseBattleTurnHtml,
+  interpretBattleRequest,
   parsePdatHtml,
   parseLlogHtml,
   serializeLlogTracker,

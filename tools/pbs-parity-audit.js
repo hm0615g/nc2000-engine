@@ -328,17 +328,87 @@ function auditMatchTrace(traceEvents, options = {}) {
           });
           specToCheck = rebuiltSpec;
           if (ev.spec && JSON.stringify(rebuiltSpec) !== JSON.stringify(ev.spec)) {
+            const castleLegacyReparse = ev.observationRoute === 'CASTLE_OBSERVATION_UNCHANGED_CORE'
+              && ev.observationReport?.schema === 'pbs-castle-observation-report-v1';
             pushAnomaly(
               'warn',
-              'REPARSE_SPEC_DRIFT',
+              castleLegacyReparse ? 'CASTLE_LEGACY_REPARSE_NOT_COMPARABLE' : 'REPARSE_SPEC_DRIFT',
               turn,
               dec,
-              `Re-parsed PositionSpec on turn ${turn} differs from recorded spec`,
-              { recordedTurn: ev.spec.turn, rebuiltTurn: rebuiltSpec.turn }
+              castleLegacyReparse
+                ? `Legacy parser PositionSpec is not equivalent to Castle observation state on turn ${turn}`
+                : `Re-parsed PositionSpec on turn ${turn} differs from recorded spec`,
+              { recordedTurn: ev.spec.turn, rebuiltTurn: rebuiltSpec.turn,
+                castleObservation: castleLegacyReparse }
             );
           }
         }
         llogSummary = serializeLlogTracker(reparsedLlog);
+      }
+    }
+
+    // Castle-only: verify the actual searcher position recorded after HP completion.
+    // Old traces have no finalPositionSpec, so the legacy warning is preserved.
+    if (ev.observationRoute === 'CASTLE_OBSERVATION_UNCHANGED_CORE'
+        && ev.observationReport?.finalPositionSpecStage === 'post-exact-hp-position') {
+      const finalSpec = ev.observationReport.finalPositionSpec;
+      const picked = Array.isArray(ev.pickedRosterSlots) ? ev.pickedRosterSlots : pickedRosterSlots;
+      const ownMons = finalSpec?.sides?.[side]?.mons;
+      let valid = Boolean(finalSpec && finalSpec.schema === 'nc2000-position-v1'
+        && finalSpec.side === side && Array.isArray(ownMons)
+        && Array.isArray(picked) && picked.length === 3
+        && new Set(picked).size === 3 && Array.isArray(pdat?.mons)
+        && pdat.mons.length === 3);
+      let opaqueBenchHpCount = 0;
+      if (valid) {
+        for (let i = 0; i < 3; i++) {
+          const current = ownMons[picked[i]];
+          const observed = pdat.mons[i];
+          const sourceHp = observed?.hp;
+          const sourceMaxHp = observed?.maxHp;
+          const matchingHpChecks = Array.isArray(ev.observationReport.ownHpChecks)
+            ? ev.observationReport.ownHpChecks.filter(row => row.rosterSlot === picked[i]
+              && row.species === observed?.speciesId && row.hp === sourceHp
+              && row.maxHp === sourceMaxHp && row.match === true) : [];
+          const expectedPercent = Number.isInteger(sourceHp) && Number.isInteger(sourceMaxHp)
+            && sourceMaxHp > 0 && sourceHp >= 0 && sourceHp <= sourceMaxHp
+            ? Math.floor((200 * sourceHp + sourceMaxHp) / (2 * sourceMaxHp)) : null;
+          const percentMatch = current?.hp_den === 100 && current.hp_num === expectedPercent;
+          // The final PositionSpec may retain 48/48 on an unused, non-fainted bench slot.
+          // This is NOT accepted as an exact HP reading: the independently checked
+          // ProtocolSearcher stateView HP is attested by ownHpChecks instead.
+          const opaqueBenchHp = current?.hp_num === 48 && current?.hp_den === 48
+            && current.active === false && current.fainted === false && sourceHp > 0;
+          if (opaqueBenchHp) opaqueBenchHpCount++;
+          if (!current || !observed
+              || toId(current.species) !== toId(observed.speciesId)
+              || expectedPercent === null || matchingHpChecks.length !== 1
+              || current.fainted !== (sourceHp === 0)
+              || !(percentMatch || opaqueBenchHp)) {
+            valid = false;
+            break;
+          }
+        }
+      }
+      if (!valid) {
+        pushAnomaly('error','CASTLE_FINAL_POSITION_PDAT_MISMATCH',turn,dec,
+          `Final Castle searcher position fails own-HP/roster checks on turn ${turn}`,
+          {side, pickedRosterSlots:picked});
+      } else {
+        specToCheck = finalSpec;
+      }
+      if (ev.observationReport.completePositionCertified !== true
+          || ev.observationReport.allConverterBranchesCertified !== true
+          || ev.observationReport.phase?.residualCompletionCertified !== true
+          || (ev.observationReport.acceptedPpGaps?.length || 0) > 0
+          || opaqueBenchHpCount > 0) {
+        pushAnomaly('warn','CASTLE_POSITION_CERTIFICATION_LIMITED',turn,dec,
+          `Castle final position is only partially certified on turn ${turn}`,
+          {completePositionCertified:ev.observationReport.completePositionCertified,
+           allConverterBranchesCertified:ev.observationReport.allConverterBranchesCertified,
+           residualCompletionCertified:ev.observationReport.phase?.residualCompletionCertified,
+           acceptedPpGapCount:ev.observationReport.acceptedPpGaps?.length || 0,
+           opaqueBenchHpCount});
       }
     }
 
@@ -678,7 +748,17 @@ function auditMatchTrace(traceEvents, options = {}) {
       }
       if (!startEv?.random && battleTurn.options.length > 1) {
         const mp = String(ev.mappingPath || '');
-        if (!mp.startsWith('direct:')) {
+        const castleObservedVerified = ev.observationRoute === 'CASTLE_OBSERVATION_UNCHANGED_CORE'
+          && ev.observationReport?.schema === 'pbs-castle-observation-report-v1'
+          && ['observed:search','observed:random','observed:only-option'].includes(mp)
+          && typeof ev.bestChoice === 'string'
+          && ev.bestChoice === ev.matchedAction
+          && ev.chosenMoveValue === submittedVal
+          && ev.postFields?.MOVE === submittedVal
+          && Array.isArray(ev.errors) && ev.errors.length === 0
+          && ev.observationReport.legalMatch === true
+          && battleTurn.options.filter(o => o.value === submittedVal).length === 1;
+        if (!mp.startsWith('direct:') && !castleObservedVerified) {
           const sev = mp.startsWith('policy-fallback:') ? 'warn' : 'error';
           pushAnomaly(
             sev,
