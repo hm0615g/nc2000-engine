@@ -587,7 +587,7 @@ impl WasmBlindSearcher {
         self.baked = None;
         let seed = self.rng.next();
         let position = self.local.position(&self.dex, &mut self.belief, &self.observer, &mut self.rng).map_err(js_err)?;
-        let search = BlindSearch::from_observation(&position, &self.dex, self.cfg.clone(), self.side, seed);
+        let mut search = BlindSearch::from_observation(&position, &self.dex, self.cfg.clone(), self.side, seed);
         if search.is_preview() {
             // Pinned (open sheet): both sheets public — resolve the pair
             // directly by signature, no identification condition. Else the
@@ -607,6 +607,9 @@ impl WasmBlindSearcher {
                 if search.actions().contains(&c) {
                     self.baked = Some(c);
                 }
+            }
+            if self.baked.is_none() {
+                search.prune_preview_aliases(&self.dex);
             }
         }
         self.preview_cache_info = self.preview_cache_identity.info(&battle.battle, &self.observer);

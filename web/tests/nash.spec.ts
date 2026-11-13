@@ -442,7 +442,7 @@ test("the play door's Nash draw choice draws a mixture arm and persists", async 
 test("the start screen links to the party evaluator", async ({ page }) => {
   await seedStorage(page);
   await page.goto("/");
-  const link = page.locator(".start-link");
+  const link = page.locator('.start-link[href*="?evaluate"]');
   await expect(link).toHaveAttribute("href", /\?evaluate$/);
   await link.click();
   await expect(page.getByRole("heading", { name: "Evaluate your team's strength" })).toBeVisible();

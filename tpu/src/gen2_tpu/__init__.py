@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import time
 import jax
 import jax.numpy as jnp
 
-os.makedirs("/tmp/jax_cache_gen2_tpu", exist_ok=True)
-jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache_gen2_tpu")
+def _configure_jax_compilation_cache() -> None:
+    cache_dir = os.environ.get("JAX_COMPILATION_CACHE_DIR", "/tmp/jax_cache_gen2_tpu")
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        jax.config.update("jax_compilation_cache_dir", cache_dir)
+        jax.config.update("jax_persistent_cache_min_compile_time_secs", 0.5)
+    except Exception:
+        pass
+
+
+_configure_jax_compilation_cache()
 
 from .tpu_emu import (
     TPU_V5E,

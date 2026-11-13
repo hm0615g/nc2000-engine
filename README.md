@@ -41,15 +41,15 @@ Rust battle engine, imperfect-information search bot, WebAssembly/Preact client,
 - WASM bindings & build script: [`crates/wasm/src/lib.rs`](crates/wasm/src/lib.rs), [`crates/wasm/build.sh`](crates/wasm/build.sh), [`crates/wasm/tests-node/`](crates/wasm/tests-node/)
 - Web application & E2E suites: [`web/src/app.tsx`](web/src/app.tsx), [`web/src/data.ts`](web/src/data.ts), [`web/package.json`](web/package.json), [`web/tests/`](web/tests/)
 - PS local/websocket interop & preview cache helper: [`tools/ps-arena.js`](tools/ps-arena.js), [`tools/ps-client.js`](tools/ps-client.js), [`tools/preview-cache.js`](tools/preview-cache.js)
-- Gym Leader's Castle (`PS.cgi`) client, `PD0` exporter & resident Discord bot: [`tools/pbs-client.js`](tools/pbs-client.js), [`tools/export-pdinput.js`](tools/export-pdinput.js), [`tools/pbs-discord-bot.js`](tools/pbs-discord-bot.js)
-- JAX/TPU package: [`tpu/README.md`](tpu/README.md), [`tpu/HANDOFF.md`](tpu/HANDOFF.md)
+- Core Engine SDK builder & deterministic position diagnosis CLI: [`tools/bundle-core-sdk.js`](tools/bundle-core-sdk.js), [`tools/diagnose-position.js`](tools/diagnose-position.js) (downstream environment adapters like Gym Leader's Castle live in the operational fork [`hm0615g/nc2000-engine`](https://github.com/hm0615g/nc2000-engine))
+- JAX/TPU package & Google Colab runner: [`tpu/README.md`](tpu/README.md), [`tpu/HANDOFF.md`](tpu/HANDOFF.md), [`tools/colab-tpu.sh`](tools/colab-tpu.sh), [`AGENTS.md`](AGENTS.md)
 - CI / GitHub Pages deployment contract: [`.github/workflows/pages.yml`](.github/workflows/pages.yml)
 
 ### Specifications & Reference Docs
 - Format mechanics & PS porting notes: [`PORT-NOTES.md`](PORT-NOTES.md), [`PORTING.md`](PORTING.md)
 - Server-side preview cache specification: [`docs/PREVIEW-CACHE.md`](docs/PREVIEW-CACHE.md) (rendered by [`tools/render-preview-cache-doc.py`](tools/render-preview-cache-doc.py))
 - Native fork integration handoff: [`docs/NATIVE-FORK-HANDOFF.md`](docs/NATIVE-FORK-HANDOFF.md) (rendered by [`tools/render-native-handoff.py`](tools/render-native-handoff.py))
-- Gym Leader's Castle (`PS.cgi`) Discord bot operational handoff: [`docs/PBS-CASTLE-BOT-HANDOFF.md`](docs/PBS-CASTLE-BOT-HANDOFF.md)
+- Engine anomaly report & triage protocol: [`.github/ISSUE_TEMPLATE/engine_anomaly_report.yml`](.github/ISSUE_TEMPLATE/engine_anomaly_report.yml)
 - Compact replay (`NC2-…`) specification: [`docs/replay.md`](docs/replay.md)
 - Residual eval & rollout NN handoff: [`docs/RESIDUAL-NN-HANDOFF.md`](docs/RESIDUAL-NN-HANDOFF.md)
 - Endgame exact/bound solver specification: [`ENDGAME-SOLVER-ALGORITHM.md`](ENDGAME-SOLVER-ALGORITHM.md)
@@ -72,6 +72,7 @@ done
 crates/wasm/build.sh
 cd web && npm run build && npm run test:worker && npm run test:evaluate-worker && npm run test:policy && npm run test:e2e
 
-# TPU test suite
+# TPU test suite (local 8-core TPU emulation, or remote Google Colab via tools/colab-tpu.sh)
 uv run --project tpu pytest tpu/tests -v
+./tools/colab-tpu.sh pytest
 ```

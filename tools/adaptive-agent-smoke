@@ -41,7 +41,7 @@ def main():
         subprocess.run(['cargo', 'build', '--release', '-p', 'nc2000-bot', '--example', 'arena'], cwd=root, env=env, check=True)
         destination.mkdir()
         sources = ['crates/bot/src/blind.rs', 'crates/bot/src/root_policy.rs', 'crates/bot/examples/arena.rs',
-                   'crates/bot/tests/blind.rs', 'crates/bot/tests/root_mix_probes.rs']
+                   'crates/bot/tests/suite/blind.rs', 'crates/bot/tests/suite/root_mix_probes.rs']
         (destination / 'manifest.json').write_text(json.dumps(dict(binary_sha256=sha(binary),
             source_sha256={p:sha(root/p) for p in sources}), indent=2) + '\n')
         for label, opponent in [('null', 'blind:1000:0.4:mix'), ('comparison', 'blind:1000:0.4')]:

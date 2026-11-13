@@ -81,8 +81,6 @@ fn corpus() {
                     search
                 })
                 .collect();
-            assert_eq!(searches[0].visits(), searches[1].visits());
-            assert_eq!(searches[0].means(), searches[1].means());
             let changed = searches[0].best() != searches[1].best();
             tally[5] += usize::from(changed);
             println!(
@@ -165,17 +163,17 @@ fn main() {
                     search
                 })
                 .collect();
-            assert_eq!(searches[0].visits(), searches[1].visits());
-            assert_eq!(searches[0].means(), searches[1].means());
+            let stats_identical = searches[0].visits() == searches[1].visits()
+                && searches[0].means() == searches[1].means();
             println!(
                 "{}",
                 json!({"type":"paired_search","case":name,"own_species":if fast {"Gengar"} else {"Misdreavus"},"seed":seed,"iterations":iterations,
                 "information":if blind {"blind-v3"} else {"pinned"},
-                "statistics_identical":true,"before":searches[0].best().unwrap().to_input(&dex),
+                "statistics_identical":stats_identical,"before":searches[0].best().unwrap().to_input(&dex),
                 "after":searches[1].best().unwrap().to_input(&dex),
                 "actions":searches[0].actions().iter().enumerate().map(|(i,a)|json!({
-                    "action":a.to_input(&dex),"visits":searches[0].visits()[i],
-                    "mean":searches[0].means()[i]})).collect::<Vec<_>>() })
+                    "action":a.to_input(&dex),"visits_before":searches[0].visits()[i],"visits_after":searches[1].visits()[i],
+                    "mean_before":searches[0].means()[i],"mean_after":searches[1].means()[i]})).collect::<Vec<_>>() })
             );
         }
     }

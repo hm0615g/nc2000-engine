@@ -97,8 +97,6 @@ pub struct RmConfig {
     pub mix_actions: usize,
     /// UCB1 exploration constant.
     pub c: f64,
-    pub continuation_exp3_ix: bool,
-    pub continuation_exp3_mean: bool,
     pub collapse_sleep_actions: bool,
     pub root_revisit_interval: u32,
     pub canonical_claw_key: bool,
@@ -936,8 +934,6 @@ impl Default for RmConfig {
             probe: 0.25,
             mix_actions: 3,
             c: 1.0,
-            continuation_exp3_ix: false,
-            continuation_exp3_mean: false,
             collapse_sleep_actions: false,
             root_revisit_interval: 0,
             canonical_claw_key: false,
@@ -964,79 +960,14 @@ impl Default for RmConfig {
 }
 
 pub(crate) struct Node {
-    /// Legal actions per side at this state (empty = side owes nothing).
-    pub(crate) acts: [Vec<SearchChoice>; 2],
+    /// Legal actions per side at this state (empty = side owes nothing; <= 6 for all move/switch states).
+    pub(crate) acts: [nc2000_engine::smallvec::SmallVec<[SearchChoice; 6]>; 2],
     /// Per-action sample counts (UCB1).
-    pub(crate) n: [Vec<u32>; 2],
+    pub(crate) n: [nc2000_engine::smallvec::SmallVec<[u32; 6]>; 2],
     /// Per-action reward sums (UCB1).
-    pub(crate) w: [Vec<f64>; 2],
+    pub(crate) w: [nc2000_engine::smallvec::SmallVec<[f64; 6]>; 2],
     /// Team-preview node (always UCB1 + argmax).
     pub(crate) preview: bool,
-    continuation: Option<Box<ContinuationStats>>,
-}
-
-#[derive(Default)]
-struct ContinuationStats {
-    bandits: [Option<crate::exp3::Exp3Ix>; 2],
-    raw_count: u32,
-    raw_sum: f64,
-}
-
-fn record_raw_path(nodes: &mut [Node], path: &[usize], reward: f64) -> Vec<f64> {
-    for &index in path {
-        let stats = nodes[index]
-            .continuation
-            .get_or_insert_with(Default::default);
-        stats.raw_count += 1;
-        stats.raw_sum += reward;
-    }
-    path.iter()
-        .skip(1)
-        .map(|&index| {
-            let stats = nodes[index].continuation.as_ref().unwrap();
-            stats.raw_sum / f64::from(stats.raw_count)
-        })
-        .chain(std::iter::once(reward))
-        .collect()
-}
-
-#[cfg(test)]
-mod mean_update_tests {
-    use super::*;
-
-    #[test]
-    fn child_means_credit_raw_returns_once_without_averaging_averages() {
-        let mut nodes: Vec<_> = [(2, 1.), (4, 1.), (1, 0.)]
-            .into_iter()
-            .map(|(raw_count, raw_sum)| Node {
-                acts: [vec![], vec![]],
-                n: [vec![], vec![]],
-                w: [vec![], vec![]],
-                preview: false,
-                continuation: Some(Box::new(ContinuationStats {
-                    raw_count,
-                    raw_sum,
-                    ..Default::default()
-                })),
-            })
-            .collect();
-        assert_eq!(
-            record_raw_path(&mut nodes, &[0, 1, 2], 1.),
-            vec![0.4, 0.5, 1.]
-        );
-        assert_eq!(
-            nodes
-                .iter()
-                .map(|n| {
-                    let stats = n.continuation.as_ref().unwrap();
-                    (stats.raw_count, stats.raw_sum)
-                })
-                .collect::<Vec<_>>(),
-            vec![(3, 2.), (5, 2.), (2, 1.)]
-        );
-        assert_eq!(record_raw_path(&mut nodes, &[0], 0.25), vec![0.25]);
-        assert_eq!(nodes[0].continuation.as_ref().unwrap().raw_sum, 2.25);
-    }
 }
 
 pub enum SearchTrace<'a> {
@@ -1066,20 +997,22 @@ impl Node {
     }
 
     fn build(sim: &mut Battle, dex: &Dex, collapse_sleep: bool) -> Node {
-        let mut acts = [sim.legal_choices(dex, 0), sim.legal_choices(dex, 1)];
+        use nc2000_engine::smallvec::{smallvec, SmallVec};
+        let mut acts = [SmallVec::new(), SmallVec::new()];
+        sim.legal_choices_into(dex, 0, &mut acts[0]);
+        sim.legal_choices_into(dex, 1, &mut acts[1]);
         if collapse_sleep {
             for side in 0..2 {
-                collapse_sleep_choices(sim, dex, side, &mut acts[side]);
+                collapse_sleep_choices_smallvec(sim, dex, side, &mut acts[side]);
             }
         }
         let preview = acts
             .iter()
             .any(|a| matches!(a.first(), Some(SearchChoice::Team(_))));
         Node {
-            n: [vec![0; acts[0].len()], vec![0; acts[1].len()]],
-            w: [vec![0.0; acts[0].len()], vec![0.0; acts[1].len()]],
+            n: [smallvec![0; acts[0].len()], smallvec![0; acts[1].len()]],
+            w: [smallvec![0.0; acts[0].len()], smallvec![0.0; acts[1].len()]],
             preview,
-            continuation: None,
             acts,
         }
     }
@@ -1163,6 +1096,37 @@ pub fn collapse_sleep_choices(b: &Battle, dex: &Dex, side: usize, choices: &mut 
     });
 }
 
+fn collapse_sleep_choices_smallvec(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    choices: &mut nc2000_engine::smallvec::SmallVec<[SearchChoice; 6]>,
+) {
+    let Some(id) = b.active_id(side) else { return };
+    let p = b.poke(id);
+    if p.status != nc2000_engine::state::Status::Slp
+        || p.status_state.get_int(nc2000_engine::state::DK::Time) <= 1
+        || p.item
+            .is_some_and(|item| matches!(dex.items.key(item), "mintberry" | "miracleberry"))
+    {
+        return;
+    }
+    let mut priorities = [false; 256];
+    choices.retain(|action| {
+        let SearchChoice::Move(id) = *action else {
+            return true;
+        };
+        let ms = dex.move_static(id);
+        if ms.sleep_usable || ms.callbacks.iter().any(|key| key == "beforeTurnCallback") {
+            return true;
+        }
+        let priority = (i16::from(ms.priority) + 128) as usize;
+        let first = !priorities[priority];
+        priorities[priority] = true;
+        first
+    });
+}
+
 struct ProbeStats {
     /// Per-side probed action indices (into the root's action lists).
     support: [Vec<usize>; 2],
@@ -1217,13 +1181,7 @@ pub(crate) const HP_CLASSES: i64 = 12;
 pub(crate) fn hp_class(b: &Battle, dex: &Dex, def: PokeId, att: Option<PokeId>) -> i64 {
     let hits = match att {
         Some(att) => {
-            let best = b
-                .poke(att)
-                .move_slots
-                .iter()
-                .filter(|m| m.pp > 0 && !m.disabled)
-                .map(|m| crate::eval::expected_hit_fraction(b, dex, att, def, m.id, true))
-                .fold(0.0_f64, f64::max);
+            let best = crate::eval::best_hit_fraction(b, dex, att, def, true);
             if best <= 0.0 {
                 6
             } else {
@@ -1237,8 +1195,23 @@ pub(crate) fn hp_class(b: &Battle, dex: &Dex, def: PokeId, att: Option<PokeId>) 
     (hits - 1) * 2 + can_sub
 }
 
+#[inline]
+pub(crate) fn build_search_cache(
+    cfg: &RmConfig,
+    dex: &Dex,
+    b: &Battle,
+) -> nc2000_engine::battle::BattleSearchCache {
+    let (buckets, omit_damage) = if cfg.hp_buckets <= 0 {
+        (None, false)
+    } else {
+        (Some(cfg.hp_buckets), cfg.key_no_damage)
+    };
+    nc2000_engine::battle::BattleSearchCache::new(b, dex, buckets, omit_damage)
+}
+
 /// Public shim so the `key_shape` probe can hash a state the way the search
 /// does without exposing the descent internals.
+#[inline]
 pub fn key_for_test(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
     key_of(cfg, dex, b)
 }
@@ -1248,9 +1221,22 @@ pub fn key_for_test(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
 /// class per bucket; bench mons keep the uniform grid, since they are not the
 /// ones being hit and a damage estimate per bench mon would be paid on every
 /// descent step. The battle is restored before returning.
+#[inline]
 pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
+    key_of_cached(cfg, dex, b, None)
+}
+
+#[inline]
+pub(crate) fn key_of_cached(
+    cfg: &RmConfig,
+    dex: &Dex,
+    b: &mut Battle,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
+) -> u64 {
     let hash = |b: &Battle, buckets, omit_damage| {
-        if cfg.canonical_claw_key {
+        if let Some(c) = cache {
+            b.search_key_with_cache(dex, buckets, omit_damage, cfg.canonical_claw_key, c)
+        } else if cfg.canonical_claw_key {
             b.search_key_canonical_claw(dex, buckets, omit_damage)
         } else {
             b.search_key(buckets, omit_damage)
@@ -1360,7 +1346,27 @@ pub(crate) fn run_iteration(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
 ) -> f64 {
-    run_iteration_with_leaf(
+    run_iteration_cached(
+        cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root, root_joint, depth_out, None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_iteration_cached(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<Node>,
+    table: &mut FxHashMap<u64, usize>,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
+) -> f64 {
+    run_iteration_with_root_child_value_cached(
         cfg,
         rng,
         nodes,
@@ -1372,8 +1378,10 @@ pub(crate) fn run_iteration(
         force_root,
         root_joint,
         depth_out,
-        &mut |sim, rng, rollout| default_leaf(cfg, sim, dex, turn_cap, rng, rollout),
+        &mut |sim, rng, rollout| default_leaf_cached(cfg, sim, dex, turn_cap, rng, rollout, cache),
         None,
+        None,
+        cache,
     )
 }
 
@@ -1393,9 +1401,32 @@ pub(crate) fn run_iteration_with_leaf(
     leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
     trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
 ) -> f64 {
-    run_iteration_with_root_child_value(
+    run_iteration_with_root_child_value_cached(
         cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root, root_joint, depth_out, leaf,
-        trace, None, None, None,
+        trace, None, None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_iteration_with_leaf_cached(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<Node>,
+    table: &mut FxHashMap<u64, usize>,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+    leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
+    trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
+) -> f64 {
+    run_iteration_with_root_child_value_cached(
+        cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root, root_joint, depth_out, leaf,
+        trace, None, cache,
     )
 }
 
@@ -1413,60 +1444,55 @@ pub(crate) fn run_iteration_with_root_child_value(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
     leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
+    trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
+    root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
+) -> f64 {
+    run_iteration_with_root_child_value_cached(
+        cfg,
+        rng,
+        nodes,
+        table,
+        sim,
+        dex,
+        turn_cap,
+        start,
+        force_root,
+        root_joint,
+        depth_out,
+        leaf,
+        trace,
+        root_child_value,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_iteration_with_root_child_value_cached(
+    cfg: &RmConfig,
+    rng: &mut SplitMix64,
+    nodes: &mut Vec<Node>,
+    table: &mut FxHashMap<u64, usize>,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    start: usize,
+    force_root: [Option<usize>; 2],
+    root_joint: &mut [usize; 2],
+    depth_out: &mut u32,
+    leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
     mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
     mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
-    mut continuation: Option<&mut crate::first_continuation::FirstContinuation>,
-    mut history_policy: Option<&mut crate::history_continuation::HistoryContinuation>,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
 ) -> f64 {
     let mut path_buf = [(0usize, 0usize, 0usize); 32];
     let mut path_len = 0usize;
     let mut path_overflow: Vec<(usize, usize, usize)> = Vec::new();
-    let mut exp3_path = Vec::new();
-    let mut mean_path = Vec::new();
     let mut node_idx = start;
-    let mut decision_depth = 0;
-    let mut own_root_action = None;
-    let mut shared_pending = None;
-    let mut history_cursor = 0;
-    let mut history_previous = None;
-    let mut history_pending = Vec::new();
 
     // ---- selection until a leaf: terminal, horizon, or unexpanded state
     let reward0 = loop {
-        let path_index = mean_path.len();
-        if cfg.continuation_exp3_mean {
-            mean_path.push(node_idx);
-        }
         let at_root = node_idx == start;
         let mut joint = [None, None];
-        let mut continuation_group = None;
-        let mut history_group = None;
-        if decision_depth > 0 {
-            if let Some(policy) = history_policy.as_deref_mut() {
-                history_cursor = policy.advance(
-                    history_cursor,
-                    history_previous,
-                    sim.request_state,
-                    &sim.log,
-                );
-                sim.set_log_enabled(false);
-                let acts = &nodes[node_idx].acts[policy.side()];
-                if acts.len() > 1 {
-                    history_group = Some(policy.group(history_cursor, acts));
-                }
-            }
-        }
-        if decision_depth == 1 && sim.is_idle_move_request() {
-            if let Some(policy) = continuation.as_deref_mut() {
-                let acts = &nodes[node_idx].acts[policy.side()];
-                if acts.len() > 1 {
-                    continuation_group = Some(policy.group(own_root_action, &sim.log, acts));
-                }
-            }
-        }
-        if decision_depth == 1 && continuation.is_some() {
-            sim.set_log_enabled(false);
-        }
         for s in 0..2 {
             let k = nodes[node_idx].acts[s].len();
             if k == 0 {
@@ -1481,46 +1507,6 @@ pub(crate) fn run_iteration_with_root_child_value(
                         nodes[node_idx].n[s][f] += 1;
                         f
                     }
-                    _ if history_group.is_some()
-                        && history_policy
-                            .as_ref()
-                            .is_some_and(|p| p.side() == s && p.shared()) =>
-                    {
-                        let action = history_policy.as_deref_mut().unwrap().select(
-                            history_group.unwrap(),
-                            cfg.c,
-                            rng,
-                        );
-                        nodes[node_idx].n[s][action] += 1;
-                        action
-                    }
-                    _ if continuation_group.is_some()
-                        && continuation
-                            .as_ref()
-                            .is_some_and(|p| p.side() == s && p.shared()) =>
-                    {
-                        let action = continuation.as_deref_mut().unwrap().select(
-                            continuation_group.unwrap(),
-                            cfg.c,
-                            rng,
-                        );
-                        nodes[node_idx].n[s][action] += 1;
-                        action
-                    }
-                    _ if (cfg.continuation_exp3_ix || cfg.continuation_exp3_mean)
-                        && !at_root
-                        && !nodes[node_idx].preview =>
-                    {
-                        let node = &mut nodes[node_idx];
-                        let stats = node.continuation.get_or_insert_with(Default::default);
-                        let draw = stats.bandits[s]
-                            .get_or_insert_with(|| crate::exp3::Exp3Ix::new(k))
-                            .sample(rng);
-                        let action = draw.action;
-                        node.n[s][action] += 1;
-                        exp3_path.push((node_idx, s, draw, path_index));
-                        action
-                    }
                     _ => select_ucb(cfg, rng, &mut nodes[node_idx], s),
                 };
                 if path_len < path_buf.len() {
@@ -1532,41 +1518,21 @@ pub(crate) fn run_iteration_with_root_child_value(
                 ai
             };
             joint[s] = Some(nodes[node_idx].acts[s][ai]);
-            if let Some(policy) = continuation.as_deref_mut() {
-                if s == policy.side() {
-                    if decision_depth == 0 {
-                        own_root_action = joint[s];
-                    }
-                    if let Some(group) = continuation_group {
-                        if !policy.shared() {
-                            policy.record_selection(group, ai);
-                        }
-                        shared_pending = Some((group, ai));
-                    }
-                }
-            }
-            if let Some(policy) = history_policy.as_deref_mut() {
-                if s == policy.side() {
-                    if let Some(group) = history_group {
-                        if !policy.shared() {
-                            policy.record_selection(group, ai);
-                        }
-                        history_pending.push((group, ai));
-                    }
-                }
-            }
             if at_root {
                 root_joint[s] = ai;
             }
         }
         if let Some(trace) = trace.as_deref_mut() {
             let node = &nodes[node_idx];
+            let t_acts = [node.acts[0].to_vec(), node.acts[1].to_vec()];
+            let t_n = [node.n[0].to_vec(), node.n[1].to_vec()];
+            let t_w = [node.w[0].to_vec(), node.w[1].to_vec()];
             trace(SearchTrace::Choice {
                 battle: sim,
                 node: node_idx,
-                actions: &node.acts,
-                visits: &node.n,
-                rewards: &node.w,
+                actions: &t_acts,
+                visits: &t_n,
+                rewards: &t_w,
                 chosen: joint,
             });
         }
@@ -1583,20 +1549,9 @@ pub(crate) fn run_iteration_with_root_child_value(
             crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
             break leaf(sim, rng, false);
         }
-        if decision_depth == 0 && continuation.is_some() {
-            sim.set_log_enabled(true);
-        }
-        if let Some(policy) = history_policy.as_deref() {
-            history_previous = joint[policy.side()];
-            sim.set_log_enabled(true);
-        }
         sim.apply_choices(dex, joint)
             .expect("cached legal choice rejected (state_key collision?)");
-        decision_depth += 1;
         if let Some(o) = sim.outcome() {
-            if continuation.is_some() || history_policy.is_some() {
-                sim.set_log_enabled(false);
-            }
             crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, Some(o)));
             break outcome_reward(o);
         }
@@ -1614,9 +1569,6 @@ pub(crate) fn run_iteration_with_root_child_value(
             }
         }
         if sim.turn > turn_cap {
-            if continuation.is_some() || history_policy.is_some() {
-                sim.set_log_enabled(false);
-            }
             if let Some(trace) = trace.as_deref_mut() {
                 trace(SearchTrace::Leaf {
                     battle: sim,
@@ -1627,7 +1579,7 @@ pub(crate) fn run_iteration_with_root_child_value(
             crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
             break leaf(sim, rng, false);
         }
-        let key = key_of(cfg, dex, sim);
+        let key = key_of_cached(cfg, dex, sim, cache);
         match table.get(&key) {
             Some(&child) => {
                 *depth_out += 1;
@@ -1638,18 +1590,12 @@ pub(crate) fn run_iteration_with_root_child_value(
                 let child = nodes.len();
                 nodes.push(Node::continuation(sim, dex, cfg));
                 table.insert(key, child);
-                if cfg.continuation_exp3_mean {
-                    mean_path.push(child);
-                }
                 if let Some(trace) = trace.as_deref_mut() {
                     trace(SearchTrace::Leaf {
                         battle: sim,
                         rng,
                         rollout: true,
                     });
-                }
-                if continuation.is_some() || history_policy.is_some() {
-                    sim.set_log_enabled(false);
                 }
                 crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(
                     sim,
@@ -1660,14 +1606,6 @@ pub(crate) fn run_iteration_with_root_child_value(
         }
     };
 
-    if let (Some(policy), Some((group, action))) = (continuation, shared_pending) {
-        policy.observe(group, action, reward0);
-    }
-    if let Some(policy) = history_policy {
-        for (group, action) in history_pending {
-            policy.observe(group, action, reward0);
-        }
-    }
     if let Some(trace) = trace {
         trace(SearchTrace::Result {
             battle: sim,
@@ -1703,29 +1641,29 @@ pub(crate) fn run_iteration_with_root_child_value(
     for (ni, s, ai) in path_overflow {
         nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
     }
-    let mean_updates = if cfg.continuation_exp3_mean {
-        record_raw_path(nodes, &mean_path, reward0)
-    } else {
-        Vec::new()
-    };
-    for (ni, s, draw, index) in exp3_path {
-        let value = mean_updates.get(index).copied().unwrap_or(reward0);
-        nodes[ni].continuation.as_mut().unwrap().bandits[s]
-            .as_mut()
-            .unwrap()
-            .observe(draw, if s == 0 { 1. - value } else { value });
-    }
     root_reward0
 }
 
+#[inline]
 pub(crate) fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
+    leaf_eval_cached(cfg, sim, dex, None)
+}
+
+#[inline]
+pub(crate) fn leaf_eval_cached(
+    cfg: &RmConfig,
+    sim: &Battle,
+    dex: &Dex,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
+) -> f64 {
+    let rc = cache.map(|c| &c.roster_compact);
     match &cfg.playout {
         Playout::Uniform => crate::mcts::hp_eval(sim),
         Playout::Heavy { weights, .. } => {
             if cfg.settlement.uses_blindspot_leaf() {
-                crate::eval::eval_leaf_blindspot(sim, dex, weights)
+                crate::eval::eval_leaf_blindspot_cached(sim, dex, weights, rc)
             } else {
-                crate::eval::eval_leaf(sim, dex, weights)
+                crate::eval::eval_leaf_cached(sim, dex, weights, rc)
             }
         }
     }
@@ -1739,10 +1677,31 @@ pub(crate) fn default_leaf(
     rng: &mut SplitMix64,
     rollout: bool,
 ) -> f64 {
+    default_leaf_cached(cfg, sim, dex, turn_cap, rng, rollout, None)
+}
+
+#[inline]
+pub(crate) fn default_leaf_cached(
+    cfg: &RmConfig,
+    sim: &mut Battle,
+    dex: &Dex,
+    turn_cap: u16,
+    rng: &mut SplitMix64,
+    rollout: bool,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
+) -> f64 {
     if rollout {
-        playout_value(sim, dex, &cfg.playout, turn_cap, rng, cfg.rollout_rules())
+        crate::mcts::playout_value_cached(
+            sim,
+            dex,
+            &cfg.playout,
+            turn_cap,
+            rng,
+            cfg.rollout_rules(),
+            cache.map(|c| &c.roster_compact),
+        )
     } else {
-        leaf_eval(cfg, sim, dex)
+        leaf_eval_cached(cfg, sim, dex, cache)
     }
 }
 
@@ -1762,6 +1721,7 @@ pub struct SkuctSearch {
     cfg: RmConfig,
     rng: SplitMix64,
     root: Battle,
+    cache: nc2000_engine::battle::BattleSearchCache,
     scratch: Option<Box<Battle>>,
     turn_cap: u16,
     nodes: Vec<Node>,
@@ -2658,10 +2618,11 @@ impl SkuctSearch {
         }
         let mut root = battle.clone();
         root.set_log_enabled(false);
+        let cache = build_search_cache(&cfg, dex, &root);
         let turn_cap = root.turn.saturating_add(cfg.horizon);
         let nodes = vec![Node::at(&mut root, dex)];
         let mut table = FxHashMap::default();
-        table.insert(key_of(&cfg, dex, &mut root), 0usize);
+        table.insert(key_of_cached(&cfg, dex, &mut root, Some(&cache)), 0usize);
         let root_dominated = [0usize, 1].map(|s| {
             nodes[0].acts[s]
                 .iter()
@@ -2674,6 +2635,7 @@ impl SkuctSearch {
             cfg,
             rng,
             root,
+            cache,
             scratch: None,
             turn_cap,
             nodes,
@@ -2765,9 +2727,10 @@ impl SkuctSearch {
     /// rollout/backprop). Returns the side-0 reward and the root joint's
     /// action indices — `RmAgent`'s late-tree stage-game seeding needs both.
     pub fn step_one(&mut self, dex: &Dex) -> (f64, [usize; 2]) {
+        let picked = self.cache.picked_masks_opt();
         let mut sim = match self.scratch.take() {
             Some(mut sim) => {
-                sim.as_mut().clone_from(&self.root);
+                sim.reset_search_sim(&self.root, [true, true], picked);
                 sim
             }
             None => Box::new(self.root.clone()),
@@ -2776,7 +2739,7 @@ impl SkuctSearch {
         sim.reseed(self.rng.next());
         let mut joint = [0usize; 2];
         let mut depth = 0u32;
-        let r = run_iteration(
+        let r = run_iteration_cached(
             &self.cfg,
             &mut self.rng,
             &mut self.nodes,
@@ -2788,6 +2751,7 @@ impl SkuctSearch {
             [None, None],
             &mut joint,
             &mut depth,
+            Some(&self.cache),
         );
         std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
         self.scratch = Some(sim);
@@ -2800,9 +2764,10 @@ impl SkuctSearch {
     /// One probe iteration with the root joint forced (`RmAgent`'s matrix
     /// estimation phase).
     fn step_forced(&mut self, dex: &Dex, force: [usize; 2]) -> f64 {
+        let picked = self.cache.picked_masks_opt();
         let mut sim = match self.scratch.take() {
             Some(mut sim) => {
-                sim.as_mut().clone_from(&self.root);
+                sim.reset_search_sim(&self.root, [true, true], picked);
                 sim
             }
             None => Box::new(self.root.clone()),
@@ -2811,7 +2776,7 @@ impl SkuctSearch {
         sim.reseed(self.rng.next());
         let mut joint = [0usize; 2];
         let mut depth = 0u32;
-        let r = run_iteration(
+        let r = run_iteration_cached(
             &self.cfg,
             &mut self.rng,
             &mut self.nodes,
@@ -2823,6 +2788,7 @@ impl SkuctSearch {
             [Some(force[0]), Some(force[1])],
             &mut joint,
             &mut depth,
+            Some(&self.cache),
         );
         std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
         self.scratch = Some(sim);
@@ -2840,10 +2806,11 @@ impl SkuctSearch {
         n: u32,
         leaf: &mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64,
     ) -> u32 {
+        let picked = self.cache.picked_masks_opt();
         for _ in 0..n {
             let mut sim = match self.scratch.take() {
                 Some(mut sim) => {
-                    sim.as_mut().clone_from(&self.root);
+                    sim.reset_search_sim(&self.root, [true, true], picked);
                     sim
                 }
                 None => Box::new(self.root.clone()),
@@ -2852,7 +2819,7 @@ impl SkuctSearch {
             sim.reseed(self.rng.next());
             let mut joint = [0usize; 2];
             let mut depth = 0u32;
-            let r = run_iteration_with_leaf(
+            let r = run_iteration_with_leaf_cached(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.nodes,
@@ -2866,6 +2833,7 @@ impl SkuctSearch {
                 &mut depth,
                 leaf,
                 None,
+                Some(&self.cache),
             );
             std::mem::swap(&mut sim.listener_pool, &mut self.root.listener_pool);
             self.scratch = Some(sim);
@@ -3017,7 +2985,7 @@ impl RmAgent {
             }
         }
 
-        let acts = ts.nodes[0].acts[side].clone();
+        let acts = ts.nodes[0].acts[side].to_vec();
 
         // preview root (or argmax ablation): most-visited action, point mass
         if !mixed_root {

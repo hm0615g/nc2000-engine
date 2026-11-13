@@ -79,6 +79,9 @@ pub struct PositionSpec {
     /// The active cannot switch out (Mean Look / Wrap family).
     #[serde(default)]
     pub trapped: bool,
+    /// PS `maybeTrapped` flag when present on the active request.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub maybe_trapped: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -171,8 +174,10 @@ pub struct UseSpec {
 pub struct PpSpec {
     #[serde(rename = "move")]
     pub move_key: String,
-    pub pp: i32,
-    pub maxpp: i32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pp: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub maxpp: Option<i32>,
     #[serde(default)]
     pub disabled: bool,
 }
@@ -294,6 +299,9 @@ pub struct MonSpec {
     /// `[side, slot]` this mon is Transformed into.
     #[serde(default)]
     pub transformed_into: Option<[usize; 2]>,
+    /// Public PP deductions accrued on copied slots while Transformed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transformed_uses: Vec<UseSpec>,
     /// The move Mimic wrote into its slot.
     #[serde(default)]
     pub mimic_overlay: Option<String>,
@@ -327,6 +335,7 @@ pub struct MonSpec {
 
 fn unknown_hp_types() -> u16 { u16::MAX }
 fn all_hp_types(mask: &u16) -> bool { *mask == u16::MAX }
+fn is_false(b: &bool) -> bool { !*b }
 
 fn full_hp() -> i32 {
     100
@@ -366,6 +375,7 @@ impl Default for MonSpec {
             charging: None,
             must_recharge: false,
             transformed_into: None,
+            transformed_uses: Vec::new(),
             mimic_overlay: None,
             last_move: None,
             stall_streak: 0,
@@ -488,20 +498,30 @@ impl PositionSpec {
         let active_slot = me.active;
 
         let mut req_moves: Vec<serde_json::Value> = Vec::new();
+        let mut inferred_lock_trap = false;
         if !self.force_switch && !self.team_preview {
             let slot = active_slot.ok_or("no active mon for a move request")?;
             let mon = &me.mons[slot];
+            inferred_lock_trap = mon.pp.is_empty()
+                && (mon.must_recharge
+                    || mon.charging.is_some()
+                    || mon.locked.is_some()
+                    || mon.volatile("bide").is_some());
             for row in self.own_move_rows(dex, slot)? {
-                req_moves.push(serde_json::json!({
+                let mut mv = serde_json::json!({
                     "id": plain(&toid(&row.move_key)),
                     "move": row.move_key,
-                    "pp": row.pp,
-                    "maxpp": row.maxpp,
                     "target": "normal",
                     "disabled": row.disabled,
-                }));
+                });
+                if let Some(pp) = row.pp {
+                    mv["pp"] = serde_json::json!(pp);
+                }
+                if let Some(maxpp) = row.maxpp {
+                    mv["maxpp"] = serde_json::json!(maxpp);
+                }
+                req_moves.push(mv);
             }
-            let _ = mon;
         }
 
         let req_mons: Vec<serde_json::Value> = picked
@@ -546,7 +566,14 @@ impl PositionSpec {
         } else if self.force_switch {
             req["forceSwitch"] = serde_json::json!([true]);
         } else {
-            req["active"] = serde_json::json!([{"moves": req_moves, "trapped": self.trapped}]);
+            let mut active_obj = serde_json::json!({
+                "moves": req_moves,
+                "trapped": self.trapped || inferred_lock_trap
+            });
+            if self.maybe_trapped {
+                active_obj["maybeTrapped"] = serde_json::json!(true);
+            }
+            req["active"] = serde_json::json!([active_obj]);
         }
         Ok(req.to_string())
     }
@@ -559,6 +586,38 @@ impl PositionSpec {
         if !mon.pp.is_empty() {
             return Ok(mon.pp.clone());
         }
+        if mon.must_recharge {
+            return Ok(vec![PpSpec {
+                move_key: "recharge".to_string(),
+                pp: None,
+                maxpp: None,
+                disabled: false,
+            }]);
+        }
+        if let Some(ch) = &mon.charging {
+            return Ok(vec![PpSpec {
+                move_key: ch.clone(),
+                pp: None,
+                maxpp: None,
+                disabled: false,
+            }]);
+        }
+        if let Some(lk) = &mon.locked {
+            return Ok(vec![PpSpec {
+                move_key: lk.move_key.clone(),
+                pp: None,
+                maxpp: None,
+                disabled: false,
+            }]);
+        }
+        if mon.volatile("bide").is_some() {
+            return Ok(vec![PpSpec {
+                move_key: "bide".to_string(),
+                pp: None,
+                maxpp: None,
+                disabled: false,
+            }]);
+        }
         let set = self
             .own_sets
             .get(slot)
@@ -567,6 +626,9 @@ impl PositionSpec {
         let disable = mon.volatile("disable").and_then(|v| v.move_key.clone());
         let mut out = Vec::new();
         for name in &set.moves {
+            if name.is_empty() {
+                continue;
+            }
             let key = toid(name);
             let id = dex.moves.id(&key).ok_or_else(|| format!("unknown move `{name}`"))?;
             let maxpp = max_pp(dex, id);
@@ -576,11 +638,19 @@ impl PositionSpec {
                 _ => false,
             };
             out.push(PpSpec {
-                pp: (maxpp - mon.uses_of(dex, &key)).max(0),
-                maxpp,
+                pp: Some((maxpp - mon.uses_of(dex, &key)).max(0)),
+                maxpp: Some(maxpp),
                 disabled,
                 move_key: name.clone(),
             });
+        }
+        if out.is_empty() || out.iter().all(|r| r.disabled || r.pp == Some(0)) {
+            return Ok(vec![PpSpec {
+                move_key: "struggle".to_string(),
+                pp: None,
+                maxpp: None,
+                disabled: false,
+            }]);
         }
         Ok(out)
     }

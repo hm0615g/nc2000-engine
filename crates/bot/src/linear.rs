@@ -25,7 +25,7 @@
 
 use std::cell::RefCell;
 
-use nc2000_engine::compact::{vol_bit, CompactBattle, CompactWeather, MatchTable};
+use nc2000_engine::compact::{role_bit, vol_bit, CompactBattle, CompactWeather, MatchTable};
 use nc2000_engine::state::Status;
 
 /// Canonical Gen 2 HP grid resolution ($1/16 = 6.25\%$, matching Leftovers $1/16$,
@@ -496,10 +496,14 @@ fn survival_curve_6_with_mean_hp(
     cb: &CompactBattle,
     table: &MatchTable,
     att_side: usize,
+    att_slot: usize,
     def_side: usize,
+    def_slot: usize,
     start_hp: i16,
 ) -> ([f64; 7], f64) {
-    survival_curve_k_with_mean_hp(cb, table, att_side, def_side, start_hp, 6, true)
+    survival_curve_k_slots_with_mean_hp(
+        cb, table, att_side, att_slot, def_side, def_slot, start_hp, 6, true,
+    )
 }
 
 #[inline]
@@ -512,6 +516,34 @@ fn survival_curve_k_with_mean_hp(
     max_steps: usize,
     need_mean_hp: bool,
 ) -> ([f64; 7], f64) {
+    let att_slot = cb.sides[att_side].active_idx as usize;
+    let def_slot = cb.sides[def_side].active_idx as usize;
+    survival_curve_k_slots_with_mean_hp(
+        cb,
+        table,
+        att_side,
+        att_slot,
+        def_side,
+        def_slot,
+        start_hp,
+        max_steps,
+        need_mean_hp,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline]
+fn survival_curve_k_slots_with_mean_hp(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    att_side: usize,
+    att_slot: usize,
+    def_side: usize,
+    def_slot: usize,
+    start_hp: i16,
+    max_steps: usize,
+    need_mean_hp: bool,
+) -> ([f64; 7], f64) {
     if start_hp <= 0 {
         return ([0.0; 7], 0.0);
     }
@@ -519,8 +551,6 @@ fn survival_curve_k_with_mean_hp(
     if max_steps == 0 && !need_mean_hp {
         return ([1.0; 7], 0.0);
     }
-    let att_slot = cb.sides[att_side].active_idx as usize;
-    let def_slot = cb.sides[def_side].active_idx as usize;
     let att_idx = att_side * 3 + att_slot;
     let def_idx = def_side * 3 + def_slot;
     let maxhp = table.mons[def_idx].maxhp.max(1);
@@ -1791,9 +1821,15 @@ impl CachedBellman {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 const L1_SETS: usize = 4096;
+#[cfg(not(target_arch = "wasm32"))]
+const L1_SETS: usize = 8192;
 const L1_WAYS: usize = 4;
+#[cfg(target_arch = "wasm32")]
 const L2_SETS: usize = 512;
+#[cfg(not(target_arch = "wasm32"))]
+const L2_SETS: usize = 1024;
 const L2_WAYS: usize = 4;
 const MAX_CACHE_SLOTS: usize = L2_SETS * L2_WAYS;
 
@@ -2651,8 +2687,8 @@ pub fn toeplitz_coupled_race(
     }
 
     // Pure stopping-time race from the 1D Toeplitz survival curves S_0(k), S_1(k)
-    let (s_curve_0, rem0) = survival_curve_6_with_mean_hp(cb, table, s1, s0, hp0);
-    let (s_curve_1, rem1) = survival_curve_6_with_mean_hp(cb, table, s0, s1, hp1);
+    let (s_curve_0, rem0) = survival_curve_6_with_mean_hp(cb, table, s1, slot1, s0, slot0, hp0);
+    let (s_curve_1, rem1) = survival_curve_6_with_mean_hp(cb, table, s0, slot0, s1, slot1, hp1);
 
     let spd0 = cb.mon_action_speed(table, s0, slot0);
     let spd1 = cb.mon_action_speed(table, s1, slot1);
@@ -2693,12 +2729,12 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
     }
 
     let p0_perish = if (cb.mons[idx0].vol_flags & vol_bit::PERISH_SONG) != 0 {
-        cb.mons[idx0].timers[3]
+        cb.mons[idx0].perish_turns()
     } else {
         0
     };
     let p1_perish = if (cb.mons[idx1].vol_flags & vol_bit::PERISH_SONG) != 0 {
-        cb.mons[idx1].timers[3]
+        cb.mons[idx1].perish_turns()
     } else {
         0
     };
@@ -2718,7 +2754,7 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
     let mut b1_info: Option<(usize, bool)> = None;
     if p1_perish > 0 && p1_trapped && !p0_trapped {
         let hits = p1_perish.saturating_sub(1).min(3) as usize;
-        let p0_prot = cb.mons[idx0].timers[2] == 0
+        let p0_prot = cb.mons[idx0].stall_counter() == 0
             && (0..table.mons[idx0].num_moves as usize)
                 .any(|m| cb.mons[idx0].pp[m] > 0 && table.move_specs[idx0][m].is_protect);
         let p1_phaze = (0..table.mons[idx1].num_moves as usize)
@@ -2736,7 +2772,7 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
     let mut b2_info: Option<(usize, bool)> = None;
     if p0_perish > 0 && p0_trapped && !p1_trapped {
         let hits = p0_perish.saturating_sub(1).min(3) as usize;
-        let p1_prot = cb.mons[idx1].timers[2] == 0
+        let p1_prot = cb.mons[idx1].stall_counter() == 0
             && (0..table.mons[idx1].num_moves as usize)
                 .any(|m| cb.mons[idx1].pp[m] > 0 && table.move_specs[idx1][m].is_protect);
         let p0_phaze = (0..table.mons[idx0].num_moves as usize)
@@ -2955,6 +2991,9 @@ pub fn compact_rollout_linear_pick(
         && !(me.item != 0
             && (table.mons[att_idx].is_mintberry || table.mons[att_idx].is_miracleberry));
     if is_asleep_this_turn {
+        if (table.mons[att_idx].role_flags & role_bit::SLEEP_USABLE) == 0 {
+            return None;
+        }
         for &c in cs {
             if c < 4 && table.move_specs[att_idx][c as usize].special_kind == 10 {
                 return Some(c);
@@ -2968,26 +3007,30 @@ pub fn compact_rollout_linear_pick(
         return None;
     }
 
-    // 2. Protect during active Perish countdown (`timers[3] >= 2`) when trapping
+    // 2. Protect during active Perish countdown (`perish_turns >= 2`) when trapping
     let me_perish = if (me.vol_flags & vol_bit::PERISH_SONG) != 0 {
-        me.timers[3]
+        me.perish_turns()
     } else {
         0
     };
     let foe_perish = if (foe.vol_flags & vol_bit::PERISH_SONG) != 0 {
-        foe.timers[3]
+        foe.perish_turns()
     } else {
         0
     };
-    let me_trapped = (me.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0
-        || cb.sides[side].alive_mask.count_ones() <= 1;
-    let foe_trapped = (foe.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0
-        || cb.sides[def_side].alive_mask.count_ones() <= 1;
-
-    if foe_perish >= 2 && foe_trapped && !me_trapped && me.timers[2] == 0 {
-        for &c in cs {
-            if c < 4 && table.move_specs[att_idx][c as usize].is_protect {
-                return Some(c);
+    if foe_perish >= 2
+        && (table.mons[att_idx].role_flags & role_bit::PROTECT) != 0
+        && me.stall_counter() == 0
+    {
+        let me_trapped = (me.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0
+            || cb.sides[side].alive_mask.count_ones() <= 1;
+        let foe_trapped = (foe.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0
+            || cb.sides[def_side].alive_mask.count_ones() <= 1;
+        if foe_trapped && !me_trapped {
+            for &c in cs {
+                if c < 4 && table.move_specs[att_idx][c as usize].is_protect {
+                    return Some(c);
+                }
             }
         }
     }
@@ -2995,14 +3038,11 @@ pub fn compact_rollout_linear_pick(
     // 3. Bellman stage-game policy lookup for Heal / Rest when awake and strictly below full HP
     let me_hp = me.hp();
     let me_sub_up = (me.vol_flags & vol_bit::SUBSTITUTE) != 0;
-    if me_perish == 0 && me_hp < maxhp && !(me_sub_up && me_hp * 4 >= maxhp) {
-        let me_faster = cb.mon_action_speed(table, side, att_slot)
-            > cb.mon_action_speed(table, def_side, def_slot);
-        if me_faster
-            && cb.best_hit_fraction(table, side, att_slot, def_side, def_slot, true) >= 1.0
-        {
-            return None;
-        }
+    if (table.mons[att_idx].role_flags & (role_bit::HALF_HEAL | role_bit::REST)) != 0
+        && me_perish == 0
+        && me_hp < maxhp
+        && !(me_sub_up && me_hp * 4 >= maxhp)
+    {
         let b_me = Side1DOps::to_b16(me_hp, maxhp) as usize;
         let is_frz = me.status_raw() == Status::Frz as u8
             && !(me.item != 0 && table.mons[att_idx].is_miracleberry);
@@ -3020,9 +3060,20 @@ pub fn compact_rollout_linear_pick(
                 }
             }
             if let Some(h_act) = heal_act {
-                let foe_has_perish = (0..table.mons[def_idx].num_moves as usize)
-                    .any(|m| foe.pp[m] > 0 && table.move_specs[def_idx][m].special_kind == 19);
+                let foe_has_perish = (table.mons[def_idx].role_flags
+                    & role_bit::PERISH_PHAZE_TRAP)
+                    != 0
+                    && (0..table.mons[def_idx].num_moves as usize)
+                        .any(|m| foe.pp[m] > 0 && table.move_specs[def_idx][m].special_kind == 19);
                 if !foe_has_perish {
+                    let me_faster = cb.mon_action_speed(table, side, att_slot)
+                        > cb.mon_action_speed(table, def_side, def_slot);
+                    if me_faster
+                        && cb.best_hit_fraction(table, side, att_slot, def_side, def_slot, true)
+                            >= 1.0
+                    {
+                        return None;
+                    }
                     let b_foe =
                         Side1DOps::to_b16(foe.hp(), table.mons[def_idx].maxhp.max(1)) as usize;
                     let (s0_slot, s1_slot, b0, b1) = if side == 0 {
@@ -3237,5 +3288,54 @@ mod tests {
 
         assert_ne!(k_brn_plain, k_brn_tox);
         assert_ne!(op_brn_plain, op_brn_tox);
+    }
+
+    #[test]
+    fn toeplitz_coupled_race_uses_bench_slot_stats_and_moves_not_active() {
+        let dex = conformance::load_dex();
+        let unown = make_set("Unown", 50, "No Item", &["Hidden Power"]);
+        let marowak = make_set(
+            "Marowak",
+            55,
+            "Thick Club",
+            &["Earthquake", "Rock Slide", "Fire Blast", "Swords Dance"],
+        );
+        let jolteon = make_set(
+            "Jolteon",
+            50,
+            "Magnet",
+            &["Thunderbolt", "Hidden Power", "Agility", "Baton Pass"],
+        );
+
+        let mut b = Battle::from_fixture(
+            &dex,
+            "1,2,3,4",
+            &[unown, marowak],
+            &[jolteon],
+        )
+        .unwrap();
+        b.choose(&dex, 0, "team 1,2").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        let (table, cb) = CompactBattle::from_battle(&b, &dex);
+
+        // Active is slot 0 (Unown), Bench is slot 1 (Marowak).
+        // Race for bench Marowak (side 0, slot 1) vs Jolteon (side 1, slot 0):
+        // Marowak is immune to Thunderbolt and OHKOs Jolteon with Earthquake, so Marowak must strongly win!
+        let r_unown = toeplitz_coupled_race(&cb, &table, 0, 0, 1, 0);
+        let r_marowak_bench = toeplitz_coupled_race(&cb, &table, 0, 1, 1, 0);
+        assert!(
+            r_unown < 0.0,
+            "Active Unown (slot 0) loses to Jolteon, got {r_unown}"
+        );
+        assert!(
+            r_marowak_bench > 0.70,
+            "Bench Marowak (slot 1) must use slot 1's own stats/moves/types and crush Jolteon, got {r_marowak_bench}"
+        );
+        // Verify exact side-swap antisymmetry: race(0,1 vs 1,0) == -race(1,0 vs 0,1).
+        let r_swapped = toeplitz_coupled_race(&cb, &table, 1, 0, 0, 1);
+        assert!(
+            (r_marowak_bench + r_swapped).abs() < 1e-12,
+            "Antisymmetry violated: {r_marowak_bench} vs {r_swapped}"
+        );
     }
 }

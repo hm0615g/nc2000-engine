@@ -9,23 +9,6 @@ pub(crate) const TYPES: [&str; 16] = [
     "Grass", "Electric", "Psychic", "Ice", "Dragon", "Dark",
 ];
 
-pub(crate) fn effect_mask(dex: &Dex, types: &[String], effective: bool) -> u16 {
-    TYPES.iter().enumerate().fold(0, |mask, (i, ty)| {
-        let exponent: i32 = types.iter().map(|t| dex.get_effectiveness(ty, t)).sum();
-        if dex.get_immunity(ty, types)
-            && if effective {
-                exponent > 0
-            } else {
-                exponent < 0
-            }
-        {
-            mask | 1 << i
-        } else {
-            mask
-        }
-    })
-}
-
 pub(crate) fn modeled_type(dex: &Dex, p: &Pokemon) -> Option<usize> {
     let slot = p
         .base_move_slots

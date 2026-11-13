@@ -105,7 +105,7 @@ def main():
         report = verify(outputs)
         sources = subprocess.check_output(['git', 'ls-files', 'crates/bot/src', 'crates/engine/src'], cwd=root, text=True).splitlines()
         sources += [corpus, 'Cargo.lock', 'crates/conformance/src/lib.rs', 'crates/conformance/src/fixture.rs', 'data/gen2stadium2.json', 'data/learnsets-gen2.json', 'data/belief-pool-v3/belief-pool.json', 'data/team-pool-v2/team-pool.json',
-            'crates/bot/examples/sleep_equivalence_probe.rs', 'crates/bot/examples/sleep_equivalence_duel.rs', 'crates/bot/tests/sleep_equivalence.rs', 'crates/bot/tests/blind.rs', 'tools/sleep-equivalence-probe']
+            'crates/bot/examples/sleep_equivalence_probe.rs', 'crates/bot/examples/sleep_equivalence_duel.rs', 'crates/bot/tests/suite/sleep_equivalence.rs', 'crates/bot/tests/suite/blind.rs', 'tools/sleep-equivalence-probe']
         bundle = dict(outputs=outputs, hashes={p:hashlib.sha256((root/p).read_bytes()).hexdigest() for p in sources})
         archive.mkdir()
         (archive/'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle,separators=(',',':')).encode(),mtime=0))

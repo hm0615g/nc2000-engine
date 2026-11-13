@@ -19,8 +19,8 @@ export const PICKS = 3;
 
 export interface PpSpec {
   move: string;
-  pp: number;
-  maxpp: number;
+  pp?: number;
+  maxpp?: number;
   disabled?: boolean;
 }
 
@@ -74,6 +74,7 @@ export interface MonSpec {
   charging?: string | null;
   must_recharge?: boolean;
   transformed_into?: [number, number] | null;
+  transformed_uses?: UseSpec[];
   mimic_overlay?: string | null;
   last_move?: string | null;
   stall_streak?: number;
@@ -115,6 +116,7 @@ export interface PositionSpec {
   team_preview?: boolean;
   force_switch?: boolean;
   trapped?: boolean;
+  maybe_trapped?: boolean;
 }
 
 // ------------------------------------------------------- analysis report

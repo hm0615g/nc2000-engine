@@ -719,7 +719,7 @@ impl Gender {
 pub type Boosts = [i8; 7];
 
 /// PS `pokemon.switchFlag`: false | true | move id (selfSwitch).
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SwitchFlag {
     No,
     Yes,
@@ -1015,7 +1015,142 @@ impl Pokemon {
     }
 
     #[inline(always)]
+    pub(crate) fn hash_static_prefix_a<H: crate::fxhash::StateHasher>(&self, h: &mut H) {
+        use std::hash::Hash;
+        let (species, base_species, name, level, gender, happiness, set_ivs, set_evs) = (
+            &self.species,
+            &self.base_species,
+            &self.name,
+            &self.level,
+            &self.gender,
+            &self.happiness,
+            &self.set_ivs,
+            &self.set_evs,
+        );
+        h.hash_batch::<32>(
+            |b| {
+                (species, base_species, name, level, gender, happiness).hash(b);
+                (set_ivs, set_evs).hash(b);
+            },
+            |h| {
+                (species, base_species, name, level, gender, happiness).hash(h);
+                (set_ivs, set_evs).hash(h);
+            },
+        );
+    }
+
+    #[inline(always)]
+    pub(crate) fn hash_static_prefix_b<H: crate::fxhash::StateHasher>(&self, h: &mut H) {
+        use std::hash::Hash;
+        let (
+            hp_type,
+            hp_power,
+            base_hp_type,
+            base_hp_power,
+            base_stored_stats,
+            stored_stats,
+            base_maxhp,
+            maxhp,
+        ) = (
+            &self.hp_type,
+            &self.hp_power,
+            &self.base_hp_type,
+            &self.base_hp_power,
+            &self.base_stored_stats,
+            &self.stored_stats,
+            &self.base_maxhp,
+            &self.maxhp,
+        );
+        h.hash_batch::<24>(
+            |b| {
+                (hp_type, hp_power, base_hp_type, base_hp_power).hash(b);
+                (base_stored_stats, stored_stats, base_maxhp, maxhp).hash(b);
+            },
+            |h| {
+                (hp_type, hp_power, base_hp_type, base_hp_power).hash(h);
+                (base_stored_stats, stored_stats, base_maxhp, maxhp).hash(h);
+            },
+        );
+    }
+
+    #[inline(always)]
+    pub(crate) fn hash_static_prefix_full<H: crate::fxhash::StateHasher>(&self, h: &mut H) {
+        use std::hash::Hash;
+        let (
+            species,
+            base_species,
+            name,
+            level,
+            gender,
+            happiness,
+            set_ivs,
+            set_evs,
+            base_move_slots,
+            hp_type,
+            hp_power,
+            base_hp_type,
+            base_hp_power,
+            base_stored_stats,
+            stored_stats,
+            base_maxhp,
+            maxhp,
+        ) = (
+            &self.species,
+            &self.base_species,
+            &self.name,
+            &self.level,
+            &self.gender,
+            &self.happiness,
+            &self.set_ivs,
+            &self.set_evs,
+            &self.base_move_slots,
+            &self.hp_type,
+            &self.hp_power,
+            &self.base_hp_type,
+            &self.base_hp_power,
+            &self.base_stored_stats,
+            &self.stored_stats,
+            &self.base_maxhp,
+            &self.maxhp,
+        );
+        h.hash_batch::<64>(
+            |b| {
+                (species, base_species, name, level, gender, happiness).hash(b);
+                (set_ivs, set_evs, base_move_slots).hash(b);
+                (hp_type, hp_power, base_hp_type, base_hp_power).hash(b);
+                (base_stored_stats, stored_stats, base_maxhp, maxhp).hash(b);
+            },
+            |h| {
+                (species, base_species, name, level, gender, happiness).hash(h);
+                (set_ivs, set_evs, base_move_slots).hash(h);
+                (hp_type, hp_power, base_hp_type, base_hp_power).hash(h);
+                (base_stored_stats, stored_stats, base_maxhp, maxhp).hash(h);
+            },
+        );
+    }
+
+    #[inline]
     pub(crate) fn hash_state_with_options<H: crate::fxhash::StateHasher>(
+        &self,
+        h: &mut H,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+    ) {
+        self.hash_state_impl::<H, true>(h, hp_buckets, omit_damage_bookkeeping);
+    }
+
+    #[inline(never)]
+    pub(crate) fn hash_dynamic_body<H: crate::fxhash::StateHasher>(
+        &self,
+        h: &mut H,
+        hp_buckets: Option<i64>,
+        omit_damage_bookkeeping: bool,
+    ) {
+        self.hash_state_impl::<H, false>(h, hp_buckets, omit_damage_bookkeeping);
+    }
+
+    #[inline(always)]
+    fn hash_state_impl<H: crate::fxhash::StateHasher, const INCLUDE_STATIC_PREFIX: bool>(
         &self,
         h: &mut H,
         hp_buckets: Option<i64>,
@@ -1084,20 +1219,22 @@ impl Pokemon {
             times_attacked,
             speed,
         } = self;
-        h.hash_batch::<64>(
-            |b| {
-                (species, base_species, name, level, gender, happiness).hash(b);
-                (set_ivs, set_evs, base_move_slots).hash(b);
-                (hp_type, hp_power, base_hp_type, base_hp_power).hash(b);
-                (base_stored_stats, stored_stats, base_maxhp, maxhp).hash(b);
-            },
-            |h| {
-                (species, base_species, name, level, gender, happiness).hash(h);
-                (set_ivs, set_evs, base_move_slots).hash(h);
-                (hp_type, hp_power, base_hp_type, base_hp_power).hash(h);
-                (base_stored_stats, stored_stats, base_maxhp, maxhp).hash(h);
-            },
-        );
+        if INCLUDE_STATIC_PREFIX {
+            h.hash_batch::<64>(
+                |b| {
+                    (species, base_species, name, level, gender, happiness).hash(b);
+                    (set_ivs, set_evs, base_move_slots).hash(b);
+                    (hp_type, hp_power, base_hp_type, base_hp_power).hash(b);
+                    (base_stored_stats, stored_stats, base_maxhp, maxhp).hash(b);
+                },
+                |h| {
+                    (species, base_species, name, level, gender, happiness).hash(h);
+                    (set_ivs, set_evs, base_move_slots).hash(h);
+                    (hp_type, hp_power, base_hp_type, base_hp_power).hash(h);
+                    (base_stored_stats, stored_stats, base_maxhp, maxhp).hash(h);
+                },
+            );
+        }
         match (hp_buckets, omit_damage_bookkeeping) {
             (None, false) => {
                 hp.hash(h);
@@ -1316,16 +1453,153 @@ impl Pokemon {
     pub fn get_move_slot_mut(&mut self, id: MoveId) -> Option<&mut MoveSlot> {
         self.move_slots.iter_mut().find(|m| m.id == id)
     }
+
+    #[inline]
+    pub(crate) fn reset_search_mon(&mut self, source: &Self, same_set: bool) {
+        let Pokemon {
+            species,
+            base_species,
+            name,
+            level,
+            gender,
+            happiness,
+            set_ivs,
+            set_evs,
+            base_move_slots,
+            hp_type,
+            hp_power,
+            base_hp_type,
+            base_hp_power,
+            base_stored_stats,
+            stored_stats,
+            base_maxhp,
+            maxhp,
+            hp,
+            status,
+            status_state,
+            boosts,
+            move_slots,
+            item,
+            last_item,
+            item_state,
+            types,
+            volatiles,
+            handler_mask,
+            transformed,
+            fainted,
+            faint_queued,
+            is_active,
+            is_started,
+            position,
+            active_turns,
+            active_move_actions,
+            newly_switched,
+            being_called_back,
+            dragged_in,
+            previously_switched_in,
+            switch_flag,
+            force_switch_flag,
+            skip_before_switch_out,
+            trapped,
+            maybe_trapped,
+            last_move,
+            last_move_encore,
+            last_move_used,
+            last_move_target_loc,
+            move_this_turn,
+            move_this_turn_result,
+            move_last_turn_result,
+            hurt_this_turn,
+            stats_raised_this_turn,
+            stats_lowered_this_turn,
+            used_item_this_turn,
+            last_damage,
+            attacked_by,
+            times_attacked,
+            speed,
+        } = source;
+
+        if !(same_set && !self.transformed && !*transformed && self.species == *species) {
+            self.species = *species;
+            self.base_species = *base_species;
+            self.name = *name;
+            self.level = *level;
+            self.gender = *gender;
+            self.happiness = *happiness;
+            self.set_ivs = *set_ivs;
+            self.set_evs = *set_evs;
+            self.hp_type = *hp_type;
+            self.hp_power = *hp_power;
+            self.base_hp_type = *base_hp_type;
+            self.base_hp_power = *base_hp_power;
+            self.base_stored_stats = *base_stored_stats;
+            self.stored_stats = *stored_stats;
+            self.base_maxhp = *base_maxhp;
+            self.maxhp = *maxhp;
+        }
+        self.base_move_slots = *base_move_slots;
+        self.hp = *hp;
+        self.status = *status;
+        self.status_state = *status_state;
+        self.boosts = *boosts;
+        self.move_slots = *move_slots;
+        self.item = *item;
+        self.last_item = *last_item;
+        self.item_state = *item_state;
+        self.types = *types;
+        if volatiles.is_empty() {
+            self.volatiles.clear();
+        } else {
+            self.volatiles.clone_from(volatiles);
+        }
+        self.handler_mask = *handler_mask;
+        self.transformed = *transformed;
+        self.fainted = *fainted;
+        self.faint_queued = *faint_queued;
+        self.is_active = *is_active;
+        self.is_started = *is_started;
+        self.position = *position;
+        self.active_turns = *active_turns;
+        self.active_move_actions = *active_move_actions;
+        self.newly_switched = *newly_switched;
+        self.being_called_back = *being_called_back;
+        self.dragged_in = *dragged_in;
+        self.previously_switched_in = *previously_switched_in;
+        self.switch_flag = *switch_flag;
+        self.force_switch_flag = *force_switch_flag;
+        self.skip_before_switch_out = *skip_before_switch_out;
+        self.trapped = *trapped;
+        self.maybe_trapped = *maybe_trapped;
+        self.last_move = *last_move;
+        self.last_move_encore = *last_move_encore;
+        self.last_move_used = *last_move_used;
+        self.last_move_target_loc = *last_move_target_loc;
+        self.move_this_turn = *move_this_turn;
+        self.move_this_turn_result = *move_this_turn_result;
+        self.move_last_turn_result = *move_last_turn_result;
+        self.hurt_this_turn = *hurt_this_turn;
+        self.stats_raised_this_turn = *stats_raised_this_turn;
+        self.stats_lowered_this_turn = *stats_lowered_this_turn;
+        self.used_item_this_turn = *used_item_this_turn;
+        self.last_damage = *last_damage;
+        if attacked_by.is_empty() {
+            self.attacked_by.clear();
+        } else {
+            self.attacked_by.clone_from(attacked_by);
+        }
+        self.times_attacked = *times_attacked;
+        self.speed = *speed;
+    }
 }
 
 #[derive(Clone, Debug, Hash)]
 pub struct Choice {
     pub cant_undo: bool,
     pub error: bool,
-    pub actions: Vec<ChosenAction>,
+    pub actions: smallvec::SmallVec<[ChosenAction; 3]>,
     pub forced_switches_left: u32,
     pub forced_passes_left: u32,
-    pub switch_ins: Vec<u8>, // display positions already chosen to switch in
+    pub switch_ins: smallvec::SmallVec<[u8; 3]>, // display positions already chosen to switch in
 }
 
 impl Default for Choice {
@@ -1333,16 +1607,16 @@ impl Default for Choice {
         Choice {
             cant_undo: false,
             error: false,
-            actions: Vec::new(),
+            actions: smallvec::SmallVec::new(),
             forced_switches_left: 0,
             forced_passes_left: 0,
-            switch_ins: Vec::new(),
+            switch_ins: smallvec::SmallVec::new(),
         }
     }
 }
 
 /// side.ts ChosenAction (gen2 singles slice).
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Copy, Debug, Hash)]
 pub enum ChosenAction {
     Move {
         pokemon: PokeId,
@@ -1753,6 +2027,220 @@ clone_reusing_fields!(Battle {
     effect_stack, active_move, active_pokemon, active_target, last_move_id, pending_boosts,
     listener_pool, battle_mask,
 });
+
+impl Side {
+    #[inline]
+    pub(crate) fn reset_search_side(
+        &mut self,
+        source: &Self,
+        same_roster_sets: bool,
+        picked_mask: Option<u8>,
+    ) {
+        let Side {
+            name,
+            ref roster,
+            ref party,
+            active,
+            pokemon_left,
+            total_fainted,
+            ref side_conditions,
+            ref slot_conditions,
+            handler_mask,
+            last_move,
+            fainted_this_turn,
+            fainted_last_turn,
+            request,
+            ref choice,
+        } = *source;
+
+        self.name = name;
+        if self.roster.len() != roster.len() {
+            self.roster.clone_from(roster);
+        } else {
+            let _ = picked_mask;
+            for (dst, src) in self.roster.iter_mut().zip(roster.iter()) {
+                if same_roster_sets
+                    && !dst.is_started
+                    && !src.is_started
+                    && !dst.is_active
+                    && !src.is_active
+                    && dst.previously_switched_in == 0
+                    && src.previously_switched_in == 0
+                    && !dst.fainted
+                    && !src.fainted
+                    && !dst.transformed
+                    && !src.transformed
+                    && dst.status == Status::None
+                    && src.status == Status::None
+                    && dst.species == src.species
+                    && dst.hp == src.hp
+                    && dst.item == src.item
+                    && dst.last_item == src.last_item
+                    && dst.position == src.position
+                    && dst.volatiles.is_empty()
+                    && src.volatiles.is_empty()
+                {
+                    continue;
+                }
+                dst.reset_search_mon(src, same_roster_sets);
+            }
+        }
+        self.party.clone_from(party);
+        self.active = active;
+        self.pokemon_left = pokemon_left;
+        self.total_fainted = total_fainted;
+        if side_conditions.is_empty() {
+            self.side_conditions.clear();
+        } else {
+            self.side_conditions.clone_from(side_conditions);
+        }
+        if slot_conditions.is_empty() {
+            self.slot_conditions.clear();
+        } else {
+            self.slot_conditions.clone_from(slot_conditions);
+        }
+        self.handler_mask = handler_mask;
+        self.last_move = last_move;
+        self.fainted_this_turn = fainted_this_turn;
+        self.fainted_last_turn = fainted_last_turn;
+        self.request = request;
+        self.choice.cant_undo = choice.cant_undo;
+        self.choice.error = choice.error;
+        if choice.actions.is_empty() {
+            self.choice.actions.clear();
+        } else {
+            self.choice.actions.clone_from(&choice.actions);
+        }
+        self.choice.forced_switches_left = choice.forced_switches_left;
+        self.choice.forced_passes_left = choice.forced_passes_left;
+        if choice.switch_ins.is_empty() {
+            self.choice.switch_ins.clear();
+        } else {
+            self.choice.switch_ins.clone_from(&choice.switch_ins);
+        }
+    }
+}
+
+impl Battle {
+    /// Fast search-simulation state reset equivalent to `self.clone_from(source)`.
+    /// When `same_roster_sets[s]` is `true` (e.g. own team across all determinizations,
+    /// or both sides when resetting from the same world), skips copying untouched
+    /// unpicked roster Pokemon and immutable set/stat headers on picked Pokemon.
+    #[inline]
+    pub fn reset_search_sim(
+        &mut self,
+        source: &Self,
+        same_roster_sets: [bool; 2],
+        picked_masks: [Option<u8>; 2],
+    ) {
+        let Battle {
+            preview_level_caps,
+            ref prng,
+            turn,
+            request_state,
+            mid_turn,
+            started,
+            ended,
+            ref winner,
+            ref field,
+            ref sides,
+            ref queue,
+            ref faint_queue,
+            ref log,
+            log_enabled,
+            effect_order,
+            event_depth,
+            last_move_line,
+            last_successful_move_this_turn,
+            last_damage,
+            quick_claw_roll,
+            speed_order,
+            format_data,
+            sent_log_pos,
+            ref event_stack,
+            ref effect_stack,
+            ref active_move,
+            active_pokemon,
+            active_target,
+            last_move_id,
+            ref pending_boosts,
+            ref listener_pool,
+            battle_mask,
+        } = *source;
+
+        self.preview_level_caps = preview_level_caps;
+        self.prng.clone_from(prng);
+        self.turn = turn;
+        self.request_state = request_state;
+        self.mid_turn = mid_turn;
+        self.started = started;
+        self.ended = ended;
+        if winner.is_none() {
+            self.winner = None;
+        } else {
+            self.winner.clone_from(winner);
+        }
+        self.field.weather = field.weather;
+        self.field.weather_state = field.weather_state;
+        self.field.pseudo_weather.clone_from(&field.pseudo_weather);
+        self.sides[0].reset_search_side(&sides[0], same_roster_sets[0], picked_masks[0]);
+        self.sides[1].reset_search_side(&sides[1], same_roster_sets[1], picked_masks[1]);
+        if queue.is_empty() {
+            self.queue.clear();
+        } else {
+            self.queue.clone_from(queue);
+        }
+        if faint_queue.is_empty() {
+            self.faint_queue.clear();
+        } else {
+            self.faint_queue.clone_from(faint_queue);
+        }
+        if log.is_empty() {
+            self.log.clear();
+        } else {
+            self.log.clone_from(log);
+        }
+        self.log_enabled = log_enabled;
+        self.effect_order = effect_order;
+        self.event_depth = event_depth;
+        self.last_move_line = last_move_line;
+        self.last_successful_move_this_turn = last_successful_move_this_turn;
+        self.last_damage = last_damage;
+        self.quick_claw_roll = quick_claw_roll;
+        self.speed_order = speed_order;
+        self.format_data = format_data;
+        self.sent_log_pos = sent_log_pos;
+        if event_stack.is_empty() {
+            self.event_stack.clear();
+        } else {
+            self.event_stack.clone_from(event_stack);
+        }
+        if effect_stack.is_empty() {
+            self.effect_stack.clear();
+        } else {
+            self.effect_stack.clone_from(effect_stack);
+        }
+        if active_move.is_none() {
+            self.active_move = None;
+        } else {
+            self.active_move.clone_from(active_move);
+        }
+        self.active_pokemon = active_pokemon;
+        self.active_target = active_target;
+        self.last_move_id = last_move_id;
+        if pending_boosts.is_none() {
+            self.pending_boosts = None;
+        } else {
+            self.pending_boosts.clone_from(pending_boosts);
+        }
+        self.listener_pool.clone_from(listener_pool);
+        self.battle_mask = battle_mask;
+
+        debug_assert_eq!(self.state_key128(), source.state_key128());
+        debug_assert_eq!(self.battle_mask, source.battle_mask);
+        debug_assert_eq!(self.prng.lcg.seed(), source.prng.lcg.seed());
+    }
+}
 
 /// Sparse boosts as an ordered list (PS object iteration order).
 pub type SparseBoostsOwned = Vec<(usize, i8)>;

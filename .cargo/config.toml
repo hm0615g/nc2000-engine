@@ -1,0 +1,87 @@
+# Repo-local Cargo build & test optimization profile.
+# Keeps Cargo.toml / Cargo.lock / crates/*/src byte-identical (preserving
+# compiled-preview-v1.json and M17E_SOLVER_BUILD_FINGERPRINT SHA-256 locks).
+# Also disables any broken global rustc-wrapper (e.g. sandboxed sccache os error 1).
+
+[build]
+rustc-wrapper = ""
+
+[alias]
+t = ["test", "--workspace", "--lib", "--tests"]
+
+[profile.dev]
+opt-level = 1
+debug = 0
+strip = "none"
+incremental = false
+
+[profile.test]
+opt-level = 1
+debug = 0
+strip = "none"
+incremental = false
+
+# Compile proc-macros and build scripts fast at opt-level 0.
+[profile.dev.build-override]
+opt-level = 0
+debug = 0
+
+[profile.test.build-override]
+opt-level = 0
+debug = 0
+
+# Hot-path simulation, search, and serialization crates run ~5-10x faster at opt-level 2.
+[profile.dev.package.nc2000-engine]
+opt-level = 2
+
+[profile.test.package.nc2000-engine]
+opt-level = 2
+
+[profile.dev.package.conformance]
+opt-level = 1
+
+[profile.test.package.conformance]
+opt-level = 1
+
+[profile.dev.package.nc2000-bot]
+opt-level = 1
+
+[profile.test.package.nc2000-bot]
+opt-level = 1
+
+[profile.dev.package.serde]
+opt-level = 1
+
+[profile.test.package.serde]
+opt-level = 1
+
+[profile.dev.package.serde_json]
+opt-level = 1
+
+[profile.test.package.serde_json]
+opt-level = 1
+
+[profile.dev.package.miniz_oxide]
+opt-level = 1
+
+[profile.test.package.miniz_oxide]
+opt-level = 1
+
+[profile.dev.package.sha2]
+opt-level = 1
+
+[profile.test.package.sha2]
+opt-level = 1
+
+[profile.dev.package.smallvec]
+opt-level = 1
+
+[profile.test.package.smallvec]
+opt-level = 1
+
+# Host-scoped Darwin flags ONLY so wasm32-unknown-unknown builds are unaffected.
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "split-debuginfo=unpacked"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "split-debuginfo=unpacked"]

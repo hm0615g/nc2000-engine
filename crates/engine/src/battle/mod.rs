@@ -25,7 +25,7 @@ pub mod search;
 pub mod turn;
 
 pub use choices::MAX_TOTAL_LEVEL;
-pub use search::{Outcome, SearchChoice};
+pub use search::{BattleSearchCache, Outcome, SearchChoice};
 
 use crate::dex::{toid, CondId, Dex, EffectType, ItemId, MoveId};
 use crate::prng::Prng;

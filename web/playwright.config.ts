@@ -9,8 +9,8 @@ const chromiumExe = process.env.NC2000_CHROMIUM_EXE;
 
 export default defineConfig({
   testDir: "./tests",
-  fullyParallel: false,
-  workers: 1,
+  fullyParallel: true,
+  workers: process.env.CI ? 2 : 4,
   timeout: 12 * 60 * 1000,
   expect: { timeout: 30_000 },
   use: {

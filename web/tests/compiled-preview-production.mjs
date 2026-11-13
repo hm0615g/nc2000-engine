@@ -11,7 +11,7 @@ import { compatiblePolicyKeys } from '../src/preview-prior.mjs';
 const wasm = createRequire(import.meta.url)('../../crates/wasm/pkg-node/nc2000_wasm.js');
 const frameDex = new wasm.Dex();
 
-let server, browser;
+let server, browser, probeSearchers = [];
 try {
   const remote = process.env.NC2000_PREVIEW_CHECK_URL;
   if (!remote) server = await preview({ preview: { host: '127.0.0.1', port: 0 } });
@@ -30,6 +30,12 @@ try {
     text => crypto.createHash('sha256').update(text).digest('hex'));
   assert.ok(compatible.size > 0, "expected partially reusable bake");
   const poolJson = fs.readFileSync("../data/belief-pool-v3/belief-pool.json", "utf8");
+  probeSearchers = [0, 1].map(side => {
+    const sample = JSON.parse(poolJson).teams[0].sets;
+    const b = new wasm.Battle(frameDex, JSON.stringify(sample), JSON.stringify(sample), "1,2,3,4");
+    try { return new wasm.BlindSearcher(b, side, poolJson, 7, 0.4); }
+    finally { b.free(); }
+  });
   browser = await chromium.launch();
   const page = await browser.newPage();
   await page.exposeFunction('__playerFrame', (own, foe, side) => {
@@ -37,9 +43,7 @@ try {
     const battle = new wasm.Battle(frameDex, JSON.stringify(teams[0]), JSON.stringify(teams[1]), '1,2,3,4');
     const channel = new wasm.PlayerChannel(side);
     try {
-      const searcher = new wasm.BlindSearcher(battle, side, poolJson, 7, .4);
-      try { return {...JSON.parse(channel.frame(battle)), expectedTable: compatible.has(searcher.compiledPreviewKey(battle))}; }
-      finally { searcher.free(); }
+      return {...JSON.parse(channel.frame(battle)), expectedTable: compatible.has(probeSearchers[side].compiledPreviewKey(battle))};
     }
     finally { channel.free(); battle.free(); }
   });
@@ -154,6 +158,7 @@ try {
   fs.writeFileSync(output, JSON.stringify(result, null, 2) + '\n');
   console.log(JSON.stringify(result, null, 2));
 } finally {
+  for (const s of probeSearchers) s.free();
   frameDex.free();
   await browser?.close();
   if (server) await new Promise(resolve => server.httpServer.close(resolve));

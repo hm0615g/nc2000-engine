@@ -76,7 +76,7 @@ def main():
         result = json.loads(args.record.read_bytes())
         summary = verify(result, protocol)
         paths = subprocess.check_output(['git', 'ls-files', 'crates/engine', 'crates/bot/src', 'Cargo.toml', 'Cargo.lock'], cwd=root, text=True).splitlines()
-        paths += ['crates/bot/examples/preview_alias_budget.rs', 'crates/bot/tests/preview_aliases.rs',
+        paths += ['crates/bot/examples/preview_alias_budget.rs', 'crates/bot/tests/suite/preview_aliases.rs',
                   'tools/preview-alias-probe', 'findings/preview-alias-v1/protocol.json', 'findings/preview-alias-v1/audit.json', protocol['catalog'], protocol['prior']]
         bundle = dict(result=result, protocol=protocol, hashes={p: hashlib.sha256((root/p).read_bytes()).hexdigest() for p in paths})
         (archive / 'records.json.gz').write_bytes(gzip.compress(json.dumps(bundle, sort_keys=True).encode(), mtime=0))

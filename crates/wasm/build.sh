@@ -16,6 +16,16 @@ case "$target" in
   nodejs) out=pkg-node ;;
   *) echo "usage: build.sh [web|nodejs]" >&2; exit 2 ;;
 esac
+target_libdir="$(rustc --print target-libdir --target wasm32-unknown-unknown 2>/dev/null || true)"
+if [ -z "$target_libdir" ] || [ ! -d "$target_libdir" ]; then
+  if command -v rustup >/dev/null 2>&1; then
+    rustup_rustc="$(rustup which rustc)"
+    rustup_bin="$(dirname "$rustup_rustc")"
+    rustup_root="$(cd "$rustup_bin/.." && pwd)"
+    export PATH="$rustup_bin:$PATH"
+    export DYLD_FALLBACK_LIBRARY_PATH="$rustup_root/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"
+  fi
+fi
 export CARGO_PROFILE_RELEASE_LTO=fat
 export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 exec wasm-pack build --release --target "$target" --out-dir "$out"

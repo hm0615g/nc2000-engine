@@ -81,7 +81,7 @@ fn slot_role(line: &str, actor: &str, subject: &str) -> &'static str {
 /// inside the window.
 ///
 /// Two corrections over the reader this replaced, both pinned as measured
-/// blind spots in `crates/bot/tests/mask_sleep_talk.rs`:
+/// blind spots in `crates/bot/tests/suite/mask_sleep_talk.rs`:
 ///
 ///   * a `|move|` line that the ACTOR emits carrying `[from] <this move>` is
 ///     the move this one CALLED (Sleep Talk / Metronome / Mirror Move), not

@@ -88,7 +88,7 @@ def audit():
           'Native/WASM parity covers the replayed roots; counterfactual parity for the original case remains the previously documented sampled check.'],
         'sources':[{'url':'https://arxiv.org/abs/1804.09045','title':'Analysis of Hannan Consistent Selection for Monte Carlo Tree Search in Simultaneous Move Games','relevance':'Node-local no-regret on observed rewards alone does not ensure tree-level equilibrium convergence; not a finite-budget theorem for this bot.'}]}
     dump(OUT/'summary.json',result)
-    paths=['crates/bot/src/root_policy.rs','crates/bot/src/root_policy/interval.rs','crates/bot/tests/interval_root_games.rs','crates/bot/examples/interval_root_probe.rs','crates/bot/examples/root_class_certificates.rs','web/tests/deployed-policy-class.mjs','tools/policy-class-study.py','tools/policy-class-report.py','findings/deployed-bond-counterexample-v1/blind-confirmation.jsonl']
+    paths=['crates/bot/src/root_policy.rs','crates/bot/src/root_policy/interval.rs','crates/bot/tests/suite/interval_root_games.rs','crates/bot/examples/interval_root_probe.rs','crates/bot/examples/root_class_certificates.rs','web/tests/deployed-policy-class.mjs','tools/policy-class-study.py','tools/policy-class-report.py','findings/deployed-bond-counterexample-v1/blind-confirmation.jsonl']
     paths += [str(p.relative_to(ROOT)) for p in OUT.iterdir() if p.is_file() and p.name not in ['manifest.json','index.html','preview-verification.json']]
     dump(OUT/'manifest.json',{p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in sorted(paths)})
     print(json.dumps({k:v for k,v in result.items() if k not in ['cases','limits','sources']},ensure_ascii=False))
