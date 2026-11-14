@@ -1,14 +1,14 @@
 {
   "schema_version": "nc2000-sdk-v1",
   "position_schema": "nc2000-position-v1",
-  "created_at": "2026-11-14T22:32:37.882Z",
-  "engine_git_sha": "5382d5d42d5f573f4c930d21e797489fe800754c",
-  "wasm_sha256": "2b4e53deabf65d57bb5d2dd075d3a4eae6bbe2c8781de7babafcb1570d32c957",
+  "created_at": "2026-11-14T23:17:15.508Z",
+  "engine_git_sha": "ba8f8033e6bd0efeb2b28e17fa56813e12994ffa",
+  "wasm_sha256": "3e0c94a5731dec3a64c3bb61e45ee4b9c1424a79f4daa31dfeebd482b3629341",
   "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
   "default_belief_sha256": "1eeb77fecfd0045e4a030873331fa7ad2f3129653d5f87da04ed4d845ecce63d",
   "file_hashes": {
-    "crates/wasm/pkg-node/nc2000_wasm.js": "35de8feaafbf0731976079994a3b761e6cd8ceb02b67e2354ff14cf548f4bbf6",
-    "crates/wasm/pkg-node/nc2000_wasm_bg.wasm": "2b4e53deabf65d57bb5d2dd075d3a4eae6bbe2c8781de7babafcb1570d32c957",
+    "crates/wasm/pkg-node/nc2000_wasm.js": "2cdd9ff5f184538fe6f21d656798e0de8cb3589c223e52efaadff6db0d96262b",
+    "crates/wasm/pkg-node/nc2000_wasm_bg.wasm": "3e0c94a5731dec3a64c3bb61e45ee4b9c1424a79f4daa31dfeebd482b3629341",
     "crates/wasm/pkg-node/package.json": "b826a8c48da1df4bff1379c8f5d77ecaabf5ff63adc277b3b22f06fef8033027",
     "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
     "data/i18n-ja.json": "53fcc1589b170c0a78d561947f540726342cca93cf341e4138668f1c1ca20c33",
@@ -17,7 +17,7 @@
     "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
     "data/kodoku-r3/conclusion-equilibrium-deme.json": "dc4eba46a6291d52c4985a124d3a50ccfca3891220a8a431652ab2a1ef36c437",
     "data/belief-pool-v3/belief-pool.json": "1eeb77fecfd0045e4a030873331fa7ad2f3129653d5f87da04ed4d845ecce63d",
-    "data/compiled-preview-v1.json": "ba1af90c99524c9e14244c23b458d2c504f668fb41a52f27e64f6590c4681b1a",
+    "data/compiled-preview-v1.json": "9aa457dc7bf6cd7767cd9accfe11291ccb5a9ad92c8bb41a684d3a27c5c0f164",
     "tools/diagnose-position.js": "693147b6334a9660bf8e5e9b2cd31741bb10bcfe8f23c8f9615bec26e0f146d0"
   }
 }
