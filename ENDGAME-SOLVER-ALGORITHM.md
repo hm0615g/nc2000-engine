@@ -1,8 +1,9 @@
 # Certified Endgame Solver: Search-Space Reduction Proposal
 
 Status: Phases A-C and the two-sided resource-DAG extension are implemented.
-This file remains the design rationale; measured follow-ups are recorded in
-the project README and `STALL-CENSUS-RESULTS.md`.
+This file preserves the original design rationale; the authoritative solver
+implementation and verification gates live in `crates/bot/src/{exact,bounds,stall}.rs`
+and `crates/bot/examples/{anchor_gate,endgame_exactness,endgame_exactness_corpus}.rs`.
 
 Audience: AI agents working on M17e or later exact/certified endgame analysis.
 

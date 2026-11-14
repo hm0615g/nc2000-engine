@@ -20,12 +20,12 @@ Rust battle engine, imperfect-information search bot, and WebAssembly/Preact cli
 - **Retired `open` mode**: Pinned-sheet (`open`) mode exists only to replay historical fork/kifu records (`data/search-profiles.json`).
 - **Three distinct team-data roles (`web/src/data.ts`, `docs/TEAM-POOL-REBUILD-PLAN.md`)** — never substitute one for another:
   1. **Catalog (`data/team-pool-v2/team-pool.json`)**: Human built-in party list and ordinary bot draw (weighted by `drawWeight`).
-  2. **Opponent prior (`data/belief-pool-v3/belief-pool.json`)**: Weighted known-party candidate set used by `Belief` across all doors and tools: real-world variants plus only catalog-generated sets. User pool overrides never replace this prior. The optional marginal species/move prior (`crates/bot/src/prior.rs`) is opt-in and inert by default (never place a file at `data/belief-prior-v0.json`).
+  2. **Opponent prior (`data/belief-pool-v3/belief-pool.json`)**: Weighted known-party candidate set used by `Belief` across all doors and tools, augmented by bundled zero-prior Gen 2 species supplements (`crates/bot/src/belief_supplement_v1.json`) and off-pool EV/IV spread synthesis (`crates/bot/src/belief.rs`). User pool overrides never replace this prior. The optional marginal species/move prior (`crates/bot/src/prior.rs`) is opt-in and inert by default (never place a file at `data/belief-prior-v0.json`).
   3. **Historical solved mixtures (`data/kodoku-r3/conclusion-equilibrium-deme.json` primary; `data/kodoku-r3/conclusion-equilibrium-r1.json` and `data/meta-nash-v3/pool-artifact.json` preserved under `<details>`)**: Bot party draw when mixture draw (`?nash` or setup selector) is active.
-- **Budgets & compiled preview**: Search coefficients and iteration budgets are read from `data/search-profiles.json` and `data/live-search.json` (never hardcoded in docs). The [training-v3 preview bake](data/preview-training-v3/README.md) retains all 990 compatible keys across the 33 catalog teams (`30` distinct public rosters); unrecorded matchups and any keys whose shell priors diverge use live preview search. Source/data guards remain active; conditional distributions within both public shells determine prior compatibility. See [prior compatibility](docs/PREVIEW-PRIOR-COMPATIBILITY.md).
+- **Budgets & compiled preview**: Search coefficients and iteration budgets are read from `data/search-profiles.json` and `data/live-search.json` (never hardcoded in docs). The [training-v3 preview bake](data/preview-training-v3/README.md) covers compatible matchups from `data/team-pool-v2/team-pool.json`; unrecorded matchups and any keys whose shell priors diverge use live preview search. Source/data guards remain active; conditional distributions within both public shells determine prior compatibility. See [prior compatibility](docs/PREVIEW-PRIOR-COMPATIBILITY.md).
 
 ### 3. WASM & Web App (`crates/wasm`, `web`)
-- **WASM bridge (`crates/wasm/src/lib.rs`)**: Exposes `Dex`, `Battle`, `Searcher`, `BlindSearcher`, `ProtocolSearcher`, `Validator`, and `ForkArena`. Verified against native behavior via `crates/wasm/tests-node/`.
+- **WASM bridge (`crates/wasm/src/lib.rs`)**: Exposes `Dex`, `Validator`, `Battle`, `PlayerChannel`, `Searcher`, `BlindSearcher`, `ProtocolSearcher`, `PreviewTables`, `ForkArena`, and `Kifu`. Verified against native behavior via `crates/wasm/tests-node/`.
 - **Web app (`web/src/app.tsx`, `web/src/info-mode.ts`)**: Doors are `/` (`?blind` alias; `?nash` / `?nash=v3` pre-selects bot mixture draw), `?evaluate` (`web/src/evaluate.tsx`), `?fork` (`web/src/fork.tsx`), and `?solver` (`web/src/solver.tsx`). Runtime data is fetched from `<base>data/*` and copied during deploy (`.github/workflows/pages.yml`), never bundled into JS chunks.
 
 ## Pointers
@@ -62,7 +62,7 @@ cargo test
 
 # WASM Node build + parity/contract suites (mirrors .github/workflows/pages.yml)
 crates/wasm/build.sh nodejs
-for suite in smoke determinism parity kifu fork solver destiny-bond priority-heal residual-wait own-recovery-wait preview-cache; do
+for suite in smoke determinism parity kifu fork solver endgame destiny-bond priority-heal residual-wait own-recovery-wait preview-cache; do
   node "crates/wasm/tests-node/$suite.js"
 done
 

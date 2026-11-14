@@ -4,7 +4,7 @@ Historical snapshot at commit `14cf3590`, before the owner-requested
 [training-v3 repair](../training-v3/README.md). The commands below reproduce
 this snapshot from that checkout; current products use the repaired policy.
 
-Follow-up to `docs/ICO-SESSION-FINDINGS-2026-11-03.md`. This audit changes no
+Follow-up audit of observed prior-vs-training discrepancy. This audit changes no
 production prior, playable sets, engine, WASM, or preview artifact. It establishes
 candidate support and stat discrepancies, not an action-quality or win-rate gap.
 

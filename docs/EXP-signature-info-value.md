@@ -1,10 +1,13 @@
 # 署名内情報価値実験（EXP-SIV v1）— メタプール構想の分岐点実験
 
+> **Historical experiment record (2026-08-11).** Superseded for live product
+> configuration by `docs/TEAM-POOL-REBUILD-PLAN.md` and `data/kodoku-r3/`.
+> Retained because `data/exp-siv-v1/gate-result.json` references it.
+
 Status: **COMPLETE (2026-08-11).** 設計・実装・本走・判定まで同日完了。**結論: §13** —
 envelope（欺瞞価値）は実在するが、プール prior を持つ誠実なヘッジ相手には
 署名内多様性の情報価値は予算とともに消滅する。メタプール構想は行列ナッシュ混合に縮退。
 機械可読 gate: `data/exp-siv-v1/gate-result.json`。対象読者: オーナー + 実装セッション。
-前提文書: `docs/M11-metagame-research.md`(山登りとまぐれ追い対策)、README M8/M10/M17b(混合価値・blind機構・プレレジ作法)。
 
 ---
 

@@ -1,5 +1,11 @@
 # META-NASH v1 — AI進化プール + 行列ナッシュ混合（本走）
 
+> **Historical experiment record (2026-08-12).** Superseded for live product
+> configuration by `data/team-pool-v2/`, `data/belief-pool-v3/`, and
+> `data/kodoku-r3/`. Retained because `data/team-inventory-v1/`,
+> `data/team-pool-v1/`, and `tools/build-team-inventory.js` reference this path
+> for candidate provenance.
+
 Status: **COMPLETE — OR GATE PASS (Route B). 2026-08-12.** 結果は§結果、機械可読は
 `data/meta-nash-v1/gate-result.json`、製品プールは `data/meta-nash-v1/pool-artifact.json`。
 設計 2026-08-12。EXP-SIV(docs/EXP-signature-info-value.md)の

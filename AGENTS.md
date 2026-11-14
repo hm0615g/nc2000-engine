@@ -12,7 +12,7 @@
 
 ## 2. Cryptographic & Artifact Locks
 
-- `data/compiled-preview-v1.json` (checked by `web/vite.config.ts` on `npm run build`) and `crates/bot/build.rs` SHA-256 lock `Cargo.toml`, `Cargo.lock`, `crates/{engine,conformance,bot}/Cargo.toml`, `crates/{engine,bot}/build.rs`, `crates/{engine,conformance,bot}/src/**/*.rs`, `crates/bot/examples/{meta_eco.rs,meta_eco/catalog_preview.rs,endgame_exactness_corpus.rs,anchor_gate.rs}`, and core `data/*.json` files. Do not modify locked files unless intentionally re-baking or updating the allowlist.
+- `data/compiled-preview-v1.json` (verified by `web/vite.config.ts` on `npm run build`) embeds SHA-256 locks over `Cargo.toml`, `Cargo.lock`, `crates/{engine,conformance,bot}/Cargo.toml`, `crates/{engine,bot}/build.rs`, `crates/{engine,conformance,bot}/src/**/*.rs`, `crates/bot/examples/{meta_eco.rs,meta_eco/catalog_preview.rs}`, and core `data/*.json` files (plus semantic prior checks on `data/belief-pool-v3/belief-pool.json`). `crates/bot/build.rs` computes `M17E_SOLVER_BUILD_FINGERPRINT` over `Cargo.toml`, `Cargo.lock`, `crates/{bot,engine,conformance}/Cargo.toml`, `crates/bot/build.rs`, `crates/{bot,engine,conformance}/src/**/*.rs`, and `crates/bot/examples/{endgame_exactness_corpus,anchor_gate}.rs`, and `crates/engine/build.rs` hashes `crates/engine/src/**/*.rs` into `ENGINE_FINGERPRINT`. Do not modify locked files unless intentionally re-baking or updating the allowlist.
 - When running `web/tests/compiled-preview-production.mjs` during verification, pass `NC2000_PREVIEW_CHECK_OUT=../tmp/prod-verification.json` to avoid dirtying tracked `data/preview-training-v3/production-verification.json`.
 
 ## 3. Research & Strength Roadmap

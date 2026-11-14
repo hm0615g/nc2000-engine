@@ -68,8 +68,7 @@ Pooled:
   recovers.
 - This is a statement about strength against the same bot. It is not a
   statement about human agreement: cluster 2's "setup where humans set up"
-  remains an agreement gap. Agreement and strength are known not to be aligned
-  (`docs/SWITCHING-QUESTION-HANDOFF.md`).
+  remains an agreement gap. Agreement and strength are known not to be aligned.
 
 ## Reproduce
 
