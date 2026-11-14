@@ -12,6 +12,7 @@ const {readDecisionForm} = require('./pbs-v32-decision-boundary');
 const {currentBoundary} = require('./pbs-castle-current-boundary');
 const {buildCurrentRequest} = require('./pbs-castle-current-request');
 const {capturePpObservation, auditPpImport} = require('./pbs-castle-pp-observation');
+const {reconcileOwnPp, reconcileSafeguard} = require('./pbs-castle-position-reconcile');
 const {createObservationLedger} = require('./pbs-castle-observation-ledger');
 const {completeExactHpPosition} = require('./pbs-exact-hp-position');
 const {sourceHashes} = require('./pbs-castle-submission');
@@ -245,6 +246,9 @@ function createObservationSession(options = {}) {
       assert.equal(spec.team_preview, false);
       assert.equal(spec.sides[side].active, built.activeRosterSlot);
       assert.equal(spec.force_switch, boundary.form.action !== 'INPUT');
+      const ppReconciliation = reconcileOwnPp({spec, initial: ppStage.initial,
+        current: observation, activeSlot: built.activeRosterSlot});
+      const safeguardReconciliation = reconcileSafeguard({spec, evidence});
       const publicTop = built.ui.battleTurn.sides[foe];
       if (publicTop.speciesId !== null && publicTop.hp > 0) {
         const active = spec.sides[foe].mons[built.activeSlots[foe]];
@@ -275,8 +279,15 @@ function createObservationSession(options = {}) {
       const positioned = JSON.parse(exact.searcher.positionSpec());
       assert.equal(positioned.sides[side].active, built.activeRosterSlot);
       assert.equal(positioned.force_switch, boundary.form.action !== 'INPUT');
+      for (const guard of safeguardReconciliation.active) {
+        assert.ok(stateView.sides[guard.side].sideConditions.includes('safeguard'),
+          'SAFEGUARD_NOT_INSTALLED_IN_ENGINE_STATE');
+        assert.ok(positioned.sides[guard.side].conditions.some(c =>
+          c.key === 'safeguard' && c.start_turn === guard.startTurn),
+          'SAFEGUARD_NOT_RETAINED_IN_POSITION');
+      }
       const ownHpChecks = [], ownStatusChecks = [], ownItemChecks = [];
-      const publicStatusChecks = [], activePpChecks = [], acceptedPpGaps = [];
+      const publicStatusChecks = [], activePpChecks = [], allPpChecks = [], acceptedPpGaps = [];
       for (const [enginePosition, rosterSlot] of built.engineParty.entries()) {
         const source = built.pdat.mons[pickedRosterSlots.indexOf(rosterSlot)];
         const native = stateView.sides[side].party[enginePosition];
@@ -295,23 +306,22 @@ function createObservationSession(options = {}) {
           hp: native.hp, maxHp: native.maxhp, match: true});
       }
       const ppAudit = auditPpImport({observation, stateView, engineParty: built.engineParty});
-      for (const mismatch of ppAudit.mismatches) {
-        assert.equal(mismatch.code, 'CURRENT_PP_VALUE', 'UNACCEPTED_PP_MISMATCH:' + mismatch.code);
-        assert.ok(boundary.form.action !== 'INPUT' || mismatch.rosterSlot !== built.activeRosterSlot,
-          'ACTIVE_CURRENT_PP_MISMATCH');
-      }
+      assert.deepEqual(ppAudit.mismatches, [], 'OWN_PDAT_VS_ENGINE_PP_MISMATCH');
+      assert.equal(ppAudit.comparisons.length, 12, 'OWN_PDAT_PP_ROW_COUNT');
       for (const check of ppAudit.comparisons) {
         const initialMon = ppStage.initial.mons.find(mon => mon.rosterSlot === check.rosterSlot);
+        assert.ok(initialMon, 'PP_SOURCE_INITIAL_MON_MISSING');
         const maximumPp = initialMon.moves[check.moveSlot - 1].currentPp;
-        const row = {...check, maximumPp, maximumPpAuthority: 'INITIAL_UNSPENT_PDAT_USER_CONFIRMED_RULE'};
+        assert.equal(check.nativeCurrentPp, check.observedCurrentPp, 'OWN_CURRENT_PP_MISMATCH');
+        assert.equal(check.nativeMaximumPp, maximumPp, 'OWN_MAXIMUM_PP_MISMATCH');
+        const row = {...check, match: true, maximumPp,
+          maximumPpAuthority: 'INITIAL_UNSPENT_PDAT_USER_CONFIRMED_RULE'};
+        allPpChecks.push(row);
         if (boundary.form.action === 'INPUT' && check.rosterSlot === built.activeRosterSlot) {
-          assert.equal(check.nativeCurrentPp, check.observedCurrentPp, 'ACTIVE_CURRENT_PP_MISMATCH');
-          assert.equal(check.nativeMaximumPp, maximumPp, 'ACTIVE_MAXIMUM_PP_MISMATCH');
           activePpChecks.push(row);
-        } else if (check.nativeCurrentPp !== check.observedCurrentPp || check.nativeMaximumPp !== maximumPp) {
-          acceptedPpGaps.push({...row, reason: 'ACCEPTED_EXISTING_CORE_BENCH_OR_FORCE_SWITCH_PP_LIMITATION'});
         }
       }
+      assert.deepEqual(acceptedPpGaps, [], 'UNACCEPTED_OWN_PP_GAP');
       assert.ok(exact.rootChecks.every(row => row.match), 'PUBLIC_ROOT_HP_MISMATCH');
       if (publicTop.speciesId !== null && publicTop.hp > 0) {
         const matches = stateView.sides[foe].party.filter(mon => id(mon.species) === publicTop.speciesId);
@@ -338,7 +348,9 @@ function createObservationSession(options = {}) {
         normalization: normalized.changes, sourceProtocolSha256: sha(evidence.raw),
         importedProtocolSha256: sha(boundary.protocol.join('\n') + '\n'),
         ownHpChecks, ownStatusChecks, ownItemChecks, publicHpChecks: clone(exact.rootChecks),
-        publicStatusChecks, activePpChecks, acceptedPpGaps,
+        publicStatusChecks, activePpChecks, allPpChecks, acceptedPpGaps,
+        ppReconciliation: clone(ppReconciliation),
+        safeguardReconciliation: clone(safeguardReconciliation),
         legalMatch: true, inputBoundaries: clone(staged.sourceReport.inputBoundaries),
         initialPdatSha256: ppStage.initial.rawPdatSha256,
         maximumPpAuthority: 'INITIAL_UNSPENT_PDAT_USER_CONFIRMED_RULE',
