@@ -146,7 +146,7 @@ Design boundary (**Choice A — Strict Pool Trust Until Contradiction & Turn 0 I
 
 ### 2.1 Critical Baseline Correction (`43a5c58a` Profile Is Obsolete)
 
-[`findings/performance-scout-v1/README.md`](../findings/performance-scout-v1/README.md) measured commit `43a5c58a` (`2026-10-24`: `40.7%` state hashing, `21.7%` event dispatch, `3.8%` visible alloc, `1.2%` `clone_from`). **Do not use those numbers to size work on current `HEAD` (`25ed6f33`).** Between `2026-10-24` and `2026-11-14`, most of the October bottlenecks were already shipped:
+[`findings/performance-scout-v1/README.md`](../findings/performance-scout-v1/README.md) measured commit `43a5c58a` (`2026-10-24`: `40.7%` state hashing, `21.7%` event dispatch, `3.8%` visible alloc, `1.2%` `clone_from`). **Do not use those numbers to size work on current `HEAD` (`54cc2ba4`).** Most of the October bottlenecks and the subsequent §2.3 search-engine speedups have already shipped:
 
 - **`3ca86602` (`portable-search-v1`)**: `-7.7%` to `-11.1%` Chromium WASM, `-12.1%` Node WASM, `-16.2%..-16.3%` native.
 - **`ced93e74` / `9c5bceb3`**: `WordHasher::batch` (`PolyBatch`), `EvCbs::mask` + `CbMask` fast skip in `Battle::run_event`, `RV::Str(&'static str)`.
@@ -154,59 +154,65 @@ Design boundary (**Choice A — Strict Pool Trust Until Contradiction & Turn 0 I
 - **`9194b776` / `d8096e0d` / `849a3545`**: Added `BlindSearch::det_cache`, `predict_fallback_draws`, and `world_pool` (`24` worlds with `reset_search_sim`).
 - **`5d1dcec9` / `2fb86ac8`**: Added `4096 × 4-way` SplitMix64 Bellman cache + factored 2D endgame solver in [`crates/bot/src/linear.rs`](../crates/bot/src/linear.rs).
 - **`5a0abbb7`**: Added `PolyStep`/`PolyRecorder`, [`BattleSearchCache`](../crates/engine/src/battle/search.rs) (`bench_steps`), and `BlindSearch::root_node_type`.
-- **Compiler/Allocator defaults already active**: Root [`Cargo.toml`](../Cargo.toml) already enables `lto = "fat"` and `codegen-units = 1`; [`crates/bot/Cargo.toml`](../crates/bot/Cargo.toml) already enables `mimalloc` on non-`wasm32`; `crates/wasm/Cargo.toml` already runs `wasm-opt = ["-O3"]`.
+- **`69c49c3b`**: Landed `PolyStep::then` prefix hash composition, `CachedBenchMon` / `type_key_with_cache` / own-side `RosterCompactCache` template reuse, `#[repr(u8)]` callback jump tables & precomputed Dex metadata (`CondCbOp`, `ItemCbOp`, `MoveCbOp`, `DurationCbKind`, `DamageCbKind`, `BasePowerCbKind`, `BeforeMoveCbKind`), lazy priority resolution when `handlers.len() > 1`, and `field_event` `field_mask` fast-skip + permanent `EffectType::Rule` skip + deduplicated `battle_mask` check. (In the same commit, `hash_state_impl` tail batching, naive PP-slot split, `PartyMatchCache+Cow<MatchTable>`, and cond lookup tables were tested and reverted after proving neutral or negative.)
+- **Compiler/Allocator defaults already active**: Root [`Cargo.toml`](../Cargo.toml) enables `lto = "fat"` and `codegen-units = 1`; [`crates/bot/Cargo.toml`](../crates/bot/Cargo.toml) enables `mimalloc` on non-`wasm32`; `crates/wasm/Cargo.toml` runs `wasm-opt = ["-O3"]`.
+
+#### Fresh Baseline Profile on `HEAD` (`54cc2ba4`)
+
+Measured on Apple Silicon (`release`, `mimalloc` enabled):
+- **`perf_probe`**:
+  - `hash 100000 1 10`: `wall_seconds: 2.395551708` (~`0.233–0.241s` per state)
+  - `step 100000 1 10`: `wall_seconds: 1.2188765`
+  - `blind 3000 4 12`: `wall_seconds: 0.111835125`
+  - `blind 27000 4 12`: `wall_seconds: 0.837917083` (`id 0` Team Preview `0.332184708s`, `id 11` ordinary `0.220336708s`)
+- **`profile_blind`** (`24` recorded decisions @ `27000` iterations, `2,306` samples):
+  - Tree loop & key lookup: `run_iteration_cached` (`19.56%`), `key_of_cached::{closure#0}` (`7.16%`)
+  - State hashing: `Pokemon::hash_dynamic_body<WordHasher<true>>` (`10.19%`), `EffectState::hash_state` (`1.95%`)
+  - Leaf eval / rollouts / compact conversion: `linear::with_solved_bellman` (`5.03%`), `CompactBattle::step_turn` (`4.73%`), `BellmanCache::with` (`3.12%`), `mcts::compact_playout_pick` (`2.91%`), `CompactBattle::from_battle_with_roster_cache` (`2.12%`), `compact_playout_value` (`1.78%`), `eval_exact_root_table` (`0.35%`)
+  - Battle transition & allocator: `_mi_arena_try_alloc_at` + `_mi_page_queue_find_free_ex` (`4.60%` + `0.61%`), `Battle::commit_choices` (`2.99%`), `Battle::each_event` (`2.12%`), `Battle::run_move` (`1.86%`), `Battle::run_event_slow` (`1.78%`), `Battle::use_move` (`1.30%`), `Battle::find_event_handlers` (`1.30%`)
+  - Note: on synthetic single-turn `profile_mcts -- 1000` (`544` samples), cold allocations dominate (`_mi_arena_try_alloc_at` `45.77%`), so use `profile_blind` over multi-turn recorded decisions when sizing real search hotspots.
 
 **Mandatory Step 0 before any optimization work**: Re-profile current `HEAD` first using:
 - Native micro-benchmarks: `cargo run --release -p nc2000-bot --example perf_probe`
 - Native flamegraph on recorded games: `cargo run --release -p nc2000-bot --example profile_blind -- <RECORDED_GAMES> tmp/blind.svg`
 - Portable WASM/browser regression harness: [`web/tests/portable-perf.mjs`](../web/tests/portable-perf.mjs)
 
-Realistic remaining **portable (WASM + native) zero-drift speedup** on `HEAD` is estimated (inferred from inspection, pending fresh profiling) at **~5%–15%**, not another `2x`.
-
 ---
 
 ### 2.2 Already Rejected Optimization Approaches (Do Not Repeat)
 
 - Direct tuple-hash expansion (`WordHasher::batch` / `PolyBatch` already outperforms naive tuple unrolling).
+- Re-attempting `69c49c3b`-reverted micro-optimizations: `hash_state_impl` tail batching, naive PP-slot split, `PartyMatchCache+Cow<MatchTable>`, and cond lookup tables.
 - Relying on `-C target-cpu=native` alone in search (`-3.0%` at `3k`, noisy `-6.6%` at `27k` on Apple Silicon; non-portable across hosts/WASM).
 - GPU/Metal offload at 1-dispatch-per-MCTS-iteration (host/device sync latency dominates tree iteration cost).
+- **WASM `simd128` (`54cc2ba4`, `portable-perf.mjs` @ `27000 × 3`, `31` positions, 5% acceptance gate)**:
+  - `RUSTFLAGS="-C target-feature=+simd128"`: Node `v22.23.3` median `9522.058ms -> 9435.427ms` (`+1.19%`, `p95` `458.842 -> 494.325ms`, `exact_match: true`, rejected); Chromium `149.0.7827.55` median `7072.300ms -> 6987.000ms` (`+0.96%`, `p95` `302.200 -> 300.200ms`, `exact_match: true`, rejected).
+  - Explicit `core::arch::wasm32::u64x2` vectorization in `WordHasher::<true>::batch` + `+simd128`: Node median `6908.383ms -> 6890.611ms` (`+0.27%`, `p95` `296.873 -> 295.103ms`, `exact_match: true`, rejected).
+  - Manual `f32x4` intrinsics in `linear::solve_bellman_into`: not pursued because `BellmanCache` already absorbs almost all solves (`eval_exact_root_table` `0.35%` self-time; `solve_bellman_into` / `fill_ordered_q_plane` below top-40 threshold `< 0.35%`), while `linear.rs` top-40 time (`~8.5%`) is cache probing/key construction (`with_solved_bellman`, `BellmanCache::with`) and scalar survival curves.
 
 ---
 
-### 2.3 Remaining Zero-Drift Code Hotspots (`HEAD`)
+### 2.3 Remaining Zero-Drift Code Hotspots (`HEAD`: `54cc2ba4`)
 
 Every change inside `crates/engine/src/` modifies `ENGINE_FINGERPRINT` ([`crates/engine/build.rs`](../crates/engine/build.rs)) and requires updating its allowlist plus verifying bit-exact parity (`conformance` `kifu`, `replay`, `conformance_suite`, `sleep_clause`) and `data/compiled-preview-v1.json` lock rebuilds.
 
-#### A. Hashing & Team Preview Setup
-1. **Batch post-move `Pokemon::hash_state_impl` tail ([`crates/engine/src/state.rs`](../crates/engine/src/state.rs#L1338-L1436))**:
-   - `fast_flags` requires `last_move.is_none()` (`L1347`). As soon as [`Pokemon::move_used`](../crates/engine/src/battle/pokemon.rs#L698) sets `last_move = Some(...)`, virtually every depth `>= 1` active mon falls out of `hash_batch` into serial field hashing (`L1399-L1435`). Wrapping the fallback dynamic tail in `h.hash_batch` (or widening `fast_flags` to separate only `last_move*` / `move_this_turn`) is strictly bit-identical / zero-drift.
-2. **PP deduction step-cache invalidation ([`pokemon.rs`](../crates/engine/src/battle/pokemon.rs#L675-L694))**:
-   - `Battle::deduct_pp` mutates `move_slots` on Turn 1, breaking `full_step` (`base_move_slots == init_base_moves`) equivalence checks in `search.rs`. Separately caching static vs PP/volatile dynamic hashes preserves Turn 1+ prefix reuse without altering hash bits.
-3. **Team Preview bench hashing & `det_cache` misses ([`search.rs`](../crates/engine/src/battle/search.rs#L109-L166), [`blind.rs`](../crates/bot/src/blind.rs#L433))**:
-   - During Team Preview (`selected == false`), `bench_steps` in `BattleSearchCache` is empty, so all 12 roster mons hash uncollapsed on preview tree evaluations (up to `729k` budget in live config), and `root_search_key_cached` runs uncached on `det_cache` misses. Indexing Team Preview roster prefixes cleanly accelerates Preview without changing outputs.
-4. **Non-goal — pervasive dirty tracking**: Do **not** add per-field dirty bitmasks across `Battle`/`Pokemon` mutation sites (`9,500+` lines); untouched bench mons already reuse `CachedBenchMon` in two integer operations, making dirty-flag desync bugs far costlier than the residual hash savings.
-
-#### B. Event Dispatch (`Battle::apply_choices` inside MCTS Tree) & `CompactBattle`
-1. **Replace string-slice callback ladders (`conditions.rs`, `items.rs`, `moveexec.rs`)**:
-   - Callback dispatch currently routes through string-matched `(key: &str, cb: &str)` functions even though runtime handlers already hold typed integer IDs (`CondId`, `ItemId`, `MoveId`, `Cb`). Compiling a flat integer-indexed jump table at `Dex::from_json` eliminates repeated `&str` hashing/matching on hot tree transitions.
-2. **Lazy priority resolution in [`find_*_event_handlers`](../crates/engine/src/battle/events.rs#L464-L745)**:
-   - Handler discovery calls `self.resolve_priority(dex, listener, cb)` (dex metadata lookups, `f64` priority fields, speed-order lookups) eagerly for every matching listener even when `handlers.len() <= 1`. Deferring priority resolution until `handlers.len() > 1` avoids sorting metadata work in single-listener events.
-3. **`field_event` fast-skip & permanent format rules ([`events.rs`](../crates/engine/src/battle/events.rs#L691-L745), [`L1177-L1266`](../crates/engine/src/battle/events.rs#L1177-L1266))**:
-   - `field_event` lacks a `CbMask` field-wide fast skip analogous to `run_event`, and `find_field_event_handlers` iterates permanent format-rule pseudo-weathers (`maxtotallevel`, `stadiumsleepclause`, `freezeclausemod`) on `Residual` checks (`L702`: `pseudo_weather.len() > 3` still scans once present).
-4. **Pre-cache invariant `MatchTable` entries per `(world_id, party)` ([`compact.rs`](../crates/engine/src/compact.rs#L1469))**:
-   - Once Team Preview is complete (`selected == true`), matchup specs inside `CompactBattle::from_battle_with_roster_cache` are static whenever `!transformed`. Caching the immutable `MatchTable` slices per `SampledWorld` removes leaf-extraction work.
+With hashing, Team Preview roster templates, jump tables, lazy priority, and field-event masks already shipped through `69c49c3b`, remaining `profile_blind` CPU time is flatly distributed across:
+1. **SM-MCTS tree & transposition loop (`~26.7%` combined)**: `run_iteration_cached` (`19.56%`) and `key_of_cached::{closure#0}` (`7.16%`).
+2. **Dynamic state hashing (`~12.1%` combined)**: `Pokemon::hash_dynamic_body<WordHasher<true>>` (`10.19%`) and `EffectState::hash_state` (`1.95%`). **Non-goal**: pervasive per-field dirty bitmasks across `Battle`/`Pokemon` remain undesirable given maintenance/desync risk.
+3. **Bellman & rollout evaluation (`~19.7%` combined)**: `with_solved_bellman` (`5.03%`), `CompactBattle::step_turn` (`4.73%`), `BellmanCache::with` (`3.12%`), `compact_playout_pick` (`2.91%`), `CompactBattle::from_battle_with_roster_cache` (`2.12%`), `compact_playout_value` (`1.78%`).
+4. **Native allocator & battle event transition tail**: `mimalloc` arena/page queue (`~5.2%` visible in blind flamegraph) and `commit_choices` / `each_event` / `run_move` / `run_event_slow` / `use_move` / `find_event_handlers` (`~11.0%`).
 
 ---
 
 ### 2.4 Deployment & Runtime Lever (Highest Server-Side Speedup)
 
-- **Move Node WASM servers (`crates/wasm/pkg-node`) to Native Rust ([`docs/NATIVE-FORK-HANDOFF.md`](./NATIVE-FORK-HANDOFF.md))**: Running `ProtocolAgent` as a native binary with release LTO + host `-C target-cpu` + Profile-Guided Optimization (PGO) typically delivers a much larger wall-clock gain than micro-optimizing inside V8/WASM, and eliminates the 32-bit WASM linear memory ceiling if wider `world_pool` budgets are adopted server-side.
-- **Browser Web Workers remain WASM-only**: If browser throughput needs additional headroom after algorithmic profiling, evaluate targeted `wasm32` `simd128` vectorization specifically for `linear.rs` / `WordHasher::batch` (subject to Safari/Chromium baseline support).
+- **Move Node WASM servers (`crates/wasm/pkg-node`) to Native Rust ([`docs/NATIVE-FORK-HANDOFF.md`](./NATIVE-FORK-HANDOFF.md))**: Running `ProtocolAgent` as a native binary in the downstream server repository (`hm0615g/nc2000-engine`) with release LTO + host `-C target-cpu` + Profile-Guided Optimization (PGO) typically delivers a much larger wall-clock gain than micro-optimizing inside V8/WASM, and eliminates the 32-bit WASM linear memory ceiling if wider `world_pool` budgets are adopted server-side.
+- **Browser Web Workers remain WASM-only**: Auto-vectorized and manual `wasm32` `simd128` failed the `5%` regression harness gate (§2.2); keep default WASM flags without `+simd128` and invest only if a clear `>= 5%` algorithmic target emerges in `run_iteration_cached` / `hash_dynamic_body` / `BellmanCache`.
 
 ---
 
 ## 3. Recommended Sequence for Future Work
 
-1. **Profile `HEAD` before touching hot paths**: Capture fresh native (`perf_probe`, `profile_blind`) and WASM (`web/tests/portable-perf.mjs`) baselines before choosing optimization targets.
-2. **Remaining Track 2 Belief Gaps**: Fill priors/synthetic set generation for the 16 zero-prior Gen 2 species and uncommon EV spreads, and benchmark adaptive `with_max_worlds` widening above `24` exclusively at high search budgets (`>= 27k`) / high belief entropy under equal wall-clock time.
-3. **Remaining Zero-Drift Track 3 & Deployment Wins**: Explore remaining items in Section 2.3 (post-move `hash_state_impl` batching, PP-deduction step-cache split, Team Preview bench hashing, static `MatchTable` caching) and migrate Node server runners to native `ProtocolAgent` ([`docs/NATIVE-FORK-HANDOFF.md`](./NATIVE-FORK-HANDOFF.md)).
+1. **Remaining Track 2 Belief Gaps**: Fill priors/synthetic set generation for the 16 zero-prior Gen 2 species and uncommon EV spreads, and benchmark adaptive `with_max_worlds` widening above `24` exclusively at high search budgets (`>= 27k`) / high belief entropy under equal wall-clock time.
+2. **Downstream Native Server Execution**: Migrate Node `ProtocolAgent` workers to native Rust in `hm0615g/nc2000-engine` per [`docs/NATIVE-FORK-HANDOFF.md`](./NATIVE-FORK-HANDOFF.md).
+3. **Targeted Search / Leaf Work Only If Profile-Justified**: If further browser WASM throughput is still needed, target the `HEAD` flat hotspots in §2.3 (`run_iteration_cached`, `key_of_cached`, `hash_dynamic_body`, `BellmanCache` lookup / `CompactBattle::step_turn`) and gate any change with `portable-perf.mjs` (`>= 5%` median win, `p95 <= 1.05x`).
