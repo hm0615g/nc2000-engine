@@ -132,6 +132,7 @@ struct ImperfectInfoCore {
     source: BeliefSource,
     /// M18 community belief prior (inert when `source` is `OpenSheet`).
     prior: Option<Arc<BeliefPrior>>,
+    pick_prior: Option<Arc<crate::pick_prior::PickPrior>>,
     own_preview_policy: Option<Vec<f64>>,
     opp_pick_policy: Option<(Vec<f64>, f64)>,
     preview_iterations: Option<u32>,
@@ -160,6 +161,7 @@ impl ImperfectInfoCore {
             tables,
             source,
             prior: None,
+            pick_prior: None,
             own_preview_policy: None,
             opp_pick_policy: None,
             preview_iterations: None,
@@ -457,6 +459,11 @@ impl ImperfectInfoCore {
                 .observe(battle, dex, &mut g.observer)
                 .expect("player observation failed");
             g.belief.sync(dex, &g.observer);
+            if let Some(ref pick_prior) = self.pick_prior {
+                let own_preview = g.local.own_preview_mons(dex);
+                g.belief
+                    .condition_pick_prior(dex, pick_prior, &own_preview, &g.observer);
+            }
             if let Some((ref pol, smoothing)) = self.opp_pick_policy {
                 g.belief
                     .condition_canonical_pick_policy(pol, smoothing, &g.observer);
@@ -489,10 +496,16 @@ impl ImperfectInfoCore {
                     }
                 }
             }
-            if let Some(c) = self.preview_table_pick(dex) {
-                debug_assert!(choices.contains(&c), "preview pick outside legal set");
-                if choices.contains(&c) {
-                    return c;
+            if !self
+                .game
+                .as_ref()
+                .is_some_and(|g| g.belief.has_active_pick_draws(&g.observer))
+            {
+                if let Some(c) = self.preview_table_pick(dex) {
+                    debug_assert!(choices.contains(&c), "preview pick outside legal set");
+                    if choices.contains(&c) {
+                        return c;
+                    }
                 }
             }
         }
@@ -510,7 +523,12 @@ impl ImperfectInfoCore {
         if let Some(policy) = &self.decision_policy {
             return policy.clone();
         }
-        if matches!(choices[0], SearchChoice::Team(_)) {
+        if matches!(choices[0], SearchChoice::Team(_))
+            && !self
+                .game
+                .as_ref()
+                .is_some_and(|g| g.belief.has_active_pick_draws(&g.observer))
+        {
             if let (Some(tables), Some(game)) = (&self.tables, &self.game) {
                 if let Some(me) = tables.set_index(dex, game.local.own_sets()) {
                     let opp_idx = match &self.source {
@@ -633,6 +651,27 @@ impl BlindAgent {
         self.core.prior = Some(prior.clone());
         if let Some(g) = self.core.game.as_mut() {
             g.belief.set_prior(prior);
+        }
+    }
+
+    /// Condition opponent Team Preview & hidden-bench sampling on an empirical
+    /// pick prior (`nc2000-pick-prior-v1`). Inert on `OpenAgent`.
+    pub fn with_pick_prior(mut self, prior: Arc<crate::pick_prior::PickPrior>) -> Self {
+        self.set_pick_prior(prior);
+        self
+    }
+
+    pub fn set_pick_prior(&mut self, prior: Arc<crate::pick_prior::PickPrior>) {
+        self.core.pick_prior = Some(prior);
+        if let Some(g) = self.core.game.as_mut() {
+            g.belief.clear_pick_draws();
+        }
+    }
+
+    pub fn clear_pick_prior(&mut self) {
+        self.core.pick_prior = None;
+        if let Some(g) = self.core.game.as_mut() {
+            g.belief.clear_pick_draws();
         }
     }
 

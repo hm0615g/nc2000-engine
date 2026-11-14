@@ -169,6 +169,11 @@ impl LocalPlayer {
         &self.own_sets
     }
 
+    pub fn own_preview_mons(&self, dex: &Dex) -> Vec<crate::pick_prior::PreviewMon> {
+        self.tracker
+            .preview_mons_or_sets(dex, self.tracker.side(), &self.own_sets)
+    }
+
     pub fn observe(
         &mut self,
         battle: &Battle,

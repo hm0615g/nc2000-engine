@@ -983,6 +983,10 @@ impl Belief {
         self.pick_draws = Some((obs.revision(), plans));
     }
 
+    pub fn clear_pick_draws(&mut self) {
+        self.pick_draws = None;
+    }
+
     /// Condition a pinned (open-sheet) belief's hidden bench sampling on a
     /// 60-action canonical preview policy `policy` (e.g., from a Nash equilibrium
     /// over cores), mixed with `smoothing` over all 3-mon subsets containing
@@ -1017,9 +1021,13 @@ impl Belief {
 
     /// True if an active `pick_draws` distribution is installed for `obs.revision()`.
     pub fn has_active_pick_draws(&self, obs: &Observer) -> bool {
-        self.pick_draws
-            .as_ref()
-            .is_some_and(|(rev, plans)| *rev == obs.revision() && plans.iter().any(Option::is_some))
+        self.pick_draws.as_ref().is_some_and(|(rev, plans)| {
+            *rev == obs.revision()
+                && self
+                    .alive
+                    .iter()
+                    .any(|&i| plans.get(i).is_some_and(Option::is_some))
+        })
     }
 
     /// True if an opponent preview prior (`pick_draws` or off-pool fallback

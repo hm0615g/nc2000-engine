@@ -140,6 +140,8 @@ export function Game(props: {
   /** Raw belief-prior table text, only when the player loaded one by hand
    * (never fetched automatically). */
   priorJson?: string;
+  /** Raw Team Preview pick-prior table text, only when loaded by hand. */
+  pickPriorJson?: string;
   onRematch: () => void;
   onNewTeams: () => void;
 }) {
@@ -247,6 +249,7 @@ export function Game(props: {
           side: BOT,
           seed: randomSeed32(),
           priorJson: props.priorJson,
+          pickPriorJson: props.pickPriorJson,
         },
       )
       .then(() => {

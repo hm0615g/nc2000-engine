@@ -48,6 +48,33 @@ pub struct PickPrior {
     rows: HashMap<(String, Vec<PreviewMon>, usize), Vec<Choice>>,
 }
 
+pub(crate) fn preview_mons_from_sets(
+    dex: &nc2000_engine::dex::Dex,
+    sets: &[nc2000_engine::battle::PokemonSet],
+) -> Vec<PreviewMon> {
+    sets.iter()
+        .map(|s| {
+            let species = dex
+                .species
+                .id(&nc2000_engine::dex::toid(&s.species))
+                .map(|id| dex.species.key(id).to_string())
+                .unwrap_or_else(|| nc2000_engine::dex::toid(&s.species));
+            let gender = match s.gender.as_deref() {
+                Some("M") => "M",
+                Some("F") => "F",
+                _ => "",
+            }
+            .to_string();
+            PreviewMon {
+                species,
+                level: s.level,
+                gender,
+                item: !s.item.trim().is_empty(),
+            }
+        })
+        .collect()
+}
+
 pub(crate) struct PickDistribution {
     cumulative: Vec<(u8, f64)>,
     total: f64,
@@ -56,6 +83,26 @@ pub(crate) struct PickDistribution {
 }
 
 impl PickPrior {
+    pub fn row_count(&self) -> usize {
+        self.rows.len()
+    }
+
+    pub fn team_count(&self) -> usize {
+        self.rows
+            .keys()
+            .map(|(team, _, _)| team.as_str())
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+    }
+
+    pub fn smoothing(&self) -> f64 {
+        self.smoothing
+    }
+
+    pub fn backoff_strength(&self) -> f64 {
+        self.backoff_strength
+    }
+
     pub fn from_json(text: &str) -> Result<Self, String> {
         let artifact: Artifact = serde_json::from_str(text).map_err(|e| e.to_string())?;
         if artifact.schema != "nc2000-pick-prior-v1"

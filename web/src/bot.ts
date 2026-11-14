@@ -3,7 +3,15 @@ import { PlayerChannel } from "../../crates/wasm/pkg-web/nc2000_wasm";
 // Main-thread client for the bot search worker.
 
 import type { WorkerRequest, WorkerResponse } from "./bot-worker";
-import type { BeliefInfo, PriorInfo, PriorReport, RootPolicy, PlayPolicy, ActionPolicyMode } from "./types";
+import type {
+  ActionPolicyMode,
+  BeliefInfo,
+  PickPriorReport,
+  PlayPolicy,
+  PriorInfo,
+  PriorReport,
+  RootPolicy,
+} from "./types";
 import { endgameSettings, type EndgameSettings } from "./endgame-settings";
 
 export interface SearchOutcome {
@@ -31,6 +39,7 @@ export class BotWorker {
   /** The verdict on the belief-prior table handed to `newBattle` — fires
    * once per battle that carried one, whether it was applied or refused. */
   onPriorReport?: (report: PriorReport) => void;
+  onPickPriorReport?: (report: PickPriorReport) => void;
   private pending = new Map<
     number,
     {
@@ -95,6 +104,9 @@ export class BotWorker {
         case "prior":
           this.onPriorReport?.(JSON.parse(m.report) as PriorReport);
           break;
+        case "pickPrior":
+          this.onPickPriorReport?.(JSON.parse(m.report) as PickPriorReport);
+          break;
         case "error":
           console.error("bot worker:", m.message);
           rejectAll(m.message);
@@ -120,6 +132,7 @@ export class BotWorker {
       side: number;
       seed: number;
       priorJson?: string;
+      pickPriorJson?: string;
       compiledPreview?: boolean;
       endgame?: EndgameSettings;
       actionPolicy?: ActionPolicyMode;

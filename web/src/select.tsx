@@ -27,7 +27,7 @@
 // inside Opponent & Setup.
 
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import type { MetaPool, PoolTeam, PriorReport } from "./types";
+import type { MetaPool, PickPriorReport, PoolTeam, PriorReport } from "./types";
 import type { SelectedTeam } from "./app";
 import type { NashMix, NashTeam } from "./nash-mix";
 import type { DrawSource } from "./draw-source";
@@ -38,12 +38,14 @@ import {
   type LoadedPool,
 } from "./team-pool";
 import {
+  clearStoredPickPrior,
   clearStoredPrior,
+  storePickPrior,
   storePrior,
   type StoredPrior,
 } from "./belief-prior";
 import { Modal } from "./modal";
-import { getValidator, probePrior } from "./engine";
+import { getValidator, probePickPriorTable, probePrior } from "./engine";
 import { parsePsExport } from "./ps-import";
 import { findingAnchor, findingText, type Finding } from "./findings";
 import {
@@ -528,48 +530,54 @@ const SAMPLE_PRIOR = "belief-prior-v0.sample.json";
  * a malformed file degrades into `warnings` — so a throw here means the
  * boundary itself failed, which is reported as a load failure rather than
  * as a verdict about the table. */
-function probeQuiet(json: string): {
-  report: PriorReport | null;
-  error: string | null;
-} {
+function probeQuiet<R>(
+  probeFn: (json: string) => R,
+  json: string,
+): { report: R | null; error: string | null } {
   try {
-    return { report: probePrior(json), error: null };
+    return { report: probeFn(json), error: null };
   } catch (e) {
     return { report: null, error: String(e) };
   }
 }
 
-/** Belief-prior panel (the second half of the Blind setup modal): pick a
- * table file or load the shipped sample, read back what the engine makes of
- * it, or clear it. Both sources
- * run the same adopt() path — probe first (so the user sees the verdict
- * even when the table is useless), then persist, and only a table the
- * browser can keep is adopted: one that cannot be stored would silently
- * vanish on reload, which is worse than refusing it now. */
-function PriorPanel(props: {
+interface PriorReportShape {
+  applied: boolean;
+  warnings: string[];
+}
+
+function PriorFilePanel<R extends PriorReportShape>(props: {
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
+  probe: (json: string) => R;
+  store: (name: string, json: string) => string | null;
+  clear: () => void;
+  help: string;
+  pickLabel: string;
+  sampleLabel?: string;
+  onLoadSample?: (adopt: (name: string, json: string) => void) => Promise<void>;
+  summarize: (report: R) => string;
+  fileTestId: string;
+  sampleTestId?: string;
+  clearTestId: string;
+  reportTestId: string;
 }) {
   // Mounting IS "the modal opened" (the parent mounts it on open), so a
   // table kept from an earlier session gets its report back before the user
   // touches anything.
-  const [report, setReport] = useState<PriorReport | null>(() =>
-    props.prior ? probeQuiet(props.prior.json).report : null,
+  const [report, setReport] = useState<R | null>(() =>
+    props.prior ? probeQuiet(props.probe, props.prior.json).report : null,
   );
   const [failure, setFailure] = useState<string | null>(null);
 
   function adopt(name: string, json: string) {
-    const probed = probeQuiet(json);
+    const probed = probeQuiet(props.probe, json);
     setReport(probed.report);
     if (probed.error !== null) {
       setFailure(ui().priorLoadFailed(probed.error));
       return;
     }
-    // OPEN QUESTION: a table the engine reports as NOT applied (unparseable
-    // or empty) is still adopted here — the contract gates adoption on the
-    // storage result only, and the report says plainly that it will not
-    // apply. Refusing it outright may read better; owner call.
-    const why = storePrior(name, json);
+    const why = props.store(name, json);
     if (why !== null) {
       setFailure(ui().priorLoadFailed(why));
       return;
@@ -578,32 +586,19 @@ function PriorPanel(props: {
     props.onPrior({ name, json });
   }
 
-  async function loadSample() {
-    try {
-      const res = await fetch(
-        `${import.meta.env.BASE_URL}data/${SAMPLE_PRIOR}`,
-      );
-      if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
-      adopt(SAMPLE_PRIOR, await res.text());
-    } catch (e) {
-      setReport(null);
-      setFailure(ui().priorLoadFailed(String(e)));
-    }
-  }
-
   return (
     <div class="prior-panel">
-      <p class="modal-note">{ui().priorHelp}</p>
+      <p class="modal-note">{props.help}</p>
       <div class="prior-actions">
         {/* A real <label> wrapping the input: the native file button has no
          * accessible name of its own, and the visible text must be the one
          * a screen reader announces. */}
         <label class="prior-pick">
-          <span class="prior-pick-label">{ui().priorPick}</span>
+          <span class="prior-pick-label">{props.pickLabel}</span>
           <input
             type="file"
             accept=".json,application/json"
-            data-testid="prior-file"
+            data-testid={props.fileTestId}
             onChange={(e) => {
               const input = e.currentTarget as HTMLInputElement;
               const file = input.files?.[0];
@@ -621,15 +616,25 @@ function PriorPanel(props: {
             }}
           />
         </label>
-        <button data-testid="prior-sample" onClick={() => void loadSample()}>
-          {ui().priorSample}
-        </button>
+        {props.onLoadSample && props.sampleLabel && (
+          <button
+            data-testid={props.sampleTestId}
+            onClick={() => {
+              void props.onLoadSample!(adopt).catch((e: unknown) => {
+                setReport(null);
+                setFailure(ui().priorLoadFailed(String(e)));
+              });
+            }}
+          >
+            {props.sampleLabel}
+          </button>
+        )}
         <button
           class="ghost"
-          data-testid="prior-clear"
+          data-testid={props.clearTestId}
           disabled={props.prior === null}
           onClick={() => {
-            clearStoredPrior();
+            props.clear();
             props.onPrior(null);
             setReport(null);
             setFailure(null);
@@ -642,19 +647,13 @@ function PriorPanel(props: {
       {report && (
         // Reading order is the order of the claims: does it apply, what does
         // it contain, what did the interpreter object to.
-        <div class="prior-report" data-testid="prior-report">
+        <div class="prior-report" data-testid={props.reportTestId}>
           {/* The verdict is the one line that must not be missed, so it
               carries colour as well as words (never colour alone). */}
           <div class={`prior-verdict ${report.applied ? "ok" : "no"}`}>
             {report.applied ? ui().priorApplied : ui().priorNotApplied}
           </div>
-          <div class="prior-summary">
-            {ui().priorSummary(
-              report.species,
-              report.meanMoveSum,
-              report.skipped,
-            )}
-          </div>
+          <div class="prior-summary">{props.summarize(report)}</div>
           {report.warnings.length > 0 && (
             <>
               <h3>{ui().priorWarnings}</h3>
@@ -668,6 +667,68 @@ function PriorPanel(props: {
         </div>
       )}
     </div>
+  );
+}
+
+/** Belief-prior panel: pick a table file or load the shipped sample. */
+function PriorPanel(props: {
+  prior: StoredPrior | null;
+  onPrior: (p: StoredPrior | null) => void;
+}) {
+  return (
+    <PriorFilePanel<PriorReport>
+      prior={props.prior}
+      onPrior={props.onPrior}
+      probe={probePrior}
+      store={storePrior}
+      clear={clearStoredPrior}
+      help={ui().priorHelp}
+      pickLabel={ui().priorPick}
+      sampleLabel={ui().priorSample}
+      sampleTestId="prior-sample"
+      fileTestId="prior-file"
+      clearTestId="prior-clear"
+      reportTestId="prior-report"
+      onLoadSample={async (adopt) => {
+        const res = await fetch(
+          `${import.meta.env.BASE_URL}data/${SAMPLE_PRIOR}`,
+        );
+        if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+        adopt(SAMPLE_PRIOR, await res.text());
+      }}
+      summarize={(report) =>
+        ui().priorSummary(report.species, report.meanMoveSum, report.skipped)
+      }
+    />
+  );
+}
+
+/** Team Preview pick-prior panel: validate and store a `nc2000-pick-prior-v1` file. */
+function PickPriorPanel(props: {
+  prior: StoredPrior | null;
+  onPrior: (p: StoredPrior | null) => void;
+}) {
+  return (
+    <PriorFilePanel<PickPriorReport>
+      prior={props.prior}
+      onPrior={props.onPrior}
+      probe={probePickPriorTable}
+      store={storePickPrior}
+      clear={clearStoredPickPrior}
+      help={ui().pickPriorHelp}
+      pickLabel={ui().pickPriorPick}
+      fileTestId="pick-prior-file"
+      clearTestId="pick-prior-clear"
+      reportTestId="pick-prior-report"
+      summarize={(report) =>
+        ui().pickPriorSummary(
+          report.rows,
+          report.teams,
+          report.smoothing,
+          report.backoffStrength,
+        )
+      }
+    />
   );
 }
 
@@ -871,6 +932,8 @@ function SetupPanel(props: {
   oldNashMix: NashMix;
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
+  pickPrior: StoredPrior | null;
+  onPickPrior: (p: StoredPrior | null) => void;
 }) {
   return (
     <>
@@ -890,6 +953,13 @@ function SetupPanel(props: {
       <section class="setup-section">
         <h3>{ui().priorLabel}</h3>
         <PriorPanel prior={props.prior} onPrior={props.onPrior} />
+      </section>
+      <section class="setup-section">
+        <h3>{ui().pickPriorLabel}</h3>
+        <PickPriorPanel
+          prior={props.pickPrior}
+          onPrior={props.onPickPrior}
+        />
       </section>
     </>
   );
@@ -923,6 +993,8 @@ export function StartScreen(props: {
   botDrawCount: number;
   prior: StoredPrior | null;
   onPrior: (p: StoredPrior | null) => void;
+  pickPrior: StoredPrior | null;
+  onPickPrior: (p: StoredPrior | null) => void;
   onStart: (human: SelectedTeam, bot: SelectedTeam) => void;
 }) {
   const pool = props.loadedPool.pool;
@@ -1036,18 +1108,22 @@ export function StartScreen(props: {
         >
           <span class="party-label">{ui().settingsLabel}</span>
           <span class="party-value">
-            {ui().settingsValue(
-              props.loadedPool.name !== null
-                ? ui().poolLoaded(props.loadedPool.name, teams.length)
-                : props.drawSource === "nash"
-                  ? ui().drawNash(props.nashMix.teams.length)
-                  : props.drawSource === "nash-r1"
-                    ? ui().drawPrevNashR1(props.prevNashR1Mix.teams.length)
-                    : props.drawSource === "nash-v3"
-                      ? ui().drawOldNash(props.oldNashMix.teams.length)
-                      : ui().poolBundled(teams.length),
-              props.prior ? props.prior.name : ui().priorNone,
-            )}
+            {(() => {
+              const poolStr =
+                props.loadedPool.name !== null
+                  ? ui().poolLoaded(props.loadedPool.name, teams.length)
+                  : props.drawSource === "nash"
+                    ? ui().drawNash(props.nashMix.teams.length)
+                    : props.drawSource === "nash-r1"
+                      ? ui().drawPrevNashR1(props.prevNashR1Mix.teams.length)
+                      : props.drawSource === "nash-v3"
+                        ? ui().drawOldNash(props.oldNashMix.teams.length)
+                        : ui().poolBundled(teams.length);
+              const priorStr = props.prior ? props.prior.name : ui().priorNone;
+              return props.pickPrior !== null
+                ? ui().settingsValueWithPickPrior(poolStr, priorStr, props.pickPrior.name)
+                : ui().settingsValue(poolStr, priorStr);
+            })()}
           </span>
         </button>
         <a class="start-link" href={`${import.meta.env.BASE_URL}?evaluate`}>
@@ -1088,6 +1164,8 @@ export function StartScreen(props: {
             oldNashMix={props.oldNashMix}
             prior={props.prior}
             onPrior={props.onPrior}
+            pickPrior={props.pickPrior}
+            onPickPrior={props.onPickPrior}
           />
         </Modal>
       )}

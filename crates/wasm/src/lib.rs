@@ -460,6 +460,7 @@ pub struct WasmBlindSearcher {
     tables: TableSet,
     observer: Observer,
     belief: Belief,
+    pick_prior: Option<Arc<nc2000_bot::PickPrior>>,
     /// Open-team-sheet mode (M12, `pinOpponent`): the belief is pinned to
     /// the opponent's true sets and preview resolves both sides by
     /// signature (public) instead of through pool identification.
@@ -507,6 +508,7 @@ impl WasmBlindSearcher {
             tables,
             observer,
             belief,
+            pick_prior: None,
             pinned: false,
             observed: false,
             preview_cache_identity: preview_cache::Identity::new("blind", &skuct_config(c.unwrap_or_else(|| profile_c("blind")), hp_buckets), pool_json),
@@ -540,6 +542,8 @@ impl WasmBlindSearcher {
         let sets: Vec<PokemonSet> = serde_json::from_str(team_json).map_err(js_err)?;
         self.belief =
             Belief::pinned_checked(&self.dex, "opponent", &sets, &self.observer).map_err(js_err)?;
+        self.pick_prior = None;
+        self.preview_cache_identity.clear_pick_prior();
         self.pinned = true;
         Ok(())
     }
@@ -584,6 +588,17 @@ impl WasmBlindSearcher {
         self.belief
             .sync_checked(&self.dex, &self.observer)
             .map_err(js_err)?;
+        if !self.pinned {
+            if let Some(ref pick_prior) = self.pick_prior {
+                let own_preview = self.local.own_preview_mons(&self.dex);
+                self.belief.condition_pick_prior(
+                    &self.dex,
+                    pick_prior,
+                    &own_preview,
+                    &self.observer,
+                );
+            }
+        }
         self.baked = None;
         let seed = self.rng.next();
         let position = self.local.position(&self.dex, &mut self.belief, &self.observer, &mut self.rng).map_err(js_err)?;
@@ -592,7 +607,9 @@ impl WasmBlindSearcher {
             // Pinned (open sheet): both sheets public — resolve the pair
             // directly by signature, no identification condition. Else the
             // M10 belief-mediated lookup (singleton identification only).
-            let pick = if self.pinned {
+            let pick = if self.belief.has_active_pick_draws(&self.observer) {
+                None
+            } else if self.pinned {
                 open_preview_pick(&self.tables, position.model(), self.side, &mut self.rng)
             } else {
                 baked_preview_pick(
@@ -799,6 +816,22 @@ impl WasmBlindSearcher {
         report
     }
 
+    #[wasm_bindgen(js_name = setPickPrior)]
+    pub fn set_pick_prior(&mut self, json: &str) -> String {
+        let (prior, report) = try_install_pick_prior(
+            json,
+            self.pinned,
+            self.observed,
+            "called after the first observe(), where it would change the information \
+             structure of a game already in progress; set the pick prior at team preview",
+        );
+        if let Some(prior) = prior {
+            self.preview_cache_identity.set_pick_prior(json);
+            self.pick_prior = Some(Arc::new(prior));
+        }
+        report
+    }
+
     /// JSON `{installed, governed}` — whether a non-empty prior reached this
     /// game's belief, and which opponent roster slots it currently drives
     /// (`governed` in observer roster order; empty before the first
@@ -810,6 +843,17 @@ impl WasmBlindSearcher {
         serde_json::json!({
             "installed": self.belief.has_prior(),
             "governed": self.belief.prior_governed(),
+        })
+        .to_string()
+    }
+
+    #[wasm_bindgen(js_name = pickPriorInfo)]
+    pub fn pick_prior_info(&self) -> String {
+        serde_json::json!({
+            "installed": !self.pinned && self.pick_prior.is_some(),
+            "active": !self.pinned
+                && self.observed
+                && self.belief.has_active_pick_draws(&self.observer),
         })
         .to_string()
     }
@@ -953,6 +997,10 @@ impl WasmProtocolSearcher {
         // `pinned_sets` is `None` — but the certified open-sheet configuration
         // should not have to depend on reading that far).
         self.agent.set_belief_prior(Arc::new(BeliefPrior::empty()));
+        self.agent.clear_pick_prior();
+        if let Some(identity) = self.preview_cache_identity.as_mut() {
+            identity.clear_pick_prior();
+        }
         Ok(())
     }
 
@@ -1009,6 +1057,24 @@ impl WasmProtocolSearcher {
         report
     }
 
+    #[wasm_bindgen(js_name = setPickPrior)]
+    pub fn set_pick_prior(&mut self, json: &str) -> String {
+        let (prior, report) = try_install_pick_prior(
+            json,
+            self.pinned,
+            self.agent.belief().is_some(),
+            "called after the first onRequest, where the belief is already built; \
+             set the pick prior at construction time",
+        );
+        if let Some(prior) = prior {
+            if let Some(identity) = self.preview_cache_identity.as_mut() {
+                identity.set_pick_prior(json);
+            }
+            self.agent.set_pick_prior(Arc::new(prior));
+        }
+        report
+    }
+
     /// JSON `{installed, governed}` — whether a non-empty prior actually
     /// reached the live belief, and which opponent roster slots it currently
     /// drives (`governed` in `|poke|` order; empty before the first
@@ -1022,6 +1088,17 @@ impl WasmProtocolSearcher {
             None => (false, Vec::new()),
         };
         serde_json::json!({ "installed": installed, "governed": governed }).to_string()
+    }
+
+    #[wasm_bindgen(js_name = pickPriorInfo)]
+    pub fn pick_prior_info(&self) -> String {
+        let installed = !self.pinned && self.agent.has_pick_prior();
+        let active = !self.pinned
+            && matches!(
+                (self.agent.belief(), self.agent.observer()),
+                (Some(b), Some(o)) if b.has_active_pick_draws(o)
+            );
+        serde_json::json!({ "installed": installed, "active": active }).to_string()
     }
 
     /// Feed one baked pair table for table-answered previews.
@@ -1672,6 +1749,66 @@ pub fn probe_belief_prior(json: &str) -> String {
     let prior = BeliefPrior::from_json(json);
     let applied = !prior.is_empty();
     belief_prior_report(&prior, applied, &[])
+}
+
+#[wasm_bindgen(js_name = probePickPrior)]
+pub fn probe_pick_prior(json: &str) -> String {
+    try_install_pick_prior(json, false, false, "").1
+}
+
+fn pick_prior_report_json(
+    applied: bool,
+    rows: usize,
+    teams: usize,
+    smoothing: f64,
+    backoff_strength: f64,
+    warnings: &[String],
+) -> String {
+    serde_json::json!({
+        "applied": applied,
+        "rows": rows,
+        "teams": teams,
+        "smoothing": smoothing,
+        "backoffStrength": backoff_strength,
+        "warnings": warnings,
+    })
+    .to_string()
+}
+
+fn try_install_pick_prior(
+    json: &str,
+    pinned: bool,
+    started: bool,
+    started_msg: &str,
+) -> (Option<nc2000_bot::PickPrior>, String) {
+    let prior = match nc2000_bot::PickPrior::from_json(json) {
+        Ok(prior) => prior,
+        Err(err) => return (None, pick_prior_report_json(false, 0, 0, 0.0, 0.0, &[err])),
+    };
+    let mut refusals: Vec<String> = Vec::new();
+    if pinned {
+        refusals.push(
+            "open-team-sheet mode (pinOpponent): the belief is pinned to the opponent's \
+             true sets, so a pick prior must never be consulted; table ignored"
+                .to_string(),
+        );
+    }
+    if prior.row_count() == 0 {
+        refusals.push("pick prior table contains 0 rows; pick sampling is unchanged".to_string());
+    }
+    if started {
+        refusals.push(started_msg.to_string());
+    }
+    let applied = refusals.is_empty();
+    let report = pick_prior_report_json(
+        applied,
+        prior.row_count(),
+        prior.team_count(),
+        prior.smoothing(),
+        prior.backoff_strength(),
+        &refusals,
+    );
+    (applied.then_some(prior), report)
 }
 
 // ------------------------------------------------------------------ tests
@@ -2451,5 +2588,166 @@ mod tests {
             run_proto(&prior_b),
             "WasmProtocolSearcher Team Preview must reflect lead-only BeliefPrior"
         );
+    }
+
+    #[test]
+    fn wasm_searchers_wire_pick_prior() {
+        let root = conformance::fixture::repo_root();
+        let pool_json =
+            std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+        let pool: serde_json::Value = serde_json::from_str(&pool_json).unwrap();
+        let dex = WasmDex::new().map_err(|_| "dex").unwrap();
+        let opp_team = &pool["teams"][0];
+        let opp = opp_team["sets"].clone();
+        let own = pool["teams"][1]["sets"].clone();
+        let opp_json = opp.to_string();
+        let own_json = own.to_string();
+
+        let sp = |i: usize| nc2000_engine::dex::toid(opp[i]["species"].as_str().unwrap());
+        let opp_arr = opp.as_array().unwrap();
+        let level_of = |i: usize| opp_arr[i]["level"].as_u64().unwrap_or(50) as u32;
+        let mut legal_triples = Vec::new();
+        for i in 0..opp_arr.len() {
+            for j in (i + 1)..opp_arr.len() {
+                for k in (j + 1)..opp_arr.len() {
+                    if level_of(i) + level_of(j) + level_of(k) <= 155 {
+                        legal_triples.push([i, j, k]);
+                    }
+                }
+            }
+        }
+        let preview: Vec<serde_json::Value> = own
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "species": nc2000_engine::dex::toid(s["species"].as_str().unwrap()),
+                    "level": s["level"].as_u64().unwrap_or(50),
+                    "gender": match s["gender"].as_str() { Some("M") => "M", Some("F") => "F", _ => "" },
+                    "item": !s["item"].as_str().unwrap_or("").is_empty(),
+                })
+            })
+            .collect();
+        let make_pick = |fav: [usize; 3]| {
+            serde_json::json!({
+                "schema": "nc2000-pick-prior-v1",
+                "smoothing": 0.001,
+                "backoff_strength": 1.0,
+                "source": {},
+                "rows": [{
+                    "team": opp_team["id"],
+                    "enemy_preview": preview,
+                    "side": 0,
+                    "choices": [{ "species": [sp(fav[0]), sp(fav[1]), sp(fav[2])], "count": 500 }]
+                }]
+            })
+            .to_string()
+        };
+        let triple_a = legal_triples[0];
+        let triple_b = *legal_triples.iter().rev().find(|t| t[0] != triple_a[0]).unwrap();
+        let pick_a = make_pick(triple_a);
+        let pick_b = make_pick(triple_b);
+
+        let good_probe: serde_json::Value = serde_json::from_str(&probe_pick_prior(&pick_a)).unwrap();
+        assert_eq!(good_probe["applied"], true, "{good_probe}");
+        assert_eq!(good_probe["rows"], 1);
+        assert_eq!(good_probe["teams"], 1);
+
+        let bad_probe: serde_json::Value = serde_json::from_str(&probe_pick_prior("{bad")).unwrap();
+        assert_eq!(bad_probe["applied"], false, "{bad_probe}");
+        assert!(!bad_probe["warnings"].as_array().unwrap().is_empty());
+
+        let run_blind = |pick_text: Option<&str>, pin: bool, late: bool| -> (String, Option<String>, serde_json::Value, Option<serde_json::Value>) {
+            let b = WasmBattle::new(&dex, &opp_json, &own_json, "1,2,3,4")
+                .map_err(|_| "battle")
+                .unwrap();
+            let mut bs = WasmBlindSearcher::new(&b, 1, &pool_json, 7, None, None)
+                .map_err(|_| "blind searcher")
+                .unwrap();
+            if pin {
+                bs.pin_opponent(&opp_json).map_err(|_| "pin").unwrap();
+            }
+            let mut rep = None;
+            if let Some(text) = pick_text.filter(|_| !late) {
+                rep = Some(serde_json::from_str(&bs.set_pick_prior(text)).unwrap());
+            }
+            bs.observe(&b).map_err(|_| "obs").unwrap();
+            if let Some(text) = pick_text.filter(|_| late) {
+                rep = Some(serde_json::from_str(&bs.set_pick_prior(text)).unwrap());
+            }
+            let info: serde_json::Value = serde_json::from_str(&bs.pick_prior_info()).unwrap();
+            let cache = bs.preview_cache_info();
+            bs.step(120).map_err(|_| "step").unwrap();
+            (bs.root_policy(), cache, info, rep)
+        };
+
+        let (blind_base, cache_base, info_base, _) = run_blind(None, false, false);
+        let (blind_a, cache_a, info_a, rep_a) = run_blind(Some(&pick_a), false, false);
+        let (blind_b, cache_b, info_b, rep_b) = run_blind(Some(&pick_b), false, false);
+        assert_eq!(info_base, serde_json::json!({"installed": false, "active": false}));
+        assert_eq!(info_a, serde_json::json!({"installed": true, "active": true}));
+        assert_eq!(info_b, serde_json::json!({"installed": true, "active": true}));
+        assert_eq!(rep_a.unwrap()["applied"], true);
+        assert_eq!(rep_b.unwrap()["applied"], true);
+        assert_ne!(cache_a, cache_base);
+        assert_ne!(cache_a, cache_b);
+        assert_ne!(blind_a, blind_b, "WasmBlindSearcher Team Preview must reflect PickPrior");
+
+        let (blind_late, _, info_late, rep_late) = run_blind(Some(&pick_a), false, true);
+        assert_eq!(rep_late.unwrap()["applied"], false);
+        assert_eq!(info_late["installed"], false);
+        assert_eq!(blind_late, blind_base);
+
+        let (blind_pin_base, _, _, _) = run_blind(None, true, false);
+        let (blind_pin_priored, _, info_pin, rep_pin) = run_blind(Some(&pick_a), true, false);
+        assert_eq!(rep_pin.unwrap()["applied"], false);
+        assert_eq!(info_pin, serde_json::json!({"installed": false, "active": false}));
+        assert_eq!(blind_pin_priored, blind_pin_base);
+
+        let (lines_json, request_json) = preview_stream(&opp, &own);
+        let run_proto = |pick_text: Option<&str>, pin: bool, late: bool| -> (String, Option<String>, serde_json::Value, Option<serde_json::Value>) {
+            let mut ps = WasmProtocolSearcher::new(&dex, 1, &pool_json, 7, None, None)
+                .map_err(|_| "protocol searcher")
+                .unwrap();
+            ps.set_own_team(&own_json).map_err(|_| "own").unwrap();
+            if pin {
+                ps.pin_opponent(&opp_json).map_err(|_| "pin").unwrap();
+            }
+            let mut rep = None;
+            if let Some(text) = pick_text.filter(|_| !late) {
+                rep = Some(serde_json::from_str(&ps.set_pick_prior(text)).unwrap());
+            }
+            ps.push_lines(&lines_json).map_err(|_| "push").unwrap();
+            assert!(ps.on_request(&request_json).map_err(|_| "req").unwrap());
+            if let Some(text) = pick_text.filter(|_| late) {
+                rep = Some(serde_json::from_str(&ps.set_pick_prior(text)).unwrap());
+            }
+            let info: serde_json::Value = serde_json::from_str(&ps.pick_prior_info()).unwrap();
+            let cache = ps.preview_cache_info();
+            ps.step(120).map_err(|_| "step").unwrap();
+            (ps.root_policy(), cache, info, rep)
+        };
+
+        let (proto_base, pcache_base, _, _) = run_proto(None, false, false);
+        let (proto_a, pcache_a, pinfo_a, prep_a) = run_proto(Some(&pick_a), false, false);
+        let (proto_b, pcache_b, pinfo_b, prep_b) = run_proto(Some(&pick_b), false, false);
+        assert_eq!(pinfo_a, serde_json::json!({"installed": true, "active": true}));
+        assert_eq!(pinfo_b, serde_json::json!({"installed": true, "active": true}));
+        assert_eq!(prep_a.unwrap()["applied"], true);
+        assert_eq!(prep_b.unwrap()["applied"], true);
+        assert_ne!(pcache_a, pcache_base);
+        assert_ne!(pcache_a, pcache_b);
+        assert_ne!(proto_a, proto_b, "WasmProtocolSearcher Team Preview must reflect PickPrior");
+
+        let (proto_late, _, _, prep_late) = run_proto(Some(&pick_a), false, true);
+        assert_eq!(prep_late.unwrap()["applied"], false);
+        assert_eq!(proto_late, proto_base);
+
+        let (proto_pin_base, _, _, _) = run_proto(None, true, false);
+        let (proto_pin_priored, _, pinfo_pin, prep_pin) = run_proto(Some(&pick_a), true, false);
+        assert_eq!(prep_pin.unwrap()["applied"], false);
+        assert_eq!(pinfo_pin, serde_json::json!({"installed": false, "active": false}));
+        assert_eq!(proto_pin_priored, proto_pin_base);
     }
 }

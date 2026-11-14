@@ -138,6 +138,18 @@ export interface UIStrings {
   priorNotApplied: string;
   priorWarnings: string;
   priorLoadFailed: (why: string) => string;
+  // Team Preview pick prior (nc2000-pick-prior-v1): opponent 3-of-6 selection
+  // probabilities conditioned on team id, our own preview roster, and side.
+  pickPriorLabel: string;
+  pickPriorHelp: string;
+  pickPriorPick: string;
+  pickPriorSummary: (
+    rows: number,
+    teams: number,
+    smoothing: number,
+    backoffStrength: number,
+  ) => string;
+  settingsValueWithPickPrior: (pool: string, prior: string, pickPrior: string) => string;
   // swappable team pool: one file replaces the bot's draw and the human
   // team list, while the bot's picture of possible opponents stays the
   // shipped prior — poolHelp has to say both halves, or the swap looks like
@@ -431,6 +443,15 @@ const EN: UIStrings = {
   priorNotApplied: "NOT applied",
   priorWarnings: "Warnings",
   priorLoadFailed: (why) => `Could not load that table — ${why}`,
+  pickPriorLabel: "Pick prior",
+  pickPriorHelp:
+    "An empirical Team Preview selection table (nc2000-pick-prior-v1) " +
+    "used to weight an in-pool opponent's 3-mon selection and hidden bench.",
+  pickPriorPick: "Choose a pick prior file…",
+  pickPriorSummary: (rows, teams, smoothing, backoffStrength) =>
+    `${rows} ${rows === 1 ? "row" : "rows"}, ${teams} ${teams === 1 ? "team" : "teams"}, ` +
+    `smoothing ${smoothing.toFixed(3)}, backoff ${backoffStrength.toFixed(1)}`,
+  settingsValueWithPickPrior: (pool, prior, pickPrior) => `${pool} · ${prior} · ${pickPrior}`,
   poolLabel: "Team pool",
   poolBundled: (n) => `Built-in (${n} ${n === 1 ? "party" : "parties"})`,
   drawSourceLabel: "Where the opponent comes from",
@@ -709,6 +730,15 @@ const JA: UIStrings = {
   priorNotApplied: "適用されません",
   priorWarnings: "警告",
   priorLoadFailed: (why) => `表を読み込めませんでした — ${why}`,
+  pickPriorLabel: "選出事前分布",
+  pickPriorHelp:
+    "プール内パーティに対する相手の3体選出および控え推定に使う" +
+    "実戦選出分布表 (nc2000-pick-prior-v1) です。",
+  pickPriorPick: "選出分布ファイルを選ぶ…",
+  pickPriorSummary: (rows, teams, smoothing, backoffStrength) =>
+    `${rows}行・${teams}チーム、` +
+    `平滑化 ${smoothing.toFixed(3)}・バックオフ ${backoffStrength.toFixed(1)}`,
+  settingsValueWithPickPrior: (pool, prior, pickPrior) => `${pool} · ${prior} · ${pickPrior}`,
   poolLabel: "チームプール",
   poolBundled: (n) => `標準(${n}パーティ)`,
   drawSourceLabel: "相手パーティの抽選元",

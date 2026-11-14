@@ -300,6 +300,36 @@ impl ProtocolTracker {
         self.turn
     }
 
+    pub fn side(&self) -> usize {
+        self.side
+    }
+
+    pub(crate) fn preview_mons(&self, dex: &Dex, side: usize) -> Vec<crate::pick_prior::PreviewMon> {
+        self.sides[side]
+            .mons
+            .iter()
+            .map(|mon| crate::pick_prior::PreviewMon {
+                species: dex.species.key(mon.species).to_string(),
+                level: mon.level,
+                gender: mon.gender.as_str().to_string(),
+                item: mon.preview_item,
+            })
+            .collect()
+    }
+
+    pub(crate) fn preview_mons_or_sets(
+        &self,
+        dex: &Dex,
+        side: usize,
+        sets: &[PokemonSet],
+    ) -> Vec<crate::pick_prior::PreviewMon> {
+        if self.sides[side].mons.is_empty() {
+            crate::pick_prior::preview_mons_from_sets(dex, sets)
+        } else {
+            self.preview_mons(dex, side)
+        }
+    }
+
     /// Opponent preview facts as M10a `MonObs` (feeds `Observer::from_mons`).
     pub(crate) fn observer_mons(&self) -> Vec<MonObs> {
         self.sides[1 - self.side]
@@ -2495,6 +2525,7 @@ pub struct ProtocolAgent {
     /// M18 community belief prior for the hidden-team fallback imputation.
     /// `None` (the default) leaves it exactly as shipped.
     prior: Option<std::sync::Arc<crate::prior::BeliefPrior>>,
+    pick_prior: Option<std::sync::Arc<crate::pick_prior::PickPrior>>,
     fallback_policy: crate::belief::FallbackPolicy,
     tracker: ProtocolTracker,
     history: Vec<String>,
@@ -2531,6 +2562,7 @@ impl ProtocolAgent {
             own_sets: Vec::new(),
             pinned_sets: None,
             prior: None,
+            pick_prior: None,
             fallback_policy: crate::belief::FallbackPolicy::default(),
             tracker: ProtocolTracker::new(side),
             history: Vec::new(),
@@ -2565,6 +2597,7 @@ impl ProtocolAgent {
             self.belief = Some(belief);
         }
         self.pinned_sets = Some(sets);
+        self.pick_prior = None;
         if let (Some(_), Some(req)) = (self.observer.as_ref(), self.request.clone()) {
             self.install(dex, req)?;
         }
@@ -2580,6 +2613,29 @@ impl ProtocolAgent {
                 belief.set_prior(prior);
             }
         }
+    }
+
+    /// Condition opponent hidden-pick sampling on an empirical Team Preview
+    /// pick prior (`nc2000-pick-prior-v1`). Inert when opponent sets are pinned.
+    pub fn set_pick_prior(&mut self, prior: std::sync::Arc<crate::pick_prior::PickPrior>) {
+        if self.pinned_sets.is_some() {
+            return;
+        }
+        self.pick_prior = Some(prior);
+        if let Some(belief) = self.belief.as_mut() {
+            belief.clear_pick_draws();
+        }
+    }
+
+    pub fn clear_pick_prior(&mut self) {
+        self.pick_prior = None;
+        if let Some(belief) = self.belief.as_mut() {
+            belief.clear_pick_draws();
+        }
+    }
+
+    pub fn has_pick_prior(&self) -> bool {
+        self.pinned_sets.is_none() && self.pick_prior.is_some()
     }
 
     pub fn add_pair_json(&mut self, json: &str) -> Result<(), String> {
@@ -2679,6 +2735,14 @@ impl ProtocolAgent {
         let obs = self.observer.as_ref().unwrap();
         let belief = self.belief.as_mut().unwrap();
         belief.sync_checked(dex, obs)?;
+        if self.pinned_sets.is_none() {
+            if let Some(ref pick_prior) = self.pick_prior {
+                let preview =
+                    self.tracker
+                        .preview_mons_or_sets(dex, self.side, &self.own_sets);
+                belief.condition_pick_prior(dex, pick_prior, &preview, obs);
+            }
+        }
 
         // Preserve player HP buckets across every candidate determinization.
         self.tracker.set_hp_observations(belief, 1-self.side);
@@ -2718,22 +2782,25 @@ impl ProtocolAgent {
             if allowed.iter().any(|&a| a) {
                 search.mask_actions(&allowed);
             }
-            // baked pair tables, restricted to the legal picks
-            let pick = if self.pinned_sets.is_some() {
-                filtered_open_preview(&self.tables, &battle, self.side, &levels, &mut self.rng)
-            } else {
-                filtered_baked_preview(
-                    &self.tables,
-                    belief,
-                    &battle,
-                    self.side,
-                    &levels,
-                    &mut self.rng,
-                )
-            };
-            if let Some(c) = pick {
-                if search.actions().contains(&c) {
-                    self.baked = Some(c);
+            // baked pair tables, restricted to the legal picks (skipped when
+            // an active PickPrior conditions the opponent's Team Preview)
+            if !belief.has_active_pick_draws(obs) {
+                let pick = if self.pinned_sets.is_some() {
+                    filtered_open_preview(&self.tables, &battle, self.side, &levels, &mut self.rng)
+                } else {
+                    filtered_baked_preview(
+                        &self.tables,
+                        belief,
+                        &battle,
+                        self.side,
+                        &levels,
+                        &mut self.rng,
+                    )
+                };
+                if let Some(c) = pick {
+                    if search.actions().contains(&c) {
+                        self.baked = Some(c);
+                    }
                 }
             }
             if self.baked.is_none() {

@@ -16,20 +16,22 @@ const options = {
 };
 const cache = createPreviewCache(options);
 const objects = [];
-function blind({ours = own, theirs = foe, seed = 7, c = .4, pool = poolJson, prior, buckets, pinBeforeObserve = false} = {}) {
+function blind({ours = own, theirs = foe, seed = 7, c = .4, pool = poolJson, prior, pickPrior, buckets, pinBeforeObserve = false} = {}) {
 	const b = new wasm.Battle(dex, JSON.stringify(ours), JSON.stringify(theirs), '1,2,3,4');
 	const s = new wasm.BlindSearcher(b, 0, pool, seed, c, buckets);
 	objects.push(s, b);
 	assert.equal(s.previewCacheInfo(), undefined);
 	if (prior) assert.equal(JSON.parse(s.setBeliefPrior(prior)).applied, true);
+	if (pickPrior) assert.equal(JSON.parse(s.setPickPrior(pickPrior)).applied, true);
 	if (pinBeforeObserve) s.pinOpponent(JSON.stringify(theirs));
 	s.observe(b);
 	return {s, b};
 }
 const details = p => `${p.species}, L${p.level}${p.gender === 'M' || p.gender === 'F' ? ', ' + p.gender : ''}`;
-function protocol(seed = 7) {
+function protocol(seed = 7, {pickPrior} = {}) {
 	const s = new wasm.ProtocolSearcher(dex, 0, poolJson, seed, .4);
 	objects.push(s); s.setOwnTeam(JSON.stringify(own));
+	if (pickPrior) assert.equal(JSON.parse(s.setPickPrior(pickPrior)).applied, true);
 	const lines = [['p1', own], ['p2', foe]].flatMap(([tag, team]) => team.map(p => `|poke|${tag}|${details(p)}|${p.item ? 'item' : ''}`));
 	s.pushLines(JSON.stringify([...lines, '|teampreview']));
 	assert.equal(s.onRequest(JSON.stringify({teamPreview: true, rqid: 1, side: {id: 'p1', pokemon: own.map(p => ({ident: `p1: ${p.name || p.species}`, details: details(p), condition: '100/100', item: p.item, active: false}))}})), true);
@@ -85,6 +87,42 @@ try {
 	pinnedPs.pinOpponent(JSON.stringify(foe));
 	assert.equal(JSON.parse(pinnedPs.beliefInfo()).count, 1);
 	assert.equal(cache.key(pinnedPs), null);
+
+	const toId = name => String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
+	let legalPick = null;
+	for (let i = 0; i < foe.length && !legalPick; i++)
+		for (let j = i + 1; j < foe.length && !legalPick; j++)
+			for (let k = j + 1; k < foe.length && !legalPick; k++)
+				if ((foe[i].level ?? 50) + (foe[j].level ?? 50) + (foe[k].level ?? 50) <= 155)
+					legalPick = [i, j, k].map(n => toId(foe[n].species));
+	const foeIds = JSON.parse(poolJson).teams
+		.filter(t => JSON.stringify(t.sets.map(x => toId(x.species)).sort()) === JSON.stringify(foe.map(x => toId(x.species)).sort()))
+		.map(t => t.id);
+	const pickPrior = JSON.stringify({
+		schema: 'nc2000-pick-prior-v1',
+		smoothing: 0.001,
+		backoff_strength: 1.0,
+		source: {},
+		rows: foeIds.map(team => ({
+			team,
+			enemy_preview: own.map(p => ({species: toId(p.species), level: p.level ?? 50, gender: p.gender === 'M' || p.gender === 'F' ? p.gender : '', item: Boolean(p.item)})),
+			side: 1,
+			choices: [{species: legalPick, count: 500}],
+		})),
+	});
+	assert.equal(JSON.parse(wasm.probePickPrior(pickPrior)).applied, true);
+	const basePreviewInfo = JSON.parse(blind().s.previewCacheInfo());
+	assert.equal(Object.hasOwn(basePreviewInfo, 'pickPrior'), false);
+	const ppBlind = blind({pickPrior}).s;
+	assert.deepEqual(JSON.parse(ppBlind.pickPriorInfo()), {installed: true, active: true});
+	assert.equal(Object.hasOwn(JSON.parse(ppBlind.previewCacheInfo()), 'pickPrior'), true);
+	assert.equal(cache.readRecord(ppBlind, record), null, 'PickPrior must invalidate cached preview');
+	const ppPs = protocol(7, {pickPrior});
+	assert.deepEqual(JSON.parse(ppPs.pickPriorInfo()), {installed: true, active: true});
+	assert.equal(Object.hasOwn(JSON.parse(ppPs.previewCacheInfo()), 'pickPrior'), true);
+	assert.equal(cache.readRecord(ppPs, protocolRecord), null, 'PickPrior must invalidate protocol cached preview');
+	assert.equal(JSON.parse(ps.setPickPrior(pickPrior)).applied, false, 'late ProtocolSearcher.setPickPrior must be rejected');
+	assert.equal(JSON.parse(pinnedPs.setPickPrior(pickPrior)).applied, false);
 	console.log('preview-cache: passed (real WASM, both drivers, invalidation, public-only identity, RNG continuation)');
 } finally {
 	for (const object of objects) object.free();

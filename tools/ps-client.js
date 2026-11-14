@@ -23,6 +23,7 @@
 //     --team pool:0|pool:random|FILE.json [--challenge USER | --accept any|U1,U2] \
 //     [--games N] [--iters 27000] [--seed 1] [--random] [--timer] \
 //     [--decision-log FILE.jsonl] [--belief-prior FILE.json] \
+//     [--pick-prior FILE.json] \
 //     [--password PW] [--loginserver URL] [--format gen2nintendocup2000noohkostadium2strict] \
 //     [--drop SPEC] [--quiet]
 //
@@ -98,6 +99,8 @@ if (args.help || args.h) {
                     Without the flag the fallback
                     imputation is exactly today's. A malformed table warns
                     and degrades rather than failing the run
+  --pick-prior F    Team Preview pick prior (nc2000-pick-prior-v1 JSON).
+                    Read once at startup and handed to each game's searcher.
   --drop SPEC       verification hook: socket kills at chosen decision
                     points (see header comment)
   --decision-log F  append private (mode 0600) JSONL for regret replay:
@@ -143,6 +146,8 @@ const DECISION_LOG = args['decision-log'] && args['decision-log'] !== true ?
 const MATCH_LOG = DECISION_LOG ? `${DECISION_LOG}.matches.jsonl` : '';
 const BELIEF_PRIOR_FILE = args['belief-prior'] && args['belief-prior'] !== true ?
 	path.resolve(String(args['belief-prior'])) : '';
+const PICK_PRIOR_FILE = args['pick-prior'] && args['pick-prior'] !== true ?
+	path.resolve(String(args['pick-prior'])) : '';
 const DEBOUNCE_MS = 100; // network analogue of the M15a stream-quiescence wait
 const RECONNECT_MS = 500;
 
@@ -235,40 +240,59 @@ if (!RANDOM) {
 // degrades into warnings and play continues exactly as it does with no prior
 // at all — so the only hard failure is a file we cannot read, which is a typo
 // in the flag rather than a statement about the table.
-function reportPrior(reportJson, log) {
+function reportPriorJson(label, methodName, summarize, reportJson, log) {
 	let r = null;
 	try {
 		r = JSON.parse(reportJson);
 	} catch { /* fall through to the unreadable-report line */ }
 	if (!r) {
-		log('belief prior: setBeliefPrior returned no readable report');
+		log(`${label}: ${methodName} returned no readable report`);
 		return;
 	}
-	for (const w of r.warnings || []) log(`belief prior: ${w}`);
-	log(`belief prior: ${r.species} species, mean move-probability sum ` +
-		`${Number(r.meanMoveSum).toFixed(2)}, ${r.skipped} entries skipped — ` +
-		`${r.applied ? 'applied' : 'NOT applied'}`);
+	for (const w of r.warnings || []) log(`${label}: ${w}`);
+	log(`${label}: ${summarize(r)} — ${r.applied ? 'applied' : 'NOT applied'}`);
 }
 
-let priorText = '';
-if (BELIEF_PRIOR_FILE) {
+const reportPrior = (reportJson, log) => reportPriorJson(
+	'belief prior',
+	'setBeliefPrior',
+	r => `${r.species} species, mean move-probability sum ${Number(r.meanMoveSum).toFixed(2)}, ${r.skipped} entries skipped`,
+	reportJson,
+	log,
+);
+
+const reportPickPrior = (reportJson, log) => reportPriorJson(
+	'pick prior',
+	'setPickPrior',
+	r => `${r.rows} rows, ${r.teams} teams`,
+	reportJson,
+	log,
+);
+
+function loadStartupPrior(flag, filePath, installFn, reportFn) {
+	if (!filePath) return '';
 	if (RANDOM) {
-		console.error('--belief-prior has nothing to act on in --random mode (no searcher)');
+		console.error(`${flag} has nothing to act on in --random mode (no searcher)`);
 		process.exit(2);
 	}
+	let text = '';
 	try {
-		priorText = fs.readFileSync(BELIEF_PRIOR_FILE, 'utf8');
+		text = fs.readFileSync(filePath, 'utf8');
 	} catch (e) {
-		console.error(`--belief-prior: cannot read ${BELIEF_PRIOR_FILE}: ${e.message}`);
+		console.error(`${flag}: cannot read ${filePath}: ${e.message}`);
 		process.exit(2);
 	}
 	// Probe once up front so a typo in the TABLE is visible before the first
 	// challenge instead of one line per game; each game's searcher gets its
 	// own install below (the prior lives on the searcher, one per battle).
 	const probe = new wasm.ProtocolSearcher(dex, 0, poolJson, 0, PROFILE.c);
-	reportPrior(probe.setBeliefPrior(priorText), m => console.log(`[${NAME}] ${m}`));
+	reportFn(installFn(probe, text), m => console.log(`[${NAME}] ${m}`));
 	if (typeof probe.free === 'function') probe.free();
+	return text;
 }
+
+let priorText = loadStartupPrior('--belief-prior', BELIEF_PRIOR_FILE, (s, t) => s.setBeliefPrior(t), reportPrior);
+let pickPriorText = loadStartupPrior('--pick-prior', PICK_PRIOR_FILE, (s, t) => s.setPickPrior(t), reportPickPrior);
 
 const logProvenance = DECISION_LOG ? provenance({
 	client: fs.readFileSync(__filename),
@@ -641,6 +665,7 @@ class BattleDriver {
 			this.searcher = new wasm.ProtocolSearcher(dex, this.side, poolJson, SEED * 1000 + this.battleIdx, PROFILE.c);
 			this.searcher.setOwnTeam(JSON.stringify(this.client.currentTeam.sets));
 			if (priorText) reportPrior(this.searcher.setBeliefPrior(priorText), m => this.log(m));
+			if (pickPriorText) reportPickPrior(this.searcher.setPickPrior(pickPriorText), m => this.log(m));
 		}
 		if (this.lineBuffer.length) {
 			this.searcher.pushLines(JSON.stringify(this.lineBuffer));

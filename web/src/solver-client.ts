@@ -18,6 +18,7 @@ export interface SolveOptions {
   spec: string;
   poolJson: string;
   priorJson?: string;
+  pickPriorJson?: string;
   seed: number;
   budget: number;
   plies: number;
@@ -106,6 +107,7 @@ export class SolverWorker {
       spec: o.spec,
       poolJson: o.poolJson,
       priorJson: o.priorJson,
+      pickPriorJson: o.pickPriorJson,
       endgame: endgameSettings(),
       seed: o.seed,
       budget: o.budget,

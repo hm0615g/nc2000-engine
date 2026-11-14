@@ -462,3 +462,142 @@ fn blind_agent_routes_lead_prior_to_preview_search_only_on_offpool_nonuniform_pr
         "BlindAgent Team Preview never responded to opposite lead-only BeliefPriors"
     );
 }
+
+#[test]
+fn blind_agent_wires_pick_prior_for_preview_and_battle() {
+    use nc2000_bot::PickPrior;
+    use nc2000_engine::dex::toid;
+
+    let dex = common::dex();
+    let meta = pool();
+    let opp_team = &meta.teams[0];
+    let opp_sets = opp_team.sets.clone();
+    let own_sets = meta.teams[1].sets.clone();
+
+    let level_sum = |t: [usize; 3]| -> i32 {
+        t.iter().map(|&i| opp_sets[i].level as i32).sum()
+    };
+    let legal_for_lead = |lead: usize, avoid: usize| -> [usize; 3] {
+        let mut rest: Vec<usize> = (0..opp_sets.len()).filter(|&i| i != lead && i != avoid).collect();
+        rest.sort_by_key(|&i| opp_sets[i].level);
+        [lead, rest[0], rest[1]]
+    };
+    let triple_a = legal_for_lead(0, 1);
+    let triple_b = legal_for_lead(1, 0);
+    assert!(level_sum(triple_a) <= 155 && level_sum(triple_b) <= 155);
+
+    let sp = |i: usize| dex.species.key(dex.species.id(&toid(&opp_sets[i].species)).unwrap()).to_string();
+    let preview_json: Vec<serde_json::Value> = own_sets
+        .iter()
+        .map(|s| {
+            serde_json::json!({
+                "species": dex.species.key(dex.species.id(&toid(&s.species)).unwrap()),
+                "level": s.level,
+                "gender": match s.gender.as_deref() { Some("M") => "M", Some("F") => "F", _ => "" },
+                "item": !s.item.is_empty(),
+            })
+        })
+        .collect();
+    let make_prior = |fav: [usize; 3]| -> Arc<PickPrior> {
+        let text = serde_json::json!({
+            "schema": "nc2000-pick-prior-v1",
+            "smoothing": 0.001,
+            "backoff_strength": 1.0,
+            "source": {},
+            "rows": [{
+                "team": opp_team.id,
+                "enemy_preview": preview_json,
+                "side": 0,
+                "choices": [{ "species": [sp(fav[0]), sp(fav[1]), sp(fav[2])], "count": 500 }]
+            }]
+        })
+        .to_string();
+        Arc::new(PickPrior::from_json(&text).unwrap())
+    };
+    let prior_a = make_prior(triple_a);
+    let prior_b = make_prior(triple_b);
+
+    let cfg = RmConfig {
+        iterations: 160,
+        ..Default::default()
+    };
+
+    let mut preview_diffs = 0usize;
+    for seed in 1u64..=12 {
+        let mut run_preview = |prior: Arc<PickPrior>| -> SearchChoice {
+            let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &opp_sets, &own_sets).unwrap();
+            let mut agent = BlindAgent::new(cfg.clone(), meta.clone(), None, seed).with_pick_prior(prior);
+            let choices = battle.legal_choices(&dex, 1);
+            let pick = agent.choose(&battle, &dex, 1, &choices);
+            let obs = agent.observer().unwrap();
+            let belief = agent.belief().unwrap();
+            assert!(belief.has_active_pick_draws(obs));
+            assert!(belief.has_preview_prior(obs));
+            pick
+        };
+        if run_preview(prior_a.clone()) != run_preview(prior_b.clone()) {
+            preview_diffs += 1;
+        }
+    }
+    assert!(
+        preview_diffs > 0,
+        "BlindAgent Team Preview must respond to opposite PickPriors"
+    );
+
+    // Also verify Turn 1+ battle re-conditioning and determinized hidden bench preference.
+    let (bench_a, bench_b) = (0..6)
+        .find_map(|lead| {
+            let mut triples = Vec::new();
+            let others: Vec<usize> = (0..6).filter(|&i| i != lead).collect();
+            for a in 0..others.len() {
+                for b in (a + 1)..others.len() {
+                    let t = [lead, others[a], others[b]];
+                    if level_sum(t) <= 155 {
+                        triples.push(t);
+                    }
+                }
+            }
+            (triples.len() >= 2).then(|| (triples[0], triples[triples.len() - 1]))
+        })
+        .expect("need two legal triples with a shared lead");
+    assert!(level_sum(bench_a) <= 155 && level_sum(bench_b) <= 155);
+    let prior_bench_a = make_prior(bench_a);
+    let prior_bench_b = make_prior(bench_b);
+
+    let run_turn1 = |prior: Arc<PickPrior>| -> usize {
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &opp_sets, &own_sets).unwrap();
+        let mut agent = BlindAgent::new(cfg.clone(), meta.clone(), None, 7).with_pick_prior(prior);
+        let prev_choices = battle.legal_choices(&dex, 1);
+        let p2_prev = agent.choose(&battle, &dex, 1, &prev_choices);
+        battle.apply_choice(&dex, 0, SearchChoice::Team(bench_a.map(|i| (i + 1) as u8))).unwrap();
+        battle.apply_choice(&dex, 1, p2_prev).unwrap();
+        let choices = battle.legal_choices(&dex, 1);
+        let _ = agent.choose(&battle, &dex, 1, &choices);
+        let obs = agent.observer().unwrap();
+        let belief = agent.belief().unwrap();
+        assert!(belief.has_active_pick_draws(obs), "Turn 1 must refresh active pick_draws");
+        let mut rng = SplitMix64::new(99);
+        let mut hits_a = 0usize;
+        let sp_set_a = [
+            dex.species.id(&toid(&opp_sets[bench_a[1]].species)).unwrap(),
+            dex.species.id(&toid(&opp_sets[bench_a[2]].species)).unwrap(),
+        ];
+        for _ in 0..40 {
+            let det = belief.determinize(&dex, &battle, obs, &mut rng);
+            let mut species: Vec<_> = det.sides[0]
+                .party
+                .iter()
+                .map(|&s| det.sides[0].roster[s as usize].base_species)
+                .collect();
+            species.sort();
+            if sp_set_a.iter().all(|s| species.contains(s)) {
+                hits_a += 1;
+            }
+        }
+        hits_a
+    };
+    assert!(
+        run_turn1(prior_bench_a) > run_turn1(prior_bench_b) + 15,
+        "Turn 1 hidden-bench sampling did not follow PickPrior"
+    );
+}

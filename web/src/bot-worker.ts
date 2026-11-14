@@ -27,6 +27,7 @@ export type WorkerRequest =
         side: number;
         seed: number;
         priorJson?: string;
+        pickPriorJson?: string;
         compiledPreview?: boolean;
         endgame?: EndgameSettings;
         actionPolicy?: ActionPolicyMode;
@@ -87,6 +88,7 @@ export type WorkerResponse =
    * `priorJson` — applied or refused, the caller gets the verdict rather
    * than the bot silently playing without the table the user chose. */
   | { t: "prior"; report: string }
+  | { t: "pickPrior"; report: string }
   /** Live battles: the bot's read, posted right after each observe(). `info` =
    * `beliefInfo()`, `prior` = `beliefPriorInfo()`, both raw JSON. */
   | { t: "belief"; info: string; prior: string }
@@ -136,7 +138,7 @@ async function handle(m: WorkerRequest): Promise<void> {
       actionPolicy = m.searcher.actionPolicy ?? "legacy";
       gen += 1;
       previewSeed = m.searcher.seed;
-      compiledAllowed = actionPolicy !== "legacy" || m.searcher.compiledPreview === false || m.searcher.priorJson
+      compiledAllowed = actionPolicy !== "legacy" || m.searcher.compiledPreview === false || m.searcher.priorJson || m.searcher.pickPriorJson
         ? Promise.resolve(new Set<string>()) : compiledPreviewCompatibility(m.searcher.poolJson, embeddedDexJson()).catch(() => new Set<string>());
       dropForked();
       battle?.free();
@@ -144,6 +146,7 @@ async function handle(m: WorkerRequest): Promise<void> {
       const ps = new ProtocolSearcher(dex, m.searcher.side, m.searcher.poolJson, m.searcher.seed >>> 0, searchProfile("blind").c);
       ps.setOwnTeam(m.ownTeam);
       if (m.searcher.priorJson) post({ t: "prior", report: ps.setBeliefPrior(m.searcher.priorJson) });
+      if (m.searcher.pickPriorJson) post({ t: "pickPrior", report: ps.setPickPrior(m.searcher.pickPriorJson) });
       forked = { channel: null, searcher: ps, positioned: false, live: true, endgame: m.searcher.endgame };
       break;
     }
