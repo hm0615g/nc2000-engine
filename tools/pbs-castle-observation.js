@@ -106,11 +106,20 @@ function preparePp(initial, observation, form, protocol, built) {
     const base = basis.mons.find(mon => mon.rosterSlot === built.activeRosterSlot);
     assert.ok(current && base);
     assert.equal(request.active.length, 1);
-    assert.equal(request.active[0].moves.length, 4);
-    for (const [index, row] of request.active[0].moves.entries()) {
-      assert.equal(moveId(row.id), current.moves[index].moveId);
-      assert.equal(row.pp, current.moves[index].currentPp);
-      row.maxpp = base.moves[index].currentPp;
+    const struggle = built.expectedNativeInputs.length === 1 &&
+      built.expectedNativeInputs[0] === 'move struggle';
+    if (struggle) {
+      assert.equal(request.active[0].moves.length, 1, 'STRUGGLE_REQUEST_LENGTH');
+      assert.equal(request.active[0].moves[0].id, 'struggle', 'STRUGGLE_REQUEST_MOVE');
+      assert.ok(current.moves.every(row => row.currentPp === 0), 'STRUGGLE_CURRENT_PP_NOT_ALL_ZERO');
+      assert.ok(base.moves.every(row => row.currentPp > 0), 'STRUGGLE_INITIAL_PP_INVALID');
+    } else {
+      assert.equal(request.active[0].moves.length, 4);
+      for (const [index, row] of request.active[0].moves.entries()) {
+        assert.equal(moveId(row.id), current.moves[index].moveId);
+        assert.equal(row.pp, current.moves[index].currentPp);
+        row.maxpp = base.moves[index].currentPp;
+      }
     }
   }
   return {initial: basis, request};
@@ -248,6 +257,16 @@ function createObservationSession(options = {}) {
       assert.equal(spec.force_switch, boundary.form.action !== 'INPUT');
       const ppReconciliation = reconcileOwnPp({spec, initial: ppStage.initial,
         current: observation, activeSlot: built.activeRosterSlot});
+      if (built.expectedNativeInputs.length === 1 &&
+          built.expectedNativeInputs[0] === 'move struggle') {
+        const active = spec.sides[side].mons[built.activeRosterSlot];
+        assert.ok(active && !active.must_recharge && !active.charging &&
+          !active.locked && !(active.volatiles || []).some(v => v.key === 'bide'),
+          'STRUGGLE_OTHER_FORCED_MOVE_POSSIBLE');
+        // On PositionSpec, empty authoritative PP rows trigger Struggle from
+        // the four exact source-derived zero-PP use counts, not from a guess.
+        active.pp = [];
+      }
       const safeguardReconciliation = reconcileSafeguard({spec, evidence});
       const publicTop = built.ui.battleTurn.sides[foe];
       if (publicTop.speciesId !== null && publicTop.hp > 0) {

@@ -239,10 +239,22 @@ function buildCurrentRequest({client, dexData, mySide, ownSets, previewSides,
     assert.ok(!forced, 'Castle A not legal on forced switch');
     assert.ok(automatic[0].kind === 'other', 'Castle A parser classification changed');
     assert.ok(!options.some(option => option.kind === 'move'), 'Castle A mixed with explicit W');
-    const resolved = resolveEncoreAutoAction({protocol, mySide,
-      ppRows: ppBySlot[activeSlots[mySide]]});
-    Object.assign(automatic[0], resolved);
-    notes.push('CASTLE_A_VERIFIED_ENCORE_ONLY');
+    const four = ppBySlot[activeSlots[mySide]];
+    const noBench = pdat.mons.every((mon, pos) =>
+      pickedRosterSlots[pos] === activeSlots[mySide] || mon.hp === 0);
+    const zeroPp = four.every(row => row.pp === 0);
+    if (zeroPp && noBench && options.length === 1 &&
+        automatic[0].label === '\u305f\u305f\u304b\u3046') {
+      Object.assign(automatic[0], {kind:'auto', value:'A',
+        moveId:'struggle', slotIndex:0, pp:null,
+        source:'CASTLE_A_ALL_FOUR_OWN_PDAT_PP_ZERO_NO_LIVE_BENCH'});
+      notes.push('CASTLE_A_VERIFIED_ZERO_PP_STRUGGLE_CANDIDATE');
+    } else {
+      const resolved = resolveEncoreAutoAction({protocol, mySide,
+        ppRows: ppBySlot[activeSlots[mySide]]});
+      Object.assign(automatic[0], resolved);
+      notes.push('CASTLE_A_VERIFIED_ENCORE_ONLY');
+    }
   }
   const moveOptions = [], switchOptions = [];
   for (const option of options) {
@@ -250,16 +262,24 @@ function buildCurrentRequest({client, dexData, mySide, ownSets, previewSides,
       'Unsupported raw option kind');
     if (option.kind === 'move' || option.kind === 'auto') {
       assert.ok(!forced, 'Forced switch must not expose move options');
-      integer(option.slotIndex, 1, 4, 'Raw move slot');
-      const row = ppBySlot[activeSlots[mySide]][option.slotIndex - 1];
-      if (option.kind === 'move') {
-        assert.equal(option.value, 'W' + option.slotIndex, 'Raw W value');
-        assert.equal(canonicalMove(option.moveId, 'Raw W move'), row.move, 'Raw W/PDAT move');
-        assert.equal(integer(option.pp, 1, 2147483647, 'Raw W current PP'), row.pp, 'Raw W/PDAT PP');
+      if (option.kind === 'auto' && option.moveId === 'struggle') {
+        assert.equal(option.value, 'A', 'Struggle must be Castle A');
+        assert.equal(option.slotIndex, 0, 'Struggle must have virtual slot zero');
+        assert.equal(option.pp, null, 'Struggle has no own PP slot');
+        assert.ok(ppBySlot[activeSlots[mySide]].every(row => row.pp === 0),
+          'STRUGGLE_REQUIRES_ALL_FOUR_ZERO_PP');
       } else {
-        assert.equal(option.value, 'A', 'Raw A value');
-        assert.equal(canonicalMove(option.moveId, 'Raw A move'), row.move, 'Raw A/PDAT move');
-        assert.equal(integer(option.pp, 1, 2147483647, 'Raw A current PP'), row.pp, 'Raw A/PDAT PP');
+        integer(option.slotIndex, 1, 4, 'Raw move slot');
+        const row = ppBySlot[activeSlots[mySide]][option.slotIndex - 1];
+        if (option.kind === 'move') {
+          assert.equal(option.value, 'W' + option.slotIndex, 'Raw W value');
+          assert.equal(canonicalMove(option.moveId, 'Raw W move'), row.move, 'Raw W/PDAT move');
+          assert.equal(integer(option.pp, 1, 2147483647, 'Raw W current PP'), row.pp, 'Raw W/PDAT PP');
+        } else {
+          assert.equal(option.value, 'A', 'Raw A value');
+          assert.equal(canonicalMove(option.moveId, 'Raw A move'), row.move, 'Raw A/PDAT move');
+          assert.equal(integer(option.pp, 1, 2147483647, 'Raw A current PP'), row.pp, 'Raw A/PDAT PP');
+        }
       }
       moveOptions.push(option);
     } else {
@@ -295,8 +315,10 @@ function buildCurrentRequest({client, dexData, mySide, ownSets, previewSides,
   else {
     assert.ok(moveOptions.length > 0, 'Normal input requires at least one explicit W option');
     const enabledSlots = new Set(moveOptions.map(option => option.slotIndex));
-    const moves = ppBySlot[activeSlots[mySide]].map((row, index) => ({id: row.move,
-      pp: row.pp, disabled: !enabledSlots.has(index + 1)}));
+    const struggle = moveOptions.some(option => option.moveId === 'struggle');
+    const moves = struggle ? [{id:'struggle', move:'Struggle', disabled:false}] :
+      ppBySlot[activeSlots[mySide]].map((row, index) => ({id: row.move,
+        pp: row.pp, disabled: !enabledSlots.has(index + 1)}));
     request.active = [{moves, trapped}];
   }
   const rawLegal = options.map(option => option.kind === 'move' || option.kind === 'auto'
@@ -349,7 +371,8 @@ function buildCurrentRequest({client, dexData, mySide, ownSets, previewSides,
     'Duplicate normalized native action');
   const nativeRequestInputs = [];
   if (!forced) for (const row of request.active[0].moves) {
-    if (!row.disabled && row.pp > 0) nativeRequestInputs.push('move ' + row.id);
+    if (!row.disabled && (row.id === 'struggle' || row.pp > 0))
+      nativeRequestInputs.push('move ' + row.id);
   }
   if (forced || !trapped) for (const [index, slot] of engineParty.entries()) {
     if (slot !== activeRosterSlot && targets.get(slot).hp > 0) nativeRequestInputs.push('switch ' + (index + 1));
