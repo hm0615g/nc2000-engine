@@ -891,3 +891,131 @@ fn corpus_replay_both_modes() {
     assert!(stats.roundtrips > 0, "no position round trip ran — gate is vacuous");
     assert_eq!(stats.roundtrip_gaps, 0, "decision points a PositionSpec could not describe");
 }
+
+#[test]
+fn protocol_agent_routes_lead_prior_and_post_install_updates() {
+    use nc2000_bot::BeliefPrior;
+    use std::sync::Arc;
+
+    let dex = common::dex();
+    let pool = common::meta_pool_v0().clone();
+    let (_, fx) = &common::corpus_json_values()[0];
+    let opp_sets: Vec<PokemonSet> = serde_json::from_value(fx["p1team"].clone()).unwrap();
+    let own_sets = pool.teams[1].sets.clone();
+
+    let sp0 = toid(&opp_sets[0].species);
+    let sp1 = toid(&opp_sets[1].species);
+    assert_ne!(sp0, sp1);
+
+    let fmt_poke = |tag: &str, team: &[PokemonSet]| -> Vec<String> {
+        team.iter()
+            .map(|p| {
+                let g = match p.gender.as_deref() {
+                    Some("M") => ", M",
+                    Some("F") => ", F",
+                    _ => "",
+                };
+                let it = if p.item.is_empty() { "" } else { "item" };
+                format!("|poke|{tag}|{}, L{}{}|{it}", p.species, p.level, g)
+            })
+            .collect()
+    };
+    let req_json = serde_json::json!({
+        "teamPreview": true,
+        "rqid": 1,
+        "side": {
+            "id": "p2",
+            "pokemon": own_sets.iter().map(|p| serde_json::json!({
+                "ident": format!("p2: {}", p.species),
+                "details": format!("{}, L{}", p.species, p.level),
+                "condition": "100/100",
+                "item": p.item,
+                "active": false,
+            })).collect::<Vec<_>>()
+        }
+    })
+    .to_string();
+
+    let run_proto = |opp: &[PokemonSet], prior_json: Option<&str>, seed: u64| {
+        let mut agent = ProtocolAgent::new(
+            dex,
+            1,
+            pool.clone(),
+            RmConfig {
+                iterations: 120,
+                ..Default::default()
+            },
+            seed,
+        );
+        agent.set_own_team(own_sets.clone());
+        if let Some(text) = prior_json {
+            agent.set_belief_prior(Arc::new(BeliefPrior::from_json(text)));
+        }
+        for line in fmt_poke("p1", opp).into_iter().chain(fmt_poke("p2", &own_sets)) {
+            agent.push_line(dex, &line);
+        }
+        agent.push_line(dex, "|teampreview");
+        assert!(agent.on_request(dex, &req_json).unwrap());
+        agent.step(dex, 120).unwrap();
+        let has_preview = agent
+            .belief()
+            .zip(agent.observer())
+            .is_some_and(|(b, o)| b.has_preview_prior(o));
+        (agent.root_policy(dex), has_preview)
+    };
+
+    let (base_policy, base_preview) = run_proto(&opp_sets, None, 7);
+    assert!(!base_preview);
+    let (unrelated_policy, unrelated_preview) =
+        run_proto(&opp_sets, Some(r#"{"species":{"shuckle":{"lead":0.99}}}"#), 7);
+    assert!(!unrelated_preview);
+    assert_eq!(unrelated_policy, base_policy);
+
+    let pool_opp = &pool.teams[0].sets;
+    let psp0 = toid(&pool_opp[0].species);
+    let psp1 = toid(&pool_opp[1].species);
+    let (pool_base, pool_base_prev) = run_proto(pool_opp, None, 7);
+    let (pool_prior, pool_prior_prev) = run_proto(
+        pool_opp,
+        Some(&format!(r#"{{"species":{{"{psp0}":{{"lead":0.99}},"{psp1}":{{"lead":0.01}}}}}}"#)),
+        7,
+    );
+    assert!(!pool_base_prev && !pool_prior_prev);
+    assert_eq!(pool_prior, pool_base);
+
+    let prior_a = format!(r#"{{"species":{{"{sp0}":{{"lead":0.99}},"{sp1}":{{"lead":0.01}}}}}}"#);
+    let prior_b = format!(r#"{{"species":{{"{sp0}":{{"lead":0.01}},"{sp1}":{{"lead":0.99}}}}}}"#);
+    let (pol_a, prev_a) = run_proto(&opp_sets, Some(&prior_a), 7);
+    let (pol_b, prev_b) = run_proto(&opp_sets, Some(&prior_b), 7);
+    assert!(prev_a && prev_b);
+    assert_ne!(pol_a, pol_b, "opposite lead-only priors must move ProtocolAgent preview policy");
+
+    // Post-construction set_belief_prior updates the live belief and next install() picks it up.
+    let mut late = ProtocolAgent::new(
+        dex,
+        1,
+        pool,
+        RmConfig {
+            iterations: 32,
+            ..Default::default()
+        },
+        11,
+    );
+    late.set_own_team(own_sets.clone());
+    for line in fmt_poke("p1", &opp_sets)
+        .into_iter()
+        .chain(fmt_poke("p2", &own_sets))
+    {
+        late.push_line(dex, &line);
+    }
+    late.push_line(dex, "|teampreview");
+    assert!(late.on_request(dex, &req_json).unwrap());
+    assert!(!late.belief().unwrap().has_prior());
+    late.set_belief_prior(Arc::new(BeliefPrior::from_json(&prior_a)));
+    assert!(late.belief().unwrap().has_prior());
+    assert!(late.on_request(dex, &req_json).unwrap());
+    assert!(late
+        .belief()
+        .zip(late.observer())
+        .is_some_and(|(b, o)| b.has_preview_prior(o)));
+}

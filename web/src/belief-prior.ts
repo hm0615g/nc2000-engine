@@ -7,7 +7,7 @@
 // disagree with the engine's parse. So this module is deliberately dumb —
 // it names the bytes and stores them.
 //
-// Policy (crates/bot/src/prior.rs:491): a prior is NEVER auto-loaded. It
+// Policy (docs/community-belief-prior-design.md): a prior is NEVER auto-loaded. It
 // exists only because the user explicitly picked a file (or the sample),
 // which is exactly what a localStorage record is: an earlier explicit act
 // that the user can clear. Nothing here fetches anything.

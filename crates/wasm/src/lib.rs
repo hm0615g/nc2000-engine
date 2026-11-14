@@ -611,6 +611,9 @@ impl WasmBlindSearcher {
             if self.baked.is_none() {
                 search.prune_preview_aliases(&self.dex);
             }
+            if self.belief.has_preview_prior(&self.observer) {
+                search.set_opponent_preview_prior(true);
+            }
         }
         self.preview_cache_info = self.preview_cache_identity.info(position.model(), &self.observer);
         self.search = Some(search);
@@ -2382,6 +2385,71 @@ mod tests {
         assert_eq!(
             late.policy, base.policy,
             "a refused late prior changed the running search"
+        );
+    }
+
+    #[test]
+    fn wasm_searchers_route_lead_only_belief_prior() {
+        let root = conformance::fixture::repo_root();
+        let pool_json =
+            std::fs::read_to_string(root.join("data/meta-pool-v0/meta-pool.json")).unwrap();
+        let pool: serde_json::Value = serde_json::from_str(&pool_json).unwrap();
+        let dex = WasmDex::new().map_err(|_| "dex").unwrap();
+        let (opp_json, _) = fixture_teams();
+        let opp: serde_json::Value = serde_json::from_str(&opp_json).unwrap();
+        let own = pool["teams"][1]["sets"].clone();
+        let own_json = own.to_string();
+
+        let sp0 = nc2000_engine::dex::toid(opp[0]["species"].as_str().unwrap());
+        let sp1 = nc2000_engine::dex::toid(opp[1]["species"].as_str().unwrap());
+        assert_ne!(sp0, sp1);
+        let prior_a = format!(r#"{{"species":{{"{sp0}":{{"lead":0.99}},"{sp1}":{{"lead":0.01}}}}}}"#);
+        let prior_b = format!(r#"{{"species":{{"{sp0}":{{"lead":0.01}},"{sp1}":{{"lead":0.99}}}}}}"#);
+
+        let run_blind = |prior_text: &str| -> String {
+            let b = WasmBattle::new(&dex, &opp_json, &own_json, "1,2,3,4")
+                .map_err(|_| "battle")
+                .unwrap();
+            let mut bs = WasmBlindSearcher::new(&b, 1, &pool_json, 7, None, None)
+                .map_err(|_| "blind searcher")
+                .unwrap();
+            let rep: serde_json::Value =
+                serde_json::from_str(&bs.set_belief_prior(prior_text)).unwrap();
+            assert_eq!(rep["applied"], true, "{rep}");
+            bs.observe(&b).unwrap();
+            let info: serde_json::Value = serde_json::from_str(&bs.belief_prior_info()).unwrap();
+            assert_eq!(info["installed"], true, "{info}");
+            assert!(
+                info["governed"].as_array().unwrap().iter().any(|g| g == true),
+                "{info}"
+            );
+            bs.step(120).map_err(|_| "step").unwrap();
+            bs.root_policy()
+        };
+        assert_ne!(
+            run_blind(&prior_a),
+            run_blind(&prior_b),
+            "WasmBlindSearcher Team Preview must reflect lead-only BeliefPrior"
+        );
+
+        let (lines_json, request_json) = preview_stream(&opp, &own);
+        let run_proto = |prior_text: &str| -> String {
+            let mut ps = WasmProtocolSearcher::new(&dex, 1, &pool_json, 7, None, None)
+                .map_err(|_| "protocol searcher")
+                .unwrap();
+            ps.set_own_team(&own_json).map_err(|_| "own team").unwrap();
+            let rep: serde_json::Value =
+                serde_json::from_str(&ps.set_belief_prior(prior_text)).unwrap();
+            assert_eq!(rep["applied"], true, "{rep}");
+            ps.push_lines(&lines_json).map_err(|_| "push").unwrap();
+            assert!(ps.on_request(&request_json).map_err(|_| "req").unwrap());
+            ps.step(120).map_err(|_| "step").unwrap();
+            ps.root_policy()
+        };
+        assert_ne!(
+            run_proto(&prior_a),
+            run_proto(&prior_b),
+            "WasmProtocolSearcher Team Preview must reflect lead-only BeliefPrior"
         );
     }
 }

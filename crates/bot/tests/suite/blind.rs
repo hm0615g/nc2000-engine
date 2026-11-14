@@ -371,3 +371,94 @@ fn blind_lifecycle_and_reset() {
         assert!(decisions > 5, "game {game}: too few decisions ({decisions})");
     }
 }
+
+#[test]
+fn blind_agent_routes_lead_prior_to_preview_search_only_on_offpool_nonuniform_prior() {
+    use nc2000_bot::BeliefPrior;
+    use nc2000_engine::dex::toid;
+
+    let dex = common::dex();
+    let meta = pool();
+    let (_, fx) = &common::corpus_json_values()[0];
+    let opp_sets: Vec<PokemonSet> = serde_json::from_value(fx["p1team"].clone()).unwrap();
+    let own_sets = meta.teams[1].sets.clone();
+
+    let sp0 = toid(&opp_sets[0].species);
+    let sp1 = toid(&opp_sets[1].species);
+    assert_ne!(sp0, sp1);
+
+    let cfg = RmConfig {
+        iterations: 120,
+        ..Default::default()
+    };
+
+    let run_preview = |opp: &[PokemonSet], prior_json: Option<&str>| -> SearchChoice {
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", opp, &own_sets).unwrap();
+        let mut agent = BlindAgent::new(cfg.clone(), meta.clone(), None, 7);
+        if let Some(text) = prior_json {
+            agent.set_belief_prior(Arc::new(BeliefPrior::from_json(text)));
+        }
+        let choices = battle.legal_choices(&dex, 1);
+        agent.choose(&battle, &dex, 1, &choices)
+    };
+
+    let base = run_preview(&opp_sets, None);
+    let unrelated = run_preview(
+        &opp_sets,
+        Some(r#"{"species":{"shuckle":{"lead":0.99}}}"#),
+    );
+    let all_equal_species = opp_sets
+        .iter()
+        .map(|s| format!(r#""{}":{{"lead":0.25}}"#, toid(&s.species)))
+        .collect::<Vec<_>>()
+        .join(",");
+    let uniform = run_preview(
+        &opp_sets,
+        Some(&format!(r#"{{"species":{{{all_equal_species}}}}}"#)),
+    );
+    assert_eq!(unrelated, base, "non-matching lead prior must stay identical");
+    assert_eq!(uniform, base, "uniform lead weights across roster must stay identical");
+
+    // In-pool opponent must remain bit-identical even with skewed lead weights.
+    let pool_opp = meta.teams[0].sets.clone();
+    let psp0 = toid(&pool_opp[0].species);
+    let psp1 = toid(&pool_opp[1].species);
+    let pool_base = run_preview(&pool_opp, None);
+    let pool_with_prior = run_preview(
+        &pool_opp,
+        Some(&format!(r#"{{"species":{{"{psp0}":{{"lead":0.99}},"{psp1}":{{"lead":0.01}}}}}}"#)),
+    );
+    assert_eq!(pool_with_prior, pool_base, "in-pool opponent must ignore BeliefPrior lead");
+
+    // Skewed lead-only prior on an off-pool opponent sets fallback_lead_weights and
+    // must shift Team Preview choice across opposite lead priors.
+    let prior_a = format!(
+        r#"{{"species":{{"{sp0}":{{"lead":0.99}},"{sp1}":{{"lead":0.01}}}}}}"#
+    );
+    let prior_b = format!(
+        r#"{{"species":{{"{sp0}":{{"lead":0.01}},"{sp1}":{{"lead":0.99}}}}}}"#
+    );
+    let mut diffs = 0usize;
+    for seed in 1u64..=12 {
+        let mut run_seeded = |prior_json: &str| {
+            let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &opp_sets, &own_sets).unwrap();
+            let mut agent = BlindAgent::new(cfg.clone(), meta.clone(), None, seed);
+            agent.set_belief_prior(Arc::new(BeliefPrior::from_json(prior_json)));
+            let choices = battle.legal_choices(&dex, 1);
+            let pick = agent.choose(&battle, &dex, 1, &choices);
+            let g_obs = agent.observer().unwrap();
+            assert!(
+                agent.belief().unwrap().has_preview_prior(g_obs),
+                "skewed lead prior on off-pool team must activate has_preview_prior"
+            );
+            pick
+        };
+        if run_seeded(&prior_a) != run_seeded(&prior_b) {
+            diffs += 1;
+        }
+    }
+    assert!(
+        diffs > 0,
+        "BlindAgent Team Preview never responded to opposite lead-only BeliefPriors"
+    );
+}

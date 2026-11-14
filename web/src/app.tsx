@@ -113,7 +113,7 @@ export function App() {
   const [beliefJson, setBeliefJson] = useState<string | null>(null);
   const [loc, setLoc] = useState<Locale>(locale());
   // A table the user once picked by hand; nothing here ever fetches one on
-  // its own (crates/bot/src/prior.rs:491).
+  // its own (docs/community-belief-prior-design.md).
   const [prior, setPrior] = useState<StoredPrior | null>(
     () => (readDrawSourceFromQuery() !== null ? null : loadStoredPrior()),
   );

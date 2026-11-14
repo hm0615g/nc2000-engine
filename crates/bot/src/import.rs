@@ -2574,7 +2574,12 @@ impl ProtocolAgent {
     /// M18: consume a community belief prior. Governs only the hidden-team
     /// fallback imputation; a pinned (open-sheet) belief ignores it.
     pub fn set_belief_prior(&mut self, prior: std::sync::Arc<crate::prior::BeliefPrior>) {
-        self.prior = Some(prior);
+        self.prior = Some(prior.clone());
+        if self.pinned_sets.is_none() {
+            if let Some(belief) = self.belief.as_mut() {
+                belief.set_prior(prior);
+            }
+        }
     }
 
     pub fn add_pair_json(&mut self, json: &str) -> Result<(), String> {
@@ -2733,6 +2738,9 @@ impl ProtocolAgent {
             }
             if self.baked.is_none() {
                 search.prune_preview_aliases(dex);
+            }
+            if belief.has_preview_prior(obs) {
+                search.set_opponent_preview_prior(true);
             }
         } else {
             // request-side legality metrics + single-choice bypass

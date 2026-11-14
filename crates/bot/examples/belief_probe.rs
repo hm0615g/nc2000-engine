@@ -32,6 +32,7 @@ use nc2000_bot::player::PlayerChannel;
 use nc2000_bot::player_state::LocalPlayer;
 use nc2000_bot::preview::{load_meta_pool, team_sig, MetaPool};
 use nc2000_bot::rng::SplitMix64;
+use nc2000_bot::prior::BeliefPrior;
 use nc2000_bot::runner::{play_game, GameResult};
 use nc2000_bot::smmcts::{RmConfig, SelRule};
 use nc2000_bot::teamgen::{to_sets, TeamGen};
@@ -65,6 +66,7 @@ struct Cli {
     threads: usize,
     seed: u64,
     out_path: Option<PathBuf>,
+    prior_path: Option<PathBuf>,
     max_turns: u16,
     samples: usize,
     mutations: usize,
@@ -111,6 +113,7 @@ fn parse_cli(root: &Path) -> Cli {
         .and_then(|s| s.parse().ok())
         .unwrap_or(0x4245_4C49_4546_0001);
     let out_path = arg_val(&args, "--out").map(PathBuf::from);
+    let prior_path = arg_val(&args, "--prior").map(PathBuf::from);
     let max_turns = arg_val(&args, "--max-turns")
         .and_then(|s| s.parse().ok())
         .unwrap_or(200);
@@ -130,6 +133,7 @@ fn parse_cli(root: &Path) -> Cli {
         threads,
         seed,
         out_path,
+        prior_path,
         max_turns,
         samples,
         mutations,
@@ -749,6 +753,10 @@ fn mode_calibration(cli: &Cli, root: &Path) -> Value {
     let prior = Arc::new(load_meta_pool(
         &root.join("data/belief-pool-v3/belief-pool.json"),
     ));
+    let belief_prior = cli
+        .prior_path
+        .as_deref()
+        .map(|p| Arc::new(BeliefPrior::load(p)));
     let offpool = Arc::new(load_offpool_teams(
         root,
         &dex,
@@ -762,6 +770,7 @@ fn mode_calibration(cli: &Cli, root: &Path) -> Value {
     struct CalibAcc {
         positions: usize,
         fallback_positions: usize,
+        prior_governed_positions: usize,
         alive_sum: usize,
         active_unseen_total: usize,
         active_unseen_recalled: usize,
@@ -803,6 +812,9 @@ fn mode_calibration(cli: &Cli, root: &Path) -> Value {
                     let mut agents = [MaxDamageAgent::conformant(), MaxDamageAgent::conformant()];
                     let (mut lp, mut obs) = LocalPlayer::new(&battle, &dex, 0).unwrap();
                     let mut belief = Belief::new(&dex, &prior, &obs);
+                    if let Some(bp) = &belief_prior {
+                        belief.set_prior(bp.clone());
+                    }
                     let mut sampled_turns = HashSet::new();
 
                     for _ply in 0..80 {
@@ -822,6 +834,9 @@ fn mode_calibration(cli: &Cli, root: &Path) -> Value {
                                 local_acc.fallback_positions += 1;
                             } else {
                                 local_acc.alive_sum += belief.candidate_count();
+                            }
+                            if !belief.prior_governed().is_empty() {
+                                local_acc.prior_governed_positions += 1;
                             }
 
                             let opp = 1;
@@ -949,6 +964,7 @@ fn mode_calibration(cli: &Cli, root: &Path) -> Value {
                 let mut guard = total_acc.lock().unwrap();
                 guard.positions += local_acc.positions;
                 guard.fallback_positions += local_acc.fallback_positions;
+                guard.prior_governed_positions += local_acc.prior_governed_positions;
                 guard.alive_sum += local_acc.alive_sum;
                 guard.active_unseen_total += local_acc.active_unseen_total;
                 guard.active_unseen_recalled += local_acc.active_unseen_recalled;
@@ -1031,6 +1047,10 @@ fn mode_calibration(cli: &Cli, root: &Path) -> Value {
 
     json!({
         "mode": "calibration",
+        "prior": cli.prior_path.as_ref().map(|p| p.display().to_string()),
+        "prior_species": belief_prior.as_ref().map_or(0, |p| p.len()),
+        "prior_warnings": belief_prior.as_ref().map_or(0, |p| p.warnings().len()),
+        "prior_governed_positions": acc.prior_governed_positions,
         "games": n_games,
         "positions": acc.positions,
         "fallback_rate": round4(fb_rate),
@@ -1059,6 +1079,10 @@ fn mode_gauntlet(cli: &Cli, root: &Path) -> Value {
     let prior = Arc::new(load_meta_pool(
         &root.join("data/belief-pool-v3/belief-pool.json"),
     ));
+    let belief_prior = cli
+        .prior_path
+        .as_deref()
+        .map(|p| Arc::new(BeliefPrior::load(p)));
     let offpool = Arc::new(load_offpool_teams(
         root,
         &dex,
@@ -1157,6 +1181,9 @@ fn mode_gauntlet(cli: &Cli, root: &Path) -> Value {
                             bs,
                             FallbackPolicy::Bayesian,
                         );
+                        if let Some(bp) = &belief_prior {
+                            blind.set_belief_prior(bp.clone());
+                        }
                         let mut open = OpenAgent::new(cfg.clone(), None, os);
                         let res = if blind_is_p1 {
                             play_game(&dex, &mut battle, &mut [&mut blind, &mut open], cli.max_turns)
@@ -1240,6 +1267,9 @@ fn mode_gauntlet(cli: &Cli, root: &Path) -> Value {
 
     json!({
         "mode": "gauntlet",
+        "prior": cli.prior_path.as_ref().map(|p| p.display().to_string()),
+        "prior_species": belief_prior.as_ref().map_or(0, |p| p.len()),
+        "prior_warnings": belief_prior.as_ref().map_or(0, |p| p.warnings().len()),
         "matchups": match cli.matchups { MatchupSet::Offpool => "offpool", MatchupSet::Catalog => "catalog" },
         "pairs": pairs_spec.len(),
         "iters": cli.iters,

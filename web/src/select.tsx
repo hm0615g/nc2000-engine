@@ -521,7 +521,7 @@ function HumanPicker(props: {
 /** The one table shipped with the app, served like every other data file
  * (repo `data/`, mapped under the deploy base — see vite.config.ts). It is
  * fetched only when the user presses the button: nothing loads a prior on
- * its own, by policy (crates/bot/src/prior.rs:491). */
+ * its own, by policy (docs/community-belief-prior-design.md). */
 const SAMPLE_PRIOR = "belief-prior-v0.sample.json";
 
 /** Interpret a table without installing it. The wasm interpreter is total —

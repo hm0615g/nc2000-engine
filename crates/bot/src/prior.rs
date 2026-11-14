@@ -69,12 +69,13 @@ const MAX_WARNINGS: usize = 32;
 pub struct SpeciesPrior {
     /// `P(this species carries this move)`, by move id.
     pub moves: Vec<(String, f64)>,
-    /// `P(this species holds this item)`, by item id. Unused by the M18
-    /// sampler (item identity is already reveal-dominated and the fallback
-    /// set supplies one); parsed so a table that carries them round-trips.
+    /// `P(this species holds this item)`, by item id. Consumed during
+    /// off-pool fallback imputation (when the item is unrevealed) to weight
+    /// legal item candidates via `LoadoutDraw` and `FallbackCandPool`.
     pub items: Vec<(String, f64)>,
-    /// `P(this species leads)`. Parsed, currently unconsumed — pick identity
-    /// is resampled uniformly by the determinizer.
+    /// `P(this species leads)` (relative weight per species). Consumed during
+    /// off-pool fallback imputation (`fallback_lead_weights` ->
+    /// `sample_hidden_party` and Team Preview `sample_preview_prior`).
     pub lead: Option<f64>,
 }
 

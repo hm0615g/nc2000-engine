@@ -53,7 +53,8 @@ engine/search code:
 - Keys use lowercase PS IDs (`snorlax`, `bodyslam`).
 - `moves` probabilities represent `P(species carries move)` (carry marginals),
   not raw spectator reveal rates `P(carries) * P(uses | carries)`.
-- `items` and `lead` are parsed for forward compatibility.
+- `items` is consumed by off-pool fallback imputation (when an item is unrevealed) via `LoadoutDraw` and `FallbackCandPool`.
+- `lead` is consumed by off-pool fallback imputation (`fallback_lead_weights` -> `sample_hidden_party` and Team Preview `sample_preview_prior`).
 
 ---
 

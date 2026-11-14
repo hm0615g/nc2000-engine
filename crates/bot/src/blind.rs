@@ -287,13 +287,17 @@ impl ImperfectInfoCore {
         choices: &[SearchChoice],
     ) -> SearchChoice {
         let is_preview = matches!(choices[0], SearchChoice::Team(_));
-        let position = {
+        let (position, has_belief_preview_prior) = {
             let g = self.game.as_mut().expect("search after lifecycle setup");
-            g.local
+            g.belief.sync(dex, &g.observer);
+            let pos = g
+                .local
                 .position(dex, &mut g.belief, &g.observer, &mut self.rng)
-                .expect("player reconstruction failed")
+                .expect("player reconstruction failed");
+            let has_prior = g.belief.has_preview_prior(&g.observer);
+            (pos, has_prior)
         };
-        let opp_prior = self.opp_pick_policy.is_some();
+        let opp_prior = self.opp_pick_policy.is_some() || has_belief_preview_prior;
         if !is_preview {
             self.root_stats.searches += 1;
             if let Some(mixture) = self.adaptive_mixture.as_mut() {

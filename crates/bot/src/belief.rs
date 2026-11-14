@@ -1022,6 +1022,13 @@ impl Belief {
             .is_some_and(|(rev, plans)| *rev == obs.revision() && plans.iter().any(Option::is_some))
     }
 
+    /// True if an opponent preview prior (`pick_draws` or off-pool fallback
+    /// `fallback_lead_weights`) is active for `obs.revision()`.
+    pub fn has_preview_prior(&self, obs: &Observer) -> bool {
+        self.has_active_pick_draws(obs)
+            || (self.synced == Some(obs.revision()) && self.fallback_lead_weights.is_some())
+    }
+
     pub(crate) fn sample_preview_prior(
         &self,
         pick: Option<usize>,
