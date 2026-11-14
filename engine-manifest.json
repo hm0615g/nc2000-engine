@@ -1,14 +1,14 @@
 {
   "schema_version": "nc2000-sdk-v1",
   "position_schema": "nc2000-position-v1",
-  "created_at": "2026-11-14T19:10:08.461Z",
-  "engine_git_sha": "ce6485d91d992ac7a2912cb39933483a5d1c306b",
-  "wasm_sha256": "01eec70f3a3063b12ea0c8d74c3b7cdba26c1d6786098b585b4a1cde59c42e3b",
+  "created_at": "2026-11-14T21:45:14.941Z",
+  "engine_git_sha": "48e2d8258a512e0ddd4660d4d6f0a8e2e0627982",
+  "wasm_sha256": "db723ddb5a6d211bc0010966c40f231b6b627a7b119e987b69b0b87fedb3e5aa",
   "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
-  "default_belief_sha256": "50618a2a5a59f6cb2e652bce2146987923e88217b471ff0ecb845cc84be5fb5b",
+  "default_belief_sha256": "1eeb77fecfd0045e4a030873331fa7ad2f3129653d5f87da04ed4d845ecce63d",
   "file_hashes": {
     "crates/wasm/pkg-node/nc2000_wasm.js": "35de8feaafbf0731976079994a3b761e6cd8ceb02b67e2354ff14cf548f4bbf6",
-    "crates/wasm/pkg-node/nc2000_wasm_bg.wasm": "01eec70f3a3063b12ea0c8d74c3b7cdba26c1d6786098b585b4a1cde59c42e3b",
+    "crates/wasm/pkg-node/nc2000_wasm_bg.wasm": "db723ddb5a6d211bc0010966c40f231b6b627a7b119e987b69b0b87fedb3e5aa",
     "crates/wasm/pkg-node/package.json": "b826a8c48da1df4bff1379c8f5d77ecaabf5ff63adc277b3b22f06fef8033027",
     "data/gen2stadium2.json": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
     "data/i18n-ja.json": "53fcc1589b170c0a78d561947f540726342cca93cf341e4138668f1c1ca20c33",
@@ -16,8 +16,8 @@
     "data/live-search.json": "bcd72c90aff04fb6e8c2ce7fb6551e03d2aafc318a416a153194b0abf4dcebed",
     "data/team-pool-v2/team-pool.json": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
     "data/kodoku-r3/conclusion-equilibrium-deme.json": "dc4eba46a6291d52c4985a124d3a50ccfca3891220a8a431652ab2a1ef36c437",
-    "data/belief-pool-v3/belief-pool.json": "50618a2a5a59f6cb2e652bce2146987923e88217b471ff0ecb845cc84be5fb5b",
-    "data/compiled-preview-v1.json": "b70de2e760aa712cc9dd1edeb7dc59280779ed68e7ff5701fe4d8801bc9b649d",
+    "data/belief-pool-v3/belief-pool.json": "1eeb77fecfd0045e4a030873331fa7ad2f3129653d5f87da04ed4d845ecce63d",
+    "data/compiled-preview-v1.json": "a2315bec67fc40826c3e512d68253efb6a4a24576a9ebb7547e48df1989790bb",
     "tools/diagnose-position.js": "693147b6334a9660bf8e5e9b2cd31741bb10bcfe8f23c8f9615bec26e0f146d0"
   }
 }
