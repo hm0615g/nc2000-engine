@@ -7,10 +7,10 @@
     "data/partybox-v0/teams.json": "99b8c916fe68368f604d045202b044fcb3b46956bda7dd9ef10e3a4f3031e0a0",
     "data/kodoku-r3/majinjima-assassins.json": "f9a5080cae82dcef037c7a702cc78a738b20194a3f81da998b1395b922311efe",
     "data/community-rentals-v0/teams.json": "d081ac265f64370fd4a6790cf0eb54c806e8b7bf5ec789c37f9409254f1b50dd",
-    "data/training-v3/supplemental.json": "c004789a0203fccc24b6a32e9970e0f9ab01142c6440ddadcdc5a29811dfd18c"
+    "data/training-v3/supplemental.json": "7d9f8563a685d9b5c28ec409155c189087b167f6f2ec74f00c7ccc526230d908"
   },
-  "parties": 468,
-  "human": 459,
+  "parties": 471,
+  "human": 462,
   "generated": 9,
   "removedGenerated": [
     "nb-sample-12-0",
@@ -1671,6 +1671,24 @@
       "source": "data/training-v3/supplemental.json",
       "weight": 1,
       "shell": "[[\"snorlax\",50,\"M\",true],[\"starmie\",50,\"N\",true],[\"xatu\",50,\"M\",true],[\"yanma\",50,\"M\",true],[\"zapdos\",50,\"N\",true],[\"zubat\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-23",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"bulbasaur\",50,\"M\",true],[\"caterpie\",50,\"M\",true],[\"cleffa\",50,\"M\",true],[\"igglybuff\",50,\"M\",true],[\"metapod\",50,\"M\",true],[\"oddish\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-24",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"diglett\",50,\"M\",true],[\"geodude\",50,\"M\",true],[\"gloom\",50,\"M\",true],[\"poliwag\",50,\"M\",true],[\"shellder\",50,\"M\",true],[\"tentacool\",50,\"M\",true]]"
+    },
+    {
+      "id": "supp-cov-25",
+      "source": "data/training-v3/supplemental.json",
+      "weight": 1,
+      "shell": "[[\"ditto\",50,\"N\",true],[\"dunsparce\",50,\"M\",true],[\"hoothoot\",50,\"M\",true],[\"igglybuff\",50,\"M\",true],[\"onix\",50,\"M\",true],[\"phanpy\",50,\"M\",true]]"
     }
   ],
   "duplicateSourceAliases": [

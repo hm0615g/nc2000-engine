@@ -479,14 +479,14 @@ fn hp_compatible_with_obs(dex: &Dex, mon: &Pokemon, mo: &MonObs) -> bool {
                 .any(|m| dex.moves.key(m.id) == "hiddenpower"))
 }
 
-type TeamSig = Vec<(u16, Option<u16>, Vec<u16>)>;
+type TeamSig = Vec<(u16, Option<u16>, Vec<u16>, [i32; 5], u8)>;
 
 fn team_signature(team: &[Pokemon]) -> TeamSig {
     team.iter()
         .map(|p| {
             let mut mvs: Vec<u16> = p.base_move_slots.iter().map(|s| s.id.0).collect();
             mvs.sort_unstable();
-            (p.species.0, p.item.map(|i| i.0), mvs)
+            (p.species.0, p.item.map(|i| i.0), mvs, p.base_stored_stats, p.base_hp_type.0)
         })
         .collect()
 }
@@ -2293,6 +2293,7 @@ impl Belief {
         }
         moves.truncate(4);
         set.moves = moves;
+        apply_low_attack_spread_if_special(dex, &mut set, mo);
         let pool_item = std::mem::take(&mut set.item);
         set.item = self.resolve_non_excluded_item(dex, obs_mons, slot, mo, &pool_item, &carriers);
         set
@@ -2325,7 +2326,7 @@ impl Belief {
         let move_sig = |p: &Pokemon| {
             let mut mvs: Vec<u16> = p.base_move_slots.iter().map(|s| s.id.0).collect();
             mvs.sort_unstable();
-            (p.item.map(|i| i.0), mvs)
+            (p.item.map(|i| i.0), mvs, p.base_stored_stats, p.base_hp_type.0)
         };
         let fallback_sig = move_sig(fallback_mon);
         let build_candidate_mon = |mut set: PokemonSet| -> Option<Pokemon> {
@@ -2343,18 +2344,34 @@ impl Belief {
                 crate::hp_evidence::consistent(dex, mon, mo.hp_type_mask)
                     || (!has_explicit_typed_hp && hp_compatible_with_obs(dex, mon, mo))
             };
+            let finish = |mon: Pokemon| -> Option<Pokemon> {
+                if mon.gender != mo.gender {
+                    return None;
+                }
+                if hp_ok(&mon) {
+                    return Some(mon);
+                }
+                if mo.hp_type_mask != 0 && mo.hp_type_mask != u16::MAX {
+                    if let Some(proj) =
+                        crate::hp_evidence::project_deterministic(dex, &mon, mo.gender, mo.hp_type_mask)
+                    {
+                        if proj.gender == mo.gender && hp_ok(&proj) {
+                            return Some(proj);
+                        }
+                    }
+                }
+                None
+            };
             if let Ok(built) = Battle::from_fixture(dex, "1,2,3,4", &[set.clone()], &[set.clone()])
             {
-                let mon = &built.sides[0].roster[0];
-                if mon.gender == mo.gender && hp_ok(mon) {
-                    return Some(mon.clone());
+                if let Some(mon) = finish(built.sides[0].roster[0].clone()) {
+                    return Some(mon);
                 }
             }
             set.gender = Some(gender_str);
             set.ivs = None;
             let built = Battle::from_fixture(dex, "1,2,3,4", &[set.clone()], &[set]).ok()?;
-            let mon = &built.sides[0].roster[0];
-            (mon.gender == mo.gender && hp_ok(mon)).then(|| mon.clone())
+            finish(built.sides[0].roster[0].clone())
         };
         let add_secondary_item_variant = |entries: &mut Vec<(Pokemon, f64)>| {
             if !mo.preview_has_item
@@ -2730,6 +2747,7 @@ impl Belief {
                         }
                         mvs.truncate(4);
                         set.moves = mvs;
+                        apply_low_attack_spread_if_special(dex, &mut set, mo);
                         let pool_item = std::mem::take(&mut set.item);
                         set.item = resolve_item(&pool_item, false);
                         let Some(mon) = build_candidate_mon(set) else {
@@ -2756,6 +2774,32 @@ impl Belief {
         {
             entries.push((fallback_mon.clone(), 1.0));
             add_secondary_item_variant(&mut entries);
+        }
+
+        if self.fallback_policy == FallbackPolicy::Bayesian && mo.appeared && entries.len() < 4 {
+            if entries.is_empty() && mo.revealed_moves.len() == 4 {
+                entries.push((fallback_mon.clone(), 1.0));
+            }
+            if !entries.is_empty() && entries.len() < 4 {
+                let primary = &entries[0].0;
+                if primary.set_evs[5] > 0 || primary.set_ivs[5] > 2 {
+                    let base_spe = dex.species.get(mo.species).base_stats.spe;
+                    let has_slow_move = primary.base_move_slots.iter().any(|m| {
+                        let k = dex.moves.key(m.id);
+                        matches!(k, "counter" | "mirrorcoat")
+                            || (k == "batonpass" && base_spe <= 75)
+                    });
+                    if has_slow_move || (mo.revealed_moves.len() == 4 && entries.len() <= 2) {
+                        let slow_mon = with_reduced_speed_spread(dex, primary);
+                        let slow_sig = move_sig(&slow_mon);
+                        if !entries.iter().any(|(existing, _)| move_sig(existing) == slow_sig) {
+                            let rel_w = if has_slow_move { 0.12 } else { 0.06 };
+                            let w = entries[0].1 * rel_w;
+                            entries.push((slow_mon, w));
+                        }
+                    }
+                }
+            }
         }
 
         if entries.is_empty()
@@ -3216,6 +3260,81 @@ fn base_set(dex: &Dex, mo: &MonObs) -> PokemonSet {
             g => g.to_string(),
         }),
     }
+}
+
+fn set_has_attack_dependency(dex: &Dex, moves: &[String]) -> bool {
+    moves.iter().any(|m| {
+        let k = toid(m);
+        k.starts_with("hiddenpower")
+            || matches!(k.as_str(), "metronome" | "mimic" | "mirrormove" | "transform")
+            || dex
+                .moves
+                .id(&k)
+                .is_some_and(|id| dex.moves.get(id).category == "Physical")
+    })
+}
+
+/// Apply Gen 2 special/status minimum-Attack optimization to synthesized sets that have
+/// no Physical moves, Hidden Power, or move-calling moves, preserving gender and HP DV.
+fn apply_low_attack_spread_if_special(dex: &Dex, set: &mut PokemonSet, mo: &MonObs) {
+    if dex.species.key(mo.species) == "unown" || set_has_attack_dependency(dex, &set.moves) {
+        return;
+    }
+    let mut evs = set.evs.take().unwrap_or_else(|| {
+        ["hp", "atk", "def", "spa", "spd", "spe"]
+            .iter()
+            .map(|k| (k.to_string(), 255u16))
+            .collect()
+    });
+    evs.insert("atk".to_string(), 0);
+    set.evs = Some(evs);
+    if mo.gender.as_str() != "M" {
+        let ivs: std::collections::BTreeMap<String, u8> = [
+            ("hp", 31),
+            ("atk", 3),
+            ("def", 31),
+            ("spa", 31),
+            ("spd", 31),
+            ("spe", 31),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
+        set.ivs = Some(ivs);
+    } else {
+        set.ivs = None;
+    }
+}
+
+/// Build a reduced-Speed EV/IV spread variant (`spe ev = 0`, LSB-preserving `spe DV in {0, 1}`)
+/// keeping HP DV, Hidden Power type, and gender identical.
+fn with_reduced_speed_spread(dex: &Dex, mon: &Pokemon) -> Pokemon {
+    let mut variant = mon.clone();
+    variant.set_evs[5] = 0;
+    let spe_dv_new = (mon.set_ivs[5] / 2) & 1;
+    variant.set_ivs[5] = 2 * spe_dv_new;
+    let base_spe = i32::from(dex.species.get(mon.species).base_stats.spe);
+    let spe_stat = (2 * base_spe + variant.set_ivs[5] + variant.set_evs[5] / 4)
+        * i32::from(mon.level)
+        / 100
+        + 5;
+    variant.base_stored_stats[4] = spe_stat;
+    if !variant.transformed {
+        variant.stored_stats[4] = spe_stat;
+        variant.speed = spe_stat;
+    }
+    let atk = variant.set_ivs[1] / 2;
+    let def = variant.set_ivs[2] / 2;
+    let spc = variant.set_ivs[3] / 2;
+    let hp_power =
+        (5 * ((spc >> 3) + 2 * (spe_dv_new >> 3) + 4 * (def >> 3) + 8 * (atk >> 3)) + spc % 4)
+            / 2
+            + 31;
+    variant.base_hp_power = hp_power;
+    if !variant.transformed {
+        variant.hp_power = hp_power;
+    }
+    variant
 }
 
 /// A full-PP move slot, matching what `Battle::from_fixture` builds for a
@@ -4839,5 +4958,167 @@ mod fallback_tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn all_gen2_learnset_species_have_empirical_prior_coverage_and_valid_bayesian_draws() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let sup = supplemental_prior_teams(&dex);
+        let ren = community_rental_teams(&dex);
+        let raw_learnsets: Value = serde_json::from_str(LEARNSETS_JSON).unwrap();
+        let mut uncovered = Vec::new();
+        for species_key in raw_learnsets["species"].as_object().unwrap().keys() {
+            let sid = dex.species.id(species_key).unwrap();
+            let in_pool = pool.teams.iter().any(|t| {
+                t.sets
+                    .iter()
+                    .any(|s| dex.species.id(&toid(&s.species)) == Some(sid))
+            });
+            let in_sup = sup.iter().any(|t| {
+                t.sets
+                    .iter()
+                    .any(|s| dex.species.id(&toid(&s.species)) == Some(sid))
+            });
+            let in_ren = ren.iter().any(|sets| {
+                sets.iter()
+                    .any(|s| dex.species.id(&toid(&s.species)) == Some(sid))
+            });
+            if !(in_pool || in_sup || in_ren) {
+                uncovered.push(species_key.to_string());
+            }
+        }
+        assert!(
+            uncovered.is_empty(),
+            "every format-legal Gen 2 species must have prior coverage; uncovered: {uncovered:?}"
+        );
+
+        // Verify a previously zero-prior species (Dunsparce) now determinizes empirical moves and item in Bayesian mode.
+        let p1 = pool.teams[0].sets.clone();
+        let mut p2 = pool.teams[0].sets.clone();
+        p2[0] = plain_set("Dunsparce");
+        p2[0].item = "Leftovers".into();
+        p2[0].moves = vec![
+            "Glare".into(),
+            "Screech".into(),
+            "Return".into(),
+            "Flamethrower".into(),
+        ];
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        battle
+            .apply_choices(
+                &dex,
+                [
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                ],
+            )
+            .unwrap();
+        let mut obs = Observer::new(&battle, 0);
+        obs.observe(&battle, &dex);
+        obs.ingest_line("|move|p2a: Dunsparce|Glare|p1a: Target", &dex);
+        let belief = Belief::new(&dex, &pool, &obs);
+        assert!(belief.is_fallback());
+        let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(1));
+        let det_moves: Vec<&str> = det.sides[1].roster[0]
+            .base_move_slots
+            .iter()
+            .map(|s| dex.moves.key(s.id))
+            .collect();
+        assert!(
+            det_moves.contains(&"screech") && det_moves.contains(&"flamethrower"),
+            "Dunsparce empirical prior should predict Screech + Flamethrower: {det_moves:?}"
+        );
+    }
+
+    #[test]
+    fn synthetic_special_sets_optimize_low_attack_and_preserve_spread_signatures() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let mut mo = mon(&dex, "alakazam", 50, &["psychic", "thunderwave", "recover", "encore"]);
+        mo.gender = Gender::F;
+        let mut set = plain_set("Alakazam");
+        set.moves = vec![
+            "Psychic".into(),
+            "Thunder Wave".into(),
+            "Recover".into(),
+            "Encore".into(),
+        ];
+        set.gender = Some("F".into());
+        apply_low_attack_spread_if_special(&dex, &mut set, &mo);
+        assert_eq!(set.evs.as_ref().unwrap()["atk"], 0);
+        assert_eq!(set.ivs.as_ref().unwrap()["atk"], 3);
+
+        let p1 = pool.teams[0].sets.clone();
+        let fast_mon = &Battle::from_fixture(&dex, "1,2,3,4", &p1, &p1).unwrap().sides[0].roster[0];
+        let slow_mon = with_reduced_speed_spread(&dex, fast_mon);
+        assert_eq!(slow_mon.set_evs[5], 0);
+        assert!(slow_mon.set_ivs[5] <= 2);
+        assert!(slow_mon.base_stored_stats[4] < fast_mon.base_stored_stats[4]);
+        assert_eq!(slow_mon.base_hp_type, fast_mon.base_hp_type);
+        assert_eq!(slow_mon.gender, fast_mon.gender);
+        assert_ne!(
+            team_signature(std::slice::from_ref(fast_mon)),
+            team_signature(std::slice::from_ref(&slow_mon)),
+            "team_signature must distinguish different EV/IV stat spreads"
+        );
+    }
+
+    #[test]
+    fn bayesian_loadout_draw_diversifies_reduced_speed_spread_for_slow_pivots() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let p1 = pool.teams[0].sets.clone();
+        let mut p2 = pool.teams[0].sets.clone();
+        p2[0] = plain_set("Umbreon");
+        p2[0].name = "SlowUmbreon".into();
+        p2[0].item = "Leftovers".into();
+        p2[0].moves = vec![
+            "Curse".into(),
+            "Baton Pass".into(),
+            "Mean Look".into(),
+            "Moonlight".into(),
+        ];
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        battle
+            .apply_choices(
+                &dex,
+                [
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                ],
+            )
+            .unwrap();
+        let mut obs = Observer::new(&battle, 0);
+        obs.observe(&battle, &dex);
+        obs.ingest_line("|move|p2a: SlowUmbreon|Curse|p2a: SlowUmbreon", &dex);
+        obs.ingest_line("|move|p2a: SlowUmbreon|Baton Pass|p2a: SlowUmbreon", &dex);
+        obs.ingest_line("|move|p2a: SlowUmbreon|Mean Look|p1a: Target", &dex);
+        obs.ingest_line("|move|p2a: SlowUmbreon|Moonlight|p2a: SlowUmbreon", &dex);
+        let belief = Belief::new(&dex, &pool, &obs);
+        assert!(belief.is_fallback());
+        let ld = belief.loadout_draws.as_ref().unwrap()[0]
+            .as_ref()
+            .expect("Umbreon slow pivot must construct LoadoutDraw");
+        let distinct_speeds: Vec<i32> = ld
+            .entries
+            .iter()
+            .map(|(m, _)| m.base_stored_stats[4])
+            .collect();
+        let min_spe = *distinct_speeds.iter().min().unwrap();
+        let max_spe = *distinct_speeds.iter().max().unwrap();
+        assert!(
+            min_spe < max_spe,
+            "slow pivot LoadoutDraw must include both max-Speed and reduced-Speed spread: {distinct_speeds:?}"
+        );
     }
 }
