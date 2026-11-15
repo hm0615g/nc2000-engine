@@ -2828,6 +2828,8 @@ impl ProtocolAgent {
             }
             if legal.len() == 1 {
                 self.forced = Some(legal[0].clone());
+            } else {
+                search.prune_dominated();
             }
         }
         self.battle = Some(battle);

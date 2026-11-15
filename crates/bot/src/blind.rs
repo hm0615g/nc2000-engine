@@ -956,9 +956,9 @@ impl BlindSearch {
         Self::from_observation_with_rng(position, dex, cfg, side, SplitMix64::new(seed))
     }
 
-    /// Product search with caller-threaded PRNG: skips full-state
-    /// `dominated_reason` pruning (`my_dominated` stays all-`false`) and
-    /// installs the reconstructed hidden condition timers.
+    /// Product search with caller-threaded PRNG: populates `my_dominated` only
+    /// from strictly public / own-certain no-op rules (`public_noop_reason`)
+    /// and installs the reconstructed hidden condition timers.
     pub(crate) fn from_observation_with_rng(
         position: &ObservedPosition,
         dex: &Dex,
@@ -976,12 +976,24 @@ impl BlindSearch {
         self.hidden_timers = timers;
     }
 
-    fn use_public_exclusions(&mut self, _dex: &Dex) {
-        // A guessed world is not a universal proof of uselessness. Even a
-        // last-mon self-KO selection can win if sleep/flinch prevents the
-        // move and residual damage then KOs the foe. Keep heuristic root
-        // exclusions empty; request legality and preview rules are separate.
-        self.my_dominated.fill(false);
+    fn use_public_exclusions(&mut self, dex: &Dex) {
+        // Guessed hidden opponent attributes (Speed, Quick Claw, bench sets,
+        // HP rolls) cannot prove action dominance. Exclude only pure-public /
+        // own-certain no-ops that agree across every legal world.
+        self.my_dominated = self
+            .my_acts
+            .iter()
+            .map(|&c| {
+                crate::smmcts::public_noop_reason(
+                    &self.base,
+                    dex,
+                    self.side,
+                    c,
+                    self.cfg.mask_rules,
+                )
+                .is_some()
+            })
+            .collect();
     }
 
     /// Full-world research API. Product callers use `from_observation`.
@@ -1476,8 +1488,13 @@ impl BlindSearch {
         }
         let (mut sim, root, type_index, pick, cache) =
             self.next_determinized_world(dex, belief, obs);
-        let min_floor_pick =
-            if !self.is_preview() && self.cfg.root_revisit_interval == 0 && self.done >= 512 {
+        // Forced switches have `replies == 0` and an empty `cells` matrix, so
+        // world-floor coverage does not apply and UCB1 must drive allocation.
+        let min_floor_pick = if !self.is_preview()
+            && self.cfg.root_revisit_interval == 0
+            && self.done >= 512
+            && self.root_types[type_index].replies > 0
+        {
                 let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
                 let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
                 let elig: nc2000_engine::smallvec::SmallVec<[usize; 8]> = (0..self.my_acts.len())
@@ -2505,14 +2522,19 @@ impl BlindSearch {
                 })
                 .map(|i| self.my_acts[i]);
         }
-        (0..self.my_acts.len())
-            .filter(|&i| eligible(i))
-            .max_by_key(|&i| {
+        let eff_n: Vec<u32> = (0..self.my_acts.len())
+            .map(|i| {
                 if ordinary {
                     self.my_n[i] - self.joint_probe_n[i]
                 } else {
                     self.my_n[i]
                 }
+            })
+            .collect();
+        (0..self.my_acts.len())
+            .filter(|&i| eligible(i))
+            .max_by(|&a, &b| {
+                crate::smmcts::cmp_visits_then_mean(&eff_n, &self.my_n, &self.my_w, a, b)
             })
             .map(|i| self.my_acts[i])
     }
@@ -3794,5 +3816,106 @@ mod mixed_selection_tests {
         assert_eq!(cached.node_count(), uncached.node_count());
         assert_eq!(cached.root_matrix(), uncached.root_matrix());
         assert_eq!(cached.root_replies(), uncached.root_replies());
+    }
+
+    #[test]
+    fn forced_switch_uses_ucb1_past_512_iterations_and_breaks_visit_ties_by_mean() {
+        let dex = conformance::load_dex();
+        let make_mon = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
+            serde_json::from_value(serde_json::json!({
+                "name": species,
+                "species": species,
+                "level": 50,
+                "moves": moves,
+                "happiness": 255
+            }))
+            .unwrap()
+        };
+        let own = [
+            make_mon("Caterpie", &["Tackle"]),
+            make_mon("Zapdos", &["Thunderbolt", "Thunder", "Hidden Power Ice", "Rest"]),
+            make_mon("Magikarp", &["Splash"]),
+        ];
+        let foe = [make_mon("Slowbro", &["Surf", "Psychic", "Rest", "Thunder Wave"])];
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &own, &foe).unwrap();
+        let p0 = battle.legal_choices(&dex, 0)[0];
+        let p1 = battle.legal_choices(&dex, 1)[0];
+        battle.apply_choices(&dex, [Some(p0), Some(p1)]).unwrap();
+        // Let Slowbro genuinely KO a 1-HP Caterpie so the engine produces a
+        // real RequestState::Switch forced switch (`replies == 0`).
+        let lead = battle.active_id(0).unwrap();
+        battle.poke_mut(lead).hp = 1;
+        let surf = SearchChoice::Move(dex.moves.id("surf").unwrap());
+        let tackle = SearchChoice::Move(dex.moves.id("tackle").unwrap());
+        battle.apply_choices(&dex, [Some(tackle), Some(surf)]).unwrap();
+        assert_eq!(
+            battle.request_state,
+            nc2000_engine::state::RequestState::Switch
+        );
+
+        let mut obs = Observer::new(&battle, 0);
+        obs.observe(&battle, &dex);
+        let pool = MetaPool {
+            teams: vec![crate::preview::MetaTeam {
+                id: "foe".into(),
+                sets: foe.to_vec(),
+                weight: Some(1.0),
+            }],
+        };
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        belief.sync(&dex, &obs);
+        let cfg = RmConfig {
+            iterations: 1200,
+            c: 0.4,
+            ..Default::default()
+        };
+        let mut search = BlindSearch::new(&battle, &dex, cfg, 0, 12345);
+        search.step(&dex, &belief, &obs, 1200);
+        assert!(search.root_replies().is_empty());
+        let zap_idx = search
+            .actions()
+            .iter()
+            .position(|&c| c == SearchChoice::Switch(2))
+            .unwrap();
+        let karp_idx = search
+            .actions()
+            .iter()
+            .position(|&c| c == SearchChoice::Switch(3))
+            .unwrap();
+        let visits = search.visits();
+        assert!(
+            visits[zap_idx] > visits[karp_idx] + 200,
+            "forced switch should let UCB1 allocate beyond 512 iters (was 50/50 split), got {:?}",
+            visits
+        );
+        assert_eq!(search.best(), Some(SearchChoice::Switch(2)));
+
+        // Visit ties must break by mean reward, never last-index preference.
+        for rules in [
+            crate::smmcts::EndgameRules::all_decision(),
+            crate::smmcts::EndgameRules::none(),
+        ] {
+            let mut tied = BlindSearch::new(
+                &battle,
+                &dex,
+                RmConfig {
+                    endgame_rules: rules,
+                    ..Default::default()
+                },
+                0,
+                99,
+            );
+            tied.my_acts = vec![SearchChoice::Switch(1), SearchChoice::Switch(2)];
+            tied.my_n = vec![4500, 4500];
+            tied.joint_probe_n = vec![0, 0];
+            tied.my_w = vec![3600.0, 900.0];
+            tied.my_dominated = vec![false, false];
+            tied.done = 9000;
+            assert_eq!(
+                tied.best(),
+                Some(SearchChoice::Switch(1)),
+                "tied visits should pick earlier higher-mean action under {rules:?}"
+            );
+        }
     }
 }

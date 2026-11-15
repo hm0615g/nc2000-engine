@@ -222,6 +222,29 @@ pub enum EndgameRegime {
     ComebackLoss,
 }
 
+/// Compare two root actions by effective visits first, breaking ties by higher
+/// empirical mean reward (`rewards / total_visits`) and finally total visits.
+pub(crate) fn cmp_visits_then_mean(
+    effective_visits: &[u32],
+    total_visits: &[u32],
+    rewards: &[f64],
+    a: usize,
+    b: usize,
+) -> std::cmp::Ordering {
+    let mean = |i: usize| {
+        let n = total_visits[i];
+        if n > 0 {
+            rewards[i] / f64::from(n)
+        } else {
+            f64::NEG_INFINITY
+        }
+    };
+    effective_visits[a]
+        .cmp(&effective_visits[b])
+        .then_with(|| mean(a).total_cmp(&mean(b)))
+        .then_with(|| total_visits[a].cmp(&total_visits[b]))
+}
+
 #[derive(Clone, Debug)]
 pub struct EndgameActionMetrics {
     pub action: SearchChoice,
@@ -425,7 +448,9 @@ impl EndgameRootStats {
         if elig.is_empty() {
             return None;
         }
-        let legacy_idx = *elig.iter().max_by_key(|&&i| effective_visits[i])?;
+        let legacy_idx = *elig
+            .iter()
+            .max_by(|&&a, &&b| cmp_visits_then_mean(effective_visits, total_visits, rewards, a, b))?;
         let n_max = elig.iter().map(|&i| total_visits[i]).max().unwrap_or(0);
         let mut metrics: Vec<EndgameActionMetrics> = (0..k)
             .map(|i| {
@@ -774,7 +799,7 @@ impl EndgameRootStats {
         if !rules.decision_any() {
             return (0..k)
                 .filter(|&i| eligible(i))
-                .max_by_key(|&i| effective_visits[i]);
+                .max_by(|&a, &b| cmp_visits_then_mean(effective_visits, total_visits, rewards, a, b));
         }
         self.analyze(
             rules,
@@ -2106,6 +2131,48 @@ fn foe_switchin_candidates(b: &Battle, side: usize) -> Vec<PokeId> {
 /// or a foe self-cure can make a refused action live before it resolves.
 /// `noop_census` measures that error rate against the engine over corpus
 /// positions; it is the number to re-check whenever a rule is added.
+/// Subset of [`noop_reason`] that depends strictly on public / own-certain
+/// battle state (never guessed speed, items, hidden foe sets, or HP rolls),
+/// so every world compatible with the public protocol agrees on the exclusion.
+pub(crate) fn public_noop_reason(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    c: SearchChoice,
+    rules: MaskRules,
+) -> Option<&'static str> {
+    let SearchChoice::Move(id) = c else {
+        return None;
+    };
+    b.active_id(side)?;
+    let ms = dex.move_static(id);
+    let key = dex.moves.key(id);
+    // Our own screens/Safeguard/Mist cannot be removed in Gen 2 and expire at
+    // upkeep after moves, so casting them while already active always fails.
+    if let Some(sc) = ms.side_condition.as_deref() {
+        if ms.target != "foeSide"
+            && dex
+                .conds_id(sc)
+                .is_some_and(|cid| b.sides[side].has_side_condition(cid))
+        {
+            return Some("that side condition is already up");
+        }
+    }
+    // Phazing when the opponent has 0 non-fainted bench Pokemon remaining.
+    if ms.force_switch && !b.can_switch((1 - side) as u8) {
+        return Some("there is nobody left to phaze in");
+    }
+    // Perish Song / Destiny Bond fail (`onPrepareHit`) from the last own mon.
+    if matches!(key, "perishsong" | "destinybond") && b.sides[side].pokemon_left == 1 {
+        return Some("Perish Song and Destiny Bond fail from the last mon");
+    }
+    // Baton Pass fails when our own bench has no non-fainted switch target.
+    if rules.extended_noops && ms.self_switch.is_some() && !b.can_switch(side as u8) {
+        return Some("Baton Pass fails with nobody left to switch to");
+    }
+    None
+}
+
 fn noop_reason(
     b: &Battle,
     dex: &Dex,
@@ -2124,6 +2191,9 @@ fn noop_reason(
         ($cond:expr, $why:expr) => {
             return if $cond { Some($why) } else { None }
         };
+    }
+    if let Some(why) = public_noop_reason(b, dex, side, c, rules) {
+        return Some(why);
     }
     let SearchChoice::Move(id) = c else {
         return None;
@@ -2155,58 +2225,11 @@ fn noop_reason(
         let up = dex
             .conds_id(sc)
             .is_some_and(|cid| b.sides[target_side].has_side_condition(cid));
-        // Our own screens cannot be removed in gen 2 and expire at upkeep,
-        // after moves. Hazards on the FOE's side can be spun away first, so
-        // that half needs us to move first.
+        // Hazards on the FOE's side can be spun away first, so that half needs us to move first.
         verdict!(
             up && (!on_foe || faster_than_foe(b, dex, side)),
             "that side condition is already up"
         );
-    }
-    // ---- a phazing move with nobody left to drag in. `moveexec.rs:2262`
-    // raises didSomething only for `md.force_switch && self.can_switch(t.side)`
-    // and the drag at `moveexec.rs:2412` is gated on the same pair, so with an
-    // empty foe bench the move ends as a bare `-fail`. `forceSwitch` is exactly
-    // {roar, whirlwind} in this format and neither carries a second payload
-    // (data/gen2stadium2.json: category Status, all effect fields null), so
-    // nothing else can land.
-    //
-    // Calls the engine's own `can_switch` rather than transcribing it, and
-    // deliberately NOT `foe_can_switch` above: that one also reports false for
-    // a TRAPPED foe, but a trapped foe still gets dragged out by a phaze, so
-    // reusing it here would refuse a move that works.
-    //
-    // No speed gate, unlike the rules below. A bench only ever shrinks —
-    // `fainted` is only ever assigned true (`turn.rs:314`), `pokemon_left` is
-    // only decremented in battle (`turn.rs:297`), and `party` only grows at the
-    // preview action (`turn.rs:53`) — and a foe with no bench cannot switch,
-    // Baton Pass being gated on the same `can_switch` (`moveexec.rs:2265`).
-    // Zero at the decision therefore implies zero at resolution whatever the
-    // move order, so there is nothing for a faster foe to invalidate.
-    if ms.force_switch && !b.can_switch((1 - side) as u8) {
-        yes!("there is nobody left to phaze in");
-    }
-    // ---- Perish Song / Destiny Bond from the last mon. The Stadium 2 rule
-    // at `moveexec.rs:499` (destinybond/perishsong onPrepareHit) returns
-    // False on `pokemon_left == 1`, so the move ends as a bare `-fail` with
-    // the "fails if it is being used by your last Pokemon" hint and nothing
-    // else runs. The pair is exactly the set of moves that arm covers.
-    //
-    // Reads OUR OWN bench, which is why this needs no speed gate and no
-    // switch gate: a side's `pokemon_left` only ever decreases within a
-    // battle (`turn.rs`), and nothing the foe does on this turn can hand us
-    // a Pokemon back. One at the decision therefore implies one at
-    // resolution, whatever the move order — the same argument the phaze rule
-    // above makes about an empty foe bench.
-    //
-    // Found by battle-4040 (2026-08-16): Gengar's kit is Ice Punch / Mean
-    // Look / Destiny Bond / Perish Song, and as the last mon the bot spent 8
-    // of 22 turns on the two that cannot do anything.
-    if matches!(key, "perishsong" | "destinybond") && b.sides[side].pokemon_left == 1 {
-        yes!("Perish Song and Destiny Bond fail from the last mon");
-    }
-    if rules.extended_noops && ms.self_switch.is_some() && !b.can_switch(side as u8) {
-        yes!("Baton Pass fails with nobody left to switch to");
     }
     let foe_may_raise_hp = || {
         b.active_id(1 - side).is_some_and(|f| {
@@ -2920,10 +2943,12 @@ impl SkuctSearch {
                 )
                 .map(|a| node.acts[side][a]);
         }
+        let n = &node.n[side];
+        let w = &node.w[side];
         (0..node.acts[side].len())
             .filter(|&a| !sui.get(a).copied().unwrap_or(false))
-            .max_by_key(|&a| node.n[side][a])
-            .or_else(|| (0..node.acts[side].len()).max_by_key(|&a| node.n[side][a]))
+            .max_by(|&a, &b| cmp_visits_then_mean(n, n, w, a, b))
+            .or_else(|| (0..node.acts[side].len()).max_by(|&a, &b| cmp_visits_then_mean(n, n, w, a, b)))
             .map(|a| node.acts[side][a])
     }
 
@@ -2986,17 +3011,19 @@ impl RmAgent {
 
         // preview root (or argmax ablation): most-visited action, point mass
         if !mixed_root {
+            let n = &ts.nodes[0].n[side];
+            let w = &ts.nodes[0].w[side];
             let best = if self.cfg.endgame_rules.decision_any() && !ts.is_preview() {
                 ts.best(side)
                     .and_then(|c| acts.iter().position(|&a| a == c))
                     .unwrap_or_else(|| {
                         (0..acts.len())
-                            .max_by_key(|&a| ts.nodes[0].n[side][a])
+                            .max_by(|&a, &b| cmp_visits_then_mean(n, n, w, a, b))
                             .unwrap()
                     })
             } else {
                 (0..acts.len())
-                    .max_by_key(|&a| ts.nodes[0].n[side][a])
+                    .max_by(|&a, &b| cmp_visits_then_mean(n, n, w, a, b))
                     .unwrap()
             };
             let mut probs = vec![0.0; acts.len()];
@@ -3059,8 +3086,10 @@ impl RmAgent {
         // visit statistics (hundreds of samples vs ~tens per matrix cell),
         // so a purified point mass defers to argmax-visits.
         if probs.iter().filter(|&&p| p > 0.0).count() == 1 {
+            let n = &ts.nodes[0].n[side];
+            let w = &ts.nodes[0].w[side];
             let best = (0..acts.len())
-                .max_by_key(|&a| ts.nodes[0].n[side][a])
+                .max_by(|&a, &b| cmp_visits_then_mean(n, n, w, a, b))
                 .unwrap();
             probs.iter_mut().for_each(|p| *p = 0.0);
             probs[best] = 1.0;

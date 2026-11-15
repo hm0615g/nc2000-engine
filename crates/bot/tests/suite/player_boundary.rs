@@ -338,6 +338,89 @@ fn selecting_self_ko_while_unable_to_move_is_not_a_certain_loss() {
 }
 
 #[test]
+fn protocol_excludes_only_public_certain_noops_without_guessing_foe_state() {
+    let dex = super::common::dex();
+    let set = |species: &str, moves: &[&str]| -> PokemonSet {
+        serde_json::from_value(json!({
+            "name": species,
+            "species": species,
+            "level": 50,
+            "moves": moves,
+            "happiness": 255
+        }))
+        .unwrap()
+    };
+
+    // 1. Last-mon Perish Song & Destiny Bond are publicly useless on any world.
+    let gengar = set("Gengar", &["Ice Punch", "Perish Song", "Destiny Bond"]);
+    let snorlax = set("Snorlax", &["Body Slam"]);
+    let mut b = Battle::from_fixture(&dex, "1,2,3,4", &[gengar.clone()], &[snorlax.clone()]).unwrap();
+    b.choose(&dex, 0, "team 1").unwrap();
+    b.choose(&dex, 1, "team 1").unwrap();
+    let f = PlayerChannel::new(0).frame(&mut b, &dex).unwrap();
+    let pool = MetaPool {
+        teams: vec![MetaTeam {
+            id: "lax".into(),
+            sets: vec![snorlax.clone()],
+            weight: Some(1.0),
+        }],
+    };
+    let mut agent = ProtocolAgent::new(&dex, 0, pool.clone(), config(), 97);
+    agent.set_own_team(vec![gengar]);
+    for line in &f.lines {
+        agent.push_line(&dex, line);
+    }
+    agent.on_request(&dex, &f.request.to_string()).unwrap();
+    let (ice_idx, perish_idx, db_idx) = {
+        let search = agent.search().unwrap();
+        let actions = search.actions();
+        let dom = search.dominated();
+        let idx = |key: &str| {
+            actions
+                .iter()
+                .position(|c| *c == nc2000_engine::battle::SearchChoice::Move(dex.moves.id(key).unwrap()))
+                .unwrap()
+        };
+        let (ice, perish, db) = (idx("icepunch"), idx("perishsong"), idx("destinybond"));
+        assert!(!dom[ice]);
+        assert!(dom[perish]);
+        assert!(dom[db]);
+        (ice, perish, db)
+    };
+    agent.step(&dex, 120).unwrap();
+    let search = agent.search().unwrap();
+    assert_eq!(search.visits()[perish_idx], 0);
+    assert_eq!(search.visits()[db_idx], 0);
+    let _ = ice_idx;
+    assert_eq!(agent.best(&dex).unwrap(), "move icepunch");
+
+    // 2. Last-mon Baton Pass and empty-bench Roar are likewise publicly useless.
+    let jolteon = set("Jolteon", &["Thunderbolt", "Baton Pass", "Roar"]);
+    let mut b2 = Battle::from_fixture(&dex, "1,2,3,4", &[jolteon.clone()], &[snorlax]).unwrap();
+    b2.choose(&dex, 0, "team 1").unwrap();
+    b2.choose(&dex, 1, "team 1").unwrap();
+    let f2 = PlayerChannel::new(0).frame(&mut b2, &dex).unwrap();
+    let mut a2 = ProtocolAgent::new(&dex, 0, pool, config(), 97);
+    a2.set_own_team(vec![jolteon]);
+    for line in &f2.lines {
+        a2.push_line(&dex, line);
+    }
+    a2.on_request(&dex, &f2.request.to_string()).unwrap();
+    let s2 = a2.search().unwrap();
+    let actions2 = s2.actions();
+    let dom2 = s2.dominated();
+    let idx2 = |key: &str| {
+        actions2
+            .iter()
+            .position(|c| *c == nc2000_engine::battle::SearchChoice::Move(dex.moves.id(key).unwrap()))
+            .unwrap()
+    };
+    assert!(!dom2[idx2("thunderbolt")]);
+    assert!(dom2[idx2("batonpass")]);
+    assert!(dom2[idx2("roar")]);
+}
+
+#[test]
 fn open_agent_matches_singleton_pool_blind_agent_bit_for_bit() {
     let dex = super::common::dex();
     let catalog = load_meta_pool(&repo_root().join("data/team-pool-v2/team-pool.json"));
