@@ -2471,37 +2471,44 @@ impl BlindSearch {
                     if matches!(
                         info.regime,
                         crate::smmcts::EndgameRegime::FastWin
+                            | crate::smmcts::EndgameRegime::SafeWin
                             | crate::smmcts::EndgameRegime::ComebackLoss
-                    ) || (info.regime == crate::smmcts::EndgameRegime::SafeWin
-                        && info.chosen_idx != info.legacy_idx)
-                    {
+                    ) {
                         return Some(self.my_acts[info.chosen_idx]);
                     }
                 }
             }
+            let base_idx = if self.cfg.endgame_rules.decision_any() {
+                self.endgame.select_best(
+                    self.cfg.endgame_rules,
+                    &self.my_acts,
+                    &self.my_n,
+                    &eff_n,
+                    &self.my_w,
+                    eligible,
+                    |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
+                )?
+            } else {
+                (0..self.my_acts.len())
+                    .filter(|&i| eligible(i))
+                    .max_by(|&a, &b| {
+                        crate::smmcts::cmp_visits_then_mean(&eff_n, &self.my_n, &self.my_w, a, b)
+                    })?
+            };
             if !self.nodes.is_empty() && self.done >= 64 {
                 if let Some(eq) = self.bayesian_equilibrium() {
-                    let draw =
-                        SplitMix64::new(self.decision_seed ^ u64::from(self.done)).next_f64();
-                    if let Some(choice) = draw_policy(&self.my_acts, &eq.policy, draw) {
-                        return Some(choice);
+                    if eq.equilibrium_value
+                        > eq.pure_guarantees[base_idx] + crate::root_policy::MIN_MIX_MARGIN
+                    {
+                        let draw =
+                            SplitMix64::new(self.decision_seed ^ u64::from(self.done)).next_f64();
+                        if let Some(choice) = draw_policy(&self.my_acts, &eq.policy, draw) {
+                            return Some(choice);
+                        }
                     }
                 }
             }
-            if self.cfg.endgame_rules.decision_any() {
-                return self
-                    .endgame
-                    .select_best(
-                        self.cfg.endgame_rules,
-                        &self.my_acts,
-                        &self.my_n,
-                        &eff_n,
-                        &self.my_w,
-                        eligible,
-                        |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
-                    )
-                    .map(|i| self.my_acts[i]);
-            }
+            return Some(self.my_acts[base_idx]);
         }
         if self.is_preview() {
             return (0..self.my_acts.len())
@@ -2522,21 +2529,7 @@ impl BlindSearch {
                 })
                 .map(|i| self.my_acts[i]);
         }
-        let eff_n: Vec<u32> = (0..self.my_acts.len())
-            .map(|i| {
-                if ordinary {
-                    self.my_n[i] - self.joint_probe_n[i]
-                } else {
-                    self.my_n[i]
-                }
-            })
-            .collect();
-        (0..self.my_acts.len())
-            .filter(|&i| eligible(i))
-            .max_by(|&a, &b| {
-                crate::smmcts::cmp_visits_then_mean(&eff_n, &self.my_n, &self.my_w, a, b)
-            })
-            .map(|i| self.my_acts[i])
+        unreachable!("non-preview roots return above")
     }
 
     pub fn bayesian_equilibrium(&self) -> Option<crate::root_policy::BayesianEquilibrium> {
@@ -2547,6 +2540,17 @@ impl BlindSearch {
         let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
         let eligible: Vec<bool> = (0..self.my_acts.len())
             .map(|i| allowed(i) && (!safe || !self.my_dominated[i]))
+            .collect();
+        let ordinary =
+            (0..self.my_acts.len()).any(|i| eligible[i] && self.my_n[i] > self.joint_probe_n[i]);
+        let eff_n: Vec<u32> = (0..self.my_acts.len())
+            .map(|i| {
+                if ordinary {
+                    self.my_n[i] - self.joint_probe_n[i]
+                } else {
+                    self.my_n[i]
+                }
+            })
             .collect();
         let total_late: u64 = self
             .root_types
@@ -2646,7 +2650,7 @@ impl BlindSearch {
         }
         crate::root_policy::solve_bayesian_equilibrium_with_priors(
             &eligible,
-            &self.my_n,
+            &eff_n,
             &means,
             &types,
             &pooled_priors,
@@ -3917,5 +3921,84 @@ mod mixed_selection_tests {
                 "tied visits should pick earlier higher-mean action under {rules:?}"
             );
         }
+    }
+
+    #[test]
+    fn safewin_root_with_chosen_eq_legacy_is_never_overridden_by_bayesian_equilibrium() {
+        let dex = conformance::load_dex();
+        let make_mon = |species: &str, moves: &[&str]| -> nc2000_engine::battle::PokemonSet {
+            serde_json::from_value(serde_json::json!({
+                "name": species,
+                "species": species,
+                "level": 50,
+                "moves": moves,
+                "happiness": 255
+            }))
+            .unwrap()
+        };
+        let mut battle = Battle::from_fixture(
+            &dex,
+            "1,2,3,4",
+            &[make_mon("Snorlax", &["Return", "Curse"])],
+            &[make_mon("Suicune", &["Surf"])],
+        )
+        .unwrap();
+        battle.choose(&dex, 0, "team 1").unwrap();
+        battle.choose(&dex, 1, "team 1").unwrap();
+        let obs = Observer::new(&battle, 0);
+        let belief = Belief::pinned_from_battle(&battle, &obs);
+        let mut search = BlindSearch::new(
+            &battle,
+            &dex,
+            RmConfig {
+                iterations: 128,
+                endgame_rules: crate::smmcts::EndgameRules::all_decision(),
+                ..Default::default()
+            },
+            0,
+            77,
+        );
+        search.step(&dex, &belief, &obs, 128);
+        assert!(!search.nodes.is_empty());
+        assert_eq!(search.my_acts.len(), 2);
+
+        // Configure a SafeWin root where chosen_idx == legacy_idx == 0 (80% winrate, 5,600 visits),
+        // while root_types artificially favors action 1 so bayesian_equilibrium() would pick action 1.
+        search.my_n = vec![5600, 2900];
+        search.joint_probe_n = vec![0, 0];
+        search.my_w = vec![5600.0 * 0.80, 2900.0 * 0.66];
+        search.my_dominated = vec![false, false];
+        search.done = 8500;
+        let opp_act = search.root_types[0].reply_acts[0];
+        search.root_types = vec![RootTypeStats {
+            samples: 8500,
+            late_samples: 0,
+            replies: 1,
+            reply_acts: vec![opp_act],
+            cells: vec![(5600, 5600.0 * 0.55), (2900, 2900.0 * 0.90)],
+            late_cells: vec![(0, 0.0), (0, 0.0)],
+        }];
+        search.joint.clear();
+        search.joint_index.clear();
+
+        let eq = search.bayesian_equilibrium().unwrap();
+        assert_eq!(eq.best_pure_action, 1);
+
+        let info = search
+            .endgame
+            .analyze(
+                search.cfg.endgame_rules,
+                &search.my_acts,
+                &search.my_n,
+                &search.my_n,
+                &search.my_w,
+                |_| true,
+                |own, n_i, mean_i| search.reply_metrics(own, n_i, mean_i),
+            )
+            .unwrap();
+        assert_eq!(info.regime, crate::smmcts::EndgameRegime::SafeWin);
+        assert_eq!(info.chosen_idx, 0);
+        assert_eq!(info.legacy_idx, 0);
+        assert_eq!(search.best(), Some(search.my_acts[0]));
     }
 }

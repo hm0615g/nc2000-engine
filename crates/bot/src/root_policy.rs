@@ -420,20 +420,18 @@ pub fn solve_bayesian_equilibrium_with_priors(
         }
         let m_act = active_cols.len();
         let mut values = vec![0.5f64; n * m_act];
-        const KAPPA_ROW: f64 = 16.0;
-        const KAPPA_CELL: f64 = 64.0;
+        const KAPPA_ROW: f64 = 8.0;
+        const KAPPA_COL: f64 = 8.0;
+        const KAPPA_CELL: f64 = 16.0;
         for r in 0..n {
             let own = actions[r];
             let g_mean = global_means[own].clamp(0.0, 1.0);
             let mu_row = (row_w[r] + KAPPA_ROW * g_mean) / (f64::from(row_n[r]) + KAPPA_ROW);
             for (c_idx, &j) in active_cols.iter().enumerate() {
-                let mu_col = if col_n[j] > 0 {
-                    col_w[j] / f64::from(col_n[j])
-                } else {
-                    world_mean
-                };
-                let col_blunder_bonus = (mu_col - world_mean).max(0.0);
-                let additive_prior = (mu_row + col_blunder_bonus).clamp(0.0, 1.0);
+                let mu_col =
+                    (col_w[j] + KAPPA_COL * world_mean) / (f64::from(col_n[j]) + KAPPA_COL);
+                let col_delta = mu_col - world_mean;
+                let additive_prior = (mu_row + col_delta).clamp(0.0, 1.0);
                 let p_n = f64::from(prior_n[r * m + j]);
                 let mu_prior = if p_n > 0.0 {
                     let pooled_val = prior_mean[r * m + j].clamp(0.0, 1.0);
@@ -918,5 +916,54 @@ mod tests {
         assert!((mix_eq.policy[0] - 0.5).abs() < 1e-4);
         assert!((mix_eq.policy[1] - 0.5).abs() < 1e-4);
         assert!(mix_eq.equilibrium_value > mix_eq.best_pure_value + 0.15);
+    }
+
+    #[test]
+    fn bayesian_equilibrium_debiased_shrinkage_penalizes_sparse_punishing_reply_and_preserves_trap_avoidance() {
+        // Action 0 (5,600 visits) is well-sampled across both replies with min 0.72.
+        // Action 1 (2,900 visits) has higher mean 0.80 on reply 0, but only 3 samples
+        // (0.20) on punishing reply 1 where mu_col < world_mean. Symmetric col_delta
+        // and KAPPA_CELL=16.0 prevent upward prior bias from letting Action 1 beat Action 0.
+        let sparse_trap = [RootType {
+            samples: 8500,
+            replies: 2,
+            cells: vec![
+                RootCell { own: 0, reply: 0, samples: 4000, mean: 0.76 },
+                RootCell { own: 0, reply: 1, samples: 1600, mean: 0.72 },
+                RootCell { own: 1, reply: 0, samples: 2897, mean: 0.80 },
+                RootCell { own: 1, reply: 1, samples: 3, mean: 0.20 },
+            ],
+        }];
+        let g0 = (4000.0 * 0.76 + 1600.0 * 0.72) / 5600.0;
+        let g1 = (2897.0 * 0.80 + 3.0 * 0.20) / 2900.0;
+        let eq = solve_bayesian_equilibrium(&[true, true], &[5600, 2900], &[g0, g1], &sparse_trap)
+            .unwrap();
+        assert_eq!(eq.best_pure_action, 0);
+        assert_eq!(eq.policy, vec![1.0, 0.0]);
+        assert!(eq.pure_guarantees[0] > eq.pure_guarantees[1]);
+
+        // Converse trap-avoidance: Action 0 has 5,000 visits and higher global mean,
+        // but collapses on reply 1 (0.20), while Action 1 genuinely dominates the worst-case
+        // across all columns (0.74 vs 0.72).
+        let genuine_trap = [RootType {
+            samples: 6000,
+            replies: 2,
+            cells: vec![
+                RootCell { own: 0, reply: 0, samples: 4500, mean: 0.85 },
+                RootCell { own: 0, reply: 1, samples: 500, mean: 0.20 },
+                RootCell { own: 1, reply: 0, samples: 500, mean: 0.74 },
+                RootCell { own: 1, reply: 1, samples: 500, mean: 0.72 },
+            ],
+        }];
+        let trap_eq = solve_bayesian_equilibrium(
+            &[true, true],
+            &[5000, 1000],
+            &[0.785, 0.73],
+            &genuine_trap,
+        )
+        .unwrap();
+        assert_eq!(trap_eq.best_pure_action, 1);
+        assert_eq!(trap_eq.policy, vec![0.0, 1.0]);
+        assert!(trap_eq.equilibrium_value > trap_eq.pure_guarantees[0] + MIN_MIX_MARGIN);
     }
 }
