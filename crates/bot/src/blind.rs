@@ -244,9 +244,10 @@ impl ImperfectInfoCore {
                 if let SearchChoice::Move(chosen_mid) = picked {
                     let means = search.means();
                     let visits = search.visits();
-                    if let Some(chosen_idx) = choices.iter().position(|&c| c == picked) {
+                    let actions = search.actions();
+                    if let Some(chosen_idx) = actions.iter().position(|&c| c == picked) {
                         let q_best = means[chosen_idx];
-                        let q_alt = (0..choices.len())
+                        let q_alt = (0..actions.len())
                             .filter(|&i| i != chosen_idx && visits[i] > 0)
                             .map(|i| means[i])
                             .fold(f64::NEG_INFINITY, f64::max);

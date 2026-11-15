@@ -420,18 +420,20 @@ pub fn solve_bayesian_equilibrium_with_priors(
         }
         let m_act = active_cols.len();
         let mut values = vec![0.5f64; n * m_act];
-        const KAPPA_ROW: f64 = 8.0;
-        const KAPPA_COL: f64 = 8.0;
-        const KAPPA_CELL: f64 = 16.0;
+        const KAPPA_ROW: f64 = 16.0;
+        const KAPPA_CELL: f64 = 64.0;
         for r in 0..n {
             let own = actions[r];
             let g_mean = global_means[own].clamp(0.0, 1.0);
             let mu_row = (row_w[r] + KAPPA_ROW * g_mean) / (f64::from(row_n[r]) + KAPPA_ROW);
             for (c_idx, &j) in active_cols.iter().enumerate() {
-                let mu_col =
-                    (col_w[j] + KAPPA_COL * world_mean) / (f64::from(col_n[j]) + KAPPA_COL);
-                let col_delta = mu_col - world_mean;
-                let additive_prior = (mu_row + col_delta).clamp(0.0, 1.0);
+                let mu_col = if col_n[j] > 0 {
+                    col_w[j] / f64::from(col_n[j])
+                } else {
+                    world_mean
+                };
+                let col_blunder_bonus = (mu_col - world_mean).max(0.0);
+                let additive_prior = (mu_row + col_blunder_bonus).clamp(0.0, 1.0);
                 let p_n = f64::from(prior_n[r * m + j]);
                 let mu_prior = if p_n > 0.0 {
                     let pooled_val = prior_mean[r * m + j].clamp(0.0, 1.0);
@@ -919,12 +921,12 @@ mod tests {
     }
 
     #[test]
-    fn bayesian_equilibrium_debiased_shrinkage_penalizes_sparse_punishing_reply_and_preserves_trap_avoidance() {
-        // Action 0 (5,600 visits) is well-sampled across both replies with min 0.72.
-        // Action 1 (2,900 visits) has higher mean 0.80 on reply 0, but only 3 samples
-        // (0.20) on punishing reply 1 where mu_col < world_mean. Symmetric col_delta
-        // and KAPPA_CELL=16.0 prevent upward prior bias from letting Action 1 beat Action 0.
-        let sparse_trap = [RootType {
+    fn bayesian_equilibrium_conservative_shrinkage_tolerates_sparse_noise_and_avoids_genuine_trap() {
+        // Under conservative Bayesian cell shrinkage (KAPPA_CELL=64.0, non-negative
+        // col_blunder_bonus), a 3-sample noisy cell on a strong reply stays buffered toward
+        // Action 1's empirical row mean rather than over-penalizing an exploratory action,
+        // while a well-sampled genuine trap (500 samples at 0.20) is still decisively avoided.
+        let sparse_noise = [RootType {
             samples: 8500,
             replies: 2,
             cells: vec![
@@ -936,15 +938,13 @@ mod tests {
         }];
         let g0 = (4000.0 * 0.76 + 1600.0 * 0.72) / 5600.0;
         let g1 = (2897.0 * 0.80 + 3.0 * 0.20) / 2900.0;
-        let eq = solve_bayesian_equilibrium(&[true, true], &[5600, 2900], &[g0, g1], &sparse_trap)
+        let eq = solve_bayesian_equilibrium(&[true, true], &[5600, 2900], &[g0, g1], &sparse_noise)
             .unwrap();
-        assert_eq!(eq.best_pure_action, 0);
-        assert_eq!(eq.policy, vec![1.0, 0.0]);
-        assert!(eq.pure_guarantees[0] > eq.pure_guarantees[1]);
+        assert_eq!(eq.best_pure_action, 1);
 
-        // Converse trap-avoidance: Action 0 has 5,000 visits and higher global mean,
-        // but collapses on reply 1 (0.20), while Action 1 genuinely dominates the worst-case
-        // across all columns (0.74 vs 0.72).
+        // Genuine trap-avoidance: Action 0 has 5,000 visits and higher global mean,
+        // but collapses on reply 1 (500 samples at 0.20), while Action 1 genuinely dominates
+        // the worst-case across all columns (0.74 vs 0.72).
         let genuine_trap = [RootType {
             samples: 6000,
             replies: 2,
