@@ -1,24 +1,26 @@
 # Bot Strength & Battle-Log Audit Handoff
 
-> **Status**: Analysis-only handoff on HEAD [`42cf9f69`](../crates/bot/src/blind.rs). No code edits or locked-artifact changes have been made yet.
+> **Status**: Partially implemented through [`40673df2`](../crates/bot/src/blind.rs) (code changes landed in `b164009a`, `ab2c1e50`, and `6e2c2ac5`; compiled preview tables re-baked and SDK manifest synced in `40673df2`).
 >
-> **Scope**: Separates already-fixed historical log issues from live suboptimalities and bugs still active on current HEAD, combining `omniscient_audit` HEAD traces (`48` games), `BoundSolver` `1v1` endgame certificates (`24` states), and historical human-vs-bot ladder logs (`184` decided `puniu3` games in `logs_20260804.zip`, `51` matched games in `logs/decision-log.jsonl`).
+> - **Landed**: **P0-1** (forced-switch visit allocation & mean tie-break), **P0-2** (public/own-certain root no-op pruning in `ProtocolAgent` / `BlindSearch`), **P1-1** (`MIN_MIX_MARGIN` equilibrium override gate & `SafeWin` protection, keeping conservative cell shrinkage), and **P1-2 first half** (`MaskRules::default().immunity_all_switchins = true` & `tactical_desperation_bonus` guards).
+> - **Remaining**: **P1-1** optional `min_own_v` / LCB refinement, **P1-2 second half** (endless switching loop suppression), **P2-1** (rollout rules & `EvalWeights` exchange/confusion features), and **P2-2** (Team Preview `T0` predictability / off-pool 60-permutation dilution).
+>
+> **Scope**: Tracks historical log issues and live bottlenecks from the `42cf9f69` baseline (`omniscient_audit`, `BoundSolver` `1v1` certificates, and `184` `puniu3` ladder games in `logs_20260804.zip` + `51` games in `logs/decision-log.jsonl`) through the post-fix verification runs on `6e2c2ac5` / `40673df2`.
 
 ---
 
-## 1. Quantitative Baseline & Bottleneck Map
+## 1. Quantitative Baseline & Post-Fix Verification
 
-### 1.1 Current HEAD (`omniscient_audit --corrected-product`, `9,000` iters, `24` games/tier)
+### 1.1 `omniscient_audit --corrected-product` (`9,000` iters)
 
-- **vs `T2_Rules_Bayesian_Oracle_BR` (public info + determinized policy oracle + coupled BR)**:
-  - Bot (`ProtocolAgent`, compiled preview): **15W–9L** (`Red_WR = 37.5%`).
-  - Still shows clear self-inflicted blunders: `18/38` suboptimal forced switches across T2+T5 (`8` in T2 and `10` in T5, losing `> 0.1%` EV by picking `switch 3` over `switch 2`), `65/483` (`13.5%`) normal turns deviating from max-visit action in T2 (`121/844` = `14.3%` in T5), and `6` moves wasted into opponent type immunities in T2.
-- **vs `T5_Omniscient_God_BR` (full state + live-policy oracle + `BoundSolver`)**:
-  - Bot: **7W–17L** (`Red_WR = 70.83% ± 7.43%`, `Gain = +20.83%`, `Turns = 33.4`, `Mix = 0/0/0`).
-  - Consistent with existing production-profile snapshots in [`data/dominance-audit-v13-verified/omniscient-audit-prod27k.json`](../data/dominance-audit-v13-verified/omniscient-audit-prod27k.json) (`T2 = 55.56%`, `T5 = 72.22%`, `T6 = 88.89%`) and [`data/dominance-audit-v13-verified/omniscient-audit-prod81k.json`](../data/dominance-audit-v13-verified/omniscient-audit-prod81k.json) (`T2 = 54.17%`, `T2a_3x_Search = 41.67%`).
-- **`1v1` Last-Mon Endgame Exactness (`BoundSolver`, `400` iters base, `24` states)**:
-  - `AvgWidth = 0.6814`; `6/24` states tightly closed (`value_width <= 0.10`): `Blind400_TightMid = 4.90%`, `Skuct3200_TightMid = 4.83%`, `Blind400+Mix_TightMid = 10.54%`.
-  - On the `4` states closed to `value_width = 0.0` (`idx 2, 7, 11, 23`), `Blind400` achieved **`0.00%` exact loss**. Thus `1v1` terminal play is mostly solid; primary Elo headroom lies in **root action selection bugs, midgame switch/setup handling, and opponent-response modeling** before reaching `1v1`.
+| Tier | Pre-Fix Baseline (`42cf9f69`, `24` games/tier) | Post-Fix (`6e2c2ac5` / `40673df2`, `96` games/tier) |
+| :--- | :--- | :--- |
+| **`T2_Rules_Bayesian_Oracle_BR`** (public info + determinized oracle + coupled BR) | Bot **15W–9L** (`Red_WR = 37.5%`) | Bot **47W–49L** (`Red_WR = 51.04% ± 4.34%`, `Blue_WR = 48.96%`, `Gain = +1.04%`, `Turns = 22.7`) |
+| **`T5_Omniscient_God_BR`** (full state + live-policy oracle + `BoundSolver`) | Bot **7W–17L** (`Red_WR = 70.83% ± 7.43%`, `Gain = +20.83%`, `Turns = 33.4`) | Bot **54W–42L** (`Red_WR = 43.75% ± 5.29%`, `Blue_WR = 56.25%`, `Gain = -6.25%`, `Turns = 30.8`) |
+
+- **Additional post-fix production duel check** (`6e2c2ac5`, `9,000` base / `729,000` preview iters, `320` games vs `Raikou3-shell`): Bot (`Blue`) scored **`64.69%`** (`Red_WR = 35.31%`, 95% CI `[29.64%, 40.98%]`).
+- **`1v1` Last-Mon Endgame Exactness (`BoundSolver`, `24` states)**:
+  - On `42cf9f69` (`AvgWidth = 0.6814`, `6/24` tightly closed with `value_width <= 0.10`), `Blind400_TightMid = 4.90%` and `Skuct3200_TightMid = 4.83%` (`0.00%` exact loss on the `4` states closed to `0.0`). On the `6e2c2ac5` `96`-game audit run (`AvgWidth = 0.7892`, `1/24` tight state `<= 0.10`), `Blind400_TightMid = 4.49%` matched `Skuct3200_TightMid = 4.49%`. Terminal `1v1` play remains strong; remaining headroom sits in **midgame rollouts/evaluation, switching loops, and Team Preview (`T0`)**.
 
 ### 1.2 Human-vs-Bot Ladder Corpus (`puniu3`, `logs_20260804.zip` + `logs/decision-log.jsonl`)
 
@@ -26,7 +28,7 @@ Across **184 decided `puniu3` games** (`88W–96L`, `47.8%` WR):
 - **Bot self-errors correlate with losses**:
   - Moves hitting opponent type immunity (`|-immune|`): **`35.4%` (`34/96`) of losses** vs `23.9%` (`21/88`) of wins.
   - Self move failures (`|-fail|`): **`27.1%` (`26/96`) of losses** vs `12.5%` (`11/88`) of wins.
-- **Lowest bot win rates by opponent move used**:
+- **Lowest bot win rates by opponent move used** (still unaddressed by rollout/eval defaults in **P2-1**):
   - `Baton Pass`: **25.0%** (`2W–6L`, `n=8`)
   - `Whirlwind`: **32.3%** (`10W–21L`, `n=31`)
   - `Sleep Talk`: **41.4%** (`12W–17L`, `n=29`)
@@ -35,95 +37,66 @@ Across **184 decided `puniu3` games** (`88W–96L`, `47.8%` WR):
   - `Mean Look`: **42.9%** (`9W–12L`, `n=21`)
   - `Perish Song`: **43.8%** (`14W–18L`, `n=32`)
 
-*(Historical defects such as missing `pokemon_left`, HP rounding mismatches, Sleep Clause attribution, and `MaskRules` rules for last-mon `perishsong`/`destinybond` or awake `sleeptalk` in `smmcts.rs` were implemented previously — see item #2 below for why several remain unexecuted in the live product path.)*
+---
+
+## 2. Status of Audit Items
+
+### Priority 0 — Critical Implementation Bugs (Landed)
+
+#### P0-1. Forced-Switch (`Request::Switch`) Uniform Visit Split & `switch 3` Tie-Break Bug — **LANDED (`b164009a`)**
+- **Original Defect**: On `42cf9f69`, `18/38` (`47.4%`) forced switches picked `switch 3` over a strictly higher-mean `switch 2` (`0/38` selections for `switch 2`, up to `-36.21%` EV loss) because `min_floor_pick` overrode UCB1 whenever `replies == 0` (`w_n == 0 < world_floor`) and `max_by_key` broke equal-visit ties toward the last element (`switch 3`).
+- **Resolution**:
+  - [`crates/bot/src/blind.rs#L1494-L1498`](../crates/bot/src/blind.rs#L1494-L1498) gates `min_floor_pick` on `self.root_types[type_index].replies > 0` so forced switches fall through to `select_global_with_prior` (UCB1).
+  - [`crates/bot/src/blind.rs#L2496`](../crates/bot/src/blind.rs#L2496) and [`crates/bot/src/smmcts.rs#L227`](../crates/bot/src/smmcts.rs#L227) (`cmp_visits_then_mean`) break visit ties by mean reward (`my_w / my_n`).
+
+#### P0-2. Live `ProtocolAgent` / `BlindSearch::from_observation` Root No-Op Pruning — **LANDED (`b164009a`, `ab2c1e50`)**
+- **Original Defect**: `BlindAgent::new` disabled `root_pruning`, `BlindSearch::from_observation_with_rng` cleared `my_dominated`, and `ProtocolAgent::on_request` never called `prune_dominated()`, allowing last-mon `Perish Song` / `Destiny Bond` and repeated dead moves in production.
+- **Resolution**:
+  - [`crates/bot/src/smmcts.rs#L2250-L2343`](../crates/bot/src/smmcts.rs#L2250-L2343) introduces `public_noop_reason` / `raw_public_noop_reason`, restricting live exclusions strictly to turn-order-independent public/own-certain state: own screens/Safeguard/Mist already up, phazing with an empty foe bench, `perishsong`/`destinybond` from the last mon, `batonpass` with an empty bench (`rules.extended_noops`), foe Safeguard blocking status/non-Swagger confusion, and `immunity_all_switchins` (respecting `wait_exempt` and `foe_may_change_type`).
+  - [`crates/bot/src/blind.rs#L971-L995`](../crates/bot/src/blind.rs#L971-L995) populates `my_dominated` via `public_noop_reason` in `use_public_exclusions`, and [`crates/bot/src/import.rs#L2832`](../crates/bot/src/import.rs#L2832) calls `search.prune_dominated()`.
+- **Intentional Scope Boundary**: Turn-order-dependent rules (`sleeptalk`/`snore` while awake, `rest`/`recover` at full HP) remain in [`noop_reason`](../crates/bot/src/smmcts.rs#L2345-L2470) gated on `faster_than_foe`, **not** in `public_noop_reason`, because a faster foe can inflict sleep or deal damage before our move resolves.
 
 ---
 
-## 2. Prioritized Actionable Opportunities on Current HEAD
+### Priority 1 — Root Policy & Type-Immunity Exploitation (Partially Landed)
 
-### Priority 0 — Critical Implementation Bugs
+#### P1-1. `bayesian_equilibrium()` Override Bias & Shrinkage — **PARTIALLY LANDED (`ab2c1e50`, adjusted in `6e2c2ac5`)**
+- **Landed**:
+  - [`crates/bot/src/blind.rs#L2472-L2512`](../crates/bot/src/blind.rs#L2472-L2512) protects `EndgameRegime::SafeWin` alongside `FastWin` / `ComebackLoss`, computes `base_idx` from `endgame.select_best` or `cmp_visits_then_mean`, and only overrides with `bayesian_equilibrium()` when `eq.equilibrium_value > eq.pure_guarantees[base_idx] + MIN_MIX_MARGIN` (`0.02`, [`root_policy.rs#L3`](../crates/bot/src/root_policy.rs#L3)).
+  - `6e2c2ac5` intentionally restored conservative Bayesian cell shrinkage in [`crates/bot/src/root_policy.rs#L423-L448`](../crates/bot/src/root_policy.rs#L423-L448) (`KAPPA_ROW = 16.0`, `KAPPA_CELL = 64.0`, non-negative `col_blunder_bonus`) after `ab2c1e50`'s symmetric `col_delta` / `KAPPA_CELL = 16.0` proved overly punitive on sparse exploratory cells, and fixed `ImperfectInfoCore` telemetry indexing in [`blind.rs#L247-L250`](../crates/bot/src/blind.rs#L247-L250).
+- **Remaining (Optional Tuning)**:
+  - [`crates/bot/src/root_policy.rs#L349`](../crates/bot/src/root_policy.rs#L349) still admits candidate actions down to `min_own_v = (max_v / 32).clamp(4, 64)`. Tightening `min_own_v` or adding an LCB sample-count penalty has not been added and is only worth pursuing if post-`6e2c2ac5` traces still show low-visit pure overrides losing EV.
 
-#### P0-1. Forced-Switch (`Request::Switch`) Uniform Visit Split & `switch 3` Tie-Break Bug
-- **Evidence (HEAD traces)**: Out of **38** forced-switch decisions with `>= 2` legal switches and `iterations > 0`, **`18/38` (`47.4%`) picked `switch 3` when `switch 2` had a strictly higher search mean** (up to **-36.21% EV** loss), and `switch 2` was selected **`0/38` times**.
-  - `T5` game-007 T5: chose `switch 3` (`4500v`, mean `0.3422`) over `switch 2` (`4500v`, mean `0.7043`, **-36.21%**)
-  - `T2` game-022 T4: chose `switch 3` (`4500v`, mean `0.4530`) over `switch 2` (`4500v`, mean `0.6597`, **-20.67%**)
-  - `T2` game-011 T5: chose `switch 3` (`4500v`, mean `0.4311`) over `switch 2` (`4500v`, mean `0.6239`, **-19.28%**)
-  - `T2` game-002 T5: chose `switch 3` (`4500v`, mean `0.1863`) over `switch 2` (`4500v`, mean `0.3088`, **-12.24%**, lost game)
-  - `T5` game-014 T4: chose `switch 3` (`4500v`, mean `0.1885`) over `switch 2` (`4500v`, mean `0.3074`, **-11.90%**, lost game)
-- **Root Cause**:
-  1. In [`crates/bot/src/blind.rs#L1479-L1503`](../crates/bot/src/blind.rs#L1479-L1503) (`BlindSearch::step_one_impl`), `min_floor_pick` iterates over `elig` and sums `stats.cells.get(row_start..row_start + replies)`. On a forced switch (`Request::Switch`), the opponent has `0` legal replies (`replies == 0`), so the slice is `0..0` and `w_n` is always `0`. Once `stats.samples` makes `world_floor > 0` (after `done >= 512`), `min_floor_pick` overrides `select_global_with_prior` on **every** iteration and allocates exact uniform round-robin visits (`4500 / 4500` at 9k).
-  2. When selecting the final move, `bayesian_equilibrium()` skips types with `replies == 0` (`None`), and [`crates/bot/src/blind.rs#L2510`](../crates/bot/src/blind.rs#L2510) / [`crates/bot/src/smmcts.rs#L428`](../crates/bot/src/smmcts.rs#L428) / [`L777`](../crates/bot/src/smmcts.rs#L777) call `max_by_key` on equal visit counts (`4500 == 4500`), which in Rust returns the **last** maximum (`switch 3` > `switch 2`) without comparing `my_w[i] / my_n[i]`.
-- **Fix Direction**:
-  1. Gate `min_floor_pick` on `replies > 0` so forced switches use `select_global_with_prior` (UCB1).
-  2. Break visit ties in `best()` and `EndgameRootStats` using mean reward (`my_w[i] / my_n[i]`) as secondary key (just like preview at [`blind.rs#L2504`](../crates/bot/src/blind.rs#L2504) and `import.rs#L2933`).
-
-#### P0-2. Live `ProtocolAgent` / `BlindSearch::from_observation` Never Executes Root No-Op Pruning
-- **Evidence (HEAD traces & ladder logs)**:
-  - Across the `48` HEAD traces (where Blue runs [`ProtocolAgent`](../crates/bot/src/import.rs#L2518), matching WASM in [`crates/wasm/src/lib.rs#L891-L954`](../crates/wasm/src/lib.rs#L891-L954)):
-    - **6 turns** failed `Perish Song` on Blue's last Pokemon (`T5` game-002 T84 spent `4,567` visits on `move perishsong`, triggering `|-fail|` with the Stadium 2 last-Pokemon hint).
-    - **1 turn** failed `Rest` at full HP (`292/292`, `T5` game-017 T16).
-    - In `T5` game-009 T13, an **awake** `Snorlax` (`163/292 None`) spent **`4,023 / 9,000` (`44.7%`)** root iterations exploring `move sleeptalk`.
-  - Matches ladder room `3791` T10–T12 (`Gengar` last mon clicking `Destiny Bond` 3 turns straight).
-- **Root Cause**:
-  - [`crates/bot/src/smmcts.rs#L2205`](../crates/bot/src/smmcts.rs#L2205) already implements `perishsong | destinybond` last-mon pruning and `noop_reason`, **but**:
-    - `BlindAgent::new` sets `root_pruning: false` ([`crates/bot/src/blind.rs#L173`](../crates/bot/src/blind.rs#L173));
-    - `BlindSearch::from_observation_with_rng` passes `compute_dominated = false` and clears `my_dominated` in `use_public_exclusions` ([`crates/bot/src/blind.rs#L962-L985`](../crates/bot/src/blind.rs#L962-L985));
-    - [`ProtocolAgent::on_request`](../crates/bot/src/import.rs#L2762-L2836) never calls `search.prune_dominated()`.
-- **Important Caveat & Fix Direction**:
-  - Per [`docs/SEARCH-AND-BELIEF-HANDOFF.md`](SEARCH-AND-BELIEF-HANDOFF.md), guessed-world exclusions (such as assuming opponent sleep duration or unseen switch locks) must **not** run blindly on `ObservedPosition`.
-  - However, rules that depend strictly on **own-side or publicly certain state** — `b.sides[side].pokemon_left == 1` (`perishsong`, `destinybond`, `batonpass`), own `status != Slp` (`sleeptalk`), own `hp == maxhp && status == None` (`rest`/`recover`/etc. unless `MaskRules` says otherwise), and publicly empty foe bench (`roar`/`whirlwind`) — cannot misread hidden state and should be extracted into a `public_noop_reason` pass enabled in `ProtocolAgent` / `BlindSearch::from_observation` (then A/B tested via non-mirror `T2`/self-play gates).
+#### P1-2. Immunity Wastes (`Ghost` / `Ground`) & Endless Switching Loops — **HALF LANDED (`ab2c1e50`) / HALF REMAINING**
+- **Landed (Type-Immunity Mask & Desperation Tie-Breaker)**:
+  - [`crates/bot/src/smmcts.rs#L1913-L1924`](../crates/bot/src/smmcts.rs#L1913-L1924) promotes `MaskRules::default().immunity_all_switchins` to `true`, so `public_noop_reason` prunes moves whose type cannot hit the active foe or any live/possible switch-in candidate (with `foe_may_change_type` guards for `Conversion`/`Conversion 2`/`Sketch`/transformed `Hidden Power` and `wait_exempt` guards).
+  - [`crates/bot/src/smmcts.rs#L895-L1023`](../crates/bot/src/smmcts.rs#L895-L1023) updates `tactical_desperation_bonus` (`foe_status_or_volatile_blocked` and Spikes-aware switch scoring) so losing roots stop rewarding blocked status moves or lethal switch-ins.
+- **Remaining (Endless Switching Loops)**:
+  - No mechanism yet penalizes or breaks low-entropy repeated switching loops under passive damage (`Spikes`/status, e.g., `Snorlax`↔`Cloyster` or `Zapdos`↔`Steelix`↔`Raichu` loops observed in ladder logs). Note also that `MaskRules::immunity_ignores_switch_read` remains `false` by design so single-immunity read targets are not blindly masked.
 
 ---
 
-### Priority 1 — Root Policy & Type-Immunity Exploitation
+### Priority 2 — Midgame Rollouts, Opponent Modeling & Evaluation (Remaining)
 
-#### P1-1. `bayesian_equilibrium()` Sample-Poverty Bias Picks Lower-Mean / Low-Visit Actions
-- **Evidence (HEAD traces)**:
-  - In [`crates/bot/src/blind.rs#L2465-L2472`](../crates/bot/src/blind.rs#L2465-L2472), `best()` overrides UCB max-visits / `EndgameRootStats` with `bayesian_equilibrium()` on **every** non-preview turn with `done >= 64` whenever opponent has `>= 1` reply — even when no mixing passes the `+0.005` threshold and `policy[best_pure_action] = 1.0` ([`crates/bot/src/root_policy.rs#L575-L585`](../crates/bot/src/root_policy.rs#L575-L585)).
-  - In HEAD traces, `blue_choice != max_visits` occurred on **`65/483` (`13.5%`)** T2 turns and **`121/844` (`14.3%`)** T5 turns. Excluding forced switches, `chosen != max_visits` occurred `168` times across T2+T5 combined; while `21` turns improved mean by `> 2%` (avoiding traps), **`21` turns lost `> 2%` mean EV** relative to the UCB favorite:
-    - `T5` game-018 T18: vs `Cloyster(30/156)`, `switch 3` (`5665v`, mean `0.7924`) was overridden by `move flamethrower` (`2914v`, mean `0.6620`, **-13.05% EV**, lost game).
-    - `T2` game-006 T10: `move doubleedge` (`7613v`, `0.8651`) overridden by `move curse` (`446v`, `0.7998`, **-6.52% EV**).
-    - `T2` game-001 T2: `move thunderwave` (`4550v`, `0.6114`) overridden by `switch 3` (`1162v`, `0.5475`, **-6.39% EV**).
-    - `T5` game-023 T2: `move sleeptalk` (`2883v`, `0.3053`) overridden by `switch 2` (`489v`, `0.2559`, **-4.94% EV**).
-- **Root Cause**:
-  - [`crates/bot/src/root_policy.rs#L349`](../crates/bot/src/root_policy.rs#L349) admits low-visit actions down to `min_own_v = (max_v / 32).clamp(4, 64)` (`0.7%` of a 9k budget), and [`L423-L448`](../crates/bot/src/root_policy.rs#L423-L448) shrinks each `(world, own, reply)` cell with `KAPPA_CELL = 64.0` toward `mu_row + col_blunder_bonus`.
-  - Low-visit actions with only `1–5` samples per `(world, reply)` cell shrink upward toward the row prior and disguise tail losses, whereas high-visit UCB favorites accumulate enough samples to reveal bad replies — causing `pure_guarantees` to rank under-sampled actions ahead of the main line.
-- **Fix Direction**:
-  - Tighten `min_own_v` (e.g., proportional to `max_v`, such as `max_v / 8`) and/or add sample-count confidence penalties (LCB-style adjustment per cell or world) before replacing the UCB/Endgame favorite in pure-strategy regimes.
+#### P2-1. Greedy Max-Damage Rollout & Zeroed Leaf Weights Blind to Phazing / Setup / Traps — **REMAINING**
+- **Current Code State**:
+  - `RmConfig::default()` ([`crates/bot/src/smmcts.rs#L1039-L1066`](../crates/bot/src/smmcts.rs#L1039-L1066)) already enables `rollout_combo: true` and `rollout_baton_pass: true`, **but** keeps **`rollout_status: false`, `rollout_switch: false`, `rollout_perish: false`**.
+  - `EvalWeights::default()` ([`crates/bot/src/eval.rs#L166-L190`](../crates/bot/src/eval.rs#L166-L190)) keeps **`exchange: 0.0`, `confusion: 0.0`, `exchange_v2: false`** (even though `EvalWeights::exchange_scheme` at [`eval.rs#L252`](../crates/bot/src/eval.rs#L252) and `RolloutRules` hooks in [`crates/bot/src/mcts.rs#L262-L277`](../crates/bot/src/mcts.rs#L262-L277) already exist behind flags).
+- **Why It Matters**:
+  - Rollout playouts remain mostly greedy max-damage (`Playout::heavy()`), and leaf evaluations ignore switching costs / `exchange_v2` / `confusion` — matching the steep ladder WR drops against `Baton Pass` (`25.0%`), `Whirlwind` (`32.3%`), `Sleep Talk` (`41.4%`), `Curse` (`41.5%`), `Swords Dance` (`41.7%`), `Mean Look` (`42.9%`), and `Perish Song` (`43.8%`), as well as midgame blunders like staying in vs revealed `Hidden Power` threats (`room 3755`).
 
-#### P1-2. Immunity Wastes (`Ghost` / `Ground`) & Endless Switching Loops
-- **Evidence**:
-  - **HEAD**: `T2` game-013 (`Gengar` threw `Shadow Ball` into sleeping `Snorlax` **5 times**: T6, T39, T52, T61, T64); `T2` game-001 T4 (`Starmie` poured `7,117` visits into `Thunder Wave` while `T2` BR predicted `Thunder Wave` and brought `Marowak` in free).
-  - **Ladder (`decision-log.jsonl`)**:
-    - Room `3746`: `Snorlax`↔`Cloyster` loop (`9` switches, `6` immunities vs `Misdreavus`); `T2` `Marowak` stayed in to `Rock Slide` (`74.3%`) into L55 `Zapdos` after `Hidden Power` was revealed on T1.
-    - Room `3730`: `Zapdos`↔`Steelix`↔`Raichu` loop (`9` switches, `4` Electric hits into `Steelix`).
-    - Room `3800` T83–T84: `Heracross` gave `Hidden Power [Fighting]` **`34.3%` visit share** against `Gengar` even on the turn immediately after it proved `|-immune|`.
-    - [`4069.log`](../tmp/release-strength-v1/combined/2026-08-19%2013%3A30%3A52%20FreeDrink%20VS%20puniu3%20(Winner%3A%20FreeDrink)%20battle-gen2nintendocup2000noohkostadium2strict-4069.log) T1–T5: `Miltank` Cursed into `Mean Look + Perish Song Misdreavus` and repeatedly `Return`-ed into immunity until fainting.
-- **Code Hooks**:
-  - [`crates/bot/src/smmcts.rs#L1796-L1808`](../crates/bot/src/smmcts.rs#L1796-L1808) keeps `immunity_all_switchins: false` and `immunity_ignores_switch_read: false`, even though `immunity_all_switchins` is already implemented at [`L2347-L2354`](../crates/bot/src/smmcts.rs#L2347-L2354).
-  - Testing `immunity_all_switchins` (plus public-only variant when the entire live/known opponent roster is immune, e.g., sleeping `Snorlax` when foe won't switch) and penalisations for low-entropy repeated switching under passive damage are direct candidates.
+#### P2-2. Team Preview (`T0`) Off-Pool Variance & Compiled-Table Predictability — **REMAINING**
+- **Current Code State**:
+  - Compiled preview tables (`data/compiled-preview-v1.json`) remain deterministic per seed/matchup key (`choices[u32(seed)%64]`), which an adaptive opponent (`T5`) or informed human can counter-lead.
+  - For off-pool rosters falling back to live `T0` search, evaluating all `60` `(lead, bench1, bench2)` permutations at ~10k iterations still spreads visits thinly (~150–1,000 visits per trio).
 
 ---
 
-### Priority 2 — Midgame Rollouts, Opponent Modeling & Evaluation
+## 3. Remaining Execution Sequence
 
-#### P2-1. Greedy Max-Damage Rollout & Zeroed Leaf Weights Blind to Phazing / Setup / Traps
-- **Code State**:
-  - `RmConfig::default()` ([`crates/bot/src/smmcts.rs#L935-L943`](../crates/bot/src/smmcts.rs#L935-L943)) runs `Playout::heavy()` with **`rollout_status: false`, `rollout_switch: false`, `rollout_perish: false`**.
-  - `EvalWeights::default()` ([`crates/bot/src/eval.rs#L186-L188`](../crates/bot/src/eval.rs#L186-L188)) keeps **`exchange: 0.0`, `confusion: 0.0`, `exchange_v2: false`**.
-- **Symptom Match**:
-  - Matches the steep ladder WR drops against **`Whirlwind` (32.3%)**, **`Baton Pass` (25.0%)**, **`Sleep Talk` (41.4%)**, **`Curse` (41.5%)**, **`Swords Dance` (41.7%)**, **`Mean Look` (42.9%)**, **`Perish Song` (43.8%)**, and concrete losses like `room 3781` T11–T13 (allowing `+3 Curse Heracross` while shuffling `Cloyster`↔`Snorlax`) and `room 3755` T7–T8 (`L55 Snorlax` staying in at `149/292` with `99.3%` visits on `Return`, `Q = 0.634`, immediately KO'd by revealed `Heracross` `Hidden Power`).
-  - Also explains much of the `+20.8%..+22.2%` gap to `T5_Omniscient_God_BR`: `T5` uses coupled policy-oracle anticipation (`predicts` when Blue stays/clicks `Double-Edge`/`Thunder Wave` so it switches `Gengar`/`Marowak` in or triggers `Explosion` / counter-leads), whereas Blue's tree + greedy rollout underestimates opponent defensive switches, phazing loops, and setup races.
-
-#### P2-2. Team Preview (`T0`) off-pool variance & compiled-table predictability
-- In `omniscient_audit`, `T5` consistently counter-picked Blue's fixed compiled-preview lead/trio (e.g., bringing `Starmie` lead into `Marowak` lead in Pair 11 games `g022` T9 / `g023` T8).
-- In off-pool ladder games (`logs/decision-log.jsonl` `T0`), searching `60` `(lead, bench1, bench2)` permutations at 10k iters spreads visits thinly (~150–1000 per trio, e.g., `room 3730` top-1 at `6.9%` / `0.284` vs `4.3%` / `0.275`).
-
----
-
-## 3. Suggested Next Execution Sequence
-
-1. **Patch & Gate P0-1 (`blind.rs` forced switch + `mean` tie-break) and P0-2 (public-certain `prune_dominated` in `ProtocolAgent`)**:
-   - Note: [`crates/bot/src/`](../crates/bot/src) and [`crates/wasm/`](../crates/wasm) changes affect SHA-256 build fingerprints referenced in [`AGENTS.md`](../AGENTS.md); verify tests with `cargo t` first and rebake `data/compiled-preview-v1.json` only after confirming strength wins.
-2. **Patch & Gate P1-1 (`root_policy.rs` `min_own_v` / shrinkage asymmetry vs UCB max-visits)** using non-mirror `omniscient_audit` (`T2_Rules_Bayesian_Oracle_BR`, `T5_Omniscient_God_BR`) rather than symmetric self-play alone.
-3. **Investigate `room 3755` T7–T8 (`Hidden Power` Fighting vs `Snorlax`)** and `immunity_all_switchins` / lightweight switch & setup awareness in rollouts (`P1-2` / `P2-1`).
+1. **Address P2-1 (Midgame Rollouts & Leaf Eval) via Staged Gate**:
+   - Screen and A/B test [`EvalWeights::exchange_scheme`](../crates/bot/src/eval.rs#L252) (`exchange_v2`, `exchange`, `confusion`) and selective `RmConfig` rollout heuristics (`rollout_status`, `rollout_switch`, `rollout_perish`, setup/phaze awareness) via `eval_calibration` → candidate screen → non-mirror `omniscient_audit` (`T2` / `T5`) and production challenger duels before toggling shipped defaults.
+2. **Address P1-2 (Switching Loops) & Residual `T2`/`T5` Traces**:
+   - Audit post-`6e2c2ac5` `omniscient_audit` traces for remaining midgame switch loops or low-visit `bayesian_equilibrium` overrides (**P1-1** `min_own_v` check) before adding complexity.
+3. **Address P2-2 (`T0` Off-Pool Pruning / Mixing)** if `T0` off-pool logs or challenger counter-leads show measurable loss.
+4. **Build & Lock Discipline**: Any edit to `crates/bot/src/` or `crates/wasm/` updates `M17E_SOLVER_BUILD_FINGERPRINT` and requires `cargo t`, WASM/web tests, and re-baking `data/compiled-preview-v1.json` + `engine-manifest.json` per [`AGENTS.md`](../AGENTS.md).
