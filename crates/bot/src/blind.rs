@@ -804,7 +804,6 @@ enum ForcedRoot {
 }
 
 const MAX_SUBSAMPLED_WORLDS: usize = 24;
-const CELL_WARMUP_SAMPLES: u32 = 6;
 
 struct RootTypeStats {
     samples: u32,
@@ -1949,7 +1948,7 @@ impl BlindSearch {
             let cell = &mut stats.cells[cell_idx];
             cell.0 += 1;
             cell.1 += mine;
-            if stats.samples > world_warmup && cell.0 > CELL_WARMUP_SAMPLES {
+            if stats.samples > world_warmup {
                 stats.late_samples += 1;
                 let late_cell = &mut stats.late_cells[cell_idx];
                 late_cell.0 += 1;
@@ -2498,7 +2497,7 @@ impl BlindSearch {
             };
             if !self.nodes.is_empty() && self.done >= 64 {
                 if let Some(eq) = self.bayesian_equilibrium() {
-                    if eq.equilibrium_value
+                    if eq.override_value
                         > eq.pure_guarantees[base_idx] + crate::root_policy::MIN_MIX_MARGIN
                     {
                         let draw =

@@ -293,6 +293,9 @@ pub struct BayesianEquilibrium {
     pub action_values: Vec<f64>,
     pub pure_guarantees: Vec<f64>,
     pub equilibrium_value: f64,
+    /// Conservative lower-confidence value of `policy` used to gate overriding
+    /// UCB's top-visited choice at decision time.
+    pub override_value: f64,
     pub best_pure_value: f64,
     pub best_pure_action: usize,
 }
@@ -327,37 +330,43 @@ pub fn solve_bayesian_equilibrium_with_priors(
     if all_elig.is_empty() {
         return None;
     }
-    if all_elig.len() == 1 {
-        let only = all_elig[0];
+    let singleton_result = |only: usize| {
         let mut policy = vec![0.0; k_total];
         policy[only] = 1.0;
         let v = global_means[only];
-        return Some(BayesianEquilibrium {
+        BayesianEquilibrium {
             policy,
             action_values: global_means.to_vec(),
             pure_guarantees: global_means.to_vec(),
             equilibrium_value: v,
+            override_value: v,
             best_pure_value: v,
             best_pure_action: only,
-        });
+        }
+    };
+    if all_elig.len() == 1 {
+        return Some(singleton_result(all_elig[0]));
     }
     let max_v = all_elig
         .iter()
         .map(|&i| global_visits[i])
         .max()
         .unwrap_or(0);
-    let min_own_v = (max_v / 32).clamp(4, 64).min(max_v);
+    let min_own_v = (max_v / 8).max(4).min(max_v);
     let mut actions: Vec<usize> = all_elig
         .iter()
         .copied()
         .filter(|&i| global_visits[i] >= min_own_v)
         .collect();
-    if actions.len() < 2 {
+    if actions.len() == 1 {
+        return Some(singleton_result(actions[0]));
+    }
+    if actions.is_empty() {
         actions = all_elig.clone();
     }
     let n = actions.len();
 
-    let mut raw_worlds: Vec<(f64, usize, Vec<f64>)> = Vec::with_capacity(types.len());
+    let mut raw_worlds: Vec<(f64, usize, Vec<f64>, Vec<f64>)> = Vec::with_capacity(types.len());
     let mut total_weight = 0.0_f64;
 
     for (t_idx, t) in types.iter().enumerate() {
@@ -420,20 +429,20 @@ pub fn solve_bayesian_equilibrium_with_priors(
         }
         let m_act = active_cols.len();
         let mut values = vec![0.5f64; n * m_act];
+        let mut lcb_values = vec![0.0f64; n * m_act];
         const KAPPA_ROW: f64 = 16.0;
+        const KAPPA_COL: f64 = 8.0;
         const KAPPA_CELL: f64 = 64.0;
+        const KAPPA_LCB: f64 = 8.0;
         for r in 0..n {
             let own = actions[r];
             let g_mean = global_means[own].clamp(0.0, 1.0);
             let mu_row = (row_w[r] + KAPPA_ROW * g_mean) / (f64::from(row_n[r]) + KAPPA_ROW);
             for (c_idx, &j) in active_cols.iter().enumerate() {
-                let mu_col = if col_n[j] > 0 {
-                    col_w[j] / f64::from(col_n[j])
-                } else {
-                    world_mean
-                };
-                let col_blunder_bonus = (mu_col - world_mean).max(0.0);
-                let additive_prior = (mu_row + col_blunder_bonus).clamp(0.0, 1.0);
+                let mu_col =
+                    (col_w[j] + KAPPA_COL * world_mean) / (f64::from(col_n[j]) + KAPPA_COL);
+                let col_delta = mu_col - world_mean;
+                let additive_prior = (mu_row + col_delta).clamp(0.0, 1.0);
                 let p_n = f64::from(prior_n[r * m + j]);
                 let mu_prior = if p_n > 0.0 {
                     let pooled_val = prior_mean[r * m + j].clamp(0.0, 1.0);
@@ -444,25 +453,41 @@ pub fn solve_bayesian_equilibrium_with_priors(
                 let cn = f64::from(cell_n[r * m + j]);
                 let cw = cell_w[r * m + j];
                 values[r * m_act + c_idx] = (cw + KAPPA_CELL * mu_prior) / (cn + KAPPA_CELL);
+
+                // For overriding MCTS's visit winner, do not hide sparse negative cells
+                // under heavy shrinkage and subtract a 1-sigma finite-sample bound.
+                let lcb_est = (cw + KAPPA_LCB * mu_prior) / (cn + KAPPA_LCB);
+                let eff_n = cn + 0.25 * p_n;
+                let se = (lcb_est * (1.0 - lcb_est) / (eff_n + 1.0)
+                    + 0.25 / (eff_n + 1.0).powi(2))
+                .sqrt();
+                lcb_values[r * m_act + c_idx] = (lcb_est - se).clamp(0.0, 1.0);
             }
         }
         let w_k = f64::from(world_n);
         total_weight += w_k;
-        raw_worlds.push((w_k, m_act, values));
+        raw_worlds.push((w_k, m_act, values, lcb_values));
     }
 
     if raw_worlds.is_empty() || total_weight <= 0.0 {
         return None;
     }
 
-    let type_matrices: Vec<TypeMatrix> = raw_worlds
-        .into_iter()
-        .map(|(w_k, replies, values)| TypeMatrix {
-            weight: w_k / total_weight,
+    let mut type_matrices: Vec<TypeMatrix> = Vec::with_capacity(raw_worlds.len());
+    let mut lcb_type_matrices: Vec<TypeMatrix> = Vec::with_capacity(raw_worlds.len());
+    for (w_k, replies, values, lcb_values) in raw_worlds {
+        let weight = w_k / total_weight;
+        type_matrices.push(TypeMatrix {
+            weight,
             replies,
             values,
-        })
-        .collect();
+        });
+        lcb_type_matrices.push(TypeMatrix {
+            weight,
+            replies,
+            values: lcb_values,
+        });
+    }
 
     let mut pure_guarantees = global_means.to_vec();
     for (r, &own) in actions.iter().enumerate() {
@@ -561,6 +586,7 @@ pub fn solve_bayesian_equilibrium_with_priors(
     let eq_guarantee = guarantee(&type_matrices, &purified_x);
     let mut policy = vec![0.0; k_total];
     if eq_guarantee > best_pure_value + 0.005 {
+        let override_value = guarantee(&lcb_type_matrices, &purified_x);
         for (r, &own) in actions.iter().enumerate() {
             policy[own] = purified_x[r];
         }
@@ -569,16 +595,21 @@ pub fn solve_bayesian_equilibrium_with_priors(
             action_values,
             pure_guarantees,
             equilibrium_value: eq_guarantee,
+            override_value,
             best_pure_value,
             best_pure_action,
         })
     } else {
         policy[best_pure_action] = 1.0;
+        let mut pure_policy = vec![0.0; n];
+        pure_policy[best_pure_sub] = 1.0;
+        let override_value = guarantee(&lcb_type_matrices, &pure_policy);
         Some(BayesianEquilibrium {
             policy,
             action_values,
             pure_guarantees,
             equilibrium_value: best_pure_value,
+            override_value,
             best_pure_value,
             best_pure_action,
         })
@@ -965,5 +996,87 @@ mod tests {
         assert_eq!(trap_eq.best_pure_action, 1);
         assert_eq!(trap_eq.policy, vec![0.0, 1.0]);
         assert!(trap_eq.equilibrium_value > trap_eq.pure_guarantees[0] + MIN_MIX_MARGIN);
+    }
+
+    #[test]
+    fn bayesian_equilibrium_rejects_sparse_low_visit_override_while_preserving_well_sampled_mix() {
+        // Reproduces 3809 T13 structure: primary action has 3909 visits (mean 0.558),
+        // while rejected switch only has 151 visits (< max_v / 8 = 488) and loses badly
+        // against reply 1 (n=17, mean=0.290) and reply 2 (n=9, mean=0.467).
+        let sparse_switch = [RootType {
+            samples: 4060,
+            replies: 3,
+            cells: vec![
+                RootCell { own: 0, reply: 0, samples: 2900, mean: 0.550 },
+                RootCell { own: 0, reply: 1, samples: 600, mean: 0.580 },
+                RootCell { own: 0, reply: 2, samples: 409, mean: 0.582 },
+                RootCell { own: 1, reply: 0, samples: 119, mean: 0.617 },
+                RootCell { own: 1, reply: 1, samples: 17, mean: 0.290 },
+                RootCell { own: 1, reply: 2, samples: 9, mean: 0.467 },
+            ],
+        }];
+        let eq = solve_bayesian_equilibrium(
+            &[true, true],
+            &[3909, 151],
+            &[0.558, 0.562],
+            &sparse_switch,
+        )
+        .unwrap();
+        assert_eq!(eq.best_pure_action, 0);
+        assert_eq!(eq.policy, vec![1.0, 0.0]);
+        assert!(eq.override_value <= eq.pure_guarantees[0] + MIN_MIX_MARGIN);
+
+        // Borderline under-sampled alternative (just above max_v/8) with few reply samples
+        // must also fail the LCB override gate when worst-case evidence is weak.
+        let weak_lcb = [RootType {
+            samples: 4600,
+            replies: 2,
+            cells: vec![
+                RootCell { own: 0, reply: 0, samples: 2000, mean: 0.56 },
+                RootCell { own: 0, reply: 1, samples: 2000, mean: 0.56 },
+                RootCell { own: 1, reply: 0, samples: 585, mean: 0.60 },
+                RootCell { own: 1, reply: 1, samples: 15, mean: 0.54 },
+            ],
+        }];
+        let weak_eq = solve_bayesian_equilibrium(
+            &[true, true],
+            &[4000, 600],
+            &[0.56, 0.598],
+            &weak_lcb,
+        )
+        .unwrap();
+        assert!(
+            weak_eq.override_value <= weak_eq.pure_guarantees[0] + MIN_MIX_MARGIN,
+            "weakly sampled alternative must not pass LCB override gate: override={} pure0={}",
+            weak_eq.override_value,
+            weak_eq.pure_guarantees[0]
+        );
+
+        // Well-sampled genuine 2x2 RPS (3728 T17 structure): both actions exceed max_v / 8
+        // and both replies are heavily sampled, so override_value clears MIN_MIX_MARGIN.
+        let genuine_rps = [RootType {
+            samples: 7848,
+            replies: 2,
+            cells: vec![
+                RootCell { own: 0, reply: 0, samples: 3500, mean: 0.536 },
+                RootCell { own: 0, reply: 1, samples: 1730, mean: 0.735 },
+                RootCell { own: 1, reply: 0, samples: 1600, mean: 0.609 },
+                RootCell { own: 1, reply: 1, samples: 1018, mean: 0.523 },
+            ],
+        }];
+        let rps_eq = solve_bayesian_equilibrium(
+            &[true, true],
+            &[5230, 2618],
+            &[0.602, 0.576],
+            &genuine_rps,
+        )
+        .unwrap();
+        assert!(rps_eq.policy[0] > 0.2 && rps_eq.policy[1] > 0.2);
+        assert!(
+            rps_eq.override_value > rps_eq.pure_guarantees[0] + MIN_MIX_MARGIN,
+            "genuine RPS mix should pass LCB override gate: override={} pure0={}",
+            rps_eq.override_value,
+            rps_eq.pure_guarantees[0]
+        );
     }
 }
