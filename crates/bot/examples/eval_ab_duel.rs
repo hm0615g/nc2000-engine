@@ -77,8 +77,7 @@ fn main() {
     // A = shipped default, B = the scheme. This is the arm that is *supposed*
     // to have a footprint: the exchange term as a bonus changed the bot's top-1
     // on 13.8% of corpus decisions against a 15.5% seed-flip floor, which is
-    // why it could only ever read parity. Screen with
-    // `tools/eval-candidate-screen.py` before spending a duel on it.
+    // why it could only ever read parity.
     let scheme: Option<f64> = args
         .iter()
         .position(|a| a == "--scheme")
@@ -96,31 +95,6 @@ fn main() {
         .position(|a| a == "--confusion")
         .and_then(|i| args.get(i + 1))
         .and_then(|v| v.parse().ok());
-    let residual: Option<f64> = args
-        .iter()
-        .position(|a| a == "--residual")
-        .and_then(|i| args.get(i + 1))
-        .and_then(|v| v.parse().ok());
-    let rollout_residual = args.iter().any(|a| a == "--rollout-residual");
-    if let Some(w) = residual {
-        let a_weights = EvalWeights { residual_scale: 0.0, ..EvalWeights::default() };
-        let b_weights = EvalWeights { residual_scale: w, ..EvalWeights::default() };
-        let a_cfg = RmConfig { rollout_residual: false, ..cfg_with(a_weights, iters) };
-        let b_cfg = RmConfig { rollout_residual, ..cfg_with(b_weights, iters) };
-        let stats = run_duel(
-            &dex,
-            &teams,
-            &|s| Box::new(RmAgent::new(a_cfg.clone(), s)),
-            &|s| Box::new(RmAgent::new(b_cfg.clone(), s)),
-            DuelSpec::new(games, seed),
-        );
-        println!(
-            "A(residual 0.0) vs B(residual {w}, rres {rollout_residual}) @{iters}: {}W {}L {}T  A-score {:.3} +/- {:.3}  avg turns {:.1}  think A {:.1} B {:.1} ms",
-            stats.wins, stats.losses, stats.ties, stats.score, stats.ci95, stats.avg_turns,
-            stats.a_ms_per_move, stats.b_ms_per_move
-        );
-        return;
-    }
     if let Some(w) = scheme.or(confusion) {
         let (b_weights, label) = if let Some(x) = scheme {
             (EvalWeights::exchange_scheme(x, scheme_damp), format!("scheme {x}/damp {scheme_damp}"))

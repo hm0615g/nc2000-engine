@@ -53,12 +53,14 @@ fn arg(args: &[String], key: &str, default: usize) -> usize {
         .unwrap_or(default)
 }
 
-/// `species id -> (observations, move id -> count, item id -> count)`.
+/// `species id -> (move-reveal obs, move id -> count, item id -> count, rostered, leads)`.
 #[derive(Default)]
 struct Counts {
     n: u64,
     moves: BTreeMap<String, u64>,
     items: BTreeMap<String, u64>,
+    rostered: u64,
+    leads: u64,
 }
 
 fn to_id(dex: &Dex, name: &str) -> Option<String> {
@@ -111,8 +113,18 @@ fn count_sets(dex: &Dex, root: &std::path::Path) -> BTreeMap<String, Counts> {
     out
 }
 
-/// Reveal-marginals from the spectator corpus. Large sample of the WRONG
-/// quantity — see the module doc. Emitted for drift detection and ranking.
+fn to_species_id(dex: &Dex, species: &str) -> Option<nc2000_engine::dex::SpeciesId> {
+    let key: String = species
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    dex.species.id(&key)
+}
+
+/// Reveal-marginals and lead frequencies from the spectator corpus. Large
+/// sample of the WRONG move-quantity — see the module doc. Emitted for drift
+/// detection, ranking, and observed `lead` weights.
 fn count_reveals(
     dex: &Dex,
     root: &std::path::Path,
@@ -127,18 +139,56 @@ fn count_reveals(
         }
         let cb = load_battle(&path);
         for (species, moves) in cb.evidence.revealed_by_species() {
-            let key: String = species
-                .chars()
-                .filter(|c| c.is_ascii_alphanumeric())
-                .map(|c| c.to_ascii_lowercase())
-                .collect();
-            let Some(sp) = dex.species.id(&key) else { continue };
+            let Some(sp) = to_species_id(dex, species) else { continue };
             let e = out.entry(dex.species.key(sp).to_string()).or_default();
             e.n += 1;
             for m in moves {
                 if let Some(id) = to_id(dex, m) {
                     *e.moves.entry(id).or_default() += 1;
                 }
+            }
+        }
+        let mut seen_poke = std::collections::HashSet::<(usize, String)>::new();
+        let mut seen_lead = [false; 2];
+        for ln in &cb.lines {
+            let p: Vec<&str> = ln.split('|').collect();
+            if p.len() < 2 {
+                continue;
+            }
+            match p[1] {
+                "turn" => break,
+                "poke" if p.len() >= 4 => {
+                    let side = if p[2].starts_with("p1") {
+                        0usize
+                    } else if p[2].starts_with("p2") {
+                        1usize
+                    } else {
+                        continue;
+                    };
+                    let raw_sp = p[3].split(',').next().unwrap_or("").trim();
+                    let Some(sp) = to_species_id(dex, raw_sp) else { continue };
+                    let sp_key = dex.species.key(sp).to_string();
+                    if seen_poke.insert((side, sp_key.clone())) {
+                        out.entry(sp_key).or_default().rostered += 1;
+                    }
+                }
+                "switch" if p.len() >= 4 => {
+                    let side = if p[2].starts_with("p1") {
+                        0usize
+                    } else if p[2].starts_with("p2") {
+                        1usize
+                    } else {
+                        continue;
+                    };
+                    if !seen_lead[side] {
+                        seen_lead[side] = true;
+                        let raw_sp = p[3].split(',').next().unwrap_or("").trim();
+                        let Some(sp) = to_species_id(dex, raw_sp) else { continue };
+                        let sp_key = dex.species.key(sp).to_string();
+                        out.entry(sp_key).or_default().leads += 1;
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -165,6 +215,10 @@ fn emit(counts: &BTreeMap<String, Counts>, source: &str, min_n: u64) -> serde_js
         entry.insert("moves".into(), serde_json::Value::Object(moves));
         if !items.is_empty() {
             entry.insert("items".into(), serde_json::Value::Object(items));
+        }
+        if c.rostered > 0 {
+            let lead = (c.leads as f64 / c.rostered as f64 * 1000.0).round() / 1000.0;
+            entry.insert("lead".into(), serde_json::json!(lead));
         }
         entry.insert("n".into(), serde_json::json!(c.n));
         species.insert(sp.clone(), serde_json::Value::Object(entry));
@@ -193,16 +247,30 @@ fn check(path: &str) {
         return;
     };
     let mut sums: Vec<(String, f64, u64)> = Vec::new();
+    let mut n_items = 0usize;
+    let mut n_leads = 0usize;
+    let mut lead_sum = 0.0f64;
     for (sp, e) in species {
         let sum: f64 = e["moves"]
             .as_object()
             .map(|m| m.values().filter_map(|x| x.as_f64()).sum())
             .unwrap_or(0.0);
+        if e["items"].as_object().is_some_and(|m| !m.is_empty()) {
+            n_items += 1;
+        }
+        if let Some(lw) = e["lead"].as_f64() {
+            n_leads += 1;
+            lead_sum += lw;
+        }
         sums.push((sp.clone(), sum, e["n"].as_u64().unwrap_or(0)));
     }
     sums.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     let mean = sums.iter().map(|s| s.1).sum::<f64>() / sums.len().max(1) as f64;
-    println!("species {}  mean move-probability sum {mean:.2}  (complete sets => ~4.0)", sums.len());
+    let mean_lead = if n_leads > 0 { lead_sum / n_leads as f64 } else { 0.0 };
+    println!(
+        "species {}  mean move-probability sum {mean:.2}  (complete sets => ~4.0)  items {n_items}  lead {n_leads} (mean {mean_lead:.3})",
+        sums.len()
+    );
     println!("\nfurthest from 4.0:");
     for (sp, sum, n) in sums.iter().take(5).chain(sums.iter().rev().take(5)) {
         let flag = if *sum > 4.5 {

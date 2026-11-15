@@ -30,6 +30,8 @@ export type SolverRequest =
       /** Optional community belief prior (M18), governing the fallback
        * imputation when no pool team fits. */
       priorJson?: string;
+      /** Optional Team Preview pick prior (`nc2000-pick-prior-v1`). */
+      pickPriorJson?: string;
       endgame?: EndgameSettings;
       seed: number;
       budget: number;
@@ -100,6 +102,7 @@ async function handle(m: SolverRequest): Promise<void> {
       plies = m.plies;
       const s = new ProtocolSearcher(dex, JSON.parse(m.spec).side ?? 0, m.poolJson, seed, searchProfile("blind").c);
       if (m.priorJson) s.setBeliefPrior(m.priorJson);
+      if (m.pickPriorJson) s.setPickPrior(m.pickPriorJson);
       try {
         s.setPosition(m.spec);
       } catch (err) {
@@ -113,6 +116,7 @@ async function handle(m: SolverRequest): Promise<void> {
     }
     case "extend": {
       if (!searcher) return;
+      gen += 1;
       stopping = false;
       plies = m.plies;
       await run(m.id, m.budget, gen);

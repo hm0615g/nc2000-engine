@@ -128,6 +128,8 @@ if (args.help || args.h) {
                     data/belief-pool-v3/belief-pool.json. Without the flag the fallback
                     imputation is exactly today's. A malformed table warns
                     and degrades rather than failing the run
+  --pick-prior F    Team Preview pick prior (nc2000-pick-prior-v1 JSON).
+                    Read once at startup and handed to each game's searcher.
   --drop SPEC       verification hook: socket kills at chosen decision
                     points (see header comment)
   --quiet           per-game lines only`);
@@ -222,6 +224,16 @@ const DEFAULT_BELIEF_POOL_JSON =
 const BELIEF_PRIOR_ARG = args['belief-prior'] && args['belief-prior'] !== true ? String(args['belief-prior']) : '';
 const BELIEF_PRIOR_AUTO = BELIEF_PRIOR_ARG.toLowerCase() === 'auto';
 const BELIEF_PRIOR_FILE = BELIEF_PRIOR_ARG && !BELIEF_PRIOR_AUTO ? resolveUserPath(BELIEF_PRIOR_ARG) : '';
+const PICK_PRIOR_ARG = args['pick-prior'] && args['pick-prior'] !== true ? String(args['pick-prior']) : '';
+const PICK_PRIOR_FILE = PICK_PRIOR_ARG ? resolveUserPath(PICK_PRIOR_ARG) : '';
+if (args['pick-prior'] === true) {
+    console.error('--pick-prior requires a JSON file path');
+    process.exit(2);
+}
+if (PICK_PRIOR_FILE && (RANDOM || MODE !== 'blind' || SEARCH_RUNTIME !== 'wasm')) {
+    console.error('--pick-prior requires non-random --mode blind --search-runtime wasm');
+    process.exit(2);
+}
 const DEBOUNCE_MS = 100; // network analogue of the M15a stream-quiescence wait
 const RECONNECT_MS = 500;
 
@@ -786,26 +798,24 @@ if (MODE === 'open') {
 // degrades into warnings and play continues exactly as it does with no prior
 // at all — so the only hard failure is a file we cannot read, which is a typo
 // in the flag rather than a statement about the table.
-function reportPrior(reportJson, log) {
+function reportPriorJson(label, methodName, summarize, reportJson, log) {
 	let r = null;
 	try {
 		r = JSON.parse(reportJson);
 	} catch { /* fall through to the unreadable-report line */ }
 	if (!r) {
-		log('belief prior: setBeliefPrior returned no readable report');
+		log(`${label}: ${methodName} returned no readable report`);
 		return;
 	}
-	for (const w of r.warnings || []) log(`belief prior: ${w}`);
-	log(`belief prior: ${r.species} species, mean move-probability sum ` +
-		`${Number(r.meanMoveSum).toFixed(2)}, ${r.skipped} entries skipped — ` +
-		`${r.applied ? 'applied' : 'NOT applied'}`);
+	for (const w of r.warnings || []) log(`${label}: ${w}`);
+	log(`${label}: ${summarize(r)} — ${r.applied ? 'applied' : 'NOT applied'}`);
 }
 
 let priorText = '';
 let priorSource = '';
 if (BELIEF_PRIOR_ARG) {
 	if (RANDOM) {
-		console.error('--belief-prior has nothing to act on in --random mode (no searcher)');
+		console.error(`${flag} has nothing to act on in --random mode (no searcher)`);
 		process.exit(2);
 	}
 	if (MODE !== 'blind') {
@@ -857,6 +867,37 @@ if (BELIEF_PRIOR_ARG) {
 	console.log(`[${NAME}] belief prior source: ${priorSource}`);
 }
 
+// Optional upstream PickPrior: validate at startup and install before the
+// first onRequest for each game. Without the flag this adds no API calls.
+function reportPickPrior(reportJson, log) {
+    let result = null;
+    try { result = JSON.parse(reportJson); } catch { /* fail safe */ }
+    if (!result || typeof result !== 'object') {
+        log('pick prior: setPickPrior returned no readable report');
+        return;
+    }
+    for (const warning of result.warnings || []) log(`pick prior: ${warning}`);
+    log(`pick prior: ${result.rows} rows, ${result.teams} teams - ` +
+        `${result.applied ? 'applied' : 'NOT applied'}`);
+}
+
+let pickPriorText = '';
+if (PICK_PRIOR_FILE) {
+    try {
+        pickPriorText = fs.readFileSync(PICK_PRIOR_FILE, 'utf8');
+    } catch (error) {
+        console.error(`--pick-prior: cannot read ${PICK_PRIOR_FILE}: ${error.message}`);
+        process.exit(2);
+    }
+    const probe = new wasm.ProtocolSearcher(dex, 0, DEFAULT_BELIEF_POOL_JSON, 0, PROFILE.c);
+    try {
+        reportPickPrior(probe.setPickPrior(pickPriorText),
+            line => console.log(`[${NAME}] ${line}`));
+    } finally {
+        if (typeof probe.free === 'function') probe.free();
+    }
+}
+
 // ------------------------------------------------------------- drop specs
 // one entry per battle index; `null` = no drop for that battle
 const dropSpecs = String(args.drop && args.drop !== true ? args.drop : '')
@@ -891,7 +932,8 @@ function randomChoice(req) {
 			const pick = order.slice(0, size);
 			if (pick.reduce((a, s) => a + levels[s - 1], 0) <= 155) return `team ${pick.join('')}`;
 		}
-		return `team ${mons.map((_, i) => i + 1).slice(0, size).join('')}`;
+		const lowest = mons.map((_, i) => i + 1).sort((a, b) => levels[a - 1] - levels[b - 1]);
+		return `team ${lowest.slice(0, size).join('')}`;
 	}
 	if (req.forceSwitch) {
 		const mons = req.side.pokemon;
@@ -931,7 +973,6 @@ const stats = {
 	proofsOk: 0, proofsBad: [], proofsSkipped: 0,
 	maxThinkMs: 0, thinkMsSum: 0, thinkN: 0,
 	legalityDrift: 0, projections: 0, reconnects: 0,
-	untriggeredDrops: 0,
 };
 
 // ---------------------------------------------------------- battle driver
@@ -1309,7 +1350,7 @@ class BattleDriver {
 		// last request ourselves (the searcher re-syncs and re-chooses);
 		// if that keeps getting rejected, fall back to the always-legal
 		// `default` choice rather than stall out the battle.
-		if (line.includes('[Unavailable choice]')) return;
+		if (line.includes('[Unavailable choice]') || /nothing to choose|not your turn|already ended/i.test(line)) return;
 		if (!this.pendingReq && this.lastReq) {
 			this.errRecoveries++;
 			if (this.errRecoveries > 2) {
@@ -1508,6 +1549,12 @@ class BattleDriver {
 				if (priorText) {
 					reportPrior(
 						this.searcher.setBeliefPrior(priorText),
+						m => this.log(m)
+					);
+				}
+				if (pickPriorText) {
+					reportPickPrior(
+						this.searcher.setPickPrior(pickPriorText),
 						m => this.log(m)
 					);
 				}

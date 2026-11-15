@@ -3,7 +3,15 @@ import { PlayerChannel } from "../../crates/wasm/pkg-web/nc2000_wasm";
 // Main-thread client for the bot search worker.
 
 import type { WorkerRequest, WorkerResponse } from "./bot-worker";
-import type { BeliefInfo, PriorInfo, PriorReport, RootPolicy, PlayPolicy, ActionPolicyMode } from "./types";
+import type {
+  ActionPolicyMode,
+  BeliefInfo,
+  PickPriorReport,
+  PlayPolicy,
+  PriorInfo,
+  PriorReport,
+  RootPolicy,
+} from "./types";
 import { endgameSettings, type EndgameSettings } from "./endgame-settings";
 
 export interface SearchOutcome {
@@ -31,10 +39,12 @@ export class BotWorker {
   /** The verdict on the belief-prior table handed to `newBattle` — fires
    * once per battle that carried one, whether it was applied or refused. */
   onPriorReport?: (report: PriorReport) => void;
+  onPickPriorReport?: (report: PickPriorReport) => void;
   private pending = new Map<
     number,
     {
       resolve: (r: SearchOutcome) => void;
+      reject: (e: Error) => void;
       onProgress?: (done: number, budget: number) => void;
       resolveInput: (input: string) => string;
     }
@@ -46,6 +56,16 @@ export class BotWorker {
     });
     let onReady!: () => void;
     this.ready = new Promise<void>((r) => (onReady = r));
+    const rejectAll = (message: string) => {
+      for (const [id, p] of this.pending) {
+        this.pending.delete(id);
+        p.reject(new Error(message));
+      }
+    };
+    this.worker.onerror = (ev: ErrorEvent) => {
+      console.error("bot worker error:", ev.message);
+      rejectAll(ev.message || "Bot worker error");
+    };
     this.worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const m = e.data;
       switch (m.t) {
@@ -84,8 +104,12 @@ export class BotWorker {
         case "prior":
           this.onPriorReport?.(JSON.parse(m.report) as PriorReport);
           break;
+        case "pickPrior":
+          this.onPickPriorReport?.(JSON.parse(m.report) as PickPriorReport);
+          break;
         case "error":
           console.error("bot worker:", m.message);
+          rejectAll(m.message);
           break;
       }
     };
@@ -108,6 +132,7 @@ export class BotWorker {
       side: number;
       seed: number;
       priorJson?: string;
+      pickPriorJson?: string;
       compiledPreview?: boolean;
       endgame?: EndgameSettings;
       actionPolicy?: ActionPolicyMode;
@@ -166,7 +191,7 @@ export class BotWorker {
     onProgress?: (done: number, budget: number) => void,
   ): Promise<SearchOutcome> {
     const id = this.nextId++;
-    return new Promise<SearchOutcome>((resolve) => {
+    return new Promise<SearchOutcome>((resolve, reject) => {
       const inputs: string[] = this.mirror ? JSON.parse(this.mirror.legalChoices(side)).map((c: {input:string})=>c.input) : [];
       const key = (input: string) => input.replace(/\s/g, "").replace(/^movehiddenpower.*/, "movehiddenpower");
       const resolveInput = (input: string) => {
@@ -175,7 +200,7 @@ export class BotWorker {
         if (!canonical) throw new Error(`Cannot resolve player action: ${input}`);
         return canonical;
       };
-      this.pending.set(id, { resolve, onProgress, resolveInput });
+      this.pending.set(id, { resolve, reject, onProgress, resolveInput });
       const frame = this.mirror ? JSON.parse(this.channel!.frame(this.mirror)) : undefined;
       this.send({ t: "search", id, side, budget, seed, ponder, frame });
     });

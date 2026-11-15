@@ -60,16 +60,15 @@ The ordinary lifecycle is:
    the fork's existing resume checks.
 
 For the ordinary blind configuration, mirror `skuct_config`: use UCB,
-`c` from `data/search-profiles.json` (currently 0.4), and 16 HP buckets,
-with the other `RmConfig` defaults unchanged. Plain `RmConfig::default()`
-is not that configuration. Mirror JavaScript's unsigned 32-bit seed
-conversion before passing the value as Rust `u64`.
+`c` from `data/search-profiles.json`, and 16 HP buckets, with the other
+`RmConfig` defaults unchanged. Plain `RmConfig::default()` is not that
+configuration. Mirror JavaScript's unsigned 32-bit seed conversion before
+passing the value as Rust `u64`.
 
-Budget policy is separate from the runtime. `data/live-search.json` currently
-contains 27,000/81,000 battle iterations and 729,000 for an unknown preview.
-The CLI's selected flags may specify a different existing policy. Preserve
-that policy during migration; do not make human input timing, chunk size or
-thread scheduling change the iteration count.
+Budget policy is separate from the runtime: read production battle and unknown
+preview iteration counts from `data/live-search.json` (and honor any explicit
+CLI flags). Preserve that policy during migration; do not make human input
+timing, chunk size or thread scheduling change the iteration count.
 
 A persistent Rust subprocess with a versioned JSON-lines protocol is a
 small integration option: initialize, feed lines/request, step or search,
@@ -87,8 +86,8 @@ mix independently reindexed dex definitions inside the same worker.
 The compiled preview policy is not a generic battle-result cache. Use
 `compiled_preview::key` and its build fingerprint, and preserve the existing
 selection seed mapping. Feed the observer/request lifecycle even on a
-preview cache hit. Consult upstream's `preview-cache.html` and README API
-section before reusing the Node cache helper.
+preview cache hit. Consult upstream's `preview-cache.html` and
+`docs/PREVIEW-CACHE.md` before reusing the Node cache helper.
 
 The existing server cache binds to the actual WASM binary. A native adapter
 must use a separate, versioned identity bound to its native binary and all

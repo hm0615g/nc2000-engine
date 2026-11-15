@@ -71,6 +71,7 @@ pub use eval::EvalWeights;
 pub use exploit::BrAgent;
 pub use import::{ProtocolAgent, ProtocolTracker, Request};
 pub use mcts::{MctsAgent, MctsConfig, Playout};
+pub use pick_prior::{PickPrior, PreviewMon};
 pub use position::PositionSpec;
 pub use preview::{BakedPreviewAgent, CounterPickAgent, PreviewMode, TableSet};
 pub use prior::{BeliefPrior, SpeciesPrior};

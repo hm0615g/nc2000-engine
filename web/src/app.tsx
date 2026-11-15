@@ -47,7 +47,11 @@ import {
   parsePoolText,
   type LoadedPool,
 } from "./team-pool";
-import { loadStoredPrior, type StoredPrior } from "./belief-prior";
+import {
+  loadStoredPickPrior,
+  loadStoredPrior,
+  type StoredPrior,
+} from "./belief-prior";
 import { StartScreen } from "./select";
 import { Game } from "./game";
 import { Solver } from "./solver";
@@ -113,8 +117,13 @@ export function App() {
   const [beliefJson, setBeliefJson] = useState<string | null>(null);
   const [loc, setLoc] = useState<Locale>(locale());
   // A table the user once picked by hand; nothing here ever fetches one on
-  // its own (crates/bot/src/prior.rs:491).
-  const [prior, setPrior] = useState<StoredPrior | null>(loadStoredPrior);
+  // its own (docs/community-belief-prior-design.md).
+  const [prior, setPrior] = useState<StoredPrior | null>(
+    () => (readDrawSourceFromQuery() !== null ? null : loadStoredPrior()),
+  );
+  const [pickPrior, setPickPrior] = useState<StoredPrior | null>(
+    () => (readDrawSourceFromQuery() !== null ? null : loadStoredPickPrior()),
+  );
 
   useEffect(() => {
     void (async () => {
@@ -192,6 +201,8 @@ export function App() {
       <Solver
         pool={catalog.pool.pool}
         poolJson={beliefJson}
+        priorJson={prior?.json}
+        pickPriorJson={pickPrior?.json}
         locale={loc}
         onLocale={(l) => {
           setLocale(l);
@@ -245,6 +256,8 @@ export function App() {
         botDrawCount={activePool.pool.teams.length}
         prior={prior}
         onPrior={setPrior}
+        pickPrior={pickPrior}
+        onPickPrior={setPickPrior}
         onStart={(human, bot) => setGame({ human, bot, n: 1 })}
       />
     );
@@ -257,6 +270,7 @@ export function App() {
       humanTeam={game.human}
       botTeam={game.bot}
       priorJson={prior?.json}
+      pickPriorJson={pickPrior?.json}
       // A rematch redraws the opponent: replaying a lost battle against the
       // party you just watched play would hand the human the very
       // information blind play withholds.

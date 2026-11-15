@@ -27,20 +27,21 @@ Rapid Spin Starmie now has maximum Attack. `pb-13` Porygon2's Frustration
 happiness is corrected from 255 to 0.
 
 Prior membership, ordering, weights and source archives are preserved.
-The 221-entry prior now has exact full-set/stat support for all 33 catalog
-parties, including the same-gender low-Attack variants. The earlier Rain Dance
-witness now determinizes Zapdos HP 215 and Cloyster Speed 121 correctly.
+The current prior in `../belief-pool-v3/belief-pool.json` retains exact
+full-set/stat support for all catalog parties, including same-gender low-Attack
+variants. The earlier Rain Dance witness now determinizes Zapdos HP 215 and
+Cloyster Speed 121 correctly.
 
 Normalized fallback sources are generated into `supplemental.json` and
-`rentals.json`; `Belief` embeds these derivatives. The 40 supplemental teams
-and the same 19 legal rental teams use this policy. The nine foreign-format or
-illegal rental entries remain excluded by the existing runtime rules.
+`rentals.json`; `Belief` embeds these derivatives (including zero-prior Gen 2
+species coverage alongside `crates/bot/src/belief_supplement_v1.json`). Illegal
+or foreign-format rental entries remain excluded by existing runtime rules.
 
 ## Independent adversarial verification
 
-`verification.json` records hashes of all seven checked product files:
-33 catalog teams, 221 prior entries, the 4/17/5 current and historical draw
-mixtures, 40 supplemental teams and 19 eligible rentals: **2,034 set occurrences**.
+`verification.json` records hashes and counts of the checked product files
+(catalog teams, prior entries, current and historical draw mixtures,
+supplemental teams, and eligible rentals).
 
 The Rust checker does not call the JavaScript normalizer. It constructs real
 engine stats, validates team legality, and enumerates all **65,536 DV tuples**
@@ -83,11 +84,6 @@ cargo run --quiet -p nc2000-bot --example verify_training -- data/training-v3/ne
 
 That command is expected to exit 1. Rejected entries are evidence that the
 adversary detects the known old defects; their expectations were not weakened.
-
-`cargo test -p nc2000-bot --lib belief::` has eight pre-existing move/fallback
-test failures. The same eight failures reproduce in an isolated checkout of
-`14cf3590` before this repair; the remaining 22 pass. They are not stat-check
-failures, and this change does not rewrite those expectations.
 
 ## Preview and measurement compatibility
 

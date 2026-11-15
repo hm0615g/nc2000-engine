@@ -499,7 +499,7 @@ fn handle(
                         "opponentTeam",
                     )?;
 
-                    agent.pin_opponent(opponent);
+                    agent.pin_opponent(dex, opponent)?;
                     true
                 }
 

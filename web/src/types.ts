@@ -118,9 +118,24 @@ export interface BeliefInfo {
  * first observe(), on a pool-identified or pinned opponent, and whenever the
  * table says nothing usable about this roster — installed but governing
  * nothing is a real and reportable state. */
+/** `BlindSearcher.beliefPriorInfo()` / `ProtocolSearcher.beliefPriorInfo()` */
 export interface PriorInfo {
   installed: boolean;
   governed: boolean[];
+}
+
+export interface PickPriorReport {
+  applied: boolean;
+  rows: number;
+  teams: number;
+  smoothing: number;
+  backoffStrength: number;
+  warnings: string[];
+}
+
+export interface PickPriorInfo {
+  installed: boolean;
+  active: boolean;
 }
 
 /** `BlindSearcher.setBeliefPrior()` / `probeBeliefPrior()` — the table

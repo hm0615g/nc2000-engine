@@ -1,7 +1,10 @@
 //! The move pipeline: gen2 `runMove` → base `useMove` → gen3 `useMoveInner`
 //! → gen2stadium2 `tryMoveHit` → gen2 `moveHit` → gen2stadium2 `getDamage`.
 
-use crate::dex::{Accuracy, Category, Cb, Dex, HitEffect, MoveId, Multihit, SparseBoosts};
+use crate::dex::{
+    Accuracy, BasePowerCbKind, BeforeMoveCbKind, Category, Cb, DamageCbKind, Dex, HitEffect,
+    MoveCbOp, MoveId, Multihit, SparseBoosts,
+};
 use crate::prng::{DamageExactReason, DamageRollContext, DamageRollMode};
 use crate::state::*;
 
@@ -154,11 +157,32 @@ const TYPE_NAMES: [&str; 17] = [
     "Flying", "Ground", "Normal", "Poison", "Psychic", "Rock", "Water",
 ];
 
+#[cold]
+fn unported_damage_cb(dex: &Dex, m: MoveId) -> ! {
+    panic!("unported damageCallback: {}", dex.moves.key(m));
+}
+
+#[cold]
+fn unported_base_power_cb(dex: &Dex, m: MoveId) -> ! {
+    panic!("unported basePowerCallback: {}", dex.moves.key(m));
+}
+
+#[cold]
+fn unported_before_move_cb(dex: &Dex, m: MoveId) -> ! {
+    panic!("unported beforeMoveCallback: {}", dex.moves.key(m));
+}
+
+#[cold]
+fn unported_move_cb(dex: &Dex, m: MoveId, cb_name: &str) -> ! {
+    panic!("unported move callback: {} {cb_name}", dex.moves.key(m));
+}
+
 /// damageCallback dispatch (counter/mirrorcoat/psywave/superfang).
 fn damage_callback(b: &mut Battle, dex: &Dex, m: MoveId, source: PokeId, target: PokeId) -> DamageResult {
-    match dex.moves.key(m) {
-        "counter" | "mirrorcoat" => {
-            let want_physical = dex.moves.key(m) == "counter";
+    let kind = dex.move_static(m).damage_cb;
+    match kind {
+        DamageCbKind::Counter | DamageCbKind::MirrorCoat => {
+            let want_physical = kind == DamageCbKind::Counter;
             let Some(last) = b.get_last_attacked_by(source).cloned() else {
                 return DamageResult::False;
             };
@@ -178,16 +202,16 @@ fn damage_callback(b: &mut Battle, dex: &Dex, m: MoveId, source: PokeId, target:
             }
             DamageResult::False
         }
-        "psywave" => {
+        DamageCbKind::Psywave => {
             let level = b.poke(source).level as u32;
             let hi = level + level / 2;
             DamageResult::Damage(b.prng.random_range(1, hi) as f64)
         }
-        "superfang" => {
+        DamageCbKind::SuperFang => {
             let d = clamp_int_range(b.poke(target).hp as f64 / 2.0, Some(1.0), None);
             DamageResult::Damage(d)
         }
-        other => panic!("unported damageCallback: {other}"),
+        DamageCbKind::None => unported_damage_cb(dex, m),
     }
 }
 
@@ -200,8 +224,8 @@ fn base_power_callback(
     target: PokeId,
     base_power: i32,
 ) -> Option<i32> {
-    match dex.moves.key(m) {
-        "flail" | "reversal" => {
+    match dex.move_static(m).base_power_cb {
+        BasePowerCbKind::FlailReversal => {
             let p = b.poke(source);
             let ratio = ((p.hp as f64 * 48.0 / p.maxhp as f64).floor() as i32).max(1);
             Some(match ratio {
@@ -213,19 +237,19 @@ fn base_power_callback(
                 _ => 20,
             })
         }
-        "frustration" => {
+        BasePowerCbKind::Frustration => {
             let bp = (255 - b.poke(source).happiness as i32) * 10 / 25;
             if bp == 0 { None } else { Some(bp) }
         }
-        "return" => {
+        BasePowerCbKind::Return => {
             let bp = b.poke(source).happiness as i32 * 10 / 25;
             if bp == 0 { None } else { Some(bp) }
         }
-        "triplekick" => {
+        BasePowerCbKind::TripleKick => {
             let hit = b.active_move.as_ref().map(|am| am.hit).unwrap_or(0);
             Some(10 * hit)
         }
-        "pursuit" => {
+        BasePowerCbKind::Pursuit => {
             let t = b.poke(target);
             if t.being_called_back || t.switch_flag.is_set() {
                 Some(base_power * 2)
@@ -233,7 +257,7 @@ fn base_power_callback(
                 Some(base_power)
             }
         }
-        "beatup" => {
+        BasePowerCbKind::BeatUp => {
             let allies_len = b
                 .active_move
                 .as_ref()
@@ -242,8 +266,8 @@ fn base_power_callback(
                 .unwrap_or(0);
             if allies_len == 0 { None } else { Some(10) }
         }
-        "hiddenpower" => Some(b.poke(source).hp_power),
-        "furycutter" => {
+        BasePowerCbKind::HiddenPower => Some(b.poke(source).hp_power),
+        BasePowerCbKind::FuryCutter => {
             let fc = crate::cond_id!(dex, "furycutter").unwrap();
             let hit = b.active_move.as_ref().map(|am| am.hit).unwrap_or(0);
             if !b.poke(source).has_volatile(fc) || hit == 1 {
@@ -252,7 +276,7 @@ fn base_power_callback(
             let mult = b.poke(source).volatile(fc).map(|v| v.get_int(crate::state::DK::Multiplier)).unwrap_or(1);
             Some(clamp_int_range(base_power as f64 * mult as f64, Some(1.0), Some(160.0)) as i32)
         }
-        "rollout" => {
+        BasePowerCbKind::Rollout => {
             let ro = crate::cond_id!(dex, "rollout").unwrap();
             let dc = crate::cond_id!(dex, "defensecurl").unwrap();
             let mut bp = base_power as i64;
@@ -279,7 +303,7 @@ fn base_power_callback(
             }
             Some(bp as i32)
         }
-        other => panic!("unported basePowerCallback: {other}"),
+        BasePowerCbKind::None => unported_base_power_cb(dex, m),
     }
 }
 
@@ -291,13 +315,72 @@ fn before_move_callback(
     pokemon: PokeId,
     _target: Option<PokeId>,
 ) -> bool {
-    match dex.moves.key(m) {
-        "bide" => {
+    match dex.move_static(m).before_move_cb {
+        BeforeMoveCbKind::Bide => {
             let bide = crate::cond_id!(dex, "bide").unwrap();
             b.poke(pokemon).has_volatile(bide)
         }
-        other => panic!("unported beforeMoveCallback: {other}"),
+        BeforeMoveCbKind::None => unported_before_move_cb(dex, m),
     }
+}
+
+fn charge_try_move(
+    b: &mut Battle,
+    dex: &Dex,
+    m: MoveId,
+    target: EvTarget,
+    source: Option<PokeId>,
+    is_skullbash: bool,
+    is_solarbeam: bool,
+) -> RV {
+    let attacker = target.poke().unwrap();
+    if b.remove_volatile(dex, attacker, dex.moves.key(m)) {
+        return RV::Undef;
+    }
+    let ps = b.poke_str(attacker);
+    let move_name = dex.move_static(m).name.clone();
+    let move_eff = EffectHandle::MoveEff(m);
+    b.add(&["-prepare", &ps, &move_name]);
+    if is_skullbash {
+        b.boost(dex, &[(1, 1)], Some(attacker), Some(attacker), move_eff);
+    }
+    if is_solarbeam {
+        let w = b.effective_weather(attacker);
+        if w.is_some() && w == crate::cond_id!(dex, "sunnyday") {
+            b.attr_last_move(&["[still]"]);
+            let ps = b.poke_str(attacker);
+            let defender_str = source.map(|d| b.poke_str(d)).unwrap_or_default();
+            b.add_move(&["-anim", &ps, &move_name, &defender_str]);
+            return RV::Undef;
+        }
+    }
+    if !b
+        .run_event(dex, &ev::ChargeMove, EvTarget::Poke(attacker), source, move_eff, None, false, false)
+        .truthy()
+    {
+        return RV::Undef;
+    }
+    b.add_volatile(dex, attacker, "twoturnmove", source, EffectHandle::None);
+    RV::Null
+}
+
+/// Dispatch sub-block callbacks (`secondary.onHit` / `self.onHit`) via dense opcode.
+pub fn dispatch_sub_move_callback(
+    b: &mut Battle,
+    dex: &Dex,
+    m: MoveId,
+    is_self: bool,
+    target: EvTarget,
+    source: Option<PokeId>,
+    relay: RV,
+) -> RV {
+    let md = dex.move_static(m);
+    let op = if is_self { md.self_on_hit_op } else { md.secondary_on_hit_op };
+    if op == MoveCbOp::Unported {
+        let name = if is_self { "self.onHit" } else { "secondary.onHit" };
+        unported_move_cb(dex, m, name);
+    }
+    exec_move_cb_op(b, dex, m, op, target, source, relay)
 }
 
 /// Dispatch a move's own callbacks used as effect handlers.
@@ -305,23 +388,38 @@ pub fn dispatch_move_callback(
     b: &mut Battle,
     dex: &Dex,
     m: MoveId,
-    callback_name: &str,
+    cb: Cb,
     target: EvTarget,
     source: Option<PokeId>,
     relay: RV,
 ) -> RV {
-    let key = dex.moves.key(m);
+    let op = dex.move_static(m).cb_ops[cb.0 as usize];
+    if op == MoveCbOp::Unported {
+        unported_move_cb(dex, m, dex.cb_key(cb));
+    }
+    exec_move_cb_op(b, dex, m, op, target, source, relay)
+}
+
+fn exec_move_cb_op(
+    b: &mut Battle,
+    dex: &Dex,
+    m: MoveId,
+    op: MoveCbOp,
+    target: EvTarget,
+    source: Option<PokeId>,
+    relay: RV,
+) -> RV {
     let move_eff = EffectHandle::MoveEff(m);
     let tpoke = target.poke();
-    match (key, callback_name) {
+    match op {
         // ---------------------------------------------------- onModifyMove
-        ("struggle", "onModifyMove") => {
+        MoveCbOp::StruggleModifyMove => {
             if let Some(am) = b.active_move.as_mut() {
                 am.move_type = dex.known_types.unknown;
             }
             RV::Undef
         }
-        ("thunder", "onModifyMove") => {
+        MoveCbOp::ThunderModifyMove => {
             // target?.effectiveWeather() — the foe (= the event's source)
             let weather = source.and_then(|t| b.effective_weather(t));
             let rain = weather.is_some() && weather == crate::cond_id!(dex, "raindance");
@@ -335,19 +433,17 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("hiddenpower", "onModifyMove") => {
+        MoveCbOp::HiddenPowerModifyMove => {
             let user = tpoke.unwrap();
             let hp_type = b.poke(user).hp_type;
-            const SPECIAL: [&str; 8] =
-                ["Fire", "Water", "Grass", "Ice", "Electric", "Dark", "Psychic", "Dragon"];
-            let special = SPECIAL.contains(&dex.type_name(hp_type));
+            let special = (hp_type.0 as u32) < 32 && (dex.special_type_mask & (1u32 << hp_type.0)) != 0;
             if let Some(am) = b.active_move.as_mut() {
                 am.move_type = hp_type;
                 am.category = if special { Category::Special } else { Category::Physical };
             }
             RV::Undef
         }
-        ("curse", "onModifyMove") => {
+        MoveCbOp::CurseModifyMove => {
             let user = tpoke.unwrap();
             if !b.poke(user).has_type(dex.known_types.ghost) {
                 let non_ghost = b
@@ -381,7 +477,7 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("magnitude", "onModifyMove") => {
+        MoveCbOp::MagnitudeModifyMove => {
             const MAGS: [(i64, i32); 7] =
                 [(4, 10), (5, 30), (6, 50), (7, 70), (8, 90), (9, 110), (10, 150)];
             let (mag, bp) = MAGS[b.prng.random_bucketed(100, &[5, 15, 35, 65, 85, 95, 100])];
@@ -391,7 +487,7 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("present", "onModifyMove") => {
+        MoveCbOp::PresentModifyMove => {
             let bucket = b.prng.random_bucketed(10, &[2, 6, 9, 10]);
             if let Some(am) = b.active_move.as_mut() {
                 match bucket {
@@ -406,7 +502,7 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("beatup", "onModifyMove") => {
+        MoveCbOp::BeatUpModifyMove => {
             let user = tpoke.unwrap();
             let side = &b.sides[user.side as usize];
             let allies: Vec<PokeId> = side
@@ -423,7 +519,7 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("rollout", "onModifyMove") => {
+        MoveCbOp::RolloutModifyMove => {
             let user = tpoke.unwrap();
             let ro = crate::cond_id!(dex, "rollout").unwrap();
             if b.poke(user).has_volatile(ro) || b.poke(user).status == Status::Slp || source.is_none()
@@ -441,7 +537,7 @@ pub fn dispatch_move_callback(
             RV::Undef
         }
         // ------------------------------------------------ onUseMoveMessage
-        ("magnitude", "onUseMoveMessage") => {
+        MoveCbOp::MagnitudeUseMoveMessage => {
             let user = tpoke.unwrap();
             let ps = b.poke_str(user);
             let mag = b.active_move.as_ref().and_then(|am| am.magnitude).unwrap_or(0);
@@ -450,53 +546,23 @@ pub fn dispatch_move_callback(
             RV::Undef
         }
         // ------------------------------------------------------ onTryMove (charge)
-        ("dig", "onTryMove") | ("fly", "onTryMove") | ("razorwind", "onTryMove")
-        | ("skullbash", "onTryMove") | ("skyattack", "onTryMove") | ("solarbeam", "onTryMove") => {
-            let attacker = tpoke.unwrap();
-            if b.remove_volatile(dex, attacker, &key) {
-                return RV::Undef;
-            }
-            let ps = b.poke_str(attacker);
-            let move_name = dex.move_static(m).name.clone();
-            b.add(&["-prepare", &ps, &move_name]);
-            if key == "skullbash" {
-                b.boost(dex, &[(1, 1)], Some(attacker), Some(attacker), move_eff);
-            }
-            if key == "solarbeam" {
-                let w = b.effective_weather(attacker);
-                if w.is_some() && w == crate::cond_id!(dex, "sunnyday") {
-                    b.attr_last_move(&["[still]"]);
-                    let ps = b.poke_str(attacker);
-                    let defender_str = source.map(|d| b.poke_str(d)).unwrap_or_default();
-                    b.add_move(&["-anim", &ps, &move_name, &defender_str]);
-                    return RV::Undef;
-                }
-            }
-            if !b
-                .run_event(dex, &ev::ChargeMove, EvTarget::Poke(attacker), source, move_eff, None, false, false)
-                .truthy()
-            {
-                return RV::Undef;
-            }
-            b.add_volatile(dex, attacker, "twoturnmove", source, EffectHandle::None);
-            RV::Null
-        }
+        MoveCbOp::ChargeTryMove => charge_try_move(b, dex, m, target, source, false, false),
+        MoveCbOp::SkullBashTryMove => charge_try_move(b, dex, m, target, source, true, false),
+        MoveCbOp::SolarBeamTryMove => charge_try_move(b, dex, m, target, source, false, true),
         // ---------------------------------------------------- onPrepareHit
-        ("dig", "onPrepareHit") | ("fly", "onPrepareHit") | ("razorwind", "onPrepareHit")
-        | ("skullbash", "onPrepareHit") | ("skyattack", "onPrepareHit")
-        | ("solarbeam", "onPrepareHit") => {
+        MoveCbOp::ChargePrepareHit => {
             // (target, source): source = the attacker
             let attacker = source.unwrap();
             RV::from_bool(b.poke(attacker).status != Status::Slp)
         }
-        ("protect", "onPrepareHit") | ("detect", "onPrepareHit") | ("endure", "onPrepareHit") => {
+        MoveCbOp::ProtectDetectEndurePrepareHit => {
             let user = tpoke.unwrap();
             if !b.queue_will_act() {
                 return RV::False;
             }
             b.run_event(dex, &ev::StallMove, EvTarget::Poke(user), None, EffectHandle::None, None, false, false)
         }
-        ("destinybond", "onPrepareHit") | ("perishsong", "onPrepareHit") => {
+        MoveCbOp::DestinyPerishPrepareHit => {
             let user = tpoke.unwrap();
             if b.sides[user.side as usize].pokemon_left == 1 {
                 let name = dex.move_static(m).name.clone();
@@ -509,7 +575,7 @@ pub fn dispatch_move_callback(
             RV::Undef
         }
         // ----------------------------------------------------------- onTry
-        ("rest", "onTry") => {
+        MoveCbOp::RestTry => {
             let user = tpoke.unwrap();
             if b.poke(user).hp < b.poke(user).maxhp {
                 return RV::Undef;
@@ -518,13 +584,13 @@ pub fn dispatch_move_callback(
             b.add(&["-fail", &ps]);
             RV::Null
         }
-        ("sleeptalk", "onTry") | ("snore", "onTry") => {
+        MoveCbOp::SleepTalkSnoreTry => {
             let user = tpoke.unwrap();
             RV::from_bool(b.poke(user).status == Status::Slp)
         }
-        ("splash", "onTry") => RV::Undef, // gravity: no such pseudo-weather in gen2
-        ("teleport", "onTry") => RV::False, // data constant `onTry: false`
-        ("futuresight", "onTry") => {
+        MoveCbOp::NoopTry => RV::Undef, // gravity: no such pseudo-weather in gen2
+        MoveCbOp::FalseTry => RV::False, // data constant `onTry: false`
+        MoveCbOp::FutureSightTry => {
             let user = tpoke.unwrap();
             let foe = source.unwrap();
             if !b.add_slot_condition(dex, foe, "futuremove", Some(user), move_eff).truthy() {
@@ -555,7 +621,7 @@ pub fn dispatch_move_callback(
             RV::Null
         }
         // -------------------------------------------------------- onTryHit
-        ("substitute", "onTryHit") => {
+        MoveCbOp::SubstituteTryHit => {
             let user = tpoke.unwrap();
             let sub = crate::cond_id!(dex, "substitute").unwrap();
             if b.poke(user).has_volatile(sub) {
@@ -570,7 +636,7 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("curse", "onTryHit") => {
+        MoveCbOp::CurseTryHit => {
             let user = source.unwrap();
             let t = tpoke.unwrap();
             if !b.poke(user).has_type(dex.known_types.ghost) {
@@ -591,7 +657,7 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("disable", "onTryHit") => {
+        MoveCbOp::DisableTryHit => {
             let t = tpoke.unwrap();
             match b.poke(t).last_move {
                 None => RV::False,
@@ -599,7 +665,7 @@ pub fn dispatch_move_callback(
                 _ => RV::Undef,
             }
         }
-        ("foresight", "onTryHit") => {
+        MoveCbOp::ForesightTryHit => {
             let t = tpoke.unwrap();
             let fs = crate::cond_id!(dex, "foresight").unwrap();
             if b.poke(t).has_volatile(fs) {
@@ -607,7 +673,7 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("lockon", "onTryHit") | ("mindreader", "onTryHit") => {
+        MoveCbOp::LockOnTryHit => {
             let t = tpoke.unwrap();
             let fs = crate::cond_id!(dex, "foresight").unwrap();
             let lo = crate::cond_id!(dex, "lockon").unwrap();
@@ -616,7 +682,7 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("roar", "onTryHit") | ("whirlwind", "onTryHit") => {
+        MoveCbOp::RoarTryHit => {
             for action in &b.queue {
                 match &action.choice {
                     ActionKind::Move { .. } => return RV::False,
@@ -626,11 +692,11 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("splash", "onTryHit") => {
+        MoveCbOp::SplashTryHit => {
             b.add(&["-nothing"]);
             RV::Undef
         }
-        ("swagger", "onTryHit") => {
+        MoveCbOp::SwaggerTryHit => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
             if b.poke(t).boosts[0] >= 6 || b.get_stat(dex, t, 0, false, true, false) == 999 {
@@ -640,7 +706,7 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("sleeptalk", "onTryHit") => {
+        MoveCbOp::SleepTalkTryHit => {
             let user = tpoke.unwrap();
             let cl = crate::cond_id!(dex, "choicelock");
             let en = crate::cond_id!(dex, "encore").unwrap();
@@ -649,24 +715,24 @@ pub fn dispatch_move_callback(
             RV::from_bool(!locked)
         }
         // --------------------------------------------------- onTryImmunity
-        ("attract", "onTryImmunity") => {
+        MoveCbOp::AttractTryImmunity => {
             let t = tpoke.unwrap();
             let s = source.unwrap();
             let tg = b.poke(t).gender;
             let sg = b.poke(s).gender;
             RV::from_bool((tg == Gender::M && sg == Gender::F) || (tg == Gender::F && sg == Gender::M))
         }
-        ("dreameater", "onTryImmunity") => {
+        MoveCbOp::DreamEaterTryImmunity => {
             let t = tpoke.unwrap();
             let sub = crate::cond_id!(dex, "substitute").unwrap();
             RV::from_bool(b.poke(t).status == Status::Slp && !b.poke(t).has_volatile(sub))
         }
-        ("leechseed", "onTryImmunity") => {
+        MoveCbOp::LeechSeedTryImmunity => {
             let t = tpoke.unwrap();
             RV::from_bool(!b.poke(t).has_type(dex.known_types.grass))
         }
         // ------------------------------------------------------ onMoveFail
-        ("highjumpkick", "onMoveFail") | ("jumpkick", "onMoveFail") => {
+        MoveCbOp::HighJumpKickMoveFail => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
             if b.run_type_immunity(dex, t, dex.known_types.fighting) {
@@ -679,20 +745,20 @@ pub fn dispatch_move_callback(
                 let d = match damage {
                     DamageResult::Damage(d) => d,
                     DamageResult::Zero => 0.0,
-                    _ => panic!("Couldn't get {key} recoil"),
+                    _ => panic!("Couldn't get {} recoil", dex.moves.key(m)),
                 };
                 let amount = clamp_int_range(d / 8.0, Some(1.0), None);
                 b.damage(dex, amount, Some(user), Some(user), DamageEffect::Effect(move_eff), false);
             }
             RV::Undef
         }
-        ("outrage", "onMoveFail") | ("petaldance", "onMoveFail") | ("thrash", "onMoveFail") => {
+        MoveCbOp::OutrageMoveFail => {
             let user = source.unwrap();
             b.add_volatile(dex, user, "lockedmove", None, EffectHandle::None);
             RV::Undef
         }
         // ---------------------------------------------------------- onDamage
-        ("falseswipe", "onDamage") => {
+        MoveCbOp::FalseSwipeDamage => {
             let t = tpoke.unwrap();
             let damage = relay.as_num();
             if damage >= b.poke(t).hp as f64 {
@@ -701,7 +767,7 @@ pub fn dispatch_move_callback(
             RV::Undef
         }
         // ------------------------------------------------------ onHitField
-        ("haze", "onHitField") => {
+        MoveCbOp::HazeHitField => {
             b.add(&["-clearallboost"]);
             for id in b.get_all_active(false) {
                 b.poke_mut(id).boosts = [0; 7];
@@ -710,7 +776,7 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("perishsong", "onHitField") => {
+        MoveCbOp::PerishSongHitField => {
             let user = source.unwrap();
             let mut result = false;
             let mut message = false;
@@ -743,14 +809,14 @@ pub fn dispatch_move_callback(
             RV::Undef
         }
         // ------------------------------------------------------------ onHit
-        ("substitute", "onHit") => {
+        MoveCbOp::SubstituteHit => {
             // base onHit: directDamage(target.maxhp / 4) — the sub's HP cost.
             let t = tpoke.unwrap();
             let maxhp = b.poke(t).maxhp as f64;
             b.direct_damage(dex, maxhp / 4.0, Some(t), None, EffectHandle::None);
             RV::Undef
         }
-        ("bellydrum", "onHit") => {
+        MoveCbOp::BellyDrumHit => {
             let t = tpoke.unwrap();
             if b.poke(t).boosts[0] >= 6 || b.poke(t).hp as f64 <= b.poke(t).maxhp as f64 / 2.0 {
                 return RV::False;
@@ -780,7 +846,7 @@ pub fn dispatch_move_callback(
             b.boost(dex, &[(0, boosts)], None, None, EffectHandle::None);
             RV::Undef
         }
-        ("conversion", "onHit") => {
+        MoveCbOp::ConversionHit => {
             let t = tpoke.unwrap();
             let mut possible: Vec<crate::dex::TypeId> = Vec::new();
             for slot in b.poke(t).move_slots {
@@ -798,7 +864,7 @@ pub fn dispatch_move_callback(
             b.add(&["-start", &ts, "typechange", dex.type_name(ty)]);
             RV::Undef
         }
-        ("conversion2", "onHit") => {
+        MoveCbOp::Conversion2Hit => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
             let Some(last) = b.poke(t).last_move else { return RV::False };
@@ -824,12 +890,12 @@ pub fn dispatch_move_callback(
             b.add(&["-start", &us, "typechange", dex.type_name(ty)]);
             RV::Undef
         }
-        ("detect", "onHit") | ("protect", "onHit") | ("endure", "onHit") => {
+        MoveCbOp::ProtectDetectEndureHit => {
             let t = tpoke.unwrap();
             b.add_volatile(dex, t, "stall", None, EffectHandle::None);
             RV::Undef
         }
-        ("healbell", "onHit") => {
+        MoveCbOp::HealBellHit => {
             let user = source.unwrap();
             let us = b.poke_str(user);
             b.add(&["-cureteam", &us, "[from] move: Heal Bell"]);
@@ -841,7 +907,7 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("lockon", "onHit") | ("mindreader", "onHit") => {
+        MoveCbOp::LockOnHit => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
             b.add_volatile(dex, user, "lockon", Some(t), EffectHandle::None);
@@ -851,12 +917,12 @@ pub fn dispatch_move_callback(
             b.add(&["-activate", &us, &name, &of]);
             RV::Undef
         }
-        ("meanlook", "onHit") | ("spiderweb", "onHit") => {
+        MoveCbOp::MeanLookHit => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
             b.add_volatile_linked(dex, t, "trapped", Some(user), move_eff, "trapper")
         }
-        ("metronome", "onHit") => {
+        MoveCbOp::MetronomeHit => {
             let user = tpoke.unwrap();
             let own: Vec<MoveId> = b.poke(user).move_slots.iter().map(|s| s.id).collect();
             let mut pool: Vec<(i32, MoveId)> = Vec::new();
@@ -872,10 +938,14 @@ pub fn dispatch_move_callback(
                 return RV::False;
             }
             let pick = pool[b.prng.sample_index(pool.len())].1;
+            let saved = (b.active_move.take(), b.active_pokemon, b.active_target);
             b.use_move(dex, pick, user, None, None);
+            b.active_move = saved.0;
+            b.active_pokemon = saved.1;
+            b.active_target = saved.2;
             RV::Undef
         }
-        ("mimic", "onHit") => {
+        MoveCbOp::MimicHit => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
             let sub = crate::cond_id!(dex, "substitute").unwrap();
@@ -911,7 +981,7 @@ pub fn dispatch_move_callback(
             b.add(&["-activate", &us, "move: Mimic", &name]);
             RV::Undef
         }
-        ("mirrormove", "onHit") => {
+        MoveCbOp::MirrorMoveHit => {
             let user = tpoke.unwrap();
             const NO_MIRROR: [&str; 6] =
                 ["metronome", "mimic", "mirrormove", "sketch", "sleeptalk", "transform"];
@@ -922,10 +992,14 @@ pub fn dispatch_move_callback(
             if NO_MIRROR.contains(&last_key) || own.contains(&last) {
                 return RV::False;
             }
+            let saved = (b.active_move.take(), b.active_pokemon, b.active_target);
             b.use_move(dex, last, user, None, None);
+            b.active_move = saved.0;
+            b.active_pokemon = saved.1;
+            b.active_target = saved.2;
             RV::Undef
         }
-        ("moonlight", "onHit") | ("morningsun", "onHit") | ("synthesis", "onHit") => {
+        MoveCbOp::MoonlightHit => {
             let t = tpoke.unwrap();
             let w = b.effective_weather(t);
             let amount = if w.is_some() && w == crate::cond_id!(dex, "sunnyday") {
@@ -940,7 +1014,7 @@ pub fn dispatch_move_callback(
             b.heal(dex, amount, None, None, super::dmg::HealEffect::Effect(EffectHandle::None));
             RV::Undef
         }
-        ("painsplit", "onHit") => {
+        MoveCbOp::PainSplitHit => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
             let target_hp = b.poke(t).hp;
@@ -966,11 +1040,11 @@ pub fn dispatch_move_callback(
             );
             RV::Undef
         }
-        ("payday", "onHit") => {
+        MoveCbOp::PayDayHit => {
             b.add(&["-fieldactivate", "move: Pay Day"]);
             RV::Undef
         }
-        ("psychup", "onHit") => {
+        MoveCbOp::PsychUpHit => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
             let boosts = b.poke(t).boosts;
@@ -980,7 +1054,7 @@ pub fn dispatch_move_callback(
             b.add(&["-copyboost", &us, &ts, "[from] move: Psych Up"]);
             RV::Undef
         }
-        ("rest", "onHit") => {
+        MoveCbOp::RestHit => {
             let t = tpoke.unwrap();
             if b.poke(t).status != Status::Slp {
                 if !b.set_status(dex, t, "slp", source, move_eff, false).truthy() {
@@ -1000,11 +1074,11 @@ pub fn dispatch_move_callback(
             b.heal(dex, maxhp, None, None, super::dmg::HealEffect::Effect(EffectHandle::None));
             RV::Undef
         }
-        ("sketch", "onHit") => {
+        MoveCbOp::SketchHit => {
             b.add(&["-nothing"]);
             RV::Undef
         }
-        ("sleeptalk", "onHit") => {
+        MoveCbOp::SleepTalkHit => {
             let user = tpoke.unwrap();
             let mut moves: Vec<MoveId> = Vec::new();
             for slot in &b.poke(user).move_slots {
@@ -1017,10 +1091,14 @@ pub fn dispatch_move_callback(
                 return RV::False;
             }
             let pick = moves[b.prng.sample_index(moves.len())];
+            let saved = (b.active_move.take(), b.active_pokemon, b.active_target);
             b.use_move(dex, pick, user, None, None);
+            b.active_move = saved.0;
+            b.active_pokemon = saved.1;
+            b.active_target = saved.2;
             RV::Undef
         }
-        ("spite", "onHit") => {
+        MoveCbOp::SpiteHit => {
             let t = tpoke.unwrap();
             let roll = b.prng.random_range(2, 6) as i32;
             if let Some(last) = b.poke(t).last_move {
@@ -1034,12 +1112,12 @@ pub fn dispatch_move_callback(
             }
             RV::False
         }
-        ("transform", "onHit") => {
+        MoveCbOp::TransformHit => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
             RV::from_bool(b.transform_into(dex, user, t))
         }
-        ("triattack", "onHit") => {
+        MoveCbOp::TriAttackHit => {
             const STATUSES: [&str; 3] = ["par", "frz", "brn"];
             let pick = STATUSES[b.prng.sample_index(3)];
             if let Some(am) = b.active_move.as_mut() {
@@ -1047,7 +1125,7 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("batonpass", "onHit") => {
+        MoveCbOp::BatonPassHit => {
             let t = tpoke.unwrap();
             if !b.can_switch(t.side) {
                 b.attr_last_move(&["[still]"]);
@@ -1057,19 +1135,19 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("furycutter", "onHit") => {
+        MoveCbOp::FuryCutterHit => {
             let user = source.unwrap();
             b.add_volatile(dex, user, "furycutter", None, EffectHandle::None);
             RV::Undef
         }
-        ("curse", "onHit") => {
+        MoveCbOp::CurseHit => {
             let user = source.unwrap();
             let maxhp = b.poke(user).maxhp as f64;
             b.direct_damage(dex, maxhp / 2.0, Some(user), Some(user), EffectHandle::None);
             RV::Undef
         }
         // ----------------------------------------------- sub-block onHit
-        ("thief", "secondary.onHit") => {
+        MoveCbOp::ThiefSecondaryOnHit => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
             if b.poke(user).item.is_some() {
@@ -1087,7 +1165,7 @@ pub fn dispatch_move_callback(
             b.add(&["-item", &us, &item_name, "[from] move: Thief", &of]);
             RV::Undef
         }
-        ("triattack", "secondary.onHit") => {
+        MoveCbOp::TriAttackSecondaryOnHit => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
             let roll = b.active_move.as_ref().and_then(|am| am.status_roll);
@@ -1096,27 +1174,27 @@ pub fn dispatch_move_callback(
             }
             RV::Undef
         }
-        ("rapidspin", "self.onHit") => {
+        MoveCbOp::RapidSpinSelfOnHit => {
             let user = tpoke.unwrap();
             rapid_spin_cleanup(b, dex, user);
             RV::Undef
         }
-        ("batonpass", "self.onHit") => {
+        MoveCbOp::BatonPassSelfOnHit => {
             let user = tpoke.unwrap();
             b.poke_mut(user).skip_before_switch_out = true;
             RV::Undef
         }
-        ("rapidspin", "onAfterHit") => {
+        MoveCbOp::RapidSpinAfterHit => {
             let user = source.unwrap();
             rapid_spin_cleanup(b, dex, user);
             RV::Undef
         }
-        ("rollout", "onAfterMove") => {
+        MoveCbOp::RolloutAfterMove => {
             // rolloutstorage transfer: hitCount==5 && contactHitCount<5 is
             // unreachable in gen2 (both counters increment together).
             RV::Undef
         }
-        _ => panic!("unported move callback: {key} {callback_name}"),
+        MoveCbOp::Unported => unreachable!("unported move callback checked by caller"),
     }
 }
 
@@ -1255,9 +1333,7 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
         // Hit event; no self/secondaries/forceSwitch.
         let mut cur_target = Some(target);
         let rv = b.run_event(dex, &ev::TryPrimaryHit, EvTarget::Poke(target), Some(source), move_eff, None, false, false);
-        if rv == RV::Num(0.0) {
-            cur_target = None;
-        } else if !rv.truthy() {
+        if !rv.truthy() {
             cur_target = None;
         }
         let mut dealt: Option<f64> = None;
@@ -1359,10 +1435,9 @@ impl Battle {
         }
         let is_self = target_loc == -1;
         let is_foe = target_loc == 1;
-        let is_adjacent = is_foe || (is_self && false) || target_loc == -1 && false;
         // singles: adjacency = the foe slot only (|loc| == 1, loc != selfLoc);
         // selfLoc is -1, so isAdjacent === (targetLoc == 1).
-        let is_adjacent = is_adjacent || target_loc == 1;
+        let is_adjacent = is_foe;
         match target_type {
             "randomNormal" | "scripted" | "normal" => is_adjacent,
             "adjacentAlly" => is_adjacent && !is_foe,
@@ -1514,9 +1589,7 @@ impl Battle {
             None,
         );
         // gen2: if !move.selfSwitch && foe active has hp → AfterMoveSelf
-        let self_switch = self.active_move.as_ref().and_then(|m| m.self_switch.clone());
         let move_self_switch = dex.move_static(move_id).self_switch.is_some();
-        let _ = self_switch;
         let foe_hp = self
             .active_id(1 - pokemon.side as usize)
             .map(|f| self.poke(f).hp > 0)
@@ -1666,13 +1739,6 @@ impl Battle {
             move_eff,
             None,
         );
-
-        {
-            let am = self.active_move.as_mut().unwrap();
-            // (data always carries an explicit bool; PS's undefined-default
-            // logic resolved at export time)
-            let _ = &am.ignore_immunity;
-        }
 
         // gen3: selfdestruct === 'always' faints the user up front (the
         // stadium2 tryMoveHit faint below is then a no-op; side.lastMove
@@ -2319,7 +2385,6 @@ impl Battle {
                     MoveHitData::Sub(h) if h.has_on_hit => {
                         // singleEvent('Hit', subBlock, ...) — dispatch by the
                         // owning move + block kind.
-                        let name = if is_self { "self.onHit" } else { "secondary.onHit" };
                         self.effect_stack.push(EffectFrame { effect: move_eff, state: StateLoc::None });
                         self.event_stack.push(EventFrame {
                             id: "Hit",
@@ -2329,11 +2394,11 @@ impl Battle {
                             modifier: 1.0,
                         });
                         self.event_depth += 1;
-                        let r = dispatch_move_callback(
+                        let r = dispatch_sub_move_callback(
                             self,
                             dex,
                             move_id.unwrap(),
-                            name,
+                            is_self,
                             EvTarget::Poke(t),
                             Some(pokemon),
                             RV::True,
@@ -2492,95 +2557,10 @@ impl Battle {
     // ---------------------------------------------------------- getDamage
 
     /// Semantic information used by the experimental damage-roll quotient.
-    /// Mechanics which can later observe numeric damage can retain exact
-    /// rolls; the remaining thresholds describe predicates that change at a
-    /// small number of meaningful post-hit HP values.
-    fn damage_roll_context(
-        &self,
-        dex: &Dex,
-        target: PokeId,
-        mode: DamageRollMode,
-    ) -> DamageRollContext {
+    /// Mechanics which can later observe numeric damage retain exact rolls
+    /// even when `DamageRollMode::Mean` merges remaining rolls.
+    fn damage_roll_context(&self, dex: &Dex, target: PokeId) -> DamageRollContext {
         let p = self.poke(target);
-        let maxhp = p.maxhp.max(1);
-        let lean = matches!(
-            mode,
-            DamageRollMode::ThresholdLean
-                | DamageRollMode::ThresholdLeanNoCounter
-                | DamageRollMode::ThresholdLeanNoDrainRecoil
-                | DamageRollMode::ThresholdLeanNoMultiHit
-                | DamageRollMode::ThresholdLeanNoSubstitute
-                | DamageRollMode::ThresholdLeanMinimal
-                | DamageRollMode::ThresholdLeanMinimalLow
-                | DamageRollMode::ThresholdLeanMinimalHigh
-                | DamageRollMode::ThresholdLeanNext
-                | DamageRollMode::ThresholdLeanResidual
-                | DamageRollMode::ThresholdLeanClock
-                | DamageRollMode::ThresholdHealSplit
-                | DamageRollMode::ThresholdHeal
-        );
-        let mut thresholds = if lean {
-            vec![0]
-        } else {
-            // Baseline retained for direct comparison with the original
-            // experiment. The lean modes below require an observable cause.
-            vec![0, maxhp / 4, maxhp / 3, maxhp / 2]
-        };
-
-        let usable_move = |name: &str| {
-            p.move_slots.iter().any(|slot| slot.pp > 0 && dex.moves.key(slot.id) == name)
-        };
-        if lean {
-            if usable_move("substitute") {
-                thresholds.push(maxhp / 4);
-            }
-            if usable_move("bellydrum") {
-                thresholds.push(maxhp / 2);
-            }
-            if p.item.is_some_and(|item| {
-                matches!(dex.items.key(item), "berry" | "goldberry" | "berryjuice")
-            }) {
-                thresholds.push(maxhp / 2);
-            }
-        }
-
-        // Flail/Reversal's six base-power bands. Only add them when the
-        // damaged Pokemon can actually make the predicate observable.
-        let has_hp_power_move = p
-            .move_slots
-            .iter()
-            .any(|slot| slot.pp > 0 && matches!(dex.moves.key(slot.id), "flail" | "reversal"));
-        if has_hp_power_move {
-            for ratio_max in [1, 4, 9, 16, 32] {
-                let numerator = (ratio_max + 1) * maxhp;
-                let boundary = (numerator + 47) / 48 - 1;
-                if boundary > 0 && boundary < maxhp {
-                    thresholds.push(boundary);
-                }
-            }
-        }
-        thresholds.sort_unstable();
-        thresholds.dedup();
-
-        // The next status tick's nominal damage. This clock is a grouping
-        // hint, not a battle-rule replacement; the engine still executes the
-        // real residual handlers on every representative state.
-        let residual_damage = if matches!(p.status, Status::Brn | Status::Psn | Status::Tox) {
-            let residual = crate::cond_id!(dex, "residualdmg");
-            if let Some(state) = residual.and_then(|id| p.volatile(id)) {
-                let counter = state.get_int(DK::Counter) as i32;
-                if p.status == Status::Tox && counter == 0 {
-                    0
-                } else {
-                    ((maxhp / 16).max(1) * counter.max(1)).max(1)
-                }
-            } else {
-                (maxhp / 8).max(1)
-            }
-        } else {
-            0
-        };
-
         let active_exact_reason = self.active_move.as_ref().and_then(|mv| {
             if mv.multihit.is_some() {
                 Some(DamageExactReason::MultiHit)
@@ -2594,66 +2574,13 @@ impl Battle {
         let has_damage_callback = p.move_slots.iter().any(|slot| {
             slot.pp > 0 && matches!(dex.moves.key(slot.id), "counter" | "mirrorcoat" | "bide")
         }) || crate::cond_id!(dex, "bide").is_some_and(|id| p.has_volatile(id));
-        let has_heal_move = p.move_slots.iter().any(|slot| {
-            slot.pp > 0
-                && matches!(
-                    dex.moves.key(slot.id),
-                    "rest"
-                        | "recover"
-                        | "softboiled"
-                        | "milkdrink"
-                        | "moonlight"
-                        | "morningsun"
-                        | "synthesis"
-                )
-        });
-        let heal_sensitive =
-            mode == DamageRollMode::ThresholdHeal && p.hp <= maxhp / 2 && has_heal_move;
-        let heal_threshold = if mode == DamageRollMode::ThresholdHealSplit && has_heal_move {
-            maxhp / 2
-        } else {
-            0
-        };
 
-        let keep_exact = |reason| match (mode, reason) {
-            (
-                DamageRollMode::ThresholdLeanMinimal
-                | DamageRollMode::ThresholdLeanMinimalLow
-                | DamageRollMode::ThresholdLeanMinimalHigh,
-                _,
-            ) => false,
-            (DamageRollMode::ThresholdLeanNoCounter, DamageExactReason::CounterBide) => false,
-            (DamageRollMode::ThresholdLeanNoDrainRecoil, DamageExactReason::DrainRecoil) => false,
-            (DamageRollMode::ThresholdLeanNoMultiHit, DamageExactReason::MultiHit) => false,
-            (DamageRollMode::ThresholdLeanNoSubstitute, DamageExactReason::Substitute) => false,
-            _ => true,
-        };
         let exact_reason = active_exact_reason
-            .filter(|&reason| keep_exact(reason))
-            .or_else(|| {
-                has_substitute
-                    .then_some(DamageExactReason::Substitute)
-                    .filter(|&reason| keep_exact(reason))
-            })
-            .or_else(|| {
-                has_damage_callback
-                    .then_some(DamageExactReason::CounterBide)
-                    .filter(|&reason| keep_exact(reason))
-            })
-            .or_else(|| {
-                heal_sensitive
-                    .then_some(DamageExactReason::Heal)
-                    .filter(|&reason| keep_exact(reason))
-            })
+            .or_else(|| has_substitute.then_some(DamageExactReason::Substitute))
+            .or_else(|| has_damage_callback.then_some(DamageExactReason::CounterBide))
             .unwrap_or_default();
 
-        DamageRollContext {
-            hp: p.hp,
-            thresholds,
-            residual_damage,
-            heal_threshold,
-            exact_reason,
-        }
+        DamageRollContext { exact_reason }
     }
 
     /// gen2stadium2 getDamage on the current active move.
@@ -2922,7 +2849,7 @@ impl Battle {
         let rain = self.field.weather.is_some() && self.field.weather == crate::cond_id!(dex, "raindance");
         let sun = self.field.weather.is_some() && self.field.weather == crate::cond_id!(dex, "sunnyday");
         let kt = &dex.known_types;
-        let is_solarbeam = self.active_move.as_ref().unwrap().id.map(|m| dex.moves.key(m) == "solarbeam").unwrap_or(false);
+        let is_solarbeam = self.active_move.as_ref().unwrap().id.map(|m| dex.move_static(m).is_solarbeam).unwrap_or(false);
         if (mv_type == kt.water && rain) || (mv_type == kt.fire && sun) {
             damage = (damage * 1.5).floor();
         } else if ((mv_type == kt.fire || is_solarbeam) && rain) || (mv_type == kt.water && sun) {
@@ -2963,7 +2890,7 @@ impl Battle {
             if mode == DamageRollMode::Exact {
                 damage = self.prng.apply_damage_variance(damage);
             } else {
-                let context = self.damage_roll_context(dex, target, mode);
+                let context = self.damage_roll_context(dex, target);
                 damage = self.prng.apply_damage_variance_with_context(damage, Some(&context));
             }
         }
@@ -3076,4 +3003,94 @@ struct EffectiveMoveData {
     secondaries: smallvec::SmallVec<[HitEffect; 2]>,
     force_switch: bool,
     self_switch: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::battle::PokemonSet;
+    use crate::dex::Dex;
+    use crate::state::{Battle, Status};
+
+    fn load_dex() -> Dex {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../data/gen2stadium2.json");
+        Dex::from_json(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    fn mk(species: &str, moves: &[&str]) -> PokemonSet {
+        serde_json::from_value(serde_json::json!({
+            "name": species, "species": species, "item": "", "ability": "No Ability",
+            "moves": moves, "level": 50,
+            "evs": {"hp":255,"atk":255,"def":255,"spa":255,"spd":255,"spe":255},
+            "ivs": {"hp":30,"atk":30,"def":30,"spa":30,"spd":30,"spe":30},
+            "happiness": 255
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn nested_sleep_talk_does_not_clobber_active_move_or_emit_ohko() {
+        let dex = load_dex();
+        let p1 = vec![
+            mk("Aerodactyl", &["Horn Drill", "Slash"]),
+            mk("Snorlax", &["Double-Edge", "Sleep Talk"]),
+        ];
+        let p2 = vec![
+            mk("Snorlax", &["Sleep Talk", "Horn Drill"]),
+            mk("Jynx", &["Lovely Kiss", "Psychic"]),
+        ];
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        b.choose(&dex, 0, "team 1,2").unwrap();
+        b.choose(&dex, 1, "team 1,2").unwrap();
+        b.log.clear();
+
+        // Force P2 Snorlax asleep so Sleep Talk actually executes Horn Drill.
+        let p2_act = b.active_id(1).unwrap();
+        b.try_set_status(&dex, p2_act, "slp", None, super::EffectHandle::None);
+        b.poke_mut(p2_act).status_state.set_int(crate::state::DK::Time, 3);
+        b.poke_mut(p2_act).status_state.set_int(crate::state::DK::StartTime, 3);
+
+        // Faster Aerodactyl hits sleeping P2 Snorlax with Slash, then Snorlax uses Sleep Talk (only Horn Drill is pickable).
+        b.choose(&dex, 0, "move slash").unwrap();
+        b.choose(&dex, 1, "move sleeptalk").unwrap();
+
+        let p2_after = b.poke(p2_act);
+        assert_eq!(p2_after.times_attacked, 1, "nested Sleep Talk must not self-credit times_attacked");
+        let attackers: Vec<_> = p2_after.attacked_by.iter().map(|a| a.source).collect();
+        assert_eq!(attackers, vec![b.active_id(0).unwrap()], "get_last_attacked_by must still point to foe, not self");
+        assert!(
+            !b.log.iter().any(|l| l.starts_with("|-ohko|")),
+            "missed inner OHKO must not emit |-ohko| on outer Sleep Talk: {:?}",
+            b.log
+        );
+    }
+
+    #[test]
+    fn nested_metronome_does_not_self_credit_attacked_by() {
+        let dex = load_dex();
+        // Put Togetic (Metronome) slower than Jolteon so Jolteon hits first and Togetic retaliates with Metronome.
+        let p1 = vec![mk("Jolteon", &["Quick Attack", "Thunderbolt"])];
+        let p2 = vec![mk("Togetic", &["Metronome", "Tackle"])];
+        // Sweep a few seeds until Metronome picks a move without killing Jolteon or itself.
+        let mut checked = 0;
+        for seed in 1..20u64 {
+            let mut b = Battle::from_fixture(&dex, &format!("{seed},2,3,4"), &p1, &p2).unwrap();
+            b.choose(&dex, 0, "team 1").unwrap();
+            b.choose(&dex, 1, "team 1").unwrap();
+            b.choose(&dex, 0, "move quickattack").unwrap();
+            b.choose(&dex, 1, "move metronome").unwrap();
+            let p2_act = b.active_id(1).unwrap();
+            if b.poke(p2_act).hp > 0 {
+                let p2_after = b.poke(p2_act);
+                assert!(
+                    p2_after.attacked_by.iter().all(|a| a.source != p2_act),
+                    "nested Metronome must never attribute attack to user: {:?}",
+                    p2_after.attacked_by
+                );
+                assert_eq!(p2_after.times_attacked, 1);
+                checked += 1;
+            }
+        }
+        assert!(checked > 0);
+    }
 }

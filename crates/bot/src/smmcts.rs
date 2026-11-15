@@ -129,12 +129,7 @@ pub struct RmConfig {
     /// (`mcts::perish_combo`); implies `rollout_perish`'s escape. Shipped
     /// ON; gates and measurements in `data/perish-rollout-v1/README.md`.
     pub rollout_combo: bool,
-    pub rollout_capped_damage: bool,
-    pub rollout_residual: bool,
     pub rollout_baton_pass: bool,
-    /// M17 cluster-2 probe: replace the uniform HP grid in the node key with
-    /// a threshold-preserving class for the two ACTIVE mons. See `hp_class`.
-    pub threshold_key: bool,
     /// Drop damage-history fields from the node key. Sound only when no mon
     /// can read them (Counter/Mirror Coat); the search checks that once at
     /// construction and clears this flag if it cannot.
@@ -918,8 +913,6 @@ impl RmConfig {
             switch: self.rollout_switch,
             perish_escape: self.rollout_perish,
             perish_combo: self.rollout_combo,
-            capped_damage: self.rollout_capped_damage,
-            rollout_residual: self.rollout_residual,
             baton_pass: self.rollout_baton_pass,
             settlement: self.settlement,
         }
@@ -947,10 +940,7 @@ impl Default for RmConfig {
             rollout_switch: false,
             rollout_perish: false,
             rollout_combo: true,
-            rollout_capped_damage: false,
-            rollout_residual: false,
             rollout_baton_pass: true,
-            threshold_key: false,
             key_no_damage: false,
             mask_rules: MaskRules::default(),
             settlement: crate::accounting::LeafSettlementMode::BlindSpotLeaf,
@@ -996,19 +986,23 @@ impl Node {
         Self::build(sim, dex, false)
     }
 
-    fn build(sim: &mut Battle, dex: &Dex, collapse_sleep: bool) -> Node {
+    fn build(
+        sim: &mut Battle,
+        dex: &Dex,
+        collapse_sleep: bool,
+    ) -> Node {
         use nc2000_engine::smallvec::{smallvec, SmallVec};
         let mut acts = [SmallVec::new(), SmallVec::new()];
         sim.legal_choices_into(dex, 0, &mut acts[0]);
         sim.legal_choices_into(dex, 1, &mut acts[1]);
-        if collapse_sleep {
+        let preview = acts
+            .iter()
+            .any(|a| matches!(a.first(), Some(SearchChoice::Team(_))));
+        if collapse_sleep && !preview {
             for side in 0..2 {
                 collapse_sleep_choices_smallvec(sim, dex, side, &mut acts[side]);
             }
         }
-        let preview = acts
-            .iter()
-            .any(|a| matches!(a.first(), Some(SearchChoice::Team(_))));
         Node {
             n: [smallvec![0; acts[0].len()], smallvec![0; acts[1].len()]],
             w: [smallvec![0.0; acts[0].len()], smallvec![0.0; acts[1].len()]],
@@ -1096,7 +1090,7 @@ pub fn collapse_sleep_choices(b: &Battle, dex: &Dex, side: usize, choices: &mut 
     });
 }
 
-fn collapse_sleep_choices_smallvec(
+pub(crate) fn collapse_sleep_choices_smallvec(
     b: &Battle,
     dex: &Dex,
     side: usize,
@@ -1162,39 +1156,6 @@ impl ProbeStats {
 // `RmAgent` methods; bodies unchanged so agent behavior stays bit-identical
 // (verified by the arena sanity run in M9a).
 
-/// Number of threshold classes an active mon's HP collapses to. Kept at or
-/// below the uniform bucket count so each class lands in its own bucket when
-/// the canonical representative is hashed.
-pub(crate) const HP_CLASSES: i64 = 12;
-
-/// Which HP class an active mon is in, against the mon actually in front of it.
-///
-/// The uniform grid aliases by an arbitrary band of maxhp; what a decision
-/// turns on is **how many more hits this mon survives**. Two damage rolls that
-/// leave the same hits-to-KO are the same decision and should share a node;
-/// two HP values inside one uniform band can differ on it and must not. The
-/// second bit is whether Substitute is still affordable (a 25% cliff no
-/// uniform grid is aligned to).
-///
-/// `expected_hit_fraction` is already normalised by the defender's CURRENT hp,
-/// so its reciprocal is hits-to-KO from here.
-pub(crate) fn hp_class(b: &Battle, dex: &Dex, def: PokeId, att: Option<PokeId>) -> i64 {
-    let hits = match att {
-        Some(att) => {
-            let best = crate::eval::best_hit_fraction(b, dex, att, def, true);
-            if best <= 0.0 {
-                6
-            } else {
-                ((1.0 / best).ceil() as i64).clamp(1, 6)
-            }
-        }
-        None => 6,
-    };
-    let d = b.poke(def);
-    let can_sub = i64::from(d.hp as i64 * 4 > d.maxhp as i64);
-    (hits - 1) * 2 + can_sub
-}
-
 #[inline]
 pub(crate) fn build_search_cache(
     cfg: &RmConfig,
@@ -1209,6 +1170,29 @@ pub(crate) fn build_search_cache(
     nc2000_engine::battle::BattleSearchCache::new(b, dex, buckets, omit_damage)
 }
 
+#[inline]
+pub(crate) fn build_search_cache_with_template(
+    cfg: &RmConfig,
+    dex: &Dex,
+    b: &Battle,
+    own_side: usize,
+    template: &nc2000_engine::battle::BattleSearchCache,
+) -> nc2000_engine::battle::BattleSearchCache {
+    let (buckets, omit_damage) = if cfg.hp_buckets <= 0 {
+        (None, false)
+    } else {
+        (Some(cfg.hp_buckets), cfg.key_no_damage)
+    };
+    nc2000_engine::battle::BattleSearchCache::new_with_own_side_template(
+        b,
+        dex,
+        buckets,
+        omit_damage,
+        own_side,
+        template,
+    )
+}
+
 /// Public shim so the `key_shape` probe can hash a state the way the search
 /// does without exposing the descent internals.
 #[inline]
@@ -1216,11 +1200,33 @@ pub fn key_for_test(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
     key_of(cfg, dex, b)
 }
 
-/// Node key. With `threshold_key`, each active's HP is first canonicalised to
-/// its class representative, so the existing uniform hashing lands exactly one
-/// class per bucket; bench mons keep the uniform grid, since they are not the
-/// ones being hit and a damage estimate per bench mon would be paid on every
-/// descent step. The battle is restored before returning.
+/// Public-only check for whether damage bookkeeping (`attacked_by` / `last_damage`) can be
+/// observed by future moves, without inspecting hidden opponent movesets.
+pub(crate) fn public_damage_bookkeeping_observable(
+    b: &Battle,
+    dex: &Dex,
+    viewer_side: usize,
+) -> bool {
+    if b.sides[viewer_side].roster.iter().any(|p| {
+        p.base_move_slots
+            .iter()
+            .chain(p.move_slots.iter())
+            .any(|slot| matches!(dex.moves.key(slot.id), "counter" | "mirrorcoat"))
+    }) {
+        return true;
+    }
+    let learnsets = crate::belief::format_learnsets();
+    b.sides[1 - viewer_side].roster.iter().any(|p| {
+        let sp_key = dex.species.key(p.base_species);
+        learnsets.species(sp_key).map_or(true, |ls| {
+            ls.moves
+                .iter()
+                .any(|m| matches!(m.as_str(), "counter" | "mirrorcoat"))
+        })
+    })
+}
+
+/// Node search key over canonicalized HP buckets.
 #[inline]
 pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
     key_of_cached(cfg, dex, b, None)
@@ -1230,7 +1236,7 @@ pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
 pub(crate) fn key_of_cached(
     cfg: &RmConfig,
     dex: &Dex,
-    b: &mut Battle,
+    b: &Battle,
     cache: Option<&nc2000_engine::battle::BattleSearchCache>,
 ) -> u64 {
     let hash = |b: &Battle, buckets, omit_damage| {
@@ -1243,30 +1249,10 @@ pub(crate) fn key_of_cached(
         }
     };
     if cfg.hp_buckets <= 0 {
-        return hash(b, None, false);
+        hash(b, None, false)
+    } else {
+        hash(b, Some(cfg.hp_buckets), cfg.key_no_damage)
     }
-    if !cfg.threshold_key {
-        return hash(b, Some(cfg.hp_buckets), cfg.key_no_damage);
-    }
-    // Both classes are read before either mon is edited: Flail/Reversal make
-    // the attacker's own HP an input to its damage.
-    let ids = [0usize, 1].map(|s| b.active_id(s));
-    let classes = [0usize, 1].map(|s| ids[s].map(|id| hp_class(b, dex, id, ids[1 - s])));
-    let mut saved = [None, None];
-    for s in 0..2 {
-        if let (Some(id), Some(c)) = (ids[s], classes[s]) {
-            let slot = id.slot as usize;
-            let p = &mut b.sides[id.side as usize].roster[slot];
-            saved[s] = Some((id, p.hp));
-            p.hp = ((p.maxhp as i64 * (2 * c + 1) / (2 * HP_CLASSES)).max(1)) as i32;
-        }
-    }
-    let key = hash(b, Some(cfg.hp_buckets), cfg.key_no_damage);
-    for entry in saved.into_iter().flatten() {
-        let (id, hp) = entry;
-        b.sides[id.side as usize].roster[id.slot as usize].hp = hp;
-    }
-    key
 }
 
 /// UCB1 (untried-first, then mean + c·sqrt(ln N / n)).
@@ -1586,7 +1572,7 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
                 node_idx = child;
             }
             None => {
-                // expand exactly one node per iteration, then roll out
+                // expand exactly one node per iteration, then settle leaf
                 let child = nodes.len();
                 nodes.push(Node::continuation(sim, dex, cfg));
                 table.insert(key, child);
@@ -1605,13 +1591,6 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
             }
         }
     };
-
-    if let Some(trace) = trace {
-        trace(SearchTrace::Result {
-            battle: sim,
-            reward0,
-        });
-    }
 
     let mut path_nodes = [start; 32];
     let mut path_nodes_len = 0usize;
@@ -1640,6 +1619,12 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
     }
     for (ni, s, ai) in path_overflow {
         nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
+    }
+    if let Some(trace) = trace {
+        trace(SearchTrace::Result {
+            battle: sim,
+            reward0: root_reward0,
+        });
     }
     root_reward0
 }
@@ -2017,7 +2002,13 @@ fn faster_than_foe(b: &Battle, dex: &Dex, side: usize) -> bool {
     b.get_pokemon_action_speed(dex, me) > b.get_pokemon_action_speed(dex, foe)
 }
 
-fn foe_may_preempt_with_damage(b: &Battle, dex: &Dex, side: usize, priority: i8) -> bool {
+fn foe_may_preempt_matching(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    priority: i8,
+    damage_only: bool,
+) -> bool {
     let Some(id) = b.active_id(1 - side) else {
         return true;
     };
@@ -2033,9 +2024,18 @@ fn foe_may_preempt_with_damage(b: &Battle, dex: &Dex, side: usize, priority: i8)
     learnset.moves.iter().any(|key| {
         dex.moves.id(key).is_some_and(|id| {
             let ms = dex.move_static(id);
-            ms.priority > priority && ms.category != nc2000_engine::dex::Category::Status
+            ms.priority > priority
+                && (!damage_only || ms.category != nc2000_engine::dex::Category::Status)
         })
     })
+}
+
+fn foe_may_preempt_with_damage(b: &Battle, dex: &Dex, side: usize, priority: i8) -> bool {
+    foe_may_preempt_matching(b, dex, side, priority, true)
+}
+
+fn foe_may_preempt_with_any_move(b: &Battle, dex: &Dex, side: usize, priority: i8) -> bool {
+    foe_may_preempt_matching(b, dex, side, priority, false)
 }
 
 /// Every foe mon that could be standing there when our move resolves, other
@@ -2363,7 +2363,7 @@ fn noop_reason(
                 .conds_id("substitute")
                 .is_some_and(|sid| d.has_volatile(sid));
             verdict!(
-                d.status != Status::Slp || subbed,
+                (d.status != Status::Slp && faster_than_foe(b, dex, side)) || subbed,
                 "Dream Eater needs a sleeping, unsubstituted target"
             );
         }
@@ -2450,7 +2450,7 @@ fn noop_reason(
             };
             if no_last
                 && faster_than_foe(b, dex, side)
-                && !foe_may_preempt_with_damage(b, dex, side, ms.priority)
+                && !foe_may_preempt_with_any_move(b, dex, side, ms.priority)
             {
                 yes!("the target has not used a move yet");
             }
@@ -2491,7 +2491,7 @@ fn noop_reason(
             let stable = if v == "destinybond" {
                 !foe_can_switch(b, side)
                     && faster_than_foe(b, dex, side)
-                    && !foe_may_preempt_with_damage(b, dex, side, ms.priority)
+                    && !foe_may_preempt_with_any_move(b, dex, side, ms.priority)
             } else {
                 tgt == Some(att) || faster_than_foe(b, dex, side)
             };
@@ -2588,7 +2588,7 @@ fn noop_reason(
             // A faster foe can un-cap us first (Screech into our +6 defence
             // is the census's example), so our own stages are only fixed if we
             // act first; the foe's are covered by the switch gate above.
-            if capped && (!self_targeted || faster_than_foe(b, dex, side)) {
+            if capped && faster_than_foe(b, dex, side) {
                 yes!("every stat this move moves is already capped");
             }
         }
@@ -2727,10 +2727,9 @@ impl SkuctSearch {
     /// rollout/backprop). Returns the side-0 reward and the root joint's
     /// action indices — `RmAgent`'s late-tree stage-game seeding needs both.
     pub fn step_one(&mut self, dex: &Dex) -> (f64, [usize; 2]) {
-        let picked = self.cache.picked_masks_opt();
         let mut sim = match self.scratch.take() {
             Some(mut sim) => {
-                sim.reset_search_sim(&self.root, [true, true], picked);
+                sim.reset_search_sim(&self.root, [true, true]);
                 sim
             }
             None => Box::new(self.root.clone()),
@@ -2764,10 +2763,9 @@ impl SkuctSearch {
     /// One probe iteration with the root joint forced (`RmAgent`'s matrix
     /// estimation phase).
     fn step_forced(&mut self, dex: &Dex, force: [usize; 2]) -> f64 {
-        let picked = self.cache.picked_masks_opt();
         let mut sim = match self.scratch.take() {
             Some(mut sim) => {
-                sim.reset_search_sim(&self.root, [true, true], picked);
+                sim.reset_search_sim(&self.root, [true, true]);
                 sim
             }
             None => Box::new(self.root.clone()),
@@ -2806,11 +2804,10 @@ impl SkuctSearch {
         n: u32,
         leaf: &mut dyn FnMut(&mut Battle, &mut SplitMix64, bool) -> f64,
     ) -> u32 {
-        let picked = self.cache.picked_masks_opt();
         for _ in 0..n {
             let mut sim = match self.scratch.take() {
                 Some(mut sim) => {
-                    sim.reset_search_sim(&self.root, [true, true], picked);
+                    sim.reset_search_sim(&self.root, [true, true]);
                     sim
                 }
                 None => Box::new(self.root.clone()),
@@ -3285,15 +3282,13 @@ mod dominated_action_tests {
         states.push((fainted, true));
         for (state, observable) in states {
             assert_eq!(state.quick_claw_roll_observable(&dex), observable);
-            for (hp_buckets, threshold_key, key_no_damage) in [
-                (0, false, false),
-                (16, false, false),
-                (16, true, false),
-                (16, false, true),
+            for (hp_buckets, key_no_damage) in [
+                (0, false),
+                (16, false),
+                (16, true),
             ] {
                 let cfg = RmConfig {
                     hp_buckets,
-                    threshold_key,
                     key_no_damage,
                     ..Default::default()
                 };
@@ -4434,7 +4429,7 @@ mod dominated_action_tests {
             let mut b = b.clone();
             b.add_side_condition(&dex, 1, "safeguard", Some(def), EffectHandle::None);
             assert!(noop(&b, 0, "toxic"), "Toxic into Safeguard");
-            assert!(noop(&b, 1, "confuseray") || true); // side 1's own side: not blocked
+            assert!(!noop(&b, 1, "confuseray"), "Side 1 Safeguard must not block side 1 Confuse Ray");
             let after = play(&dex, &b, 0, 2);
             assert_eq!(after.poke(def).status, Status::None);
         }
@@ -4488,7 +4483,12 @@ mod dominated_action_tests {
         {
             let mut b = b.clone();
             b.poke_mut(att).boosts[1] = -6;
-            assert!(noop(&b, 1, "screech"), "Screech at -6 defence");
+            assert!(
+                !noop(&b, 1, "screech"),
+                "slower Screech must stay live when faster foe can raise Def first"
+            );
+            b.poke_mut(def).boosts[4] = 6;
+            assert!(noop(&b, 1, "screech"), "faster Screech at -6 defence");
             let after = play(&dex, &b, 1, 3);
             assert_eq!(after.poke(att).boosts[1], -6);
         }
@@ -4521,8 +4521,14 @@ mod dominated_action_tests {
             let after = play(&dex, &b, 1, 2);
             assert!(!after.poke(after.active_id(1).unwrap()).has_volatile(sub));
         }
-        // Dream Eater needs a sleeping target (`moveexec.rs` dreameater/onTryImmunity).
-        assert!(noop(&b, 1, "dreameater"), "Dream Eater on an awake foe");
+        // Dream Eater needs a sleeping target (`moveexec.rs` dreameater/onTryImmunity),
+        // proved only when acting first so a faster awake foe cannot Rest before us.
+        {
+            let mut b = b.clone();
+            assert!(!noop(&b, 1, "dreameater"), "slower Dream Eater into awake Rest learner stays live");
+            b.poke_mut(def).boosts[4] = 6;
+            assert!(noop(&b, 1, "dreameater"), "faster Dream Eater on an awake foe");
+        }
         {
             let mut b = b.clone();
             b.set_status(&dex, att, "slp", None, EffectHandle::None, true);
@@ -4596,9 +4602,17 @@ mod dominated_action_tests {
         );
         db.poke_mut(def1).boosts[4] = 6; // now side 1 is faster and side 0 is stranded
         strand(&mut db, 0);
+        // Side 0 is Suicune, whose learnset includes Protect/Endure (+2 priority):
+        // it can still move before side 1 and strip Destiny Bond first.
+        assert!(
+            !certain_noop(&db, &dex, 1, mv(&dex, "destinybond")),
+            "faster holder vs stranded Protect/Endure learner may still re-arm Destiny Bond"
+        );
+        let sui = db.active_id(0).unwrap();
+        db.poke_mut(sui).species = dex.species.id("unown").unwrap();
         assert!(
             certain_noop(&db, &dex, 1, mv(&dex, "destinybond")),
-            "faster holder vs stranded non-priority foe cannot re-apply Destiny Bond"
+            "faster holder vs stranded zero-priority foe cannot re-apply Destiny Bond"
         );
 
         // 3. Encore lock on a no-op move:
@@ -4732,6 +4746,23 @@ mod dominated_action_tests {
         b.poke_mut(foe).last_move = None;
         b.poke_mut(foe).last_move_encore = None;
         b.poke_mut(me).boosts[4] = 6;
+        // Against Snorlax (which can preempt via Endure/Protect), these stay unmasked.
+        for key in [
+            "disable",
+            "encore",
+            "spite",
+            "mirrormove",
+            "conversion2",
+            "mimic",
+        ] {
+            assert_eq!(
+                noop_reason(&b, &dex, 0, mv(&dex, key), rules),
+                None,
+                "{key} vs stranded Endure/Protect learner must not be masked"
+            );
+        }
+        // Against a foe with zero priority moves in its learnset (e.g., Unown), they are masked.
+        b.poke_mut(foe).species = dex.species.id("unown").unwrap();
         for key in [
             "disable",
             "encore",
@@ -4743,9 +4774,64 @@ mod dominated_action_tests {
             assert_eq!(
                 noop_reason(&b, &dex, 0, mv(&dex, key), rules),
                 Some("the target has not used a move yet"),
-                "{key} vs stranded foe with no last_move must be masked"
+                "{key} vs stranded non-priority foe with no last_move must be masked"
             );
         }
+    }
+
+    #[test]
+    fn preemption_and_speed_gates_protect_encore_destiny_bond_dreameater_and_charm() {
+        let (dex, mut b) = setup();
+        strand(&mut b, 1);
+        let me = b.active_id(0).unwrap();
+        let foe = b.active_id(1).unwrap();
+        let rules = MaskRules::default();
+
+        // 1. Faster Encore vs slower stranded foe that can learn Endure/Protect.
+        b.poke_mut(me).boosts[4] = 6;
+        b.poke_mut(foe).last_move_encore = None;
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "encore"), rules),
+            None,
+            "faster Encore must stay live against slower Endure/Protect learner"
+        );
+
+        // 2. Faster Destiny Bond re-arm vs slower stranded Protect/Endure learner.
+        b.add_volatile(&dex, me, "destinybond", Some(me), EffectHandle::None);
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "destinybond"), rules),
+            None,
+            "faster Destiny Bond re-arm stays live if foe can preempt with Protect/Endure"
+        );
+
+        // 3. Slower Dream Eater vs faster awake foe (which can Rest first).
+        b.poke_mut(me).boosts[4] = -6;
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "dreameater"), rules),
+            None,
+            "slower Dream Eater stays live vs awake foe that can Rest first"
+        );
+        b.poke_mut(me).boosts[4] = 6;
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "dreameater"), rules),
+            Some("Dream Eater needs a sleeping, unsubstituted target"),
+            "faster Dream Eater vs awake foe is a no-op"
+        );
+
+        // 4. Slower Charm vs faster foe already at -6 Atk (which can Swords Dance first).
+        b.poke_mut(foe).boosts[0] = -6;
+        b.poke_mut(me).boosts[4] = -6;
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "charm"), rules),
+            None,
+            "slower Charm stays live when faster foe can boost Atk first"
+        );
+        b.poke_mut(me).boosts[4] = 6;
+        assert_eq!(
+            noop_reason(&b, &dex, 0, mv(&dex, "charm"), rules),
+            Some("every stat this move moves is already capped"),
+            "faster Charm into -6 Atk foe is a no-op"
+        );
     }
 
     #[test]

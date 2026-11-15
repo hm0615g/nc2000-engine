@@ -7,7 +7,7 @@
 // disagree with the engine's parse. So this module is deliberately dumb —
 // it names the bytes and stores them.
 //
-// Policy (crates/bot/src/prior.rs:491): a prior is NEVER auto-loaded. It
+// Policy (docs/community-belief-prior-design.md): a prior is NEVER auto-loaded. It
 // exists only because the user explicitly picked a file (or the sample),
 // which is exactly what a localStorage record is: an earlier explicit act
 // that the user can clear. Nothing here fetches anything.
@@ -24,6 +24,7 @@ export interface StoredPrior {
 }
 
 const LS_KEY = "nc2000-belief-prior";
+const PICK_LS_KEY = "nc2000-pick-prior";
 
 /** Refuse tables that cannot plausibly fit localStorage (typically a ~5 MB
  * per-origin budget shared with saved teams and picks). Checked before the
@@ -32,8 +33,16 @@ const LS_KEY = "nc2000-belief-prior";
 export const PRIOR_MAX_BYTES = 2_000_000;
 
 export function loadStoredPrior(): StoredPrior | null {
+  return loadFromKey(LS_KEY);
+}
+
+export function loadStoredPickPrior(): StoredPrior | null {
+  return loadFromKey(PICK_LS_KEY);
+}
+
+function loadFromKey(key: string): StoredPrior | null {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const p = JSON.parse(raw) as Partial<StoredPrior>;
     if (!p || typeof p.name !== "string" || typeof p.json !== "string")
@@ -54,12 +63,20 @@ export function loadStoredPrior(): StoredPrior | null {
  * defect (table defects come from the wasm probe's warnings).
  */
 export function storePrior(name: string, json: string): string | null {
+  return storeAtKey(LS_KEY, name, json);
+}
+
+export function storePickPrior(name: string, json: string): string | null {
+  return storeAtKey(PICK_LS_KEY, name, json);
+}
+
+function storeAtKey(key: string, name: string, json: string): string | null {
   if (!json.trim()) return "empty file";
   const bytes = byteLength(json);
   if (bytes > PRIOR_MAX_BYTES)
     return `table too large (${bytes} bytes, limit ${PRIOR_MAX_BYTES})`;
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify({ name, json }));
+    localStorage.setItem(key, JSON.stringify({ name, json }));
     return null;
   } catch (e) {
     return `could not be saved (${String(e)})`;
@@ -67,8 +84,16 @@ export function storePrior(name: string, json: string): string | null {
 }
 
 export function clearStoredPrior(): void {
+  clearKey(LS_KEY);
+}
+
+export function clearStoredPickPrior(): void {
+  clearKey(PICK_LS_KEY);
+}
+
+function clearKey(key: string): void {
   try {
-    localStorage.removeItem(LS_KEY);
+    localStorage.removeItem(key);
   } catch {
     /* storage unavailable: nothing was persisted to begin with */
   }

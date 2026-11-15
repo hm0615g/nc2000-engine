@@ -95577,6 +95577,609 @@
      "happiness": 255
     }
    ]
+  },
+  {
+   "id": "supp-cov-23",
+   "weight": 1,
+   "provenance": {
+    "origin": "human",
+    "source": "data/training-v3/supplemental.json",
+    "sourceId": "supp-cov-23"
+   },
+   "sets": [
+    {
+     "name": "Bulbasaur",
+     "species": "Bulbasaur",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Sleep Powder",
+      "Giga Drain",
+      "Synthesis",
+      "Leech Seed"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 6,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Caterpie",
+     "species": "Caterpie",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Tackle",
+      "String Shot"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Metapod",
+     "species": "Metapod",
+     "item": "Mint Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Tackle",
+      "String Shot",
+      "Harden"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Cleffa",
+     "species": "Cleffa",
+     "item": "Focus Band",
+     "ability": "No Ability",
+     "moves": [
+      "Encore",
+      "Fire Blast",
+      "Icy Wind",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 26,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Igglybuff",
+     "species": "Igglybuff",
+     "item": "PRZ Cure Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Icy Wind",
+      "Present",
+      "Sing",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Oddish",
+     "species": "Oddish",
+     "item": "Gold Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Sleep Powder",
+      "Sludge Bomb",
+      "Giga Drain",
+      "Moonlight"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ]
+  },
+  {
+   "id": "supp-cov-24",
+   "weight": 1,
+   "provenance": {
+    "origin": "human",
+    "source": "data/training-v3/supplemental.json",
+    "sourceId": "supp-cov-24"
+   },
+   "sets": [
+    {
+     "name": "Gloom",
+     "species": "Gloom",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Sleep Powder",
+      "Sludge Bomb",
+      "Giga Drain",
+      "Moonlight"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Diglett",
+     "species": "Diglett",
+     "item": "Gold Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Earthquake",
+      "Rock Slide",
+      "Sludge Bomb",
+      "Double-Edge"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Poliwag",
+     "species": "Poliwag",
+     "item": "Mint Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Attract",
+      "Toxic",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 18,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Tentacool",
+     "species": "Tentacool",
+     "item": "Miracle Berry",
+     "ability": "No Ability",
+     "moves": [
+      "Surf",
+      "Sludge Bomb",
+      "Ice Beam",
+      "Mirror Coat"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Geodude",
+     "species": "Geodude",
+     "item": "Focus Band",
+     "ability": "No Ability",
+     "moves": [
+      "Earthquake",
+      "Rock Slide",
+      "Explosion",
+      "Fire Blast"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Shellder",
+     "species": "Shellder",
+     "item": "Scope Lens",
+     "ability": "No Ability",
+     "moves": [
+      "Surf",
+      "Ice Beam",
+      "Explosion",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ]
+  },
+  {
+   "id": "supp-cov-25",
+   "weight": 1,
+   "provenance": {
+    "origin": "human",
+    "source": "data/training-v3/supplemental.json",
+    "sourceId": "supp-cov-25"
+   },
+   "sets": [
+    {
+     "name": "Onix",
+     "species": "Onix",
+     "item": "Quick Claw",
+     "ability": "No Ability",
+     "moves": [
+      "Earthquake",
+      "Rock Slide",
+      "Explosion",
+      "Screech"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Hoothoot",
+     "species": "Hoothoot",
+     "item": "Focus Band",
+     "ability": "No Ability",
+     "moves": [
+      "Night Shade",
+      "Hypnosis",
+      "Return",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Dunsparce",
+     "species": "Dunsparce",
+     "item": "Leftovers",
+     "ability": "No Ability",
+     "moves": [
+      "Glare",
+      "Screech",
+      "Return",
+      "Flamethrower"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Phanpy",
+     "species": "Phanpy",
+     "item": "Berry Juice",
+     "ability": "No Ability",
+     "moves": [
+      "Earthquake",
+      "Double-Edge",
+      "Ancient Power",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Igglybuff",
+     "species": "Igglybuff",
+     "item": "Bright Powder",
+     "ability": "No Ability",
+     "moves": [
+      "Fire Blast",
+      "Solar Beam",
+      "Dizzy Punch",
+      "Rest"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "M",
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    },
+    {
+     "name": "Ditto",
+     "species": "Ditto",
+     "item": "Metal Powder",
+     "ability": "No Ability",
+     "moves": [
+      "Transform"
+     ],
+     "nature": "Serious",
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     },
+     "gender": "N",
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "level": 50,
+     "happiness": 255
+    }
+   ]
   }
  ],
  "membershipPolicy": "known-real-and-catalog-generated-v1"

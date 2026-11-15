@@ -66,7 +66,7 @@ fn imported_trapping_preserves_both_sides_switch_legality() {
                 let mut agent =
                     ProtocolAgent::new(&dex, observer, pool.clone(), RmConfig::default(), 7);
                 agent.set_own_team(sets.clone());
-                agent.pin_opponent(sets.clone());
+                agent.pin_opponent(&dex, sets.clone()).unwrap();
                 let mut filter = SplitFilter::new(observer);
                 for line in &b.log {
                     if filter.visible(line) {
@@ -135,6 +135,25 @@ fn imported_trapping_preserves_both_sides_switch_legality() {
         }
         assert!(b.poke(b.active_id(1).unwrap()).trapped, "trap did not land");
         check(&b, "trapped");
+        let mut bp = b.clone();
+        bp.choose(&dex, 0, "move batonpass").unwrap();
+        bp.choose(&dex, 1, "move curse").unwrap();
+        assert_eq!(bp.request_state, nc2000_engine::state::RequestState::Switch);
+        check(&bp, "baton pass switch prompt");
+        bp.choose(&dex, 0, "switch 2").unwrap();
+        if matches!(trap, "Mean Look" | "Spider Web") {
+            assert!(
+                bp.poke(bp.active_id(1).unwrap()).trapped,
+                "{trap} must survive baton pass"
+            );
+            check(&bp, "baton pass kept trapping");
+        } else {
+            assert!(
+                !bp.poke(bp.active_id(1).unwrap()).trapped,
+                "{trap} binding must end on baton pass"
+            );
+            check(&bp, "baton pass released binding");
+        }
         let mut knocked_out = b.clone();
         let source = knocked_out.active_id(0).unwrap();
         knocked_out.poke_mut(source).hp = 1;
@@ -296,20 +315,38 @@ fn build_request(
                 .find(|p| p["active"].as_bool().unwrap_or(false));
             let moves: Vec<Value> = active
                 .map(|p| {
-                    p["moves"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .map(|m| {
-                            let id = m["id"].as_str().unwrap();
-                            serde_json::json!({
-                                "id": id,
-                                "pp": m["pp"].as_i64().unwrap_or(0),
-                                "maxpp": maxpp_of(dex, id),
-                                "disabled": m["disabled"].as_bool().unwrap_or(false),
+                    let v = &p["volatiles"];
+                    let locked_id = if v.get("mustrecharge").is_some() {
+                        Some("recharge".to_string())
+                    } else if let Some(s) = v.get("lockedmove").and_then(|x| x["move"].as_str()) {
+                        Some(s.to_string())
+                    } else if let Some(s) = v.get("twoturnmove").and_then(|x| x["move"].as_str()) {
+                        Some(s.to_string())
+                    } else if v.get("rollout").is_some() {
+                        Some("rollout".to_string())
+                    } else if v.get("bide").is_some() {
+                        Some("bide".to_string())
+                    } else {
+                        None
+                    };
+                    if let Some(id) = locked_id {
+                        vec![serde_json::json!({ "id": id })]
+                    } else {
+                        p["moves"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .map(|m| {
+                                let id = m["id"].as_str().unwrap();
+                                serde_json::json!({
+                                    "id": id,
+                                    "pp": m["pp"].as_i64().unwrap_or(0),
+                                    "maxpp": maxpp_of(dex, id),
+                                    "disabled": m["disabled"].as_bool().unwrap_or(false),
+                                })
                             })
-                        })
-                        .collect()
+                            .collect()
+                    }
                 })
                 .unwrap_or_default();
             // PS computes `trapped` from state; mirror the same conditions
@@ -561,7 +598,7 @@ fn replay(dex: &Dex, fixture: &Value, side: usize, pinned: bool, stats: &mut Sta
     let mut agent = ProtocolAgent::new(dex, side, pool_ref.clone(), cfg, 7 + side as u64);
     agent.set_own_team(own_sets);
     if pinned {
-        agent.pin_opponent(opp_sets);
+        agent.pin_opponent(dex, opp_sets).unwrap();
     }
 
     let snaps = fixture["snapshots"].as_array().unwrap();
@@ -853,4 +890,302 @@ fn corpus_replay_both_modes() {
     assert!(stats.sleep_sources > 0, "no sleep reached the source check — gate is vacuous");
     assert!(stats.roundtrips > 0, "no position round trip ran — gate is vacuous");
     assert_eq!(stats.roundtrip_gaps, 0, "decision points a PositionSpec could not describe");
+}
+
+#[test]
+fn protocol_agent_routes_lead_prior_and_post_install_updates() {
+    use nc2000_bot::BeliefPrior;
+    use std::sync::Arc;
+
+    let dex = common::dex();
+    let pool = common::meta_pool_v0().clone();
+    let (_, fx) = &common::corpus_json_values()[0];
+    let opp_sets: Vec<PokemonSet> = serde_json::from_value(fx["p1team"].clone()).unwrap();
+    let own_sets = pool.teams[1].sets.clone();
+
+    let sp0 = toid(&opp_sets[0].species);
+    let sp1 = toid(&opp_sets[1].species);
+    assert_ne!(sp0, sp1);
+
+    let fmt_poke = |tag: &str, team: &[PokemonSet]| -> Vec<String> {
+        team.iter()
+            .map(|p| {
+                let g = match p.gender.as_deref() {
+                    Some("M") => ", M",
+                    Some("F") => ", F",
+                    _ => "",
+                };
+                let it = if p.item.is_empty() { "" } else { "item" };
+                format!("|poke|{tag}|{}, L{}{}|{it}", p.species, p.level, g)
+            })
+            .collect()
+    };
+    let req_json = serde_json::json!({
+        "teamPreview": true,
+        "rqid": 1,
+        "side": {
+            "id": "p2",
+            "pokemon": own_sets.iter().map(|p| serde_json::json!({
+                "ident": format!("p2: {}", p.species),
+                "details": format!("{}, L{}", p.species, p.level),
+                "condition": "100/100",
+                "item": p.item,
+                "active": false,
+            })).collect::<Vec<_>>()
+        }
+    })
+    .to_string();
+
+    let run_proto = |opp: &[PokemonSet], prior_json: Option<&str>, seed: u64| {
+        let mut agent = ProtocolAgent::new(
+            dex,
+            1,
+            pool.clone(),
+            RmConfig {
+                iterations: 120,
+                ..Default::default()
+            },
+            seed,
+        );
+        agent.set_own_team(own_sets.clone());
+        if let Some(text) = prior_json {
+            agent.set_belief_prior(Arc::new(BeliefPrior::from_json(text)));
+        }
+        for line in fmt_poke("p1", opp).into_iter().chain(fmt_poke("p2", &own_sets)) {
+            agent.push_line(dex, &line);
+        }
+        agent.push_line(dex, "|teampreview");
+        assert!(agent.on_request(dex, &req_json).unwrap());
+        agent.step(dex, 120).unwrap();
+        let has_preview = agent
+            .belief()
+            .zip(agent.observer())
+            .is_some_and(|(b, o)| b.has_preview_prior(o));
+        (agent.root_policy(dex), has_preview)
+    };
+
+    let (base_policy, base_preview) = run_proto(&opp_sets, None, 7);
+    assert!(!base_preview);
+    let (unrelated_policy, unrelated_preview) =
+        run_proto(&opp_sets, Some(r#"{"species":{"shuckle":{"lead":0.99}}}"#), 7);
+    assert!(!unrelated_preview);
+    assert_eq!(unrelated_policy, base_policy);
+
+    let pool_opp = &pool.teams[0].sets;
+    let psp0 = toid(&pool_opp[0].species);
+    let psp1 = toid(&pool_opp[1].species);
+    let (pool_base, pool_base_prev) = run_proto(pool_opp, None, 7);
+    let (pool_prior, pool_prior_prev) = run_proto(
+        pool_opp,
+        Some(&format!(r#"{{"species":{{"{psp0}":{{"lead":0.99}},"{psp1}":{{"lead":0.01}}}}}}"#)),
+        7,
+    );
+    assert!(!pool_base_prev && !pool_prior_prev);
+    assert_eq!(pool_prior, pool_base);
+
+    let prior_a = format!(r#"{{"species":{{"{sp0}":{{"lead":0.99}},"{sp1}":{{"lead":0.01}}}}}}"#);
+    let prior_b = format!(r#"{{"species":{{"{sp0}":{{"lead":0.01}},"{sp1}":{{"lead":0.99}}}}}}"#);
+    let (pol_a, prev_a) = run_proto(&opp_sets, Some(&prior_a), 7);
+    let (pol_b, prev_b) = run_proto(&opp_sets, Some(&prior_b), 7);
+    assert!(prev_a && prev_b);
+    assert_ne!(pol_a, pol_b, "opposite lead-only priors must move ProtocolAgent preview policy");
+
+    // Post-construction set_belief_prior updates the live belief and next install() picks it up.
+    let mut late = ProtocolAgent::new(
+        dex,
+        1,
+        pool,
+        RmConfig {
+            iterations: 32,
+            ..Default::default()
+        },
+        11,
+    );
+    late.set_own_team(own_sets.clone());
+    for line in fmt_poke("p1", &opp_sets)
+        .into_iter()
+        .chain(fmt_poke("p2", &own_sets))
+    {
+        late.push_line(dex, &line);
+    }
+    late.push_line(dex, "|teampreview");
+    assert!(late.on_request(dex, &req_json).unwrap());
+    assert!(!late.belief().unwrap().has_prior());
+    late.set_belief_prior(Arc::new(BeliefPrior::from_json(&prior_a)));
+    assert!(late.belief().unwrap().has_prior());
+    assert!(late.on_request(dex, &req_json).unwrap());
+    assert!(late
+        .belief()
+        .zip(late.observer())
+        .is_some_and(|(b, o)| b.has_preview_prior(o)));
+}
+
+#[test]
+fn protocol_agent_wires_pick_prior_in_live_and_position_modes() {
+    use nc2000_bot::player::PlayerChannel;
+    use nc2000_bot::PickPrior;
+    use nc2000_engine::battle::SearchChoice;
+    use std::sync::Arc;
+
+    let dex = common::dex();
+    let pool = common::meta_pool_v0().clone();
+    let opp_team = &pool.teams[0];
+    let opp_sets = opp_team.sets.clone();
+    let own_sets = pool.teams[1].sets.clone();
+
+    let sp = |i: usize| dex.species.key(dex.species.id(&toid(&opp_sets[i].species)).unwrap()).to_string();
+    let preview_json: Vec<Value> = own_sets
+        .iter()
+        .map(|s| {
+            serde_json::json!({
+                "species": dex.species.key(dex.species.id(&toid(&s.species)).unwrap()),
+                "level": s.level,
+                "gender": match s.gender.as_deref() { Some("M") => "M", Some("F") => "F", _ => "" },
+                "item": !s.item.is_empty(),
+            })
+        })
+        .collect();
+    let make_prior = |fav: [usize; 3]| -> Arc<PickPrior> {
+        let text = serde_json::json!({
+            "schema": "nc2000-pick-prior-v1",
+            "smoothing": 0.001,
+            "backoff_strength": 1.0,
+            "source": {},
+            "rows": [{
+                "team": opp_team.id,
+                "enemy_preview": preview_json,
+                "side": 0,
+                "choices": [{ "species": [sp(fav[0]), sp(fav[1]), sp(fav[2])], "count": 500 }]
+            }]
+        })
+        .to_string();
+        Arc::new(PickPrior::from_json(&text).unwrap())
+    };
+    let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &opp_sets, &own_sets).unwrap();
+    let opp_legal_picks: Vec<[usize; 3]> = battle
+        .legal_choices(dex, 0)
+        .into_iter()
+        .filter_map(|c| match c {
+            SearchChoice::Team(t) => {
+                Some([(t[0] - 1) as usize, (t[1] - 1) as usize, (t[2] - 1) as usize])
+            }
+            _ => None,
+        })
+        .collect();
+    let own_pick = battle.legal_choices(dex, 1)[0];
+    let triple_a = opp_legal_picks[0];
+    let triple_b = *opp_legal_picks
+        .iter()
+        .find(|t| t[0] != triple_a[0])
+        .expect("distinct legal lead");
+    let prior_a = make_prior(triple_a);
+    let prior_b = make_prior(triple_b);
+
+    let mut channel = PlayerChannel::new(1);
+    let frame0 = channel.frame(&mut battle, dex).unwrap();
+    let req0_json = frame0.request.to_string();
+
+    let run_preview = |prior: Option<Arc<PickPrior>>, pin: bool| -> (String, bool, bool) {
+        let mut agent = ProtocolAgent::new(
+            dex,
+            1,
+            pool.clone(),
+            RmConfig { iterations: 120, ..Default::default() },
+            7,
+        );
+        agent.set_own_team(own_sets.clone());
+        if pin {
+            agent.pin_opponent(dex, opp_sets.clone()).unwrap();
+        }
+        if let Some(p) = prior {
+            agent.set_pick_prior(p);
+        }
+        for line in &frame0.lines {
+            agent.push_line(dex, line);
+        }
+        assert!(agent.on_request(dex, &req0_json).unwrap());
+        let active = agent
+            .belief()
+            .zip(agent.observer())
+            .is_some_and(|(b, o)| b.has_active_pick_draws(o));
+        let has_preview = agent
+            .belief()
+            .zip(agent.observer())
+            .is_some_and(|(b, o)| b.has_preview_prior(o));
+        agent.step(dex, 120).unwrap();
+        (serde_json::to_string(&agent.root_policy(dex)).unwrap(), active, has_preview)
+    };
+
+    let (pol_a, active_a, prev_a) = run_preview(Some(prior_a.clone()), false);
+    let (pol_b, active_b, prev_b) = run_preview(Some(prior_b.clone()), false);
+    assert!(active_a && prev_a && active_b && prev_b);
+    assert_ne!(pol_a, pol_b, "ProtocolAgent Team Preview must respond to PickPrior");
+
+    // PositionSpec set_position preserves pick_prior.
+    let mut pos_agent = ProtocolAgent::new(
+        dex,
+        1,
+        pool.clone(),
+        RmConfig { iterations: 120, ..Default::default() },
+        7,
+    );
+    pos_agent.set_own_team(own_sets.clone());
+    for line in &frame0.lines {
+        pos_agent.push_line(dex, line);
+    }
+    assert!(pos_agent.on_request(dex, &req0_json).unwrap());
+    let spec = pos_agent.to_position_spec(dex).unwrap();
+    let run_pos = |prior: Arc<PickPrior>| -> String {
+        let mut p = ProtocolAgent::new(
+            dex,
+            1,
+            pool.clone(),
+            RmConfig { iterations: 120, ..Default::default() },
+            7,
+        );
+        p.set_pick_prior(prior);
+        p.set_position(dex, &spec).unwrap();
+        assert!(p.belief().zip(p.observer()).is_some_and(|(b, o)| b.has_active_pick_draws(o)));
+        p.step(dex, 120).unwrap();
+        serde_json::to_string(&p.root_policy(dex)).unwrap()
+    };
+    assert_eq!(run_pos(prior_a.clone()), pol_a, "set_position preview must match live stream");
+    assert_eq!(run_pos(prior_b.clone()), pol_b);
+
+    // Pinned open-sheet mode ignores PickPrior bit-identically.
+    let (pin_base, pin_base_act, _) = run_preview(None, true);
+    let (pin_priored, pin_priored_act, _) = run_preview(Some(prior_a.clone()), true);
+    assert!(!pin_base_act && !pin_priored_act);
+    assert_eq!(pin_priored, pin_base, "pinned ProtocolAgent must ignore PickPrior");
+
+    // Advance to Turn 1 and verify mid-battle request + pin_opponent clearing.
+    battle
+        .apply_choice(dex, 0, SearchChoice::Team(triple_a.map(|i| (i + 1) as u8)))
+        .unwrap();
+    battle.apply_choice(dex, 1, own_pick).unwrap();
+    let frame1 = channel.frame(&mut battle, dex).unwrap();
+    let req1_json = frame1.request.to_string();
+
+    let mut live = ProtocolAgent::new(
+        dex,
+        1,
+        pool.clone(),
+        RmConfig { iterations: 64, ..Default::default() },
+        7,
+    );
+    live.set_own_team(own_sets.clone());
+    live.set_pick_prior(prior_a.clone());
+    assert!(live.has_pick_prior());
+    for line in frame0.lines.iter().chain(&frame1.lines) {
+        live.push_line(dex, line);
+    }
+    assert!(live.on_request(dex, &req1_json).unwrap());
+    assert!(live.belief().zip(live.observer()).is_some_and(|(b, o)| b.has_active_pick_draws(o)));
+    live.clear_pick_prior();
+    assert!(!live.has_pick_prior());
+    assert!(!live.belief().zip(live.observer()).is_some_and(|(b, o)| b.has_active_pick_draws(o)));
+    live.set_pick_prior(prior_a);
+    live.pin_opponent(dex, opp_sets).unwrap();
+    assert!(!live.has_pick_prior());
+    assert!(!live.belief().zip(live.observer()).is_some_and(|(b, o)| b.has_active_pick_draws(o)));
 }

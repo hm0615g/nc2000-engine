@@ -96,14 +96,13 @@ enum AgentSpec {
     Mcts5 { iterations: u32, c: f64 },
     Rm { iterations: u32, probe: f64, threshold: f64, buckets: i64 },
     SkUct { iterations: u32, c: f64, buckets: i64 },
-    /// skuct with the parked M16c rollout upgrades ON (A/B research arm).
+    /// M16c rollout arm: status pseudo-scoring + bad-matchup voluntary switching
+    /// in `greedy_pick`. Off by default, as shipped.
     SkUctNs { iterations: u32, c: f64, buckets: i64 },
-    /// M17 cluster-2 probe: threshold-preserving node key (`hp_class`).
-    SkUctThr { iterations: u32, c: f64, buckets: i64 },
-    /// Threshold key + damage-bookkeeping-free key (the full abstraction).
+    /// Damage-bookkeeping-free key abstraction.
     SkUctAbs { iterations: u32, c: f64, buckets: i64 },
-    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, res: bool, bp: bool, endgame: EndgameRules },
-    Open { iterations: u32, c: f64, buckets: i64, perish: PerishRollout, m16c: M16c, res: bool, bp: bool, endgame: EndgameRules },
+    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, endgame: EndgameRules },
+    Open { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, endgame: EndgameRules },
     Exploit(Box<AgentSpec>),
     ExploitControl(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
@@ -215,21 +214,32 @@ fn endgame_label(e: &EndgameRules) -> String {
     format!(":{}", parts.join(","))
 }
 
-/// `blind`'s fields: numeric ones keep their positions, non-numeric ones are
-/// comma-separated mask-rule tokens. Splitting on "starts with a digit"
-/// rather than on position is what lets `blind:300:immunity_all_switchins`
-/// mean iters=300 with the default c and buckets.
-fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String> {
+struct ParsedSearchSpec {
+    iterations: u32,
+    c: f64,
+    buckets: i64,
+    mask: MaskRules,
+    perish: PerishRollout,
+    m16c: M16c,
+    mixed: bool,
+    bp: bool,
+    endgame: EndgameRules,
+}
+
+fn parse_search_spec(
+    parts: &[&str],
+    kind: &str,
+    mut mask: MaskRules,
+) -> Result<ParsedSearchSpec, String> {
     let mut nums: Vec<&str> = Vec::new();
     let mut perish = PerishRollout::shipped();
     let mut m16c = M16c::default();
     let mut mixed = false;
-    let mut res = false;
     let mut bp = true;
     let mut endgame = EndgameRules::default();
     for part in &parts[1..] {
         if part.is_empty() {
-            return Err("empty field in a blind spec".into());
+            return Err(format!("empty field in a {kind} spec"));
         }
         if part.starts_with(|c: char| c.is_ascii_digit()) {
             nums.push(part);
@@ -237,10 +247,6 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
             for tok in part.split(',').filter(|t| !t.is_empty()) {
                 if tok == "mix" {
                     mixed = true;
-                } else if tok == "res" {
-                    res = true;
-                } else if tok == "-res" {
-                    res = false;
                 } else if tok == "bp" {
                     bp = true;
                 } else if tok == "-bp" {
@@ -254,11 +260,13 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
         }
     }
     if nums.len() > 3 {
-        return Err(format!("too many numeric fields in a blind spec: {nums:?}"));
+        return Err(format!("too many numeric fields in a {kind} spec: {nums:?}"));
     }
     let iterations = opt_num(&nums, 0, "iters")?.unwrap_or(1000);
-    if mixed && iterations == 0 { return Err("mixed search needs a positive iteration budget".into()); }
-    Ok(AgentSpec::Blind {
+    if mixed && iterations == 0 {
+        return Err("mixed search needs a positive iteration budget".into());
+    }
+    Ok(ParsedSearchSpec {
         iterations,
         c: opt_num(&nums, 1, "c")?.unwrap_or(1.0),
         buckets: opt_num(&nums, 2, "buckets")?.unwrap_or(16),
@@ -266,9 +274,27 @@ fn parse_blind(parts: &[&str], mut mask: MaskRules) -> Result<AgentSpec, String>
         perish,
         m16c,
         mixed,
-        res,
         bp,
         endgame,
+    })
+}
+
+/// `blind`'s fields: numeric ones keep their positions, non-numeric ones are
+/// comma-separated mask-rule tokens. Splitting on "starts with a digit"
+/// rather than on position is what lets `blind:300:immunity_all_switchins`
+/// mean iters=300 with the default c and buckets.
+fn parse_blind(parts: &[&str], mask: MaskRules) -> Result<AgentSpec, String> {
+    let s = parse_search_spec(parts, "blind", mask)?;
+    Ok(AgentSpec::Blind {
+        iterations: s.iterations,
+        c: s.c,
+        buckets: s.buckets,
+        mask: s.mask,
+        perish: s.perish,
+        m16c: s.m16c,
+        mixed: s.mixed,
+        bp: s.bp,
+        endgame: s.endgame,
     })
 }
 
@@ -342,45 +368,20 @@ fn apply_rollout_token(perish: &mut PerishRollout, m16c: &mut M16c, tok: &str) -
     true
 }
 
-/// `open`'s fields, split like [`parse_blind`]'s; the only named tokens are
-/// the rollout rules.
+/// `open`'s fields match [`parse_blind`]'s: numeric ones keep their positions,
+/// non-numeric ones are comma-separated rollout / mix / mask tokens.
 fn parse_open(parts: &[&str]) -> Result<AgentSpec, String> {
-    let mut nums: Vec<&str> = Vec::new();
-    let mut perish = PerishRollout::shipped();
-    let mut m16c = M16c::default();
-    let mut res = false;
-    let mut bp = true;
-    let mut endgame = EndgameRules::default();
-    for part in &parts[1..] {
-        if part.starts_with(|c: char| c.is_ascii_digit()) {
-            nums.push(part);
-        } else {
-            for tok in part.split(',').filter(|t| !t.is_empty()) {
-                if tok == "res" {
-                    res = true;
-                } else if tok == "-res" {
-                    res = false;
-                } else if tok == "bp" {
-                    bp = true;
-                } else if tok == "-bp" {
-                    bp = false;
-                } else if apply_endgame_token(&mut endgame, tok) {
-                    // handled
-                } else if !apply_rollout_token(&mut perish, &mut m16c, tok) {
-                    return Err(format!("unknown open-spec token `{tok}`"));
-                }
-            }
-        }
-    }
+    let s = parse_search_spec(parts, "open", MaskRules::default())?;
     Ok(AgentSpec::Open {
-        iterations: opt_num(&nums, 0, "iters")?.unwrap_or(1000),
-        c: opt_num(&nums, 1, "c")?.unwrap_or(1.0),
-        buckets: opt_num(&nums, 2, "buckets")?.unwrap_or(16),
-        perish,
-        m16c,
-        res,
-        bp,
-        endgame,
+        iterations: s.iterations,
+        c: s.c,
+        buckets: s.buckets,
+        mask: s.mask,
+        perish: s.perish,
+        m16c: s.m16c,
+        mixed: s.mixed,
+        bp: s.bp,
+        endgame: s.endgame,
     })
 }
 
@@ -413,11 +414,6 @@ impl AgentSpec {
                 buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
             }),
             "skuctabs" => Ok(AgentSpec::SkUctAbs {
-                iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
-                c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
-                buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
-            }),
-            "skuctthr" => Ok(AgentSpec::SkUctThr {
                 iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
                 buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
@@ -551,19 +547,7 @@ impl AgentSpec {
                     rule: SelRule::Ucb,
                     c: *c,
                     hp_buckets: *buckets,
-                    threshold_key: true,
                     key_no_damage: true,
-                    ..Default::default()
-                },
-                seed,
-            )),
-            AgentSpec::SkUctThr { iterations, c, buckets } => Box::new(RmAgent::new(
-                RmConfig {
-                    iterations: *iterations,
-                    rule: SelRule::Ucb,
-                    c: *c,
-                    hp_buckets: *buckets,
-                    threshold_key: true,
                     ..Default::default()
                 },
                 seed,
@@ -580,22 +564,13 @@ impl AgentSpec {
                 },
                 seed,
             )),
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, res, bp, endgame } => {
-                let playout = Playout::Heavy {
-                    eps: 0.2,
-                    turns: 8,
-                    weights: EvalWeights {
-                        residual_scale: if *res { 1.0 } else { 0.0 },
-                        ..EvalWeights::default()
-                    },
-                };
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, endgame } => {
                 let agent = BlindAgent::new(
                     RmConfig {
                         iterations: *iterations,
                         rule: SelRule::Ucb,
                         c: *c,
                         hp_buckets: *buckets,
-                        playout,
                         mask_rules: *mask,
                         rollout_perish: *perish == PerishRollout::Escape,
                         rollout_combo: *perish == PerishRollout::Combo,
@@ -611,31 +586,31 @@ impl AgentSpec {
                 );
                 Box::new(if *mixed {agent.with_adaptive_mixture((u64::from(*iterations) * 2 / 5) as u32)} else {agent})
             },
-            AgentSpec::Open { iterations, c, buckets, perish, m16c, res, bp, endgame } => Box::new(OpenAgent::new(
-                RmConfig {
-                    iterations: *iterations,
-                    rule: SelRule::Ucb,
-                    c: *c,
-                    hp_buckets: *buckets,
-                    playout: Playout::Heavy {
-                        eps: 0.2,
-                        turns: 8,
-                        weights: EvalWeights {
-                            residual_scale: if *res { 1.0 } else { 0.0 },
-                            ..EvalWeights::default()
-                        },
+            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, endgame } => {
+                let agent = OpenAgent::new(
+                    RmConfig {
+                        iterations: *iterations,
+                        rule: SelRule::Ucb,
+                        c: *c,
+                        hp_buckets: *buckets,
+                        mask_rules: *mask,
+                        rollout_perish: *perish == PerishRollout::Escape,
+                        rollout_combo: *perish == PerishRollout::Combo,
+                        rollout_status: m16c.status,
+                        rollout_switch: m16c.switch,
+                        rollout_baton_pass: *bp,
+                        endgame_rules: *endgame,
+                        ..Default::default()
                     },
-                    rollout_perish: *perish == PerishRollout::Escape,
-                    rollout_combo: *perish == PerishRollout::Combo,
-                    rollout_status: m16c.status,
-                    rollout_switch: m16c.switch,
-                    rollout_baton_pass: *bp,
-                    endgame_rules: *endgame,
-                    ..Default::default()
-                },
-                tables.cloned(),
-                seed,
-            )),
+                    tables.cloned(),
+                    seed,
+                );
+                Box::new(if *mixed {
+                    agent.with_adaptive_mixture((u64::from(*iterations) * 2 / 5) as u32)
+                } else {
+                    agent
+                })
+            }
             AgentSpec::Exploit(inner) | AgentSpec::ExploitControl(inner) => {
                 let model = inner.build(seed ^ 0x517C_C1B7_2722_0A95, tables, pool);
                 let cfg =
@@ -677,14 +652,11 @@ impl AgentSpec {
             AgentSpec::SkUctNs { iterations, c, buckets } => {
                 format!("skuctm16c:{iterations}:{c}:{buckets}")
             }
-            AgentSpec::SkUctThr { iterations, c, buckets } => {
-                format!("skuctthr:{iterations}:{c}:{buckets}")
-            }
             AgentSpec::SkUctAbs { iterations, c, buckets } => {
                 format!("skuctabs:{iterations}:{c}:{buckets}")
             }
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, res, bp, endgame } => {
-                let rollout = format!("{}{}{}{}{}{}", perish.label(), m16c.label(), if *mixed {":mix"} else {""}, if *res {":res"} else {""}, if *bp {""} else {":-bp"}, endgame_label(endgame));
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, endgame } => {
+                let rollout = format!("{}{}{}{}{}", perish.label(), m16c.label(), if *mixed {":mix"} else {""}, if *bp {""} else {":-bp"}, endgame_label(endgame));
                 if *mask == legacy_mask() {
                     return format!("blindlegacy:{iterations}:{c}:{buckets}{rollout}");
                 }
@@ -698,9 +670,24 @@ impl AgentSpec {
                     if diff.is_empty() { String::new() } else { format!(":{}", diff.join(",")) };
                 format!("blind:{iterations}:{c}:{buckets}{suffix}{rollout}")
             }
-            AgentSpec::Open { iterations, c, buckets, perish, m16c, res, bp, endgame } => {
-                let rollout = format!("{}{}{}{}{}", perish.label(), m16c.label(), if *res {":res"} else {""}, if *bp {""} else {":-bp"}, endgame_label(endgame));
-                format!("open:{iterations}:{c}:{buckets}{rollout}")
+            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, endgame } => {
+                let rollout = format!(
+                    "{}{}{}{}{}",
+                    perish.label(),
+                    m16c.label(),
+                    if *mixed { ":mix" } else { "" },
+                    if *bp { "" } else { ":-bp" },
+                    endgame_label(endgame),
+                );
+                let diff: Vec<String> = mask_fields(mask)
+                    .into_iter()
+                    .zip(mask_fields(&MaskRules::default()))
+                    .filter(|((_, cur), (_, def))| cur != def)
+                    .map(|((name, cur), _)| if cur { name.into() } else { format!("-{name}") })
+                    .collect();
+                let suffix =
+                    if diff.is_empty() { String::new() } else { format!(":{}", diff.join(",")) };
+                format!("open:{iterations}:{c}:{buckets}{suffix}{rollout}")
             }
             AgentSpec::Exploit(inner) => format!("exploit:{}", inner.label()),
             AgentSpec::ExploitControl(inner) => format!("exploit-control:{}", inner.label()),

@@ -140,6 +140,8 @@ export function Game(props: {
   /** Raw belief-prior table text, only when the player loaded one by hand
    * (never fetched automatically). */
   priorJson?: string;
+  /** Raw Team Preview pick-prior table text, only when loaded by hand. */
+  pickPriorJson?: string;
   onRematch: () => void;
   onNewTeams: () => void;
 }) {
@@ -247,6 +249,7 @@ export function Game(props: {
           side: BOT,
           seed: randomSeed32(),
           priorJson: props.priorJson,
+          pickPriorJson: props.pickPriorJson,
         },
       )
       .then(() => {
@@ -331,10 +334,6 @@ export function Game(props: {
     const legal = legalChoices(battle, BOT);
     if (legal.length === 1) {
       req.picks[BOT] = legal[0].input;
-      return;
-    }
-    if (legal[0].kind === "team") {
-      void searchBot(req, legal);
       return;
     }
     void searchBot(req, legal);
@@ -852,9 +851,10 @@ export function ChoiceButtons(props: {
       {switches.length > 0 && (
         <div class="switch-row">
           {switches.map((s) => {
-            // Current item from the live view (species-matched — party
-            // order and choice pos live in different index spaces).
+            // Current item from the live view (`pos` is 1-based party slot,
+            // with species match as fallback if out of range).
             const pk =
+              props.party[s.pos - 1] ??
               props.party.find((p) => toId(p.species) === toId(s.species)) ??
               null;
             const cur = pk?.item ?? null;

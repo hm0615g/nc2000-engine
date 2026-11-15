@@ -2905,6 +2905,7 @@ function buildDynamicBeliefPoolJson({
   foeName,
   seenFoeMons,
   opponentDb,
+  positionSpec = null,
 }) {
   if (!Array.isArray(foePreviewMons) || foePreviewMons.length !== 6) {
     return { json: beliefPoolJson, hasCustomShellMemory: false };
@@ -3132,12 +3133,18 @@ function buildDynamicBeliefPoolJson({
     });
   }
 
+  const itemResult = positionSpec
+    ? require('./pbs-castle-item-hypotheses').repairAdaptedTeamItems({
+        teams: clonedTeams, baseTeams: baseBeliefPool.teams, positionSpec
+      })
+    : {teams: clonedTeams, repairs: []};
   return {
     json: JSON.stringify({
       ...baseBeliefPool,
-      teams: clonedTeams,
+      teams: itemResult.teams,
     }),
     hasCustomShellMemory,
+    itemHypothesisRepairs: itemResult.repairs,
   };
 }
 
@@ -4880,9 +4887,9 @@ async function playOneGame(gameIdx, dependencies = {}) {
               side: mySide, matchId, ownSets: team.sets, previewSides, pickedRosterSlots,
               seed: SEED * 1000 + gameIdx * 10 + mySide, c: PROFILE.c,
               poolJson: beliefPoolJson,
-              poolProvider: ({seenFoeMons: observed, foeSide}) => buildDynamicBeliefPoolJson({
+              poolProvider: ({seenFoeMons: observed, foeSide, spec}) => buildDynamicBeliefPoolJson({
                 foePreviewMons: previewSides[foeSide], foeName,
-                seenFoeMons: observed, opponentDb,
+                seenFoeMons: observed, opponentDb, positionSpec: spec,
               }),
             });
             // Preview's searcher is no longer a battle input authority.

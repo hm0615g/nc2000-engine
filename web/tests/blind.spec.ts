@@ -534,3 +534,75 @@ test("a pinned built-in party plays its exact catalog sets", async ({ page }) =>
   await expect(page.locator(".start-screen")).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("pick prior loads, validates, stores, and clears cleanly in setup", async ({
+  page,
+}) => {
+  const errors = guardConsole(page);
+  await seedStorage(page);
+  await page.goto("/");
+  await page.evaluate(() => localStorage.removeItem("nc2000-pick-prior"));
+
+  const setup = page.locator('[data-party="settings"] .party-value');
+  const atRest = ((await setup.textContent()) ?? "").replace(/\s+/g, " ").trim();
+
+  await page.locator('[data-party="settings"]').click();
+  const pickInput = page.locator('[data-testid="pick-prior-file"]');
+  const pickReport = page.locator('[data-testid="pick-prior-report"]');
+
+  await pickInput.setInputFiles({
+    name: "bad-pick-prior.json",
+    mimeType: "application/json",
+    buffer: Buffer.from('{"schema":"wrong"}'),
+  });
+  await expect(pickReport).toContainText("NOT applied");
+  await expect(page.locator('[data-testid="prior-report"]')).toHaveCount(0);
+
+  const foeTeam = catalog.teams[0];
+  const ownTeam = catalog.teams[1];
+  const validPickPrior = JSON.stringify({
+    schema: "nc2000-pick-prior-v1",
+    smoothing: 0.01,
+    backoff_strength: 1.0,
+    source: {},
+    rows: [
+      {
+        team: foeTeam.id,
+        enemy_preview: ownTeam.sets.map((s) => ({
+          species: toId(s.species),
+          level: s.level,
+          gender: s.gender === "M" || s.gender === "F" ? s.gender : "",
+          item: Boolean(s.item),
+        })),
+        side: 0,
+        choices: [
+          {
+            species: [0, 1, 2].map((i) => toId(foeTeam.sets[i].species)),
+            count: 50,
+          },
+        ],
+      },
+    ],
+  });
+
+  await pickInput.setInputFiles({
+    name: "valid-pick-prior.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(validPickPrior),
+  });
+  await expect(pickReport).toContainText("Applied");
+  await expect(pickReport).toContainText("1 row, 1 team");
+  await page.locator("dialog.modal .modal-head button").click();
+  await expect(setup).toContainText("valid-pick-prior.json");
+  await expect(setup).toContainText(catalogLine);
+
+  await page.locator('[data-party="settings"]').click();
+  await page.locator('[data-testid="pick-prior-clear"]').click();
+  await expect(setup).toHaveText(atRest);
+  expect(
+    await page.evaluate(() => localStorage.getItem("nc2000-pick-prior")),
+  ).toBeNull();
+  const close = page.locator("dialog.modal .modal-head button");
+  if ((await close.count()) > 0) await close.click();
+  expect(errors).toEqual([]);
+});

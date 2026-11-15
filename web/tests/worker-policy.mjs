@@ -111,12 +111,70 @@ try {
         rows.push({ path: "fork", mode, decisions: 1, support: result.playPolicy.actions.length });
       } finally { worker.terminate(); reference.free(); battle.free(); }
     }
+    // Verify BotWorker passes pickPriorJson through to ProtocolSearcher and
+    // bypasses compiledPreview so PickPrior shifts Team Preview search.
+    const toId = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const previewMons = catalog.teams[1].sets.map(s => ({
+      species: toId(s.species),
+      level: s.level,
+      gender: s.gender === "M" || s.gender === "F" ? s.gender : "",
+      item: Boolean(s.item),
+    }));
+    const foeTeam = catalog.teams[0];
+    const makePickPrior = fav => JSON.stringify({
+      schema: "nc2000-pick-prior-v1",
+      smoothing: 0.001,
+      backoff_strength: 1.0,
+      source: {},
+      rows: [{
+        team: foeTeam.id,
+        enemy_preview: previewMons,
+        side: 0,
+        choices: [{ species: fav.map(i => toId(foeTeam.sets[i].species)), count: 500 }],
+      }],
+    });
+    const pickPriorA = makePickPrior([0, 1, 2]);
+    const pickPriorB = makePickPrior([3, 4, 5]);
+    const runPickWorker = async (pickPriorJson) => {
+      const worker = new BotWorker();
+      const reference = new wasm.ProtocolSearcher(dex, 1, poolJson, seed, searchProfile("blind").c);
+      const battle = new wasm.Battle(dex, teams[0], teams[1], "1,2,3,4");
+      const channel = new wasm.PlayerChannel(1);
+      let report = null;
+      worker.onPickPriorReport = r => { report = r; };
+      try {
+        reference.setOwnTeam(teams[1]);
+        const refRep = JSON.parse(reference.setPickPrior(pickPriorJson));
+        if (!refRep.applied) throw new Error("reference setPickPrior refused");
+        await worker.newBattle(teams[0], teams[1], "1,2,3,4", {
+          poolJson, side: 1, seed, compiledPreview: true, pickPriorJson,
+        });
+        const frame = JSON.parse(channel.frame(battle));
+        reference.pushLines(JSON.stringify(frame.lines));
+        reference.onRequest(JSON.stringify(frame.request));
+        reference.step(budget);
+        const res = await worker.search(1, budget, seed, false);
+        const refRoot = JSON.parse(reference.rootPolicy());
+        for (const row of refRoot.actions) row.input = battle.resolveChoice(1, row.input);
+        equal(report, refRep, "worker pickPrior report mismatch");
+        equal(res.src, "search", "pickPrior must bypass compiledPreview lookup");
+        equal(res.policy, refRoot, "worker pickPrior policy diverged from reference");
+        return res.policy;
+      } finally {
+        worker.terminate(); channel.free(); reference.free(); battle.free();
+      }
+    };
+    const polA = await runPickWorker(pickPriorA);
+    const polB = await runPickWorker(pickPriorB);
+    if (JSON.stringify(polA) === JSON.stringify(polB))
+      throw new Error("BotWorker Team Preview policy did not change across opposite PickPriors");
+    rows.push({ path: "pick-prior", mode: "legacy", decisions: 2, shifted: true });
     dex.free();
     return rows;
   }, { wasmUrl: "/@fs" + fileURLToPath(new URL("../../crates/wasm/pkg-web/nc2000_wasm.js", import.meta.url)),
     compiledDisabled: process.env.NC2000_DISABLE_COMPILED_PREVIEW === "1" ||
       JSON.parse(readFileSync(new URL("../../data/compiled-preview-v1.json", import.meta.url), "utf8")).status === "retired-training-v3" });
-  assert.equal(result.length, 6);
+  assert.equal(result.length, 7);
   console.log(JSON.stringify(result, null, 2));
 } finally {
   await browser?.close();

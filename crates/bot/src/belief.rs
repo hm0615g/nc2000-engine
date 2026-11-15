@@ -82,7 +82,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
 use nc2000_engine::battle::{tr, PokemonSet};
-use nc2000_engine::dex::{toid, Dex, MoveId};
+use nc2000_engine::dex::{toid, Dex, ItemId, MoveId};
 use nc2000_engine::state::{
     ActionKind, Battle, EffId, EffectState, MoveSlot, MoveSlots, PokeId, Pokemon,
 };
@@ -91,7 +91,7 @@ use nc2000_engine::validate::{validate_team, Learnsets};
 use crate::observe::{move_matches, MonObs, Observer};
 use crate::preview::MetaPool;
 use crate::pick_prior::{PickDistribution, PickPrior, PreviewMon};
-use crate::prior::BeliefPrior;
+use crate::prior::{BeliefPrior, SpeciesPrior};
 use crate::rng::SplitMix64;
 
 /// Training-normalized no-OHKO community rentals, baked into the bot so the live
@@ -301,60 +301,250 @@ impl FallbackSource {
     }
 }
 
-/// M18 item 2: one fallback-roster slot's per-determinization move draw.
-///
-/// Rebuilt with the fallback roster at every re-filter, so `revealed` tracks
-/// the reveals as they accumulate and `pool` shrinks to match. Splitting the
-/// two is what makes reveal-dominance structural rather than checked: the
-/// revealed slots are copied in first and unconditionally, and the pool it
-/// draws the remainder from cannot contain them.
-#[derive(Clone, Debug)]
-struct MoveDraw {
-    /// Slots the reveals pin. Always kept, always first, never resampled.
-    revealed: Vec<MoveSlot>,
-    /// `(fresh slot, marginal weight)` over the species' prior moves that are
-    /// format-legal at the observed level and not already revealed. Ordered
-    /// by the prior table's (sorted) move ids, so the draw never depends on
-    /// JSON key order.
-    pool: Vec<(MoveSlot, f64)>,
+const ITEM_FALLBACK_ORDER: &[&str] = &[
+    "leftovers", "miracleberry", "mintberry", "goldberry", "przcureberry", "psncureberry",
+    "iceberry", "burntberry", "bitterberry", "berry", "scopelens", "quickclaw",
+    "charcoal", "magnet", "mysticwater", "nevermeltice", "softsand", "hardstone",
+    "miracleseed", "sharpbeak", "pinkbow", "polkadotbow", "twistedspoon", "blackbelt",
+    "blackglasses", "poisonbarb", "silverpowder", "spelltag", "dragonfang",
+];
+
+fn align_moves_with_reference(dex: &Dex, mut mon: Pokemon, fallback_mon: &Pokemon) -> Pokemon {
+    let fb_slots = &fallback_mon.base_move_slots;
+    let cand_slots = mon.base_move_slots;
+    if cand_slots.len() != fb_slots.len() || cand_slots.is_empty() {
+        return mon;
+    }
+    let n = cand_slots.len();
+    let mut aligned: [Option<MoveSlot>; 4] = [None; 4];
+    let mut used_cand = [false; 4];
+    for (c_idx, cs) in cand_slots.iter().enumerate() {
+        if let Some(f_idx) =
+            (0..n).find(|&fi| aligned[fi].is_none() && fb_slots[fi].id == cs.id)
+        {
+            aligned[f_idx] = Some(*cs);
+            used_cand[c_idx] = true;
+        }
+    }
+    for (c_idx, cs) in cand_slots.iter().enumerate() {
+        if used_cand[c_idx] {
+            continue;
+        }
+        if dex.moves.key(cs.id).starts_with("hiddenpower") {
+            if let Some(f_idx) = (0..n).find(|&fi| {
+                aligned[fi].is_none() && dex.moves.key(fb_slots[fi].id).starts_with("hiddenpower")
+            }) {
+                aligned[f_idx] = Some(*cs);
+                used_cand[c_idx] = true;
+            }
+        }
+    }
+    for (c_idx, cs) in cand_slots.iter().enumerate() {
+        if used_cand[c_idx] {
+            continue;
+        }
+        if let Some(f_idx) = (0..n).find(|&fi| aligned[fi].is_none()) {
+            aligned[f_idx] = Some(*cs);
+        }
+    }
+    let mut nb = MoveSlots::default();
+    for fi in 0..n {
+        if let Some(slot) = aligned[fi] {
+            nb.push(slot);
+        }
+    }
+    mon.base_move_slots = nb;
+    mon.move_slots = nb;
+    mon
 }
 
-impl MoveDraw {
-    /// Revealed slots, then a **weighted draw without replacement** for the
-    /// `k` still-open ones, on the caller's (per-iteration) rng — the rule
-    /// the design doc specifies. Independent Bernoulli draws are wrong here:
-    /// they do not yield exactly the k slots that are actually open. Drawing
-    /// without replacement distorts the marginals, which is accepted: the
-    /// distortion lives entirely in the guess about unrevealed slots, i.e.
-    /// inside class B.
-    fn draw(&self, rng: &mut SplitMix64) -> MoveSlots {
-        let mut out = MoveSlots::default();
-        for slot in self.revealed.iter().take(4) {
-            out.push(*slot);
+fn clone_mon_with_item(base: &Pokemon, item_id: Option<ItemId>) -> Pokemon {
+    let mut mon = base.clone();
+    mon.item = item_id;
+    mon.item_state = EffectState {
+        id: item_id.map(EffId::Item).unwrap_or_default(),
+        effect_order: base.item_state.effect_order,
+        ..Default::default()
+    };
+    mon
+}
+
+fn choose_fallback_item_for_slot(
+    dex: &Dex,
+    obs_mons: &[MonObs],
+    slot: usize,
+    used_items: &[ItemId],
+) -> Option<ItemId> {
+    ITEM_FALLBACK_ORDER.iter().filter_map(|k| dex.items.id(k)).find(|&id| {
+        !used_items.contains(&id)
+            && !Observer::is_item_excluded_for_slot(dex, obs_mons, slot, Some(id))
+    })
+}
+
+fn distinct_revealed_moves(dex: &Dex, mo: &MonObs) -> Vec<MoveId> {
+    let mut out = Vec::with_capacity(4);
+    for &m in &mo.revealed_moves {
+        if out.len() >= 4 {
+            break;
         }
-        let mut pool = self.pool.clone();
-        while out.len() < 4 && !pool.is_empty() {
-            let total: f64 = pool.iter().map(|(_, w)| *w).sum();
-            let pick = if total > 0.0 {
-                let mut u = rng.next_f64() * total;
-                let mut pick = pool.len() - 1;
-                for (i, (_, w)) in pool.iter().enumerate() {
-                    u -= *w;
-                    if u < 0.0 {
-                        pick = i;
-                        break;
-                    }
-                }
-                pick
-            } else {
-                // Unreachable through the interpreter (it drops non-positive
-                // weights); total-by-construction rather than by argument.
-                rng.below(pool.len())
-            };
-            out.push(pool.swap_remove(pick).0);
+        if !out.iter().any(|&prev| move_matches(dex, prev, m)) {
+            out.push(m);
         }
-        out
     }
+    out
+}
+
+fn legal_prior_moves(dex: &Dex, sp: &SpeciesPrior, mo: &MonObs) -> Vec<(MoveId, String, f64)> {
+    let species_key = dex.species.key(mo.species);
+    let poss = mo.hp_type_mask & crate::hp_evidence::possible_types(dex, mo.species, mo.gender);
+    let mut out: Vec<(MoveId, String, f64)> = Vec::new();
+    for (key, w) in &sp.moves {
+        let w = *w;
+        if !w.is_finite() || w <= 0.0 {
+            continue;
+        }
+        let Some(id) = dex.moves.id(&toid(key)) else {
+            continue;
+        };
+        let move_key = dex.moves.key(id);
+        if !format_move_legal_at_level(species_key, move_key, mo.level) {
+            continue;
+        }
+        if mo.revealed_moves.iter().any(|&r| move_matches(dex, id, r)) {
+            continue;
+        }
+        if move_key == "hiddenpower" {
+            if poss == 0 {
+                continue;
+            }
+        } else if move_key.starts_with("hiddenpower") {
+            let ty = dex.moves.get(id).move_type.as_str();
+            let Some(idx) = crate::hp_evidence::TYPES.iter().position(|&t| t == ty) else {
+                continue;
+            };
+            if (poss & (1u16 << idx)) == 0 {
+                continue;
+            }
+        }
+        if out.iter().any(|(prev_id, _, _)| *prev_id == id) {
+            continue;
+        }
+        out.push((id, move_key.to_string(), w));
+    }
+    out.sort_by(|a, b| {
+        b.2.partial_cmp(&a.2)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.1.cmp(&b.1))
+    });
+    out
+}
+
+fn legal_prior_items(
+    dex: &Dex,
+    sp: &SpeciesPrior,
+    obs_mons: &[MonObs],
+    slot: usize,
+) -> Vec<(ItemId, f64)> {
+    let Some(mo) = obs_mons.get(slot) else {
+        return Vec::new();
+    };
+    if !mo.preview_has_item || mo.item.original.is_some() {
+        return Vec::new();
+    }
+    let mut out: Vec<(ItemId, f64)> = Vec::new();
+    for (key, w) in &sp.items {
+        let w = *w;
+        if !w.is_finite() || w <= 0.0 {
+            continue;
+        }
+        let Some(id) = dex.items.id(&toid(key)) else {
+            continue;
+        };
+        if Observer::is_item_excluded_for_slot(dex, obs_mons, slot, Some(id)) {
+            continue;
+        }
+        if out.iter().any(|(prev_id, _)| *prev_id == id) {
+            continue;
+        }
+        out.push((id, w));
+    }
+    out.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| dex.items.key(a.0).cmp(dex.items.key(b.0)))
+    });
+    out
+}
+
+fn enforce_roster_item_clause(
+    dex: &Dex,
+    obs_mons: &[MonObs],
+    prior: Option<&BeliefPrior>,
+    roster: &mut [Pokemon],
+) {
+    let mut used_items: Vec<ItemId> = Vec::with_capacity(roster.len());
+    for mo in obs_mons {
+        if let Some(Some(id)) = mo.item.original {
+            if !used_items.contains(&id) {
+                used_items.push(id);
+            }
+        }
+    }
+    let mut order: Vec<usize> = (0..roster.len().min(obs_mons.len())).collect();
+    order.sort_by_key(|&s| (!obs_mons[s].appeared, s));
+    for slot in order {
+        let mo = &obs_mons[slot];
+        if mo.item.original.is_some() || !mo.preview_has_item {
+            continue;
+        }
+        let ok = roster[slot].item.is_some_and(|id| {
+            !used_items.contains(&id)
+                && !Observer::is_item_excluded_for_slot(dex, obs_mons, slot, Some(id))
+        });
+        if ok {
+            if let Some(id) = roster[slot].item {
+                used_items.push(id);
+            }
+        } else {
+            let prior_rep = prior
+                .and_then(|pr| pr.species(dex.species.key(mo.species)))
+                .and_then(|sp| {
+                    legal_prior_items(dex, sp, obs_mons, slot)
+                        .into_iter()
+                        .map(|(id, _)| id)
+                        .find(|id| !used_items.contains(id))
+                });
+            if let Some(rep) =
+                prior_rep.or_else(|| choose_fallback_item_for_slot(dex, obs_mons, slot, &used_items))
+            {
+                roster[slot] = clone_mon_with_item(&roster[slot], Some(rep));
+                used_items.push(rep);
+            }
+        }
+    }
+}
+
+fn hp_compatible_with_obs(dex: &Dex, mon: &Pokemon, mo: &MonObs) -> bool {
+    crate::hp_evidence::consistent(dex, mon, mo.hp_type_mask)
+        || (mo.hp_type_mask != 0
+            && (mo.hp_type_mask & crate::hp_evidence::possible_types(dex, mon.species, mo.gender))
+                != 0
+            && mon
+                .base_move_slots
+                .iter()
+                .any(|m| dex.moves.key(m.id) == "hiddenpower"))
+}
+
+type TeamSig = Vec<(u16, Option<u16>, Vec<u16>, [i32; 5], u8)>;
+
+fn team_signature(team: &[Pokemon]) -> TeamSig {
+    team.iter()
+        .map(|p| {
+            let mut mvs: Vec<u16> = p.base_move_slots.iter().map(|s| s.id.0).collect();
+            mvs.sort_unstable();
+            (p.species.0, p.item.map(|i| i.0), mvs, p.base_stored_stats, p.base_hp_type.0)
+        })
+        .collect()
 }
 
 struct LoadoutDraw {
@@ -384,6 +574,81 @@ impl LoadoutDraw {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum TeamPlanPick {
+    Pool(usize),
+    FallbackCand(usize),
+    FallbackDefault,
+}
+
+impl TeamPlanPick {
+    #[inline]
+    pub(crate) fn pool_index(self) -> Option<usize> {
+        match self {
+            TeamPlanPick::Pool(idx) => Some(idx),
+            TeamPlanPick::FallbackCand(_) | TeamPlanPick::FallbackDefault => None,
+        }
+    }
+}
+
+fn systematic_resample_indices(weights: &[f64], k: usize, rng: &mut SplitMix64) -> Vec<usize> {
+    let mut picked = Vec::with_capacity(k);
+    if k == 0 || weights.is_empty() {
+        return picked;
+    }
+    let pos: Vec<(usize, f64)> = weights
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &w)| (w.is_finite() && w > 0.0).then_some((i, w)))
+        .collect();
+    let items: Vec<(usize, f64)> = if pos.is_empty() {
+        (0..weights.len()).map(|i| (i, 1.0)).collect()
+    } else {
+        pos
+    };
+    let total: f64 = items.iter().map(|&(_, w)| w).sum();
+    let step = total / (k as f64);
+    let u0 = rng.next_f64() * step;
+    let mut idx = 0usize;
+    let mut cum = items[0].1;
+    for j in 0..k {
+        let target = u0 + (j as f64) * step;
+        while idx + 1 < items.len() && cum <= target {
+            idx += 1;
+            cum += items[idx].1;
+        }
+        picked.push(items[idx].0);
+    }
+    for i in (1..picked.len()).rev() {
+        let j = rng.below(i + 1);
+        picked.swap(i, j);
+    }
+    picked
+}
+
+#[derive(Clone)]
+struct FallbackCandPool {
+    entries: Vec<(Vec<Pokemon>, f64)>,
+    total: f64,
+}
+
+impl FallbackCandPool {
+    #[inline]
+    fn draw_index(&self, rng: &mut SplitMix64) -> usize {
+        if self.entries.len() <= 1 || !(self.total > 0.0) {
+            return 0;
+        }
+        let mut u = rng.next_f64() * self.total;
+        for (i, (_, weight)) in self.entries.iter().enumerate() {
+            u -= *weight;
+            if u < 0.0 {
+                return i;
+            }
+        }
+        self.entries.len() - 1
+    }
+}
+
 pub struct Belief {
     hp_observations: Option<Vec<(i32, i32)>>,
     cands: Vec<Candidate>,
@@ -401,8 +666,10 @@ pub struct Belief {
     /// M18: the community belief prior, when the owner loaded one.
     prior: Option<Arc<BeliefPrior>>,
     pick_draws: Option<(u64, Vec<Option<PickDistribution>>)>,
-    draws: Option<Vec<Option<MoveDraw>>>,
+    prior_governed_slots: Vec<bool>,
+    fallback_lead_weights: Option<[f64; 6]>,
     loadout_draws: Option<Vec<Option<LoadoutDraw>>>,
+    fallback_cands: Option<FallbackCandPool>,
     synced: Option<u64>,
 }
 
@@ -447,8 +714,10 @@ impl Belief {
             fallback_policy,
             prior: None,
             pick_draws: None,
-            draws: None,
+            prior_governed_slots: Vec::new(),
+            fallback_lead_weights: None,
             loadout_draws: None,
+            fallback_cands: None,
             synced: None,
         };
         b.refilter(dex, obs);
@@ -516,10 +785,68 @@ impl Belief {
             fallback_policy: FallbackPolicy::Layered,
             prior: None,
             pick_draws: None,
-            draws: None,
+            prior_governed_slots: Vec::new(),
+            fallback_lead_weights: None,
             loadout_draws: None,
+            fallback_cands: None,
             synced: Some(obs.revision()),
         })
+    }
+
+    /// Construct a singleton pinned belief from raw opponent `PokemonSet`s
+    /// without running the full pool validator (which rejects non-pool test
+    /// fixtures and 3-mon subteams). Uses `build_refs` to align slots to public
+    /// preview order, falling back to slot-for-slot `Battle::from_fixture` when
+    /// `sets.len() == obs.mons().len()`.
+    pub fn pinned_from_sets(
+        dex: &Dex,
+        id: &str,
+        sets: &[PokemonSet],
+        obs: &Observer,
+    ) -> Result<Belief, String> {
+        let refs = if let Some(refs) = build_refs(dex, sets, obs.mons()) {
+            refs
+        } else if sets.len() == obs.mons().len() {
+            Battle::from_fixture(dex, "1,2,3,4", sets, sets)
+                .map(|mut b| std::mem::take(&mut b.sides[0].roster))
+                .map_err(|e| format!("construct pinned opponent refs: {e:?}"))?
+        } else {
+            return Err("pinned opponent team does not match the public preview".to_string());
+        };
+        Ok(Belief {
+            hp_observations: None,
+            cands: vec![Candidate {
+                id: id.to_string(),
+                weight: None,
+                sets: sets.to_vec(),
+                refs: Some(refs),
+            }],
+            alive: vec![0],
+            fallback: None,
+            fallback_visible: None,
+            pinned: true,
+            fallback_policy: FallbackPolicy::Layered,
+            prior: None,
+            pick_draws: None,
+            prior_governed_slots: Vec::new(),
+            fallback_lead_weights: None,
+            loadout_draws: None,
+            fallback_cands: None,
+            synced: Some(obs.revision()),
+        })
+    }
+
+    /// The pinned opponent's Turn-0 `PokemonSet`s when constructed via
+    /// `pinned`, `pinned_checked`, or `pinned_from_sets`.
+    pub fn pinned_sets(&self) -> Option<&[PokemonSet]> {
+        self.pinned
+            .then(|| {
+                self.cands
+                    .first()
+                    .map(|c| c.sets.as_slice())
+                    .filter(|s| !s.is_empty())
+            })
+            .flatten()
     }
 
     /// Open-team-sheet belief for a caller that holds the TRUE battle (the
@@ -546,8 +873,10 @@ impl Belief {
             fallback_policy: FallbackPolicy::Layered,
             prior: None,
             pick_draws: None,
-            draws: None,
+            prior_governed_slots: Vec::new(),
+            fallback_lead_weights: None,
             loadout_draws: None,
+            fallback_cands: None,
             synced: Some(obs.revision()),
         }
     }
@@ -616,8 +945,17 @@ impl Belief {
     /// fallback roster, which is the only place the reveals are known).
     pub fn set_prior(&mut self, prior: Arc<BeliefPrior>) {
         self.prior = Some(prior);
-        self.draws = None;
+        self.prior_governed_slots.clear();
+        self.fallback_lead_weights = None;
+        self.loadout_draws = None;
+        self.fallback_cands = None;
         self.synced = None;
+    }
+
+    fn active_prior(&self) -> Option<&BeliefPrior> {
+        self.prior
+            .as_deref()
+            .filter(|p| !p.is_empty() && !self.pinned && self.alive.is_empty())
     }
 
     pub fn has_prior(&self) -> bool {
@@ -643,6 +981,10 @@ impl Belief {
             prior.condition(&candidate.id, own_preview, obs.opp(), &roster, appeared)
         }).collect();
         self.pick_draws = Some((obs.revision(), plans));
+    }
+
+    pub fn clear_pick_draws(&mut self) {
+        self.pick_draws = None;
     }
 
     /// Condition a pinned (open-sheet) belief's hidden bench sampling on a
@@ -679,9 +1021,20 @@ impl Belief {
 
     /// True if an active `pick_draws` distribution is installed for `obs.revision()`.
     pub fn has_active_pick_draws(&self, obs: &Observer) -> bool {
-        self.pick_draws
-            .as_ref()
-            .is_some_and(|(rev, plans)| *rev == obs.revision() && plans.iter().any(Option::is_some))
+        self.pick_draws.as_ref().is_some_and(|(rev, plans)| {
+            *rev == obs.revision()
+                && self
+                    .alive
+                    .iter()
+                    .any(|&i| plans.get(i).is_some_and(Option::is_some))
+        })
+    }
+
+    /// True if an opponent preview prior (`pick_draws` or off-pool fallback
+    /// `fallback_lead_weights`) is active for `obs.revision()`.
+    pub fn has_preview_prior(&self, obs: &Observer) -> bool {
+        self.has_active_pick_draws(obs)
+            || (self.synced == Some(obs.revision()) && self.fallback_lead_weights.is_some())
     }
 
     pub(crate) fn sample_preview_prior(
@@ -691,20 +1044,68 @@ impl Belief {
         actions: &[nc2000_engine::battle::SearchChoice],
         rng: &mut SplitMix64,
     ) -> Option<usize> {
-        self.pick_draws.as_ref()
+        if let Some(chosen) = self
+            .pick_draws
+            .as_ref()
             .filter(|(revision, _)| *revision == obs.revision())
-            .and_then(|(_, plans)| pick.and_then(|i| plans[i].as_ref()))?
-            .sample_preview(actions, rng)
+            .and_then(|(_, plans)| pick.and_then(|i| plans[i].as_ref()))
+            .and_then(|dist| dist.sample_preview(actions, rng))
+        {
+            return Some(chosen);
+        }
+        if pick.is_none() && self.synced == Some(obs.revision()) {
+            if let Some(lw) = &self.fallback_lead_weights {
+                if actions.is_empty() {
+                    return None;
+                }
+                let mut scores = Vec::with_capacity(actions.len());
+                let mut raw_sum = 0.0f64;
+                for action in actions {
+                    let s = match action {
+                        nc2000_engine::battle::SearchChoice::Team(slots) => {
+                            let a = slots[0];
+                            if !(1..=6).contains(&a) {
+                                0.0
+                            } else {
+                                let lead_w = lw[(a - 1) as usize];
+                                let team_w: f64 = slots
+                                    .iter()
+                                    .filter(|&&slot| (1..=6).contains(&slot))
+                                    .map(|&slot| lw[(slot - 1) as usize])
+                                    .sum();
+                                if team_w > 0.0 { lead_w / team_w } else { 0.0 }
+                            }
+                        }
+                        _ => 0.0,
+                    };
+                    raw_sum += s;
+                    scores.push(s);
+                }
+                let n = actions.len() as f64;
+                let mut u = rng.next_f64();
+                for (i, raw) in scores.into_iter().enumerate() {
+                    let norm = if raw_sum > 0.0 { raw / raw_sum } else { 1.0 / n };
+                    let p = 0.85 * norm + 0.15 / n;
+                    u -= p;
+                    if u < 0.0 {
+                        return Some(i);
+                    }
+                }
+                return Some(actions.len() - 1);
+            }
+        }
+        None
     }
 
     /// Which fallback roster slots the installed prior currently governs, in
     /// observer roster order (`false` = today's deterministic filler). Empty
     /// when nothing is governed. A coverage surface for the M18 gate.
     pub fn prior_governed(&self) -> Vec<bool> {
-        self.draws
-            .as_deref()
-            .map(|d| d.iter().map(Option::is_some).collect())
-            .unwrap_or_default()
+        if self.prior_governed_slots.iter().any(|&g| g) {
+            self.prior_governed_slots.clone()
+        } else {
+            Vec::new()
+        }
     }
 
     /// Per-mon synthesis sources in observer roster order. Meaningful when
@@ -718,6 +1119,12 @@ impl Belief {
             .as_deref()
             .and_then(|d| d.get(slot)?.as_ref())
             .map_or(0, |ld| ld.entries.len())
+    }
+
+    pub fn fallback_cand_count(&self) -> usize {
+        self.fallback_cands
+            .as_ref()
+            .map_or(0, |pool| pool.entries.len())
     }
 
     pub fn candidate_id(&self, pool_idx: usize) -> &str {
@@ -762,6 +1169,35 @@ impl Belief {
             r -= weight(i);
         }
         self.alive.last().copied()
+    }
+
+    pub(crate) fn root_sampling_plan(&self, k: usize, rng: &mut SplitMix64) -> Vec<TeamPlanPick> {
+        if k == 0 {
+            return Vec::new();
+        }
+        if !self.alive.is_empty() {
+            let weights: Vec<f64> = self
+                .alive
+                .iter()
+                .map(|&i| self.cands[i].weight.unwrap_or(1.0))
+                .collect();
+            return systematic_resample_indices(&weights, k, rng)
+                .into_iter()
+                .map(|pos| TeamPlanPick::Pool(self.alive[pos]))
+                .collect();
+        }
+        if !self.pinned {
+            if let Some(pool) = &self.fallback_cands {
+                if !pool.entries.is_empty() {
+                    let weights: Vec<f64> = pool.entries.iter().map(|(_, w)| *w).collect();
+                    return systematic_resample_indices(&weights, k, rng)
+                        .into_iter()
+                        .map(TeamPlanPick::FallbackCand)
+                        .collect();
+                }
+            }
+        }
+        vec![TeamPlanPick::FallbackDefault; k]
     }
 
     fn is_weighted_prior(&self) -> bool {
@@ -851,6 +1287,387 @@ impl Belief {
                 .as_deref()
                 .expect("determinize_with: fallback roster not built (call sync first)"),
         };
+        self.determinize_with_refs_in_place(dex, out, obs, pick, refs, rng);
+    }
+
+    pub(crate) fn determinize_in_place_planned(
+        &self,
+        dex: &Dex,
+        out: &mut Battle,
+        obs: &Observer,
+        plan_pick: TeamPlanPick,
+        rng: &mut SplitMix64,
+    ) {
+        match plan_pick {
+            TeamPlanPick::Pool(i) => {
+                let refs = self.cands[i]
+                    .refs
+                    .as_deref()
+                    .expect("determinize_with: candidate is preview-inconsistent");
+                self.determinize_with_refs_in_place(dex, out, obs, Some(i), refs, rng);
+            }
+            TeamPlanPick::FallbackCand(idx)
+                if !self.pinned
+                    && self
+                        .fallback_cands
+                        .as_ref()
+                        .is_some_and(|pool| idx < pool.entries.len()) =>
+            {
+                let refs = &self.fallback_cands.as_ref().unwrap().entries[idx].0;
+                self.determinize_with_refs_in_place(dex, out, obs, None, refs, rng);
+            }
+            TeamPlanPick::FallbackCand(_) | TeamPlanPick::FallbackDefault => {
+                self.determinize_in_place(dex, out, obs, None, rng);
+            }
+        }
+    }
+
+    pub(crate) fn sample_hidden_party(
+        &self,
+        obs: &Observer,
+        pick: Option<usize>,
+        opp_side: &nc2000_engine::state::Side,
+        preview_level_cap: Option<u32>,
+        rng: &mut SplitMix64,
+    ) -> ([u8; 6], usize, bool) {
+        let roster_len = opp_side.roster.len().min(6);
+        let party_len = opp_side.party.len().min(6);
+        let mut party_key = [0u8; 6];
+        for pos in 0..party_len {
+            party_key[pos] = opp_side.party[pos];
+        }
+        if party_len >= roster_len {
+            return (party_key, party_len, false);
+        }
+        let mut appeared = [false; 6];
+        for s in 0..roster_len {
+            appeared[s] = opp_side.roster[s].previously_switched_in > 0
+                || opp_side.roster[s].is_active;
+        }
+        let mut hidden_positions = [0usize; 6];
+        let mut hidden_len = 0usize;
+        for pos in 0..party_len {
+            if !appeared[party_key[pos] as usize] {
+                hidden_positions[hidden_len] = pos;
+                hidden_len += 1;
+            }
+        }
+        if hidden_len == 0 {
+            return (party_key, party_len, false);
+        }
+
+        let mut pool = [0u8; 6];
+        let mut pool_len = 0usize;
+        for s in 0..roster_len {
+            if !appeared[s] {
+                pool[pool_len] = s as u8;
+                pool_len += 1;
+            }
+        }
+        let public = (0..roster_len)
+            .fold(0u8, |mask, slot| mask | (u8::from(appeared[slot]) << slot));
+        let level_of = |mask: u8| -> u32 {
+            obs.mons()
+                .iter()
+                .enumerate()
+                .take(roster_len)
+                .filter(|(slot, _)| mask & (1 << slot) != 0)
+                .map(|(_, mon)| u32::from(mon.level))
+                .sum()
+        };
+        let collect_legal = |cap: u32| -> ([u8; 64], usize) {
+            let mut legal = [0u8; 64];
+            let mut n = 0usize;
+            for mask in 0..(1u8 << roster_len) {
+                if mask.count_ones() as usize == party_len
+                    && (mask & public) == public
+                    && level_of(mask) <= cap
+                {
+                    legal[n] = mask;
+                    n += 1;
+                }
+            }
+            assert!(n > 0, "public reveals have no level-legal selection");
+            (legal, n)
+        };
+
+        let distribution = if party_len == 3 {
+            self.pick_draws
+                .as_ref()
+                .filter(|(revision, _)| *revision == obs.revision())
+                .and_then(|(_, plans)| pick.and_then(|i| plans[i].as_ref()))
+        } else {
+            None
+        };
+
+        if let Some(distribution) = distribution {
+            let mask = distribution.sample(rng);
+            let mut selected = [0u8; 6];
+            let mut sel_len = 0usize;
+            for &slot in &pool[..pool_len] {
+                if mask & (1 << slot) != 0 {
+                    selected[sel_len] = slot;
+                    sel_len += 1;
+                }
+            }
+            if sel_len == hidden_len {
+                pool = selected;
+                pool_len = sel_len;
+            }
+            for &pos in &hidden_positions[..hidden_len] {
+                let idx = rng.below(pool_len);
+                let new_slot = pool[idx];
+                pool[idx] = pool[pool_len - 1];
+                pool_len -= 1;
+                party_key[pos] = new_slot;
+            }
+            if let Some(cap) = preview_level_cap {
+                let cur_mask = (0..party_len).fold(0u8, |m, p| m | (1 << party_key[p]));
+                if level_of(cur_mask) > cap {
+                    let (legal, legal_len) = collect_legal(cap);
+                    let mask = distribution
+                        .sample_allowed(&legal[..legal_len], rng)
+                        .unwrap_or_else(|| legal[rng.below(legal_len)]);
+                    pool_len = 0;
+                    for slot in 0..roster_len {
+                        if mask & (1 << slot) != 0 && !appeared[slot] {
+                            pool[pool_len] = slot as u8;
+                            pool_len += 1;
+                        }
+                    }
+                    for &pos in &hidden_positions[..hidden_len] {
+                        let idx = rng.below(pool_len);
+                        let new_slot = pool[idx];
+                        pool[idx] = pool[pool_len - 1];
+                        pool_len -= 1;
+                        party_key[pos] = new_slot;
+                    }
+                }
+            }
+            return (party_key, party_len, true);
+        }
+
+        if pick.is_none() && self.synced == Some(obs.revision()) {
+            if let Some(lw) = &self.fallback_lead_weights {
+                if party_len == 3 {
+                    let mut legal = [0u8; 64];
+                    let mut legal_len = 0usize;
+                    for mask in 0..(1u8 << roster_len) {
+                        if mask.count_ones() as usize == 3
+                            && (mask & public) == public
+                            && preview_level_cap.is_none_or(|cap| level_of(mask) <= cap)
+                        {
+                            legal[legal_len] = mask;
+                            legal_len += 1;
+                        }
+                    }
+                    assert!(legal_len > 0, "public reveals have no level-legal selection");
+                    if hidden_positions[0] == 0 {
+                        let mut cands = [(0u8, 0u8, 0.0f64); 192];
+                        let mut n_cands = 0usize;
+                        let mut total_w = 0.0f64;
+                        for &mask in &legal[..legal_len] {
+                            let sum_m: f64 = (0..roster_len)
+                                .filter(|&x| (mask & (1 << x)) != 0)
+                                .map(|x| lw[x])
+                                .sum();
+                            for s0 in 0..roster_len {
+                                if (mask & (1 << s0)) != 0 && !appeared[s0] {
+                                    let w = if sum_m > 0.0 { lw[s0] / sum_m } else { 1.0 };
+                                    cands[n_cands] = (mask, s0 as u8, w);
+                                    n_cands += 1;
+                                    total_w += w;
+                                }
+                            }
+                        }
+                        let mut u = rng.next_f64() * total_w;
+                        let mut chosen = cands[n_cands - 1];
+                        for &c in &cands[..n_cands] {
+                            u -= c.2;
+                            if u < 0.0 {
+                                chosen = c;
+                                break;
+                            }
+                        }
+                        let (chosen_mask, s0, _) = chosen;
+                        party_key[0] = s0;
+                        let mut rem_pool = [0u8; 6];
+                        let mut rem_len = 0usize;
+                        for s in 0..roster_len {
+                            if (chosen_mask & (1 << s)) != 0 && !appeared[s] && s as u8 != s0 {
+                                rem_pool[rem_len] = s as u8;
+                                rem_len += 1;
+                            }
+                        }
+                        for &pos in &hidden_positions[1..hidden_len] {
+                            let idx = rng.below(rem_len);
+                            let slot = rem_pool[idx];
+                            rem_pool[idx] = rem_pool[rem_len - 1];
+                            rem_len -= 1;
+                            party_key[pos] = slot;
+                        }
+                    } else {
+                        let l0 = party_key[0] as usize;
+                        let mut cands = [(0u8, 0.0f64); 64];
+                        let mut total_w = 0.0f64;
+                        for (i, &mask) in legal[..legal_len].iter().enumerate() {
+                            let sum_m: f64 = (0..roster_len)
+                                .filter(|&x| (mask & (1 << x)) != 0)
+                                .map(|x| lw[x])
+                                .sum();
+                            let w = if sum_m > 0.0 { lw[l0] / sum_m } else { 1.0 };
+                            cands[i] = (mask, w);
+                            total_w += w;
+                        }
+                        let mut u = rng.next_f64() * total_w;
+                        let mut chosen_mask = cands[legal_len - 1].0;
+                        for &(mask, w) in &cands[..legal_len] {
+                            u -= w;
+                            if u < 0.0 {
+                                chosen_mask = mask;
+                                break;
+                            }
+                        }
+                        let mut rem_pool = [0u8; 6];
+                        let mut rem_len = 0usize;
+                        for s in 0..roster_len {
+                            if (chosen_mask & (1 << s)) != 0 && !appeared[s] {
+                                rem_pool[rem_len] = s as u8;
+                                rem_len += 1;
+                            }
+                        }
+                        for &pos in &hidden_positions[..hidden_len] {
+                            let idx = rng.below(rem_len);
+                            let slot = rem_pool[idx];
+                            rem_pool[idx] = rem_pool[rem_len - 1];
+                            rem_len -= 1;
+                            party_key[pos] = slot;
+                        }
+                    }
+                    return (party_key, party_len, true);
+                } else if hidden_positions[0] == 0 {
+                    let legal_opt = preview_level_cap.map(&collect_legal);
+                    let mut lead_cands = [0u8; 6];
+                    let mut lead_len = 0usize;
+                    let mut lead_total = 0.0f64;
+                    for &s in &pool[..pool_len] {
+                        let ok = match &legal_opt {
+                            Some((legal, legal_len)) => {
+                                legal[..*legal_len].iter().any(|&m| (m & (1 << s)) != 0)
+                            }
+                            None => true,
+                        };
+                        if ok {
+                            lead_cands[lead_len] = s;
+                            lead_len += 1;
+                            lead_total += lw[s as usize];
+                        }
+                    }
+                    let s0 = if lead_len > 0 && lead_total > 0.0 {
+                        let mut u = rng.next_f64() * lead_total;
+                        let mut pick_s = lead_cands[lead_len - 1];
+                        for &s in &lead_cands[..lead_len] {
+                            u -= lw[s as usize];
+                            if u < 0.0 {
+                                pick_s = s;
+                                break;
+                            }
+                        }
+                        pick_s
+                    } else {
+                        pool[rng.below(pool_len)]
+                    };
+                    party_key[0] = s0;
+                    if let Some(pos_in_pool) = pool[..pool_len].iter().position(|&s| s == s0) {
+                        pool[pos_in_pool] = pool[pool_len - 1];
+                        pool_len -= 1;
+                    }
+                    for &pos in &hidden_positions[1..hidden_len] {
+                        let idx = rng.below(pool_len);
+                        let new_slot = pool[idx];
+                        pool[idx] = pool[pool_len - 1];
+                        pool_len -= 1;
+                        party_key[pos] = new_slot;
+                    }
+                    if let Some((legal, legal_len)) = legal_opt {
+                        let cap = preview_level_cap.unwrap();
+                        let cur_mask = (0..party_len).fold(0u8, |m, p| m | (1 << party_key[p]));
+                        if level_of(cur_mask) > cap {
+                            let mut sub = [0u8; 64];
+                            let mut sub_len = 0usize;
+                            for &m in &legal[..legal_len] {
+                                if (m & (1 << s0)) != 0 {
+                                    sub[sub_len] = m;
+                                    sub_len += 1;
+                                }
+                            }
+                            let mask = if sub_len > 0 {
+                                sub[rng.below(sub_len)]
+                            } else {
+                                legal[rng.below(legal_len)]
+                            };
+                            let mut rem_pool = [0u8; 6];
+                            let mut rem_len = 0usize;
+                            for slot in 0..roster_len {
+                                if mask & (1 << slot) != 0 && !appeared[slot] && slot as u8 != s0 {
+                                    rem_pool[rem_len] = slot as u8;
+                                    rem_len += 1;
+                                }
+                            }
+                            for &pos in &hidden_positions[1..hidden_len] {
+                                let idx = rng.below(rem_len);
+                                let new_slot = rem_pool[idx];
+                                rem_pool[idx] = rem_pool[rem_len - 1];
+                                rem_len -= 1;
+                                party_key[pos] = new_slot;
+                            }
+                        }
+                    }
+                    return (party_key, party_len, true);
+                }
+            }
+        }
+
+        for &pos in &hidden_positions[..hidden_len] {
+            let idx = rng.below(pool_len);
+            let new_slot = pool[idx];
+            pool[idx] = pool[pool_len - 1];
+            pool_len -= 1;
+            party_key[pos] = new_slot;
+        }
+        if let Some(cap) = preview_level_cap {
+            let cur_mask = (0..party_len).fold(0u8, |m, p| m | (1 << party_key[p]));
+            if level_of(cur_mask) > cap {
+                let (legal, legal_len) = collect_legal(cap);
+                let mask = legal[rng.below(legal_len)];
+                pool_len = 0;
+                for slot in 0..roster_len {
+                    if mask & (1 << slot) != 0 && !appeared[slot] {
+                        pool[pool_len] = slot as u8;
+                        pool_len += 1;
+                    }
+                }
+                for &pos in &hidden_positions[..hidden_len] {
+                    let idx = rng.below(pool_len);
+                    let new_slot = pool[idx];
+                    pool[idx] = pool[pool_len - 1];
+                    pool_len -= 1;
+                    party_key[pos] = new_slot;
+                }
+            }
+        }
+        (party_key, party_len, true)
+    }
+
+    fn determinize_with_refs_in_place(
+        &self,
+        dex: &Dex,
+        out: &mut Battle,
+        obs: &Observer,
+        pick: Option<usize>,
+        refs: &[Pokemon],
+        rng: &mut SplitMix64,
+    ) {
         audit_battle_hidden(out);
 
         out.set_log_enabled(false);
@@ -869,68 +1686,26 @@ impl Belief {
         let opp = obs.opp();
         let roster_len = out.sides[opp].roster.len();
 
-        if out.sides[opp].party.len() < roster_len {
-            let appeared: Vec<bool> = out.sides[opp]
-                .roster
-                .iter()
-                .map(|p| p.previously_switched_in > 0 || p.is_active)
-                .collect();
-            let party_len = out.sides[opp].party.len();
-            let hidden_positions: Vec<usize> = (0..party_len)
-                .filter(|&pos| !appeared[out.sides[opp].party[pos] as usize])
-                .collect();
-            let mut pool: Vec<u8> =
-                (0..roster_len as u8).filter(|&s| !appeared[s as usize]).collect();
-            let distribution = if party_len == 3 && !hidden_positions.is_empty() {
-                self.pick_draws.as_ref()
-                    .filter(|(revision, _)| *revision == obs.revision())
-                    .and_then(|(_, plans)| pick.and_then(|i| plans[i].as_ref()))
-            } else { None };
-            if let Some(distribution) = distribution {
-                let mask = distribution.sample(rng);
-                let selected: Vec<u8> = pool.iter().copied()
-                    .filter(|slot| mask & (1 << slot) != 0).collect();
-                if selected.len() == hidden_positions.len() {
-                    pool = selected;
-                }
+        let (party_key, party_len, changed) = self.sample_hidden_party(
+            obs,
+            pick,
+            &out.sides[opp],
+            out.preview_level_caps[opp],
+            rng,
+        );
+        if changed {
+            // party members carry their display index; the rest are
+            // parked canonically (same assignment ⇒ same state key)
+            for pos in 0..party_len {
+                let slot = party_key[pos] as usize;
+                out.sides[opp].party[pos] = slot as u8;
+                out.sides[opp].roster[slot].position = pos as u8;
             }
-            for &pos in &hidden_positions {
-                let new_slot = pool.swap_remove(rng.below(pool.len()));
-                out.sides[opp].party[pos] = new_slot;
-            }
-            if let Some(cap) = out.preview_level_caps[opp].filter(|_| !hidden_positions.is_empty()) {
-                let level = |mask: u8| obs.mons().iter().enumerate()
-                    .filter(|(slot, _)| mask & (1 << slot) != 0)
-                    .map(|(_, mon)| u32::from(mon.level)).sum::<u32>();
-                let mask = out.sides[opp].party.iter().fold(0u8, |mask, slot| mask | (1 << slot));
-                if level(mask) > cap {
-                    let public = appeared.iter().enumerate()
-                        .fold(0u8, |mask, (slot, &seen)| mask | (u8::from(seen) << slot));
-                    let legal: Vec<u8> = (0..1u8 << roster_len)
-                        .filter(|mask| mask.count_ones() as usize == party_len && mask & public == public && level(*mask) <= cap)
-                        .collect();
-                    assert!(!legal.is_empty(), "public reveals have no level-legal selection");
-                    let mask = distribution.and_then(|d| d.sample_allowed(&legal, rng))
-                        .unwrap_or_else(|| legal[rng.below(legal.len())]);
-                    pool = (0..roster_len as u8).filter(|slot| mask & (1 << slot) != 0 && !appeared[*slot as usize]).collect();
-                    for &pos in &hidden_positions {
-                        out.sides[opp].party[pos] = pool.swap_remove(rng.below(pool.len()));
-                    }
-                }
-            }
-            if !hidden_positions.is_empty() {
-                // party members carry their display index; the rest are
-                // parked canonically (same assignment ⇒ same state key)
-                for pos in 0..party_len {
-                    let slot = out.sides[opp].party[pos] as usize;
-                    out.sides[opp].roster[slot].position = pos as u8;
-                }
-                let mut bench_pos = party_len as u8;
-                for slot in 0..roster_len {
-                    if !out.sides[opp].party.contains(&(slot as u8)) {
-                        out.sides[opp].roster[slot].position = bench_pos;
-                        bench_pos += 1;
-                    }
+            let mut bench_pos = party_len as u8;
+            for slot in 0..roster_len {
+                if !out.sides[opp].party.contains(&(slot as u8)) {
+                    out.sides[opp].roster[slot].position = bench_pos;
+                    bench_pos += 1;
                 }
             }
         }
@@ -941,8 +1716,10 @@ impl Belief {
             let mo = &obs.mons()[slot];
             let projected = crate::hp_evidence::project(dex, &refs[slot], mo, rng);
             impute_mon(mon, projected.as_ref().unwrap_or(&refs[slot]), mo, dex);
-            if let Some(&(cur, den)) = self.hp_observations.as_ref().and_then(|h| h.get(slot)) {
-                mon.hp = crate::import::impute_hp(cur, den, mon.maxhp);
+            if mo.appeared {
+                if let Some(&(cur, den)) = self.hp_observations.as_ref().and_then(|h| h.get(slot)) {
+                    mon.hp = crate::import::impute_hp(cur, den, mon.maxhp);
+                }
             }
             out.refresh_poke_mask(dex, PokeId { side: opp as u8, slot: slot as u8 });
         }
@@ -978,30 +1755,45 @@ impl Belief {
         if pending.is_empty() {
             return;
         }
-        if out
+        let new_id = if let Some(forced) = out
             .get_locked_move(dex, active)
             .or_else(|| out.get_semi_locked_move(dex, active))
-            .is_some()
+            .and_then(|k| dex.moves.id(k))
         {
-            return; // forced continuation: publicly known
-        }
-        let usable: Vec<MoveId> = out
-            .poke(active)
-            .move_slots
-            .iter()
-            .filter(|s| s.pp > 0 && !s.disabled)
-            .map(|s| s.id)
-            .collect();
-        let new_id = if usable.is_empty() {
-            dex.moves.id("struggle").expect("struggle interned")
+            forced
+        } else if let Some(encored) = dex
+            .conds_id("encore")
+            .and_then(|c| out.poke(active).volatile(c))
+            .and_then(|v| v.get_move())
+            .filter(|&m| {
+                out.poke(active)
+                    .move_slots
+                    .iter()
+                    .any(|s| s.id == m && s.pp > 0)
+            })
+        {
+            encored
         } else {
-            usable[rng.below(usable.len())]
+            let usable: Vec<MoveId> = out
+                .poke(active)
+                .move_slots
+                .iter()
+                .filter(|s| s.pp > 0 && !s.disabled)
+                .map(|s| s.id)
+                .collect();
+            if usable.is_empty() {
+                dex.moves.id("struggle").expect("struggle interned")
+            } else {
+                usable[rng.below(usable.len())]
+            }
         };
+        let speed = out.get_pokemon_action_speed(dex, active) as f64;
         for i in pending {
             let old_id = match out.queue[i].choice {
                 ActionKind::Move { move_id, .. } => move_id,
                 _ => unreachable!(),
             };
+            out.queue[i].speed = speed;
             if old_id == new_id {
                 continue;
             }
@@ -1017,7 +1809,6 @@ impl Belief {
             }
             out.queue[i].priority = dex.move_static(new_id).priority as f64;
             out.queue[i].fractional_priority = 0.0;
-            out.queue[i].speed = out.get_pokemon_action_speed(dex, active) as f64;
             if dex.moves.key(new_id) == "pursuit" {
                 if let Some(target) = out.active_id(1 - opp) {
                     out.before_turn_callback(dex, new_id, active, target);
@@ -1028,6 +1819,55 @@ impl Belief {
 
     // ------------------------------------------------------------- filter
 
+    fn compute_fallback_lead_weights(&self, dex: &Dex, obs: &Observer) -> Option<[f64; 6]> {
+        let prior = self.active_prior()?;
+        let n = obs.mons().len();
+        if !(1..=6).contains(&n) {
+            return None;
+        }
+        let mut spec = [None; 6];
+        let mut n_spec = 0usize;
+        let mut sum_spec = 0.0f64;
+        for (s, mo) in obs.mons().iter().enumerate() {
+            if let Some(p) = prior
+                .species(dex.species.key(mo.species))
+                .and_then(|sp| sp.lead)
+                .filter(|w| w.is_finite() && *w >= 0.0)
+            {
+                spec[s] = Some(p);
+                n_spec += 1;
+                sum_spec += p;
+            }
+        }
+        if n_spec == 0 || spec[..n].iter().all(|x| matches!(x, Some(v) if *v == 0.0)) {
+            return None;
+        }
+        let u = n - n_spec;
+        let unspec_w = if u > 0 {
+            ((1.0 - sum_spec).max(0.0) / u as f64).max(1.0 / n as f64)
+        } else {
+            0.0
+        };
+        let mut raw = [0.0f64; 6];
+        for s in 0..n {
+            raw[s] = spec[s].unwrap_or(unspec_w);
+        }
+        let sum_raw: f64 = raw[..n].iter().sum();
+        if !(sum_raw > 0.0) {
+            return None;
+        }
+        let min_w = raw[..n].iter().copied().fold(f64::INFINITY, f64::min);
+        let max_w = raw[..n].iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        if (max_w - min_w) <= 1e-12 {
+            return None;
+        }
+        let mut lw = [0.0f64; 6];
+        for s in 0..n {
+            lw[s] = 0.95 * (raw[s] / sum_raw) + 0.05 / (n as f64);
+        }
+        Some(lw)
+    }
+
     fn refilter(&mut self, dex: &Dex, obs: &Observer) {
         self.alive = (0..self.cands.len())
             .filter(|&i| match &self.cands[i].refs {
@@ -1036,109 +1876,72 @@ impl Belief {
             })
             .collect();
         if self.alive.is_empty() {
+            self.fallback_lead_weights = self.compute_fallback_lead_weights(dex, obs);
+            self.prior_governed_slots = if let Some(prior) = self.active_prior() {
+                let appeared_count = obs.mons().iter().filter(|m| m.appeared).count();
+                let mut governed: Vec<bool> = obs
+                    .mons()
+                    .iter()
+                    .enumerate()
+                    .map(|(slot, mo)| {
+                        let Some(sp) = prior.species(dex.species.key(mo.species)) else {
+                            return false;
+                        };
+                        let rev = distinct_revealed_moves(dex, mo);
+                        let open_slots = 4usize.saturating_sub(rev.len());
+                        let has_moves =
+                            open_slots > 0 && !legal_prior_moves(dex, sp, mo).is_empty();
+                        let has_items = !legal_prior_items(dex, sp, obs.mons(), slot).is_empty();
+                        let has_lead = !mo.appeared
+                            && appeared_count < 3
+                            && sp.lead.is_some()
+                            && self.fallback_lead_weights.is_some();
+                        has_moves || has_items || has_lead
+                    })
+                    .collect();
+                if !governed.iter().any(|&g| g) {
+                    governed.clear();
+                }
+                governed
+            } else {
+                Vec::new()
+            };
             let roster = self.build_fallback(dex, obs);
-            self.draws = self.build_draws(dex, obs, &roster);
             self.loadout_draws = self.build_loadout_draws(dex, obs, &roster);
-            let mut rng = SplitMix64::new(0);
+            self.fallback_cands = if !self.pinned
+                && self.fallback_policy == FallbackPolicy::Bayesian
+                && (obs.mons().iter().any(|m| m.appeared) || !self.prior_governed_slots.is_empty())
+            {
+                self.build_fallback_cands(dex, obs, &roster)
+            } else {
+                None
+            };
             self.fallback_visible = obs.mons().iter().any(|m| m.hp_type_mask != u16::MAX).then(|| {
-                roster.iter().zip(obs.mons()).map(|(p, mo)| {
-                    crate::hp_evidence::project(dex, p, mo, &mut rng).unwrap_or_else(|| p.clone())
-                }).collect()
+                roster
+                    .iter()
+                    .zip(obs.mons())
+                    .map(|(p, mo)| {
+                        crate::hp_evidence::project_deterministic(
+                            dex,
+                            p,
+                            mo.gender,
+                            mo.hp_type_mask,
+                        )
+                        .unwrap_or_else(|| p.clone())
+                    })
+                    .collect()
             });
             self.fallback = Some(roster);
         } else {
-            self.draws = None;
+            self.prior_governed_slots.clear();
+            self.fallback_lead_weights = None;
             self.loadout_draws = None;
+            self.fallback_cands = None;
         }
         self.synced = Some(obs.revision());
     }
 
     // ------------------------------------------------- M18 marginal sampling
-
-    fn build_draws(
-        &self,
-        dex: &Dex,
-        obs: &Observer,
-        roster: &[Pokemon],
-    ) -> Option<Vec<Option<MoveDraw>>> {
-        let prior = self.prior.as_deref()?;
-        if prior.is_empty() || self.pinned {
-            return None;
-        }
-        let mut governed = false;
-        let draws: Vec<Option<MoveDraw>> = obs
-            .mons()
-            .iter()
-            .zip(roster)
-            .map(|(mo, mon)| {
-                let draw = self.move_draw(dex, prior, mo, mon)?;
-                governed = true;
-                Some(draw)
-            })
-            .collect();
-        governed.then_some(draws)
-    }
-
-    /// One roster slot's plan, or `None` to keep today's filler for it.
-    ///
-    /// The revealed prefix is taken from `mo.revealed_moves` rather than from
-    /// the built roster mon: the roster's *defensive* second stage (an
-    /// unconstructible set) drops the reveals, and reading the observation
-    /// directly means the sampler restores reveal-dominance there instead of
-    /// inheriting the hole. Existing slots are reused when present so the
-    /// live PP marks survive.
-    fn move_draw(
-        &self,
-        dex: &Dex,
-        prior: &BeliefPrior,
-        mo: &MonObs,
-        mon: &Pokemon,
-    ) -> Option<MoveDraw> {
-        let species = dex.species.key(mo.species);
-        let sp = prior.species(species)?;
-        let mut revealed: Vec<MoveSlot> = Vec::new();
-        for &m in &mo.revealed_moves {
-            if revealed.len() >= 4 {
-                break; // the <=4 clamp, same truncation as `fallback_set`
-            }
-            if revealed.iter().any(|s| move_matches(dex, s.id, m)) {
-                continue;
-            }
-            revealed.push(
-                mon.base_move_slots
-                    .iter()
-                    .find(|s| move_matches(dex, s.id, m))
-                    .copied()
-                    .unwrap_or_else(|| fresh_move_slot(dex, m)),
-            );
-        }
-        if revealed.len() >= 4 {
-            return None; // fully revealed: nothing left to sample
-        }
-        let mut pool: Vec<(MoveSlot, f64)> = Vec::new();
-        for (key, weight) in &sp.moves {
-            let Some(id) = dex.moves.id(key) else { continue };
-            // Legality is code and outranks the data: an off-format or
-            // level-illegal entry in a community table is simply not drawn.
-            if !format_move_legal_at_level(species, dex.moves.key(id), mo.level) {
-                continue;
-            }
-            if revealed.iter().any(|s| move_matches(dex, s.id, id))
-                || mo.revealed_moves.iter().any(|&m| move_matches(dex, id, m))
-                || pool.iter().any(|(s, _)| s.id == id)
-            {
-                continue;
-            }
-            pool.push((fresh_move_slot(dex, id), *weight));
-        }
-        if pool.is_empty() {
-            // Nothing legal to offer. Falling through to today's filler is
-            // strictly better than emitting a short set, and is what the
-            // "species in neither file" rule prescribes anyway.
-            return None;
-        }
-        Some(MoveDraw { revealed, pool })
-    }
 
     fn early_perish_draw(&self, dex: &Dex, mo: &MonObs, mon: &Pokemon) -> Option<LoadoutDraw> {
         let trap = dex.moves.id("meanlook")?;
@@ -1195,29 +1998,61 @@ impl Belief {
     }
 
     fn build_loadout_draws(&self, dex: &Dex, obs: &Observer, roster: &[Pokemon]) -> Option<Vec<Option<LoadoutDraw>>> {
-        if !matches!(
-            self.fallback_policy,
-            FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian
-        ) || self.pinned
+        if self.pinned {
+            return None;
+        }
+        let has_prior = self.active_prior().is_some();
+        if !has_prior
+            && !matches!(
+                self.fallback_policy,
+                FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian
+            )
         {
             return None;
         }
         let draws: Vec<_> = obs
             .mons()
             .iter()
+            .enumerate()
             .zip(roster)
-            .map(|(mo, mon)| match self.fallback_policy {
-                FallbackPolicy::BayesianPointMass => self.early_perish_draw(dex, mo, mon),
-                FallbackPolicy::Bayesian => self.bayesian_loadout_draw(dex, mo, obs.mons(), mon),
-                _ => None,
+            .map(|((slot, mo), mon)| match self.fallback_policy {
+                FallbackPolicy::Bayesian => self.bayesian_loadout_draw(dex, mo, slot, obs.mons(), mon),
+                FallbackPolicy::BayesianPointMass => self
+                    .prior_loadout_draw(dex, mo, slot, obs.mons(), mon)
+                    .or_else(|| self.early_perish_draw(dex, mo, mon)),
+                _ => self.prior_loadout_draw(dex, mo, slot, obs.mons(), mon),
             })
             .collect();
         draws.iter().any(Option::is_some).then_some(draws)
     }
 
+    #[inline]
+    pub(crate) fn predict_plan_draws(
+        &self,
+        plan_pick: TeamPlanPick,
+        battle: &Battle,
+        opp: usize,
+        rng: &mut SplitMix64,
+    ) -> Option<u64> {
+        match plan_pick {
+            TeamPlanPick::Pool(_) => Some(0),
+            TeamPlanPick::FallbackCand(idx)
+                if !self.pinned
+                    && self
+                        .fallback_cands
+                        .as_ref()
+                        .is_some_and(|pool| idx < pool.entries.len()) =>
+            {
+                Some((idx as u64) + 1)
+            }
+            TeamPlanPick::FallbackCand(_) | TeamPlanPick::FallbackDefault => {
+                self.predict_fallback_draws(None, battle, opp, rng)
+            }
+        }
+    }
+
     /// Predicts the fallback loadout draw indices for `BlindSearch::det_cache`
     /// while advancing `rng` identically to `sample_fallback_refs`.
-    /// Returns `None` if an uncacheable M18 marginal `MoveDraw` is active.
     #[inline]
     pub(crate) fn predict_fallback_draws(
         &self,
@@ -1229,6 +2064,10 @@ impl Belief {
         if pick.is_some() || self.pinned {
             return Some(0);
         }
+        if let Some(pool) = &self.fallback_cands {
+            let idx = pool.draw_index(rng);
+            return Some((idx as u64) + 1);
+        }
         let active = |slot: usize| match self.fallback_policy {
             FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian => {
                 let r = &battle.sides[opp].roster[slot];
@@ -1236,14 +2075,12 @@ impl Belief {
             }
             _ => true,
         };
-        if self.draws.is_none()
-            && self.loadout_draws.as_ref().is_none_or(|plans| {
-                !plans
-                    .iter()
-                    .enumerate()
-                    .any(|(slot, plan)| plan.is_some() && active(slot))
-            })
-        {
+        if self.loadout_draws.as_ref().is_none_or(|plans| {
+            !plans
+                .iter()
+                .enumerate()
+                .any(|(slot, plan)| plan.is_some() && active(slot))
+        }) {
             return Some(0);
         }
         let fallback = self.fallback.as_deref()?;
@@ -1251,9 +2088,6 @@ impl Belief {
         for slot in 0..fallback.len() {
             if !active(slot) {
                 continue;
-            }
-            if self.draws.as_ref().and_then(|d| d.get(slot)?.as_ref()).is_some() {
-                return None;
             }
             if let Some(draw) = self.loadout_draws.as_ref().and_then(|d| d.get(slot)?.as_ref()) {
                 let idx = draw.draw_index(rng);
@@ -1275,6 +2109,10 @@ impl Belief {
         if pick.is_some() || self.pinned {
             return None;
         }
+        if let Some(pool) = &self.fallback_cands {
+            let idx = pool.draw_index(rng);
+            return Some(pool.entries[idx].0.clone());
+        }
         let active = |slot: usize| match self.fallback_policy {
             FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian => {
                 let r = &battle.sides[opp].roster[slot];
@@ -1282,7 +2120,7 @@ impl Belief {
             }
             _ => true,
         };
-        if self.draws.is_none() && self.loadout_draws.as_ref().is_none_or(|plans| {
+        if self.loadout_draws.as_ref().is_none_or(|plans| {
             !plans.iter().enumerate().any(|(slot, plan)| plan.is_some() && active(slot))
         }) {
             return None;
@@ -1292,27 +2130,8 @@ impl Belief {
             if !active(slot) {
                 continue;
             }
-            if matches!(
-                self.fallback_policy,
-                FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian
-            ) {
-                if let Some(draw) = self.draws.as_ref().and_then(|d| d[slot].as_ref()) {
-                    let slots = draw.draw(rng);
-                    if !slots.is_empty() {
-                        mon.base_move_slots = slots;
-                        mon.move_slots = slots;
-                    }
-                } else if let Some(draw) = self.loadout_draws.as_ref().and_then(|d| d[slot].as_ref()) {
-                    *mon = draw.draw(rng).clone();
-                }
-            } else if let Some(draw) = self.loadout_draws.as_ref().and_then(|d| d[slot].as_ref()) {
+            if let Some(draw) = self.loadout_draws.as_ref().and_then(|d| d[slot].as_ref()) {
                 *mon = draw.draw(rng).clone();
-            } else if let Some(draw) = self.draws.as_ref().and_then(|d| d[slot].as_ref()) {
-                let slots = draw.draw(rng);
-                if !slots.is_empty() {
-                    mon.base_move_slots = slots;
-                    mon.move_slots = slots;
-                }
             }
         }
         Some(roster)
@@ -1324,14 +2143,19 @@ impl Belief {
         let sets: Vec<PokemonSet> = obs
             .mons()
             .iter()
-            .map(|mo| match self.fallback_policy {
+            .enumerate()
+            .map(|(slot, mo)| match self.fallback_policy {
                 FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian => {
-                    self.bayesian_fallback_set(dex, mo, obs.mons())
+                    self.bayesian_fallback_set(dex, mo, slot, obs.mons())
                 }
-                _ => self.fallback_set(dex, mo),
+                _ => self.fallback_set_at(dex, mo, slot, obs.mons()),
             })
             .collect();
-        self.build_fallback_from_sets(dex, obs, &sets)
+        let mut roster = self.build_fallback_from_sets(dex, obs, &sets);
+        if self.fallback_policy == FallbackPolicy::Bayesian || self.active_prior().is_some() {
+            enforce_roster_item_clause(dex, obs.mons(), self.active_prior(), &mut roster);
+        }
+        roster
     }
 
     fn build_fallback_from_sets(
@@ -1410,6 +2234,7 @@ impl Belief {
         &'a self,
         dex: &Dex,
         mo: &MonObs,
+        slot: usize,
         obs_mons: &[MonObs],
     ) -> Vec<(&'a PokemonSet, f64)> {
         let level_aware = self.fallback_policy == FallbackPolicy::Bayesian;
@@ -1452,7 +2277,32 @@ impl Belief {
             } else {
                 1.0
             };
-            base_w * level_mult * (0.6 * match_score).exp()
+            let hp_mult = if mo.hp_type_mask != u16::MAX {
+                let explicit_hp = carrier_set.moves.iter().find_map(|m| {
+                    let mid = dex.moves.id(&toid(m))?;
+                    let key = dex.moves.key(mid);
+                    (key != "hiddenpower" && key.starts_with("hiddenpower")).then(|| {
+                        let ty = dex.moves.get(mid).move_type.as_str();
+                        crate::hp_evidence::TYPES.iter().position(|t| *t == ty)
+                    })?
+                });
+                match explicit_hp {
+                    Some(idx) if (mo.hp_type_mask & (1u16 << idx)) != 0 => 2.0,
+                    Some(_) => 0.15,
+                    None => 1.0,
+                }
+            } else {
+                1.0
+            };
+            let carrier_item = dex.items.id(&toid(&carrier_set.item));
+            let item_mult = if carrier_item.is_some() == mo.preview_has_item
+                && !Observer::is_item_excluded_for_slot(dex, obs_mons, slot, carrier_item)
+            {
+                1.5
+            } else {
+                1.0
+            };
+            base_w * level_mult * hp_mult * item_mult * (0.6 * match_score).exp()
         };
 
         let mut out: Vec<(&'a PokemonSet, f64)> = Vec::new();
@@ -1489,14 +2339,67 @@ impl Belief {
         out
     }
 
+    fn resolve_non_excluded_item(
+        &self,
+        dex: &Dex,
+        obs_mons: &[MonObs],
+        slot: usize,
+        mo: &MonObs,
+        preferred: &str,
+        carriers: &[(&PokemonSet, f64)],
+    ) -> String {
+        if let Some(known) = mo.item.original {
+            return known.map(|id| dex.items.key(id).to_string()).unwrap_or_default();
+        }
+        if !mo.preview_has_item {
+            return String::new();
+        }
+        let allowed = |key: &str| -> Option<String> {
+            let id = dex.items.id(&toid(key))?;
+            (!crate::observe::Observer::is_item_excluded_for_slot(dex, obs_mons, slot, Some(id)))
+                .then(|| dex.items.key(id).to_string())
+        };
+        if !preferred.is_empty() {
+            if let Some(k) = allowed(preferred) {
+                return k;
+            }
+        }
+        let mut by_item: Vec<(u16, String, f64)> = Vec::new();
+        for &(s, w) in carriers {
+            let Some(id) = dex.items.id(&toid(&s.item)) else { continue };
+            if crate::observe::Observer::is_item_excluded_for_slot(dex, obs_mons, slot, Some(id)) {
+                continue;
+            }
+            match by_item.iter_mut().find(|(iid, _, _)| *iid == id.0) {
+                Some((_, _, sum)) => *sum += w,
+                None => by_item.push((id.0, dex.items.key(id).to_string(), w)),
+            }
+        }
+        by_item.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+        if let Some((_, k, _)) = by_item.into_iter().next() {
+            return k;
+        }
+        for cand in ITEM_FALLBACK_ORDER {
+            if let Some(k) = allowed(cand) {
+                return k;
+            }
+        }
+        if let Some(k) = allowed(preferred) {
+            return k;
+        }
+        preferred.to_string()
+    }
+
     fn bayesian_fallback_set(
         &self,
         dex: &Dex,
         mo: &MonObs,
+        slot: usize,
         obs_mons: &[MonObs],
     ) -> PokemonSet {
-        let carriers = self.bayesian_prior_carriers(dex, mo, obs_mons);
+        let carriers = self.bayesian_prior_carriers(dex, mo, slot, obs_mons);
         let species_key = dex.species.key(mo.species);
+        let prior_sp = self.active_prior().and_then(|p| p.species(species_key));
         let matches_moves = |s: &PokemonSet| {
             mo.revealed_moves.iter().all(|&revealed| {
                 s.moves
@@ -1505,16 +2408,45 @@ impl Belief {
                     .any(|m| move_matches(dex, m, revealed))
             })
         };
-        let matches_item = |s: &PokemonSet| match mo.item.original {
-            Some(item) => dex.items.id(&toid(&s.item)) == item,
-            None => true,
+        let matches_item = |s: &PokemonSet| {
+            let item = dex.items.id(&toid(&s.item));
+            item.is_some() == mo.preview_has_item
+                && match mo.item.original {
+                    Some(known) => known == item,
+                    None => true,
+                }
         };
 
-        let mut moves: Vec<String> = mo
-            .revealed_moves
-            .iter()
-            .map(|&m| dex.moves.key(m).to_string())
-            .collect();
+        let mut moves: Vec<String> = if prior_sp.is_some() {
+            distinct_revealed_moves(dex, mo)
+                .into_iter()
+                .map(|m| dex.moves.key(m).to_string())
+                .collect()
+        } else {
+            mo.revealed_moves
+                .iter()
+                .map(|&m| dex.moves.key(m).to_string())
+                .collect()
+        };
+        let prior_items = prior_sp
+            .map(|sp| legal_prior_items(dex, sp, obs_mons, slot))
+            .unwrap_or_default();
+        if let Some(sp) = prior_sp {
+            let mut has_hp = moves.iter().any(|m| toid(m).starts_with("hiddenpower"));
+            for (_, key, _) in legal_prior_moves(dex, sp, mo) {
+                if moves.len() >= 4 {
+                    break;
+                }
+                let is_hp = key.starts_with("hiddenpower");
+                if is_hp && has_hp {
+                    continue;
+                }
+                if is_hp {
+                    has_hp = true;
+                }
+                moves.push(key);
+            }
+        }
 
         let chosen_prior: Option<&PokemonSet> = if carriers.is_empty() {
             None
@@ -1643,12 +2575,18 @@ impl Belief {
         set.name = String::new();
 
         let has_exact_move_match = carriers.iter().any(|(s, _)| matches_moves(s));
-        if has_exact_move_match {
+        if moves.len() < 4 && has_exact_move_match {
             for name in chosen_prior.map(|s| s.moves.clone()).unwrap_or_default() {
                 if moves.len() >= 4 {
                     break;
                 }
                 let Some(id) = dex.moves.id(&toid(&name)) else { continue };
+                if prior_sp.is_some()
+                    && dex.moves.key(id).starts_with("hiddenpower")
+                    && moves.iter().any(|m| toid(m).starts_with("hiddenpower"))
+                {
+                    continue;
+                }
                 if format_move_legal_at_level(species_key, dex.moves.key(id), mo.level)
                     && !mo.revealed_moves.iter().any(|&m| move_matches(dex, id, m))
                     && !moves.iter().any(|m| dex.moves.id(&toid(m)) == Some(id))
@@ -1784,28 +2722,587 @@ impl Belief {
         }
         moves.truncate(4);
         set.moves = moves;
+        apply_low_attack_spread_if_special(dex, &mut set, mo);
         let pool_item = std::mem::take(&mut set.item);
-        set.item = match mo.item.original {
-            Some(Some(x)) => dex.items.key(x).to_string(),
-            Some(None) => String::new(),
-            None if mo.preview_has_item => pool_item,
-            None => String::new(),
-        };
+        let preferred_item = prior_items
+            .first()
+            .map(|(id, _)| dex.items.key(*id))
+            .unwrap_or(pool_item.as_str());
+        set.item = self.resolve_non_excluded_item(dex, obs_mons, slot, mo, preferred_item, &carriers);
         set
+    }
+
+    fn mon_loadout_sig(p: &Pokemon) -> (Option<u16>, Vec<u16>, [i32; 5], u8) {
+        let mut mvs: Vec<u16> = p.base_move_slots.iter().map(|s| s.id.0).collect();
+        mvs.sort_unstable();
+        (p.item.map(|i| i.0), mvs, p.base_stored_stats, p.base_hp_type.0)
+    }
+
+    fn append_secondary_item_variant(
+        dex: &Dex,
+        obs_mons: &[MonObs],
+        slot: usize,
+        mo: &MonObs,
+        carriers: &[(&PokemonSet, f64)],
+        entries: &mut Vec<(Pokemon, f64)>,
+    ) {
+        if !mo.preview_has_item
+            || mo.item.original.is_some()
+            || entries.is_empty()
+            || entries.len() >= 4
+        {
+            return;
+        }
+        let primary = &entries[0].0;
+        let primary_item = primary.item;
+        let mut by_item: Vec<(ItemId, f64)> = Vec::new();
+        for &(s, w) in carriers {
+            let Some(id) = dex.items.id(&toid(&s.item)) else { continue };
+            if Observer::is_item_excluded_for_slot(dex, obs_mons, slot, Some(id)) {
+                continue;
+            }
+            match by_item.iter_mut().find(|(iid, _)| *iid == id) {
+                Some((_, sum)) => *sum += w,
+                None => by_item.push((id, w)),
+            }
+        }
+        by_item.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let top_item_w = by_item
+            .iter()
+            .find(|(id, _)| Some(*id) == primary_item)
+            .map(|(_, w)| *w)
+            .or_else(|| by_item.first().map(|(_, w)| *w))
+            .unwrap_or(0.0);
+        let sec = by_item.iter().find(|&&(id, _)| Some(id) != primary_item).copied();
+        let (sec_id, rel_w) = if let Some((id, w)) = sec {
+            let ratio = if top_item_w > 0.0 {
+                (w / top_item_w).clamp(0.18, 0.45)
+            } else {
+                0.25
+            };
+            (id, ratio)
+        } else {
+            const ALT_STAPLES: &[&str] =
+                &["leftovers", "miracleberry", "mintberry", "goldberry", "przcureberry"];
+            let Some(id) = ALT_STAPLES.iter().filter_map(|k| dex.items.id(k)).find(|&id| {
+                Some(id) != primary_item
+                    && !Observer::is_item_excluded_for_slot(dex, obs_mons, slot, Some(id))
+            }) else {
+                return;
+            };
+            (id, 0.25)
+        };
+        let alt_mon = clone_mon_with_item(primary, Some(sec_id));
+        let alt_sig = Self::mon_loadout_sig(&alt_mon);
+        let alt_w = entries[0].1 * rel_w;
+        match entries
+            .iter_mut()
+            .find(|(existing, _)| Self::mon_loadout_sig(existing) == alt_sig)
+        {
+            Some((_, w)) => *w += alt_w,
+            None => entries.push((alt_mon, alt_w)),
+        }
+    }
+
+    fn prior_loadout_draw(
+        &self,
+        dex: &Dex,
+        mo: &MonObs,
+        slot: usize,
+        obs_mons: &[MonObs],
+        fallback_mon: &Pokemon,
+    ) -> Option<LoadoutDraw> {
+        const MAX_SLOT_LOADOUTS: usize = 12;
+        let species_key = dex.species.key(mo.species);
+        let sp = self.active_prior()?.species(species_key)?;
+        let rev = distinct_revealed_moves(dex, mo);
+        let open_slots = 4usize.saturating_sub(rev.len());
+        let legal_moves = if open_slots > 0 {
+            legal_prior_moves(dex, sp, mo)
+        } else {
+            Vec::new()
+        };
+        let legal_items = legal_prior_items(dex, sp, obs_mons, slot);
+        let has_prior_moves = open_slots > 0 && !legal_moves.is_empty();
+        let has_prior_items = !legal_items.is_empty();
+        if !has_prior_moves && !has_prior_items {
+            return None;
+        }
+
+        let carriers = self.bayesian_prior_carriers(dex, mo, slot, obs_mons);
+        let strict_item = |source: &PokemonSet| {
+            let item = dex.items.id(&toid(&source.item));
+            item.is_some() == mo.preview_has_item
+                && mo.item.original.is_none_or(|known| known == item)
+        };
+        let move_sig = |p: &Pokemon| {
+            let mut mvs: Vec<u16> = p.base_move_slots.iter().map(|s| s.id.0).collect();
+            mvs.sort_unstable();
+            (p.item.map(|i| i.0), mvs, p.base_stored_stats, p.base_hp_type.0)
+        };
+        let project_consistent = |mut mon: Pokemon| -> Pokemon {
+            if !crate::hp_evidence::consistent(dex, &mon, mo.hp_type_mask) {
+                if let Some(proj) = crate::hp_evidence::project_deterministic(
+                    dex,
+                    &mon,
+                    mo.gender,
+                    mo.hp_type_mask,
+                ) {
+                    mon = proj;
+                }
+            }
+            mon
+        };
+        let build_mon_from_moves = |move_keys: &[String], item_key: &str| -> Pokemon {
+            let mut move_ids: Vec<MoveId> =
+                move_keys.iter().filter_map(|k| dex.moves.id(&toid(k))).collect();
+            move_ids.sort_unstable_by_key(|m| m.0);
+            let best_carrier = carriers
+                .iter()
+                .max_by(|(sa, wa), (sb, wb)| {
+                    let ov_a = sa
+                        .moves
+                        .iter()
+                        .filter_map(|m| dex.moves.id(&toid(m)))
+                        .filter(|id| move_ids.iter().any(|mid| move_matches(dex, *id, *mid)))
+                        .count();
+                    let ov_b = sb
+                        .moves
+                        .iter()
+                        .filter_map(|m| dex.moves.id(&toid(m)))
+                        .filter(|id| move_ids.iter().any(|mid| move_matches(dex, *id, *mid)))
+                        .count();
+                    ov_a.cmp(&ov_b)
+                        .then_with(|| strict_item(sa).cmp(&strict_item(sb)))
+                        .then_with(|| wa.partial_cmp(wb).unwrap_or(std::cmp::Ordering::Equal))
+                })
+                .map(|&(s, _)| s);
+            let mut set = best_carrier.cloned().unwrap_or_else(|| base_set(dex, mo));
+            set.level = mo.level;
+            set.gender = Some(match mo.gender.as_str() {
+                "" => "N".to_string(),
+                g => g.to_string(),
+            });
+            set.name.clear();
+            set.moves = move_keys.to_vec();
+            apply_low_attack_spread_if_special(dex, &mut set, mo);
+            set.item = item_key.to_string();
+
+            let try_build = |mut s: PokemonSet| -> Option<Pokemon> {
+                let has_explicit_typed_hp = s.moves.iter().any(|m| {
+                    let k = toid(m);
+                    k.starts_with("hiddenpower") && k != "hiddenpower"
+                });
+                let hp_ok = |mon: &Pokemon| {
+                    crate::hp_evidence::consistent(dex, mon, mo.hp_type_mask)
+                        || (!has_explicit_typed_hp && hp_compatible_with_obs(dex, mon, mo))
+                };
+                let finish = |mon: Pokemon| -> Option<Pokemon> {
+                    if mon.gender != mo.gender {
+                        return None;
+                    }
+                    if crate::hp_evidence::consistent(dex, &mon, mo.hp_type_mask) {
+                        return Some(mon);
+                    }
+                    if mo.hp_type_mask != 0 && mo.hp_type_mask != u16::MAX {
+                        if let Some(proj) = crate::hp_evidence::project_deterministic(
+                            dex,
+                            &mon,
+                            mo.gender,
+                            mo.hp_type_mask,
+                        ) {
+                            if proj.gender == mo.gender
+                                && crate::hp_evidence::consistent(dex, &proj, mo.hp_type_mask)
+                            {
+                                return Some(proj);
+                            }
+                        }
+                    }
+                    if hp_ok(&mon) { Some(mon) } else { None }
+                };
+                if let Ok(built) = Battle::from_fixture(dex, "1,2,3,4", &[s.clone()], &[s.clone()]) {
+                    if let Some(mon) = finish(built.sides[0].roster[0].clone()) {
+                        return Some(mon);
+                    }
+                }
+                s.ivs = None;
+                let built = Battle::from_fixture(dex, "1,2,3,4", &[s.clone()], &[s]).ok()?;
+                finish(built.sides[0].roster[0].clone())
+            };
+
+            let mon = if let Some(built) = try_build(set) {
+                built
+            } else {
+                let mut cloned = clone_mon_with_item(
+                    fallback_mon,
+                    (!item_key.is_empty())
+                        .then(|| dex.items.id(&toid(item_key)))
+                        .flatten(),
+                );
+                let mut slots = MoveSlots::default();
+                for k in move_keys {
+                    if let Some(id) = dex.moves.id(&toid(k)) {
+                        if slots.len() < 4 {
+                            slots.push(fresh_move_slot(dex, id));
+                        }
+                    }
+                }
+                if !slots.is_empty() {
+                    cloned.base_move_slots = slots;
+                    cloned.move_slots = slots;
+                }
+                cloned
+            };
+            let mon = project_consistent(mon);
+            align_moves_with_reference(dex, mon, fallback_mon)
+        };
+
+        let fb_item_key = fallback_mon
+            .item
+            .map(|id| dex.items.key(id).to_string())
+            .unwrap_or_default();
+        let default_item_key = if !legal_items.is_empty() {
+            dex.items.key(legal_items[0].0).to_string()
+        } else {
+            self.resolve_non_excluded_item(dex, obs_mons, slot, mo, &fb_item_key, &carriers)
+        };
+
+        let mut move_archetypes: Vec<(Pokemon, f64)> = Vec::new();
+        if has_prior_moves {
+            let rev_keys: Vec<String> = rev.iter().map(|&m| dex.moves.key(m).to_string()).collect();
+            let rev_has_hp = rev_keys.iter().any(|k| k.starts_with("hiddenpower"));
+            let m_cap = legal_moves.len().min(10);
+            let capped = &legal_moves[..m_cap];
+            let mut is_hp = [false; 10];
+            let mut non_hp_count = 0usize;
+            for (j, (_, k, _)) in capped.iter().enumerate() {
+                is_hp[j] = k.starts_with("hiddenpower");
+                if !is_hp[j] {
+                    non_hp_count += 1;
+                }
+            }
+            let max_legal_from_capped =
+                non_hp_count + usize::from(!rev_has_hp && non_hp_count < m_cap);
+
+            if max_legal_from_capped >= open_slots {
+                let n_masks = 1usize << m_cap;
+                let mut dp = [0.0f64; 1024];
+                dp[0] = 1.0;
+                for step in 0..open_slots {
+                    let mut next_dp = [0.0f64; 1024];
+                    for mask in 0..n_masks {
+                        let w_mask = dp[mask];
+                        if !(w_mask > 0.0) || mask.count_ones() as usize != step {
+                            continue;
+                        }
+                        let mask_has_hp = rev_has_hp
+                            || (0..m_cap).any(|j| (mask & (1 << j)) != 0 && is_hp[j]);
+                        let mut rem_w = 0.0f64;
+                        for j in 0..m_cap {
+                            if (mask & (1 << j)) == 0 && !(mask_has_hp && is_hp[j]) {
+                                rem_w += capped[j].2;
+                            }
+                        }
+                        if rem_w > 0.0 {
+                            for j in 0..m_cap {
+                                if (mask & (1 << j)) == 0 && !(mask_has_hp && is_hp[j]) {
+                                    next_dp[mask | (1 << j)] += w_mask * (capped[j].2 / rem_w);
+                                }
+                            }
+                        }
+                    }
+                    dp = next_dp;
+                }
+
+                let carrier_exact_4: Vec<[MoveId; 4]> = carriers
+                    .iter()
+                    .filter_map(|(s, _)| {
+                        if s.moves.len() != 4 {
+                            return None;
+                        }
+                        let mut ids = [MoveId(0); 4];
+                        for (i, m) in s.moves.iter().enumerate() {
+                            ids[i] = dex.moves.id(&toid(m))?;
+                        }
+                        Some(ids)
+                    })
+                    .collect();
+
+                let mut mask_weights: Vec<(usize, f64)> = Vec::new();
+                for mask in 0..n_masks {
+                    if mask.count_ones() as usize != open_slots || !(dp[mask] > 0.0) {
+                        continue;
+                    }
+                    let mut w = dp[mask];
+                    if !carrier_exact_4.is_empty() && rev.len() + open_slots == 4 {
+                        let mut full = Vec::with_capacity(4);
+                        full.extend_from_slice(&rev);
+                        for j in 0..m_cap {
+                            if (mask & (1 << j)) != 0 {
+                                full.push(capped[j].0);
+                            }
+                        }
+                        let matches_carrier = carrier_exact_4.iter().any(|c_ids| {
+                            full.iter()
+                                .all(|&fid| c_ids.iter().any(|&cid| move_matches(dex, fid, cid)))
+                                && c_ids
+                                    .iter()
+                                    .all(|&cid| full.iter().any(|&fid| move_matches(dex, fid, cid)))
+                        });
+                        if matches_carrier {
+                            w *= 1.20;
+                        }
+                    }
+                    mask_weights.push((mask, w));
+                }
+                mask_weights.sort_by(|a, b| {
+                    b.1.partial_cmp(&a.1)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| a.0.cmp(&b.0))
+                });
+
+                let trap_id = dex.moves.id("meanlook");
+                let web_id = dex.moves.id("spiderweb");
+                let perish_id = dex.moves.id("perishsong");
+                let is_joint_trap_mask = |mask: usize| -> bool {
+                    let has_id = |target: Option<MoveId>| -> bool {
+                        target.is_some_and(|tid| {
+                            rev.iter().any(|&r| r == tid)
+                                || (0..m_cap)
+                                    .any(|j| (mask & (1 << j)) != 0 && capped[j].0 == tid)
+                        })
+                    };
+                    (has_id(trap_id) || has_id(web_id)) && has_id(perish_id)
+                };
+
+                let mut top_masks: Vec<(usize, f64)> = mask_weights.iter().copied().take(6).collect();
+                if !top_masks.is_empty()
+                    && !top_masks.iter().any(|&(m, _)| is_joint_trap_mask(m))
+                {
+                    if let Some(&trap_cand) =
+                        mask_weights.iter().find(|&&(m, _)| is_joint_trap_mask(m))
+                    {
+                        if top_masks.len() >= 6 {
+                            top_masks[5] = trap_cand;
+                        } else {
+                            top_masks.push(trap_cand);
+                        }
+                    }
+                }
+
+                for (mask, w) in top_masks {
+                    let mut mvs = rev_keys.clone();
+                    for j in 0..m_cap {
+                        if (mask & (1 << j)) != 0 {
+                            mvs.push(capped[j].1.clone());
+                        }
+                    }
+                    let mon = build_mon_from_moves(&mvs, &default_item_key);
+                    let sig = move_sig(&mon);
+                    match move_archetypes
+                        .iter_mut()
+                        .find(|(existing, _)| move_sig(existing) == sig)
+                    {
+                        Some((_, ew)) => *ew += w,
+                        None => move_archetypes.push((mon, w)),
+                    }
+                }
+            } else {
+                // Fewer distinct non-conflicting legal prior moves than open slots:
+                // lock all legal prior moves first and backfill only remaining slots.
+                let mut locked_ids = rev.clone();
+                let mut locked_keys = rev_keys.clone();
+                let mut has_hp = rev_has_hp;
+                for &(id, ref key, _) in &legal_moves {
+                    if locked_ids.len() >= 4 {
+                        break;
+                    }
+                    let hp = key.starts_with("hiddenpower");
+                    if hp && has_hp {
+                        continue;
+                    }
+                    if hp {
+                        has_hp = true;
+                    }
+                    locked_ids.push(id);
+                    locked_keys.push(key.clone());
+                }
+                let rem_slots = 4usize.saturating_sub(locked_ids.len());
+                if rem_slots == 0 {
+                    move_archetypes
+                        .push((build_mon_from_moves(&locked_keys, &default_item_key), 1.0));
+                } else {
+                    let mut fill_scores: Vec<(MoveId, String, f64)> = Vec::new();
+                    for &(s, w) in &carriers {
+                        let c_ids: Vec<MoveId> = s
+                            .moves
+                            .iter()
+                            .filter_map(|m| dex.moves.id(&toid(m)))
+                            .collect();
+                        let ov = locked_ids
+                            .iter()
+                            .filter(|&&lid| c_ids.iter().any(|&cid| move_matches(dex, cid, lid)))
+                            .count() as f64;
+                        let set_w =
+                            w * (4.0 * ov).exp() * if strict_item(s) { 1.5 } else { 1.0 };
+                        for id in c_ids {
+                            let mk = dex.moves.key(id);
+                            if !format_move_legal_at_level(species_key, mk, mo.level)
+                                || locked_ids.iter().any(|&lid| move_matches(dex, id, lid))
+                                || (has_hp && mk.starts_with("hiddenpower"))
+                            {
+                                continue;
+                            }
+                            match fill_scores.iter_mut().find(|(mid, _, _)| *mid == id) {
+                                Some(e) => e.2 += set_w,
+                                None => fill_scores.push((id, mk.to_string(), set_w)),
+                            }
+                        }
+                    }
+                    fill_scores.sort_by(|a, b| {
+                        b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    if fill_scores.len() < rem_slots + 2 {
+                        let floor_scale = fill_scores
+                            .last()
+                            .map(|x| x.2 * 0.15)
+                            .unwrap_or(1.0)
+                            .max(1e-4);
+                        for (id, name, quality) in non_dominated_learnset_moves(dex, mo) {
+                            let mk = dex.moves.key(id);
+                            if locked_ids.iter().any(|&lid| move_matches(dex, id, lid))
+                                || (has_hp && mk.starts_with("hiddenpower"))
+                                || fill_scores.iter().any(|(mid, _, _)| *mid == id)
+                            {
+                                continue;
+                            }
+                            fill_scores.push((id, name, floor_scale * quality));
+                        }
+                        fill_scores.sort_by(|a, b| {
+                            b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                    }
+                    let pool_len = fill_scores.len().min(rem_slots + 3);
+                    if pool_len >= rem_slots {
+                        let mut combos: Vec<(Vec<usize>, f64)> = Vec::new();
+                        for mask in 0..(1usize << pool_len) {
+                            if mask.count_ones() as usize != rem_slots {
+                                continue;
+                            }
+                            let idxs: Vec<usize> =
+                                (0..pool_len).filter(|&i| (mask & (1 << i)) != 0).collect();
+                            let w: f64 = idxs.iter().map(|&i| fill_scores[i].2).product();
+                            if w > 0.0 {
+                                combos.push((idxs, w));
+                            }
+                        }
+                        combos.sort_by(|a, b| {
+                            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                        for (idxs, w) in combos.into_iter().take(3) {
+                            let mut mvs = locked_keys.clone();
+                            for i in idxs {
+                                mvs.push(fill_scores[i].1.clone());
+                            }
+                            let mon = build_mon_from_moves(&mvs, &default_item_key);
+                            let sig = move_sig(&mon);
+                            match move_archetypes
+                                .iter_mut()
+                                .find(|(existing, _)| move_sig(existing) == sig)
+                            {
+                                Some((_, ew)) => *ew += w,
+                                None => move_archetypes.push((mon, w)),
+                            }
+                        }
+                    }
+                    if move_archetypes.is_empty() {
+                        move_archetypes
+                            .push((project_consistent(fallback_mon.clone()), 1.0));
+                    }
+                }
+            }
+        }
+
+        let mut entries: Vec<(Pokemon, f64)> = Vec::new();
+        if !legal_items.is_empty() {
+            if move_archetypes.is_empty() {
+                move_archetypes.push((project_consistent(fallback_mon.clone()), 1.0));
+            }
+            move_archetypes.sort_by(|a, b| {
+                b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            let k_it = legal_items.len().min(4);
+            let top_items = &legal_items[..k_it];
+            let item_sum: f64 = top_items.iter().map(|(_, w)| *w).sum();
+            if !(item_sum > 0.0) {
+                return None;
+            }
+            let (ref mon0, mw0) = move_archetypes[0];
+            for &(item_id, iw) in top_items {
+                let cand = clone_mon_with_item(mon0, Some(item_id));
+                let w = mw0 * (iw / item_sum);
+                let sig = move_sig(&cand);
+                match entries
+                    .iter_mut()
+                    .find(|(existing, _)| move_sig(existing) == sig)
+                {
+                    Some((_, ew)) => *ew += w,
+                    None => entries.push((cand, w)),
+                }
+            }
+            let mut extra_pairs: Vec<(Pokemon, f64)> = Vec::new();
+            for (mon_i, mw_i) in move_archetypes.iter().skip(1) {
+                for &(item_id, iw) in top_items {
+                    extra_pairs.push((
+                        clone_mon_with_item(mon_i, Some(item_id)),
+                        *mw_i * (iw / item_sum),
+                    ));
+                }
+            }
+            extra_pairs.sort_by(|a, b| {
+                b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            for (cand, w) in extra_pairs.into_iter().take(MAX_SLOT_LOADOUTS.saturating_sub(k_it)) {
+                let sig = move_sig(&cand);
+                match entries
+                    .iter_mut()
+                    .find(|(existing, _)| move_sig(existing) == sig)
+                {
+                    Some((_, ew)) => *ew += w,
+                    None => entries.push((cand, w)),
+                }
+            }
+            entries.sort_by(|a, b| {
+                b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+            });
+        } else {
+            entries = move_archetypes;
+            entries.sort_by(|a, b| {
+                b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            Self::append_secondary_item_variant(dex, obs_mons, slot, mo, &carriers, &mut entries);
+        }
+
+        let total: f64 = entries.iter().map(|(_, w)| *w).sum();
+        (!entries.is_empty() && total > 0.0).then_some(LoadoutDraw { entries, total })
     }
 
     fn bayesian_loadout_draw(
         &self,
         dex: &Dex,
         mo: &MonObs,
+        slot: usize,
         obs_mons: &[MonObs],
         fallback_mon: &Pokemon,
     ) -> Option<LoadoutDraw> {
-        if !mo.appeared {
+        if let Some(draw) = self.prior_loadout_draw(dex, mo, slot, obs_mons, fallback_mon) {
+            return Some(draw);
+        }
+        if !obs_mons.iter().any(|m| m.appeared) {
             return None;
         }
-        let carriers = self.bayesian_prior_carriers(dex, mo, obs_mons);
-        if carriers.is_empty() && !self.is_weighted_prior() {
+        let carriers = self.bayesian_prior_carriers(dex, mo, slot, obs_mons);
+        if carriers.is_empty() && !self.is_weighted_prior() && self.cands.len() < 20 {
             return None;
         }
         let species_key = dex.species.key(mo.species);
@@ -1814,86 +3311,15 @@ impl Belief {
             item.is_some() == mo.preview_has_item
                 && mo.item.original.is_none_or(|known| known == item)
         };
-        let resolve_item = |source_item: &str, use_strict: bool| -> String {
-            if use_strict {
-                source_item.to_string()
-            } else {
-                match mo.item.original {
-                    Some(Some(x)) => dex.items.key(x).to_string(),
-                    Some(None) => String::new(),
-                    None if mo.preview_has_item => {
-                        if dex.items.id(&toid(source_item)).is_some() {
-                            source_item.to_string()
-                        } else {
-                            "leftovers".to_string()
-                        }
-                    }
-                    None => String::new(),
-                }
-            }
+        let resolve_item = |source_item: &str, _use_strict: bool| -> String {
+            self.resolve_non_excluded_item(dex, obs_mons, slot, mo, source_item, &carriers)
         };
         let move_sig = |p: &Pokemon| {
             let mut mvs: Vec<u16> = p.base_move_slots.iter().map(|s| s.id.0).collect();
             mvs.sort_unstable();
-            (
-                mo.item.original.is_some().then(|| p.item.map(|i| i.0)),
-                mvs,
-            )
+            (p.item.map(|i| i.0), mvs, p.base_stored_stats, p.base_hp_type.0)
         };
         let fallback_sig = move_sig(fallback_mon);
-        // Align candidate move slots 0..4 with `fallback_mon.base_move_slots` so that
-        // any move shared with `fallback_mon` (including all revealed moves and shared
-        // unrevealed staples) occupies the exact same `SearchChoice::Move(1..=4)` index
-        // across all worlds in `BlindSearch`.
-        let align_moves_to_fallback = |mut mon: Pokemon| -> Pokemon {
-            let fb_slots = &fallback_mon.base_move_slots;
-            let cand_slots = mon.base_move_slots;
-            if cand_slots.len() != fb_slots.len() || cand_slots.is_empty() {
-                return mon;
-            }
-            let n = cand_slots.len();
-            let mut aligned: [Option<MoveSlot>; 4] = [None; 4];
-            let mut used_cand = [false; 4];
-            for (c_idx, cs) in cand_slots.iter().enumerate() {
-                if let Some(f_idx) =
-                    (0..n).find(|&fi| aligned[fi].is_none() && fb_slots[fi].id == cs.id)
-                {
-                    aligned[f_idx] = Some(*cs);
-                    used_cand[c_idx] = true;
-                }
-            }
-            for (c_idx, cs) in cand_slots.iter().enumerate() {
-                if used_cand[c_idx] {
-                    continue;
-                }
-                if dex.moves.key(cs.id).starts_with("hiddenpower") {
-                    if let Some(f_idx) = (0..n).find(|&fi| {
-                        aligned[fi].is_none()
-                            && dex.moves.key(fb_slots[fi].id).starts_with("hiddenpower")
-                    }) {
-                        aligned[f_idx] = Some(*cs);
-                        used_cand[c_idx] = true;
-                    }
-                }
-            }
-            for (c_idx, cs) in cand_slots.iter().enumerate() {
-                if used_cand[c_idx] {
-                    continue;
-                }
-                if let Some(f_idx) = (0..n).find(|&fi| aligned[fi].is_none()) {
-                    aligned[f_idx] = Some(*cs);
-                }
-            }
-            let mut nb = MoveSlots::default();
-            for fi in 0..n {
-                if let Some(slot) = aligned[fi] {
-                    nb.push(slot);
-                }
-            }
-            mon.base_move_slots = nb;
-            mon.move_slots = nb;
-            mon
-        };
         let build_candidate_mon = |mut set: PokemonSet| -> Option<Pokemon> {
             set.level = mo.level;
             set.name.clear();
@@ -1901,21 +3327,45 @@ impl Belief {
                 "" => "N".to_string(),
                 g => g.to_string(),
             };
+            let has_explicit_typed_hp = set.moves.iter().any(|m| {
+                let k = toid(m);
+                k.starts_with("hiddenpower") && k != "hiddenpower"
+            });
+            let hp_ok = |mon: &Pokemon| {
+                crate::hp_evidence::consistent(dex, mon, mo.hp_type_mask)
+                    || (!has_explicit_typed_hp && hp_compatible_with_obs(dex, mon, mo))
+            };
+            let finish = |mon: Pokemon| -> Option<Pokemon> {
+                if mon.gender != mo.gender {
+                    return None;
+                }
+                if hp_ok(&mon) {
+                    return Some(mon);
+                }
+                if mo.hp_type_mask != 0 && mo.hp_type_mask != u16::MAX {
+                    if let Some(proj) =
+                        crate::hp_evidence::project_deterministic(dex, &mon, mo.gender, mo.hp_type_mask)
+                    {
+                        if proj.gender == mo.gender && hp_ok(&proj) {
+                            return Some(proj);
+                        }
+                    }
+                }
+                None
+            };
             if let Ok(built) = Battle::from_fixture(dex, "1,2,3,4", &[set.clone()], &[set.clone()])
             {
-                let mon = &built.sides[0].roster[0];
-                if mon.gender == mo.gender
-                    && crate::hp_evidence::consistent(dex, mon, mo.hp_type_mask)
-                {
-                    return Some(mon.clone());
+                if let Some(mon) = finish(built.sides[0].roster[0].clone()) {
+                    return Some(mon);
                 }
             }
             set.gender = Some(gender_str);
             set.ivs = None;
             let built = Battle::from_fixture(dex, "1,2,3,4", &[set.clone()], &[set]).ok()?;
-            let mon = &built.sides[0].roster[0];
-            (mon.gender == mo.gender && crate::hp_evidence::consistent(dex, mon, mo.hp_type_mask))
-                .then(|| mon.clone())
+            finish(built.sides[0].roster[0].clone())
+        };
+        let add_secondary_item_variant = |entries: &mut Vec<(Pokemon, f64)>| {
+            Self::append_secondary_item_variant(dex, obs_mons, slot, mo, &carriers, entries);
         };
 
         let move_consistent: Vec<(&PokemonSet, f64)> = carriers
@@ -1942,10 +3392,11 @@ impl Belief {
 
         if !move_consistent.is_empty() {
             // Tier A: Aggregate soft-likelihood weights by canonical sorted 4-move set
-            // before constructing Pokemon fixtures, retaining the modal item for each
-            // moveset and keeping the top-K major movesets (weight >= 0.20 * top_w).
+            // before constructing Pokemon fixtures, keeping diverse archetypes and a
+            // secondary non-excluded item variant for root multi-world hedging.
             let use_strict_item = move_consistent.iter().any(|(s, _)| strict_item(s));
             let mut marginal_w: HashMap<String, f64> = HashMap::new();
+            let mut tally_total_w = 0.0f64;
             // (sorted_moves, total_weight, best_rep_weight, best_rep_set)
             let mut tally: Vec<(Vec<String>, f64, f64, &PokemonSet)> = Vec::new();
             for &(source, weight) in &move_consistent {
@@ -1955,6 +3406,7 @@ impl Belief {
                 let mut mvs: Vec<String> = source.moves.iter().map(|m| toid(m)).collect();
                 mvs.sort();
                 mvs.dedup();
+                tally_total_w += weight;
                 for mv in &mvs {
                     *marginal_w.entry(mv.clone()).or_insert(0.0) += weight;
                 }
@@ -1980,28 +3432,39 @@ impl Belief {
             }
             tally.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-            let has_baton_pass = tally.first().is_some_and(|(_, top_w, _, _)| {
-                tally
-                    .iter()
-                    .any(|(mvs, w, _, _)| *w >= top_w * 0.15 && mvs.iter().any(|m| m == "batonpass"))
-            });
-
             if let Some((top_mvs, top_w, _, top_rep)) = tally.first().cloned() {
+                let locked_staples: Vec<String> =
+                    if !mo.revealed_moves.is_empty() && tally_total_w > 0.0 {
+                        top_mvs
+                            .iter()
+                            .filter(|m| {
+                                let mid = dex.moves.id(m);
+                                mid.is_none_or(|id| {
+                                    !mo.revealed_moves
+                                        .iter()
+                                        .any(|&rev| move_matches(dex, id, rev))
+                                }) && marginal_w.get(*m).copied().unwrap_or(0.0)
+                                    >= 0.85 * tally_total_w
+                            })
+                            .cloned()
+                            .collect()
+                    } else {
+                        Vec::new()
+                    };
                 let is_joint_trap = |mvs: &[String]| {
                     mvs.iter().any(|m| m == "meanlook" || m == "spiderweb")
                         && mvs.iter().any(|m| m == "perishsong")
                 };
                 let mut selected: Vec<(Vec<String>, f64, &PokemonSet)> =
                     vec![(top_mvs.clone(), top_w, top_rep)];
-                let max_tier_a = if has_baton_pass { 3 } else { 2 };
+                let max_tier_a = if mo.appeared { 4 } else { 3 };
                 for (mvs, w, _, rep) in tally.iter().skip(1) {
                     if selected.len() >= max_tier_a {
                         break;
                     }
                     let diff_moves = mvs.iter().filter(|m| !top_mvs.contains(m)).count();
-                    let min_rel = if has_baton_pass { 0.20 } else { 0.55 };
-                    let distinct_archetype = has_baton_pass || diff_moves >= 2;
-                    if *w >= top_w * min_rel && distinct_archetype {
+                    let keeps_staples = locked_staples.iter().all(|req| mvs.contains(req));
+                    if *w >= top_w * 0.15 && diff_moves >= 1 && keeps_staples {
                         selected.push((mvs.clone(), *w, *rep));
                     }
                 }
@@ -2018,6 +3481,9 @@ impl Belief {
                         if let Some((k, _, _, rep)) =
                             tally.iter().find(|(mvs, _, _, _)| is_joint_trap(mvs))
                         {
+                            if selected.len() >= 4 {
+                                selected.pop();
+                            }
                             selected.push((k.clone(), trap_total, *rep));
                         }
                     }
@@ -2033,13 +3499,14 @@ impl Belief {
                     let mon = if sig == fallback_sig {
                         fallback_mon.clone()
                     } else {
-                        align_moves_to_fallback(mon)
+                        align_moves_with_reference(dex, mon, fallback_mon)
                     };
                     match entries.iter_mut().find(|(existing, _)| move_sig(existing) == sig) {
                         Some((_, w)) => *w += weight,
                         None => entries.push((mon, weight)),
                     }
                 }
+                add_secondary_item_variant(&mut entries);
             }
         } else if mo.revealed_moves.len() < 4 {
             // Tier B: Novel move combination (or unseen prior species) — conditional
@@ -2122,15 +3589,7 @@ impl Belief {
             }
 
             let pool_len = move_scores.len().min(open_slots + 3);
-            let has_novel_baton_pass = move_scores
-                .iter()
-                .take(pool_len)
-                .any(|(id, _, _, _, _)| dex.moves.key(*id) == "batonpass")
-                || mo
-                    .revealed_moves
-                    .iter()
-                    .any(|&id| dex.moves.key(id) == "batonpass");
-            if pool_len > open_slots && has_novel_baton_pass {
+            if pool_len > open_slots {
                 let template_set = carriers
                     .iter()
                     .max_by(|(sa, wa), (sb, wb)| {
@@ -2208,14 +3667,14 @@ impl Belief {
                     b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
                 });
                 if let Some(best_w) = combos.first().map(|x| x.1) {
-                    const MAX_NOVEL_LOADOUTS: usize = 2;
+                    let max_novel = if mo.appeared { 3 } else { 2 };
                     for (idxs, w) in combos
                         .into_iter()
                         .filter(|(idxs, w)| {
-                            *w >= best_w * 0.25
+                            *w >= best_w * 0.20
                                 && locked_partners.iter().all(|req| idxs.contains(req))
                         })
-                        .take(MAX_NOVEL_LOADOUTS)
+                        .take(max_novel)
                     {
                         let mut set = template_set.clone();
                         let mut mvs = base_moves.clone();
@@ -2224,6 +3683,7 @@ impl Belief {
                         }
                         mvs.truncate(4);
                         set.moves = mvs;
+                        apply_low_attack_spread_if_special(dex, &mut set, mo);
                         let pool_item = std::mem::take(&mut set.item);
                         set.item = resolve_item(&pool_item, false);
                         let Some(mon) = build_candidate_mon(set) else {
@@ -2233,7 +3693,7 @@ impl Belief {
                         let mon = if sig == fallback_sig {
                             fallback_mon.clone()
                         } else {
-                            align_moves_to_fallback(mon)
+                            align_moves_with_reference(dex, mon, fallback_mon)
                         };
                         match entries
                             .iter_mut()
@@ -2241,6 +3701,37 @@ impl Belief {
                         {
                             Some((_, ew)) => *ew += w,
                             None => entries.push((mon, w)),
+                        }
+                    }
+                    add_secondary_item_variant(&mut entries);
+                }
+            }
+        } else if mo.revealed_moves.len() == 4 && mo.preview_has_item && mo.item.original.is_none()
+        {
+            entries.push((fallback_mon.clone(), 1.0));
+            add_secondary_item_variant(&mut entries);
+        }
+
+        if self.fallback_policy == FallbackPolicy::Bayesian && mo.appeared && entries.len() < 4 {
+            if entries.is_empty() && mo.revealed_moves.len() == 4 {
+                entries.push((fallback_mon.clone(), 1.0));
+            }
+            if !entries.is_empty() && entries.len() < 4 {
+                let primary = &entries[0].0;
+                if primary.set_evs[5] > 0 || primary.set_ivs[5] > 2 {
+                    let base_spe = dex.species.get(mo.species).base_stats.spe;
+                    let has_slow_move = primary.base_move_slots.iter().any(|m| {
+                        let k = dex.moves.key(m.id);
+                        matches!(k, "counter" | "mirrorcoat")
+                            || (k == "batonpass" && base_spe <= 75)
+                    });
+                    if has_slow_move || (mo.revealed_moves.len() == 4 && entries.len() <= 2) {
+                        let slow_mon = with_reduced_speed_spread(dex, primary);
+                        let slow_sig = move_sig(&slow_mon);
+                        if !entries.iter().any(|(existing, _)| move_sig(existing) == slow_sig) {
+                            let rel_w = if has_slow_move { 0.12 } else { 0.06 };
+                            let w = entries[0].1 * rel_w;
+                            entries.push((slow_mon, w));
                         }
                     }
                 }
@@ -2256,12 +3747,414 @@ impl Belief {
         Some(LoadoutDraw { entries, total })
     }
 
+    fn build_fallback_cands(
+        &self,
+        dex: &Dex,
+        obs: &Observer,
+        roster: &[Pokemon],
+    ) -> Option<FallbackCandPool> {
+        let obs_mons = obs.mons();
+        let n_mons = obs_mons.len().min(roster.len());
+        if n_mons == 0 {
+            return None;
+        }
+        let slot_opts: Vec<Vec<(Pokemon, f64)>> = (0..n_mons)
+            .map(|slot| {
+                let project_if_prior = |p: Pokemon| -> Pokemon {
+                    if !self.prior_governed_slots.is_empty()
+                        && !crate::hp_evidence::consistent(dex, &p, obs_mons[slot].hp_type_mask)
+                    {
+                        crate::hp_evidence::project_deterministic(
+                            dex,
+                            &p,
+                            obs_mons[slot].gender,
+                            obs_mons[slot].hp_type_mask,
+                        )
+                        .unwrap_or(p)
+                    } else {
+                        p
+                    }
+                };
+                let mut opts: Vec<(Pokemon, f64)> = self
+                    .loadout_draws
+                    .as_ref()
+                    .and_then(|d| d.get(slot)?.as_ref())
+                    .map(|ld| {
+                        ld.entries
+                            .iter()
+                            .filter(|(p, w)| {
+                                *w > 0.0
+                                    && !Observer::is_item_excluded_for_slot(
+                                        dex, obs_mons, slot, p.item,
+                                    )
+                            })
+                            .map(|(p, w)| {
+                                (
+                                    project_if_prior(align_moves_with_reference(
+                                        dex,
+                                        p.clone(),
+                                        &roster[slot],
+                                    )),
+                                    *w,
+                                )
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if opts.is_empty() {
+                    opts.push((project_if_prior(roster[slot].clone()), 1.0));
+                }
+                opts
+            })
+            .collect();
+
+        // Source 1: Near-Pool Soft Shell Repair (matches >= n_mons - 1 slots on species+level)
+        let mut source1: Vec<(Vec<Pokemon>, f64, usize)> = Vec::new();
+        if n_mons >= 2 && obs_mons.iter().any(|m| m.appeared) {
+            let min_shell = n_mons.saturating_sub(1).max(2);
+            let mut raw_cands: Vec<(f64, &[PokemonSet], Option<&[Pokemon]>)> = Vec::new();
+            let extra_iter = (self.is_weighted_prior() || self.cands.len() >= 20)
+                .then(|| supplemental_prior_teams(dex).iter().map(|t| (t.weight, t.sets.as_slice(), None)))
+                .into_iter()
+                .flatten();
+            for (base_w, sets, prebuilt) in self
+                .cands
+                .iter()
+                .map(|c| (c.weight.unwrap_or(1.0), c.sets.as_slice(), c.refs.as_deref()))
+                .chain(extra_iter)
+            {
+                let mut used_set = vec![false; sets.len()];
+                let mut shell_matches = 0usize;
+                for mo in obs_mons.iter().take(n_mons) {
+                    if let Some(idx) = sets.iter().enumerate().position(|(i, s)| {
+                        !used_set[i]
+                            && s.level == mo.level
+                            && dex.species.id(&toid(&s.species)) == Some(mo.species)
+                    }) {
+                        used_set[idx] = true;
+                        shell_matches += 1;
+                    }
+                }
+                if shell_matches >= min_shell {
+                    let score = base_w * (1.2 * shell_matches as f64).exp();
+                    raw_cands.push((score, sets, prebuilt));
+                }
+            }
+            raw_cands.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            raw_cands.truncate(16);
+
+            let move_item_sig = |p: &Pokemon| -> (Option<u16>, Vec<u16>) {
+                let mut mvs: Vec<u16> = p.base_move_slots.iter().map(|s| s.id.0).collect();
+                mvs.sort_unstable();
+                (p.item.map(|i| i.0), mvs)
+            };
+            let prior_slot_sigs: Vec<Vec<(Option<u16>, Vec<u16>)>> = (0..n_mons)
+                .map(|slot| {
+                    let governed = self.prior_governed_slots.get(slot).copied().unwrap_or(false)
+                        && self
+                            .loadout_draws
+                            .as_ref()
+                            .and_then(|d| d.get(slot)?.as_ref())
+                            .is_some();
+                    if governed {
+                        slot_opts[slot]
+                            .iter()
+                            .map(|(p, _)| move_item_sig(p))
+                            .collect()
+                    } else {
+                        Vec::new()
+                    }
+                })
+                .collect();
+            let mon_consistent_for_slot = |slot: usize, p: &Pokemon| -> bool {
+                let mo = &obs_mons[slot];
+                p.species == mo.species
+                    && p.level == mo.level
+                    && p.gender == mo.gender
+                    && p.item.is_some() == mo.preview_has_item
+                    && mo.item.original.is_none_or(|known| known == p.item)
+                    && !Observer::is_item_excluded_for_slot(dex, obs_mons, slot, p.item)
+                    && crate::hp_evidence::consistent(dex, p, mo.hp_type_mask)
+                    && mo
+                        .revealed_moves
+                        .iter()
+                        .all(|&rev| p.base_move_slots.iter().any(|s| move_matches(dex, s.id, rev)))
+                    && (prior_slot_sigs[slot].is_empty()
+                        || prior_slot_sigs[slot].contains(&move_item_sig(p)))
+            };
+
+            let mut s1_sigs: Vec<TeamSig> = Vec::new();
+            let min_consistent = n_mons.saturating_sub(2).max(2);
+            for (raw_score, sets, prebuilt) in raw_cands {
+                let owned_roster;
+                let team_roster: &[Pokemon] = if let Some(refs) = prebuilt {
+                    refs
+                } else if let Ok(b) = Battle::from_fixture(dex, "1,2,3,4", sets, sets) {
+                    owned_roster = b.sides[0].roster.clone();
+                    &owned_roster
+                } else {
+                    continue;
+                };
+                let mut used_src = vec![false; team_roster.len()];
+                let mut matched_idx: Vec<Option<usize>> = vec![None; n_mons];
+                for slot in 0..n_mons {
+                    if let Some(i) = team_roster
+                        .iter()
+                        .enumerate()
+                        .position(|(i, p)| !used_src[i] && mon_consistent_for_slot(slot, p))
+                    {
+                        used_src[i] = true;
+                        matched_idx[slot] = Some(i);
+                    }
+                }
+                let k_consistent = matched_idx.iter().filter(|m| m.is_some()).count();
+                if k_consistent < min_consistent {
+                    continue;
+                }
+
+                let mut used_items: Vec<ItemId> = Vec::with_capacity(n_mons);
+                for mo in obs_mons.iter().take(n_mons) {
+                    if let Some(Some(id)) = mo.item.original {
+                        if !used_items.contains(&id) {
+                            used_items.push(id);
+                        }
+                    }
+                }
+                let mut repaired: Vec<Option<Pokemon>> = vec![None; n_mons];
+                for slot in 0..n_mons {
+                    let Some(idx) = matched_idx[slot] else { continue };
+                    let p = &team_roster[idx];
+                    let item_ok = obs_mons[slot].item.original.is_some()
+                        || p.item.is_none_or(|id| !used_items.contains(&id));
+                    if item_ok {
+                        if obs_mons[slot].item.original.is_none() {
+                            if let Some(id) = p.item {
+                                used_items.push(id);
+                            }
+                        }
+                        repaired[slot] =
+                            Some(align_moves_with_reference(dex, p.clone(), &roster[slot]));
+                    }
+                }
+                let mut repair_slots: Vec<usize> =
+                    (0..n_mons).filter(|&s| repaired[s].is_none()).collect();
+                repair_slots.sort_by_key(|&s| (!obs_mons[s].appeared, s));
+                for slot in repair_slots {
+                    let mo = &obs_mons[slot];
+                    let chosen = slot_opts[slot]
+                        .iter()
+                        .find(|(p, _)| {
+                            !Observer::is_item_excluded_for_slot(dex, obs_mons, slot, p.item)
+                                && (mo.item.original.is_some()
+                                    || p.item.is_none_or(|id| !used_items.contains(&id)))
+                        })
+                        .map(|(p, _)| p.clone())
+                        .unwrap_or_else(|| {
+                            let base = &slot_opts[slot][0].0;
+                            if mo.preview_has_item && mo.item.original.is_none() {
+                                if let Some(alt_id) = choose_fallback_item_for_slot(
+                                    dex,
+                                    obs_mons,
+                                    slot,
+                                    &used_items,
+                                ) {
+                                    return clone_mon_with_item(base, Some(alt_id));
+                                }
+                            }
+                            base.clone()
+                        });
+                    if mo.item.original.is_none() {
+                        if let Some(id) = chosen.item {
+                            if !used_items.contains(&id) {
+                                used_items.push(id);
+                            }
+                        }
+                    }
+                    repaired[slot] =
+                        Some(align_moves_with_reference(dex, chosen, &roster[slot]));
+                }
+                let team: Vec<Pokemon> = repaired.into_iter().map(Option::unwrap).collect();
+                let w = raw_score * (0.3 * k_consistent as f64).exp();
+                let sig = team_signature(&team);
+                if let Some(pos) = s1_sigs.iter().position(|existing| *existing == sig) {
+                    source1[pos].1 += w;
+                    source1[pos].2 = source1[pos].2.max(k_consistent);
+                } else {
+                    s1_sigs.push(sig);
+                    source1.push((team, w, k_consistent));
+                }
+            }
+            source1.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            source1.truncate(4);
+        }
+
+        // Source 2: Latin-Hypercube Quantile Coupling enforcing global Item Clause
+        let num_strata: usize = if !self.prior_governed_slots.is_empty() { 16 } else { 8 };
+        let mut slot_order: Vec<usize> = (0..n_mons).collect();
+        slot_order.sort_by_key(|&s| {
+            (
+                obs_mons[s].item.original.is_none(),
+                !obs_mons[s].appeared,
+                slot_opts[s].len(),
+                s,
+            )
+        });
+        let slot_cdfs: Vec<Vec<f64>> = (0..n_mons)
+            .map(|slot| {
+                let total: f64 = slot_opts[slot]
+                    .iter()
+                    .map(|(_, w)| (*w).max(0.0))
+                    .sum::<f64>()
+                    .max(1e-12);
+                let mut cum = 0.0;
+                slot_opts[slot]
+                    .iter()
+                    .map(|(_, w)| {
+                        cum += (*w).max(0.0) / total;
+                        cum
+                    })
+                    .collect()
+            })
+            .collect();
+        let mut source2: Vec<(Vec<Pokemon>, f64)> = Vec::with_capacity(num_strata);
+        let mut s2_sigs: Vec<TeamSig> = Vec::with_capacity(num_strata);
+        for b in 0..num_strata {
+            let mut used_items: Vec<ItemId> = Vec::with_capacity(n_mons);
+            for mo in obs_mons.iter().take(n_mons) {
+                if let Some(Some(id)) = mo.item.original {
+                    if !used_items.contains(&id) {
+                        used_items.push(id);
+                    }
+                }
+            }
+            let mut team_slots: Vec<Option<Pokemon>> = vec![None; n_mons];
+            for &slot in &slot_order {
+                let mo = &obs_mons[slot];
+                let opts = &slot_opts[slot];
+                let k_stratum = if b == 0 {
+                    0
+                } else {
+                    1 + ((b - 1 + slot * 2) % (num_strata - 1))
+                };
+                let q = (k_stratum as f64 + 0.5) / (num_strata as f64);
+                let pref_idx = if k_stratum + 1 == num_strata && opts.len() > 1 {
+                    opts.len() - 1
+                } else {
+                    slot_cdfs[slot]
+                        .iter()
+                        .position(|&c| q < c)
+                        .unwrap_or(opts.len() - 1)
+                };
+                let chosen = if mo.item.original.is_some()
+                    || opts[pref_idx]
+                        .0
+                        .item
+                        .is_none_or(|id| !used_items.contains(&id))
+                {
+                    opts[pref_idx].0.clone()
+                } else if let Some((alt_p, _)) = opts
+                    .iter()
+                    .find(|(p, _)| p.item.is_none_or(|id| !used_items.contains(&id)))
+                {
+                    alt_p.clone()
+                } else if mo.preview_has_item && mo.item.original.is_none() {
+                    if let Some(alt_id) =
+                        choose_fallback_item_for_slot(dex, obs_mons, slot, &used_items)
+                    {
+                        clone_mon_with_item(&opts[pref_idx].0, Some(alt_id))
+                    } else {
+                        opts[pref_idx].0.clone()
+                    }
+                } else {
+                    opts[pref_idx].0.clone()
+                };
+                if mo.item.original.is_none() {
+                    if let Some(id) = chosen.item {
+                        if !used_items.contains(&id) {
+                            used_items.push(id);
+                        }
+                    }
+                }
+                team_slots[slot] = Some(chosen);
+            }
+            let team: Vec<Pokemon> = team_slots.into_iter().map(Option::unwrap).collect();
+            let sig = team_signature(&team);
+            let w = 1.0 / (num_strata as f64);
+            if let Some(pos) = s2_sigs.iter().position(|existing| *existing == sig) {
+                source2[pos].1 += w;
+            } else {
+                s2_sigs.push(sig);
+                source2.push((team, w));
+            }
+        }
+
+        let s2_sum: f64 = source2.iter().map(|(_, w)| *w).sum();
+        if s2_sum > 0.0 {
+            for (_, w) in &mut source2 {
+                *w /= s2_sum;
+            }
+        } else {
+            source2.clear();
+        }
+
+        let mut merged: Vec<(Vec<Pokemon>, f64)> = Vec::new();
+        let mut merged_sigs: Vec<TeamSig> = Vec::new();
+        let mut push_team = |team: Vec<Pokemon>, weight: f64| {
+            let sig = team_signature(&team);
+            if let Some(pos) = merged_sigs.iter().position(|s| *s == sig) {
+                merged[pos].1 += weight;
+            } else {
+                merged_sigs.push(sig);
+                merged.push((team, weight));
+            }
+        };
+
+        let has_s2 = !source2.is_empty();
+        for (team, w) in source2 {
+            push_team(team, w);
+        }
+        if !source1.is_empty() {
+            let max_k = source1.iter().map(|x| x.2).max().unwrap_or(0);
+            let s1_sum: f64 = source1.iter().map(|x| x.1).sum();
+            if s1_sum > 0.0 {
+                let target_mass = if !has_s2 {
+                    1.0
+                } else {
+                    let alpha = if max_k >= n_mons.saturating_sub(1) {
+                        0.55
+                    } else {
+                        0.30
+                    };
+                    alpha / (1.0 - alpha)
+                };
+                for (team, w, _) in source1 {
+                    push_team(team, w * (target_mass / s1_sum));
+                }
+            }
+        }
+
+        merged.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        merged.truncate(num_strata);
+        if merged.is_empty() {
+            return None;
+        }
+        let total = merged.iter().map(|(_, w)| *w).sum();
+        (total > 0.0).then_some(FallbackCandPool {
+            entries: merged,
+            total,
+        })
+    }
+
     fn fallback_set(&self, dex: &Dex, mo: &MonObs) -> PokemonSet {
+        self.fallback_set_at(dex, mo, 0, std::slice::from_ref(mo))
+    }
+
+    fn fallback_set_at(&self, dex: &Dex, mo: &MonObs, slot: usize, obs_mons: &[MonObs]) -> PokemonSet {
         if matches!(
             self.fallback_policy,
             FallbackPolicy::BayesianPointMass | FallbackPolicy::Bayesian
         ) {
-            return self.bayesian_fallback_set(dex, mo, std::slice::from_ref(mo));
+            return self.bayesian_fallback_set(dex, mo, slot, obs_mons);
         }
         let pool_set = self.pool_set_for(dex, mo);
         // A separate prior, not a pool candidate: it can fill hidden fields
@@ -2289,15 +4182,48 @@ impl Belief {
             g => g.to_string(),
         });
         set.name = String::new();
-        let mut moves: Vec<String> =
-            mo.revealed_moves.iter().map(|&m| dex.moves.key(m).to_string()).collect();
+        let species_key = dex.species.key(mo.species);
+        let prior_sp = self.active_prior().and_then(|p| p.species(species_key));
+        let mut moves: Vec<String> = if prior_sp.is_some() {
+            distinct_revealed_moves(dex, mo)
+                .into_iter()
+                .map(|m| dex.moves.key(m).to_string())
+                .collect()
+        } else {
+            mo.revealed_moves
+                .iter()
+                .map(|&m| dex.moves.key(m).to_string())
+                .collect()
+        };
+        if let Some(sp) = prior_sp {
+            let mut has_hp = moves.iter().any(|m| toid(m).starts_with("hiddenpower"));
+            for (_, key, _) in legal_prior_moves(dex, sp, mo) {
+                if moves.len() >= 4 {
+                    break;
+                }
+                let is_hp = key.starts_with("hiddenpower");
+                if is_hp && has_hp {
+                    continue;
+                }
+                if is_hp {
+                    has_hp = true;
+                }
+                moves.push(key);
+            }
+        }
         for name in prior.map(|s| s.moves.clone()).unwrap_or_default() {
             if moves.len() >= 4 {
                 break;
             }
             let Some(id) = dex.moves.id(&toid(&name)) else { continue };
+            if prior_sp.is_some()
+                && dex.moves.key(id).starts_with("hiddenpower")
+                && moves.iter().any(|m| toid(m).starts_with("hiddenpower"))
+            {
+                continue;
+            }
             if format_move_legal_at_level(
-                dex.species.key(mo.species),
+                species_key,
                 dex.moves.key(id),
                 mo.level,
             )
@@ -2313,11 +4239,18 @@ impl Belief {
         moves.truncate(4);
         set.moves = moves;
         let pool_item = std::mem::take(&mut set.item);
-        set.item = match mo.item.original {
-            Some(Some(x)) => dex.items.key(x).to_string(),
-            Some(None) => String::new(),
-            None if mo.preview_has_item => pool_item, // pool set's, may be ""
-            None => String::new(),
+        let prior_items = prior_sp
+            .map(|sp| legal_prior_items(dex, sp, obs_mons, slot))
+            .unwrap_or_default();
+        set.item = if let Some(&(id, _)) = prior_items.first() {
+            self.resolve_non_excluded_item(dex, obs_mons, slot, mo, dex.items.key(id), &[])
+        } else {
+            match mo.item.original {
+                Some(Some(x)) => dex.items.key(x).to_string(),
+                Some(None) => String::new(),
+                None if mo.preview_has_item => pool_item, // pool set's, may be ""
+                None => String::new(),
+            }
         };
         set
     }
@@ -2352,6 +4285,81 @@ fn base_set(dex: &Dex, mo: &MonObs) -> PokemonSet {
             g => g.to_string(),
         }),
     }
+}
+
+fn set_has_attack_dependency(dex: &Dex, moves: &[String]) -> bool {
+    moves.iter().any(|m| {
+        let k = toid(m);
+        k.starts_with("hiddenpower")
+            || matches!(k.as_str(), "metronome" | "mimic" | "mirrormove" | "transform")
+            || dex
+                .moves
+                .id(&k)
+                .is_some_and(|id| dex.moves.get(id).category == "Physical")
+    })
+}
+
+/// Apply Gen 2 special/status minimum-Attack optimization to synthesized sets that have
+/// no Physical moves, Hidden Power, or move-calling moves, preserving gender and HP DV.
+fn apply_low_attack_spread_if_special(dex: &Dex, set: &mut PokemonSet, mo: &MonObs) {
+    if dex.species.key(mo.species) == "unown" || set_has_attack_dependency(dex, &set.moves) {
+        return;
+    }
+    let mut evs = set.evs.take().unwrap_or_else(|| {
+        ["hp", "atk", "def", "spa", "spd", "spe"]
+            .iter()
+            .map(|k| (k.to_string(), 255u16))
+            .collect()
+    });
+    evs.insert("atk".to_string(), 0);
+    set.evs = Some(evs);
+    if mo.gender.as_str() != "M" {
+        let ivs: std::collections::BTreeMap<String, u8> = [
+            ("hp", 31),
+            ("atk", 3),
+            ("def", 31),
+            ("spa", 31),
+            ("spd", 31),
+            ("spe", 31),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
+        set.ivs = Some(ivs);
+    } else {
+        set.ivs = None;
+    }
+}
+
+/// Build a reduced-Speed EV/IV spread variant (`spe ev = 0`, LSB-preserving `spe DV in {0, 1}`)
+/// keeping HP DV, Hidden Power type, and gender identical.
+fn with_reduced_speed_spread(dex: &Dex, mon: &Pokemon) -> Pokemon {
+    let mut variant = mon.clone();
+    variant.set_evs[5] = 0;
+    let spe_dv_new = (mon.set_ivs[5] / 2) & 1;
+    variant.set_ivs[5] = 2 * spe_dv_new;
+    let base_spe = i32::from(dex.species.get(mon.species).base_stats.spe);
+    let spe_stat = (2 * base_spe + variant.set_ivs[5] + variant.set_evs[5] / 4)
+        * i32::from(mon.level)
+        / 100
+        + 5;
+    variant.base_stored_stats[4] = spe_stat;
+    if !variant.transformed {
+        variant.stored_stats[4] = spe_stat;
+        variant.speed = spe_stat;
+    }
+    let atk = variant.set_ivs[1] / 2;
+    let def = variant.set_ivs[2] / 2;
+    let spc = variant.set_ivs[3] / 2;
+    let hp_power =
+        (5 * ((spc >> 3) + 2 * (spe_dv_new >> 3) + 4 * (def >> 3) + 8 * (atk >> 3)) + spc % 4)
+            / 2
+            + 31;
+    variant.base_hp_power = hp_power;
+    if !variant.transformed {
+        variant.hp_power = hp_power;
+    }
+    variant
 }
 
 /// A full-PP move slot, matching what `Battle::from_fixture` builds for a
@@ -2446,7 +4454,7 @@ fn non_dominated_learnset_moves(dex: &Dex, mo: &MonObs) -> Vec<(MoveId, String, 
         ("bellydrum", 2.2),
         ("charm", 2.0),
         ("painsplit", 2.1),
-        ("Safeguard", 1.7),
+        ("safeguard", 1.7),
         ("healbell", 2.3),
         ("leechseed", 2.2),
         ("spikes", 2.5),
@@ -2473,7 +4481,7 @@ fn non_dominated_learnset_moves(dex: &Dex, mo: &MonObs) -> Vec<(MoveId, String, 
             2.6
         } else if m == "counter" || m == "mirrorcoat" || m == "seismictoss" || m == "superfang" {
             2.0
-        } else if m == "rapidspin" || m == "pursuit" || m == "thief" || m == "encore" {
+        } else if m == "rapidspin" || m == "pursuit" || m == "thief" {
             1.9
         } else if md.base_power > 0 {
             let stab = if sp_types.iter().any(|t| t == &md.move_type) {
@@ -2524,14 +4532,13 @@ fn build_refs(dex: &Dex, sets: &[PokemonSet], mons: &[MonObs]) -> Option<Vec<Pok
 }
 
 fn consistent(dex: &Dex, refs: &[Pokemon], mons: &[MonObs]) -> bool {
-    refs.iter().zip(mons).all(|(r, mo)| {
-        crate::hp_evidence::consistent(dex, r, mo.hp_type_mask) && mo.revealed_moves
-            .iter()
-            .all(|m| r.base_move_slots.iter().any(|s| move_matches(dex, s.id, *m)))
-            && match mo.item.original {
-                Some(orig) => r.item == orig,
-                None => true,
-            }
+    refs.iter().zip(mons).enumerate().all(|(slot, (r, mo))| {
+        crate::hp_evidence::consistent(dex, r, mo.hp_type_mask)
+            && !crate::observe::Observer::is_item_excluded_for_slot(dex, mons, slot, r.item)
+            && mo
+                .revealed_moves
+                .iter()
+                .all(|m| r.base_move_slots.iter().any(|s| move_matches(dex, s.id, *m)))
     })
 }
 
@@ -2800,8 +4807,10 @@ mod fallback_tests {
             fallback_policy: FallbackPolicy::Layered,
             prior: None,
             pick_draws: None,
-            draws: None,
+            prior_governed_slots: Vec::new(),
+            fallback_lead_weights: None,
             loadout_draws: None,
+            fallback_cands: None,
             synced: None,
         }
     }
@@ -2816,6 +4825,7 @@ mod fallback_tests {
             hp_type_mask: u16::MAX,
             revealed_moves: revealed.iter().map(|m| dex.moves.id(m).unwrap()).collect(),
             item: ItemObs::default(),
+            excluded_items: 0,
             appeared: false,
         }
     }
@@ -3525,6 +5535,441 @@ mod fallback_tests {
     }
 
     #[test]
+    fn prior_items_marginal_sampling_and_dominance() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(META_POOL_JSON).unwrap();
+        let item_set = |species: &str, item: &str| {
+            let mut s = plain_set(species);
+            s.item = item.to_string();
+            s
+        };
+        let custom: Vec<PokemonSet> = [
+            ("Bulbasaur", "Gold Berry"),
+            ("Ivysaur", "Miracle Berry"),
+            ("Venusaur", "Mint Berry"),
+            ("Charmander", ""),
+            ("Charmeleon", "Quick Claw"),
+            ("Charizard", "Leftovers"),
+        ]
+        .into_iter()
+        .map(|(sp, it)| item_set(sp, it))
+        .collect();
+        let custom_p1: Vec<PokemonSet> = [
+            "Snorlax", "Zapdos", "Raikou", "Cloyster", "Tyranitar", "Gengar",
+        ]
+        .into_iter()
+        .map(plain_set)
+        .collect();
+        let battle =
+            Battle::from_fixture(&dex, "1,2,3,4", &custom_p1, &custom).unwrap();
+        let mut obs = Observer::new(&battle, 0);
+
+        let prior_json = r#"{
+            "format": "nc2000-belief-prior", "version": 1,
+            "species": {
+                "bulbasaur": {"moves": {"razorleaf": 0.9, "sleeppowder": 0.8, "bodyslam": 0.7, "synthesis": 0.6},
+                              "items": {"leftovers": 0.8, "miracleberry": 0.2}},
+                "ivysaur": {"moves": {"razorleaf": 0.9, "sleeppowder": 0.8, "bodyslam": 0.7, "synthesis": 0.6},
+                            "items": {"leftovers": 0.8, "miracleberry": 0.2}},
+                "charmander": {"moves": {"flamethrower": 0.9, "fireblast": 0.8, "bodyslam": 0.7, "rest": 0.6},
+                               "items": {"leftovers": 0.9, "goldberry": 0.1}},
+                "charmeleon": {"moves": {"flamethrower": 0.9, "fireblast": 0.8, "bodyslam": 0.7, "rest": 0.6},
+                               "items": {}}
+            }
+        }"#;
+        let prior = Arc::new(BeliefPrior::from_json(prior_json));
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        belief.set_prior(prior.clone());
+        belief.sync(&dex, &obs);
+
+        let leftovers = dex.items.id("leftovers").unwrap();
+        let miracleberry = dex.items.id("miracleberry").unwrap();
+        let goldberry = dex.items.id("goldberry").unwrap();
+        let mut bulb_lefties = 0usize;
+        let mut bulb_miracle = 0usize;
+        for seed in 0..200 {
+            let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(seed + 1));
+            // !preview_has_item on slot 3 (Charmander) must dominate sp.items.
+            assert_eq!(det.sides[1].roster[3].item, None);
+            // Empty sp.items on slot 4 (Charmeleon) falls back cleanly to a non-None item.
+            assert!(det.sides[1].roster[4].item.is_some());
+            // Global Item Clause across all unrevealed preview_has_item slots.
+            let mut seen = Vec::new();
+            for mon in &det.sides[1].roster {
+                if let Some(id) = mon.item {
+                    assert!(!seen.contains(&id), "duplicate item {id:?} under BeliefPrior");
+                    seen.push(id);
+                }
+            }
+            match det.sides[1].roster[0].item {
+                Some(id) if id == leftovers => bulb_lefties += 1,
+                Some(id) if id == miracleberry => bulb_miracle += 1,
+                other => panic!("unexpected bulbasaur item {other:?}"),
+            }
+        }
+        assert!(bulb_lefties > bulb_miracle && bulb_miracle > 0);
+
+        // Reveal Gold Berry on slot 0 (item.original) and Leftovers on slot 2 (cross-slot Item Clause)
+        // plus chip+upkeep on slot 1 to exclude Leftovers passively on slot 1.
+        let mut battle_t1 = battle.clone();
+        battle_t1
+            .apply_choices(
+                &dex,
+                [
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                ],
+            )
+            .unwrap();
+        obs.observe(&battle_t1, &dex);
+        obs.ingest_line("|-item|p2a: Bulbasaur|Gold Berry", &dex);
+        obs.ingest_line("|switch|p2a: Ivysaur|Ivysaur, L50, M|100/100", &dex);
+        obs.ingest_line("|-damage|p2a: Ivysaur|90/100", &dex);
+        obs.ingest_line("|upkeep", &dex);
+        belief.sync(&dex, &obs);
+        for seed in 0..32 {
+            let det = belief.determinize(&dex, &battle_t1, &obs, &mut SplitMix64::new(seed + 1));
+            assert_eq!(det.sides[1].roster[0].item, Some(goldberry));
+            assert_ne!(det.sides[1].roster[1].item, Some(leftovers));
+            assert_eq!(det.sides[1].roster[1].item, Some(miracleberry));
+        }
+
+        // 100%-excluded sp.items falls back cleanly instead of producing None.
+        let mut custom2 = custom.clone();
+        custom2[2].item = "Leftovers".to_string();
+        let mut battle2 =
+            Battle::from_fixture(&dex, "1,2,3,4", &custom_p1, &custom2).unwrap();
+        battle2
+            .apply_choices(
+                &dex,
+                [
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                ],
+            )
+            .unwrap();
+        let mut obs2 = Observer::new(&battle2, 0);
+        obs2.observe(&battle2, &dex);
+        obs2.ingest_line("|switch|p2a: Venusaur|Venusaur, L50, M|100/100", &dex);
+        obs2.ingest_line("|-heal|p2a: Venusaur|100/100|[from] item: Leftovers", &dex);
+        obs2.ingest_line("|switch|p2a: Bulbasaur|Bulbasaur, L50, M|100/100", &dex);
+        let mut b2 = Belief::new(&dex, &pool, &obs2);
+        b2.set_prior(Arc::new(BeliefPrior::from_json(
+            r#"{"species":{"bulbasaur":{"items":{"leftovers":1.0}}}}"#,
+        )));
+        b2.sync(&dex, &obs2);
+        for seed in 0..16 {
+            let det = b2.determinize(&dex, &battle2, &obs2, &mut SplitMix64::new(seed + 1));
+            let item = det.sides[1].roster[0].item;
+            assert!(item.is_some() && item != Some(leftovers));
+        }
+    }
+
+    #[test]
+    fn prior_lead_biases_party_and_respects_level_caps() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(META_POOL_JSON).unwrap();
+        let lv_set = |species: &str, level: u8| {
+            let mut s = plain_set(species);
+            s.level = level;
+            s
+        };
+        let custom: Vec<PokemonSet> = [
+            lv_set("Bulbasaur", 55),
+            lv_set("Ivysaur", 55),
+            lv_set("Venusaur", 55),
+            lv_set("Charmander", 50),
+            lv_set("Charmeleon", 50),
+            lv_set("Charizard", 50),
+        ]
+        .into_iter()
+        .collect();
+        let custom_p1: Vec<PokemonSet> = [
+            "Snorlax", "Zapdos", "Raikou", "Cloyster", "Tyranitar", "Gengar",
+        ]
+        .into_iter()
+        .map(plain_set)
+        .collect();
+        let battle =
+            Battle::from_fixture(&dex, "1,2,3,4", &custom_p1, &custom).unwrap();
+        let obs = Observer::new(&battle, 0);
+
+        // 1. Lead weights bias hidden party[0] (when party_len == 3 & hidden) and strictly obey preview_level_caps <= 155.
+        let mut battle_hidden_party = battle.clone();
+        battle_hidden_party.sides[1].party.truncate(3);
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        belief.set_prior(Arc::new(BeliefPrior::from_json(
+            r#"{
+                "species": {
+                    "bulbasaur": {"lead": 0.9},
+                    "ivysaur": {"lead": 0.9},
+                    "venusaur": {"lead": 0.9},
+                    "charmander": {"lead": 0.01},
+                    "charmeleon": {"lead": 0.01},
+                    "charizard": {"lead": 0.0}
+                }
+            }"#,
+        )));
+        belief.sync(&dex, &obs);
+        let mut high_lv_leads = 0usize;
+        for seed in 0..300 {
+            let det = belief.determinize(
+                &dex,
+                &battle_hidden_party,
+                &obs,
+                &mut SplitMix64::new(seed + 1),
+            );
+            let total_lv: u32 = det.sides[1]
+                .party
+                .iter()
+                .map(|&s| u32::from(det.sides[1].roster[s as usize].level))
+                .sum();
+            assert!(total_lv <= 155, "level cap violated: {total_lv}");
+            if det.sides[1].party[0] < 3 {
+                high_lv_leads += 1;
+            }
+        }
+        assert!(
+            high_lv_leads > 200,
+            "lead weights should strongly bias party[0] toward slots 0..3, got {high_lv_leads}/300"
+        );
+
+        // sample_preview_prior respects legal actions under preview_level_caps.
+        let custom_ref = &custom;
+        let actions: Vec<nc2000_engine::battle::SearchChoice> = (1..=6u8)
+            .flat_map(|a| {
+                (1..=6u8).flat_map(move |b| {
+                    (1..=6u8).filter_map(move |c| {
+                        if a == b || a == c || b == c {
+                            return None;
+                        }
+                        let lv: u32 = [a, b, c]
+                            .iter()
+                            .map(|&s| u32::from(custom_ref[(s - 1) as usize].level))
+                            .sum();
+                        (lv <= 155).then_some(nc2000_engine::battle::SearchChoice::Team([a, b, c]))
+                    })
+                })
+            })
+            .collect();
+        let mut preview_high_leads = 0usize;
+        for seed in 0..200 {
+            let idx = belief
+                .sample_preview_prior(None, &obs, &actions, &mut SplitMix64::new(seed + 1))
+                .expect("sample_preview_prior must return Some when fallback_lead_weights is active");
+            if let nc2000_engine::battle::SearchChoice::Team([a, _, _]) = actions[idx] {
+                if a <= 3 {
+                    preview_high_leads += 1;
+                }
+            }
+        }
+        assert!(preview_high_leads > 110, "got {preview_high_leads}/200");
+
+        // 2. Luce bench posterior after lead reveal (slot 3 leads at L50, slot 0 has lead 0.9, slot 4 has lead 0.0).
+        let mut battle_t1 = battle.clone();
+        battle_t1
+            .apply_choices(
+                &dex,
+                [
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                    Some(nc2000_engine::battle::SearchChoice::Team([4, 5, 6])),
+                ],
+            )
+            .unwrap();
+        let mut obs_t1 = Observer::new(&battle_t1, 0);
+        obs_t1.observe(&battle_t1, &dex);
+        let mut belief_t1 = Belief::new(&dex, &pool, &obs_t1);
+        belief_t1.set_prior(Arc::new(BeliefPrior::from_json(
+            r#"{
+                "species": {
+                    "bulbasaur": {"lead": 0.9},
+                    "ivysaur": {"lead": 0.9},
+                    "venusaur": {"lead": 0.9},
+                    "charmander": {"lead": 0.05},
+                    "charmeleon": {"lead": 0.05},
+                    "charizard": {"lead": 0.0}
+                }
+            }"#,
+        )));
+        belief_t1.sync(&dex, &obs_t1);
+        let mut saw_l55_pair = 0usize;
+        for seed in 0..120 {
+            let det = belief_t1.determinize(&dex, &battle_t1, &obs_t1, &mut SplitMix64::new(seed + 1));
+            assert_eq!(det.sides[1].party[0], 3, "appeared lead must stay at party[0]");
+            let total_lv: u32 = det.sides[1]
+                .party
+                .iter()
+                .map(|&s| u32::from(det.sides[1].roster[s as usize].level))
+                .sum();
+            assert!(total_lv <= 155);
+            if det.sides[1].party[1..].iter().any(|&s| s < 3) {
+                saw_l55_pair += 1;
+            }
+        }
+        assert!(saw_l55_pair > 0);
+
+        // 3. "lead": 0 on ALL 6 slots must be total (never divide by zero / panic).
+        let mut zero_belief = Belief::new(&dex, &pool, &obs);
+        zero_belief.set_prior(Arc::new(BeliefPrior::from_json(
+            r#"{
+                "species": {
+                    "bulbasaur": {"lead": 0.0},
+                    "ivysaur": {"lead": 0.0},
+                    "venusaur": {"lead": 0.0},
+                    "charmander": {"lead": 0.0},
+                    "charmeleon": {"lead": 0.0},
+                    "charizard": {"lead": 0.0}
+                }
+            }"#,
+        )));
+        zero_belief.sync(&dex, &obs);
+        for seed in 0..16 {
+            let det = zero_belief.determinize(
+            &dex,
+            &battle_hidden_party,
+            &obs,
+            &mut SplitMix64::new(seed + 1),
+        );
+            let total_lv: u32 = det.sides[1]
+                .party
+                .iter()
+                .map(|&s| u32::from(det.sides[1].roster[s as usize].level))
+                .sum();
+            assert!(total_lv <= 155);
+        }
+    }
+
+    #[test]
+    fn fallback_cand_pool_and_bench_diversification_active_under_prior() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(META_POOL_JSON).unwrap();
+        let custom: Vec<PokemonSet> = [
+            "Bulbasaur", "Ivysaur", "Venusaur", "Charmander", "Charmeleon", "Charizard",
+        ]
+        .into_iter()
+        .map(plain_set)
+        .collect();
+        let custom_p1: Vec<PokemonSet> = [
+            "Snorlax", "Zapdos", "Raikou", "Cloyster", "Tyranitar", "Gengar",
+        ]
+        .into_iter()
+        .map(plain_set)
+        .collect();
+        let mut battle =
+            Battle::from_fixture(&dex, "1,2,3,4", &custom_p1, &custom).unwrap();
+        battle
+            .apply_choices(
+                &dex,
+                [
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                ],
+            )
+            .unwrap();
+        let mut obs = Observer::new(&battle, 0);
+        obs.observe(&battle, &dex);
+
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        belief.set_prior(Arc::new(BeliefPrior::from_json(
+            r#"{
+                "species": {
+                    "bulbasaur": {"moves": {"razorleaf": 0.9, "sleeppowder": 0.7, "swordsdance": 0.5, "bodyslam": 0.4, "synthesis": 0.3}},
+                    "ivysaur": {"moves": {"razorleaf": 0.9, "sleeppowder": 0.7, "swordsdance": 0.5, "bodyslam": 0.4, "synthesis": 0.3}},
+                    "charizard": {"moves": {"flamethrower": 0.9, "earthquake": 0.8, "rockslide": 0.7, "bellydrum": 0.6, "fireblast": 0.5}}
+                }
+            }"#,
+        )));
+        belief.sync(&dex, &obs);
+        assert!(belief.fallback_cand_count() > 1);
+        let plan = belief.root_sampling_plan(16, &mut SplitMix64::new(7));
+        assert!(plan.iter().any(|p| matches!(p, TeamPlanPick::FallbackCand(_))));
+
+        // Unappeared bench slots (e.g. slot 1 Ivysaur, slot 5 Charizard) must diversify across determinizations.
+        let mut bench1 = std::collections::HashSet::new();
+        let mut bench5 = std::collections::HashSet::new();
+        for seed in 0..32 {
+            let mut rng_probe = SplitMix64::new(seed + 1);
+            let key = belief.predict_fallback_draws(None, &battle, 1, &mut rng_probe);
+            assert!(key.is_some());
+            let mut rng_actual = SplitMix64::new(seed + 1);
+            let _ = belief.sample_fallback_refs(None, &mut rng_actual, &battle, 1);
+            assert_eq!(rng_probe.0, rng_actual.0);
+
+            let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(seed + 1));
+            let m1: Vec<u16> = det.sides[1].roster[1]
+                .base_move_slots
+                .iter()
+                .map(|m| m.id.0)
+                .collect();
+            let m5: Vec<u16> = det.sides[1].roster[5]
+                .base_move_slots
+                .iter()
+                .map(|m| m.id.0)
+                .collect();
+            bench1.insert(m1);
+            bench5.insert(m5);
+        }
+        assert!(bench1.len() > 1, "unappeared slot 1 should diversify");
+        assert!(bench5.len() > 1, "unappeared slot 5 should diversify");
+    }
+
+    #[test]
+    fn non_matching_species_prior_is_bit_identical() {
+        let (dex, pool, battle, obs) = m18_fixture(true);
+        let plain = Belief::new(&dex, &pool, &obs);
+        let mut with_other = Belief::new(&dex, &pool, &obs);
+        with_other.set_prior(Arc::new(BeliefPrior::from_json(
+            r#"{"species":{"mewtwo":{"moves":{"psychic":1.0,"icebeam":0.9},"items":{"leftovers":1.0},"lead":0.9}}}"#,
+        )));
+        with_other.sync(&dex, &obs);
+        assert!(with_other.prior_governed().is_empty());
+        assert_eq!(plain.fallback_cand_count(), with_other.fallback_cand_count());
+        let mut r1 = SplitMix64::new(123);
+        let mut r2 = SplitMix64::new(123);
+        assert_eq!(
+            plain.root_sampling_plan(8, &mut r1).len(),
+            with_other.root_sampling_plan(8, &mut r2).len()
+        );
+        assert_eq!(r1.0, r2.0);
+        for seed in 0..16 {
+            let mut a = SplitMix64::new(seed + 1);
+            let mut b = SplitMix64::new(seed + 1);
+            let d1 = plain.determinize(&dex, &battle, &obs, &mut a);
+            let d2 = with_other.determinize(&dex, &battle, &obs, &mut b);
+            assert_eq!(a.0, b.0);
+            for slot in 0..6 {
+                assert_eq!(
+                    d1.sides[1].roster[slot].base_move_slots,
+                    d2.sides[1].roster[slot].base_move_slots
+                );
+                assert_eq!(d1.sides[1].roster[slot].item, d2.sides[1].roster[slot].item);
+            }
+        }
+    }
+
+    #[test]
+    fn partial_prior_support_locks_moves_and_backfills_remaining() {
+        let (dex, pool, battle, obs) = m18_fixture(false);
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        belief.set_prior(Arc::new(BeliefPrior::from_json(
+            r#"{"species":{"bulbasaur":{"moves":{"razorleaf":0.8,"sleeppowder":0.2,"fissure":1.0}}}}"#,
+        )));
+        belief.sync(&dex, &obs);
+        for seed in 0..32 {
+            let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(seed + 1));
+            let moves: Vec<String> = det.sides[1].roster[0]
+                .base_move_slots
+                .iter()
+                .map(|m| dex.moves.key(m.id).to_string())
+                .collect();
+            assert_eq!(moves.len(), 4);
+            assert!(moves.iter().any(|m| m == "razorleaf"));
+            assert!(moves.iter().any(|m| m == "sleeppowder"));
+            assert!(!moves.iter().any(|m| m == "fissure"));
+        }
+    }
+
+    #[test]
     fn supplemental_prior_teams_are_all_format_legal_and_cover_baton_pass_learners() {
         let dex = test_dex();
         let raw: SupplementalPriorDb = serde_json::from_str(SUPPLEMENTAL_PRIOR_JSON).unwrap();
@@ -3710,5 +6155,431 @@ mod fallback_tests {
                 "every Tier B completion for Agility+Attract Jolteon must retain Baton Pass: {mvs:?}"
             );
         }
+    }
+
+    #[test]
+    fn unrevealed_bench_ignores_hp_observations_and_scrub_enforces_locked_move() {
+        use nc2000_engine::battle::{EffectHandle, SearchChoice};
+        use nc2000_engine::state::{Action, ActionKind};
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let p1 = pool.teams[0].sets.clone();
+        let mut p2 = pool.teams[0].sets.clone();
+        p2[0].moves = vec![
+            "Outrage".into(),
+            "Earthquake".into(),
+            "Rest".into(),
+            "Sleep Talk".into(),
+        ];
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        battle
+            .apply_choices(&dex, [Some(SearchChoice::Team([1, 2, 3])), Some(SearchChoice::Team([1, 2, 3]))])
+            .unwrap();
+        let mut obs = Observer::new(&battle, 0);
+        obs.observe(&battle, &dex);
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        belief.set_hp_observations(vec![
+            (100, 100),
+            (1, 100),
+            (100, 100),
+            (100, 100),
+            (100, 100),
+            (100, 100),
+        ]);
+        let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(7));
+        assert_eq!(det.sides[1].roster[1].hp, det.sides[1].roster[1].maxhp);
+
+        let opp_act = battle.active_id(1).unwrap();
+        let outrage = dex.moves.id("outrage").unwrap();
+        let earthquake = dex.moves.id("earthquake").unwrap();
+        battle.add_volatile(
+            &dex,
+            opp_act,
+            "lockedmove",
+            Some(opp_act),
+            EffectHandle::MoveEff(outrage),
+        );
+        if let Some(lm) = battle.poke_mut(opp_act).volatile_mut(dex.conds_id("lockedmove").unwrap()) {
+            lm.duration = Some(2);
+        }
+        battle.queue.push(Action {
+            choice: ActionKind::Move {
+                move_id: earthquake,
+                target_loc: 1,
+                original_target: None,
+                source_effect: None,
+            },
+            order: 200,
+            priority: 0.0,
+            fractional_priority: 0.0,
+            speed: 1.0,
+            pokemon: Some(opp_act),
+        });
+        let det_locked = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(9));
+        let queued = det_locked
+            .queue
+            .iter()
+            .find(|q| q.pokemon == Some(opp_act))
+            .expect("queued foe action");
+        match queued.choice {
+            ActionKind::Move { move_id, .. } => assert_eq!(move_id, outrage),
+            _ => panic!("expected move action"),
+        }
+    }
+
+    #[test]
+    fn near_pool_soft_shell_repair_retains_exact_untouched_slots() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let p1 = pool.teams[0].sets.clone();
+        let mut p2 = pool.teams[1].sets.clone();
+        // Replace slot 0 with an off-pool species at L50, leaving slots 1..=5 identical to pool team 1.
+        let untouched_species: Vec<String> = p2[1..]
+            .iter()
+            .map(|s| s.species.clone())
+            .collect();
+        p2[0] = PokemonSet {
+            name: "Pinsir".into(),
+            species: "Pinsir".into(),
+            item: "Leftovers".into(),
+            ability: "No Ability".into(),
+            moves: vec![
+                "Swords Dance".into(),
+                "Submission".into(),
+                "Body Slam".into(),
+                "Hidden Power Bug".into(),
+            ],
+            level: 50,
+            evs: None,
+            ivs: None,
+            happiness: Some(255),
+            gender: Some("M".into()),
+        };
+        // Avoid item duplication with pool.teams[1] slots 1..=5
+        p2[0].item = "BrightPowder".into();
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        battle
+            .apply_choices(
+                &dex,
+                [
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                ],
+            )
+            .unwrap();
+        let mut obs = Observer::new(&battle, 0);
+        obs.observe(&battle, &dex);
+        let belief = Belief::new(&dex, &pool, &obs);
+        assert!(belief.is_fallback());
+        assert!(
+            belief.fallback_cand_count() > 0,
+            "in-battle near-pool fallback must populate fallback_cands (untouched={untouched_species:?})"
+        );
+        let fc = belief.fallback_cands.as_ref().unwrap();
+        // Verify at least one high-weight entry matches pool.teams[1] exact items+moves on all 5 untouched slots
+        let expected_refs = build_refs(&dex, &pool.teams[1].sets[1..], &obs.mons()[1..]);
+        let _ = expected_refs;
+        let matching_entry = fc.entries.iter().any(|(team, _)| {
+            (1..team.len()).all(|s| {
+                let mut m_team: Vec<u16> = team[s].base_move_slots.iter().map(|m| m.id.0).collect();
+                m_team.sort_unstable();
+                let mut m_true: Vec<u16> =
+                    battle.sides[1].roster[s].base_move_slots.iter().map(|m| m.id.0).collect();
+                m_true.sort_unstable();
+                team[s].species == battle.sides[1].roster[s].species
+                    && team[s].item == battle.sides[1].roster[s].item
+                    && m_team == m_true
+            })
+        });
+        assert!(
+            matching_entry,
+            "near-pool soft shell repair must retain exact untouched pool slots 1..=5"
+        );
+    }
+
+    #[test]
+    fn global_item_clause_and_turn_zero_invariance_hold_with_exclusions() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let p1 = pool.teams[0].sets.clone();
+        let mut p2 = pool.teams[2].sets.clone();
+        // Replace slot 5 with an off-pool species so the team exits the pool cleanly.
+        p2[5] = PokemonSet {
+            name: "Pinsir".into(),
+            species: "Pinsir".into(),
+            item: "BrightPowder".into(),
+            ability: "No Ability".into(),
+            moves: vec![
+                "Swords Dance".into(),
+                "Submission".into(),
+                "Body Slam".into(),
+                "Hidden Power Bug".into(),
+            ],
+            level: 50,
+            evs: None,
+            ivs: None,
+            happiness: Some(255),
+            gender: Some("M".into()),
+        };
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        let obs_t0 = Observer::new(&battle, 0);
+        let belief_t0 = Belief::new(&dex, &pool, &obs_t0);
+        // Choice A / Turn 0 invariance: no appeared mon yet -> no fallback_cands or loadout_draws.
+        assert_eq!(belief_t0.fallback_cand_count(), 0);
+        for slot in 0..6 {
+            assert_eq!(belief_t0.loadout_draw_len(slot), 0);
+        }
+
+        battle
+            .apply_choices(
+                &dex,
+                [
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                ],
+            )
+            .unwrap();
+        let mut obs = Observer::new(&battle, 0);
+        obs.observe(&battle, &dex);
+        // Simulate taking chip damage on p2a without any Leftovers heal event -> excludes Leftovers on slot 0.
+        let p2a = battle.sides[1].roster[0].name.clone();
+        obs.ingest_line(&format!("|-damage|p2a: {p2a}|90/100"), &dex);
+        obs.ingest_line("|upkeep", &dex);
+        let belief = Belief::new(&dex, &pool, &obs);
+        assert!(belief.is_fallback());
+        assert!(belief.fallback_cand_count() > 1);
+        let leftovers = dex.items.id("leftovers").unwrap();
+        let any_bench_diverse = (1..6).any(|slot| belief.loadout_draw_len(slot) > 1);
+        assert!(
+            any_bench_diverse,
+            "in-battle unappeared bench should have multi-loadout diversity"
+        );
+
+        for seed in 0..64 {
+            let mut rng_probe = SplitMix64::new(seed);
+            let fb_key = belief.predict_fallback_draws(None, &battle, 1, &mut rng_probe);
+            assert!(fb_key.is_some());
+            let mut rng_actual = SplitMix64::new(seed);
+            let _ = belief.sample_fallback_refs(None, &mut rng_actual, &battle, 1);
+            assert_eq!(rng_probe.0, rng_actual.0);
+
+            let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(seed));
+            let mut seen_items = Vec::new();
+            for (slot, mon) in det.sides[1].roster.iter().enumerate() {
+                if let Some(id) = mon.item {
+                    assert!(
+                        !seen_items.contains(&id),
+                        "duplicate item {} across determinized roster on seed {seed}",
+                        dex.items.key(id)
+                    );
+                    seen_items.push(id);
+                }
+                if slot == 0 {
+                    assert_ne!(
+                        mon.item,
+                        Some(leftovers),
+                        "active slot 0 must not receive excluded Leftovers"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn systematic_resample_respects_skewed_weights_and_skips_zero() {
+        let weights = [0.0, 0.7, 0.2, 0.1, 0.0];
+        let k = 24;
+        for seed in 0..16 {
+            let mut rng = SplitMix64::new(seed);
+            let picked = systematic_resample_indices(&weights, k, &mut rng);
+            assert_eq!(picked.len(), k);
+            let mut counts = [0usize; 5];
+            for idx in picked {
+                counts[idx] += 1;
+            }
+            assert_eq!(counts[0], 0);
+            assert_eq!(counts[4], 0);
+            for i in 1..4 {
+                let exp = k as f64 * weights[i];
+                let lo = exp.floor() as usize;
+                let hi = exp.ceil() as usize;
+                assert!(
+                    counts[i] >= lo && counts[i] <= hi,
+                    "seed {seed}: slot {i} count {} not in [{lo}, {hi}]",
+                    counts[i]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn all_gen2_learnset_species_have_empirical_prior_coverage_and_valid_bayesian_draws() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let sup = supplemental_prior_teams(&dex);
+        let ren = community_rental_teams(&dex);
+        let raw_learnsets: Value = serde_json::from_str(LEARNSETS_JSON).unwrap();
+        let mut uncovered = Vec::new();
+        for species_key in raw_learnsets["species"].as_object().unwrap().keys() {
+            let sid = dex.species.id(species_key).unwrap();
+            let in_pool = pool.teams.iter().any(|t| {
+                t.sets
+                    .iter()
+                    .any(|s| dex.species.id(&toid(&s.species)) == Some(sid))
+            });
+            let in_sup = sup.iter().any(|t| {
+                t.sets
+                    .iter()
+                    .any(|s| dex.species.id(&toid(&s.species)) == Some(sid))
+            });
+            let in_ren = ren.iter().any(|sets| {
+                sets.iter()
+                    .any(|s| dex.species.id(&toid(&s.species)) == Some(sid))
+            });
+            if !(in_pool || in_sup || in_ren) {
+                uncovered.push(species_key.to_string());
+            }
+        }
+        assert!(
+            uncovered.is_empty(),
+            "every format-legal Gen 2 species must have prior coverage; uncovered: {uncovered:?}"
+        );
+
+        // Verify a previously zero-prior species (Dunsparce) now determinizes empirical moves and item in Bayesian mode.
+        let p1 = pool.teams[0].sets.clone();
+        let mut p2 = pool.teams[0].sets.clone();
+        p2[0] = plain_set("Dunsparce");
+        p2[0].item = "Leftovers".into();
+        p2[0].moves = vec![
+            "Glare".into(),
+            "Screech".into(),
+            "Return".into(),
+            "Flamethrower".into(),
+        ];
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        battle
+            .apply_choices(
+                &dex,
+                [
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                ],
+            )
+            .unwrap();
+        let mut obs = Observer::new(&battle, 0);
+        obs.observe(&battle, &dex);
+        obs.ingest_line("|move|p2a: Dunsparce|Glare|p1a: Target", &dex);
+        let belief = Belief::new(&dex, &pool, &obs);
+        assert!(belief.is_fallback());
+        let det = belief.determinize(&dex, &battle, &obs, &mut SplitMix64::new(1));
+        let det_moves: Vec<&str> = det.sides[1].roster[0]
+            .base_move_slots
+            .iter()
+            .map(|s| dex.moves.key(s.id))
+            .collect();
+        assert!(
+            det_moves.contains(&"screech") && det_moves.contains(&"flamethrower"),
+            "Dunsparce empirical prior should predict Screech + Flamethrower: {det_moves:?}"
+        );
+    }
+
+    #[test]
+    fn synthetic_special_sets_optimize_low_attack_and_preserve_spread_signatures() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let mut mo = mon(&dex, "alakazam", 50, &["psychic", "thunderwave", "recover", "encore"]);
+        mo.gender = Gender::F;
+        let mut set = plain_set("Alakazam");
+        set.moves = vec![
+            "Psychic".into(),
+            "Thunder Wave".into(),
+            "Recover".into(),
+            "Encore".into(),
+        ];
+        set.gender = Some("F".into());
+        apply_low_attack_spread_if_special(&dex, &mut set, &mo);
+        assert_eq!(set.evs.as_ref().unwrap()["atk"], 0);
+        assert_eq!(set.ivs.as_ref().unwrap()["atk"], 3);
+
+        let p1 = pool.teams[0].sets.clone();
+        let fast_mon = &Battle::from_fixture(&dex, "1,2,3,4", &p1, &p1).unwrap().sides[0].roster[0];
+        let slow_mon = with_reduced_speed_spread(&dex, fast_mon);
+        assert_eq!(slow_mon.set_evs[5], 0);
+        assert!(slow_mon.set_ivs[5] <= 2);
+        assert!(slow_mon.base_stored_stats[4] < fast_mon.base_stored_stats[4]);
+        assert_eq!(slow_mon.base_hp_type, fast_mon.base_hp_type);
+        assert_eq!(slow_mon.gender, fast_mon.gender);
+        assert_ne!(
+            team_signature(std::slice::from_ref(fast_mon)),
+            team_signature(std::slice::from_ref(&slow_mon)),
+            "team_signature must distinguish different EV/IV stat spreads"
+        );
+    }
+
+    #[test]
+    fn bayesian_loadout_draw_diversifies_reduced_speed_spread_for_slow_pivots() {
+        let dex = test_dex();
+        let pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let p1 = pool.teams[0].sets.clone();
+        let mut p2 = pool.teams[0].sets.clone();
+        p2[0] = plain_set("Umbreon");
+        p2[0].name = "SlowUmbreon".into();
+        p2[0].item = "Leftovers".into();
+        p2[0].moves = vec![
+            "Curse".into(),
+            "Baton Pass".into(),
+            "Mean Look".into(),
+            "Moonlight".into(),
+        ];
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        battle
+            .apply_choices(
+                &dex,
+                [
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                ],
+            )
+            .unwrap();
+        let mut obs = Observer::new(&battle, 0);
+        obs.observe(&battle, &dex);
+        obs.ingest_line("|move|p2a: SlowUmbreon|Curse|p2a: SlowUmbreon", &dex);
+        obs.ingest_line("|move|p2a: SlowUmbreon|Baton Pass|p2a: SlowUmbreon", &dex);
+        obs.ingest_line("|move|p2a: SlowUmbreon|Mean Look|p1a: Target", &dex);
+        obs.ingest_line("|move|p2a: SlowUmbreon|Moonlight|p2a: SlowUmbreon", &dex);
+        let belief = Belief::new(&dex, &pool, &obs);
+        assert!(belief.is_fallback());
+        let ld = belief.loadout_draws.as_ref().unwrap()[0]
+            .as_ref()
+            .expect("Umbreon slow pivot must construct LoadoutDraw");
+        let distinct_speeds: Vec<i32> = ld
+            .entries
+            .iter()
+            .map(|(m, _)| m.base_stored_stats[4])
+            .collect();
+        let min_spe = *distinct_speeds.iter().min().unwrap();
+        let max_spe = *distinct_speeds.iter().max().unwrap();
+        assert!(
+            min_spe < max_spe,
+            "slow pivot LoadoutDraw must include both max-Speed and reduced-Speed spread: {distinct_speeds:?}"
+        );
     }
 }

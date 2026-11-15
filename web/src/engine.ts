@@ -10,8 +10,9 @@ import init, {
   deriveBattleSeed,
   forkInfo,
   probeBeliefPrior,
+  probePickPrior,
 } from "../../crates/wasm/pkg-web/nc2000_wasm";
-import type { Choice, ForkInfo, PriorReport, StateView } from "./types";
+import type { Choice, ForkInfo, PickPriorReport, PriorReport, StateView } from "./types";
 
 export { Battle, Kifu };
 
@@ -72,6 +73,11 @@ export function takeNewLog(battle: Battle): string[] {
  * The interpreter is total, so a malformed file comes back as warnings. */
 export function probePrior(json: string): PriorReport {
   return JSON.parse(probeBeliefPrior(json)) as PriorReport;
+}
+
+/** Validate and summarize a `nc2000-pick-prior-v1` document without installing it. */
+export function probePickPriorTable(json: string): PickPriorReport {
+  return JSON.parse(probePickPrior(json)) as PickPriorReport;
 }
 
 /** Validates a `nc2000-fork-v1` document; throws with the reason. */
