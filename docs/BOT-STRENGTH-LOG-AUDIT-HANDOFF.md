@@ -3,7 +3,7 @@
 > **Status**: Partially implemented through [`40673df2`](../crates/bot/src/blind.rs) (code changes landed in `b164009a`, `ab2c1e50`, and `6e2c2ac5`; compiled preview tables re-baked and SDK manifest synced in `40673df2`).
 >
 > - **Landed**: **P0-1** (forced-switch visit allocation & mean tie-break), **P0-2** (public/own-certain root no-op pruning in `ProtocolAgent` / `BlindSearch`), **P1-1** (`MIN_MIX_MARGIN` equilibrium override gate & `SafeWin` protection, keeping conservative cell shrinkage), and **P1-2 first half** (`MaskRules::default().immunity_all_switchins = true` & `tactical_desperation_bonus` guards).
-> - **Remaining**: **P1-1** optional `min_own_v` / LCB refinement, **P1-2 second half** (endless switching loop suppression), **P2-1** (rollout rules & `EvalWeights` exchange/confusion features), and **P2-2** (Team Preview `T0` predictability / off-pool 60-permutation dilution).
+> - **Remaining**: **P1-1** optional `min_own_v` / LCB refinement, **P1-2 second half** (root-cause diagnosis of progressively losing switch loops), **P2-1** (midgame search/value-sign diagnosis for phazing/setup/traps — noting that parked `RmConfig` rollout flags and `EvalWeights::exchange_scheme` were previously measured NULL/below seed-noise floor), and **P2-2** (Team Preview `T0` predictability / off-pool 60-permutation dilution).
 >
 > **Scope**: Tracks historical log issues and live bottlenecks from the `42cf9f69` baseline (`omniscient_audit`, `BoundSolver` `1v1` certificates, and `184` `puniu3` ladder games in `logs_20260804.zip` + `51` games in `logs/decision-log.jsonl`) through the post-fix verification runs on `6e2c2ac5` / `40673df2`.
 
@@ -71,19 +71,19 @@ Across **184 decided `puniu3` games** (`88W–96L`, `47.8%` WR):
 - **Landed (Type-Immunity Mask & Desperation Tie-Breaker)**:
   - [`crates/bot/src/smmcts.rs#L1913-L1924`](../crates/bot/src/smmcts.rs#L1913-L1924) promotes `MaskRules::default().immunity_all_switchins` to `true`, so `public_noop_reason` prunes moves whose type cannot hit the active foe or any live/possible switch-in candidate (with `foe_may_change_type` guards for `Conversion`/`Conversion 2`/`Sketch`/transformed `Hidden Power` and `wait_exempt` guards).
   - [`crates/bot/src/smmcts.rs#L895-L1023`](../crates/bot/src/smmcts.rs#L895-L1023) updates `tactical_desperation_bonus` (`foe_status_or_volatile_blocked` and Spikes-aware switch scoring) so losing roots stop rewarding blocked status moves or lethal switch-ins.
-- **Remaining (Endless Switching Loops)**:
-  - No mechanism yet penalizes or breaks low-entropy repeated switching loops under passive damage (`Spikes`/status, e.g., `Snorlax`↔`Cloyster` or `Zapdos`↔`Steelix`↔`Raichu` loops observed in ladder logs). Note also that `MaskRules::immunity_ignores_switch_read` remains `false` by design so single-immunity read targets are not blindly masked.
+- **Remaining (Root-Cause Diagnosis of Progressively Losing Switch Loops)**:
+  - Concrete traces still exhibit repeated switching loops under passive damage (`Spikes`/status) or setup (`Snorlax`↔`Cloyster`, `Zapdos`↔`Steelix`↔`Raichu`). Do **not** add an ad-hoc `if-then` loop-penalty patch, which risks breaking legitimate cycle/pivot play; instead, inspect post-`6e2c2ac5` traces to diagnose *why* search evaluates repeated switches as higher or flat Q-value relative to staying in. Note also that `MaskRules::immunity_ignores_switch_read` remains `false` by design so single-immunity read targets are not blindly masked.
 
 ---
 
-### Priority 2 — Midgame Rollouts, Opponent Modeling & Evaluation (Remaining)
+### Priority 2 — Midgame Search, Opponent Modeling & Team Preview (Remaining)
 
-#### P2-1. Greedy Max-Damage Rollout & Zeroed Leaf Weights Blind to Phazing / Setup / Traps — **REMAINING**
-- **Current Code State**:
-  - `RmConfig::default()` ([`crates/bot/src/smmcts.rs#L1039-L1066`](../crates/bot/src/smmcts.rs#L1039-L1066)) already enables `rollout_combo: true` and `rollout_baton_pass: true`, **but** keeps **`rollout_status: false`, `rollout_switch: false`, `rollout_perish: false`**.
-  - `EvalWeights::default()` ([`crates/bot/src/eval.rs#L166-L190`](../crates/bot/src/eval.rs#L166-L190)) keeps **`exchange: 0.0`, `confusion: 0.0`, `exchange_v2: false`** (even though `EvalWeights::exchange_scheme` at [`eval.rs#L252`](../crates/bot/src/eval.rs#L252) and `RolloutRules` hooks in [`crates/bot/src/mcts.rs#L262-L277`](../crates/bot/src/mcts.rs#L262-L277) already exist behind flags).
-- **Why It Matters**:
-  - Rollout playouts remain mostly greedy max-damage (`Playout::heavy()`), and leaf evaluations ignore switching costs / `exchange_v2` / `confusion` — matching the steep ladder WR drops against `Baton Pass` (`25.0%`), `Whirlwind` (`32.3%`), `Sleep Talk` (`41.4%`), `Curse` (`41.5%`), `Swords Dance` (`41.7%`), `Mean Look` (`42.9%`), and `Perish Song` (`43.8%`), as well as midgame blunders like staying in vs revealed `Hidden Power` threats (`room 3755`).
+#### P2-1. Midgame Phazing / Setup / Trap Weaknesses (Parked Rollout/Eval Flags Already Measured Null) — **REMAINING (Diagnosis Needed)**
+- **Current Code State & Historical Null Findings**:
+  - `RmConfig::default()` ([`crates/bot/src/smmcts.rs#L1039-L1066`](../crates/bot/src/smmcts.rs#L1039-L1066)) enables `rollout_combo: true` (which already implies `perish_escape` in [`crates/bot/src/mcts.rs#L470`](../crates/bot/src/mcts.rs#L470)) and `rollout_baton_pass: true`, while keeping `rollout_status: false`, `rollout_switch: false`, and `rollout_perish: false`. Those M16c rollout rules (`rollout_status`, `rollout_switch`) are **intentionally off** because full-pool CRN re-runs measured them as strength **NULL** (`0.493 ± 0.023` for `rollout_status`, `0.466 ± 0.032` for `rollout_switch`, `0.505 ± 0.019` combined): leaf eval already prices boosts and status, so rollout heuristics only add variance unless the rollout gets the value **sign** wrong (as `perish_combo` fixed).
+  - Likewise, `EvalWeights::default()` ([`crates/bot/src/eval.rs#L166-L190`](../crates/bot/src/eval.rs#L166-L190)) keeps `exchange: 0.0`, `confusion: 0.0`, `exchange_v2: false` **intentionally off** because candidate screening (`eval-candidate-screen`) showed even `EvalWeights::exchange_scheme` ([`eval.rs#L252`](../crates/bot/src/eval.rs#L252)) moved top-1 choices at `1.00x` of the single-seed flip floor (`0.1542` vs `0.1547`), meaning additive/matrix leaf-eval tweaks alone stay buried under search seed noise.
+- **What Remains**:
+  - Ladder WR drops against `Baton Pass` (`25.0%`), `Whirlwind` (`32.3%`), `Sleep Talk` (`41.4%`), `Curse` (`41.5%`), `Swords Dance` (`41.7%`), `Mean Look` (`42.9%`), and `Perish Song` (`43.8%`), plus staying in vs revealed threats (`room 3755`), reflect midgame **search / opponent-response / horizon or value-sign** gaps rather than unflipped `rollout_status`/`exchange_v2` switches. Any fix should come from concrete trace diagnosis of where search fails to separate or price those continuations, not re-enabling the parked M16c/M17 flags.
 
 #### P2-2. Team Preview (`T0`) Off-Pool Variance & Compiled-Table Predictability — **REMAINING**
 - **Current Code State**:
@@ -94,9 +94,7 @@ Across **184 decided `puniu3` games** (`88W–96L`, `47.8%` WR):
 
 ## 3. Remaining Execution Sequence
 
-1. **Address P2-1 (Midgame Rollouts & Leaf Eval) via Staged Gate**:
-   - Screen and A/B test [`EvalWeights::exchange_scheme`](../crates/bot/src/eval.rs#L252) (`exchange_v2`, `exchange`, `confusion`) and selective `RmConfig` rollout heuristics (`rollout_status`, `rollout_switch`, `rollout_perish`, setup/phaze awareness) via `eval_calibration` → candidate screen → non-mirror `omniscient_audit` (`T2` / `T5`) and production challenger duels before toggling shipped defaults.
-2. **Address P1-2 (Switching Loops) & Residual `T2`/`T5` Traces**:
-   - Audit post-`6e2c2ac5` `omniscient_audit` traces for remaining midgame switch loops or low-visit `bayesian_equilibrium` overrides (**P1-1** `min_own_v` check) before adding complexity.
-3. **Address P2-2 (`T0` Off-Pool Pruning / Mixing)** if `T0` off-pool logs or challenger counter-leads show measurable loss.
-4. **Build & Lock Discipline**: Any edit to `crates/bot/src/` or `crates/wasm/` updates `M17E_SOLVER_BUILD_FINGERPRINT` and requires `cargo t`, WASM/web tests, and re-baking `data/compiled-preview-v1.json` + `engine-manifest.json` per [`AGENTS.md`](../AGENTS.md).
+1. **Trace Audit on Post-`6e2c2ac5` `omniscient_audit` (`T2`/`T5`) & Ladder Cases**:
+   - Inspect concrete turns where search still picks progressively losing switch loops (**P1-2**), fails to answer setup/phazing/trap continuations (**P2-1**), or lets low-visit actions override UCB via `bayesian_equilibrium` (**P1-1** `min_own_v`). Focus on structural search/value-sign causes rather than ad-hoc `if-then` patches or re-enabling the parked `rollout_status`/`rollout_switch`/`exchange_v2` flags.
+2. **Address P2-2 (`T0` Off-Pool Pruning / Mixing)** if `T0` off-pool logs or challenger counter-leads show measurable loss.
+3. **Build & Lock Discipline**: Any edit to `crates/bot/src/` or `crates/wasm/` updates `M17E_SOLVER_BUILD_FINGERPRINT` and requires `cargo t`, WASM/web tests, and re-baking `data/compiled-preview-v1.json` + `engine-manifest.json` per [`AGENTS.md`](../AGENTS.md).
