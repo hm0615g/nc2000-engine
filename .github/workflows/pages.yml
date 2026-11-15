@@ -20,7 +20,6 @@ on:
       - "data/**"
       - "tools/preview-cache.js"
       - "tools/render-preview-cache-doc.py"
-      - "tools/render-native-handoff.py"
       - "tools/normalize-training*"
       - "tools/build-training-products.js"
       - "tools/preview-prior*"
@@ -29,7 +28,6 @@ on:
       - "tools/build-team-products-v2.js"
       - "tools/optimize-low-attack*"
       - "docs/PREVIEW-CACHE.md"
-      - "docs/NATIVE-FORK-HANDOFF.md"
       - "README.md"
       - ".github/workflows/pages.yml"
 
@@ -142,7 +140,6 @@ jobs:
             node "crates/wasm/tests-node/$suite.js"
           done
           python3 tools/render-preview-cache-doc.py web/dist
-          python3 tools/render-native-handoff.py web/dist
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

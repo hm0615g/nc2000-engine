@@ -15,7 +15,7 @@ Imperfect-information error on held-out / off-pool rosters (documented in [`find
 
 - **Choice A (Strict pool trust until contradiction & Turn 0 invariance)**: While `Belief::alive` is non-empty, pool filtering and Turn 0 Team Preview sampling stay unchanged. Near-pool soft shell repair, quantile-coupled fallback synthesis, and unappeared-bench loadout diversification activate only after the known pool is contradicted in battle.
 - **No heuristic root exclusions**: Guessed worlds cannot prove action dominance (`BlindSearch::use_public_exclusions` stays disabled; see [`crates/bot/src/blind.rs`](../crates/bot/src/blind.rs)).
-- **World sampling budget**: `BlindSearch` defaults to `MAX_SUBSAMPLED_WORLDS = 24` with bounded warmup in [`crates/bot/src/blind.rs`](../crates/bot/src/blind.rs). Unconditional large widening (e.g. `24 -> 192`) harms per-world tree depth, warms up too many leaves, and inflates 32-bit WASM linear memory; any future `with_max_worlds` widening must be benchmarked strictly in isolation at **equal wall-clock time** under high fallback entropy.
+- **World sampling budget**: `BlindSearch` defaults to `MAX_SUBSAMPLED_WORLDS = 24` with bounded warmup in [`crates/bot/src/blind.rs`](../crates/bot/src/blind.rs). Probing `with_max_worlds` via [`crates/bot/examples/world_budget_probe.rs`](../crates/bot/examples/world_budget_probe.rs) on off-pool positions showed no clear improvement over `24`: at `27k` (`64` fallback positions, `mean_fallback_cands = 7.75`), top-1 flip rates for `K = 4..192` (`0.1250–0.2188`) stayed below the `K = 24` seed-noise floor (`0.2344`); at `81k` (`48` positions), `K = 48/96` (`0.2708/0.2292`) matched seed noise (`0.2500`); with `BeliefPrior` (`num_strata = 16`, `mean_fallback_cands = 13.83`, `27k`), `K = 8..96` (`0.2813–0.2969`) also stayed below seed noise (`0.3281`); and `27k` paired `both-offpool` duels (`96` games each) scored `0.5208 ± 0.0712` (`K = 64` vs `24`, `ms_ratio = 0.997`) and `0.5000 ± 0.0772` (`K = 4` vs `24`, `ms_ratio = 1.062`). Keep `MAX_SUBSAMPLED_WORLDS = 24` unless `FallbackCandPool` diversity or root resolution changes substantially.
 
 ### 1.2 Implementation & Probe Pointers
 
@@ -23,6 +23,7 @@ Imperfect-information error on held-out / off-pool rosters (documented in [`find
 - **Live Hidden Power narrowing & deductive item exclusions**: [`crates/bot/src/hp_evidence.rs`](../crates/bot/src/hp_evidence.rs), [`crates/bot/src/observe.rs`](../crates/bot/src/observe.rs), [`crates/bot/src/position.rs`](../crates/bot/src/position.rs), [`web/src/position.ts`](../web/src/position.ts)
 - **Known prior, zero-prior species supplement, near-pool repair & off-pool EV/IV spread synthesis**: [`crates/bot/src/belief.rs`](../crates/bot/src/belief.rs), [`crates/bot/src/belief_supplement_v1.json`](../crates/bot/src/belief_supplement_v1.json), [`data/belief-pool-v3/belief-pool.json`](../data/belief-pool-v3/belief-pool.json), [`data/training-v3/supplemental.json`](../data/training-v3/supplemental.json)
 - **Non-self-play evaluation & corpus safety audit (`corpus_audit`, `calibration`, `gauntlet`)**: [`crates/bot/examples/belief_probe.rs`](../crates/bot/examples/belief_probe.rs)
+- **World-count sensitivity & paired duel probe**: [`crates/bot/examples/world_budget_probe.rs`](../crates/bot/examples/world_budget_probe.rs)
 
 ### 1.3 Validation Pitfalls (Do Not Repeat)
 
@@ -32,7 +33,7 @@ Imperfect-information error on held-out / off-pool rosters (documented in [`find
 
 ---
 
-## 2. Track 3 — Zero-Drift Search Speedups & Native Server Execution
+## 2. Track 3 — Zero-Drift Search Speedups
 
 ### 2.1 Profiling & Gate Commands (Always Re-Measure on Current HEAD)
 
@@ -51,7 +52,6 @@ Note that single-turn `profile_mcts` is dominated by cold allocator churn; use m
 - **Reverted hashing/table micro-experiments**: Tail-batching `hash_state_impl`, naive PP-slot splits, `PartyMatchCache+Cow<MatchTable>`, cond lookup tables, `-C target-cpu=native`-only search claims, and 1-dispatch-per-iteration GPU offload.
 - **Non-goal**: Pervasive per-field dirty bitmasks across `Battle`/`Pokemon` due to desync risk against `ENGINE_FINGERPRINT` ([`crates/engine/build.rs`](../crates/engine/build.rs)).
 
-### 2.3 Deployment & Fingerprint Rules
+### 2.3 Fingerprint & Artifact Rules
 
-- **Native server execution**: Downstream server deployments (`ProtocolAgent`) should migrate Node WASM workers (`crates/wasm/pkg-node`) to native Rust with release LTO, host `-C target-cpu`, and PGO per [`docs/NATIVE-FORK-HANDOFF.md`](./NATIVE-FORK-HANDOFF.md).
 - **Fingerprint & artifact locks**: Any edit inside `crates/engine/src/` updates `ENGINE_FINGERPRINT` ([`crates/engine/build.rs`](../crates/engine/build.rs)) and requires updating its allowlist plus verifying conformance (`kifu`, `replay`, `conformance_suite`, `sleep_clause`) and `data/compiled-preview-v1.json` lock validity ([`AGENTS.md`](../AGENTS.md)).

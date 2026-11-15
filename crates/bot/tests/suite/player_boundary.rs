@@ -338,6 +338,256 @@ fn selecting_self_ko_while_unable_to_move_is_not_a_certain_loss() {
 }
 
 #[test]
+fn protocol_excludes_only_public_certain_noops_without_guessing_foe_state() {
+    let dex = super::common::dex();
+    let set = |species: &str, moves: &[&str]| -> PokemonSet {
+        serde_json::from_value(json!({
+            "name": species,
+            "species": species,
+            "level": 50,
+            "moves": moves,
+            "happiness": 255
+        }))
+        .unwrap()
+    };
+
+    // 1. Last-mon Perish Song & Destiny Bond are publicly useless on any world.
+    let gengar = set("Gengar", &["Ice Punch", "Perish Song", "Destiny Bond"]);
+    let snorlax = set("Snorlax", &["Body Slam"]);
+    let mut b = Battle::from_fixture(&dex, "1,2,3,4", &[gengar.clone()], &[snorlax.clone()]).unwrap();
+    b.choose(&dex, 0, "team 1").unwrap();
+    b.choose(&dex, 1, "team 1").unwrap();
+    let f = PlayerChannel::new(0).frame(&mut b, &dex).unwrap();
+    let pool = MetaPool {
+        teams: vec![MetaTeam {
+            id: "lax".into(),
+            sets: vec![snorlax.clone()],
+            weight: Some(1.0),
+        }],
+    };
+    let mut agent = ProtocolAgent::new(&dex, 0, pool.clone(), config(), 97);
+    agent.set_own_team(vec![gengar]);
+    for line in &f.lines {
+        agent.push_line(&dex, line);
+    }
+    agent.on_request(&dex, &f.request.to_string()).unwrap();
+    let (ice_idx, perish_idx, db_idx) = {
+        let search = agent.search().unwrap();
+        let actions = search.actions();
+        let dom = search.dominated();
+        let idx = |key: &str| {
+            actions
+                .iter()
+                .position(|c| *c == nc2000_engine::battle::SearchChoice::Move(dex.moves.id(key).unwrap()))
+                .unwrap()
+        };
+        let (ice, perish, db) = (idx("icepunch"), idx("perishsong"), idx("destinybond"));
+        assert!(!dom[ice]);
+        assert!(dom[perish]);
+        assert!(dom[db]);
+        (ice, perish, db)
+    };
+    agent.step(&dex, 120).unwrap();
+    let search = agent.search().unwrap();
+    assert_eq!(search.visits()[perish_idx], 0);
+    assert_eq!(search.visits()[db_idx], 0);
+    let _ = ice_idx;
+    assert_eq!(agent.best(&dex).unwrap(), "move icepunch");
+
+    // 2. Last-mon Baton Pass and empty-bench Roar are likewise publicly useless.
+    let jolteon = set("Jolteon", &["Thunderbolt", "Baton Pass", "Roar"]);
+    let mut b2 = Battle::from_fixture(&dex, "1,2,3,4", &[jolteon.clone()], &[snorlax.clone()]).unwrap();
+    b2.choose(&dex, 0, "team 1").unwrap();
+    b2.choose(&dex, 1, "team 1").unwrap();
+    let f2 = PlayerChannel::new(0).frame(&mut b2, &dex).unwrap();
+    let mut a2 = ProtocolAgent::new(&dex, 0, pool, config(), 97);
+    a2.set_own_team(vec![jolteon]);
+    for line in &f2.lines {
+        a2.push_line(&dex, line);
+    }
+    a2.on_request(&dex, &f2.request.to_string()).unwrap();
+    let s2 = a2.search().unwrap();
+    let actions2 = s2.actions();
+    let dom2 = s2.dominated();
+    let idx2 = |key: &str| {
+        actions2
+            .iter()
+            .position(|c| *c == nc2000_engine::battle::SearchChoice::Move(dex.moves.id(key).unwrap()))
+            .unwrap()
+    };
+    assert!(!dom2[idx2("thunderbolt")]);
+    assert!(dom2[idx2("batonpass")]);
+    assert!(dom2[idx2("roar")]);
+
+    // 3. Foe Safeguard publicly masks status and non-Swagger confusion while keeping
+    //    Swagger and damaging moves unmasked (even with a switchable foe bench).
+    let zapdos = set("Zapdos", &["Thunderbolt", "Thunder Wave", "Confuse Ray", "Swagger"]);
+    let blissey = set("Blissey", &["Safeguard", "Splash"]);
+    let mut b3 = Battle::from_fixture(
+        &dex,
+        "1,2,3,4",
+        &[zapdos.clone(), snorlax.clone()],
+        &[blissey.clone(), snorlax.clone()],
+    )
+    .unwrap();
+    b3.choose(&dex, 0, "team 1,2").unwrap();
+    b3.choose(&dex, 1, "team 1,2").unwrap();
+    let mut ch3 = PlayerChannel::new(0);
+    let f3_init = ch3.frame(&mut b3, &dex).unwrap();
+    b3.choose(&dex, 0, "move thunderbolt").unwrap();
+    b3.choose(&dex, 1, "move safeguard").unwrap();
+    let f3 = ch3.frame(&mut b3, &dex).unwrap();
+    let pool3 = MetaPool {
+        teams: vec![MetaTeam {
+            id: "bliss".into(),
+            sets: vec![blissey, snorlax.clone()],
+            weight: Some(1.0),
+        }],
+    };
+    let mut a3 = ProtocolAgent::new(&dex, 0, pool3, config(), 97);
+    a3.set_own_team(vec![zapdos, snorlax.clone()]);
+    for line in f3_init.lines.iter().chain(&f3.lines) {
+        a3.push_line(&dex, line);
+    }
+    a3.on_request(&dex, &f3.request.to_string()).unwrap();
+    let s3 = a3.search().unwrap();
+    let actions3 = s3.actions();
+    let dom3 = s3.dominated();
+    let idx3 = |key: &str| {
+        actions3
+            .iter()
+            .position(|c| *c == nc2000_engine::battle::SearchChoice::Move(dex.moves.id(key).unwrap()))
+            .unwrap()
+    };
+    assert!(!dom3[idx3("thunderbolt")]);
+    assert!(dom3[idx3("thunderwave")]);
+    assert!(dom3[idx3("confuseray")]);
+    assert!(!dom3[idx3("swagger")]);
+
+    // 4. Revealed all-Ghost foe trio publicly masks Body Slam, whereas an unrevealed
+    //    6-mon roster containing a non-Ghost keeps Body Slam unmasked.
+    let lax_atk = set("Snorlax", &["Body Slam", "Earthquake"]);
+    let nidoking = set("Nidoking", &["Earthquake"]);
+    let misdreavus = set("Misdreavus", &["Shadow Ball"]);
+    let gengar_foe = set("Gengar", &["Night Shade"]);
+    let haunter = set("Haunter", &["Night Shade"]);
+    let exeggutor = set("Exeggutor", &["Psychic"]);
+    let foe_roster = vec![
+        misdreavus,
+        gengar_foe,
+        haunter,
+        snorlax.clone(),
+        exeggutor,
+        nidoking.clone(),
+    ];
+    let mut b4 = Battle::from_fixture(
+        &dex,
+        "1,2,3,4",
+        &[lax_atk.clone(), nidoking.clone()],
+        &foe_roster,
+    )
+    .unwrap();
+    b4.choose(&dex, 0, "team 1,2").unwrap();
+    b4.choose(&dex, 1, "team 1,2,3").unwrap();
+    let mut ch4 = PlayerChannel::new(0);
+    let f4_unrevealed = ch4.frame(&mut b4, &dex).unwrap();
+    let pool4 = MetaPool {
+        teams: vec![MetaTeam {
+            id: "ghosts6".into(),
+            sets: foe_roster,
+            weight: Some(1.0),
+        }],
+    };
+    let mut a4 = ProtocolAgent::new(&dex, 0, pool4, config(), 97);
+    a4.set_own_team(vec![lax_atk, nidoking]);
+    for line in &f4_unrevealed.lines {
+        a4.push_line(&dex, line);
+    }
+    a4.on_request(&dex, &f4_unrevealed.request.to_string()).unwrap();
+    {
+        let s4 = a4.search().unwrap();
+        let bs_idx = s4
+            .actions()
+            .iter()
+            .position(|c| *c == nc2000_engine::battle::SearchChoice::Move(dex.moves.id("bodyslam").unwrap()))
+            .unwrap();
+        assert!(
+            !s4.dominated()[bs_idx],
+            "unrevealed picks in 6-mon roster keep Body Slam unmasked"
+        );
+    }
+    // Reveal the remaining two Ghost picks via switches.
+    b4.choose(&dex, 0, "switch 2").unwrap();
+    b4.choose(&dex, 1, "switch 2").unwrap();
+    let f4_mid = ch4.frame(&mut b4, &dex).unwrap();
+    for line in &f4_mid.lines {
+        a4.push_line(&dex, line);
+    }
+    b4.choose(&dex, 0, "switch 2").unwrap();
+    b4.choose(&dex, 1, "switch 3").unwrap();
+    let f4_revealed = ch4.frame(&mut b4, &dex).unwrap();
+    for line in &f4_revealed.lines {
+        a4.push_line(&dex, line);
+    }
+    a4.on_request(&dex, &f4_revealed.request.to_string()).unwrap();
+    {
+        let s4 = a4.search().unwrap();
+        let idx4 = |key: &str| {
+            s4.actions()
+                .iter()
+                .position(|c| *c == nc2000_engine::battle::SearchChoice::Move(dex.moves.id(key).unwrap()))
+                .unwrap()
+        };
+        assert!(
+            s4.dominated()[idx4("bodyslam")],
+            "all 3 picks revealed as Ghosts publicly masks Body Slam"
+        );
+        assert!(!s4.dominated()[idx4("earthquake")]);
+    }
+
+    // 5. Poisoned foe (residual_damage_wait) unmasks last-mon Perish Song for stall turns.
+    let gengar_tox = set("Gengar", &["Ice Punch", "Perish Song", "Toxic"]);
+    let foe_splash = set("Snorlax", &["Splash"]);
+    let mut b5 = Battle::from_fixture(
+        &dex,
+        "1,2,3,4",
+        &[gengar_tox.clone()],
+        &[foe_splash.clone()],
+    )
+    .unwrap();
+    b5.choose(&dex, 0, "team 1").unwrap();
+    b5.choose(&dex, 1, "team 1").unwrap();
+    let mut ch5 = PlayerChannel::new(0);
+    let f5_init = ch5.frame(&mut b5, &dex).unwrap();
+    b5.choose(&dex, 0, "move toxic").unwrap();
+    b5.choose(&dex, 1, "move splash").unwrap();
+    let f5 = ch5.frame(&mut b5, &dex).unwrap();
+    let pool5 = MetaPool {
+        teams: vec![MetaTeam {
+            id: "lax5".into(),
+            sets: vec![foe_splash],
+            weight: Some(1.0),
+        }],
+    };
+    let mut a5 = ProtocolAgent::new(&dex, 0, pool5, config(), 97);
+    a5.set_own_team(vec![gengar_tox]);
+    for line in f5_init.lines.iter().chain(&f5.lines) {
+        a5.push_line(&dex, line);
+    }
+    a5.on_request(&dex, &f5.request.to_string()).unwrap();
+    let s5 = a5.search().unwrap();
+    let perish5 = s5
+        .actions()
+        .iter()
+        .position(|c| *c == nc2000_engine::battle::SearchChoice::Move(dex.moves.id("perishsong").unwrap()))
+        .unwrap();
+    assert!(
+        !s5.dominated()[perish5],
+        "poisoned foe (residual_damage_wait) unmasks last-mon Perish Song"
+    );
+}
+
+#[test]
 fn open_agent_matches_singleton_pool_blind_agent_bit_for_bit() {
     let dex = super::common::dex();
     let catalog = load_meta_pool(&repo_root().join("data/team-pool-v2/team-pool.json"));
