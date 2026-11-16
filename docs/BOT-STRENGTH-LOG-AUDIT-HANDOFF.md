@@ -44,21 +44,22 @@ Replaying the historical endurance (`findings/deployed-endurance-v1/games/g4.jso
 
 ## 2. Remaining Midgame Continuation Bottlenecks on `HEAD` (`81,000` Iterations)
 
-> **Why previously parked levers stay off**:
+> **Why previously parked rollout & static-eval levers stay off**:
 > - `RmConfig::rollout_status` (`0.493 ± 0.023`), `rollout_switch` (`0.466 ± 0.032`), and `EvalWeights::exchange_scheme` (`1.00x` single-seed flip floor) all measured **NULL** or weakly negative in CRN duels.
 > - Enabling `LeafSettlementMode::BlindSpotBoth` (`compact_blindspot_tactical_override` deterministic `R1/R2a/R2b/R3b` rollout overrides in [`crates/bot/src/mcts.rs`](../crates/bot/src/mcts.rs)) **loses `-10.0%` (`0.450` vs `0.550` across `160` paired games: `-0.100 ± 0.129` in both `defense` and `offense` on `setup_gauntlet`)** against shipped `BlindSpotLeaf`, because hard deterministic `if-then` overrides inside fixed 8-turn rollouts over-fire and corrupt rollout expectations.
+> - **2026-11-16 Static `eval.rs` Balance-Sheet A/B (`spikes_no_arbitrage` & `phaze_boost_writedown`) — Also Measured NULL (`0.500`)**:
+>   - Splitting `w.spikes = 1.5` into `1.0` bench entry toll + `0.5` team-wide grounded cycle tax (`spikes_no_arbitrage`) flipped `2 / 15` (`13.3%`) of `81k` witness decisions (= **`1.00x` of the single-seed noise floor `2 / 15`**), and scored **`426W–414L = 0.5071 ± 0.030`** (`840` CRN games @ `3,000` iters) and **`117W–123L = 0.4875 ± 0.0537`** (`240` CRN games @ `9,000` iters) on `team-pool-v2` × `belief-pool-v3` (`+1.3% ± 6.7%` on `setup_gauntlet`).
+>   - Writing down positive stat boosts (`80%`) and `Roar`/`Whirlwind`-vulnerable `Substitute` premia against active surviving phazers/Hazers (`phaze_boost_writedown`) flipped `0 / 15` (`81k` witness set), scored **`240W–240L = 0.5000`** (`123W–117L` @ `3,000` iters + `117W–123L` @ `9,000` iters, `480` CRN games), and **`-3.7% ± 5.5%`** (`+1.7%` offense / `-1.7%` defense) on `setup_gauntlet`.
+>   - Inspecting the exported `PositionSpec` of `room 3809` (`d24`/`d26`) also confirmed that `Tentacruel` and `Heracross` had **already fainted (`alive = 1`)** by Turn 18, so `Skarmory`'s `Whirlwind` legally fails on `d24`/`d26` and `Snorlax` clicking `Curse` (`eqVal = 0.827`) was optimal `1v2` play (while `d2`–`d7` was matching `Curse` against `Curse + Explosion` `Cloyster`).
+>   - **Conclusion**: At `3k`–`81k` (`c = 0.4`), decisive midgame branches are already settled inside the tree + 8-turn rollout + `n0 + n1 <= 3` `linear.rs` solver + root Bayesian LP; further `O(0.1)` additive `eval.rs` tweaks only perturb flat near-tied roots at the Monte Carlo noise floor (`0.500`) and remain reverted.
 
 Any future midgame improvement must address the four concrete structural mechanisms below without introducing rigid deterministic rollout overrides:
 
-### 2.1 Phazing Valuation Blindness When `n0 + n1 >= 4` (`Curse` / `SD` vs `Whirlwind` / `Roar`)
-- **81k Witness (`room 3809`, `d24` Turn 21 & `d26` Turn 23 — Zero Belief Error)**:
-  - `Belief` has converged to the exact singleton pool team `mjj-2024-raista` (`fallback: false`), so the bot knows active `Skarmory` carries `["drillpeck", "curse", "whirlwind", "rest"]` and bench `Raikou` carries `Roar`.
-  - Despite this, mono-Normal `Snorlax` (`Double-Edge / Curse / Rest / Sleep Talk`) allocates **`100%` of `81,000` visits (`74,777` in cell `(Curse, Curse)`, `mean = 0.847`)** to `move curse` (`move doubleedge`: `38` visits, `mean = 0.377`), and the searched 4-ply principal variation is both sides clicking `Curse` 4 turns in a row.
-- **Exact Structural Mechanism**:
-  1. [`linear::compact_linear_diff`](../crates/bot/src/linear.rs#L2872-L2955) only runs when `n0 + n1 <= 3` (`1v1`, `2v1`, `1v2`). On `3v3`, `3v2`, `2v3`, and `2v2` (`n0 + n1 >= 4`), leaf evaluation falls back strictly to additive [`eval::compact_side_score`](../crates/bot/src/eval.rs#L1051-L1143).
-  2. In [`mcts::compact_greedy_pick`](../crates/bot/src/mcts.rs#L914-L1017), `Whirlwind`/`Roar` deals `0` direct damage (`raw_score = 0.0`) and `rollout_switch` is `false`.
-  3. When the tree explores `Skarmory` clicking `Whirlwind` (`cell [0][2]`, `n = 1,972`), `Whirlwind` drags in `Tentacruel` (`Surf`), and at the tree leaf the 8-turn slugfest rollout **locks `Skarmory` on the field (`rollout_switch = false`) against `Tentacruel` until `Skarmory` faints**, scoring `Whirlwind` at `0.880` for `Snorlax` (`0.120` for `Skarmory` — worse than letting `Snorlax` boost!).
-  4. Along `(Curse, Curse)` (`cell [0][0]`), neither mon ever phazes during the 8-turn rollout, leaving `Snorlax` with inflated `+Atk/+Def` stage bonuses at the horizon cutoff (`0.844`). This simultaneously causes offensive `Curse` users to over-stack into known phazers and defensive phazers to under-use `Whirlwind`/`Roar` whenever an unfavorable drag-in exists on the opponent's bench.
+### 2.1 Phazing Valuation When `n0 + n1 >= 4` (`Curse` / `SD` vs `Whirlwind` / `Roar`)
+- **Audit Correction on `room 3809`**:
+  - On `d2`–`d7`, `Snorlax` was matching `Curse` against `Curse + Explosion` `Cloyster` (`Skarmory` and `Raikou` were still benched); on `d24`/`d26` (Turns 21–23), `Tentacruel` and `Heracross` were already fainted (`alive = 1`), so `Whirlwind` legally fails and `move curse` (`eqVal = 0.827`) was optimal `1v2` play.
+- **Residual Structural Note (`n0 + n1 >= 4` Only)**:
+  - [`linear::compact_linear_diff`](../crates/bot/src/linear.rs#L2872-L2955) only runs when `n0 + n1 <= 3`. When `n0 + n1 >= 4`, `mcts::compact_greedy_pick` assigns `0.0` direct damage to `Whirlwind`/`Roar` and `rollout_switch = false` locks a phazer against an unfavorable random drag-in for 8 rollout turns. However, static leaf boost write-downs (`phaze_boost_writedown`) measured exact `0.5000` (`240W–240L` over `480` CRN games), indicating that tree lookahead already handles almost all real in-game phazing interactions.
 
 ### 2.2 Public Self-Fail Masks (`room 3800` Resolved) & Remaining Pooled-PP Horizon Note
 - **81k Witness (`room 3800`, `d44` Turn 43 & `d46` Turn 45 — Resolved by Public Self-Fail Masks)**:
