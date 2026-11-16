@@ -61,7 +61,9 @@ if (args.help || args.h) {
                        mercy = 81k + pool:tier-a human-sized sub-party box)
   --team SPEC          pool:nash | pool:tier-a | pool:random | pool:ID | FILE.json
                        (default determined by --tier)
-  --iters N            Search iterations per decision (default: live-search strong 81000)
+  --iters N            Override search iterations for BOTH battle and preview
+                       (default: Web strong, battle=81000 / preview=729000)
+  --preview-iters N    Override preview only; takes precedence over --iters
   --seed N             RNG / searcher seed (default 1)
   --poll-ms MS         Polling interval while waiting for opponent (default 2500)
   --host-timeout-sec S Max seconds to wait as P1 before leaving empty room (default 240, 0=none)
@@ -171,12 +173,28 @@ const ANOMALY_LOG_PATH = args['no-anomaly-log']
 
 const profileText = fs.readFileSync(path.join(REPO, 'data/search-profiles.json'), 'utf8');
 const PROFILE = JSON.parse(profileText).blind;
-let defaultStrongIters = 81000;
-try {
-  const liveSearch = JSON.parse(fs.readFileSync(path.join(REPO, 'data/live-search.json'), 'utf8'));
-  if (liveSearch?.battle?.strong) defaultStrongIters = liveSearch.battle.strong;
-} catch {}
-const ITERS = parseInt(args.iters || String(defaultStrongIters), 10);
+// The standard Castle policy shares the standalone Web strong budgets.
+// Explicit --iters keeps its historical meaning (both phases); an optional
+// --preview-iters overrides just the preview for controlled experiments.
+const LIVE_SEARCH = JSON.parse(fs.readFileSync(path.join(REPO, 'data/live-search.json'), 'utf8'));
+function readPositiveIters(value, name) {
+  if (typeof value !== 'string' || !/^[1-9][0-9]*$/.test(value)) {
+    throw new Error(`--${name} must be a positive integer`);
+  }
+  const result = Number(value);
+  if (!Number.isSafeInteger(result)) throw new Error(`--${name} is out of range`);
+  return result;
+}
+const ITERS = args.iters === undefined
+  ? Number(LIVE_SEARCH.battle.strong)
+  : readPositiveIters(args.iters, 'iters');
+const PREVIEW_ITERS = args['preview-iters'] !== undefined
+  ? readPositiveIters(args['preview-iters'], 'preview-iters')
+  : args.iters !== undefined ? ITERS : Number(LIVE_SEARCH.unknownPreview);
+if (!Number.isSafeInteger(ITERS) || ITERS <= 0 ||
+    !Number.isSafeInteger(PREVIEW_ITERS) || PREVIEW_ITERS <= 0) {
+  throw new Error('Web strong search budgets must be positive safe integers');
+}
 
 // ------------------------------------------------------------------ data & i18n
 const dexData = JSON.parse(fs.readFileSync(path.join(REPO, 'data/gen2stadium2.json'), 'utf8'));
@@ -4225,7 +4243,7 @@ async function playOneGame(gameIdx, dependencies = {}) {
   client.setCookie('PBS', `${NAME}_${PASS}`);
 
   const opponentDb = loadOpponentDb(OPPONENT_DB_PATH);
-  log(`Game #${gameIdx + 1}: selected team ${team.label} (iters=${ITERS}, c=${PROFILE.c})`);
+  log(`Game #${gameIdx + 1}: selected team ${team.label} (battleIters=${ITERS}, previewIters=${PREVIEW_ITERS}, c=${PROFILE.c})`);
 
   let mySide = null; // 0 = P1, 1 = P2
   let foeName = null;
@@ -4771,7 +4789,7 @@ async function playOneGame(gameIdx, dependencies = {}) {
               if (choiceStr) previewSource = 'baked';
             }
             if (!choiceStr) {
-              s.step(ITERS);
+              s.step(PREVIEW_ITERS);
               choiceStr = s.best();
               previewSource = hasCustomShellMemory ? 'adapted-search' : 'search';
               try {
@@ -4829,7 +4847,8 @@ async function playOneGame(gameIdx, dependencies = {}) {
           side: mySide,
           foeName,
           seed: gameSeed,
-          iterations: previewSource === 'search' || previewSource === 'adapted-search' ? ITERS : 0,
+          iterations: previewSource === 'search' || previewSource === 'adapted-search' ? PREVIEW_ITERS : 0,
+          requestedIterations: RANDOM ? 0 : PREVIEW_ITERS,
           c: PROFILE.c,
           previewSource,
           bestChoice: choiceStr,
@@ -5050,4 +5069,5 @@ module.exports = {
   encodeFormEucJp,
   resolveBotOutcomeFromFinishedHtml,
   TIER_A_BOX_IDS,
+  searchBudgets: Object.freeze({battle: ITERS, preview: PREVIEW_ITERS}),
 };
