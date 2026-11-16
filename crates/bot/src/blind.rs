@@ -995,7 +995,7 @@ impl BlindSearch {
         self.is_allowed(i) && (!self.prune_dominated || !has_safe || !self.my_dominated[i])
     }
 
-    fn eligible_flags(&self) -> Vec<bool> {
+    pub(crate) fn eligible_flags(&self) -> Vec<bool> {
         let has_safe = self.has_undominated_allowed();
         (0..self.my_acts.len())
             .map(|i| self.is_eligible(i, has_safe))

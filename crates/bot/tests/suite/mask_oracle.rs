@@ -621,4 +621,54 @@ fn all_blind_entrypoints_prune_public_dominated_actions_before_ucb_and_compose_w
     only_dom_allowed.step(&dex, &bel, &obs, 16);
     assert_eq!(only_dom_allowed.visits(), &[0, 0, 16, 0]);
     assert_eq!(only_dom_allowed.best(), Some(perish));
+
+    // 5. In a losing (< 0.5) position with publicly dominated 0-visit moves,
+    //    `analysis::report` (`MatrixSummary`) must NEVER assign equilibrium `mix`
+    //    or fake `0.5` `equity` to the 0-visit dominated rows!
+    let low_own = vec![mk_set(
+        "Pikachu",
+        "",
+        &["Quick Attack", "Reflect", "Baton Pass"],
+        40,
+    )];
+    let boss_foe = vec![mk_set("Snorlax", "Leftovers", &["Earthquake", "Body Slam"], 55)];
+    let boss_splash = vec![mk_set("Snorlax", "Leftovers", &["Earthquake", "Splash"], 55)];
+    let mut b_lose = Battle::from_fixture(&dex, "1,2,3,4", &low_own, &boss_splash).unwrap();
+    b_lose.choose(&dex, 0, "team 1").unwrap();
+    b_lose.choose(&dex, 1, "team 1").unwrap();
+    let mut ch_lose = PlayerChannel::new(0);
+    let f_l1 = ch_lose.frame(&mut b_lose, &dex).unwrap();
+    b_lose.choose(&dex, 0, "move reflect").unwrap();
+    b_lose.choose(&dex, 1, "move splash").unwrap();
+    let f_l2 = ch_lose.frame(&mut b_lose, &dex).unwrap();
+    let lose_pool = MetaPool {
+        teams: vec![MetaTeam {
+            id: "boss".into(),
+            sets: boss_foe,
+            weight: Some(1.0),
+        }],
+    };
+    let mut lose_agent = ProtocolAgent::new(&dex, 0, lose_pool, RmConfig::default(), 77);
+    lose_agent.set_own_team(low_own);
+    for line in f_l1.lines.iter().chain(&f_l2.lines) {
+        lose_agent.push_line(&dex, line);
+    }
+    lose_agent.on_request(&dex, &f_l2.request.to_string()).unwrap();
+    lose_agent.step(&dex, 128).unwrap();
+    let lose_rep = nc2000_bot::analysis::report(&lose_agent, &dex, 0, 1);
+    let eq_val = lose_rep["equilibrium"]["value"].as_f64().unwrap();
+    assert!(
+        eq_val < 0.20,
+        "losing position equilibrium value was inflated by 0-visit dominated rows: {lose_rep}"
+    );
+    for row in lose_rep["actions"].as_array().unwrap() {
+        if row["dominated"].as_bool().unwrap() {
+            assert_eq!(row["visits"].as_u64(), Some(0));
+            assert_eq!(row["mix"].as_f64(), Some(0.0));
+            assert_eq!(row["equity"].as_f64(), Some(0.0));
+        } else {
+            assert_eq!(row["input"].as_str(), Some("move quickattack"));
+            assert!((row["mix"].as_f64().unwrap() - 1.0).abs() < 1e-9);
+        }
+    }
 }
