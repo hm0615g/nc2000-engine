@@ -1,8 +1,8 @@
 {
   "schema_version": "nc2000-sdk-v1",
   "position_schema": "nc2000-position-v1",
-  "created_at": "2026-11-16T17:46:53.185Z",
-  "engine_git_sha": "13d4041a4ef66980ee72d64b1930b5743fc16436",
+  "created_at": "2026-11-16T18:14:44.065Z",
+  "engine_git_sha": "b7e583466ae3d0d79c7e88b61d54a0c5a770e6b2",
   "wasm_sha256": "984ef1db4579528d2f9946813a75294418ad0425765fc605f5979a5af3a927c8",
   "dex_sha256": "ecfe4c596917fd94932ebf225b8f9054071159b62d96d8d99e5a3d9fc00ae423",
   "default_belief_sha256": "1eeb77fecfd0045e4a030873331fa7ad2f3129653d5f87da04ed4d845ecce63d",
