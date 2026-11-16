@@ -543,6 +543,7 @@ pub fn solve_bayesian_equilibrium_with_priors(
             pure_guarantees[actions[a]]
                 .total_cmp(&pure_guarantees[actions[b]])
                 .then_with(|| global_visits[actions[a]].cmp(&global_visits[actions[b]]))
+                .then_with(|| actions[b].cmp(&actions[a]))
         })
         .unwrap_or(0);
     let best_pure_action = actions[best_pure_sub];
@@ -1080,5 +1081,22 @@ mod tests {
             rps_eq.override_value,
             rps_eq.pure_guarantees[0]
         );
+    }
+
+    #[test]
+    fn solve_bayesian_equilibrium_flat_tie_prefers_lower_index() {
+        let eq = solve_bayesian_equilibrium(
+            &[true, true, true],
+            &[100, 100, 100],
+            &[1.0, 1.0, 1.0],
+            &[RootType {
+                samples: 300,
+                replies: 2,
+                cells: cells(&[1.0, 1.0, 1.0, 1.0, 1.0, 1.0], 2, 50),
+            }],
+        )
+        .unwrap();
+        assert_eq!(eq.best_pure_action, 0);
+        assert_eq!(eq.policy, vec![1.0, 0.0, 0.0]);
     }
 }

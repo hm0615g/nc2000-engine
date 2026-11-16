@@ -85,7 +85,7 @@ pub enum EndgameRegime {
 }
 
 /// Compare two root actions by effective visits first, breaking ties by higher
-/// empirical mean reward (`rewards / total_visits`) and finally total visits.
+/// empirical mean reward (`rewards / total_visits`), total visits, and lower index.
 pub(crate) fn cmp_visits_then_mean(
     effective_visits: &[u32],
     total_visits: &[u32],
@@ -105,6 +105,7 @@ pub(crate) fn cmp_visits_then_mean(
         .cmp(&effective_visits[b])
         .then_with(|| mean(a).total_cmp(&mean(b)))
         .then_with(|| total_visits[a].cmp(&total_visits[b]))
+        .then_with(|| b.cmp(&a))
 }
 
 #[derive(Clone, Debug)]
@@ -196,7 +197,11 @@ impl EndgameRootStats {
         let opp_alive = end.alive[1 - side] as f64;
         let my_alive = end.alive[side] as f64;
         let win_t = if is_win {
-            completed_turns + 1.0
+            if end.outcome == 0 {
+                completed_turns + 1.0 + opp_alive
+            } else {
+                completed_turns + 1.0
+            }
         } else {
             completed_turns + 2.0 + 3.0 * opp_alive + 6.0 * (1.0 - mine)
         };
@@ -236,7 +241,10 @@ impl EndgameRootStats {
         if elig.len() <= 1 {
             return true;
         }
-        let Some(&legacy_idx) = elig.iter().max_by_key(|&&i| total_visits[i]) else {
+        let Some(&legacy_idx) = elig
+            .iter()
+            .max_by(|&&a, &&b| cmp_visits_then_mean(total_visits, total_visits, rewards, a, b))
+        else {
             return false;
         };
         let min_ko_v = (target_iters / 30).clamp(32, 256);
@@ -456,10 +464,12 @@ impl EndgameRootStats {
                         && metrics[i].trap_risk <= min_trap + 0.020
                 })
                 .collect();
-            if let Some(&best_idx) = safe_winners
-                .iter()
-                .max_by(|&&a, &&b| metrics[a].score.total_cmp(&metrics[b].score))
-            {
+            if let Some(&best_idx) = safe_winners.iter().max_by(|&&a, &&b| {
+                metrics[a]
+                    .score
+                    .total_cmp(&metrics[b].score)
+                    .then_with(|| b.cmp(&a))
+            }) {
                 let min_wt_gain = if matches!(acts[legacy_idx], SearchChoice::Move(_))
                     && matches!(acts[best_idx], SearchChoice::Switch(_))
                 {
@@ -529,10 +539,12 @@ impl EndgameRootStats {
                                 && metrics[i].mean >= mu_legacy))
                 })
                 .collect();
-            if let Some(&best_idx) = candidates
-                .iter()
-                .max_by(|&&a, &&b| metrics[a].score.total_cmp(&metrics[b].score))
-            {
+            if let Some(&best_idx) = candidates.iter().max_by(|&&a, &&b| {
+                metrics[a]
+                    .score
+                    .total_cmp(&metrics[b].score)
+                    .then_with(|| b.cmp(&a))
+            }) {
                 let cand = &metrics[best_idx];
                 let overrides = cand.score > leg_score + 0.004;
                 let chosen_idx = if overrides { best_idx } else { legacy_idx };
@@ -619,10 +631,12 @@ impl EndgameRootStats {
                         && has_gain
                 })
                 .collect();
-            if let Some(&best_idx) = candidates
-                .iter()
-                .max_by(|&&a, &&b| metrics[a].score.total_cmp(&metrics[b].score))
-            {
+            if let Some(&best_idx) = candidates.iter().max_by(|&&a, &&b| {
+                metrics[a]
+                    .score
+                    .total_cmp(&metrics[b].score)
+                    .then_with(|| b.cmp(&a))
+            }) {
                 let chosen_idx = if metrics[best_idx].score > metrics[legacy_idx].score + 0.001 {
                     best_idx
                 } else {

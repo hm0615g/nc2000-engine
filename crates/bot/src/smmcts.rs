@@ -1336,7 +1336,7 @@ impl RmAgent {
         // purification: drop solver dust relative to the modal action
         // (the modal action itself always survives)
         let imax = (0..probs.len())
-            .max_by(|&a, &b| probs[a].total_cmp(&probs[b]))
+            .max_by(|&a, &b| probs[a].total_cmp(&probs[b]).then_with(|| b.cmp(&a)))
             .unwrap();
         let pmax = probs[imax];
         for (i, p) in probs.iter_mut().enumerate() {
@@ -1383,7 +1383,7 @@ impl RmAgent {
 fn top_actions(root: &Node, side: usize, m: usize) -> Vec<usize> {
     let k = root.acts[side].len();
     let mut idx: Vec<usize> = (0..k).collect();
-    idx.sort_by(|&a, &b| root.n[side][b].cmp(&root.n[side][a]));
+    idx.sort_by(|&a, &b| root.n[side][b].cmp(&root.n[side][a]).then_with(|| a.cmp(&b)));
     idx.truncate(m.max(1));
     idx
 }

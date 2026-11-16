@@ -302,6 +302,9 @@ pub(crate) fn dominated_reason(
     if certain_self_loss(b, dex, side, c) {
         return Some("self-KO with the last mon");
     }
+    if let Some(why) = public_sleep_forfeit_reason(b, dex, side, c, rules) {
+        return Some(why);
+    }
     if let SearchChoice::Move(id) = c {
         let ms = dex.move_static(id);
         if ms.status.as_deref() == Some("slp")
@@ -506,20 +509,156 @@ fn foe_switchin_candidates(b: &Battle, side: usize) -> Vec<PokeId> {
 /// `noop_census` measures that error rate against the engine over corpus
 /// positions; it is the number to re-check whenever a rule is added.
 /// Subset of [`noop_reason`] that depends strictly on public / own-certain
-fn foe_may_change_type(b: &Battle, dex: &Dex, def: PokeId) -> bool {
-    let foe = b.poke(def);
-    foe.transformed
-        || foe.move_slots.iter().any(|s| !s.shared)
+fn foe_learnset_any(b: &Battle, dex: &Dex, foe: PokeId, moves: &[&str]) -> bool {
+    let fp = b.poke(foe);
+    fp.transformed
+        || fp.move_slots.iter().any(|s| !s.shared)
         || crate::belief::format_learnsets()
-            .species(dex.species.key(foe.species))
+            .species(dex.species.key(fp.species))
             .map_or(true, |ls| {
-                ls.moves.iter().any(|m| {
-                    matches!(
-                        m.as_str(),
-                        "conversion" | "conversion2" | "transform" | "sketch"
-                    )
-                })
+                ls.moves.iter().any(|m| moves.contains(&m.as_str()))
             })
+}
+
+fn foe_may_change_type(b: &Battle, dex: &Dex, def: PokeId) -> bool {
+    foe_learnset_any(
+        b,
+        dex,
+        def,
+        &["conversion", "conversion2", "transform", "sketch"],
+    )
+}
+
+fn has_heal_berry(dex: &Dex, mon: &nc2000_engine::state::Pokemon) -> bool {
+    mon.item
+        .is_some_and(|id| matches!(dex.items.key(id), "berry" | "goldberry" | "berryjuice"))
+}
+
+fn appeared_living_foe_bench_asleep(b: &Battle, side: usize) -> bool {
+    use nc2000_engine::state::Status;
+    let opp = 1 - side;
+    let active = b.active_id(opp);
+    b.sides[opp].roster.iter().enumerate().any(|(slot, p)| {
+        let id = PokeId {
+            side: opp as u8,
+            slot: slot as u8,
+        };
+        Some(id) != active
+            && (p.previously_switched_in > 0 || p.is_active)
+            && !p.fainted
+            && p.hp > 0
+            && p.status == Status::Slp
+    })
+}
+
+fn has_harmless_status_wait_move(b: &Battle, dex: &Dex, side: usize) -> bool {
+    use nc2000_engine::dex::Category;
+    b.clone().legal_choices(dex, side).into_iter().any(|choice| {
+        let SearchChoice::Move(id) = choice else {
+            return false;
+        };
+        let ms = dex.move_static(id);
+        let key = dex.moves.key(id);
+        ms.category == Category::Status
+            && ms.status.as_deref() != Some("slp")
+            && ms.self_switch.is_none()
+            && !ms.selfdestruct
+            && !matches!(
+                key,
+                "bellydrum"
+                    | "substitute"
+                    | "curse"
+                    | "painsplit"
+                    | "metronome"
+                    | "mirrormove"
+                    | "sleeptalk"
+                    | "sketch"
+            )
+    })
+}
+
+fn public_self_ko_reason(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    c: SearchChoice,
+    rules: MaskRules,
+) -> Option<&'static str> {
+    use nc2000_engine::state::Status;
+    if !certain_self_loss(b, dex, side, c) {
+        return None;
+    }
+    let SearchChoice::Move(id) = c else {
+        return None;
+    };
+    let att = b.active_id(side)?;
+    if matches!(b.poke(att).status, Status::Slp | Status::Frz) {
+        return None;
+    }
+    if wait_exempt(b, dex, side, rules) {
+        let my_prio = dex.move_static(id).priority;
+        let has_same_prio_alt = b.clone().legal_choices(dex, side).into_iter().any(|other| {
+            let SearchChoice::Move(oid) = other else {
+                return false;
+            };
+            let oms = dex.move_static(oid);
+            oid != id && !oms.selfdestruct && !oms.sleep_usable && oms.priority == my_prio
+        });
+        if !has_same_prio_alt && !has_harmless_status_wait_move(b, dex, side) {
+            return None;
+        }
+    }
+    Some("self-KO with the last mon")
+}
+
+fn public_sleep_forfeit_reason(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    c: SearchChoice,
+    rules: MaskRules,
+) -> Option<&'static str> {
+    use nc2000_engine::state::Status;
+    let SearchChoice::Move(id) = c else {
+        return None;
+    };
+    let ms = dex.move_static(id);
+    let foe_targeted = matches!(ms.target, "normal" | "allAdjacentFoes" | "allAdjacent");
+    if ms.status.as_deref() != Some("slp") || !foe_targeted {
+        return None;
+    }
+    let sleep_clause_active = dex
+        .conds_id("stadiumsleepclause")
+        .is_some_and(|cid| b.field.pseudo_weather.iter().any(|&(c, _)| c == cid));
+    if !sleep_clause_active || !appeared_living_foe_bench_asleep(b, side) {
+        return None;
+    }
+    if dex
+        .conds_id("safeguard")
+        .is_some_and(|cid| b.sides[1 - side].has_side_condition(cid))
+    {
+        return None;
+    }
+    let foe_here = b.active_id(1 - side).filter(|&d| {
+        let p = b.poke(d);
+        !p.fainted && p.hp > 0
+    });
+    let foe_no_healbell = foe_here.is_some_and(|f| {
+        b.poke(f).status == Status::Frz
+            || !foe_learnset_any(
+                b,
+                dex,
+                f,
+                &["healbell", "metronome", "mirrormove", "sketch", "transform"],
+            )
+    });
+    if !foe_no_healbell {
+        return None;
+    }
+    if wait_exempt(b, dex, side, rules) && !has_harmless_status_wait_move(b, dex, side) {
+        return None;
+    }
+    Some("inflicting sleep would forfeit under Sleep Clause")
 }
 
 fn raw_public_noop_reason(
@@ -634,6 +773,12 @@ pub(crate) fn public_noop_reason(
     c: SearchChoice,
     rules: MaskRules,
 ) -> Option<&'static str> {
+    if let Some(why) = public_self_ko_reason(b, dex, side, c, rules) {
+        return Some(why);
+    }
+    if let Some(why) = public_sleep_forfeit_reason(b, dex, side, c, rules) {
+        return Some(why);
+    }
     if wait_exempt(b, dex, side, rules) {
         return None;
     }
@@ -700,19 +845,12 @@ fn noop_reason(
     }
     let foe_may_raise_hp = || {
         b.active_id(1 - side).is_some_and(|f| {
-            let fp = b.poke(f);
-            fp.transformed
-                || fp.move_slots.iter().any(|slot| !slot.shared)
-                || crate::belief::format_learnsets()
-                    .species(dex.species.key(fp.species))
-                    .map_or(true, |ls| {
-                        ls.moves.iter().any(|m| {
-                            matches!(
-                                m.as_str(),
-                                "painsplit" | "present" | "metronome" | "mirrormove" | "sketch"
-                            )
-                        })
-                    })
+            foe_learnset_any(
+                b,
+                dex,
+                f,
+                &["painsplit", "present", "metronome", "mirrormove", "sketch"],
+            )
         })
     };
     if rules.extended_noops && key == "bellydrum" {
@@ -724,7 +862,8 @@ fn noop_reason(
         };
         let hp_too_low_strict = (me.hp as f64) <= (me.maxhp as f64) / 2.0
             && (faster_than_foe(b, dex, side)
-                || (!foe_may_raise_hp()
+                || (!has_heal_berry(dex, me)
+                    && !foe_may_raise_hp()
                     && ((me.hp + max_leftovers_gain) as f64) <= (me.maxhp as f64) / 2.0));
         let atk_capped_strict = me.boosts[0] >= 6 && faster_than_foe(b, dex, side);
         if hp_too_low_strict || atk_capped_strict {
@@ -885,9 +1024,7 @@ fn noop_reason(
         let up = dex
             .conds_id("substitute")
             .is_some_and(|sid| me.has_volatile(sid));
-        let me_has_heal_berry = me
-            .item
-            .is_some_and(|id| matches!(dex.items.key(id), "berry" | "goldberry"));
+        let me_has_heal_berry = has_heal_berry(dex, me);
         let no_hp = (me.hp <= me.maxhp / 4 || me.maxhp == 1)
             && (faster_than_foe(b, dex, side)
                 || (!me_has_heal_berry && !foe_may_raise_hp()));

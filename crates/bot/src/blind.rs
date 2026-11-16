@@ -2289,6 +2289,11 @@ impl BlindSearch {
         &self.my_dominated_reasons
     }
 
+    /// Optional root-action legality/pruning mask aligned with `actions()`.
+    pub fn mask(&self) -> Option<&[bool]> {
+        self.my_mask.as_deref()
+    }
+
     /// Per-action mean rewards (own perspective — `my_w` is accumulated
     /// from this side's view), 0.5 when unvisited.
     pub fn means(&self) -> Vec<f64> {
@@ -2517,6 +2522,7 @@ impl BlindSearch {
                     eff_n[a]
                         .cmp(&eff_n[b])
                         .then_with(|| self.my_w[a].total_cmp(&self.my_w[b]))
+                        .then_with(|| b.cmp(&a))
                 })
                 .map(|i| self.my_acts[i]);
         }

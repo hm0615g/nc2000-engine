@@ -2930,18 +2930,7 @@ impl ProtocolAgent {
             return Some(best);
         }
         self.projections += 1;
-        let acts = search.actions();
-        let visits = search.visits();
-        let means = search.means();
-        let fallback = acts
-            .iter()
-            .enumerate()
-            .filter_map(|(i, &act)| {
-                let inp = ps_input(dex, act);
-                legal.contains(&inp).then_some((visits[i], means[i], inp))
-            })
-            .max_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.total_cmp(&b.1)))
-            .map(|(_, _, inp)| inp);
+        let fallback = projected_legal_fallback(search, dex, &legal);
         Some(fallback.unwrap_or_else(|| legal[0].clone()))
     }
 
@@ -2980,19 +2969,8 @@ impl ProtocolAgent {
             )
             .ok();
         }
-        let acts = search.actions();
-        let visits = search.visits();
-        let means = search.means();
-        let target = acts
-            .iter()
-            .enumerate()
-            .filter_map(|(i, &act)| {
-                let inp = ps_input(dex, act);
-                legal.contains(&inp).then_some((visits[i], means[i], inp))
-            })
-            .max_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.total_cmp(&b.1)))
-            .map(|(_, _, inp)| inp)
-            .unwrap_or_else(|| legal[0].clone());
+        let target =
+            projected_legal_fallback(search, dex, &legal).unwrap_or_else(|| legal[0].clone());
         Some(DecisionPolicy::pure("request-projected", target))
     }
 
@@ -3046,6 +3024,48 @@ impl ProtocolAgent {
         })
         .to_string()
     }
+}
+
+/// Pick the highest-visit (then mean, then lowest-index) request-legal
+/// action from `search`, preferring non-dominated/mask-eligible actions when
+/// any request-legal action is eligible.
+fn projected_legal_fallback(search: &BlindSearch, dex: &Dex, legal: &[String]) -> Option<String> {
+    let acts = search.actions();
+    let visits = search.visits();
+    let means = search.means();
+    let dominated = search.dominated();
+    let mask = search.mask();
+    let is_mask_allowed = |i: usize| mask.map_or(true, |m| m[i]);
+    let legal_acts: Vec<(usize, String)> = acts
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &act)| {
+            let inp = ps_input(dex, act);
+            legal.contains(&inp).then_some((i, inp))
+        })
+        .collect();
+    let has_eligible = legal_acts
+        .iter()
+        .any(|&(i, _)| is_mask_allowed(i) && !dominated[i]);
+    let has_masked = !has_eligible && legal_acts.iter().any(|&(i, _)| is_mask_allowed(i));
+    legal_acts
+        .into_iter()
+        .filter(|&(i, _)| {
+            if has_eligible {
+                is_mask_allowed(i) && !dominated[i]
+            } else if has_masked {
+                is_mask_allowed(i)
+            } else {
+                true
+            }
+        })
+        .max_by(|a, b| {
+            visits[a.0]
+                .cmp(&visits[b.0])
+                .then_with(|| means[a.0].total_cmp(&means[b.0]))
+                .then_with(|| b.0.cmp(&a.0))
+        })
+        .map(|(_, inp)| inp)
 }
 
 /// PS-canonical choice string: PS normalizes typed hidden powers to the

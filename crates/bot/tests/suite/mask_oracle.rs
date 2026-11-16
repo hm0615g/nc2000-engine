@@ -203,9 +203,17 @@ fn verify_public_mask_against_engine_oracle(
                         joint[side] = Some(choice);
                         joint[1 - side] = Some(opp_choice);
                         trial.apply_choices(dex, joint).unwrap();
+                        let chose_move_tag = match choice {
+                            SearchChoice::Move(mid) => Some(format!("|{}", dex.moves.get(mid).name)),
+                            _ => None,
+                        };
+                        let slice = own_move_slice(&trial.log, side);
+                        let chosen_move_ran = match &chose_move_tag {
+                            Some(tag) => slice.first().is_some_and(|l| l.contains(tag)),
+                            None => !slice.is_empty(),
+                        };
                         if is_forfeit_or_self_ko {
-                            let slice = own_move_slice(&trial.log, side);
-                            let executed_cleanly = !slice.is_empty()
+                            let executed_cleanly = chosen_move_ran
                                 && !slice.iter().any(|l| {
                                     l.starts_with("|-miss|")
                                         || l.starts_with("|-fail|")
@@ -221,8 +229,7 @@ fn verify_public_mask_against_engine_oracle(
                                     trial.log
                                 );
                             }
-                        } else {
-                            let slice = own_move_slice(&trial.log, side);
+                        } else if chosen_move_ran {
                             assert!(
                                 !move_slice_had_engine_effect(slice, side),
                                 "public no-op mask `{reason}` falsely excluded live move {:?} vs {:?} (world {w_idx}, seed {seed}): {:?}",
@@ -671,4 +678,170 @@ fn all_blind_entrypoints_prune_public_dominated_actions_before_ucb_and_compose_w
             assert!((row["mix"].as_f64().unwrap() - 1.0).abs() < 1e-9);
         }
     }
+}
+
+#[test]
+fn public_self_ko_and_sleep_clause_masks_hold_under_oracle_and_wait_traps() {
+    let dex = conformance::load_dex();
+    let pool = load_belief_pool();
+
+    // 1. Last-mon Explosion is masked publicly and in analysis::report.
+    {
+        let own = vec![mk_set("Alakazam", "Leftovers", &["Recover", "Psychic", "Explosion"], 50)];
+        let foe = vec![mk_set("Snorlax", "Leftovers", &["Body Slam", "Earthquake"], 50)];
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &own, &foe).unwrap();
+        b.set_log_enabled(true);
+        b.choose(&dex, 0, "team 1").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        verify_public_mask_against_engine_oracle(&dex, &pool, &b, 2001);
+        let dom = public_dominated_actions(&b, &dex, 0);
+        let exp = SearchChoice::Move(dex.moves.id("explosion").unwrap());
+        assert_eq!(dom, vec![(exp, "self-KO with the last mon")]);
+    }
+
+    // 2. Adversarial self-KO stall traps (foe has bench mon so Destiny Bond succeeds!):
+    //    (a) `[Quick Attack, Self-Destruct]` vs faster Destiny Bond Smeargle with Spore.
+    //    (b) Sleeping `[Sleep Talk, Self-Destruct]` vs Destiny Bond Wobbuffet.
+    //    (c) 1v1 `[Quick Attack, Self-Destruct]` vs Encore Smeargle (Destiny Bond fails on last mon).
+    {
+        let own_qa = vec![mk_set("Snorlax", "Leftovers", &["Quick Attack", "Self-Destruct"], 50)];
+        let foe_sm_1v1 = vec![mk_set("Smeargle", "Leftovers", &["Destiny Bond", "Spore", "Encore"], 55)];
+        let mut b1 = Battle::from_fixture(&dex, "1,2,3,4", &own_qa, &foe_sm_1v1).unwrap();
+        b1.set_log_enabled(true);
+        b1.choose(&dex, 0, "team 1").unwrap();
+        b1.choose(&dex, 1, "team 1").unwrap();
+        b1.choose(&dex, 0, "move quickattack").unwrap();
+        b1.choose(&dex, 1, "move destinybond").unwrap();
+        verify_public_mask_against_engine_oracle(&dex, &pool, &b1, 2002);
+
+        let foe_sm_1v2 = vec![
+            mk_set("Smeargle", "Leftovers", &["Destiny Bond", "Spore", "Splash"], 55),
+            mk_set("Snorlax", "Leftovers", &["Splash"], 50),
+        ];
+        let mut b2 = Battle::from_fixture(&dex, "1,2,3,4", &own_qa, &foe_sm_1v2).unwrap();
+        b2.set_log_enabled(true);
+        b2.choose(&dex, 0, "team 1").unwrap();
+        b2.choose(&dex, 1, "team 1,2").unwrap();
+        b2.choose(&dex, 0, "move quickattack").unwrap();
+        b2.choose(&dex, 1, "move destinybond").unwrap();
+        b2.poke_mut(b2.active_id(1).unwrap()).hp = 1;
+        verify_public_mask_against_engine_oracle(&dex, &pool, &b2, 2003);
+        assert!(public_dominated_actions(&b2, &dex, 0).is_empty());
+
+        let own_slp = vec![mk_set("Snorlax", "Leftovers", &["Sleep Talk", "Self-Destruct", "Rest"], 50)];
+        let foe_wobb = vec![
+            mk_set("Wobbuffet", "Leftovers", &["Destiny Bond", "Splash"], 50),
+            mk_set("Snorlax", "Leftovers", &["Splash"], 50),
+        ];
+        let mut b3 = Battle::from_fixture(&dex, "1,2,3,4", &own_slp, &foe_wobb).unwrap();
+        b3.set_log_enabled(true);
+        b3.choose(&dex, 0, "team 1").unwrap();
+        b3.choose(&dex, 1, "team 1,2").unwrap();
+        b3.poke_mut(b3.active_id(0).unwrap()).hp = 50;
+        b3.choose(&dex, 0, "move rest").unwrap();
+        b3.choose(&dex, 1, "move destinybond").unwrap();
+        b3.poke_mut(b3.active_id(1).unwrap()).hp = 1;
+        verify_public_mask_against_engine_oracle(&dex, &pool, &b3, 2004);
+    }
+
+    // 3. Public Sleep Clause forfeit masked even under `residual_damage_wait` when a harmless
+    //    status wait move (`Toxic` / `Splash`) exists, and non-starving when none exists (`Mirror Coat`).
+    {
+        let jynx = vec![mk_set("Jynx", "Leftovers", &["Lovely Kiss", "Psychic", "Toxic", "Splash"], 50)];
+        let foe = vec![
+            mk_set("Snorlax", "Leftovers", &["Rest", "Body Slam"], 50),
+            mk_set("Wobbuffet", "Leftovers", &["Destiny Bond", "Safeguard", "Counter", "Mirror Coat"], 50),
+            mk_set("Zapdos", "Leftovers", &["Thunderbolt", "Drill Peck"], 50),
+        ];
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &jynx, &foe).unwrap();
+        b.set_log_enabled(true);
+        b.choose(&dex, 0, "team 1").unwrap();
+        b.choose(&dex, 1, "team 1,2,3").unwrap();
+        b.choose(&dex, 0, "move psychic").unwrap();
+        b.choose(&dex, 1, "move rest").unwrap();
+        b.choose(&dex, 0, "move toxic").unwrap();
+        b.choose(&dex, 1, "switch 2").unwrap();
+        verify_public_mask_against_engine_oracle(&dex, &pool, &b, 2004);
+
+        let lk = SearchChoice::Move(dex.moves.id("lovelykiss").unwrap());
+        let dom = public_dominated_actions(&b, &dex, 0);
+        assert_eq!(dom, vec![(lk, "inflicting sleep would forfeit under Sleep Clause")]);
+
+        // Without any harmless status move (`[Psychic, Lovely Kiss]` at 10 HP vs Tox Mirror Coat Wobbuffet),
+        // `Lovely Kiss` must stay unmasked so Jynx is never starved into Mirror Coat KO.
+        let jynx_2mv = vec![mk_set("Jynx", "Leftovers", &["Lovely Kiss", "Psychic"], 50)];
+        let mut b_mc = Battle::from_fixture(&dex, "1,2,3,4", &jynx_2mv, &foe[..2]).unwrap();
+        b_mc.set_log_enabled(true);
+        b_mc.choose(&dex, 0, "team 1").unwrap();
+        b_mc.choose(&dex, 1, "team 1,2").unwrap();
+        b_mc.choose(&dex, 0, "move psychic").unwrap();
+        b_mc.choose(&dex, 1, "move rest").unwrap();
+        b_mc.choose(&dex, 0, "move lovelykiss").unwrap();
+        b_mc.choose(&dex, 1, "switch 2").unwrap();
+        let wobb_id = b_mc.active_id(1).unwrap();
+        b_mc.set_status(&dex, wobb_id, "tox", b_mc.active_id(0), nc2000_engine::battle::EffectHandle::None, true);
+        b_mc.poke_mut(b_mc.active_id(0).unwrap()).hp = 10;
+        verify_public_mask_against_engine_oracle(&dex, &pool, &b_mc, 2005);
+        assert!(public_dominated_actions(&b_mc, &dex, 0).is_empty());
+    }
+}
+
+#[test]
+fn flat_tiebreaks_prefer_moves_before_switches_and_projection_skips_dominated() {
+    let dex = conformance::load_dex();
+    let own = vec![
+        mk_set("Gengar", "Leftovers", &["Perish Song", "Destiny Bond", "Thunderbolt", "Ice Punch"], 50),
+        mk_set("Snorlax", "Leftovers", &["Body Slam", "Earthquake"], 50),
+    ];
+    let foe = vec![mk_set("Starmie", "Leftovers", &["Surf", "Recover"], 50)];
+    let mut b = Battle::from_fixture(&dex, "1,2,3,4", &own, &foe).unwrap();
+    b.choose(&dex, 0, "team 1,2").unwrap();
+    b.choose(&dex, 1, "team 1").unwrap();
+
+    // 0-visit flat tie in `BlindSearch` breaks toward index 0 (`Move`), never `Switch(2)`.
+    let pool = MetaPool {
+        teams: vec![MetaTeam {
+            id: "starmie".into(),
+            sets: foe.clone(),
+            weight: Some(1.0),
+        }],
+    };
+    let (local, obs) = LocalPlayer::new(&b, &dex, 0).unwrap();
+    let mut bel = Belief::new(&dex, &pool, &obs);
+    bel.sync(&dex, &obs);
+    let pos = local.position(&dex, &mut bel, &obs, &mut SplitMix64::new(11)).unwrap();
+    let unstepped = BlindSearch::from_observation(&pos, &dex, RmConfig::default(), 0, 42);
+    assert_eq!(unstepped.best(), Some(unstepped.actions()[0]));
+
+    // Last-mon Gengar where `own_sets` has `["Thunderbolt", "Ice Punch", "Perish Song", "Destiny Bond"]`
+    // (`Perish Song` and `Destiny Bond` are at the end and publicly dominated), while the PS request
+    // reports `"thunder"` instead of `"thunderbolt"` so `search.best()` (`move thunderbolt`) triggers
+    // `ProtocolAgent`'s request-legal projection (`agent.projections == 1`). Projection must skip
+    // dominated `Perish Song` / `Destiny Bond` (which old `max_by` picked last!) and choose `move icepunch`.
+    let gengar_order = vec![mk_set(
+        "Gengar",
+        "Leftovers",
+        &["Thunderbolt", "Ice Punch", "Perish Song", "Destiny Bond"],
+        50,
+    )];
+    let mut b_last = Battle::from_fixture(&dex, "1,2,3,4", &gengar_order, &foe).unwrap();
+    b_last.choose(&dex, 0, "team 1").unwrap();
+    b_last.choose(&dex, 1, "team 1").unwrap();
+    let mut ch = PlayerChannel::new(0);
+    let mut frame = ch.frame(&mut b_last, &dex).unwrap();
+    let moves = frame.request["active"][0]["moves"].as_array_mut().unwrap();
+    for m in moves.iter_mut() {
+        if m["id"] == "thunderbolt" {
+            m["id"] = serde_json::json!("thunder");
+            m["move"] = serde_json::json!("Thunder");
+        }
+    }
+    let mut agent = ProtocolAgent::new(&dex, 0, pool, RmConfig::default(), 42);
+    agent.set_own_team(gengar_order);
+    for line in &frame.lines {
+        agent.push_line(&dex, line);
+    }
+    agent.on_request(&dex, &frame.request.to_string()).unwrap();
+    assert_eq!(agent.best(&dex).as_deref(), Some("move icepunch"));
+    assert_eq!(agent.projections, 1);
 }
