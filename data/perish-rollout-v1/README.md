@@ -1,11 +1,12 @@
 # Perish rollout rules: the combo inside the search's own playouts
 
-**Status: SHIPPED.** `RmConfig::rollout_combo` defaults to ON, so every
-search entry point uses it: the Web game (`open`), the Showdown ladder client
-(`ProtocolSearcher`), the party evaluator (`?evaluate`, blind) and native
-`BlindAgent` / `OpenAgent` / `RmAgent`. In arena, census and gauntlet specs
-the shipped rules are the default; `-perish_combo` is the pre-change bot and
-`perish_escape` runs the escape alone.
+**Status: SHIPPED.** `RmConfig::rollout_combo` defaults to ON across every
+search entry point: Web blind/Nash play, the Showdown ladder client
+(`ProtocolSearcher`), the party evaluator (`?evaluate`), and native
+`BlindAgent` / `OpenAgent` / `RmAgent`. (Historical gate runs below were
+recorded in the earlier `open:3000`/`open:10000` harness before `open` play was
+retired; in arena, census, and gauntlet specs `-perish_combo` disables the
+shipped rules and `perish_escape` runs the escape alone.)
 
 Every measurement below was taken before the default flipped. There, arm A
 was spelled `…:perish_combo` and the plain spec (arm B) was the pre-change

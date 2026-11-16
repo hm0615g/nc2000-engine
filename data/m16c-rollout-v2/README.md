@@ -2,7 +2,9 @@
 
 **Status: NOT SHIPPED; stays parked.** `RmConfig::rollout_status` and
 `RmConfig::rollout_switch` (formerly the single `rollout_m16c`) stay off by
-default.
+default. (Historical CRN arena runs below were recorded in the `open` harness;
+see [`docs/BOT-STRENGTH-HANDOFF.md`](../../docs/BOT-STRENGTH-HANDOFF.md) §2 for
+current `81k` blind context.)
 
 ## Question
 

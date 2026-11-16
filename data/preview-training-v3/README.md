@@ -55,10 +55,9 @@ Regenerating training products preserves these fresh tables byte for byte.
 
 ## Verification
 
-The original full-bake `production-verification.json` exercised the bundled
-production worker. Updated worker identity and timings after the boundary
-repair are in [the repair verification](../blind-boundary-repair-v1/production-verification.json).
-Both checks cover:
+The `production-verification.json` check exercises the bundled production
+worker (`data/blind-boundary-repair-v1/production-verification.json` also
+retains the initial post-boundary-repair snapshot). Both checks cover:
 all **1,089 ordered catalog pairs, both sides (2,178 cases)** return `src=table`
 and zero search iterations, with no search progress messages. Local lookup
 latency is median **1.1 ms**, p95 **1.5 ms**; battle initialization plus lookup

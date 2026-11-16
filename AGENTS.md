@@ -17,5 +17,5 @@
 
 ## 3. Research & Strength Roadmap
 
-- Off-pool belief inference & zero-drift search diagnostics: see [`docs/SEARCH-AND-BELIEF-HANDOFF.md`](docs/SEARCH-AND-BELIEF-HANDOFF.md).
-- Midgame continuation bottlenecks & battle-log audit at `81k`: see [`docs/BOT-STRENGTH-LOG-AUDIT-HANDOFF.md`](docs/BOT-STRENGTH-LOG-AUDIT-HANDOFF.md).
+- Playing-strength architecture, measured-null dead ends, and open `81k` frontiers: see [`docs/BOT-STRENGTH-HANDOFF.md`](docs/BOT-STRENGTH-HANDOFF.md).
+- Do NOT consult gitignored local scratch/archive directories (`findings/`, `tmp/`, `.git/sota/`) for current architecture or open bottlenecks; verify claims directly against [`docs/BOT-STRENGTH-HANDOFF.md`](docs/BOT-STRENGTH-HANDOFF.md) and live code under `crates/`.
