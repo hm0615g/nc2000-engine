@@ -13,6 +13,7 @@ mod fork;
 mod hidden_pick_legality;
 mod hidden_power_damage;
 mod import;
+mod mask_oracle;
 mod mask_sleep_talk;
 mod own_recovery_wait;
 mod perish_deadline;

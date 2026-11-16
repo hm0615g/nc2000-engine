@@ -2458,57 +2458,31 @@ impl BlindSearch {
                     }
                 })
                 .collect();
-            if self.cfg.endgame_rules.decision_any() {
-                if let Some(info) = self.endgame.analyze(
-                    self.cfg.endgame_rules,
-                    &self.my_acts,
-                    &self.my_n,
-                    &eff_n,
-                    &self.my_w,
-                    eligible,
-                    |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
-                ) {
-                    if matches!(
-                        info.regime,
-                        crate::smmcts::EndgameRegime::FastWin
-                            | crate::smmcts::EndgameRegime::SafeWin
-                            | crate::smmcts::EndgameRegime::ComebackLoss
-                    ) {
-                        return Some(self.my_acts[info.chosen_idx]);
-                    }
-                }
-            }
-            let base_idx = if self.cfg.endgame_rules.decision_any() {
-                self.endgame.select_best(
-                    self.cfg.endgame_rules,
-                    &self.my_acts,
-                    &self.my_n,
-                    &eff_n,
-                    &self.my_w,
-                    eligible,
-                    |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
-                )?
-            } else {
-                (0..self.my_acts.len())
-                    .filter(|&i| eligible(i))
-                    .max_by(|&a, &b| {
-                        crate::smmcts::cmp_visits_then_mean(&eff_n, &self.my_n, &self.my_w, a, b)
-                    })?
-            };
-            if !self.nodes.is_empty() && self.done >= 64 {
-                if let Some(eq) = self.bayesian_equilibrium() {
-                    if eq.override_value
-                        > eq.pure_guarantees[base_idx] + crate::root_policy::MIN_MIX_MARGIN
-                    {
-                        let draw =
-                            SplitMix64::new(self.decision_seed ^ u64::from(self.done)).next_f64();
-                        if let Some(choice) = draw_policy(&self.my_acts, &eq.policy, draw) {
-                            return Some(choice);
+            return crate::endgame_root::select_blind_root_choice(
+                &self.endgame,
+                self.cfg.endgame_rules,
+                &self.my_acts,
+                &self.my_n,
+                &eff_n,
+                &self.my_w,
+                eligible,
+                |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
+                |base_idx| {
+                    if !self.nodes.is_empty() && self.done >= 64 {
+                        if let Some(eq) = self.bayesian_equilibrium() {
+                            if eq.override_value
+                                > eq.pure_guarantees[base_idx] + crate::root_policy::MIN_MIX_MARGIN
+                            {
+                                let draw =
+                                    SplitMix64::new(self.decision_seed ^ u64::from(self.done))
+                                        .next_f64();
+                                return draw_policy(&self.my_acts, &eq.policy, draw);
+                            }
                         }
                     }
-                }
-            }
-            return Some(self.my_acts[base_idx]);
+                    None
+                },
+            );
         }
         if self.is_preview() {
             return (0..self.my_acts.len())
