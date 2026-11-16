@@ -4145,6 +4145,7 @@ impl Belief {
         })
     }
 
+    #[cfg(test)]
     fn fallback_set(&self, dex: &Dex, mo: &MonObs) -> PokemonSet {
         self.fallback_set_at(dex, mo, 0, std::slice::from_ref(mo))
     }

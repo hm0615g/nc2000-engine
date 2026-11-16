@@ -3,10 +3,9 @@
 
 use nc2000_engine::battle::SearchChoice;
 use nc2000_engine::dex::Dex;
-use nc2000_engine::state::{Battle, PokeId};
+use nc2000_engine::state::Battle;
 
-use crate::eval::type_immune_to;
-use crate::mask::effective_move_type;
+use crate::mask::foe_blocks_status_or_volatile;
 
 /// Optional root decision & early-stop rules for won, near-won, and lost positions.
 ///
@@ -738,66 +737,6 @@ pub fn reply_risk_and_mistake_ev(
 }
 
 
-fn foe_status_or_volatile_blocked(
-    b: &Battle,
-    dex: &Dex,
-    side: usize,
-    att: PokeId,
-    def: PokeId,
-    key: &str,
-    ms: &nc2000_engine::dex::MoveStatic,
-) -> bool {
-    use nc2000_engine::state::Status;
-    let me = b.poke(att);
-    let foe = b.poke(def);
-    let foe_targeted = matches!(ms.target, "normal" | "allAdjacentFoes" | "allAdjacent");
-    let foe_directed = foe_targeted && !(key == "curse" && !me.has_type(dex.known_types.ghost));
-    if !foe_directed {
-        return false;
-    }
-    let move_type = effective_move_type(b, dex, att, key, ms);
-    if !ms.ignore_immunity
-        && move_type != dex.known_types.unknown
-        && type_immune_to(b, dex, move_type, def)
-    {
-        return true;
-    }
-    let sub_up = dex
-        .conds_id("substitute")
-        .is_some_and(|sid| foe.has_volatile(sid));
-    if sub_up && key != "swagger" {
-        return true;
-    }
-    let safeguard = dex
-        .conds_id("safeguard")
-        .is_some_and(|cid| b.sides[1 - side].has_side_condition(cid));
-    if safeguard
-        && (ms.status.is_some()
-            || (ms.volatile_status.as_deref() == Some("confusion") && key != "swagger"))
-    {
-        return true;
-    }
-    if let Some(st) = ms.status.as_deref() {
-        let check = if st == "tox" { "psn" } else { st };
-        if foe.status != Status::None
-            || foe.types.iter().any(|t| dex.status_key_immune(check, t))
-        {
-            return true;
-        }
-    }
-    if let Some(v) = ms.volatile_status.as_deref() {
-        let pure_volatile =
-            !ms.has_boosts && ms.status.is_none() && ms.heal.is_none() && ms.damage.is_none();
-        if (pure_volatile && dex.conds_id(v).is_some_and(|vid| foe.has_volatile(vid)))
-            || (key == "leechseed" && foe.has_type(dex.known_types.grass))
-            || (key == "nightmare" && foe.status != Status::Slp)
-        {
-            return true;
-        }
-    }
-    false
-}
-
 /// Static desperation tie-breaker in `[0, 1]` used when a losing root is flat zero.
 pub fn tactical_desperation_bonus(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> f64 {
     use nc2000_engine::state::Status;
@@ -830,7 +769,7 @@ pub fn tactical_desperation_bonus(b: &Battle, dex: &Dex, side: usize, c: SearchC
                 bonus += 0.20;
             }
             if (ms.status.is_some() || ms.volatile_status.is_some())
-                && !foe_status_or_volatile_blocked(b, dex, side, att, def, key, ms)
+                && !foe_blocks_status_or_volatile(b, dex, side, att, def, key, ms)
             {
                 bonus += 0.25;
             }
@@ -1004,6 +943,27 @@ mod tests {
         assert_eq!(
             super::tactical_desperation_bonus(&b_sg, &dex, 0, mv(&dex, "swagger")),
             0.45
+        );
+
+        // Under Substitute, blocked status/confusion/Leech Seed drop to 0.0 while
+        // Gen 2 Substitute-bypassing Encore and Disable keep +0.25.
+        let mut b_sub = b.clone();
+        b_sub.add_volatile(&dex, def, "substitute", Some(def), EffectHandle::None);
+        assert_eq!(
+            super::tactical_desperation_bonus(&b_sub, &dex, 0, mv(&dex, "confuseray")),
+            0.0
+        );
+        assert_eq!(
+            super::tactical_desperation_bonus(&b_sub, &dex, 0, mv(&dex, "leechseed")),
+            0.0
+        );
+        assert_eq!(
+            super::tactical_desperation_bonus(&b_sub, &dex, 0, mv(&dex, "encore")),
+            0.25
+        );
+        assert_eq!(
+            super::tactical_desperation_bonus(&b_sub, &dex, 0, mv(&dex, "disable")),
+            0.25
         );
 
         // Switch bonus ceiling is 0.25 and Spikes penalizes grounded Snorlax (and returns 0.0 on lethal).

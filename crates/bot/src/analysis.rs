@@ -220,14 +220,8 @@ pub fn report(agent: &ProtocolAgent, dex: &Dex, line_plies: usize, line_seed: u6
     let visits = search.visits();
     let means = search.means();
     let dominated = search.dominated();
+    let reasons = search.dominated_reasons();
     let total: u32 = visits.iter().sum();
-    let reasons: Vec<(SearchChoice, &'static str)> = battle
-        .map(|b| {
-            let mut bb = b.clone();
-            bb.set_log_enabled(false);
-            crate::smmcts::dominated_actions(&bb, dex, side)
-        })
-        .unwrap_or_default();
 
     let mut order: Vec<usize> = (0..acts.len()).collect();
     order.sort_by_key(|&i| std::cmp::Reverse(visits[i]));
@@ -258,10 +252,7 @@ pub fn report(agent: &ProtocolAgent, dex: &Dex, line_plies: usize, line_seed: u6
             row["worst"] = json!(m.worst.get(rank).copied().flatten());
             row["mix"] = json!(m.mix_mine.get(rank).copied());
             row["dominated"] = json!(dominated.get(i).copied().unwrap_or(false));
-            row["reason"] = json!(reasons
-                .iter()
-                .find(|(c, _)| *c == acts[i])
-                .map(|(_, why)| *why));
+            row["reason"] = json!(reasons.get(i).copied().flatten());
             row
         })
         .collect();

@@ -68,7 +68,7 @@ use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::state::Battle;
 
 use crate::agent::Agent;
-use crate::mcts::{outcome_reward, playout_value, Playout, RolloutRules};
+use crate::mcts::{outcome_reward, Playout, RolloutRules};
 use crate::rng::SplitMix64;
 
 pub use crate::endgame_root::{
@@ -77,7 +77,7 @@ pub use crate::endgame_root::{
 };
 pub(crate) use crate::endgame_root::cmp_visits_then_mean;
 pub use crate::mask::{dominated_actions, dominated_actions_with, MaskRules};
-pub(crate) use crate::mask::{certain_self_loss, dominated_reason, public_noop_reason};
+pub(crate) use crate::mask::{dominated_reason, public_noop_reason};
 
 /// Selection rule for the root decision.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -566,25 +566,6 @@ pub(crate) fn select_ucb_counts(
 /// Returns the iteration's side-0 reward and writes the root joint's action
 /// indices into `root_joint`.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_iteration(
-    cfg: &RmConfig,
-    rng: &mut SplitMix64,
-    nodes: &mut Vec<Node>,
-    table: &mut FxHashMap<u64, usize>,
-    sim: &mut Battle,
-    dex: &Dex,
-    turn_cap: u16,
-    start: usize,
-    force_root: [Option<usize>; 2],
-    root_joint: &mut [usize; 2],
-    depth_out: &mut u32,
-) -> f64 {
-    run_iteration_cached(
-        cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root, root_joint, depth_out, None,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn run_iteration_cached(
     cfg: &RmConfig,
     rng: &mut SplitMix64,
@@ -619,28 +600,6 @@ pub(crate) fn run_iteration_cached(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn run_iteration_with_leaf(
-    cfg: &RmConfig,
-    rng: &mut SplitMix64,
-    nodes: &mut Vec<Node>,
-    table: &mut FxHashMap<u64, usize>,
-    sim: &mut Battle,
-    dex: &Dex,
-    turn_cap: u16,
-    start: usize,
-    force_root: [Option<usize>; 2],
-    root_joint: &mut [usize; 2],
-    depth_out: &mut u32,
-    leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
-    trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
-) -> f64 {
-    run_iteration_with_root_child_value_cached(
-        cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root, root_joint, depth_out, leaf,
-        trace, None, None,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn run_iteration_with_leaf_cached(
     cfg: &RmConfig,
     rng: &mut SplitMix64,
@@ -660,42 +619,6 @@ pub(crate) fn run_iteration_with_leaf_cached(
     run_iteration_with_root_child_value_cached(
         cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root, root_joint, depth_out, leaf,
         trace, None, cache,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn run_iteration_with_root_child_value(
-    cfg: &RmConfig,
-    rng: &mut SplitMix64,
-    nodes: &mut Vec<Node>,
-    table: &mut FxHashMap<u64, usize>,
-    sim: &mut Battle,
-    dex: &Dex,
-    turn_cap: u16,
-    start: usize,
-    force_root: [Option<usize>; 2],
-    root_joint: &mut [usize; 2],
-    depth_out: &mut u32,
-    leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
-    trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
-    root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
-) -> f64 {
-    run_iteration_with_root_child_value_cached(
-        cfg,
-        rng,
-        nodes,
-        table,
-        sim,
-        dex,
-        turn_cap,
-        start,
-        force_root,
-        root_joint,
-        depth_out,
-        leaf,
-        trace,
-        root_child_value,
-        None,
     )
 }
 
@@ -874,11 +797,6 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
         });
     }
     root_reward0
-}
-
-#[inline]
-pub(crate) fn leaf_eval(cfg: &RmConfig, sim: &Battle, dex: &Dex) -> f64 {
-    leaf_eval_cached(cfg, sim, dex, None)
 }
 
 #[inline]

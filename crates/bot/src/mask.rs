@@ -8,6 +8,15 @@ use nc2000_engine::state::{Battle, PokeId};
 
 use crate::eval::type_immune_to;
 
+pub(crate) const SUB_BLOCKED_VOLATILE_MOVES: [&str; 6] = [
+    "leechseed",
+    "lockon",
+    "mindreader",
+    "nightmare",
+    "painsplit",
+    "sketch",
+];
+
 pub(crate) fn effective_move_type(
     b: &Battle,
     dex: &Dex,
@@ -24,6 +33,83 @@ pub(crate) fn effective_move_type(
     } else {
         ms.move_type
     }
+}
+
+/// Shared single-source check for whether a foe-directed status or volatile move
+/// is blocked by the current active foe's public protections/immunities
+/// (`Substitute`, `Safeguard`, type/status immunity, `Leech Seed` vs Grass,
+/// `Nightmare` vs non-sleeping target, `Attract` gender mismatch, or already-active
+/// pure volatile). Respects Gen 2 `Substitute`-bypassing moves (`Encore`, `Disable`,
+/// `Perish Song`, `Mean Look`, `Attract`, `Foresight`, `Spite`, etc.).
+pub(crate) fn foe_blocks_status_or_volatile(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    att: PokeId,
+    def: PokeId,
+    key: &str,
+    ms: &nc2000_engine::dex::MoveStatic,
+) -> bool {
+    use nc2000_engine::state::{Gender, Status};
+    let me = b.poke(att);
+    let foe = b.poke(def);
+    let foe_targeted = matches!(ms.target, "normal" | "allAdjacentFoes" | "allAdjacent");
+    let foe_directed = foe_targeted && !(key == "curse" && !me.has_type(dex.known_types.ghost));
+    if !foe_directed {
+        return false;
+    }
+    let move_type = effective_move_type(b, dex, att, key, ms);
+    if !ms.ignore_immunity
+        && move_type != dex.known_types.unknown
+        && type_immune_to(b, dex, move_type, def)
+    {
+        return true;
+    }
+    let sub_up = dex
+        .conds_id("substitute")
+        .is_some_and(|sid| foe.has_volatile(sid));
+    let safeguard = dex
+        .conds_id("safeguard")
+        .is_some_and(|cid| b.sides[1 - side].has_side_condition(cid));
+    if safeguard
+        && (ms.status.is_some()
+            || (ms.volatile_status.as_deref() == Some("confusion") && key != "swagger"))
+    {
+        return true;
+    }
+    if let Some(st) = ms.status.as_deref() {
+        let check = if st == "tox" { "psn" } else { st };
+        if sub_up
+            || foe.status != Status::None
+            || foe.types.iter().any(|t| dex.status_key_immune(check, t))
+        {
+            return true;
+        }
+    }
+    if let Some(v) = ms.volatile_status.as_deref() {
+        let pure_volatile =
+            !ms.has_boosts && ms.status.is_none() && ms.heal.is_none() && ms.damage.is_none();
+        if pure_volatile && dex.conds_id(v).is_some_and(|vid| foe.has_volatile(vid)) {
+            return true;
+        }
+        if sub_up
+            && ((v == "confusion" && key != "swagger") || SUB_BLOCKED_VOLATILE_MOVES.contains(&key))
+        {
+            return true;
+        }
+        if (key == "leechseed" && foe.has_type(dex.known_types.grass))
+            || (key == "nightmare" && foe.status != Status::Slp)
+        {
+            return true;
+        }
+        if key == "attract" && !foe.transformed {
+            let (tg, sg) = (foe.gender, me.gender);
+            if !((tg == Gender::M && sg == Gender::F) || (tg == Gender::F && sg == Gender::M)) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// A self-KO move used by the side's LAST mon is an unconditional immediate
@@ -884,15 +970,7 @@ fn noop_reason(
             }
             // moves the Substitute rejects wholesale
             // (`conditions.rs` substitute/onTryPrimaryHit SUB_BLOCKED)
-            const SUB_BLOCKED: [&str; 6] = [
-                "leechseed",
-                "lockon",
-                "mindreader",
-                "nightmare",
-                "painsplit",
-                "sketch",
-            ];
-            if sub_up && SUB_BLOCKED.contains(&key) {
+            if sub_up && SUB_BLOCKED_VOLATILE_MOVES.contains(&key) {
                 yes!("a Substitute rejects this move outright");
             }
             // Leech Seed does not take on a Grass type

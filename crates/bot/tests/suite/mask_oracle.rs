@@ -8,8 +8,9 @@
 
 use nc2000_bot::{
     mask::{dominated_actions, public_dominated_actions},
+    player::PlayerChannel,
     player_state::LocalPlayer,
-    preview::MetaPool,
+    preview::{MetaPool, MetaTeam},
     Belief, BlindSearch, MaxDamageAgent, ProtocolAgent, RmAgent, RmConfig, SkuctSearch, SplitMix64,
     Agent,
 };
@@ -439,4 +440,84 @@ fn decoupled_modules_preserve_deterministic_search_and_reexports() {
     assert_eq!(rm1.choose(&b, &dex, 0, &legal), rm2.choose(&b, &dex, 0, &legal));
 
     let _ = ProtocolAgent::new(&dex, 0, pool, cfg, 777);
+}
+
+#[test]
+fn analysis_report_dominated_reasons_never_contradict_public_mask_or_leak_imputation() {
+    let dex = conformance::load_dex();
+    let own = vec![mk_set("Starmie", "Leftovers", &["Recover", "Reflect", "Surf"], 50)];
+    let lax_lefties = mk_set("Snorlax", "Leftovers", &["Body Slam", "Splash"], 50);
+    let lax_claw = mk_set("Snorlax", "Quick Claw", &["Body Slam", "Splash"], 50);
+    let mut b = Battle::from_fixture(&dex, "1,2,3,4", &own, std::slice::from_ref(&lax_claw)).unwrap();
+    b.choose(&dex, 0, "team 1").unwrap();
+    b.choose(&dex, 1, "team 1").unwrap();
+    let mut ch = PlayerChannel::new(0);
+    let f_init = ch.frame(&mut b, &dex).unwrap();
+    // Put Reflect up while staying at full HP against Splash so `Reflect` becomes
+    // publicly dominated (`screen already up`) while `Recover` at full HP remains
+    // publicly UNMASKED (opponent item could be Quick Claw, or opponent could attack
+    // if faster/Quick Claw triggers) even though full-world `dominated_actions` on a
+    // Leftovers imputation would call `Recover` `"recover at full HP before foe"`.
+    b.choose(&dex, 0, "move reflect").unwrap();
+    b.choose(&dex, 1, "move splash").unwrap();
+    let f_turn2 = ch.frame(&mut b, &dex).unwrap();
+
+    let pool = MetaPool {
+        teams: vec![
+            MetaTeam {
+                id: "lax-lefties".into(),
+                sets: vec![lax_lefties],
+                weight: Some(0.9),
+            },
+            MetaTeam {
+                id: "lax-claw".into(),
+                sets: vec![lax_claw],
+                weight: Some(0.1),
+            },
+        ],
+    };
+    let cfg = RmConfig {
+        iterations: 64,
+        c: 0.4,
+        ..Default::default()
+    };
+    let mut agent = ProtocolAgent::new(&dex, 0, pool, cfg, 123);
+    agent.set_own_team(own);
+    for line in f_init.lines.iter().chain(&f_turn2.lines) {
+        agent.push_line(&dex, line);
+    }
+    agent.on_request(&dex, &f_turn2.request.to_string()).unwrap();
+    agent.step(&dex, 64).unwrap();
+
+    let rep = nc2000_bot::analysis::report(&agent, &dex, 0, 1);
+    let rows = rep["actions"].as_array().unwrap();
+    assert_eq!(rows.len(), 3);
+    let mut saw_reflect = false;
+    let mut saw_recover = false;
+    for row in rows {
+        let dom = row["dominated"].as_bool().unwrap();
+        let has_reason = row["reason"].is_string();
+        assert_eq!(
+            dom, has_reason,
+            "analysis::report row contradicted dominated vs reason: {row}"
+        );
+        match row["input"].as_str().unwrap() {
+            "move reflect" => {
+                saw_reflect = true;
+                assert!(dom);
+                assert_eq!(row["reason"].as_str(), Some("that side condition is already up"));
+            }
+            "move recover" => {
+                saw_recover = true;
+                assert!(!dom);
+                assert!(row["reason"].is_null());
+            }
+            "move surf" => {
+                assert!(!dom);
+                assert!(row["reason"].is_null());
+            }
+            other => panic!("unexpected action row: {other}"),
+        }
+    }
+    assert!(saw_reflect && saw_recover);
 }

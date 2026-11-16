@@ -964,7 +964,7 @@ fn compact_greedy_pick(
                     continue;
                 }
                 let m_slot = c as usize;
-                let (raw_score, accuracy) = cb.expected_hit_fraction_with_acc(
+                let (raw_score, _accuracy) = cb.expected_hit_fraction_with_acc(
                     table, side, att_slot, def_side, def_slot, m_slot, true,
                 );
                 // R1: Do not waste a healthy Pokemon's Explosion/Self-Destruct into a surviving healer

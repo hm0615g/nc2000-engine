@@ -2410,6 +2410,26 @@ impl ProtocolTracker {
         }
         out
     }
+
+    /// Single-source player reconstruction shared by `LocalPlayer::position` and
+    /// `ProtocolAgent::install`: installs observed opponent HP buckets onto `belief`,
+    /// synthesizes the base `Battle` from `belief.alive().first()`, and attaches
+    /// hidden condition timer specs.
+    pub(crate) fn reconstruct_position(
+        &self,
+        dex: &Dex,
+        own_sets: &[PokemonSet],
+        belief: &mut Belief,
+        observer: &Observer,
+        request: &Request,
+        rng: &mut SplitMix64,
+    ) -> Result<crate::player_state::ObservedPosition, String> {
+        self.set_hp_observations(belief, observer.opp());
+        let pick = belief.alive().first().copied();
+        let battle = self.synthesize(dex, own_sets, belief.refs(pick), observer, request, rng)?;
+        let timers = self.hidden_timer_specs(dex, &battle);
+        Ok(crate::player_state::ObservedPosition::reconstructed_with_timers(battle, timers))
+    }
 }
 
 /// party := `slots` (display order); positions canonical (party index for
@@ -2744,20 +2764,10 @@ impl ProtocolAgent {
             }
         }
 
-        // Preserve player HP buckets across every candidate determinization.
-        self.tracker.set_hp_observations(belief, 1-self.side);
-        // synthesize
-        let pick = belief.alive().first().copied();
-        let battle = {
-            let refs = belief.refs(pick);
-            self.tracker.synthesize(dex, &self.own_sets, refs, obs, &req, &mut self.rng)?
-        };
-
-        let specs = self.tracker.hidden_timer_specs(dex, &battle);
-        let pos = crate::player_state::ObservedPosition::reconstructed_with_timers(
-            battle.clone(),
-            specs,
-        );
+        let pos =
+            self.tracker
+                .reconstruct_position(dex, &self.own_sets, belief, obs, &req, &mut self.rng)?;
+        let battle = pos.model().clone();
         // search + preview policy
         let mut search =
             BlindSearch::from_observation(&pos, dex, self.cfg.clone(), self.side, self.rng.next());
