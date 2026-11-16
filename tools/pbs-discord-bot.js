@@ -144,6 +144,17 @@ function loadConfig(cliArgs = {}) {
     return String(val).split(',').map(s => s.trim()).filter(Boolean);
   };
 
+  // Web strong's preview budget is independent of --iters passed to the child.
+  // Preserve existing PBS_ITERS behavior and allow a separate preview override.
+  const previewBudgetSource = cliArgs['preview-iters'] ??
+    process.env.PBS_PREVIEW_ITERS ?? fileCfg.previewIters ??
+    require('../data/live-search.json').unknownPreview;
+  const previewBudgetText = String(previewBudgetSource);
+  if (!/^[1-9][0-9]*$/.test(previewBudgetText) ||
+      !Number.isSafeInteger(Number(previewBudgetText))) {
+    throw new Error('PBS_PREVIEW_ITERS must be a positive safe integer');
+  }
+
   return {
     discordToken: cliArgs.token || process.env.DISCORD_TOKEN || fileCfg.discordToken || '',
     pbsName: cliArgs.name || process.env.PBS_NAME || fileCfg.pbsName || 'NC2000Bot',
@@ -172,6 +183,7 @@ function loadConfig(cliArgs = {}) {
       fileCfg.postMatchThanksText ??
       'ありがとうございました',
     iters: parseInt(cliArgs.iters || process.env.PBS_ITERS || fileCfg.iters || '81000', 10),
+    previewIters: Number(previewBudgetText),
     hostTimeoutSec: parseInt(
       cliArgs['host-timeout-sec'] || process.env.HOST_TIMEOUT_SEC || fileCfg.hostTimeoutSec || '240',
       10
@@ -612,7 +624,7 @@ class CastleDiscordBot {
     if (this.config.dryRunPbs) {
       this.log(
         `[DRY-RUN-PBS] Would launch pbs-client.js in ${displayRoom} (${roomLetter}: ${roomUrl}) ` +
-        `for challenger "${challengerName}" [tier=${tier}, iters=${this.config.iters}].`
+        `for challenger "${challengerName}" [tier=${tier}, iters=${this.config.iters}, preview=${this.config.previewIters}].`
       );
       return;
     }
@@ -626,6 +638,7 @@ class CastleDiscordBot {
       '--msg', this.config.pbsMsg,
       '--tier', tier,
       '--iters', String(this.config.iters),
+      '--preview-iters', String(this.config.previewIters),
       '--games', '1',
       '--mode', 'host',
       '--entry-status-ipc',
@@ -640,7 +653,7 @@ class CastleDiscordBot {
     }
 
     this.log(
-      `Spawning pbs-client.js in ${displayRoom} (${roomLetter}: ${roomUrl}) [tier=${tier}, iters=${this.config.iters}]...`
+      `Spawning pbs-client.js in ${displayRoom} (${roomLetter}: ${roomUrl}) [tier=${tier}, iters=${this.config.iters}, preview=${this.config.previewIters}]...`
     );
 
     const child = (this.spawnProcess || spawn)(process.execPath, cliArgs, {
