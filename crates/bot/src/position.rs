@@ -112,6 +112,9 @@ pub struct SideSpec {
     /// (active first, then the mons that have appeared, then the rest).
     #[serde(default)]
     pub party: Vec<usize>,
+    /// Public `|teamsize|` pick count when it differs from `mons.len().min(3)`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub teamsize: Option<usize>,
     #[serde(default)]
     pub conditions: Vec<CondSpec>,
     /// A Baton Pass switch is pending on this side.
@@ -429,6 +432,14 @@ impl PositionSpec {
             if side.mons.is_empty() {
                 return Err(format!("sides[{s}].mons is empty"));
             }
+            if let Some(ts) = side.teamsize {
+                if ts == 0 || ts > side.mons.len() {
+                    return Err(format!(
+                        "sides[{s}].teamsize {ts} out of 1..={}",
+                        side.mons.len()
+                    ));
+                }
+            }
             if let Some(a) = side.active {
                 if a >= side.mons.len() {
                     return Err(format!("sides[{s}].active {a} out of range"));
@@ -683,6 +694,11 @@ impl PositionSpec {
             }
             return Ok(me.party.clone());
         }
+        let picks = me
+            .teamsize
+            .unwrap_or_else(|| me.mons.len().min(PICKS))
+            .min(me.mons.len())
+            .max(1);
         let mut out: Vec<usize> = Vec::new();
         if let Some(a) = me.active {
             out.push(a);
@@ -693,7 +709,7 @@ impl PositionSpec {
             }
         }
         for (i, m) in me.mons.iter().enumerate() {
-            if out.len() >= PICKS {
+            if out.len() >= picks {
                 break;
             }
             if !m.appeared && !out.contains(&i) {
@@ -703,7 +719,7 @@ impl PositionSpec {
         if out.is_empty() {
             return Err("the analyzing side has no picked mons".to_string());
         }
-        out.truncate(PICKS);
+        out.truncate(picks.max(out.iter().filter(|&&i| me.mons[i].appeared).count()));
         Ok(out)
     }
 }

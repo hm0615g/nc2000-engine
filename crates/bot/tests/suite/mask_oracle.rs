@@ -845,3 +845,221 @@ fn flat_tiebreaks_prefer_moves_before_switches_and_projection_skips_dominated() 
     assert_eq!(agent.best(&dex).as_deref(), Some("move icepunch"));
     assert_eq!(agent.projections, 1);
 }
+
+#[test]
+fn public_self_fail_masks_cover_awake_sleeptalk_weak_sub_drum_and_capped_boosts_safely() {
+    let dex = conformance::load_dex();
+    let pool = load_belief_pool();
+
+    // 1. Slower awake Snorlax vs faster Starmie (room 3800): Starmie cannot learn any sleep move,
+    //    so awake Sleep Talk and Snore are publicly masked across all determinizations.
+    {
+        let own = vec![mk_set(
+            "Snorlax",
+            "Leftovers",
+            &["Double-Edge", "Curse", "Rest", "Sleep Talk"],
+            50,
+        )];
+        let foe = vec![mk_set(
+            "Starmie",
+            "Leftovers",
+            &["Surf", "Psychic", "Thunder Wave", "Recover"],
+            55,
+        )];
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &own, &foe).unwrap();
+        b.set_log_enabled(true);
+        b.choose(&dex, 0, "team 1").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        verify_public_mask_against_engine_oracle(&dex, &pool, &b, 3001);
+        let dom = public_dominated_actions(&b, &dex, 0);
+        assert!(
+            dom.iter()
+                .any(|(c, why)| c.to_input(&dex) == "move sleeptalk" && why.contains("Sleep Talk")),
+            "expected awake Sleep Talk to be publicly masked vs Starmie, got {dom:?}"
+        );
+    }
+
+    // 2. Slower awake Snorlax vs faster Jynx (Lovely Kiss learner):
+    //    - Unstatused and alone: NOT masked (Jynx can sleep us before our move).
+    //    - Already paralyzed OR another living own bench mon is asleep under Sleep Clause: MASKED.
+    {
+        let own = vec![
+            mk_set("Snorlax", "Leftovers", &["Body Slam", "Curse", "Rest", "Sleep Talk"], 50),
+            mk_set("Suicune", "Leftovers", &["Surf", "Rest", "Sleep Talk", "Ice Beam"], 50),
+        ];
+        let foe = vec![mk_set(
+            "Jynx",
+            "Leftovers",
+            &["Lovely Kiss", "Ice Beam", "Psychic", "Substitute"],
+            55,
+        )];
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &own, &foe).unwrap();
+        b.set_log_enabled(true);
+        b.choose(&dex, 0, "team 1,2").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        verify_public_mask_against_engine_oracle(&dex, &pool, &b, 3002);
+        assert!(
+            !public_dominated_actions(&b, &dex, 0)
+                .iter()
+                .any(|(c, _)| c.to_input(&dex) == "move sleeptalk"),
+            "awake Sleep Talk must stay live against faster Lovely Kiss Jynx"
+        );
+
+        // Paralyzed Snorlax cannot be put to sleep -> Sleep Talk publicly masked.
+        let mut b_par = b.clone();
+        let lax_id = b_par.active_id(0).unwrap();
+        b_par.set_status(
+            &dex,
+            lax_id,
+            "par",
+            b_par.active_id(1),
+            nc2000_engine::battle::EffectHandle::None,
+            true,
+        );
+        verify_public_mask_against_engine_oracle(&dex, &pool, &b_par, 3003);
+        assert!(
+            public_dominated_actions(&b_par, &dex, 0)
+                .iter()
+                .any(|(c, _)| c.to_input(&dex) == "move sleeptalk")
+        );
+
+        // Sleeping bench Suicune under Stadium Sleep Clause -> any Jynx sleep forfeits immediately -> Sleep Talk masked.
+        let mut b_clause = b.clone();
+        let bench_sui = nc2000_engine::state::PokeId { side: 0, slot: 1 };
+        b_clause.set_status(
+            &dex,
+            bench_sui,
+            "slp",
+            Some(bench_sui),
+            nc2000_engine::battle::EffectHandle::None,
+            true,
+        );
+        verify_public_mask_against_engine_oracle(&dex, &pool, &b_clause, 3004);
+        assert!(
+            public_dominated_actions(&b_clause, &dex, 0)
+                .iter()
+                .any(|(c, _)| c.to_input(&dex) == "move sleeptalk")
+        );
+    }
+
+    // 3. Survival guard: Last-mon awake Suicune with ONLY `[Surf, Sleep Talk]` vs Wobbuffet
+    //    (`Mirror Coat` / `Destiny Bond`) at full HP must NOT mask `Sleep Talk`, preserving the
+    //    0-damage pass move against retaliation traps.
+    {
+        let own = vec![mk_set("Suicune", "", &["Surf", "Sleep Talk"], 50)];
+        let foe = vec![mk_set(
+            "Wobbuffet",
+            "Leftovers",
+            &["Mirror Coat", "Destiny Bond", "Counter", "Safeguard"],
+            55,
+        )];
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &own, &foe).unwrap();
+        b.set_log_enabled(true);
+        b.choose(&dex, 0, "team 1").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        verify_public_mask_against_engine_oracle(&dex, &pool, &b, 3005);
+        assert!(
+            public_dominated_actions(&b, &dex, 0).is_empty(),
+            "last-mon Surf + awake Sleep Talk vs Wobbuffet must keep Sleep Talk as a safe pass"
+        );
+    }
+
+    // 4. Slower weak Substitute, weak Belly Drum, and capped +6 Swords Dance / +6/+6/-6 Curse.
+    {
+        let own = vec![
+            mk_set(
+                "Marowak",
+                "Thick Club",
+                &["Earthquake", "Rock Slide", "Swords Dance", "Substitute"],
+                50,
+            ),
+            mk_set(
+                "Snorlax",
+                "Leftovers",
+                &["Body Slam", "Belly Drum", "Curse", "Rest"],
+                50,
+            ),
+        ];
+        let foe_starmie = vec![mk_set(
+            "Starmie",
+            "Leftovers",
+            &["Surf", "Psychic", "Thunder Wave", "Recover"],
+            55,
+        )];
+        let foe_cloyster = vec![mk_set(
+            "Cloyster",
+            "Leftovers",
+            &["Surf", "Ice Beam", "Screech", "Spikes"],
+            55,
+        )];
+
+        // Weak Substitute + capped Swords Dance vs Starmie (no Atk-drop/Haze/Pain Split/Present in Starmie's learnset).
+        let mut b1 = Battle::from_fixture(&dex, "1,2,3,4", &own, &foe_starmie).unwrap();
+        b1.set_log_enabled(true);
+        b1.choose(&dex, 0, "team 1,2").unwrap();
+        b1.choose(&dex, 1, "team 1").unwrap();
+        let wak = b1.active_id(0).unwrap();
+        let wak_dmg = (b1.poke(wak).hp - b1.poke(wak).maxhp / 4) as f64;
+        b1.direct_damage(
+            &dex,
+            wak_dmg,
+            Some(wak),
+            b1.active_id(1),
+            nc2000_engine::battle::EffectHandle::None,
+        );
+        b1.boost(
+            &dex,
+            &[(0, 6)],
+            Some(wak),
+            Some(wak),
+            nc2000_engine::battle::EffectHandle::None,
+        );
+        verify_public_mask_against_engine_oracle(&dex, &pool, &b1, 3006);
+        let dom1: Vec<String> = public_dominated_actions(&b1, &dex, 0)
+            .into_iter()
+            .map(|(c, _)| c.to_input(&dex))
+            .collect();
+        assert!(dom1.contains(&"move substitute".to_string()), "got {dom1:?}");
+        assert!(dom1.contains(&"move swordsdance".to_string()), "got {dom1:?}");
+        // Side 1 (1-mon Starmie vs 2-mon [Marowak, Snorlax]) must NOT mask Thunder Wave,
+        // because unappeared bench Snorlax is not immune to Electric.
+        assert!(
+            !public_dominated_actions(&b1, &dex, 1)
+                .iter()
+                .any(|(c, _)| c.to_input(&dex) == "move thunderwave")
+        );
+
+        // Against Cloyster (learns Aurora Beam -> Atk drop, Screech -> Def drop):
+        // +6/+6/-6 Curse must NOT be publicly masked when slower, while weak Belly Drum IS masked.
+        let mut b2 = Battle::from_fixture(&dex, "1,2,3,4", &own, &foe_cloyster).unwrap();
+        b2.set_log_enabled(true);
+        b2.choose(&dex, 0, "team 2,1").unwrap();
+        b2.choose(&dex, 1, "team 1").unwrap();
+        let lax = b2.active_id(0).unwrap();
+        let lax_dmg = (b2.poke(lax).hp - b2.poke(lax).maxhp / 4) as f64;
+        b2.direct_damage(
+            &dex,
+            lax_dmg,
+            Some(lax),
+            b2.active_id(1),
+            nc2000_engine::battle::EffectHandle::None,
+        );
+        b2.boost(
+            &dex,
+            &[(0, 6), (1, 6), (4, -6)],
+            Some(lax),
+            Some(lax),
+            nc2000_engine::battle::EffectHandle::None,
+        );
+        verify_public_mask_against_engine_oracle(&dex, &pool, &b2, 3007);
+        let dom2: Vec<String> = public_dominated_actions(&b2, &dex, 0)
+            .into_iter()
+            .map(|(c, _)| c.to_input(&dex))
+            .collect();
+        assert!(dom2.contains(&"move bellydrum".to_string()), "got {dom2:?}");
+        assert!(
+            !dom2.contains(&"move curse".to_string()),
+            "Cloyster learns Screech/Aurora Beam so slower +6/+6/-6 Curse must stay live, got {dom2:?}"
+        );
+    }
+}

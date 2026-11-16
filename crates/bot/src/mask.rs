@@ -534,6 +534,210 @@ fn has_heal_berry(dex: &Dex, mon: &nc2000_engine::state::Pokemon) -> bool {
         .is_some_and(|id| matches!(dex.items.key(id), "berry" | "goldberry" | "berryjuice"))
 }
 
+fn foe_may_raise_hp(b: &Battle, dex: &Dex, side: usize) -> bool {
+    b.active_id(1 - side)
+        .filter(|&d| {
+            let p = b.poke(d);
+            !p.fainted && p.hp > 0
+        })
+        .is_some_and(|f| {
+            foe_learnset_any(
+                b,
+                dex,
+                f,
+                &[
+                    "painsplit",
+                    "present",
+                    "metronome",
+                    "mirrormove",
+                    "sketch",
+                    "transform",
+                ],
+            )
+        })
+}
+
+fn foe_may_uncap_boosts(b: &Battle, dex: &Dex, side: usize, pos_stat_mask: u8) -> bool {
+    let Some(foe) = b.active_id(1 - side).filter(|&d| {
+        let p = b.poke(d);
+        !p.fainted && p.hp > 0
+    }) else {
+        return false;
+    };
+    let fp = b.poke(foe);
+    if fp.transformed || fp.move_slots.iter().any(|s| !s.shared) {
+        return true;
+    }
+    let Some(ls) = crate::belief::format_learnsets().species(dex.species.key(fp.species)) else {
+        return true;
+    };
+    ls.moves.iter().any(|m| {
+        if matches!(
+            m.as_str(),
+            "haze" | "metronome" | "mirrormove" | "sketch" | "transform"
+        ) {
+            return true;
+        }
+        let Some(mid) = dex.moves.id(m) else {
+            return false;
+        };
+        let fms = dex.move_static(mid);
+        let primary_drop = fms.target != "self"
+            && fms
+                .boosts
+                .iter()
+                .any(|&(s, amt)| amt < 0 && (pos_stat_mask & (1u8 << s)) != 0);
+        let sec_drop = fms.secondaries.iter().any(|sec| {
+            sec.boosts
+                .iter()
+                .any(|&(s, amt)| amt < 0 && (pos_stat_mask & (1u8 << s)) != 0)
+        });
+        primary_drop || sec_drop
+    })
+}
+
+fn own_other_party_asleep_under_clause(b: &Battle, dex: &Dex, side: usize, att: PokeId) -> bool {
+    use nc2000_engine::state::Status;
+    let clause = dex
+        .conds_id("stadiumsleepclause")
+        .is_some_and(|cid| b.field.pseudo_weather.iter().any(|&(c, _)| c == cid));
+    clause
+        && b.sides[side].party.iter().any(|&slot| {
+            let p = &b.sides[side].roster[slot as usize];
+            slot != att.slot && !p.fainted && p.hp > 0 && p.status == Status::Slp
+        })
+}
+
+/// Guards turn-order-independent public self-fail rules so masking a harmless
+/// 0-effect pass never starves the sole non-losing wait option on the last mon
+/// (e.g. awake `Sleep Talk` avoiding `Destiny Bond` / `Mirror Coat` / recoil KO).
+fn can_safely_mask_public_self_noop(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    excluded: SearchChoice,
+) -> bool {
+    use nc2000_engine::dex::Category;
+    use nc2000_engine::state::Status;
+    let choices = b.clone().legal_choices(dex, side);
+    if choices.len() <= 1 {
+        return true;
+    }
+    let living_own = b.sides[side]
+        .party
+        .iter()
+        .filter(|&&slot| {
+            let p = &b.sides[side].roster[slot as usize];
+            !p.fainted && p.hp > 0
+        })
+        .count();
+    if living_own >= 2 && choices.iter().any(|&ch| matches!(ch, SearchChoice::Switch(_))) {
+        return true;
+    }
+    let Some(att) = b.active_id(side) else {
+        return false;
+    };
+    let me = b.poke(att);
+    let me_has_sub = dex
+        .conds_id("substitute")
+        .is_some_and(|sid| me.has_volatile(sid));
+    let foe_here = b.active_id(1 - side).filter(|&d| {
+        let p = b.poke(d);
+        !p.fainted && p.hp > 0
+    });
+    let foe_has_retaliation_trap = living_own <= 1
+        && foe_here.is_some_and(|def| {
+            foe_learnset_any(
+                b,
+                dex,
+                def,
+                &[
+                    "destinybond",
+                    "counter",
+                    "mirrorcoat",
+                    "bide",
+                    "rage",
+                    "metronome",
+                    "mirrormove",
+                    "sketch",
+                    "transform",
+                ],
+            )
+        });
+
+    choices.into_iter().any(|other| {
+        if other == excluded {
+            return false;
+        }
+        let SearchChoice::Move(oid) = other else {
+            return living_own >= 2;
+        };
+        let oms = dex.move_static(oid);
+        let okey = dex.moves.key(oid);
+        if oms.status.as_deref() == Some("slp") {
+            return false;
+        }
+        if oms.selfdestruct {
+            return living_own >= 2;
+        }
+        // Do not let another self-failing move mutually justify masking this one.
+        if oms.sleep_usable && me.status != Status::Slp {
+            return false;
+        }
+        if okey == "substitute" && (me_has_sub || me.hp <= me.maxhp / 4 || me.maxhp == 1) {
+            return false;
+        }
+        if okey == "bellydrum"
+            && ((me.hp as f64) <= (me.maxhp as f64) / 2.0 || me.boosts[0] >= 6)
+        {
+            return false;
+        }
+        if okey == "curse"
+            && !me.has_type(dex.known_types.ghost)
+            && me.boosts[0] >= 6
+            && me.boosts[1] >= 6
+            && me.boosts[4] <= -6
+        {
+            return false;
+        }
+        if oms.category == Category::Status
+            && oms.target == "self"
+            && oms.has_boosts
+            && !matches!(okey, "defensecurl" | "minimize")
+            && oms
+                .boosts
+                .iter()
+                .all(|&(s, amt)| amt > 0 && me.boosts[s] >= 6)
+        {
+            return false;
+        }
+        if living_own >= 2 {
+            return true;
+        }
+        // Last mon (`living_own <= 1`): alternative must neither risk self-KO nor feed a retaliation trap.
+        if oms.recoil.is_some()
+            || oms.struggle_recoil
+            || matches!(
+                okey,
+                "bellydrum"
+                    | "substitute"
+                    | "jumpkick"
+                    | "highjumpkick"
+                    | "painsplit"
+                    | "swagger"
+                    | "present"
+                    | "metronome"
+                    | "mirrormove"
+                    | "sketch"
+            )
+            || (okey == "curse" && me.has_type(dex.known_types.ghost))
+        {
+            return false;
+        }
+        oms.category == Category::Status || !foe_has_retaliation_trap
+    })
+}
+
 fn appeared_living_foe_bench_asleep(b: &Battle, side: usize) -> bool {
     use nc2000_engine::state::Status;
     let opp = 1 - side;
@@ -738,6 +942,104 @@ fn raw_public_noop_reason(
     {
         return Some("immune to the move's type, and so is every possible switch-in");
     }
+
+    // Turn-order-independent own-state / public-learnset self-fail proofs.
+    if can_safely_mask_public_self_noop(b, dex, side, c) {
+        use nc2000_engine::state::Status;
+        let me = b.poke(att);
+        // 1. Awake Sleep Talk / Snore when no opponent action can put `att` into live sleep before our move.
+        if rules.sleep_talk_awake && ms.sleep_usable && me.status != Status::Slp {
+            let own_safeguard = dex
+                .conds_id("safeguard")
+                .is_some_and(|cid| b.sides[side].has_side_condition(cid));
+            let own_sub = dex
+                .conds_id("substitute")
+                .is_some_and(|sid| me.has_volatile(sid));
+            let foe_cannot_sleep = matches!(
+                me.status,
+                Status::Brn | Status::Par | Status::Psn | Status::Tox
+            ) || own_safeguard
+                || own_sub
+                || own_other_party_asleep_under_clause(b, dex, side, att)
+                || foe_here.is_none_or(|def| {
+                    !foe_learnset_any(
+                        b,
+                        dex,
+                        def,
+                        &[
+                            "hypnosis",
+                            "sing",
+                            "sleeppowder",
+                            "spore",
+                            "lovelykiss",
+                            "metronome",
+                            "mirrormove",
+                            "sketch",
+                            "transform",
+                        ],
+                    )
+                });
+            if foe_cannot_sleep {
+                return Some("Sleep Talk and Snore need the user asleep");
+            }
+        }
+        // 2. Weak Substitute (`hp <= maxhp / 4` or `maxhp == 1`) with no heal berry or foe HP-raising move.
+        if key == "substitute"
+            && (me.hp <= me.maxhp / 4 || me.maxhp == 1)
+            && !has_heal_berry(dex, me)
+            && !foe_may_raise_hp(b, dex, side)
+        {
+            return Some("Substitute is already up, or there is not enough HP to pay for one");
+        }
+        // 3. Weak or capped Belly Drum when public/own-certain facts prevent HP gain or Attack un-capping.
+        if rules.extended_noops && key == "bellydrum" {
+            let hp_too_low = (me.hp as f64) <= (me.maxhp as f64) / 2.0
+                && !has_heal_berry(dex, me)
+                && !foe_may_raise_hp(b, dex, side);
+            let atk_capped = me.boosts[0] >= 6 && !foe_may_uncap_boosts(b, dex, side, 1 << 0);
+            if hp_too_low || atk_capped {
+                return Some("Belly Drum needs over half HP and uncapped Attack");
+            }
+        }
+        // 4. Capped pure self-boost moves when active foe cannot Haze or drop those stats before our move.
+        if key == "curse"
+            && !me.has_type(dex.known_types.ghost)
+            && me.boosts[0] >= 6
+            && me.boosts[1] >= 6
+            && me.boosts[4] <= -6
+            && !foe_may_uncap_boosts(b, dex, side, (1 << 0) | (1 << 1))
+        {
+            return Some("every stat this move moves is already capped");
+        }
+        if ms.category == Category::Status
+            && ms.target == "self"
+            && ms.has_boosts
+            && ms.status.is_none()
+            && ms.volatile_status.is_none()
+            && ms.side_condition.is_none()
+            && ms.weather.is_none()
+            && ms.heal.is_none()
+            && ms.self_effect.is_none()
+            && ms.secondaries.is_empty()
+            && !matches!(key, "defensecurl" | "minimize")
+        {
+            let mut pos_mask = 0u8;
+            let all_pos_capped = ms.boosts.iter().all(|&(stat, amount)| {
+                if amount > 0 && stat < 7 && me.boosts[stat] >= 6 {
+                    pos_mask |= 1u8 << stat;
+                    true
+                } else {
+                    amount == 0
+                }
+            });
+            if all_pos_capped
+                && pos_mask != 0
+                && !foe_may_uncap_boosts(b, dex, side, pos_mask)
+            {
+                return Some("every stat this move moves is already capped");
+            }
+        }
+    }
     None
 }
 
@@ -843,16 +1145,7 @@ fn noop_reason(
             "that side condition is already up"
         );
     }
-    let foe_may_raise_hp = || {
-        b.active_id(1 - side).is_some_and(|f| {
-            foe_learnset_any(
-                b,
-                dex,
-                f,
-                &["painsplit", "present", "metronome", "mirrormove", "sketch"],
-            )
-        })
-    };
+    let foe_may_raise_hp = || foe_may_raise_hp(b, dex, side);
     if rules.extended_noops && key == "bellydrum" {
         let me = b.poke(att);
         let max_leftovers_gain = if me.item.is_some() && me.item == dex.items.id("leftovers") {
