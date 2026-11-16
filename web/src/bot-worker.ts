@@ -262,7 +262,7 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
     if (gen !== myGen) return;
     const lookupStarted = performance.now();
     const compiled = allowed.size ? compiledPreviewPick(f.searcher.compiledPreviewBuild(),
-      f.searcher.compiledPreviewKey(), previewSeed, searchProfile("blind").c, f.searcher.previewCacheInfo(), allowed) : undefined;
+      f.searcher.compiledPreviewKey(), previewSeed, searchProfile("blind").c, f.searcher.previewPublicInfo(), allowed) : undefined;
     const previewLookupMs = performance.now() - lookupStarted;
     if (compiled && frame.legal_actions.some(input => input.replace(/\s/g, "") === compiled.replace(/\s/g, ""))) {
       post({ t: "result", id: m.id, best: compiled,

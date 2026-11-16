@@ -72,6 +72,24 @@ fn js_err(e: impl std::fmt::Debug) -> JsError {
     JsError::new(&format!("{e:?}"))
 }
 
+thread_local! {
+    static CACHED_META_POOL: std::cell::RefCell<Option<(String, MetaPool)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+fn parse_cached_meta_pool(pool_json: &str) -> Result<MetaPool, JsError> {
+    CACHED_META_POOL.with(|slot| {
+        if let Some((ref raw, ref parsed)) = *slot.borrow() {
+            if raw == pool_json {
+                return Ok(parsed.clone());
+            }
+        }
+        let parsed: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
+        *slot.borrow_mut() = Some((pool_json.to_owned(), parsed.clone()));
+        Ok(parsed)
+    })
+}
+
 // -------------------------------------------------------------------- Dex
 
 #[wasm_bindgen(js_name = Dex)]
@@ -496,7 +514,7 @@ impl WasmBlindSearcher {
         c: Option<f64>,
         hp_buckets: Option<i32>,
     ) -> Result<WasmBlindSearcher, JsError> {
-        let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
+        let pool = parse_cached_meta_pool(pool_json)?;
         let tables = TableSet::from_pool(&battle.dex, &pool);
         let (local, observer) = nc2000_bot::player_state::LocalPlayer::new(&battle.battle, &battle.dex, side).map_err(js_err)?;
         let belief = Belief::new(&battle.dex, &pool, &observer);
@@ -948,7 +966,7 @@ impl WasmProtocolSearcher {
         if side > 1 {
             return Err(JsError::new("side must be 0 or 1"));
         }
-        let pool: MetaPool = serde_json::from_str(pool_json).map_err(js_err)?;
+        let pool = parse_cached_meta_pool(pool_json)?;
         let cfg = skuct_config(c.unwrap_or_else(|| profile_c("blind")), hp_buckets);
         let preview_cache_identity = Some(preview_cache::Identity::new("protocol", &cfg, pool_json));
         let agent = ProtocolAgent::new(&dex.dex, side, pool, cfg, seed as u64);
@@ -1145,6 +1163,14 @@ impl WasmProtocolSearcher {
     pub fn preview_cache_info(&self) -> Option<String> {
         if self.pinned || self.endgame.is_some() || !self.agent.search()?.is_preview() { return None; }
         self.preview_cache_identity.as_ref()?.info(self.agent.battle()?, self.agent.observer()?)
+    }
+
+    /// Lightweight public-only opponent roster metadata (`{"opponentPublic": ...}`)
+    /// for compiled-preview table lookup without serializing the full prior pool.
+    #[wasm_bindgen(js_name = previewPublicInfo)]
+    pub fn preview_public_info(&self) -> Option<String> {
+        if self.pinned || self.endgame.is_some() || !self.agent.search()?.is_preview() { return None; }
+        self.preview_cache_identity.as_ref()?.public_info(self.agent.battle()?, self.agent.observer()?)
     }
 
     /// The baked-table preview pick when one applies, else `null`.

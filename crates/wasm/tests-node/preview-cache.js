@@ -76,17 +76,19 @@ try {
 	assert.equal(fresh.rootPolicy(), s.rootPolicy()); assert.equal(fresh.best(), s.best());
 
 	const ps = protocol(); const protocolKey = cache.key(ps);
+	assert.deepEqual(JSON.parse(ps.previewPublicInfo()), {opponentPublic: JSON.parse(ps.previewCacheInfo()).opponentPublic});
 	assert(protocolKey); assert.notEqual(protocolKey, key, 'different drivers do not share entries');
 	ps.step(128); const protocolRecord = cache.createRecord(ps); const ps2 = protocol(33);
 	assert.equal(cache.readRecord(ps2, protocolRecord).choice, ps.best());
 	ps2.step(1); assert.equal(cache.readRecord(ps2, protocolRecord), null, 'never replace a partial search');
 	ps.step(1); assert.throws(() => cache.createRecord(ps), /exactly 128/);
-	ps2.onRequest(JSON.stringify({wait: true})); assert.equal(cache.key(ps2), null);
+	ps2.onRequest(JSON.stringify({wait: true})); assert.equal(cache.key(ps2), null); assert.equal(ps2.previewPublicInfo(), undefined);
 	const pinnedPs = protocol();
 	assert.ok(JSON.parse(pinnedPs.beliefInfo()).count > 1);
 	pinnedPs.pinOpponent(JSON.stringify(foe));
 	assert.equal(JSON.parse(pinnedPs.beliefInfo()).count, 1);
 	assert.equal(cache.key(pinnedPs), null);
+	assert.equal(pinnedPs.previewPublicInfo(), undefined);
 
 	const toId = name => String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
 	let legalPick = null;
