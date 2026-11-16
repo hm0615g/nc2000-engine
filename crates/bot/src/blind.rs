@@ -1201,11 +1201,13 @@ impl BlindSearch {
     }
 
     /// Predict the RNG draws and resulting opponent party of `Belief::determinize_in_place`
-    /// when no pick distribution or extra per-mon RNG draws occur.
+    /// by delegating directly to `Belief::sample_hidden_party`.
     #[inline]
     fn predict_determinization_draws(
         &self,
+        belief: &Belief,
         obs: &Observer,
+        plan_pick: TeamPlanPick,
         rng_probe: &mut SplitMix64,
     ) -> (u64, bool, [u8; 6], usize) {
         let seed = rng_probe.next();
@@ -1215,88 +1217,15 @@ impl BlindSearch {
 
         let opp = 1 - self.side;
         let opp_side = &self.base.sides[opp];
-        let roster_len = opp_side.roster.len();
-        let party_len = opp_side.party.len();
+        let (raw_party, party_len, _) = belief.sample_hidden_party(
+            obs,
+            plan_pick.pool_index(),
+            opp_side,
+            self.base.preview_level_caps[opp],
+            rng_probe,
+        );
         let mut party_key = [0xFFu8; 6];
-        for (i, &s) in opp_side.party.iter().enumerate() {
-            party_key[i] = s;
-        }
-        if party_len < roster_len {
-            let mut appeared = [false; 6];
-            for (i, p) in opp_side.roster.iter().enumerate() {
-                appeared[i] = p.previously_switched_in > 0 || p.is_active;
-            }
-            let mut hidden_positions = [0usize; 6];
-            let mut hidden_len = 0usize;
-            for pos in 0..party_len {
-                if !appeared[party_key[pos] as usize] {
-                    hidden_positions[hidden_len] = pos;
-                    hidden_len += 1;
-                }
-            }
-            let mut pool = [0u8; 6];
-            let mut pool_len = 0usize;
-            for s in 0..roster_len {
-                if !appeared[s] {
-                    pool[pool_len] = s as u8;
-                    pool_len += 1;
-                }
-            }
-            for &pos in &hidden_positions[..hidden_len] {
-                let idx = rng_probe.below(pool_len);
-                let new_slot = pool[idx];
-                pool_len -= 1;
-                pool[idx] = pool[pool_len];
-                party_key[pos] = new_slot;
-            }
-            if let Some(cap) = self.base.preview_level_caps[opp].filter(|_| hidden_len > 0) {
-                let level = |mask: u8| {
-                    obs.mons()
-                        .iter()
-                        .enumerate()
-                        .filter(|(slot, _)| mask & (1 << slot) != 0)
-                        .map(|(_, mon)| u32::from(mon.level))
-                        .sum::<u32>()
-                };
-                let mask = party_key[..party_len]
-                    .iter()
-                    .fold(0u8, |m, &slot| m | (1 << slot));
-                if level(mask) > cap {
-                    let public = appeared[..roster_len]
-                        .iter()
-                        .enumerate()
-                        .fold(0u8, |m, (slot, &seen)| m | (u8::from(seen) << slot));
-                    let mut legal = [0u8; 64];
-                    let mut legal_len = 0usize;
-                    for m in 0..(1u8 << roster_len) {
-                        if m.count_ones() as usize == party_len
-                            && (m & public) == public
-                            && level(m) <= cap
-                        {
-                            legal[legal_len] = m;
-                            legal_len += 1;
-                        }
-                    }
-                    if legal_len > 0 {
-                        let chosen_mask = legal[rng_probe.below(legal_len)];
-                        pool_len = 0;
-                        for slot in 0..roster_len {
-                            if (chosen_mask & (1 << slot)) != 0 && !appeared[slot] {
-                                pool[pool_len] = slot as u8;
-                                pool_len += 1;
-                            }
-                        }
-                        for &pos in &hidden_positions[..hidden_len] {
-                            let idx = rng_probe.below(pool_len);
-                            let new_slot = pool[idx];
-                            pool_len -= 1;
-                            pool[idx] = pool[pool_len];
-                            party_key[pos] = new_slot;
-                        }
-                    }
-                }
-            }
-        }
+        party_key[..party_len].copy_from_slice(&raw_party[..party_len]);
         (post_qc_seed, qc, party_key, party_len)
     }
 
@@ -1325,7 +1254,7 @@ impl BlindSearch {
                 belief.predict_plan_draws(plan_pick, &self.base, 1 - self.side, &mut rng_probe)
             {
                 let (post_qc_seed, qc, party_key, party_len) =
-                    self.predict_determinization_draws(obs, &mut rng_probe);
+                    self.predict_determinization_draws(belief, obs, plan_pick, &mut rng_probe);
                 let cache_key = (plan_pick, fb_key, party_key, qc);
                 if let Some(cached) = self.det_cache.get(&cache_key) {
                     self.rng = rng_probe;

@@ -309,6 +309,30 @@ const ITEM_FALLBACK_ORDER: &[&str] = &[
     "blackglasses", "poisonbarb", "silverpowder", "spelltag", "dragonfang",
 ];
 
+/// Returns `true` if `move_str` is an explicit typed Hidden Power (or untyped Hidden Power
+/// when `poss_hp == 0` and `hp_type_mask != 0`) made impossible by GSC DV/gender rules or
+/// observed effectiveness (`poss_hp`).
+fn explicit_hp_contradicted(dex: &Dex, move_str: &str, poss_hp: u16, hp_type_mask: u16) -> bool {
+    let k = toid(move_str);
+    if k == "hiddenpower" {
+        return poss_hp == 0 && hp_type_mask != 0;
+    }
+    if k.starts_with("hiddenpower") {
+        if poss_hp == 0 {
+            return true;
+        }
+        let Some(mid) = dex.moves.id(&k) else {
+            return true;
+        };
+        let ty = dex.moves.get(mid).move_type.as_str();
+        let Some(idx) = crate::hp_evidence::TYPES.iter().position(|&t| t == ty) else {
+            return true;
+        };
+        return (poss_hp & (1u16 << idx)) == 0;
+    }
+    false
+}
+
 fn align_moves_with_reference(dex: &Dex, mut mon: Pokemon, fallback_mon: &Pokemon) -> Pokemon {
     let fb_slots = &fallback_mon.base_move_slots;
     let cand_slots = mon.base_move_slots;
@@ -2164,7 +2188,7 @@ impl Belief {
         obs: &Observer,
         sets: &[PokemonSet],
     ) -> Vec<Pokemon> {
-        match Battle::from_fixture(dex, "1,2,3,4", &sets, &sets) {
+        let mut roster = match Battle::from_fixture(dex, "1,2,3,4", sets, sets) {
             Ok(b) => b.sides[0].roster.clone(),
             Err(_) => {
                 // defensive second stage: minimal sets cannot fail (species /
@@ -2185,7 +2209,28 @@ impl Belief {
                     .roster
                     .clone()
             }
+        };
+        if matches!(
+            self.fallback_policy,
+            FallbackPolicy::Bayesian | FallbackPolicy::BayesianPointMass
+        ) {
+            for (slot, mon) in roster.iter_mut().enumerate() {
+                if let Some(mo) = obs.mons().get(slot) {
+                    let poss =
+                        mo.hp_type_mask & crate::hp_evidence::possible_types(dex, mo.species, mo.gender);
+                    if poss.count_ones() == 1
+                        && !crate::hp_evidence::consistent(dex, mon, mo.hp_type_mask)
+                    {
+                        if let Some(proj) =
+                            crate::hp_evidence::project_deterministic(dex, mon, mo.gender, mo.hp_type_mask)
+                        {
+                            *mon = proj;
+                        }
+                    }
+                }
+            }
         }
+        roster
     }
 
     fn fallback_source(&self, dex: &Dex, mo: &MonObs) -> FallbackSource {
@@ -2277,7 +2322,15 @@ impl Belief {
             } else {
                 1.0
             };
-            let hp_mult = if mo.hp_type_mask != u16::MAX {
+            let poss_hp =
+                mo.hp_type_mask & crate::hp_evidence::possible_types(dex, mo.species, mo.gender);
+            let hp_mult = if carrier_set
+                .moves
+                .iter()
+                .any(|m| explicit_hp_contradicted(dex, m, poss_hp, mo.hp_type_mask))
+            {
+                0.02
+            } else if mo.hp_type_mask != u16::MAX {
                 let explicit_hp = carrier_set.moves.iter().find_map(|m| {
                     let mid = dex.moves.id(&toid(m))?;
                     let key = dex.moves.key(mid);
@@ -2287,8 +2340,8 @@ impl Belief {
                     })?
                 });
                 match explicit_hp {
-                    Some(idx) if (mo.hp_type_mask & (1u16 << idx)) != 0 => 2.0,
-                    Some(_) => 0.15,
+                    Some(idx) if (poss_hp & (1u16 << idx)) != 0 => 2.0,
+                    Some(_) => 0.02,
                     None => 1.0,
                 }
             } else {
@@ -2400,13 +2453,18 @@ impl Belief {
         let carriers = self.bayesian_prior_carriers(dex, mo, slot, obs_mons);
         let species_key = dex.species.key(mo.species);
         let prior_sp = self.active_prior().and_then(|p| p.species(species_key));
+        let poss_hp =
+            mo.hp_type_mask & crate::hp_evidence::possible_types(dex, mo.species, mo.gender);
         let matches_moves = |s: &PokemonSet| {
-            mo.revealed_moves.iter().all(|&revealed| {
-                s.moves
-                    .iter()
-                    .filter_map(|m| dex.moves.id(&toid(m)))
-                    .any(|m| move_matches(dex, m, revealed))
-            })
+            !s.moves
+                .iter()
+                .any(|m| explicit_hp_contradicted(dex, m, poss_hp, mo.hp_type_mask))
+                && mo.revealed_moves.iter().all(|&revealed| {
+                    s.moves
+                        .iter()
+                        .filter_map(|m| dex.moves.id(&toid(m)))
+                        .any(|m| move_matches(dex, m, revealed))
+                })
         };
         let matches_item = |s: &PokemonSet| {
             let item = dex.items.id(&toid(&s.item));
@@ -2417,21 +2475,14 @@ impl Belief {
                 }
         };
 
-        let mut moves: Vec<String> = if prior_sp.is_some() {
-            distinct_revealed_moves(dex, mo)
-                .into_iter()
-                .map(|m| dex.moves.key(m).to_string())
-                .collect()
-        } else {
-            mo.revealed_moves
-                .iter()
-                .map(|&m| dex.moves.key(m).to_string())
-                .collect()
-        };
+        let mut moves: Vec<String> = distinct_revealed_moves(dex, mo)
+            .into_iter()
+            .map(|m| dex.moves.key(m).to_string())
+            .collect();
         let prior_items = prior_sp
             .map(|sp| legal_prior_items(dex, sp, obs_mons, slot))
             .unwrap_or_default();
-        if let Some(sp) = prior_sp {
+        if let Some(sp) = prior_sp.filter(|sp| !sp.moves.is_empty()) {
             let mut has_hp = moves.iter().any(|m| toid(m).starts_with("hiddenpower"));
             for (_, key, _) in legal_prior_moves(dex, sp, mo) {
                 if moves.len() >= 4 {
@@ -2458,6 +2509,7 @@ impl Belief {
                     .any(|(s, _)| matches_moves(s) && matches_item(s));
                 if self.fallback_policy == FallbackPolicy::Bayesian {
                     let mut marginal_w: HashMap<String, f64> = HashMap::new();
+                    let mut tally_total_w = 0.0f64;
                     // (sorted_mvs, total_weight, best_rep_weight, best_rep_set)
                     let mut tally: Vec<(Vec<String>, f64, f64, &PokemonSet)> = Vec::new();
                     for &(s, w) in &carriers {
@@ -2468,10 +2520,14 @@ impl Belief {
                             .moves
                             .iter()
                             .map(|m| toid(m))
-                            .filter(|m| format_move_legal_at_level(species_key, m, mo.level))
+                            .filter(|m| {
+                                format_move_legal_at_level(species_key, m, mo.level)
+                                    && !explicit_hp_contradicted(dex, m, poss_hp, mo.hp_type_mask)
+                            })
                             .collect();
                         mvs.sort();
                         mvs.dedup();
+                        tally_total_w += w;
                         for mv in &mvs {
                             *marginal_w.entry(mv.clone()).or_insert(0.0) += w;
                         }
@@ -2486,21 +2542,27 @@ impl Belief {
                             None => tally.push((mvs, w, w, s)),
                         }
                     }
+                    let is_rev_mv = |mk: &str| {
+                        dex.moves.id(mk).is_some_and(|id| {
+                            mo.revealed_moves
+                                .iter()
+                                .any(|&rev| move_matches(dex, id, rev))
+                        })
+                    };
+                    let score_entry = |mvs: &[String], exact_w: f64| -> f64 {
+                        let gate = exact_w / (exact_w + 0.04 * tally_total_w.max(1e-9));
+                        let unrev_marg: f64 = mvs
+                            .iter()
+                            .filter(|m| !is_rev_mv(m))
+                            .map(|m| marginal_w.get(m).copied().unwrap_or(0.0))
+                            .sum();
+                        exact_w + 0.15 * gate * unrev_marg
+                    };
                     tally
                         .into_iter()
                         .max_by(|a, b| {
-                            let sa = a.1
-                                + 0.15
-                                    * a.0
-                                        .iter()
-                                        .map(|m| marginal_w.get(m).copied().unwrap_or(0.0))
-                                        .sum::<f64>();
-                            let sb = b.1
-                                + 0.15
-                                    * b.0
-                                        .iter()
-                                        .map(|m| marginal_w.get(m).copied().unwrap_or(0.0))
-                                        .sum::<f64>();
+                            let sa = score_entry(&a.0, a.1);
+                            let sb = score_entry(&b.0, b.1);
                             sa.partial_cmp(&sb).unwrap_or(std::cmp::Ordering::Equal)
                         })
                         .map(|(_, _, _, s)| s)
@@ -2588,6 +2650,7 @@ impl Belief {
                     continue;
                 }
                 if format_move_legal_at_level(species_key, dex.moves.key(id), mo.level)
+                    && !explicit_hp_contradicted(dex, dex.moves.key(id), poss_hp, mo.hp_type_mask)
                     && !mo.revealed_moves.iter().any(|&m| move_matches(dex, id, m))
                     && !moves.iter().any(|m| dex.moves.id(&toid(m)) == Some(id))
                 {
@@ -2640,6 +2703,7 @@ impl Belief {
                 for name in &s.moves {
                     let Some(id) = dex.moves.id(&toid(name)) else { continue };
                     if !format_move_legal_at_level(species_key, dex.moves.key(id), mo.level)
+                        || explicit_hp_contradicted(dex, dex.moves.key(id), poss_hp, mo.hp_type_mask)
                         || mo.revealed_moves.iter().any(|&m| move_matches(dex, id, m))
                         || moves.iter().any(|m| dex.moves.id(&toid(m)) == Some(id))
                     {
@@ -3368,16 +3432,19 @@ impl Belief {
             Self::append_secondary_item_variant(dex, obs_mons, slot, mo, &carriers, entries);
         };
 
+        let poss_hp =
+            mo.hp_type_mask & crate::hp_evidence::possible_types(dex, mo.species, mo.gender);
         let move_consistent: Vec<(&PokemonSet, f64)> = carriers
             .iter()
             .copied()
             .filter(|(source, _)| {
                 !source.moves.is_empty()
                     && source.moves.len() <= 4
-                    && source
-                        .moves
-                        .iter()
-                        .all(|m| format_move_legal_at_level(species_key, &toid(m), mo.level))
+                    && source.moves.iter().all(|m| {
+                        let k = toid(m);
+                        format_move_legal_at_level(species_key, &k, mo.level)
+                            && !explicit_hp_contradicted(dex, &k, poss_hp, mo.hp_type_mask)
+                    })
                     && mo.revealed_moves.iter().all(|&revealed| {
                         source
                             .moves
@@ -3421,13 +3488,22 @@ impl Belief {
                     None => tally.push((mvs, weight, weight, source)),
                 }
             }
+            let is_rev_mv = |mk: &str| {
+                dex.moves.id(mk).is_some_and(|id| {
+                    mo.revealed_moves
+                        .iter()
+                        .any(|&rev| move_matches(dex, id, rev))
+                })
+            };
             for (mvs, exact_w, _, _) in &mut tally {
                 if !mvs.is_empty() {
-                    let sum_marg: f64 = mvs
+                    let gate = *exact_w / (*exact_w + 0.04 * tally_total_w.max(1e-9));
+                    let unrev_marg: f64 = mvs
                         .iter()
+                        .filter(|m| !is_rev_mv(m))
                         .map(|m| marginal_w.get(m).copied().unwrap_or(0.0))
                         .sum::<f64>();
-                    *exact_w += 0.15 * sum_marg;
+                    *exact_w += 0.15 * gate * unrev_marg;
                 }
             }
             tally.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -3511,7 +3587,11 @@ impl Belief {
         } else if mo.revealed_moves.len() < 4 {
             // Tier B: Novel move combination (or unseen prior species) — conditional
             // move co-occurrence + non-dominated learnset backoff over open slots.
-            let open_slots = 4 - mo.revealed_moves.len();
+            let base_moves: Vec<String> = distinct_revealed_moves(dex, mo)
+                .into_iter()
+                .map(|m| dex.moves.key(m).to_string())
+                .collect();
+            let open_slots = 4usize.saturating_sub(base_moves.len());
             let mut max_overlap = 0usize;
             let mut total_carrier_w = 0.0f64;
             let mut max_overlap_w = 0.0f64;
@@ -3553,6 +3633,7 @@ impl Belief {
                 for name in &s.moves {
                     let Some(id) = dex.moves.id(&toid(name)) else { continue };
                     if !format_move_legal_at_level(species_key, dex.moves.key(id), mo.level)
+                        || explicit_hp_contradicted(dex, dex.moves.key(id), poss_hp, mo.hp_type_mask)
                         || mo.revealed_moves.iter().any(|&m| move_matches(dex, id, m))
                     {
                         continue;
@@ -3619,12 +3700,6 @@ impl Belief {
                     })
                     .map(|&(s, _)| s.clone())
                     .unwrap_or_else(|| base_set(dex, mo));
-
-                let base_moves: Vec<String> = mo
-                    .revealed_moves
-                    .iter()
-                    .map(|&m| dex.moves.key(m).to_string())
-                    .collect();
 
                 // Identify moves in the MAP prefix that are near-universal staples or essential
                 // synergy partners of the matched revealed moves (>= 85% conditional presence in
@@ -6582,5 +6657,110 @@ mod fallback_tests {
             min_spe < max_spe,
             "slow pivot LoadoutDraw must include both max-Speed and reduced-Speed spread: {distinct_speeds:?}"
         );
+    }
+
+    #[test]
+    fn marginal_tiebreak_does_not_inflate_tiny_weight_outlier_via_revealed_or_shared_moves() {
+        let dex = test_dex();
+        let mut pool: MetaPool = serde_json::from_str(include_str!(
+            "../../../data/belief-pool-v3/belief-pool.json"
+        ))
+        .unwrap();
+        let p1 = pool.teams[0].sets.clone();
+        // Inject a tiny-weight 1-off outlier sharing revealed Protect + common Mean Look / Perish Song.
+        let mut outlier_team = pool.teams[0].clone();
+        outlier_team.id = "tiny-outlier".into();
+        outlier_team.weight = Some(1e-5);
+        outlier_team.sets[0] = plain_set("Misdreavus");
+        outlier_team.sets[0].item = "BrightPowder".into();
+        outlier_team.sets[0].moves = vec![
+            "Protect".into(),
+            "Mean Look".into(),
+            "Perish Song".into(),
+            "Spite".into(),
+        ];
+        pool.teams.push(outlier_team);
+
+        let mut p2 = p1.clone();
+        p2[0] = plain_set("Misdreavus");
+        p2[0].name = "OffPoolMissy".into();
+        p2[0].item = "Leftovers".into();
+        p2[0].moves = vec![
+            "Protect".into(),
+            "Mean Look".into(),
+            "Perish Song".into(),
+            "Confuse Ray".into(),
+        ];
+        // Make p2 off-pool by replacing slot 5 with an uncommon species.
+        p2[5] = plain_set("Porygon2");
+        let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        battle
+            .apply_choices(
+                &dex,
+                [
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                    Some(nc2000_engine::battle::SearchChoice::Team([1, 2, 3])),
+                ],
+            )
+            .unwrap();
+        let mut obs = Observer::new(&battle, 0);
+        obs.observe(&battle, &dex);
+        obs.ingest_line("|move|p2a: OffPoolMissy|Protect|p2a: OffPoolMissy", &dex);
+        let belief = Belief::new(&dex, &pool, &obs);
+        assert!(belief.is_fallback());
+        let ld = belief.loadout_draws.as_ref().unwrap()[0].as_ref().unwrap();
+        let total_w: f64 = ld.entries.iter().map(|(_, w)| *w).sum();
+        let spite_id = dex.moves.id("spite").unwrap();
+        let spite_w: f64 = ld
+            .entries
+            .iter()
+            .filter(|(m, _)| m.base_move_slots.iter().any(|s| s.id == spite_id))
+            .map(|(_, w)| *w)
+            .sum();
+        assert!(
+            spite_w / total_w < 0.02,
+            "1e-5 outlier set must not borrow marginal mass from revealed/shared staples: ratio={}",
+            spite_w / total_w
+        );
+    }
+
+    #[test]
+    fn explicit_typed_hidden_power_contradicted_by_mask_or_gender_is_strictly_excluded() {
+        let dex = test_dex();
+        let grass_idx = crate::hp_evidence::TYPES
+            .iter()
+            .position(|&t| t == "Grass")
+            .unwrap();
+        let ice_idx = crate::hp_evidence::TYPES
+            .iter()
+            .position(|&t| t == "Ice")
+            .unwrap();
+        let only_grass = 1u16 << grass_idx;
+        assert!(explicit_hp_contradicted(
+            &dex,
+            "Hidden Power Ice",
+            only_grass,
+            only_grass
+        ));
+        assert!(!explicit_hp_contradicted(
+            &dex,
+            "Hidden Power Grass",
+            only_grass,
+            only_grass
+        ));
+        // Female Raichu (1:1 gender ratio, Attack DV <= 7) cannot legally have Fighting HP (idx 0, requires Atk DV >= 8? Check against possible_types).
+        let raichu = dex.species.id("raichu").unwrap();
+        let fem_poss =
+            crate::hp_evidence::possible_types(&dex, raichu, nc2000_engine::state::Gender::F);
+        for (idx, ty) in crate::hp_evidence::TYPES.iter().enumerate() {
+            let mv_name = format!("Hidden Power {ty}");
+            let impossible = (fem_poss & (1u16 << idx)) == 0;
+            assert_eq!(
+                explicit_hp_contradicted(&dex, &mv_name, fem_poss, u16::MAX),
+                impossible,
+                "mismatch for {mv_name} under female DV mask"
+            );
+        }
+        let _ = ice_idx;
     }
 }
