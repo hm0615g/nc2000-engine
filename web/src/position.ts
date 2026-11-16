@@ -98,6 +98,7 @@ export interface SideSpec {
   mons: MonSpec[];
   active?: number | null;
   party?: number[];
+  teamsize?: number;
   conditions?: CondSpec[];
   pending_bp?: boolean;
   acted_this_turn?: boolean;

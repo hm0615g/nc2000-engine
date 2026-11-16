@@ -1,8 +1,13 @@
 //! Research adapter for the live WASM decision lifecycle, without preview
 //! tables. Unlike BlindAgent, each observe draws a fresh search seed.
 use std::{cell::RefCell, rc::Rc, sync::Arc};
-use nc2000_bot::{Agent, Belief, BlindSearch, Observer, RmConfig, SplitMix64};
-use nc2000_bot::{decision::{DecisionPolicy, DecisionSampler, PolicyMode}, preview::MetaPool, smmcts::SelRule};
+use nc2000_bot::{
+    decision::{DecisionPolicy, DecisionSampler, PolicyMode},
+    player_state::LocalPlayer,
+    preview::MetaPool,
+    smmcts::SelRule,
+    Agent, Belief, BlindSearch, Observer, RmConfig, SplitMix64,
+};
 use nc2000_engine::{battle::SearchChoice, dex::Dex, state::Battle};
 
 #[derive(Clone, Default, serde::Serialize)]
@@ -23,7 +28,7 @@ pub struct ExecutionAgent {
     budget: u32,
     rng: SplitMix64,
     sampler: DecisionSampler<SearchChoice>,
-    state: Option<(Observer, Belief)>,
+    state: Option<(LocalPlayer, Observer, Belief)>,
     pub stats: Rc<RefCell<Stats>>,
     pub last_policy: Option<DecisionPolicy<SearchChoice>>,
     pub last_visits: Vec<(SearchChoice, u32, f64)>,
@@ -35,16 +40,29 @@ impl ExecutionAgent {
             stats: Rc::new(RefCell::new(Stats::default())), last_policy: None, last_visits: vec![] }
     }
     pub fn policy(&mut self, battle: &Battle, dex: &Dex, side: usize) -> (DecisionPolicy<SearchChoice>, SearchChoice) {
-        let (obs, belief) = self.state.get_or_insert_with(|| {
-            let obs = Observer::new(battle, side);
-            let belief = Belief::new(dex, &self.pool, &obs);
-            (obs, belief)
-        });
-        obs.observe(battle, dex);
+        let (local, obs, belief) = match &mut self.state {
+            Some(state) => {
+                state.0.observe(battle, dex, &mut state.1).unwrap();
+                state
+            }
+            None => {
+                let (local, obs) = LocalPlayer::new(battle, dex, side).unwrap();
+                let belief = Belief::new(dex, &self.pool, &obs);
+                self.state.insert((local, obs, belief))
+            }
+        };
         belief.sync_checked(dex, obs).unwrap();
-        let mut search = BlindSearch::new(battle, dex, RmConfig {
+        let seed = self.rng.next();
+        let position = local.position(dex, belief, obs, &mut self.rng).unwrap();
+        let mut search = BlindSearch::from_observation(&position, dex, RmConfig {
             rule: SelRule::Ucb, c: 0.4, hp_buckets: 16, ..Default::default()
-        }, side, self.rng.next());
+        }, side, seed);
+        if search.is_preview() {
+            search.prune_preview_aliases(dex);
+            if belief.has_preview_prior(obs) {
+                search.set_opponent_preview_prior(true);
+            }
+        }
         search.step(dex, belief, obs, self.budget);
         let policy = search.decision_policy(self.mode).unwrap();
         self.last_policy = Some(policy.clone());

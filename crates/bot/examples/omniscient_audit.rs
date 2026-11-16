@@ -556,7 +556,6 @@ impl PrecomputedMatchupOracle {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AttackerTier {
     T0BaselineBlind400,
-    T1aRootPruningOnly,
     T1bAdaptiveMixOnly,
     T1cBlind400AdaptiveMix,
     T1SuperCompute3200Mix,
@@ -572,7 +571,6 @@ impl AttackerTier {
     fn id(self) -> &'static str {
         match self {
             Self::T0BaselineBlind400 => "T0_Baseline_Blind",
-            Self::T1aRootPruningOnly => "T1a_RootPruning_Only",
             Self::T1bAdaptiveMixOnly => "T1b_AdaptiveMix_Only",
             Self::T1cBlind400AdaptiveMix => "T1c_AdaptiveMix_And_Pruning",
             Self::T1SuperCompute3200Mix => "T1d_SuperCompute_8x_Mix",
@@ -587,11 +585,10 @@ impl AttackerTier {
 
     fn description(self) -> &'static str {
         match self {
-            Self::T0BaselineBlind400 => "Shipped Bot (BlindAgent 1x iters, c=0.4 + Bayesian Shell-Nash Preview)",
-            Self::T1aRootPruningOnly => "Rules-Compliant 1x Compute + Root Pruning Only (prune_dominated before UCB)",
-            Self::T1bAdaptiveMixOnly => "Rules-Compliant 1x Compute + Bayesian Adaptive Mixture Only (2/5 probe reserve)",
-            Self::T1cBlind400AdaptiveMix => "Rules-Compliant 1x Compute + Bayesian Adaptive Mixture (1/5 reserve) + Root Pruning",
-            Self::T1SuperCompute3200Mix => "Rules-Compliant 8x Compute + Root Mixing + Pruning",
+            Self::T0BaselineBlind400 => "Shipped Bot (BlindAgent 1x iters, c=0.4 + Root Pruning + Bayesian Shell-Nash Preview)",
+            Self::T1bAdaptiveMixOnly => "Rules-Compliant 1x Compute + Bayesian Adaptive Mixture (2/5 probe reserve)",
+            Self::T1cBlind400AdaptiveMix => "Rules-Compliant 1x Compute + Bayesian Adaptive Mixture (1/5 reserve)",
+            Self::T1SuperCompute3200Mix => "Rules-Compliant 8x Compute + Root Mixing",
             Self::T2aRulesSuperSearch3x => "Rules-Compliant 3x Pure Search Oracle (3x Battle Iters + Bayesian BR Preview)",
             Self::T2RulesBayesianOracleBr => "Rules-Compliant Coupled Bayesian Policy-Oracle BR (Public Info Only + Determinized 1x Policy Oracle + BoundSolver + Coupled UCB-BR)",
             Self::T3ClairvoyantOpenSheet => "Cheating Set-Sheet Reader (Knows Exact Variant/Moves/Items + Variant-BR Preview + OpenAgent)",
@@ -605,7 +602,6 @@ impl AttackerTier {
         matches!(
             self,
             Self::T0BaselineBlind400
-                | Self::T1aRootPruningOnly
                 | Self::T1bAdaptiveMixOnly
                 | Self::T1cBlind400AdaptiveMix
                 | Self::T1SuperCompute3200Mix
@@ -770,13 +766,6 @@ fn play_omniscient_duel_game(
                 .with_own_preview_policy(oracle.red_nash_pol60.clone())
                 .with_opponent_pick_policy(oracle.red_opp_shell_pol60.clone(), 0.10),
         ),
-        AttackerTier::T1aRootPruningOnly => Some(
-            BlindAgent::new(base_cfg.clone(), red_prior.clone(), None, red_seed)
-                .with_preview_iterations(base_iters.max(240))
-                .with_own_preview_policy(oracle.red_nash_pol60.clone())
-                .with_opponent_pick_policy(oracle.red_opp_shell_pol60.clone(), 0.10)
-                .with_root_pruning(),
-        ),
         AttackerTier::T1bAdaptiveMixOnly => Some(
             BlindAgent::new(base_cfg.clone(), red_prior.clone(), None, red_seed)
                 .with_preview_iterations(base_iters.max(240))
@@ -789,8 +778,7 @@ fn play_omniscient_duel_game(
                 .with_preview_iterations(base_iters.max(240))
                 .with_own_preview_policy(oracle.red_nash_pol60.clone())
                 .with_opponent_pick_policy(oracle.red_opp_shell_pol60.clone(), 0.10)
-                .with_adaptive_mixture((base_iters / 5).max(40))
-                .with_root_pruning(),
+                .with_adaptive_mixture((base_iters / 5).max(40)),
         ),
         AttackerTier::T1SuperCompute3200Mix => {
             let super_iters = base_iters * 8;
@@ -805,8 +793,7 @@ fn play_omniscient_duel_game(
                     .with_preview_iterations(super_iters)
                     .with_own_preview_policy(oracle.red_nash_pol60.clone())
                     .with_opponent_pick_policy(oracle.red_opp_shell_pol60.clone(), 0.10)
-                    .with_adaptive_mixture((super_iters / 8).max(64))
-                    .with_root_pruning(),
+                    .with_adaptive_mixture((super_iters / 8).max(64)),
             )
         }
         AttackerTier::T2aRulesSuperSearch3x => {
@@ -821,8 +808,7 @@ fn play_omniscient_duel_game(
                 BlindAgent::new(super_cfg, red_prior.clone(), None, red_seed)
                     .with_preview_iterations(super_iters)
                     .with_own_preview_policy(oracle.red_bayesian_br_pol60.clone())
-                    .with_opponent_pick_policy(oracle.red_opp_shell_pol60.clone(), 0.10)
-                    .with_root_pruning(),
+                    .with_opponent_pick_policy(oracle.red_opp_shell_pol60.clone(), 0.10),
             )
         }
         _ => None,
@@ -1955,7 +1941,6 @@ fn main() {
 
     let all_tiers = [
         AttackerTier::T0BaselineBlind400,
-        AttackerTier::T1aRootPruningOnly,
         AttackerTier::T1bAdaptiveMixOnly,
         AttackerTier::T1cBlind400AdaptiveMix,
         AttackerTier::T1SuperCompute3200Mix,
@@ -1975,7 +1960,7 @@ fn main() {
             .collect()
     } else if same_budget {
         vec![
-            AttackerTier::T1aRootPruningOnly,
+            AttackerTier::T0BaselineBlind400,
             AttackerTier::T1bAdaptiveMixOnly,
             AttackerTier::T1cBlind400AdaptiveMix,
             AttackerTier::T2RulesBayesianOracleBr,

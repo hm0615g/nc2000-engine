@@ -1,5 +1,10 @@
 # Measurement validation before policy diagnosis
 
+> **Historical protocol record (2026-11-03).** Retained because
+> [`data/measurement-validation-v1/README.md`](../data/measurement-validation-v1/README.md)
+> references it for the falsified `omniscient_audit` SplitMix64 seed-boundary gate.
+> Not an active implementation plan.
+
 Status: **initial audit executed; confirmation stopped at the first failing
 information-boundary gate**. See `data/measurement-validation-v1/README.md`.
 The replacement runner and remaining gates are not implemented/executed.

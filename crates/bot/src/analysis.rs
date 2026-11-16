@@ -31,9 +31,9 @@ use nc2000_engine::state::{Battle, PokeId};
 use serde_json::{json, Value};
 
 use crate::blind::BlindSearch;
+use crate::exact::solve_matrix_full;
 use crate::import::ProtocolAgent;
 use crate::observe::Observer;
-use crate::smmcts::solve_rm_plus;
 
 pub const SCHEMA: &str = "nc2000-analysis-v1";
 
@@ -42,11 +42,6 @@ pub const SCHEMA: &str = "nc2000-analysis-v1";
 /// own the answer. Such cells still show in the matrix (with their count) —
 /// they are just not allowed to define `worst`.
 const MIN_CELL: u32 = 20;
-
-/// RM+ sweeps over the sampled matrix. The matrix is tiny (single-digit
-/// dimensions) so this is microseconds, and the same solver the baked
-/// preview tables and the RM root use.
-const SOLVE_SWEEPS: u32 = 2000;
 
 /// Playouts per ply of the searched line, as a share of the analysis that
 /// asked for it and a ceiling on that share. Each ply is a full-information
@@ -220,19 +215,13 @@ pub fn report(agent: &ProtocolAgent, dex: &Dex, line_plies: usize, line_seed: u6
     let visits = search.visits();
     let means = search.means();
     let dominated = search.dominated();
+    let reasons = search.dominated_reasons();
     let total: u32 = visits.iter().sum();
-    let reasons: Vec<(SearchChoice, &'static str)> = battle
-        .map(|b| {
-            let mut bb = b.clone();
-            bb.set_log_enabled(false);
-            crate::smmcts::dominated_actions(&bb, dex, side)
-        })
-        .unwrap_or_default();
 
     let mut order: Vec<usize> = (0..acts.len()).collect();
     order.sort_by_key(|&i| std::cmp::Reverse(visits[i]));
 
-    let m = MatrixSummary::build(search, &means, &order);
+    let m = MatrixSummary::build(search, &means, visits, &order);
 
     let actions: Vec<Value> = order
         .iter()
@@ -258,10 +247,7 @@ pub fn report(agent: &ProtocolAgent, dex: &Dex, line_plies: usize, line_seed: u6
             row["worst"] = json!(m.worst.get(rank).copied().flatten());
             row["mix"] = json!(m.mix_mine.get(rank).copied());
             row["dominated"] = json!(dominated.get(i).copied().unwrap_or(false));
-            row["reason"] = json!(reasons
-                .iter()
-                .find(|(c, _)| *c == acts[i])
-                .map(|(_, why)| *why));
+            row["reason"] = json!(reasons.get(i).copied().flatten());
             row
         })
         .collect();
@@ -315,8 +301,15 @@ struct MatrixSummary {
 }
 
 impl MatrixSummary {
-    fn build(search: &BlindSearch, means: &[f64], order: &[usize]) -> MatrixSummary {
+    fn build(
+        search: &BlindSearch,
+        means: &[f64],
+        visits: &[u32],
+        order: &[usize],
+    ) -> MatrixSummary {
         let sampled = search.root_matrix();
+        let eligible = search.eligible_flags();
+        let total: u32 = visits.iter().sum();
         let mut cols: Vec<SearchChoice> = Vec::new();
         for &(_, c, _, _) in &sampled {
             if !cols.contains(&c) {
@@ -342,33 +335,120 @@ impl MatrixSummary {
             })
             .collect();
 
+        let rows = order.len();
+        if rows == 0 {
+            return MatrixSummary {
+                cols,
+                cells,
+                equity: vec![],
+                worst: vec![],
+                mix_mine: vec![],
+                mix_theirs: vec![],
+                value: 0.5,
+            };
+        }
+
+        // Restrict player equilibrium support to eligible (undominated / allowed)
+        // rows that actually received search visits, so a 0-visit dominated row's
+        // default `0.5` mean can never capture equilibrium mass when losing.
+        let mut active_rows: Vec<usize> = (0..rows)
+            .filter(|&r| {
+                let i = order[r];
+                eligible[i] && (visits[i] > 0 || total == 0)
+            })
+            .collect();
+        if active_rows.is_empty() {
+            active_rows = (0..rows).filter(|&r| eligible[order[r]]).collect();
+        }
+        if active_rows.is_empty() {
+            active_rows = (0..rows).collect();
+        }
+
+        let row_fallback = |r: usize| -> f64 {
+            let i = order[r];
+            if total > 0 && visits[i] == 0 {
+                0.0
+            } else {
+                means[i].clamp(0.0, 1.0)
+            }
+        };
+
         // Only cells the search actually sampled enough times are evidence.
         // Everything thinner is replaced by the row's own average — the one
         // stand-in that adds no claim about the reply it stands for — and a
         // column with no evidence anywhere is dropped rather than handed to
         // the solver as a reply the opponent might have.
         let thick = |c: Option<(u32, f64)>| c.filter(|(n, _)| *n >= MIN_CELL).map(|(_, m)| m);
-        let keep: Vec<usize> =
-            (0..cols.len()).filter(|&c| cells.iter().any(|row| thick(row[c]).is_some())).collect();
-        let (rows, ncols) = (order.len(), keep.len());
-        if rows == 0 || ncols == 0 {
+        let mut keep: Vec<usize> = (0..cols.len())
+            .filter(|&c| active_rows.iter().any(|&r| thick(cells[r][c]).is_some()))
+            .collect();
+        if keep.is_empty() {
+            keep = (0..cols.len())
+                .filter(|&c| cells.iter().any(|row| thick(row[c]).is_some()))
+                .collect();
+        }
+        let ncols = keep.len();
+        if ncols == 0 {
+            let equity: Vec<f64> = (0..rows).map(row_fallback).collect();
+            let mut mix_mine = vec![0.0; rows];
+            if total == 0 {
+                let p = 1.0 / active_rows.len() as f64;
+                for &r in &active_rows {
+                    mix_mine[r] = p;
+                }
+            } else {
+                mix_mine[active_rows[0]] = 1.0;
+            }
+            let value = (0..rows)
+                .map(|r| equity[r] * mix_mine[r])
+                .sum::<f64>()
+                .clamp(0.0, 1.0);
+            let mix_theirs = vec![0.0; cols.len()];
             return MatrixSummary {
                 cols,
                 cells,
-                equity: vec![0.5; rows],
+                equity,
                 worst: vec![None; rows],
-                mix_mine: vec![1.0 / rows.max(1) as f64; rows],
-                mix_theirs: vec![],
-                value: 0.5,
+                mix_mine,
+                mix_theirs,
+                value,
             };
         }
+
         let mut flat = vec![0.0f64; rows * ncols];
-        for (r, &i) in order.iter().enumerate() {
+        for r in 0..rows {
+            let fb = row_fallback(r);
             for (c, &col) in keep.iter().enumerate() {
-                flat[r * ncols + c] = thick(cells[r][col]).unwrap_or(means[i]);
+                flat[r * ncols + c] = thick(cells[r][col]).unwrap_or(fb);
             }
         }
-        let (mix_mine, mix_kept) = solve_rm_plus(&flat, [rows, ncols], SOLVE_SWEEPS);
+
+        let n_act = active_rows.len();
+        let mut sub_flat = vec![0.0f64; n_act * ncols];
+        for (sr, &r) in active_rows.iter().enumerate() {
+            sub_flat[sr * ncols..(sr + 1) * ncols]
+                .copy_from_slice(&flat[r * ncols..(r + 1) * ncols]);
+        }
+        let sol = solve_matrix_full(&sub_flat, n_act, ncols);
+        let normalize = |v: &[f64]| -> Vec<f64> {
+            let clamped: Vec<f64> = v
+                .iter()
+                .map(|&p| if p.is_finite() && p > 0.0 { p } else { 0.0 })
+                .collect();
+            let sum: f64 = clamped.iter().sum();
+            if sum > 0.0 {
+                clamped.into_iter().map(|p| p / sum).collect()
+            } else {
+                vec![1.0 / v.len().max(1) as f64; v.len()]
+            }
+        };
+        let x_act = normalize(&sol.x);
+        let mix_kept = normalize(&sol.y);
+        let mut mix_mine = vec![0.0; rows];
+        for (sr, &r) in active_rows.iter().enumerate() {
+            mix_mine[r] = x_act[sr];
+        }
+
         let equity: Vec<f64> = (0..rows)
             .map(|r| {
                 (0..ncols)

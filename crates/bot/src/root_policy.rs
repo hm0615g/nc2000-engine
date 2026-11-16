@@ -58,7 +58,7 @@ fn guarantee(types: &[TypeMatrix], policy: &[f64]) -> f64 {
         .sum()
 }
 
-fn best_pure(types: &[TypeMatrix], rows: usize) -> f64 {
+fn row_pure_guarantees(types: &[TypeMatrix], rows: usize) -> Vec<f64> {
     (0..rows)
         .map(|i| {
             types
@@ -72,39 +72,119 @@ fn best_pure(types: &[TypeMatrix], rows: usize) -> f64 {
                 })
                 .sum::<f64>()
         })
+        .collect()
+}
+
+fn best_pure(types: &[TypeMatrix], rows: usize) -> f64 {
+    row_pure_guarantees(types, rows)
+        .into_iter()
         .fold(f64::NEG_INFINITY, f64::max)
 }
 
-fn solve_bayesian(types: &[TypeMatrix], rows: usize) -> Option<Vec<f64>> {
-    let initial = vec![1. / rows as f64; rows];
-    let mut columns = vec![response_column(types, &initial)];
-    for _ in 0..128 {
+struct BayesianColumnSolution {
+    x: Vec<f64>,
+    y: Vec<f64>,
+    columns: Vec<Vec<f64>>,
+    used_cols: usize,
+}
+
+/// Shared column-generation LP solver for ex-interim Bayesian minimax games:
+/// `\max_{p \in \Delta} \sum_k w_k \min_{j \in R_k} \sum_i p_i V_k(i, j)`.
+fn solve_bayesian_columns(
+    types: &[TypeMatrix],
+    rows: usize,
+    seed_pure: Option<usize>,
+    require_exact: bool,
+) -> Option<BayesianColumnSolution> {
+    let uniform = vec![1.0 / rows as f64; rows];
+    let mut columns = Vec::new();
+    let mut best_x = if let Some(pure_idx) = seed_pure {
+        let mut p = vec![0.0; rows];
+        p[pure_idx] = 1.0;
+        columns.push(response_column(types, &p));
+        let u_col = response_column(types, &uniform);
+        if !columns.contains(&u_col) {
+            columns.push(u_col);
+        }
+        p
+    } else {
+        columns.push(response_column(types, &uniform));
+        uniform
+    };
+    let mut best_y = vec![1.0; 1];
+    let mut best_cols_len = 1usize;
+    let mut any_valid = seed_pure.is_some();
+
+    let max_iters = if require_exact { 128 } else { 64 };
+    let gap_tol = if require_exact { 1e-8 } else { 1e-6 };
+    let neg_tol = if require_exact { -1e-12 } else { -1e-9 };
+    let sum_tol = if require_exact { 1e-8 } else { 1e-6 };
+    let conv_tol = if require_exact { 1e-8 } else { 1e-7 };
+
+    for _ in 0..max_iters {
+        let c_len = columns.len();
         let matrix: Vec<f64> = (0..rows)
             .flat_map(|i| columns.iter().map(move |c| c[i]))
             .collect();
-        let mut solution = solve_matrix_full(&matrix, rows, columns.len());
+        let mut solution = solve_matrix_full(&matrix, rows, c_len);
         if !solution.gap.is_finite()
-            || solution.gap > 1e-8
-            || solution.x.iter().any(|p| !p.is_finite() || *p < -1e-12)
-            || (solution.x.iter().sum::<f64>() - 1.).abs() > 1e-8
+            || solution.gap > gap_tol
+            || solution.x.iter().any(|p| !p.is_finite() || *p < neg_tol)
+            || (solution.x.iter().sum::<f64>() - 1.0).abs() > sum_tol
         {
-            return None;
+            if require_exact {
+                return None;
+            }
+            break;
         }
-        solution.x.iter_mut().for_each(|p| *p = p.max(0.));
+        solution.x.iter_mut().for_each(|p| *p = p.max(0.0));
         let total = solution.x.iter().sum::<f64>();
+        if total <= 0.0 {
+            if require_exact {
+                return None;
+            }
+            break;
+        }
         solution.x.iter_mut().for_each(|p| *p /= total);
+        best_x = solution.x.clone();
+        best_y = solution.y.clone();
+        best_cols_len = c_len;
+        any_valid = true;
+
         let response = response_column(types, &solution.x);
         let lower: f64 = response.iter().zip(&solution.x).map(|(v, p)| v * p).sum();
-        let upper = solution.value + solution.gap / 2.;
-        if upper - lower <= 1e-8 {
-            return Some(solution.x);
+        let upper = solution.value + solution.gap / 2.0;
+        if upper - lower <= conv_tol {
+            return Some(BayesianColumnSolution {
+                x: best_x,
+                y: best_y,
+                columns,
+                used_cols: best_cols_len,
+            });
         }
         if columns.contains(&response) {
-            return None;
+            if require_exact {
+                return None;
+            }
+            break;
         }
         columns.push(response);
     }
-    None
+
+    if !require_exact && any_valid {
+        Some(BayesianColumnSolution {
+            x: best_x,
+            y: best_y,
+            columns,
+            used_cols: best_cols_len,
+        })
+    } else {
+        None
+    }
+}
+
+fn solve_bayesian(types: &[TypeMatrix], rows: usize) -> Option<Vec<f64>> {
+    solve_bayesian_columns(types, rows, None, true).map(|s| s.x)
 }
 
 struct RootMatrices {
@@ -245,46 +325,6 @@ pub fn bayesian_mixed_root(
         policy: analysis.policy,
         estimated_advantage,
     })
-}
-
-pub fn estimated_mix_gain(
-    eligible: &[bool],
-    iterations: u32,
-    availability: &[u32],
-    cells: &[RootCell],
-) -> Option<f64> {
-    if availability.len() < 2 || availability.iter().any(|&a| a != iterations) {
-        return None;
-    }
-    estimated_bayesian_mix_gain(
-        eligible,
-        iterations,
-        &[RootType {
-            samples: iterations,
-            replies: availability.len(),
-            cells: cells.to_vec(),
-        }],
-    )
-}
-
-pub fn mixed_root(
-    eligible: &[bool],
-    iterations: u32,
-    availability: &[u32],
-    cells: &[RootCell],
-) -> Option<MixedRoot> {
-    if availability.len() < 2 || availability.iter().any(|&a| a != iterations) {
-        return None;
-    }
-    bayesian_mixed_root(
-        eligible,
-        iterations,
-        &[RootType {
-            samples: iterations,
-            replies: availability.len(),
-            cells: cells.to_vec(),
-        }],
-    )
 }
 
 #[derive(Clone, Debug)]
@@ -490,72 +530,32 @@ pub fn solve_bayesian_equilibrium_with_priors(
     }
 
     let mut pure_guarantees = global_means.to_vec();
-    for (r, &own) in actions.iter().enumerate() {
-        pure_guarantees[own] = type_matrices
-            .iter()
-            .map(|t| {
-                t.weight
-                    * t.values[r * t.replies..(r + 1) * t.replies]
-                        .iter()
-                        .copied()
-                        .fold(f64::INFINITY, f64::min)
-            })
-            .sum::<f64>();
+    for (r, (&own, pg)) in actions
+        .iter()
+        .zip(row_pure_guarantees(&type_matrices, n))
+        .enumerate()
+    {
+        let _ = r;
+        pure_guarantees[own] = pg;
     }
     let best_pure_sub = (0..n)
         .max_by(|&a, &b| {
             pure_guarantees[actions[a]]
                 .total_cmp(&pure_guarantees[actions[b]])
                 .then_with(|| global_visits[actions[a]].cmp(&global_visits[actions[b]]))
+                .then_with(|| actions[b].cmp(&actions[a]))
         })
         .unwrap_or(0);
     let best_pure_action = actions[best_pure_sub];
     let best_pure_value = pure_guarantees[best_pure_action];
 
-    let mut initial = vec![0.0; n];
-    initial[best_pure_sub] = 1.0;
-    let mut columns = vec![response_column(&type_matrices, &initial)];
-    let uniform = vec![1.0 / n as f64; n];
-    let u_col = response_column(&type_matrices, &uniform);
-    if !columns.contains(&u_col) {
-        columns.push(u_col);
-    }
-
-    let mut best_x = initial.clone();
-    let mut best_y = vec![1.0; 1];
-    let mut best_cols_len = 1usize;
-
-    for _ in 0..64 {
-        let c_len = columns.len();
-        let matrix: Vec<f64> = (0..n)
-            .flat_map(|i| columns.iter().map(move |c| c[i]))
-            .collect();
-        let mut solution = solve_matrix_full(&matrix, n, c_len);
-        if !solution.gap.is_finite()
-            || solution.gap > 1e-6
-            || solution.x.iter().any(|p| !p.is_finite() || *p < -1e-9)
-            || (solution.x.iter().sum::<f64>() - 1.0).abs() > 1e-6
-        {
-            break;
-        }
-        solution.x.iter_mut().for_each(|p| *p = p.max(0.0));
-        let total = solution.x.iter().sum::<f64>();
-        if total <= 0.0 {
-            break;
-        }
-        solution.x.iter_mut().for_each(|p| *p /= total);
-        best_x = solution.x.clone();
-        best_y = solution.y.clone();
-        best_cols_len = c_len;
-
-        let response = response_column(&type_matrices, &solution.x);
-        let lower: f64 = response.iter().zip(&solution.x).map(|(v, p)| v * p).sum();
-        let upper = solution.value + solution.gap / 2.0;
-        if upper - lower <= 1e-7 || columns.contains(&response) {
-            break;
-        }
-        columns.push(response);
-    }
+    let col_sol = solve_bayesian_columns(&type_matrices, n, Some(best_pure_sub), false)?;
+    let BayesianColumnSolution {
+        x: best_x,
+        y: best_y,
+        columns,
+        used_cols: best_cols_len,
+    } = col_sol;
 
     let mut action_values = pure_guarantees.clone();
     if best_y.len() == best_cols_len && best_cols_len <= columns.len() {
@@ -634,23 +634,29 @@ mod tests {
             .collect()
     }
 
+    fn single_type(samples: u32, replies: usize, cells: Vec<RootCell>) -> [RootType; 1] {
+        [RootType {
+            samples,
+            replies,
+            cells,
+        }]
+    }
+
     #[test]
     fn crossed_replies_require_mixing_but_pure_saddles_do_not() {
-        let mix = mixed_root(
+        let mix = bayesian_mixed_root(
             &[true, true],
             40000,
-            &[40000, 40000],
-            &cells(&[0., 1., 1., 0.], 2, 10000),
+            &single_type(40000, 2, cells(&[0., 1., 1., 0.], 2, 10000)),
         )
         .unwrap();
         assert!((mix.policy[0] - 0.5).abs() < 1e-12);
         assert!((mix.policy[1] - 0.5).abs() < 1e-12);
         assert!(mix.estimated_advantage > 0.45);
-        assert!(mixed_root(
+        assert!(bayesian_mixed_root(
             &[true, true],
             40000,
-            &[40000, 40000],
-            &cells(&[0.8, 0.9, 0.2, 0.3], 2, 10000)
+            &single_type(40000, 2, cells(&[0.8, 0.9, 0.2, 0.3], 2, 10000)),
         )
         .is_none());
     }
@@ -658,30 +664,39 @@ mod tests {
     #[test]
     fn absent_replies_and_insufficient_samples_cannot_enable_mixing() {
         let values = cells(&[0., 1., 1., 0.], 2, 10000);
-        assert!(mixed_root(&[true, true], 40000, &[40000, 39999], &values).is_none());
-        assert!(mixed_root(&[true, true], 0, &[0, 0], &values).is_none());
-        assert!(mixed_root(&[true, true], 4, &[4, 4], &cells(&[0., 1., 1., 0.], 2, 1)).is_none());
-        assert!(mixed_root(&[true, true], 40000, &[40000, 40000], &values[..3]).is_none());
+        assert!(bayesian_mixed_root(&[true, true], 39999, &single_type(40000, 2, values.clone())).is_none());
+        assert!(bayesian_mixed_root(&[true, true], 0, &single_type(0, 2, values.clone())).is_none());
+        assert!(bayesian_mixed_root(
+            &[true, true],
+            4,
+            &single_type(4, 2, cells(&[0., 1., 1., 0.], 2, 1)),
+        )
+        .is_none());
+        assert!(bayesian_mixed_root(
+            &[true, true],
+            40000,
+            &single_type(40000, 1, values),
+        )
+        .is_none());
     }
 
     #[test]
     fn promising_but_uncertain_matrices_request_more_evidence() {
-        let crossed = cells(&[0., 1., 1., 0.], 2, 1);
+        let crossed = single_type(4, 2, cells(&[0., 1., 1., 0.], 2, 1));
         assert_eq!(
-            estimated_mix_gain(&[true, true], 4, &[4, 4], &crossed),
+            estimated_bayesian_mix_gain(&[true, true], 4, &crossed),
             Some(0.5)
         );
-        assert!(mixed_root(&[true, true], 4, &[4, 4], &crossed).is_none());
+        assert!(bayesian_mixed_root(&[true, true], 4, &crossed).is_none());
         assert_eq!(
-            estimated_mix_gain(&[true, true], 4, &[4, 3], &crossed),
+            estimated_bayesian_mix_gain(&[true, true], 3, &crossed),
             None
         );
         assert_eq!(
-            estimated_mix_gain(
+            estimated_bayesian_mix_gain(
                 &[true, true],
                 4,
-                &[4, 4],
-                &cells(&[0.8, 0.9, 0.2, 0.3], 2, 1)
+                &single_type(4, 2, cells(&[0.8, 0.9, 0.2, 0.3], 2, 1)),
             ),
             Some(0.)
         );
@@ -689,22 +704,11 @@ mod tests {
 
     #[test]
     fn excluded_actions_receive_no_mass_even_when_they_dominate() {
-        let mix = mixed_root(
-            &[true, true, false],
-            60000,
-            &[60000, 60000],
-            &cells(&[0., 1., 1., 0., 1., 1.], 2, 10000),
-        )
-        .unwrap();
+        let t = single_type(60000, 2, cells(&[0., 1., 1., 0., 1., 1.], 2, 10000));
+        let mix = bayesian_mixed_root(&[true, true, false], 60000, &t).unwrap();
         assert_eq!(mix.policy[2], 0.);
         assert!((mix.policy.iter().sum::<f64>() - 1.).abs() < 1e-12);
-        assert!(mixed_root(
-            &[false, false, true],
-            60000,
-            &[60000, 60000],
-            &cells(&[0., 1., 1., 0., 1., 1.], 2, 10000)
-        )
-        .is_none());
+        assert!(bayesian_mixed_root(&[false, false, true], 60000, &t).is_none());
     }
 
     fn typed(values: &[f64], replies: usize) -> RootType {
@@ -719,11 +723,10 @@ mod tests {
     fn privately_known_types_cannot_be_averaged_before_best_response() {
         let types = [typed(&[0., 0.5, 0., 1.], 2), typed(&[1., 0., 0.5, 0.5], 2)];
         let iterations = types.iter().map(|t| t.samples).sum();
-        let naive = mixed_root(
+        let naive = bayesian_mixed_root(
             &[true, true],
             800000,
-            &[800000, 800000],
-            &cells(&[0.5, 0.25, 0.25, 0.75], 2, 200000),
+            &single_type(800000, 2, cells(&[0.5, 0.25, 0.25, 0.75], 2, 200000)),
         )
         .unwrap();
         assert!((naive.policy[0] - 2. / 3.).abs() < 1e-10);
@@ -1078,5 +1081,22 @@ mod tests {
             rps_eq.override_value,
             rps_eq.pure_guarantees[0]
         );
+    }
+
+    #[test]
+    fn solve_bayesian_equilibrium_flat_tie_prefers_lower_index() {
+        let eq = solve_bayesian_equilibrium(
+            &[true, true, true],
+            &[100, 100, 100],
+            &[1.0, 1.0, 1.0],
+            &[RootType {
+                samples: 300,
+                replies: 2,
+                cells: cells(&[1.0, 1.0, 1.0, 1.0, 1.0, 1.0], 2, 50),
+            }],
+        )
+        .unwrap();
+        assert_eq!(eq.best_pure_action, 0);
+        assert_eq!(eq.policy, vec![1.0, 0.0, 0.0]);
     }
 }

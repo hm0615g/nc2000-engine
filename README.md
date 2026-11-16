@@ -47,6 +47,7 @@ Rust battle engine, imperfect-information search bot, and WebAssembly/Preact cli
 - Format mechanics & PS porting notes: [`PORT-NOTES.md`](PORT-NOTES.md), [`PORTING.md`](PORTING.md)
 - Server-side preview cache specification: [`docs/PREVIEW-CACHE.md`](docs/PREVIEW-CACHE.md) (rendered by [`tools/render-preview-cache-doc.py`](tools/render-preview-cache-doc.py))
 - Search speed & off-pool belief diagnostics handoff: [`docs/SEARCH-AND-BELIEF-HANDOFF.md`](docs/SEARCH-AND-BELIEF-HANDOFF.md)
+- Midgame continuation & battle-log audit handoff: [`docs/BOT-STRENGTH-LOG-AUDIT-HANDOFF.md`](docs/BOT-STRENGTH-LOG-AUDIT-HANDOFF.md)
 - Engine anomaly report & triage protocol: [`.github/ISSUE_TEMPLATE/engine_anomaly_report.yml`](.github/ISSUE_TEMPLATE/engine_anomaly_report.yml)
 - Compact replay (`NC2-…`) specification: [`docs/replay.md`](docs/replay.md)
 - Endgame exact/bound solver specification: [`ENDGAME-SOLVER-ALGORITHM.md`](ENDGAME-SOLVER-ALGORITHM.md)

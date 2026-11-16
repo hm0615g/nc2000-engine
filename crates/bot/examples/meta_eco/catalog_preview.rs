@@ -361,8 +361,8 @@ fn function_source<'a>(source: &'a str, name: &str) -> &'a str {
 fn verify_partial_reuse(source: &Path, inputs: &BTreeMap<String,String>, revision: &str) -> Value {
     let previous: Value=serde_json::from_slice(&std::fs::read(source.join("compiled-preview-v1.json")).unwrap()).unwrap();
     let old: BTreeMap<String,String>=serde_json::from_value(previous["inputs"].clone()).unwrap();
-    let allowed=["crates/bot/src/belief.rs","crates/bot/src/blind.rs","crates/bot/src/import.rs",
-        "crates/bot/src/lib.rs","crates/bot/src/player.rs","crates/bot/src/player_state.rs","crates/bot/examples/meta_eco/catalog_preview.rs"];
+    let allowed=["crates/bot/src/belief.rs","crates/bot/src/blind.rs","crates/bot/src/endgame_root.rs","crates/bot/src/import.rs",
+        "crates/bot/src/lib.rs","crates/bot/src/mask.rs","crates/bot/src/player.rs","crates/bot/src/player_state.rs","crates/bot/examples/meta_eco/catalog_preview.rs"];
     let mut changed=Vec::new();
     for (path,digest) in inputs {
         if old.get(path)==Some(digest) {continue;}

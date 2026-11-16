@@ -206,18 +206,14 @@ impl LocalPlayer {
         observer: &Observer,
         rng: &mut SplitMix64,
     ) -> Result<ObservedPosition, String> {
-        self.condition_belief(belief, observer);
-        let pick = belief.alive().first().copied();
-        let battle = self.tracker.synthesize(
+        self.tracker.reconstruct_position(
             dex,
             &self.own_sets,
-            belief.refs(pick),
+            belief,
             observer,
             &self.request,
             rng,
-        )?;
-        let timers = self.tracker.hidden_timer_specs(dex, &battle);
-        Ok(ObservedPosition::reconstructed_with_timers(battle, timers))
+        )
     }
 
     /// Install only the observed opponent HP buckets; no own hidden set or

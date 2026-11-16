@@ -248,6 +248,7 @@ struct TVol {
 #[derive(Clone, Debug, Default)]
 struct TrackSide {
     mons: Vec<TrackMon>,
+    teamsize: Option<usize>,
     active: Option<usize>,
     /// (condition key, start turn).
     conds: Vec<(String, u16)>,
@@ -501,6 +502,13 @@ impl ProtocolTracker {
                 let Some(side) = Self::side_subject(arg(1)) else { return };
                 if let Some((sp, lv, g)) = Self::parse_details(dex, arg(2)) {
                     self.sides[side].mons.push(TrackMon::new(sp, lv, g, arg(3) == "item"));
+                }
+            }
+            "teamsize" => {
+                if let (Some(side), Ok(n)) = (Self::side_subject(arg(1)), arg(2).parse::<usize>()) {
+                    if n > 0 {
+                        self.sides[side].teamsize = Some(n);
+                    }
                 }
             }
             "turn" => {
@@ -1686,8 +1694,14 @@ impl ProtocolTracker {
         // other appeared picks, then imputed hidden picks (the determinizer
         // resamples those identities per iteration anyway)
         let ts = &self.sides[opp];
-        let picked = self.sides[me].mons.len().min(req.pokemon.len()).max(1);
-        let picked = picked.min(3); // NC2000: 3 picks
+        let appeared_count = ts.mons.iter().filter(|m| m.appeared).count();
+        let default_picks = ts.mons.len().min(3);
+        let picked = ts
+            .teamsize
+            .unwrap_or(default_picks)
+            .min(ts.mons.len())
+            .max(appeared_count)
+            .max(usize::from(!ts.mons.is_empty()));
         let mut opp_party: Vec<u8> = Vec::new();
         if let Some(a) = ts.active {
             opp_party.push(a as u8);
@@ -2410,6 +2424,26 @@ impl ProtocolTracker {
         }
         out
     }
+
+    /// Single-source player reconstruction shared by `LocalPlayer::position` and
+    /// `ProtocolAgent::install`: installs observed opponent HP buckets onto `belief`,
+    /// synthesizes the base `Battle` from `belief.alive().first()`, and attaches
+    /// hidden condition timer specs.
+    pub(crate) fn reconstruct_position(
+        &self,
+        dex: &Dex,
+        own_sets: &[PokemonSet],
+        belief: &mut Belief,
+        observer: &Observer,
+        request: &Request,
+        rng: &mut SplitMix64,
+    ) -> Result<crate::player_state::ObservedPosition, String> {
+        self.set_hp_observations(belief, observer.opp());
+        let pick = belief.alive().first().copied();
+        let battle = self.synthesize(dex, own_sets, belief.refs(pick), observer, request, rng)?;
+        let timers = self.hidden_timer_specs(dex, &battle);
+        Ok(crate::player_state::ObservedPosition::reconstructed_with_timers(battle, timers))
+    }
 }
 
 /// party := `slots` (display order); positions canonical (party index for
@@ -2744,20 +2778,10 @@ impl ProtocolAgent {
             }
         }
 
-        // Preserve player HP buckets across every candidate determinization.
-        self.tracker.set_hp_observations(belief, 1-self.side);
-        // synthesize
-        let pick = belief.alive().first().copied();
-        let battle = {
-            let refs = belief.refs(pick);
-            self.tracker.synthesize(dex, &self.own_sets, refs, obs, &req, &mut self.rng)?
-        };
-
-        let specs = self.tracker.hidden_timer_specs(dex, &battle);
-        let pos = crate::player_state::ObservedPosition::reconstructed_with_timers(
-            battle.clone(),
-            specs,
-        );
+        let pos =
+            self.tracker
+                .reconstruct_position(dex, &self.own_sets, belief, obs, &req, &mut self.rng)?;
+        let battle = pos.model().clone();
         // search + preview policy
         let mut search =
             BlindSearch::from_observation(&pos, dex, self.cfg.clone(), self.side, self.rng.next());
@@ -2828,8 +2852,6 @@ impl ProtocolAgent {
             }
             if legal.len() == 1 {
                 self.forced = Some(legal[0].clone());
-            } else {
-                search.prune_dominated();
             }
         }
         self.battle = Some(battle);
@@ -2922,18 +2944,7 @@ impl ProtocolAgent {
             return Some(best);
         }
         self.projections += 1;
-        let acts = search.actions();
-        let visits = search.visits();
-        let means = search.means();
-        let fallback = acts
-            .iter()
-            .enumerate()
-            .filter_map(|(i, &act)| {
-                let inp = ps_input(dex, act);
-                legal.contains(&inp).then_some((visits[i], means[i], inp))
-            })
-            .max_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.total_cmp(&b.1)))
-            .map(|(_, _, inp)| inp);
+        let fallback = projected_legal_fallback(search, dex, &legal);
         Some(fallback.unwrap_or_else(|| legal[0].clone()))
     }
 
@@ -2972,19 +2983,8 @@ impl ProtocolAgent {
             )
             .ok();
         }
-        let acts = search.actions();
-        let visits = search.visits();
-        let means = search.means();
-        let target = acts
-            .iter()
-            .enumerate()
-            .filter_map(|(i, &act)| {
-                let inp = ps_input(dex, act);
-                legal.contains(&inp).then_some((visits[i], means[i], inp))
-            })
-            .max_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.total_cmp(&b.1)))
-            .map(|(_, _, inp)| inp)
-            .unwrap_or_else(|| legal[0].clone());
+        let target =
+            projected_legal_fallback(search, dex, &legal).unwrap_or_else(|| legal[0].clone());
         Some(DecisionPolicy::pure("request-projected", target))
     }
 
@@ -3038,6 +3038,48 @@ impl ProtocolAgent {
         })
         .to_string()
     }
+}
+
+/// Pick the highest-visit (then mean, then lowest-index) request-legal
+/// action from `search`, preferring non-dominated/mask-eligible actions when
+/// any request-legal action is eligible.
+fn projected_legal_fallback(search: &BlindSearch, dex: &Dex, legal: &[String]) -> Option<String> {
+    let acts = search.actions();
+    let visits = search.visits();
+    let means = search.means();
+    let dominated = search.dominated();
+    let mask = search.mask();
+    let is_mask_allowed = |i: usize| mask.map_or(true, |m| m[i]);
+    let legal_acts: Vec<(usize, String)> = acts
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &act)| {
+            let inp = ps_input(dex, act);
+            legal.contains(&inp).then_some((i, inp))
+        })
+        .collect();
+    let has_eligible = legal_acts
+        .iter()
+        .any(|&(i, _)| is_mask_allowed(i) && !dominated[i]);
+    let has_masked = !has_eligible && legal_acts.iter().any(|&(i, _)| is_mask_allowed(i));
+    legal_acts
+        .into_iter()
+        .filter(|&(i, _)| {
+            if has_eligible {
+                is_mask_allowed(i) && !dominated[i]
+            } else if has_masked {
+                is_mask_allowed(i)
+            } else {
+                true
+            }
+        })
+        .max_by(|a, b| {
+            visits[a.0]
+                .cmp(&visits[b.0])
+                .then_with(|| means[a.0].total_cmp(&means[b.0]))
+                .then_with(|| b.0.cmp(&a.0))
+        })
+        .map(|(_, inp)| inp)
 }
 
 /// PS-canonical choice string: PS normalizes typed hidden powers to the
@@ -4164,6 +4206,124 @@ mod m17a_tests {
             kind: HiddenTimerKind::Sleep { slept: 1 },
         }));
     }
+
+    #[test]
+    fn teamsize_and_asymmetric_picks_preserve_foe_party_len_and_roundtrip() {
+        let dex = conformance::load_dex();
+        let pool = MetaPool { teams: Vec::new() };
+        let own = vec![test_set(
+            "Starmie",
+            55,
+            "Leftovers",
+            &["Surf", "Psychic", "Thunder Wave", "Recover"],
+        )];
+        let foe = vec![
+            test_set(
+                "Marowak",
+                50,
+                "Thick Club",
+                &["Earthquake", "Rock Slide", "Swords Dance", "Substitute"],
+            ),
+            test_set(
+                "Snorlax",
+                50,
+                "Leftovers",
+                &["Body Slam", "Belly Drum", "Curse", "Rest"],
+            ),
+        ];
+        // Case A: p2 has 1 mon (`teamsize|p2|1`), p1 has 2 mons and brings both (`teamsize|p1|2`).
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &foe, &own).unwrap();
+        b.set_log_enabled(true);
+        b.choose(&dex, 0, "team 1,2").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        let (local, obs) = crate::player_state::LocalPlayer::new(&b, &dex, 1).unwrap();
+        let mut belief = Belief::new(&dex, &pool, &obs);
+        belief.sync(&dex, &obs);
+        let pos = local
+            .position(&dex, &mut belief, &obs, &mut SplitMix64::new(7))
+            .unwrap();
+        assert_eq!(
+            pos.model().sides[0].party.len(),
+            2,
+            "1-mon Starmie side must still reconstruct p1's 2-mon party from |teamsize|p1|2"
+        );
+
+        // Case B: p1 has a full 6-mon canonical roster (`foe6`) but brings ONLY 2 (`|teamsize|p1|2`), round-tripped via PositionSpec.
+        let own6 = canonical_team(
+            &dex,
+            vec![
+                test_set("Starmie", 55, "Leftovers", &["Surf", "Psychic", "Thunder Wave", "Recover"]),
+                test_set("Snorlax", 50, "Mint Berry", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+                test_set("Zapdos", 50, "Miracle Berry", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+                test_set("Exeggutor", 50, "Gold Berry", &["Psychic", "Giga Drain", "Sleep Powder", "Explosion"]),
+                test_set("Gengar", 50, "Mystery Berry", &["Thunderbolt", "Ice Punch", "Destiny Bond", "Explosion"]),
+                test_set("Cloyster", 50, "Pink Bow", &["Surf", "Spikes", "Explosion", "Icy Wind"]),
+            ],
+        );
+        let foe6 = canonical_team(
+            &dex,
+            vec![
+                test_set("Marowak", 55, "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance", "Substitute"]),
+                test_set("Snorlax", 55, "Leftovers", &["Body Slam", "Belly Drum", "Curse", "Rest"]),
+                test_set("Raikou", 50, "Mint Berry", &["Thunderbolt", "Roar", "Rest", "Sleep Talk"]),
+                test_set("Suicune", 50, "Miracle Berry", &["Surf", "Ice Beam", "Rest", "Sleep Talk"]),
+                test_set("Misdreavus", 50, "Gold Berry", &["Thunder", "Mean Look", "Perish Song", "Protect"]),
+                test_set("Forretress", 50, "Mystery Berry", &["Spikes", "Rapid Spin", "Explosion", "Hidden Power"]),
+            ],
+        );
+        let mut agent = ProtocolAgent::new(&dex, 1, pool.clone(), RmConfig::default(), 21);
+        agent.set_own_team(own6.clone());
+        agent.pin_opponent(&dex, foe6.clone()).unwrap();
+        for line in poke_lines(&dex, "p1", &foe6)
+            .into_iter()
+            .chain(poke_lines(&dex, "p2", &own6))
+            .chain([
+                "|teampreview|3".to_string(),
+                "|teamsize|p1|2".to_string(),
+                "|teamsize|p2|3".to_string(),
+                "|start".to_string(),
+                "|switch|p1a: Marowak|Marowak, L55, M|100/100".to_string(),
+                "|switch|p2a: Starmie|Starmie, L55|180/180".to_string(),
+                "|turn|1".to_string(),
+            ])
+        {
+            agent.push_line(&dex, &line);
+        }
+        let req = serde_json::json!({
+            "active": [{
+                "moves": [
+                    {"id": "surf", "move": "Surf", "pp": 24, "maxpp": 24, "disabled": false},
+                    {"id": "psychic", "move": "Psychic", "pp": 16, "maxpp": 16, "disabled": false},
+                    {"id": "thunderwave", "move": "Thunder Wave", "pp": 32, "maxpp": 32, "disabled": false},
+                    {"id": "recover", "move": "Recover", "pp": 32, "maxpp": 32, "disabled": false}
+                ],
+                "trapped": false
+            }],
+            "side": {
+                "id": "p2",
+                "name": "p2",
+                "pokemon": [
+                    {"ident": "p2: Starmie", "details": "Starmie, L55", "condition": "180/180", "active": true, "item": "leftovers"},
+                    {"ident": "p2: Snorlax", "details": "Snorlax, L50, M", "condition": "266/266", "active": false, "item": "mintberry"},
+                    {"ident": "p2: Zapdos", "details": "Zapdos, L50", "condition": "196/196", "active": false, "item": "miracleberry"}
+                ]
+            },
+            "rqid": 1
+        })
+        .to_string();
+        assert!(agent.on_request(&dex, &req).unwrap());
+        assert_eq!(agent.battle().unwrap().sides[0].party.len(), 2);
+        let spec = agent.to_position_spec(&dex).unwrap();
+        assert_eq!(spec.sides[0].teamsize, Some(2));
+        assert_eq!(spec.sides[1].teamsize, None);
+        let json = serde_json::to_string(&spec).unwrap();
+        let parsed = crate::position::PositionSpec::parse(&json).unwrap();
+        assert_eq!(serde_json::to_string(&parsed).unwrap(), json);
+        let live = agent.resynthesize(&dex, 313).unwrap();
+        let rebuilt =
+            crate::position::synthesize_spec(&dex, &parsed, &pool, Some(&foe6), 313).unwrap();
+        assert_eq!(live.state_key128(), rebuilt.state_key128());
+    }
 }
 
 // ================================================== hand-entered positions
@@ -4346,6 +4506,7 @@ impl ProtocolTracker {
                 fainted_last_turn: ts.fainted_last_turn,
                 last_move: ts.side_last_move.map(|m| move_key(dex, m)),
                 party: Vec::new(),
+                teamsize: ts.teamsize.filter(|&n| n != ts.mons.len().min(3)),
             }
         };
         let mut sides = [side_spec(0), side_spec(1)];
@@ -4433,6 +4594,7 @@ impl ProtocolTracker {
                 dst.mons.push(TrackMon::from_spec(dex, m)?);
             }
             dst.active = src.active;
+            dst.teamsize = src.teamsize;
             dst.conds = src.conditions.iter().map(|c| (c.key.clone(), c.start_turn)).collect();
             dst.pending_bp = src.pending_bp;
             dst.acted_this_turn = src.acted_this_turn;

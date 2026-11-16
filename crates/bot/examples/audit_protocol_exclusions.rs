@@ -106,7 +106,7 @@ fn main() {
                 "actions":actions,"excluded":mask,"visits":visits,"means":means,"best":best}));
         }
         assert_eq!(runs[0]["actions"], runs[1]["actions"]);
-        assert_eq!(runs[0]["excluded"], json!([true, false]));
+        assert_eq!(runs[0]["excluded"], json!([false, false]));
         assert_eq!(runs[1]["excluded"], json!([false, false]));
         records.push(json!({"case":name,"same_player_frame":true,
             "same_weighted_prior_up_to_order":true,"frame":frame,"runs":runs}));
@@ -167,11 +167,12 @@ fn main() {
         })
         .collect();
     assert_eq!(hp_models[0]["announced_percent"], 50);
-    assert_ne!(hp_models[1]["announced_percent"], 50);
+    assert_eq!(hp_models[1]["announced_percent"], 50);
     let paths = [
         "crates/bot/examples/audit_protocol_exclusions.rs",
         "crates/bot/src/import.rs",
         "crates/bot/src/blind.rs",
+        "crates/bot/src/mask.rs",
         "crates/bot/src/smmcts.rs",
         "data/live-search.json",
         "data/search-profiles.json",

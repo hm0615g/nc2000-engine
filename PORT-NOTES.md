@@ -1,5 +1,7 @@
 # Porting notes (working memory — distilled from PS source @ 79c04dcc)
 
+> **Historical M2 porting notes (2026-07).** Distilled from upstream PS `gen2stadium2` during initial engine bring-up; for current NC2000 regulation invariants (`gen2nintendocup2000noohkostadium2strict` and operational Sleep Clause forfeit), see [`README.md`](README.md).
+
 Read once from PS; keep updated as the port progresses. All line refs are PS repo files.
 
 ## Merged script resolution for mod gen2stadium2 (chain: gen2stadium2 → gen2 → gen3 → gen4 → base)

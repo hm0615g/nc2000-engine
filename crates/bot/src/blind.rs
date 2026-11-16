@@ -77,7 +77,9 @@ use crate::player_state::{clean_sets_from_roster, submitted_team, LocalPlayer, O
 use crate::preview::{MetaPool, TableSet};
 use crate::prior::BeliefPrior;
 use crate::rng::SplitMix64;
-use crate::smmcts::{key_of, key_of_cached, run_iteration_cached, Node, RmConfig, SkuctSearch};
+#[cfg(test)]
+use crate::smmcts::key_of;
+use crate::smmcts::{key_of_cached, run_iteration_cached, Node, RmConfig, SkuctSearch};
 
 enum BeliefSource {
     Pool {
@@ -141,7 +143,6 @@ struct ImperfectInfoCore {
     adaptive_mixture: Option<AdaptiveMixture>,
     decision_policy: Option<Vec<f64>>,
     root_stats: RootSearchStats,
-    root_pruning: bool,
     track_move_telemetry: bool,
     move_marginals: [[f64; 4]; 6],
     move_turns: [u32; 6],
@@ -170,7 +171,6 @@ impl ImperfectInfoCore {
             adaptive_mixture: None,
             decision_policy: None,
             root_stats: RootSearchStats::default(),
-            root_pruning: false,
             track_move_telemetry,
             move_marginals: [[0.0; 4]; 6],
             move_turns: [0; 6],
@@ -205,9 +205,6 @@ impl ImperfectInfoCore {
         );
         if let Some(mixture) = &self.adaptive_mixture {
             name.push_str(&format!(":mix-probes={}", mixture.probe_iterations));
-        }
-        if self.root_pruning {
-            name.push_str(":root-prune");
         }
         if self.cfg.unseen_claw_root {
             name.push_str(":unseen-claw-root");
@@ -315,9 +312,6 @@ impl ImperfectInfoCore {
                 if opp_prior {
                     search.set_opponent_preview_prior(true);
                 }
-                if self.root_pruning {
-                    search.prune_dominated();
-                }
                 debug_assert_eq!(search.actions(), choices);
                 let g = self.game.as_ref().expect("search after lifecycle setup");
                 let probes = search.finish_with_typed_mixed_probes(
@@ -360,9 +354,6 @@ impl ImperfectInfoCore {
         bs.prune_preview_aliases(dex);
         if opp_prior {
             bs.set_opponent_preview_prior(true);
-        }
-        if self.root_pruning {
-            bs.prune_dominated();
         }
         debug_assert_eq!(
             bs.actions(),
@@ -634,11 +625,6 @@ impl BlindAgent {
         self
     }
 
-    pub fn with_root_pruning(mut self) -> Self {
-        self.core.root_pruning = true;
-        self
-    }
-
     /// Set the next decision's iteration budget without resetting observations
     /// or the search RNG. This only changes allocation, not the search policy.
     pub fn set_iterations(&mut self, iterations: u32) {
@@ -814,6 +800,7 @@ struct RootTypeStats {
     late_cells: Vec<(u32, f64)>,
 }
 
+#[cfg(test)]
 pub(crate) fn root_search_key(cfg: &RmConfig, dex: &Dex, battle: &mut Battle) -> u64 {
     root_search_key_cached(cfg, dex, battle, None)
 }
@@ -905,6 +892,11 @@ pub struct BlindSearch {
     my_mask: Option<Vec<bool>>,
     /// Final-choice exclusions: self-KO, sleep-forfeit risk, and proven no-ops.
     my_dominated: Vec<bool>,
+    my_dominated_reasons: Vec<Option<&'static str>>,
+    /// When enabled (always true on `from_observation`), UCB root exploration
+    /// skips `my_dominated` actions whenever an undominated allowed action exists,
+    /// without overwriting explicit `mask_actions` / alias masks.
+    prune_dominated: bool,
     opponent_preview_prior: bool,
     /// Per-determinization roots + full-state interior nodes.
     nodes: Vec<Node>,
@@ -957,8 +949,9 @@ impl BlindSearch {
     }
 
     /// Product search with caller-threaded PRNG: populates `my_dominated` only
-    /// from strictly public / own-certain no-op rules (`public_noop_reason`)
-    /// and installs the reconstructed hidden condition timers.
+    /// from strictly public / own-certain no-op rules (`public_noop_reason`),
+    /// enables root dominance pruning before UCB allocation, and installs the
+    /// reconstructed hidden condition timers.
     pub(crate) fn from_observation_with_rng(
         position: &ObservedPosition,
         dex: &Dex,
@@ -968,6 +961,7 @@ impl BlindSearch {
     ) -> BlindSearch {
         let mut search = Self::with_rng_inner(position.model(), dex, cfg, side, rng, false);
         search.use_public_exclusions(dex);
+        search.prune_dominated();
         search.set_hidden_timers(position.hidden_timers().to_vec());
         search
     }
@@ -976,11 +970,58 @@ impl BlindSearch {
         self.hidden_timers = timers;
     }
 
+    fn set_dominated_reasons(&mut self, reasons: Vec<Option<&'static str>>) {
+        self.my_dominated = reasons.iter().map(Option::is_some).collect();
+        self.my_dominated_reasons = reasons;
+    }
+
+    #[inline]
+    fn is_allowed(&self, i: usize) -> bool {
+        self.my_mask.as_ref().map_or(true, |mask| mask[i])
+    }
+
+    #[inline]
+    fn has_undominated_allowed(&self) -> bool {
+        (0..self.my_acts.len()).any(|i| self.is_allowed(i) && !self.my_dominated[i])
+    }
+
+    #[inline]
+    fn is_eligible(&self, i: usize, has_safe: bool) -> bool {
+        self.is_allowed(i) && (!has_safe || !self.my_dominated[i])
+    }
+
+    #[inline]
+    fn is_ucb_allowed(&self, i: usize, has_safe: bool) -> bool {
+        self.is_allowed(i) && (!self.prune_dominated || !has_safe || !self.my_dominated[i])
+    }
+
+    pub(crate) fn eligible_flags(&self) -> Vec<bool> {
+        let has_safe = self.has_undominated_allowed();
+        (0..self.my_acts.len())
+            .map(|i| self.is_eligible(i, has_safe))
+            .collect()
+    }
+
+    fn effective_visits(&self, is_elig: impl Fn(usize) -> bool) -> (bool, Vec<u32>) {
+        let ordinary =
+            (0..self.my_acts.len()).any(|i| is_elig(i) && self.my_n[i] > self.joint_probe_n[i]);
+        let eff_n = (0..self.my_acts.len())
+            .map(|i| {
+                if ordinary {
+                    self.my_n[i] - self.joint_probe_n[i]
+                } else {
+                    self.my_n[i]
+                }
+            })
+            .collect();
+        (ordinary, eff_n)
+    }
+
     fn use_public_exclusions(&mut self, dex: &Dex) {
         // Guessed hidden opponent attributes (Speed, Quick Claw, bench sets,
         // HP rolls) cannot prove action dominance. Exclude only pure-public /
         // own-certain no-ops that agree across every legal world.
-        self.my_dominated = self
+        let reasons = self
             .my_acts
             .iter()
             .map(|&c| {
@@ -991,9 +1032,9 @@ impl BlindSearch {
                     c,
                     self.cfg.mask_rules,
                 )
-                .is_some()
             })
             .collect();
+        self.set_dominated_reasons(reasons);
     }
 
     /// Full-world research API. Product callers use `from_observation`.
@@ -1043,16 +1084,15 @@ impl BlindSearch {
         }
         let turn_cap = base.turn.saturating_add(cfg.horizon);
         let my_acts = base.legal_choices(dex, side);
-        let my_dominated = if compute_dominated {
+        let my_dominated_reasons: Vec<Option<&'static str>> = if compute_dominated {
             my_acts
                 .iter()
-                .map(|&c| {
-                    crate::smmcts::dominated_reason(&base, dex, side, c, cfg.mask_rules).is_some()
-                })
+                .map(|&c| crate::smmcts::dominated_reason(&base, dex, side, c, cfg.mask_rules))
                 .collect()
         } else {
-            vec![false; my_acts.len()]
+            vec![None; my_acts.len()]
         };
+        let my_dominated = my_dominated_reasons.iter().map(Option::is_some).collect();
         let endgame = crate::smmcts::EndgameRootStats::new(&base, dex, side, &my_acts);
         let base_cache = crate::smmcts::build_search_cache(&cfg, dex, &base);
         let decision_seed = rng.0 ^ 0xa24baed4963ee407;
@@ -1082,6 +1122,8 @@ impl BlindSearch {
             my_w: vec![0.0; my_acts.len()],
             my_mask: None,
             my_dominated,
+            my_dominated_reasons,
+            prune_dominated: false,
             opponent_preview_prior: false,
             my_acts,
             nodes: Vec::new(),
@@ -1159,11 +1201,13 @@ impl BlindSearch {
     }
 
     /// Predict the RNG draws and resulting opponent party of `Belief::determinize_in_place`
-    /// when no pick distribution or extra per-mon RNG draws occur.
+    /// by delegating directly to `Belief::sample_hidden_party`.
     #[inline]
     fn predict_determinization_draws(
         &self,
+        belief: &Belief,
         obs: &Observer,
+        plan_pick: TeamPlanPick,
         rng_probe: &mut SplitMix64,
     ) -> (u64, bool, [u8; 6], usize) {
         let seed = rng_probe.next();
@@ -1173,88 +1217,15 @@ impl BlindSearch {
 
         let opp = 1 - self.side;
         let opp_side = &self.base.sides[opp];
-        let roster_len = opp_side.roster.len();
-        let party_len = opp_side.party.len();
+        let (raw_party, party_len, _) = belief.sample_hidden_party(
+            obs,
+            plan_pick.pool_index(),
+            opp_side,
+            self.base.preview_level_caps[opp],
+            rng_probe,
+        );
         let mut party_key = [0xFFu8; 6];
-        for (i, &s) in opp_side.party.iter().enumerate() {
-            party_key[i] = s;
-        }
-        if party_len < roster_len {
-            let mut appeared = [false; 6];
-            for (i, p) in opp_side.roster.iter().enumerate() {
-                appeared[i] = p.previously_switched_in > 0 || p.is_active;
-            }
-            let mut hidden_positions = [0usize; 6];
-            let mut hidden_len = 0usize;
-            for pos in 0..party_len {
-                if !appeared[party_key[pos] as usize] {
-                    hidden_positions[hidden_len] = pos;
-                    hidden_len += 1;
-                }
-            }
-            let mut pool = [0u8; 6];
-            let mut pool_len = 0usize;
-            for s in 0..roster_len {
-                if !appeared[s] {
-                    pool[pool_len] = s as u8;
-                    pool_len += 1;
-                }
-            }
-            for &pos in &hidden_positions[..hidden_len] {
-                let idx = rng_probe.below(pool_len);
-                let new_slot = pool[idx];
-                pool_len -= 1;
-                pool[idx] = pool[pool_len];
-                party_key[pos] = new_slot;
-            }
-            if let Some(cap) = self.base.preview_level_caps[opp].filter(|_| hidden_len > 0) {
-                let level = |mask: u8| {
-                    obs.mons()
-                        .iter()
-                        .enumerate()
-                        .filter(|(slot, _)| mask & (1 << slot) != 0)
-                        .map(|(_, mon)| u32::from(mon.level))
-                        .sum::<u32>()
-                };
-                let mask = party_key[..party_len]
-                    .iter()
-                    .fold(0u8, |m, &slot| m | (1 << slot));
-                if level(mask) > cap {
-                    let public = appeared[..roster_len]
-                        .iter()
-                        .enumerate()
-                        .fold(0u8, |m, (slot, &seen)| m | (u8::from(seen) << slot));
-                    let mut legal = [0u8; 64];
-                    let mut legal_len = 0usize;
-                    for m in 0..(1u8 << roster_len) {
-                        if m.count_ones() as usize == party_len
-                            && (m & public) == public
-                            && level(m) <= cap
-                        {
-                            legal[legal_len] = m;
-                            legal_len += 1;
-                        }
-                    }
-                    if legal_len > 0 {
-                        let chosen_mask = legal[rng_probe.below(legal_len)];
-                        pool_len = 0;
-                        for slot in 0..roster_len {
-                            if (chosen_mask & (1 << slot)) != 0 && !appeared[slot] {
-                                pool[pool_len] = slot as u8;
-                                pool_len += 1;
-                            }
-                        }
-                        for &pos in &hidden_positions[..hidden_len] {
-                            let idx = rng_probe.below(pool_len);
-                            let new_slot = pool[idx];
-                            pool_len -= 1;
-                            pool[idx] = pool[pool_len];
-                            party_key[pos] = new_slot;
-                        }
-                    }
-                }
-            }
-        }
+        party_key[..party_len].copy_from_slice(&raw_party[..party_len]);
         (post_qc_seed, qc, party_key, party_len)
     }
 
@@ -1283,7 +1254,7 @@ impl BlindSearch {
                 belief.predict_plan_draws(plan_pick, &self.base, 1 - self.side, &mut rng_probe)
             {
                 let (post_qc_seed, qc, party_key, party_len) =
-                    self.predict_determinization_draws(obs, &mut rng_probe);
+                    self.predict_determinization_draws(belief, obs, plan_pick, &mut rng_probe);
                 let cache_key = (plan_pick, fb_key, party_key, qc);
                 if let Some(cached) = self.det_cache.get(&cache_key) {
                     self.rng = rng_probe;
@@ -1495,38 +1466,36 @@ impl BlindSearch {
             && self.done >= 512
             && self.root_types[type_index].replies > 0
         {
-                let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
-                let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
-                let elig: nc2000_engine::smallvec::SmallVec<[usize; 8]> = (0..self.my_acts.len())
-                    .filter(|&i| allowed(i) && (!safe || !self.my_dominated[i]))
-                    .collect();
-                let n_elig = (elig.len().max(1)) as u32;
-                let stats = &self.root_types[type_index];
-                let replies = stats.replies;
-                let world_floor = (stats.samples / (3 * n_elig)).min(48);
-                elig.into_iter()
-                    .filter_map(|i| {
-                        let row_start = i * replies;
-                        let w_n: u32 = stats
-                            .cells
-                            .get(row_start..row_start + replies)
-                            .map_or(0, |row| row.iter().map(|&(n, _)| n).sum());
-                        (w_n < world_floor).then_some((w_n, self.my_n[i], i))
-                    })
-                    .min_by_key(|&(w_n, g_n, _)| (w_n, g_n))
-                    .map(|(_, _, i)| i)
-            } else {
-                None
-            };
+            let has_safe = self.has_undominated_allowed();
+            let elig: nc2000_engine::smallvec::SmallVec<[usize; 8]> = (0..self.my_acts.len())
+                .filter(|&i| self.is_eligible(i, has_safe))
+                .collect();
+            let n_elig = (elig.len().max(1)) as u32;
+            let stats = &self.root_types[type_index];
+            let replies = stats.replies;
+            let world_floor = (stats.samples / (3 * n_elig)).min(48);
+            elig.into_iter()
+                .filter_map(|i| {
+                    let row_start = i * replies;
+                    let w_n: u32 = stats
+                        .cells
+                        .get(row_start..row_start + replies)
+                        .map_or(0, |row| row.iter().map(|&(n, _)| n).sum());
+                    (w_n < world_floor).then_some((w_n, self.my_n[i], i))
+                })
+                .min_by_key(|&(w_n, g_n, _)| (w_n, g_n))
+                .map(|(_, _, i)| i)
+        } else {
+            None
+        };
         let revisit_action = if self.cfg.root_revisit_interval > 0
             && !self.is_preview()
             && self.done > 0
             && self.done % self.cfg.root_revisit_interval == 0
         {
-            let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
-            let has_safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
+            let has_safe = self.has_undominated_allowed();
             (0..self.my_acts.len())
-                .filter(|&i| allowed(i) && (!has_safe || !self.my_dominated[i]))
+                .filter(|&i| self.is_eligible(i, has_safe))
                 .min_by_key(|&i| self.my_n[i])
         } else {
             None
@@ -1538,12 +1507,19 @@ impl BlindSearch {
             self.my_n[action] += 1;
             action
         } else {
+            let has_safe = self.has_undominated_allowed();
+            let my_mask = &self.my_mask;
+            let my_dominated = &self.my_dominated;
+            let prune_dominated = self.prune_dominated;
             select_global_with_prior(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.my_n,
                 &self.my_w,
-                self.my_mask.as_deref(),
+                |a| {
+                    my_mask.as_ref().map_or(true, |m| m[a])
+                        && (!prune_dominated || !has_safe || !my_dominated[a])
+                },
                 self.bayesian_row_q.as_deref(),
             )
         };
@@ -1765,7 +1741,7 @@ impl BlindSearch {
         if let ForcedRoot::Action { own, .. } = forcing {
             assert!(own < self.my_acts.len(), "forced root action out of range");
             assert!(
-                self.my_mask.as_ref().map_or(true, |mask| mask[own]),
+                self.is_ucb_allowed(own, self.has_undominated_allowed()),
                 "forced root action is masked"
             );
         }
@@ -1791,12 +1767,10 @@ impl BlindSearch {
             }
             ForcedRoot::TypeProbe => {
                 let replies = self.nodes[root].acts[1 - self.side].len();
+                let has_safe = self.has_undominated_allowed();
                 let stats = &self.root_types[type_index];
                 let selected = (0..self.my_acts.len())
-                    .filter(|&own| {
-                        !self.my_dominated[own]
-                            && self.my_mask.as_ref().map_or(true, |mask| mask[own])
-                    })
+                    .filter(|&own| self.is_eligible(own, has_safe))
                     .flat_map(|own| (0..replies).map(move |reply| (own, reply)))
                     .min_by_key(|&(own, reply)| stats.cells[own * replies + reply].0);
                 match selected {
@@ -1805,17 +1779,25 @@ impl BlindSearch {
                         self.joint_probe_n[own] += 1;
                         (own, Some(reply), true)
                     }
-                    None => (
-                        select_global(
-                            &self.cfg,
-                            &mut self.rng,
-                            &mut self.my_n,
-                            &self.my_w,
-                            self.my_mask.as_deref(),
-                        ),
-                        None,
-                        false,
-                    ),
+                    None => {
+                        let my_mask = &self.my_mask;
+                        let my_dominated = &self.my_dominated;
+                        let prune_dominated = self.prune_dominated;
+                        (
+                            select_global(
+                                &self.cfg,
+                                &mut self.rng,
+                                &mut self.my_n,
+                                &self.my_w,
+                                |a| {
+                                    my_mask.as_ref().map_or(true, |m| m[a])
+                                        && (!prune_dominated || !has_safe || !my_dominated[a])
+                                },
+                            ),
+                            None,
+                            false,
+                        )
+                    }
                 }
             }
         };
@@ -2231,6 +2213,16 @@ impl BlindSearch {
         &self.my_dominated
     }
 
+    /// Exclusion reasons aligned 1:1 with `actions()` and `dominated()`.
+    pub fn dominated_reasons(&self) -> &[Option<&'static str>] {
+        &self.my_dominated_reasons
+    }
+
+    /// Optional root-action legality/pruning mask aligned with `actions()`.
+    pub fn mask(&self) -> Option<&[bool]> {
+        self.my_mask.as_deref()
+    }
+
     /// Per-action mean rewards (own perspective — `my_w` is accumulated
     /// from this side's view), 0.5 when unvisited.
     pub fn means(&self) -> Vec<f64> {
@@ -2256,15 +2248,7 @@ impl BlindSearch {
     }
 
     pub fn prune_dominated(&mut self) {
-        let allowed: Vec<bool> = self
-            .my_dominated
-            .iter()
-            .enumerate()
-            .map(|(i, &dominated)| !dominated && self.my_mask.as_ref().map_or(true, |m| m[i]))
-            .collect();
-        if allowed.iter().any(|&x| x) {
-            self.mask_actions(&allowed);
-        }
+        self.prune_dominated = true;
     }
 
     pub fn prune_preview_aliases(&mut self, dex: &Dex) -> usize {
@@ -2402,9 +2386,7 @@ impl BlindSearch {
     }
 
     pub fn should_early_stop(&self) -> bool {
-        let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |m| m[i]);
-        let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
-        let eligible = |i: usize| allowed(i) && (!safe || !self.my_dominated[i]);
+        let has_safe = self.has_undominated_allowed();
         self.endgame.should_early_stop(
             self.cfg.endgame_rules,
             self.done,
@@ -2412,25 +2394,14 @@ impl BlindSearch {
             self.is_preview(),
             &self.my_n,
             &self.my_w,
-            eligible,
+            |i| self.is_eligible(i, has_safe),
         )
     }
 
     pub fn endgame_analysis(&self) -> Option<crate::smmcts::EndgameDecisionInfo> {
-        let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |m| m[i]);
-        let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
-        let eligible = |i: usize| allowed(i) && (!safe || !self.my_dominated[i]);
-        let ordinary =
-            (0..self.my_acts.len()).any(|i| eligible(i) && self.my_n[i] > self.joint_probe_n[i]);
-        let eff_n: Vec<u32> = (0..self.my_acts.len())
-            .map(|i| {
-                if ordinary {
-                    self.my_n[i] - self.joint_probe_n[i]
-                } else {
-                    self.my_n[i]
-                }
-            })
-            .collect();
+        let has_safe = self.has_undominated_allowed();
+        let eligible = |i: usize| self.is_eligible(i, has_safe);
+        let (_, eff_n) = self.effective_visits(eligible);
         self.endgame.analyze(
             self.cfg.endgame_rules,
             &self.my_acts,
@@ -2443,89 +2414,44 @@ impl BlindSearch {
     }
 
     pub fn best(&self) -> Option<SearchChoice> {
-        let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |m| m[i]);
-        let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
-        let eligible = |i: usize| allowed(i) && (!safe || !self.my_dominated[i]);
-        let ordinary =
-            (0..self.my_acts.len()).any(|i| eligible(i) && self.my_n[i] > self.joint_probe_n[i]);
+        let has_safe = self.has_undominated_allowed();
+        let eligible = |i: usize| self.is_eligible(i, has_safe);
+        let (_, eff_n) = self.effective_visits(eligible);
         if !self.is_preview() {
-            let eff_n: Vec<u32> = (0..self.my_acts.len())
-                .map(|i| {
-                    if ordinary {
-                        self.my_n[i] - self.joint_probe_n[i]
-                    } else {
-                        self.my_n[i]
-                    }
-                })
-                .collect();
-            if self.cfg.endgame_rules.decision_any() {
-                if let Some(info) = self.endgame.analyze(
-                    self.cfg.endgame_rules,
-                    &self.my_acts,
-                    &self.my_n,
-                    &eff_n,
-                    &self.my_w,
-                    eligible,
-                    |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
-                ) {
-                    if matches!(
-                        info.regime,
-                        crate::smmcts::EndgameRegime::FastWin
-                            | crate::smmcts::EndgameRegime::SafeWin
-                            | crate::smmcts::EndgameRegime::ComebackLoss
-                    ) {
-                        return Some(self.my_acts[info.chosen_idx]);
-                    }
-                }
-            }
-            let base_idx = if self.cfg.endgame_rules.decision_any() {
-                self.endgame.select_best(
-                    self.cfg.endgame_rules,
-                    &self.my_acts,
-                    &self.my_n,
-                    &eff_n,
-                    &self.my_w,
-                    eligible,
-                    |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
-                )?
-            } else {
-                (0..self.my_acts.len())
-                    .filter(|&i| eligible(i))
-                    .max_by(|&a, &b| {
-                        crate::smmcts::cmp_visits_then_mean(&eff_n, &self.my_n, &self.my_w, a, b)
-                    })?
-            };
-            if !self.nodes.is_empty() && self.done >= 64 {
-                if let Some(eq) = self.bayesian_equilibrium() {
-                    if eq.override_value
-                        > eq.pure_guarantees[base_idx] + crate::root_policy::MIN_MIX_MARGIN
-                    {
-                        let draw =
-                            SplitMix64::new(self.decision_seed ^ u64::from(self.done)).next_f64();
-                        if let Some(choice) = draw_policy(&self.my_acts, &eq.policy, draw) {
-                            return Some(choice);
+            return crate::endgame_root::select_blind_root_choice(
+                &self.endgame,
+                self.cfg.endgame_rules,
+                &self.my_acts,
+                &self.my_n,
+                &eff_n,
+                &self.my_w,
+                eligible,
+                |own, n_i, mean_i| self.reply_metrics(own, n_i, mean_i),
+                |base_idx| {
+                    if !self.nodes.is_empty() && self.done >= 64 {
+                        if let Some(eq) = self.bayesian_equilibrium() {
+                            if eq.override_value
+                                > eq.pure_guarantees[base_idx] + crate::root_policy::MIN_MIX_MARGIN
+                            {
+                                let draw =
+                                    SplitMix64::new(self.decision_seed ^ u64::from(self.done))
+                                        .next_f64();
+                                return draw_policy(&self.my_acts, &eq.policy, draw);
+                            }
                         }
                     }
-                }
-            }
-            return Some(self.my_acts[base_idx]);
+                    None
+                },
+            );
         }
         if self.is_preview() {
             return (0..self.my_acts.len())
                 .filter(|&i| eligible(i))
                 .max_by(|&a, &b| {
-                    let na = if ordinary {
-                        self.my_n[a] - self.joint_probe_n[a]
-                    } else {
-                        self.my_n[a]
-                    };
-                    let nb = if ordinary {
-                        self.my_n[b] - self.joint_probe_n[b]
-                    } else {
-                        self.my_n[b]
-                    };
-                    na.cmp(&nb)
+                    eff_n[a]
+                        .cmp(&eff_n[b])
                         .then_with(|| self.my_w[a].total_cmp(&self.my_w[b]))
+                        .then_with(|| b.cmp(&a))
                 })
                 .map(|i| self.my_acts[i]);
         }
@@ -2536,22 +2462,8 @@ impl BlindSearch {
         if self.is_preview() || self.root_types.is_empty() {
             return None;
         }
-        let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |m| m[i]);
-        let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
-        let eligible: Vec<bool> = (0..self.my_acts.len())
-            .map(|i| allowed(i) && (!safe || !self.my_dominated[i]))
-            .collect();
-        let ordinary =
-            (0..self.my_acts.len()).any(|i| eligible[i] && self.my_n[i] > self.joint_probe_n[i]);
-        let eff_n: Vec<u32> = (0..self.my_acts.len())
-            .map(|i| {
-                if ordinary {
-                    self.my_n[i] - self.joint_probe_n[i]
-                } else {
-                    self.my_n[i]
-                }
-            })
-            .collect();
+        let eligible = self.eligible_flags();
+        let (_, eff_n) = self.effective_visits(|i| eligible[i]);
         let total_late: u64 = self
             .root_types
             .iter()
@@ -2677,14 +2589,15 @@ impl BlindSearch {
             return Some(DecisionPolicy::pure("estimated-mix-fallback", best));
         }
         if mode == PolicyMode::VisitSample {
-            let allowed = |i: usize| self.my_mask.as_ref().map_or(true, |mask| mask[i]);
-            let safe = (0..self.my_acts.len()).any(|i| allowed(i) && !self.my_dominated[i]);
+            let has_safe = self.has_undominated_allowed();
+            let eligible = |i: usize| self.is_eligible(i, has_safe);
+            let (_, eff_n) = self.effective_visits(eligible);
             let entries = self
                 .my_acts
                 .iter()
                 .enumerate()
-                .filter(|&(i, _)| allowed(i) && (!safe || !self.my_dominated[i]))
-                .map(|(i, &action)| (action, f64::from(self.my_n[i] - self.joint_probe_n[i])));
+                .filter(|&(i, _)| eligible(i))
+                .map(|(i, &action)| (action, f64::from(eff_n[i])));
             if let Ok(policy) = DecisionPolicy::new("visit-sample", entries) {
                 return Some(policy);
             }
@@ -2694,9 +2607,7 @@ impl BlindSearch {
     }
 
     pub fn root_policy_evidence(&self) -> (Vec<bool>, Vec<crate::root_policy::RootType>) {
-        let eligible: Vec<bool> = (0..self.my_acts.len())
-            .map(|i| self.my_mask.as_ref().map_or(true, |m| m[i]) && !self.my_dominated[i])
-            .collect();
+        let eligible = self.eligible_flags();
         let types = self
             .root_types
             .iter()
@@ -2746,9 +2657,10 @@ impl BlindSearch {
 
     pub fn step_joint_probes(&mut self, dex: &Dex, belief: &Belief, obs: &Observer, n: u32) -> u32 {
         for _ in 0..n {
+            let has_safe = self.has_undominated_allowed();
             let mut selected = None;
             for own in 0..self.my_acts.len() {
-                if self.my_dominated[own] || !self.my_mask.as_ref().map_or(true, |m| m[own]) {
+                if !self.is_eligible(own, has_safe) {
                     continue;
                 }
                 for &(reply, available) in &self.avail {
@@ -2855,17 +2767,16 @@ impl BlindSearch {
 }
 
 /// UCB1 over the global (information-set) root stats — same rule and rng
-/// draw pattern as `smmcts::select_ucb`, on plain arrays. `mask` (M15)
-/// restricts the pick to allowed indices; `None` is bit-identical to the
-/// unmasked original.
+/// draw pattern as `smmcts::select_ucb`, on plain arrays. `ok` restricts the
+/// pick to eligible indices while preserving the exact RNG draw stream.
 fn select_global(
     cfg: &RmConfig,
     rng: &mut SplitMix64,
     n: &mut [u32],
     w: &[f64],
-    mask: Option<&[bool]>,
+    ok: impl Fn(usize) -> bool,
 ) -> usize {
-    select_global_with_prior(cfg, rng, n, w, mask, None)
+    select_global_with_prior(cfg, rng, n, w, ok, None)
 }
 
 fn select_global_with_prior(
@@ -2873,11 +2784,10 @@ fn select_global_with_prior(
     rng: &mut SplitMix64,
     n: &mut [u32],
     w: &[f64],
-    mask: Option<&[bool]>,
+    ok: impl Fn(usize) -> bool,
     bayesian_q: Option<&[f64]>,
 ) -> usize {
     let k = n.len();
-    let ok = |a: usize| mask.map_or(true, |m| m[a]);
     let mut n_untried = 0usize;
     for a in 0..k {
         if n[a] == 0 && ok(a) {
@@ -2980,11 +2890,6 @@ impl OpenAgent {
 
     pub fn with_adaptive_mixture(mut self, probe_iterations: u32) -> Self {
         self.core.set_adaptive_mixture(probe_iterations);
-        self
-    }
-
-    pub fn with_root_pruning(mut self) -> Self {
-        self.core.root_pruning = true;
         self
     }
 
@@ -3372,13 +3277,22 @@ mod mixed_selection_tests {
             let mut battle=Battle::from_fixture(&dex,"1,2,3,4",&[set(species,&moves)],&[set("Snorlax",&["Return"])]).unwrap();
             battle.choose(&dex,0,"team 1").unwrap();battle.choose(&dex,1,"team 1").unwrap();
             let cfg=RmConfig{iterations:300,c:0.4,..Default::default()};
-            let mut ordinary=BlindAgent::new(cfg.clone(),Arc::new(MetaPool{teams:vec![]}),None,17);
-            let mut pruned=BlindAgent::new(cfg,Arc::new(MetaPool{teams:vec![]}),None,17).with_root_pruning();
-            let choices=battle.legal_choices(&dex,0);
-            // These moves are not public forfeits. A guessed no-op cannot
-            // become a fixed exclusion or alter the sampling stream.
-            assert_eq!(ordinary.choose(&battle,&dex,0,&choices),pruned.choose(&battle,&dex,0,&choices));
-            assert_eq!(ordinary.search_rng_state(),pruned.search_rng_state());
+            let (local, obs) = LocalPlayer::new(&battle, &dex, 0).unwrap();
+            let mut bel_a = Belief::new(&dex, &MetaPool { teams: vec![] }, &obs);
+            let mut bel_b = Belief::new(&dex, &MetaPool { teams: vec![] }, &obs);
+            let pos_a = local.position(&dex, &mut bel_a, &obs, &mut SplitMix64::new(17)).unwrap();
+            let pos_b = local.position(&dex, &mut bel_b, &obs, &mut SplitMix64::new(17)).unwrap();
+            let mut pruned = BlindSearch::from_observation(&pos_a, &dex, cfg.clone(), 0, 99);
+            let mut unpruned = BlindSearch::from_observation(&pos_b, &dex, cfg, 0, 99);
+            unpruned.prune_dominated = false;
+            // Non-public guesses (Alakazam Recover) and all-dominated fallbacks
+            // (last-mon Gengar with ONLY Destiny Bond + Perish Song) must preserve
+            // the exact unpruned UCB visit distribution and RNG stream.
+            pruned.step(&dex, &bel_a, &obs, 300);
+            unpruned.step(&dex, &bel_b, &obs, 300);
+            assert_eq!(pruned.visits(), unpruned.visits());
+            assert_eq!(pruned.best(), unpruned.best());
+            assert_eq!(pruned.rng.0, unpruned.rng.0);
         }
     }
 
