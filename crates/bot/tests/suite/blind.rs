@@ -90,27 +90,22 @@ fn projection(
 
 #[test]
 fn no_psychic_tells_on_the_collision_pair() {
-    collision_invariance(false, false, false, false, false, false);
+    collision_invariance(false, false, false, false, false);
 }
 
 #[test]
 fn adaptive_mixture_has_no_psychic_tells_on_the_collision_pair() {
-    collision_invariance(true, false, false, false, false, false);
-}
-
-#[test]
-fn root_pruning_has_no_psychic_tells_on_the_collision_pair() {
-    collision_invariance(false, true, false, false, false, false);
+    collision_invariance(true, false, false, false, false);
 }
 
 #[test]
 fn sleep_collapsing_has_no_psychic_tells_on_the_collision_pair() {
-    collision_invariance(false, false, true, false, false, false);
+    collision_invariance(false, true, false, false, false);
 }
 
 #[test]
 fn root_revisits_have_no_psychic_tells_on_the_collision_pair() {
-    collision_invariance(false, false, false, true, false, false);
+    collision_invariance(false, false, true, false, false);
 }
 
 #[test]
@@ -180,15 +175,15 @@ fn active_mixture_is_identical_across_ambiguous_hidden_stats() {
 
 #[test]
 fn canonical_claw_hidden_state_collision_invariance() {
-    collision_invariance(false, false, false, false, true, false);
+    collision_invariance(false, false, false, true, false);
 }
 
 #[test]
 fn unseen_claw_root_has_no_psychic_tells() {
-    collision_invariance(false, false, false, false, false, true);
+    collision_invariance(false, false, false, false, true);
 }
 
-fn collision_invariance(mixed: bool, prune: bool, sleep_collapse: bool, revisit: bool, canonical_claw_key: bool, unseen_claw_root: bool) {
+fn collision_invariance(mixed: bool, sleep_collapse: bool, revisit: bool, canonical_claw_key: bool, unseen_claw_root: bool) {
     let dex = common::dex();
     let meta = pool();
     let (ci, cj) = collision_pair(&meta);
@@ -212,10 +207,6 @@ fn collision_invariance(mixed: bool, prune: bool, sleep_collapse: bool, revisit:
         if mixed {
             agent_a = agent_a.with_adaptive_mixture(38);
             agent_b = agent_b.with_adaptive_mixture(38);
-        }
-        if prune {
-            agent_a = agent_a.with_root_pruning();
-            agent_b = agent_b.with_root_pruning();
         }
 
         // test-owned observers/beliefs (independent of the agents') define

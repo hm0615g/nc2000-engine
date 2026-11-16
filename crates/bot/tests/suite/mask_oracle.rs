@@ -11,8 +11,8 @@ use nc2000_bot::{
     player::PlayerChannel,
     player_state::LocalPlayer,
     preview::{MetaPool, MetaTeam},
-    Belief, BlindSearch, MaxDamageAgent, ProtocolAgent, RmAgent, RmConfig, SkuctSearch, SplitMix64,
-    Agent,
+    Agent, Belief, BlindAgent, BlindSearch, MaxDamageAgent, OpenAgent, ProtocolAgent, RmAgent,
+    RmConfig, SkuctSearch, SplitMix64,
 };
 use nc2000_engine::{
     battle::{Outcome, PokemonSet, SearchChoice},
@@ -520,4 +520,105 @@ fn analysis_report_dominated_reasons_never_contradict_public_mask_or_leak_imputa
         }
     }
     assert!(saw_reflect && saw_recover);
+}
+
+#[test]
+fn all_blind_entrypoints_prune_public_dominated_actions_before_ucb_and_compose_with_masks() {
+    let dex = conformance::load_dex();
+    let own = vec![mk_set(
+        "Gengar",
+        "Leftovers",
+        &["Ice Punch", "Thunderbolt", "Perish Song", "Destiny Bond"],
+        50,
+    )];
+    let foe = vec![mk_set("Snorlax", "Leftovers", &["Body Slam", "Splash"], 50)];
+    let mut b = Battle::from_fixture(&dex, "1,2,3,4", &own, &foe).unwrap();
+    let pool = MetaPool {
+        teams: vec![MetaTeam {
+            id: "lax".into(),
+            sets: foe.clone(),
+            weight: Some(1.0),
+        }],
+    };
+    let pool_arc = std::sync::Arc::new(pool.clone());
+    let cfg = RmConfig {
+        iterations: 128,
+        c: 0.4,
+        ..Default::default()
+    };
+
+    // Advance BlindAgent and OpenAgent through Team Preview so they hold live game state.
+    let mut blind_agent = BlindAgent::new(cfg.clone(), pool_arc, None, 314);
+    let mut open_agent = OpenAgent::new(cfg.clone(), None, 314);
+    let prev_choices = b.legal_choices(&dex, 0);
+    let _ = blind_agent.choose(&b, &dex, 0, &prev_choices);
+    let _ = open_agent.choose(&b, &dex, 0, &prev_choices);
+
+    b.choose(&dex, 0, "team 1").unwrap();
+    b.choose(&dex, 1, "team 1").unwrap();
+    let mut ch = PlayerChannel::new(0);
+    let frame = ch.frame(&mut b, &dex).unwrap();
+
+    // 1. ProtocolAgent entrypoint
+    let mut proto = ProtocolAgent::new(&dex, 0, pool.clone(), cfg.clone(), 314);
+    proto.set_own_team(own.clone());
+    for line in &frame.lines {
+        proto.push_line(&dex, line);
+    }
+    proto.on_request(&dex, &frame.request.to_string()).unwrap();
+    proto.step(&dex, 128).unwrap();
+    let proto_search = proto.search().unwrap();
+
+    // 2. Direct BlindSearch::from_observation entrypoint (used by WasmBlindSearcher)
+    let (local, obs) = LocalPlayer::new(&b, &dex, 0).unwrap();
+    let mut bel = Belief::new(&dex, &pool, &obs);
+    bel.sync(&dex, &obs);
+    let pos = local.position(&dex, &mut bel, &obs, &mut SplitMix64::new(55)).unwrap();
+    let mut obs_search = BlindSearch::from_observation(&pos, &dex, cfg.clone(), 0, 999);
+    obs_search.step(&dex, &bel, &obs, 128);
+
+    // 3. BlindAgent & OpenAgent root_policy (which reflects visit / decision support)
+    let legal = b.legal_choices(&dex, 0);
+    let blind_pol = blind_agent.root_policy(&b, &dex, 0, &legal);
+    let open_pol = open_agent.root_policy(&b, &dex, 0, &legal);
+
+    let perish = SearchChoice::Move(dex.moves.id("perishsong").unwrap());
+    let dbond = SearchChoice::Move(dex.moves.id("destinybond").unwrap());
+    for (i, &act) in legal.iter().enumerate() {
+        let is_dom = act == perish || act == dbond;
+        assert_eq!(proto_search.dominated()[i], is_dom);
+        assert_eq!(obs_search.dominated()[i], is_dom);
+        if is_dom {
+            assert_eq!(
+                proto_search.visits()[i],
+                0,
+                "ProtocolAgent must allocate 0 visits to publicly dominated {act:?}"
+            );
+            assert_eq!(
+                obs_search.visits()[i],
+                0,
+                "BlindSearch::from_observation must allocate 0 visits to publicly dominated {act:?}"
+            );
+            assert_eq!(blind_pol[i], 0.0);
+            assert_eq!(open_pol[i], 0.0);
+        }
+    }
+    assert_eq!(proto_search.visits().iter().sum::<u32>(), 128);
+    assert_eq!(obs_search.visits().iter().sum::<u32>(), 128);
+
+    // 4. Explicit `mask_actions` called AFTER `from_observation` never accidentally un-prunes
+    //    dominated actions when a live action stays allowed, yet falls back cleanly when ONLY
+    //    dominated actions stay allowed.
+    let mut partial_mask_search = BlindSearch::from_observation(&pos, &dex, cfg.clone(), 0, 999);
+    // Allow Ice Punch (0), mask Thunderbolt (1), allow Perish Song (2) & Destiny Bond (3):
+    // Perish Song and Destiny Bond must STILL get 0 visits because Ice Punch is undominated!
+    partial_mask_search.mask_actions(&[true, false, true, true]);
+    partial_mask_search.step(&dex, &bel, &obs, 32);
+    assert_eq!(partial_mask_search.visits(), &[32, 0, 0, 0]);
+
+    let mut only_dom_allowed = BlindSearch::from_observation(&pos, &dex, cfg, 0, 999);
+    only_dom_allowed.mask_actions(&[false, false, true, false]);
+    only_dom_allowed.step(&dex, &bel, &obs, 16);
+    assert_eq!(only_dom_allowed.visits(), &[0, 0, 16, 0]);
+    assert_eq!(only_dom_allowed.best(), Some(perish));
 }

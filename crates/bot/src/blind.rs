@@ -143,7 +143,6 @@ struct ImperfectInfoCore {
     adaptive_mixture: Option<AdaptiveMixture>,
     decision_policy: Option<Vec<f64>>,
     root_stats: RootSearchStats,
-    root_pruning: bool,
     track_move_telemetry: bool,
     move_marginals: [[f64; 4]; 6],
     move_turns: [u32; 6],
@@ -172,7 +171,6 @@ impl ImperfectInfoCore {
             adaptive_mixture: None,
             decision_policy: None,
             root_stats: RootSearchStats::default(),
-            root_pruning: false,
             track_move_telemetry,
             move_marginals: [[0.0; 4]; 6],
             move_turns: [0; 6],
@@ -207,9 +205,6 @@ impl ImperfectInfoCore {
         );
         if let Some(mixture) = &self.adaptive_mixture {
             name.push_str(&format!(":mix-probes={}", mixture.probe_iterations));
-        }
-        if self.root_pruning {
-            name.push_str(":root-prune");
         }
         if self.cfg.unseen_claw_root {
             name.push_str(":unseen-claw-root");
@@ -317,9 +312,6 @@ impl ImperfectInfoCore {
                 if opp_prior {
                     search.set_opponent_preview_prior(true);
                 }
-                if self.root_pruning {
-                    search.prune_dominated();
-                }
                 debug_assert_eq!(search.actions(), choices);
                 let g = self.game.as_ref().expect("search after lifecycle setup");
                 let probes = search.finish_with_typed_mixed_probes(
@@ -362,9 +354,6 @@ impl ImperfectInfoCore {
         bs.prune_preview_aliases(dex);
         if opp_prior {
             bs.set_opponent_preview_prior(true);
-        }
-        if self.root_pruning {
-            bs.prune_dominated();
         }
         debug_assert_eq!(
             bs.actions(),
@@ -636,11 +625,6 @@ impl BlindAgent {
         self
     }
 
-    pub fn with_root_pruning(mut self) -> Self {
-        self.core.root_pruning = true;
-        self
-    }
-
     /// Set the next decision's iteration budget without resetting observations
     /// or the search RNG. This only changes allocation, not the search policy.
     pub fn set_iterations(&mut self, iterations: u32) {
@@ -909,6 +893,10 @@ pub struct BlindSearch {
     /// Final-choice exclusions: self-KO, sleep-forfeit risk, and proven no-ops.
     my_dominated: Vec<bool>,
     my_dominated_reasons: Vec<Option<&'static str>>,
+    /// When enabled (always true on `from_observation`), UCB root exploration
+    /// skips `my_dominated` actions whenever an undominated allowed action exists,
+    /// without overwriting explicit `mask_actions` / alias masks.
+    prune_dominated: bool,
     opponent_preview_prior: bool,
     /// Per-determinization roots + full-state interior nodes.
     nodes: Vec<Node>,
@@ -961,8 +949,9 @@ impl BlindSearch {
     }
 
     /// Product search with caller-threaded PRNG: populates `my_dominated` only
-    /// from strictly public / own-certain no-op rules (`public_noop_reason`)
-    /// and installs the reconstructed hidden condition timers.
+    /// from strictly public / own-certain no-op rules (`public_noop_reason`),
+    /// enables root dominance pruning before UCB allocation, and installs the
+    /// reconstructed hidden condition timers.
     pub(crate) fn from_observation_with_rng(
         position: &ObservedPosition,
         dex: &Dex,
@@ -972,6 +961,7 @@ impl BlindSearch {
     ) -> BlindSearch {
         let mut search = Self::with_rng_inner(position.model(), dex, cfg, side, rng, false);
         search.use_public_exclusions(dex);
+        search.prune_dominated();
         search.set_hidden_timers(position.hidden_timers().to_vec());
         search
     }
@@ -998,6 +988,11 @@ impl BlindSearch {
     #[inline]
     fn is_eligible(&self, i: usize, has_safe: bool) -> bool {
         self.is_allowed(i) && (!has_safe || !self.my_dominated[i])
+    }
+
+    #[inline]
+    fn is_ucb_allowed(&self, i: usize, has_safe: bool) -> bool {
+        self.is_allowed(i) && (!self.prune_dominated || !has_safe || !self.my_dominated[i])
     }
 
     fn eligible_flags(&self) -> Vec<bool> {
@@ -1128,6 +1123,7 @@ impl BlindSearch {
             my_mask: None,
             my_dominated,
             my_dominated_reasons,
+            prune_dominated: false,
             opponent_preview_prior: false,
             my_acts,
             nodes: Vec::new(),
@@ -1582,12 +1578,19 @@ impl BlindSearch {
             self.my_n[action] += 1;
             action
         } else {
+            let has_safe = self.has_undominated_allowed();
+            let my_mask = &self.my_mask;
+            let my_dominated = &self.my_dominated;
+            let prune_dominated = self.prune_dominated;
             select_global_with_prior(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.my_n,
                 &self.my_w,
-                self.my_mask.as_deref(),
+                |a| {
+                    my_mask.as_ref().map_or(true, |m| m[a])
+                        && (!prune_dominated || !has_safe || !my_dominated[a])
+                },
                 self.bayesian_row_q.as_deref(),
             )
         };
@@ -1809,7 +1812,7 @@ impl BlindSearch {
         if let ForcedRoot::Action { own, .. } = forcing {
             assert!(own < self.my_acts.len(), "forced root action out of range");
             assert!(
-                self.my_mask.as_ref().map_or(true, |mask| mask[own]),
+                self.is_ucb_allowed(own, self.has_undominated_allowed()),
                 "forced root action is masked"
             );
         }
@@ -1847,17 +1850,25 @@ impl BlindSearch {
                         self.joint_probe_n[own] += 1;
                         (own, Some(reply), true)
                     }
-                    None => (
-                        select_global(
-                            &self.cfg,
-                            &mut self.rng,
-                            &mut self.my_n,
-                            &self.my_w,
-                            self.my_mask.as_deref(),
-                        ),
-                        None,
-                        false,
-                    ),
+                    None => {
+                        let my_mask = &self.my_mask;
+                        let my_dominated = &self.my_dominated;
+                        let prune_dominated = self.prune_dominated;
+                        (
+                            select_global(
+                                &self.cfg,
+                                &mut self.rng,
+                                &mut self.my_n,
+                                &self.my_w,
+                                |a| {
+                                    my_mask.as_ref().map_or(true, |m| m[a])
+                                        && (!prune_dominated || !has_safe || !my_dominated[a])
+                                },
+                            ),
+                            None,
+                            false,
+                        )
+                    }
                 }
             }
         };
@@ -2303,15 +2314,7 @@ impl BlindSearch {
     }
 
     pub fn prune_dominated(&mut self) {
-        let allowed: Vec<bool> = self
-            .my_dominated
-            .iter()
-            .enumerate()
-            .map(|(i, &dominated)| !dominated && self.my_mask.as_ref().map_or(true, |m| m[i]))
-            .collect();
-        if allowed.iter().any(|&x| x) {
-            self.mask_actions(&allowed);
-        }
+        self.prune_dominated = true;
     }
 
     pub fn prune_preview_aliases(&mut self, dex: &Dex) -> usize {
@@ -2829,17 +2832,16 @@ impl BlindSearch {
 }
 
 /// UCB1 over the global (information-set) root stats — same rule and rng
-/// draw pattern as `smmcts::select_ucb`, on plain arrays. `mask` (M15)
-/// restricts the pick to allowed indices; `None` is bit-identical to the
-/// unmasked original.
+/// draw pattern as `smmcts::select_ucb`, on plain arrays. `ok` restricts the
+/// pick to eligible indices while preserving the exact RNG draw stream.
 fn select_global(
     cfg: &RmConfig,
     rng: &mut SplitMix64,
     n: &mut [u32],
     w: &[f64],
-    mask: Option<&[bool]>,
+    ok: impl Fn(usize) -> bool,
 ) -> usize {
-    select_global_with_prior(cfg, rng, n, w, mask, None)
+    select_global_with_prior(cfg, rng, n, w, ok, None)
 }
 
 fn select_global_with_prior(
@@ -2847,11 +2849,10 @@ fn select_global_with_prior(
     rng: &mut SplitMix64,
     n: &mut [u32],
     w: &[f64],
-    mask: Option<&[bool]>,
+    ok: impl Fn(usize) -> bool,
     bayesian_q: Option<&[f64]>,
 ) -> usize {
     let k = n.len();
-    let ok = |a: usize| mask.map_or(true, |m| m[a]);
     let mut n_untried = 0usize;
     for a in 0..k {
         if n[a] == 0 && ok(a) {
@@ -2954,11 +2955,6 @@ impl OpenAgent {
 
     pub fn with_adaptive_mixture(mut self, probe_iterations: u32) -> Self {
         self.core.set_adaptive_mixture(probe_iterations);
-        self
-    }
-
-    pub fn with_root_pruning(mut self) -> Self {
-        self.core.root_pruning = true;
         self
     }
 
@@ -3346,13 +3342,22 @@ mod mixed_selection_tests {
             let mut battle=Battle::from_fixture(&dex,"1,2,3,4",&[set(species,&moves)],&[set("Snorlax",&["Return"])]).unwrap();
             battle.choose(&dex,0,"team 1").unwrap();battle.choose(&dex,1,"team 1").unwrap();
             let cfg=RmConfig{iterations:300,c:0.4,..Default::default()};
-            let mut ordinary=BlindAgent::new(cfg.clone(),Arc::new(MetaPool{teams:vec![]}),None,17);
-            let mut pruned=BlindAgent::new(cfg,Arc::new(MetaPool{teams:vec![]}),None,17).with_root_pruning();
-            let choices=battle.legal_choices(&dex,0);
-            // These moves are not public forfeits. A guessed no-op cannot
-            // become a fixed exclusion or alter the sampling stream.
-            assert_eq!(ordinary.choose(&battle,&dex,0,&choices),pruned.choose(&battle,&dex,0,&choices));
-            assert_eq!(ordinary.search_rng_state(),pruned.search_rng_state());
+            let (local, obs) = LocalPlayer::new(&battle, &dex, 0).unwrap();
+            let mut bel_a = Belief::new(&dex, &MetaPool { teams: vec![] }, &obs);
+            let mut bel_b = Belief::new(&dex, &MetaPool { teams: vec![] }, &obs);
+            let pos_a = local.position(&dex, &mut bel_a, &obs, &mut SplitMix64::new(17)).unwrap();
+            let pos_b = local.position(&dex, &mut bel_b, &obs, &mut SplitMix64::new(17)).unwrap();
+            let mut pruned = BlindSearch::from_observation(&pos_a, &dex, cfg.clone(), 0, 99);
+            let mut unpruned = BlindSearch::from_observation(&pos_b, &dex, cfg, 0, 99);
+            unpruned.prune_dominated = false;
+            // Non-public guesses (Alakazam Recover) and all-dominated fallbacks
+            // (last-mon Gengar with ONLY Destiny Bond + Perish Song) must preserve
+            // the exact unpruned UCB visit distribution and RNG stream.
+            pruned.step(&dex, &bel_a, &obs, 300);
+            unpruned.step(&dex, &bel_b, &obs, 300);
+            assert_eq!(pruned.visits(), unpruned.visits());
+            assert_eq!(pruned.best(), unpruned.best());
+            assert_eq!(pruned.rng.0, unpruned.rng.0);
         }
     }
 
