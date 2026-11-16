@@ -18,3 +18,4 @@
 ## 3. Research & Strength Roadmap
 
 - Off-pool belief inference & zero-drift search diagnostics: see [`docs/SEARCH-AND-BELIEF-HANDOFF.md`](docs/SEARCH-AND-BELIEF-HANDOFF.md).
+- Midgame continuation bottlenecks & battle-log audit at `81k`: see [`docs/BOT-STRENGTH-LOG-AUDIT-HANDOFF.md`](docs/BOT-STRENGTH-LOG-AUDIT-HANDOFF.md).

@@ -95,13 +95,6 @@ fn main() {
         .collect();
     let std_teams: Vec<usize> = (0..teams.len()).collect();
 
-    eprintln!(
-        "setup_gauntlet: {} total teams ({} Baton Pass, {} setup) | mode={mode} games={games}",
-        teams.len(),
-        bp_teams.len(),
-        setup_teams.len()
-    );
-
     let mut sched = SplitMix64::new(base_seed ^ 0x6A09_E667_F3BC_C908);
     let schedule: Vec<Game> = (0..games)
         .map(|g| {
@@ -182,7 +175,6 @@ fn main() {
                             (opp_team, arm_team)
                         };
                         let mut battle = Battle::from_fixture(dex, &g.seed, t1, t2).unwrap();
-                        battle.set_log_enabled(false);
                         let (p1, p2): (&mut dyn Agent, &mut dyn Agent) = if g.arm_is_p1 {
                             (&mut *arm, &mut *foe)
                         } else {
