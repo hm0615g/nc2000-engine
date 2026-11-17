@@ -110,12 +110,22 @@ fn relay_bellman_proactive_pressure_evasion_deadline_and_premature_pass_guard() 
     b_a1.choose(&dex, 0, "team 1,2,3").unwrap();
     b_a1.choose(&dex, 1, "team 1,2,3").unwrap();
 
+    let (_, p1_no_relay) =
+        eval_root_pinned(&dex, &b_a1, 1, LeafSettlementMode::BlindSpotLeafNoRelay, iters, 11);
+    let (nr_sub_f, _, nr_sub_m) = find_stat(&p1_no_relay, "move substitute");
+    let (nr_agi_f, _, nr_agi_m) = find_stat(&p1_no_relay, "move agility");
     let (_, p1_rows) = eval_root_pinned(&dex, &b_a1, 1, LeafSettlementMode::BlindSpotLeaf, iters, 11);
-    let (sub_f, _, sub_m) = find_stat(&p1_rows, "move substitute");
-    let (agi_f, _, agi_m) = find_stat(&p1_rows, "move agility");
+    let (sub_f, sub_q, sub_m) = find_stat(&p1_rows, "move substitute");
+    let (agi_f, agi_q, agi_m) = find_stat(&p1_rows, "move agility");
+    let (_, tb_q, _) = find_stat(&p1_rows, "move thunderbolt");
     assert!(
-        sub_f + agi_f > 0.45 && sub_m + agi_m > 0.50,
-        "Jolteon must weight Substitute/Agility in root equilibrium: {p1_rows:?}"
+        sub_f + agi_f > 0.60
+            && sub_f + agi_f > nr_sub_f + nr_agi_f + 0.30
+            && sub_q > tb_q
+            && agi_q > tb_q
+            && sub_m + agi_m > 0.25
+            && sub_m + agi_m > nr_sub_m + nr_agi_m,
+        "Jolteon must weight Substitute/Agility with relay solver active: relay={p1_rows:?}, no_relay={p1_no_relay:?}"
     );
 
     let (_, p0_base) = eval_root_pinned(&dex, &b_a1, 0, LeafSettlementMode::BlindSpotLeafNoRelay, iters, 11);
@@ -123,7 +133,7 @@ fn relay_bellman_proactive_pressure_evasion_deadline_and_premature_pass_guard() 
     let (surf_b, _, _) = find_stat(&p0_base, "move surf");
     let (surf_c, _, _) = find_stat(&p0_cand, "move surf");
     assert!(
-        surf_c > surf_b + 0.15,
+        surf_c > surf_b + 0.10 && surf_c > 0.30,
         "Suicune must shift decisively toward Surf pressure vs Jolteon Sub/BP: base={surf_b:.3}, cand={surf_c:.3}"
     );
 

@@ -82,6 +82,59 @@ use nc2000_bot::{
 };
 use nc2000_engine::battle::PokemonSet;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ClawRules {
+    canonical_key: bool,
+    unseen_root: bool,
+}
+
+impl Default for ClawRules {
+    fn default() -> Self {
+        let d = RmConfig::default();
+        Self {
+            canonical_key: d.canonical_claw_key,
+            unseen_root: d.unseen_claw_root,
+        }
+    }
+}
+
+fn apply_claw_token(c: &mut ClawRules, tok: &str) -> bool {
+    let (on, name) = match tok.strip_prefix('-') {
+        Some(rest) => (false, rest),
+        None => (true, tok),
+    };
+    match name {
+        "claw" => {
+            c.canonical_key = on;
+            c.unseen_root = on;
+        }
+        "canonical_claw" => c.canonical_key = on,
+        "unseen_claw_root" => c.unseen_root = on,
+        _ => return false,
+    }
+    true
+}
+
+fn claw_label(c: &ClawRules) -> String {
+    let def = ClawRules::default();
+    if *c == def {
+        return String::new();
+    }
+    if !c.canonical_key && !c.unseen_root {
+        return ":-claw".into();
+    }
+    let mut parts = Vec::new();
+    for (name, cur, d) in [
+        ("canonical_claw", c.canonical_key, def.canonical_key),
+        ("unseen_claw_root", c.unseen_root, def.unseen_root),
+    ] {
+        if cur != d {
+            parts.push(if cur { name.into() } else { format!("-{name}") });
+        }
+    }
+    format!(":{}", parts.join(","))
+}
+
 #[derive(Clone, Debug)]
 enum AgentSpec {
     Random,
@@ -101,8 +154,8 @@ enum AgentSpec {
     SkUctNs { iterations: u32, c: f64, buckets: i64 },
     /// Damage-bookkeeping-free key abstraction.
     SkUctAbs { iterations: u32, c: f64, buckets: i64 },
-    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, relay: bool, stall: bool, endgame: EndgameRules },
-    Open { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, relay: bool, stall: bool, endgame: EndgameRules },
+    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, relay: bool, stall: bool, endgame: EndgameRules, claw: ClawRules },
+    Open { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, relay: bool, stall: bool, endgame: EndgameRules, claw: ClawRules },
     Exploit(Box<AgentSpec>),
     ExploitControl(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
@@ -226,6 +279,7 @@ struct ParsedSearchSpec {
     relay: bool,
     stall: bool,
     endgame: EndgameRules,
+    claw: ClawRules,
 }
 
 fn parse_search_spec(
@@ -241,6 +295,7 @@ fn parse_search_spec(
     let mut relay = true;
     let mut stall = true;
     let mut endgame = EndgameRules::default();
+    let mut claw = ClawRules::default();
     for part in &parts[1..] {
         if part.is_empty() {
             return Err(format!("empty field in a {kind} spec"));
@@ -263,6 +318,8 @@ fn parse_search_spec(
                     stall = true;
                 } else if tok == "-stall" || tok == "nostall" {
                     stall = false;
+                } else if apply_claw_token(&mut claw, tok) {
+                    // handled
                 } else if apply_endgame_token(&mut endgame, tok) {
                     // handled
                 } else if !apply_rollout_token(&mut perish, &mut m16c, tok) {
@@ -290,6 +347,7 @@ fn parse_search_spec(
         relay,
         stall,
         endgame,
+        claw,
     })
 }
 
@@ -311,6 +369,7 @@ fn parse_blind(parts: &[&str], mask: MaskRules) -> Result<AgentSpec, String> {
         relay: s.relay,
         stall: s.stall,
         endgame: s.endgame,
+        claw: s.claw,
     })
 }
 
@@ -400,6 +459,7 @@ fn parse_open(parts: &[&str]) -> Result<AgentSpec, String> {
         relay: s.relay,
         stall: s.stall,
         endgame: s.endgame,
+        claw: s.claw,
     })
 }
 
@@ -582,13 +642,15 @@ impl AgentSpec {
                 },
                 seed,
             )),
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, stall, endgame } => {
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, stall, endgame, claw } => {
                 let agent = BlindAgent::new(
                     RmConfig {
                         iterations: *iterations,
                         rule: SelRule::Ucb,
                         c: *c,
                         hp_buckets: *buckets,
+                        canonical_claw_key: claw.canonical_key,
+                        unseen_claw_root: claw.unseen_root,
                         mask_rules: *mask,
                         rollout_perish: *perish == PerishRollout::Escape,
                         rollout_combo: *perish == PerishRollout::Combo,
@@ -609,13 +671,15 @@ impl AgentSpec {
                 );
                 Box::new(if *mixed {agent.with_adaptive_mixture((u64::from(*iterations) * 2 / 5) as u32)} else {agent})
             },
-            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, stall, endgame } => {
+            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, stall, endgame, claw } => {
                 let agent = OpenAgent::new(
                     RmConfig {
                         iterations: *iterations,
                         rule: SelRule::Ucb,
                         c: *c,
                         hp_buckets: *buckets,
+                        canonical_claw_key: claw.canonical_key,
+                        unseen_claw_root: claw.unseen_root,
                         mask_rules: *mask,
                         rollout_perish: *perish == PerishRollout::Escape,
                         rollout_combo: *perish == PerishRollout::Combo,
@@ -683,8 +747,8 @@ impl AgentSpec {
             AgentSpec::SkUctAbs { iterations, c, buckets } => {
                 format!("skuctabs:{iterations}:{c}:{buckets}")
             }
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, stall, endgame } => {
-                let rollout = format!("{}{}{}{}{}{}{}", perish.label(), m16c.label(), if *mixed {":mix"} else {""}, if *bp {""} else {":-bp"}, if *relay {""} else {":-relay"}, if *stall {""} else {":-stall"}, endgame_label(endgame));
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, stall, endgame, claw } => {
+                let rollout = format!("{}{}{}{}{}{}{}{}", perish.label(), m16c.label(), if *mixed {":mix"} else {""}, if *bp {""} else {":-bp"}, if *relay {""} else {":-relay"}, if *stall {""} else {":-stall"}, endgame_label(endgame), claw_label(claw));
                 if *mask == legacy_mask() {
                     return format!("blindlegacy:{iterations}:{c}:{buckets}{rollout}");
                 }
@@ -698,9 +762,9 @@ impl AgentSpec {
                     if diff.is_empty() { String::new() } else { format!(":{}", diff.join(",")) };
                 format!("blind:{iterations}:{c}:{buckets}{suffix}{rollout}")
             }
-            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, stall, endgame } => {
+            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, stall, endgame, claw } => {
                 let rollout = format!(
-                    "{}{}{}{}{}{}{}",
+                    "{}{}{}{}{}{}{}{}",
                     perish.label(),
                     m16c.label(),
                     if *mixed { ":mix" } else { "" },
@@ -708,6 +772,7 @@ impl AgentSpec {
                     if *relay { "" } else { ":-relay" },
                     if *stall { "" } else { ":-stall" },
                     endgame_label(endgame),
+                    claw_label(claw),
                 );
                 let diff: Vec<String> = mask_fields(mask)
                     .into_iter()
@@ -987,6 +1052,25 @@ fn main() {
                 eprintln!("{name} {n}: {before} -> {} teams", teams.len());
                 assert!(teams.len() >= 2, "{name} {n} left fewer than 2 teams");
             }
+        }
+        if let Some(n) = flag(&args, "--claw-min").map(|v| v.parse::<usize>().unwrap()) {
+            let before = teams.len();
+            teams.retain(|sets| {
+                sets.iter()
+                    .filter(|s| {
+                        let id: String = s
+                            .item
+                            .chars()
+                            .filter(|c| c.is_ascii_alphanumeric())
+                            .flat_map(|c| c.to_lowercase())
+                            .collect();
+                        id == "quickclaw"
+                    })
+                    .count()
+                    >= n
+            });
+            eprintln!("--claw-min {n}: {before} -> {} teams", teams.len());
+            assert!(teams.len() >= 2, "--claw-min {n} left fewer than 2 teams");
         }
         if let Some(n) = flag(&args, "--heal-max").map(|v| v.parse::<usize>().unwrap()) {
             let before = teams.len();

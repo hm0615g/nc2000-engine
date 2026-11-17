@@ -176,8 +176,8 @@ impl Default for RmConfig {
             c: 1.0,
             collapse_sleep_actions: false,
             root_revisit_interval: 0,
-            canonical_claw_key: false,
-            unseen_claw_root: false,
+            canonical_claw_key: true,
+            unseen_claw_root: true,
             horizon: 100,
             playout: Playout::heavy(),
             threshold: 0.5,
@@ -480,26 +480,108 @@ pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
 }
 
 #[inline]
+fn quick_claw_observable_fast(
+    b: &Battle,
+    dex: &Dex,
+    cache: &nc2000_engine::battle::BattleSearchCache,
+) -> bool {
+    if !cache.any_quick_claw {
+        return false;
+    }
+    let Some(item) = dex.known_items.quickclaw else {
+        return false;
+    };
+    if cache.selected
+        && b.started
+        && b.turn > 0
+        && b.request_state != nc2000_engine::state::RequestState::TeamPreview
+        && b.queue.is_empty()
+    {
+        let mut has_fainted_holder = false;
+        for side in &b.sides {
+            for &slot in &side.party {
+                if let Some(p) = side.roster.get(slot as usize) {
+                    if p.item == Some(item) {
+                        if !p.fainted || p.hp > 0 {
+                            return true;
+                        }
+                        has_fainted_holder = true;
+                    }
+                }
+            }
+        }
+        if !has_fainted_holder {
+            return false;
+        }
+        return b.mid_turn
+            || b.request_state != nc2000_engine::state::RequestState::Move
+            || !b.is_idle_move_request();
+    }
+    b.quick_claw_roll_observable(dex)
+}
+
+#[inline]
+pub(crate) fn key_of_with_claw_omit(
+    cfg: &RmConfig,
+    dex: &Dex,
+    b: &mut Battle,
+    force_omit_claw: bool,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
+) -> u64 {
+    let (buckets, omit_damage) = if cfg.hp_buckets <= 0 {
+        (None, false)
+    } else {
+        (Some(cfg.hp_buckets), cfg.key_no_damage)
+    };
+    if let Some(c) = cache {
+        let omit_qc =
+            force_omit_claw || (cfg.canonical_claw_key && !quick_claw_observable_fast(b, dex, c));
+        let saved_qc = b.quick_claw_roll;
+        if omit_qc && saved_qc {
+            b.quick_claw_roll = false;
+        }
+        let key = b.search_key_with_cache(dex, buckets, omit_damage, false, c);
+        if omit_qc && saved_qc {
+            b.quick_claw_roll = saved_qc;
+        }
+        debug_assert_eq!(
+            key,
+            if force_omit_claw {
+                let q = b.quick_claw_roll;
+                b.quick_claw_roll = false;
+                let k = b.search_key(buckets, omit_damage);
+                b.quick_claw_roll = q;
+                k
+            } else if cfg.canonical_claw_key {
+                b.search_key_canonical_claw(dex, buckets, omit_damage)
+            } else {
+                b.search_key(buckets, omit_damage)
+            }
+        );
+        return key;
+    }
+    if force_omit_claw {
+        let saved_qc = b.quick_claw_roll;
+        b.quick_claw_roll = false;
+        let key = b.search_key(buckets, omit_damage);
+        b.quick_claw_roll = saved_qc;
+        return key;
+    }
+    if cfg.canonical_claw_key {
+        b.search_key_canonical_claw(dex, buckets, omit_damage)
+    } else {
+        b.search_key(buckets, omit_damage)
+    }
+}
+
+#[inline]
 pub(crate) fn key_of_cached(
     cfg: &RmConfig,
     dex: &Dex,
-    b: &Battle,
+    b: &mut Battle,
     cache: Option<&nc2000_engine::battle::BattleSearchCache>,
 ) -> u64 {
-    let hash = |b: &Battle, buckets, omit_damage| {
-        if let Some(c) = cache {
-            b.search_key_with_cache(dex, buckets, omit_damage, cfg.canonical_claw_key, c)
-        } else if cfg.canonical_claw_key {
-            b.search_key_canonical_claw(dex, buckets, omit_damage)
-        } else {
-            b.search_key(buckets, omit_damage)
-        }
-    };
-    if cfg.hp_buckets <= 0 {
-        hash(b, None, false)
-    } else {
-        hash(b, Some(cfg.hp_buckets), cfg.key_no_damage)
-    }
+    key_of_with_claw_omit(cfg, dex, b, false, cache)
 }
 
 /// UCB1 (untried-first, then mean + c·sqrt(ln N / n)).
@@ -896,6 +978,29 @@ pub(crate) fn run_iteration_with_history_cached(
             }
             crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
             break leaf(sim, rng, false);
+        }
+        if cfg.canonical_claw_key && cache.map_or(true, |c| c.any_quick_claw) {
+            let s0 = sim.sides[0]
+                .active
+                .is_some_and(|r| sim.sides[0].roster[r as usize].speed == 65535);
+            let s1 = sim.sides[1]
+                .active
+                .is_some_and(|r| sim.sides[1].roster[r as usize].speed == 65535);
+            if (s0 || s1) && sim.is_idle_move_request() {
+                let qc = sim.quick_claw_roll;
+                sim.quick_claw_roll = false;
+                if s0 {
+                    if let Some(id) = sim.active_id(0) {
+                        sim.update_speed(dex, id);
+                    }
+                }
+                if s1 {
+                    if let Some(id) = sim.active_id(1) {
+                        sim.update_speed(dex, id);
+                    }
+                }
+                sim.quick_claw_roll = qc;
+            }
         }
         let key = key_of_cached(cfg, dex, sim, cache);
         match table.get(&key) {
@@ -1723,7 +1828,9 @@ mod tests {
     #[test]
     fn canonical_claw_key_preserves_observable_rolls_and_restores_state() {
         let (dex, root) = setup();
-        assert!(!RmConfig::default().canonical_claw_key);
+        let def = RmConfig::default();
+        assert!(def.canonical_claw_key);
+        assert!(def.unseen_claw_root);
         let mut states = vec![(root.clone(), false)];
         for slot in [0, 1] {
             let mut holder = root.clone();
@@ -1754,12 +1861,15 @@ mod tests {
                 let cfg = RmConfig {
                     hp_buckets,
                     key_no_damage,
+                    canonical_claw_key: false,
+                    unseen_claw_root: false,
                     ..Default::default()
                 };
                 let candidate = RmConfig {
                     canonical_claw_key: true,
                     ..cfg.clone()
                 };
+                let cache = build_search_cache(&candidate, &dex, &state);
                 let mut a = state.clone();
                 a.quick_claw_roll = false;
                 let mut b = state.clone();
@@ -1771,9 +1881,49 @@ mod tests {
                     key_of(&candidate, &dex, &mut a) != key_of(&candidate, &dex, &mut b),
                     observable
                 );
+                assert_eq!(
+                    key_of_cached(&candidate, &dex, &mut a, Some(&cache)),
+                    key_of(&candidate, &dex, &mut a)
+                );
+                assert_eq!(
+                    key_of_cached(&candidate, &dex, &mut b, Some(&cache)),
+                    key_of(&candidate, &dex, &mut b)
+                );
                 assert_eq!(before, [a.state_key128(), b.state_key128()]);
             }
         }
+    }
+
+    #[test]
+    fn canonical_claw_strips_stale_previous_turn_65535_speed_at_idle_continuation() {
+        let (dex, mut b0) = setup();
+        b0.sides[0].roster[0].item = dex.known_items.quickclaw;
+        b0.sides[1].roster[0].hp = b0.sides[1].roster[0].maxhp;
+        let mut b1 = b0.clone();
+        // Simulate two trajectories reaching the exact same Turn 2 idle board
+        // (`quick_claw_roll == false`), differing only in whether Turn 1 had
+        // `quick_claw_roll == true` during Turn 1 Residual (`speed == 65535`).
+        b0.quick_claw_roll = false;
+        b0.choose(&dex, 0, "move reflect").unwrap();
+        b0.choose(&dex, 1, "move confuseray").unwrap();
+        b1.quick_claw_roll = true;
+        b1.choose(&dex, 0, "move reflect").unwrap();
+        b1.choose(&dex, 1, "move confuseray").unwrap();
+        b0.quick_claw_roll = false;
+        b1.quick_claw_roll = false;
+        assert!(b0.is_idle_move_request() && b1.is_idle_move_request());
+        assert_ne!(b0.sides[0].roster[0].speed, 65535);
+        assert_eq!(b1.sides[0].roster[0].speed, 65535);
+        let cfg = RmConfig::default();
+        let cache = build_search_cache(&cfg, &dex, &b0);
+        // Before stripping stale speed, raw hashes differ; after `run_iteration`'s
+        // idle canonicalization, they merge and still produce identical transitions.
+        let id = b1.active_id(0).unwrap();
+        b1.update_speed(&dex, id);
+        assert_eq!(
+            key_of_cached(&cfg, &dex, &mut b0, Some(&cache)),
+            key_of_cached(&cfg, &dex, &mut b1, Some(&cache))
+        );
     }
 
 }

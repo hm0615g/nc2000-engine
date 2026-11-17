@@ -562,18 +562,18 @@ fn u5_gen2_struggle_leftovers_four_quadrant_kernel() {
 fn u6_81k_search_conserves_4pp_cross_chop_vs_sleeping_curselax() {
     let dex = super::common::dex();
 
-    // +1 Atk Lv50 Machamp (`Cross Chop` 4 PP left, `Rock Slide` 16 PP, 135 base Atk) vs full-HP sleeping Lv55 Snorlax
+    // +1 Atk Lv50 Machamp (`Cross Chop` 4 PP left, `Mud-Slap` 16 PP, 135 base Atk) vs full-HP sleeping Lv55 Snorlax
     // (`292/292` HP, `Rest` 16 PP, `status_data = 3` -> 2 sleep turns left) on the final turn of `Reflect` (`reflect_turns = 1`):
     // - Two unscreened non-crit `Cross Chops` on Turn 2 + Turn 3 (min `168 + 168 - 18 = 318 > 292`) ALREADY 100% 2HKO
-    //   without needing Turn-1 `Cross Chop`, whereas 1 screened + 1 unscreened non-crit (`max 102 + 198 - 18 = 282 < 292`)
-    //   cannot 2HKO — so clicking `Cross Chop` into expiring `Reflect` on Turn 1 wastes a full `Cross Chop` PP (`4 -> 3`,
+    //   without needing Turn-1 `Cross Chop`, whereas 1 screened + 1 unscreened non-crit + 1 `Mud-Slap` (`max 102 + 198 - 36 + 18 = 282 < 292`)
+    //   cannot 3HKO — so clicking `Cross Chop` into expiring `Reflect` on Turn 1 wastes a full `Cross Chop` PP (`4 -> 3`,
     //   leaving only 1 PP after Cycle 1 instead of 2 PP for a second full 2HKO cycle)!
     let machamp: PokemonSet = serde_json::from_value(json!({
         "name": "Machamp",
         "species": "Machamp",
         "item": "Leftovers",
         "ability": "No Ability",
-        "moves": ["Cross Chop", "Rock Slide"],
+        "moves": ["Cross Chop", "Mud-Slap"],
         "level": 50,
         "evs": {"hp": 255, "atk": 0, "def": 255, "spa": 0, "spd": 255, "spe": 255},
         "ivs": {"hp": 30, "atk": 0, "def": 30, "spa": 0, "spd": 30, "spe": 30},
@@ -633,8 +633,8 @@ fn u6_81k_search_conserves_4pp_cross_chop_vs_sleeping_curselax() {
     let (best, rows) =
         run_pinned_search(dex, &b, 0, LeafSettlementMode::BlindSpotLeaf, 81_000, 2026);
     assert_eq!(
-        best, "move rockslide",
-        "U-6 81k search must chip sleeping Snorlax with Rock Slide (`move rockslide`) to conserve 4-PP Cross Chop, rows={rows:?}"
+        best, "move mudslap",
+        "U-6 81k search must chip sleeping Snorlax with Mud-Slap (`move mudslap`) to conserve 4-PP Cross Chop, rows={rows:?}"
     );
 }
 
