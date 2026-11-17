@@ -315,6 +315,18 @@ impl Battle {
         if list.len() < 2 {
             return;
         }
+        if list.len() == 2 {
+            let delta = cmp(&list[0], &list[1]);
+            if delta < 0.0 {
+                return;
+            }
+            if delta > 0.0 {
+                list.swap(0, 1);
+            } else {
+                self.shuffle_speed_tie(list, 0, 2);
+            }
+            return;
+        }
         let mut sorted = 0;
         let mut next_indexes: smallvec::SmallVec<[usize; 16]> = smallvec::SmallVec::new();
         while sorted + 1 < list.len() {
@@ -338,13 +350,18 @@ impl Battle {
                 }
             }
             if next_indexes.len() > 1 {
-                if trace_enabled() {
-                    eprintln!("[trace] speed_sort shuffle: ties={} seed_before={}", next_indexes.len(), self.prng.seed_str());
-                }
-                self.prng.shuffle(list, sorted, sorted + next_indexes.len());
+                self.shuffle_speed_tie(list, sorted, sorted + next_indexes.len());
             }
             sorted += next_indexes.len();
         }
+    }
+
+    #[inline]
+    fn shuffle_speed_tie<T>(&mut self, list: &mut [T], start: usize, end: usize) {
+        if trace_enabled() {
+            eprintln!("[trace] speed_sort shuffle: ties={} seed_before={}", end - start, self.prng.seed_str());
+        }
+        self.prng.shuffle(list, start, end);
     }
 
     // ------------------------------------------------------ event frames
