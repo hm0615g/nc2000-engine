@@ -2,7 +2,8 @@
   "defaultStrength": "strong",
   "battle": {
     "standard": 27000,
-    "strong": 81000
+    "strong": 81000,
+    "adaptive": 243000
   },
   "unknownPreview": 729000
 }

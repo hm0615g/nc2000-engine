@@ -141,6 +141,7 @@ struct ImperfectInfoCore {
     game: Option<PlayerGameState>,
     pending_preview: Option<PendingPreview>,
     adaptive_mixture: Option<AdaptiveMixture>,
+    adaptive_battle_budget: bool,
     decision_policy: Option<Vec<f64>>,
     root_stats: RootSearchStats,
     track_move_telemetry: bool,
@@ -169,6 +170,7 @@ impl ImperfectInfoCore {
             game: None,
             pending_preview: None,
             adaptive_mixture: None,
+            adaptive_battle_budget: false,
             decision_policy: None,
             root_stats: RootSearchStats::default(),
             track_move_telemetry,
@@ -178,6 +180,7 @@ impl ImperfectInfoCore {
     }
 
     fn set_adaptive_mixture(&mut self, probe_iterations: u32) {
+        assert!(!self.adaptive_battle_budget, "adaptive battle budget requires legacy root selection");
         assert!(probe_iterations < self.cfg.iterations);
         self.adaptive_mixture = Some(AdaptiveMixture {
             probe_iterations,
@@ -203,6 +206,9 @@ impl ImperfectInfoCore {
             "{prefix}:{}:{}:{}",
             self.cfg.iterations, self.cfg.c, self.cfg.hp_buckets
         );
+        if self.adaptive_battle_budget {
+            name.push_str(":adaptive-budget");
+        }
         if let Some(mixture) = &self.adaptive_mixture {
             name.push_str(&format!(":mix-probes={}", mixture.probe_iterations));
         }
@@ -350,8 +356,11 @@ impl ImperfectInfoCore {
         );
         let picked = {
             let g = self.game.as_ref().expect("search after lifecycle setup");
-            for _ in 0..cfg.iterations {
-                bs.step_one(dex, &g.belief, &g.observer);
+            if self.adaptive_battle_budget && !is_preview {
+                crate::adaptive_budget::AdaptiveBattleBudget::default()
+                    .step(&mut bs, dex, &g.belief, &g.observer, cfg.iterations);
+            } else {
+                bs.step(dex, &g.belief, &g.observer, cfg.iterations);
             }
             bs.best()
                 .expect("search called with a non-empty choice list")
@@ -602,6 +611,14 @@ impl BlindAgent {
 
     pub fn with_preview_iterations(mut self, preview_iterations: u32) -> Self {
         self.core.set_preview_iterations(preview_iterations);
+        self
+    }
+
+    /// Stop clear battle decisions early, up to the smaller of the configured
+    /// iterations and 243k. Intended for the legacy root decision policy.
+    pub fn with_adaptive_battle_budget(mut self) -> Self {
+        assert!(self.core.adaptive_mixture.is_none(), "adaptive battle budget requires legacy root selection");
+        self.core.adaptive_battle_budget = true;
         self
     }
 

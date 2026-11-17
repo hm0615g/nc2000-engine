@@ -27,6 +27,7 @@
 static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 pub mod accounting;
+pub mod adaptive_budget;
 pub mod agent;
 pub mod analysis;
 pub mod belief;

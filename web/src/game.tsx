@@ -132,6 +132,9 @@ export function ThinkChip(props: { thinking: Thinking | null }) {
  * per-item reveal TRACKING (chip going ? -> Leftovers) is out of scope. */
 const UNKNOWN_ITEM = "?";
 
+const battleStrength = new URLSearchParams(globalThis.location?.search).get("budget") === "adaptive"
+  ? "adaptive" : DEFAULT_STRENGTH;
+
 export function Game(props: {
   /** The opponent prior the bot's belief narrows down (belief-pool-v3). */
   poolJson: string;
@@ -250,6 +253,7 @@ export function Game(props: {
           seed: randomSeed32(),
           priorJson: props.priorJson,
           pickPriorJson: props.pickPriorJson,
+          adaptiveBudget: battleStrength === "adaptive",
         },
       )
       .then(() => {
@@ -341,9 +345,9 @@ export function Game(props: {
 
   async function searchBot(req: Request, legal: Choice[]) {
     const bot = botRef.current!;
-    const budget = liveBudget(DEFAULT_STRENGTH, legal[0].kind === "team");
+    const budget = liveBudget(battleStrength, legal[0].kind === "team");
     // Start before the human commits to hide latency. The worker finishes
-    // exactly this budget regardless of when the human chooses.
+    // independently of when the human chooses.
     const ponder = req.needs[HUMAN] && req.picks[HUMAN] === null;
     // A non-ponder search is a genuine wait for the human — say so once.
     // Ponder searches run behind the human's own deliberation: silent.
@@ -365,7 +369,7 @@ export function Game(props: {
     else {
       const turn = battleRef.current?.turn() ?? 0;
       const acts = r.policy.actions;
-      if (turn > 0 && acts.length > 0) {
+      if (turn > 0 && r.policy.iterations > 0 && acts.length > 0) {
         const chosen = acts.find(a => a.input === r.best) ?? acts.reduce((a, b) => (b.visits > a.visits ? b : a), acts[0]);
         const botMean = Math.max(0, Math.min(1, chosen.mean));
         setWinRates(prev => [...prev, { turn, winRate: 1 - botMean }]);

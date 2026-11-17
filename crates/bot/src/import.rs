@@ -2574,6 +2574,7 @@ pub struct ProtocolAgent {
     rng: SplitMix64,
     battle: Option<Battle>,
     search: Option<BlindSearch>,
+    adaptive_budget: Option<crate::adaptive_budget::AdaptiveBattleBudget>,
     baked: Option<SearchChoice>,
     forced: Option<String>,
     request: Option<Request>,
@@ -2611,6 +2612,7 @@ impl ProtocolAgent {
             rng: SplitMix64::new(seed),
             battle: None,
             search: None,
+            adaptive_budget: None,
             baked: None,
             forced: None,
             request: None,
@@ -2793,6 +2795,7 @@ impl ProtocolAgent {
             BlindSearch::from_observation(&pos, dex, self.cfg.clone(), self.side, self.rng.next());
         self.baked = None;
         self.forced = None;
+        let mut adaptive_budget = Some(Default::default());
         if search.is_preview() {
             // PS enforces Max Total Level at preview; the engine's
             // enumeration doesn't — mask overweight picks out of the root
@@ -2854,6 +2857,9 @@ impl ProtocolAgent {
             a.sort();
             s2.sort();
             if a != s2 {
+                // The submitted pick may be projected onto a different legal
+                // set. Evidence about the synthetic winner cannot settle it.
+                adaptive_budget = None;
                 self.legality_drift += 1;
             }
             if legal.len() == 1 {
@@ -2862,6 +2868,7 @@ impl ProtocolAgent {
         }
         self.battle = Some(battle);
         self.search = Some(search);
+        self.adaptive_budget = adaptive_budget;
         self.request = Some(req);
         Ok(true)
     }
@@ -2879,6 +2886,24 @@ impl ProtocolAgent {
         let belief = self.belief.as_ref().ok_or("no belief")?;
         let obs = self.observer.as_ref().ok_or("no observer")?;
         Ok(search.step(dex, belief, obs, n))
+    }
+
+    /// Legacy battle policy with deterministic early stopping. An ordinary
+    /// step() can still extend the same tree for a fixed-budget comparison.
+    /// Preview keeps its own caller-supplied budget.
+    pub fn step_adaptive_battle(&mut self, dex: &Dex, n: u32) -> Result<u32, String> {
+        let search = self.search.as_mut().ok_or("adaptive step before request")?;
+        if self.baked.is_some() || self.forced.is_some() {
+            return Ok(search.iterations());
+        }
+        let belief = self.belief.as_ref().ok_or("no belief")?;
+        let obs = self.observer.as_ref().ok_or("no observer")?;
+        if let Some(budget) = &mut self.adaptive_budget {
+            Ok(budget.step(search, dex, belief, obs, n))
+        } else {
+            let remaining = crate::adaptive_budget::BATTLE_CAP.saturating_sub(search.iterations());
+            Ok(search.step(dex, belief, obs, n.min(remaining)))
+        }
     }
 
     pub fn iterations(&self) -> u32 {

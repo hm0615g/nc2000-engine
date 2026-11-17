@@ -1188,6 +1188,14 @@ impl WasmProtocolSearcher {
         self.agent.step(&self.dex, n).map_err(|e| JsError::new(&e))
     }
 
+    #[wasm_bindgen(js_name = stepAdaptiveBattle)]
+    pub fn step_adaptive_battle(&mut self, n: u32) -> Result<u32, JsError> {
+        if self.endgame.is_some() {
+            return self.step(n);
+        }
+        self.agent.step_adaptive_battle(&self.dex, n).map_err(|e| JsError::new(&e))
+    }
+
     #[wasm_bindgen(js_name = beginEndgame)]
     pub fn begin_endgame(&mut self, config_json: Option<String>, milliseconds: f64) -> Result<(), JsError> {
         let started = endgame_now_ms();

@@ -82,6 +82,27 @@ try {
         }
       }
     }
+    // Snore is publicly excluded against Magikarp. A legal two-move request
+    // reaches the worker, while the surviving battle action needs no rollouts.
+    {
+      const worker = new BotWorker();
+      const fish = [{ name: "Magikarp", species: "Magikarp", level: 50, moves: ["Splash"] }];
+      const attacker = [{ name: "Snorlax", species: "Snorlax", level: 50, moves: ["Return", "Snore"] }];
+      try {
+        await worker.newBattle(JSON.stringify(fish), JSON.stringify(attacker), "1,2,3,4", {
+          poolJson: JSON.stringify({ teams: [{ id: "fish", sets: fish }] }),
+          side: 1, seed, compiledPreview: false, adaptiveBudget: true,
+        });
+        const preview = await worker.search(1, 32, seed, false);
+        if (preview.policy.iterations !== 32) throw new Error("adaptive budget truncated preview");
+        worker.apply([[0, "team 1"], [1, preview.best]]);
+        const result = await worker.search(1, 243000, seed, false);
+        if (result.policy.iterations !== 0 || result.best !== "move return")
+          throw new Error(`adaptive singleton played ${result.best} after ${result.policy.iterations}`);
+      } finally {
+        worker.terminate();
+      }
+    }
     // Input timing must also preserve battle decisions and the persistent RNG.
     {
       const trajectories = [];
@@ -201,7 +222,7 @@ try {
     assert.equal(result.policyMatches, true, JSON.stringify(result));
     assert.equal(result.wrongCoefficientMatches, false, JSON.stringify(result));
   }
-  console.log(JSON.stringify(results, null, 2));
+  console.log(JSON.stringify(results));
 } finally {
   await browser?.close();
   await vite?.close();

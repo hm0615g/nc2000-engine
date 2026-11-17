@@ -14,6 +14,22 @@ Authoritative snapshot of `crates/bot` playing-strength mechanisms, measured-nul
 
 The comparisons shared `128` seat-swapped schedules and fixed seed `20261017003`. Teams were sampled by `drawWeight` from `team-pool-v2` with `belief-pool-v3` used for inference. Both arms used `BlindAgent` (`c = 0.4`) and `243k` live preview, with identical preview choices per seat across swaps and comparisons. The intervals bootstrap schedule pairs, and no games reached the turn cap. The earlier `7fa23a1d` sweep scored `50.39%` for `243k` against `81k` (95% CI `44.53–56.25%`) with a different catalog and belief pool.
 
+**Adaptive battle budget experiment (2026-11-18).** Open live play with `?budget=adaptive` to use a 243,000 iteration battle cap. Public pruning down to one eligible action ends the search immediately. Otherwise, every 27,000 iterations the controller checks whether the same action wins two consecutive checkpoints. At both checkpoints every eligible rival must have samples, fall below the existing Bayesian root LP visit cutoff (one eighth of the leader's visits, rounded down), and trail the leader's mean reward by at least 0.02. The endgame-aware final selector must also pick the leader. The earliest empirical stop is 54,000. A disagreement between the reconstructed and request-legal action sets keeps the full battle budget. These checks are deterministic for a given search and independent of worker slice timing. Team Preview uses its usual lookup and budget.
+
+One decision was sampled uniformly from each of 570 spectator games (seed `20261118`). There were 567 reconstructed positions with a searched fixed-budget decision. Continuing each tree to 243k gave the following comparison.
+
+| Battle budget | Mean iterations | Same action as fixed 243k |
+| --- | ---: | ---: |
+| Fixed 81k | 81,000 | 513/567 (90.48%) |
+| Adaptive, 243k cap | 182,762 | 565/567 (99.65%) |
+| Fixed 243k | 243,000 | 567/567 |
+
+The controller stopped early on 196 positions (34.57%), including 146 at 54k. Two early picks changed by 243k (2/196). The mean saving was 24.79% of fixed 243k, and the adaptive search used 2.26 times the iterations of the default 81k. Agreement measures sensitivity to further search on the same seed.
+
+In a native pilot against fixed 243k, the adaptive agent scored 7 wins and 9 losses across eight seed-paired, seat-swapped schedules with no turn caps. Seven pairs split, and the fixed agent won both seats in one pair. Both agents searched preview at 243k. Teams were sampled uniformly from `team-pool-v2`, with `belief-pool-v3` used for inference. The mean observed time per choice across both battle and preview was 2.35 s for adaptive and 3.70 s for fixed in this concurrent local run. Eight pairs leave playing-strength parity unresolved. Reproduce with `cargo run --release -p nc2000-bot --example adaptive_budget_probe -- duel 8 4 20261118`.
+
+Reproduce the position screen with `cargo run --release -p nc2000-bot --example adaptive_budget_probe -- <spectator-dir> 570 6 20261118` after extracting the `spectator/*.raw.log` entries from `data/corpus-spectator-logs.zip`. The probe uses the corpus reconstruction of the acting player's team and prefix-only opponent observations with `belief-pool-v3`.
+
 ### 1.2 Imperfect-Information Reconstruction & Belief ([`belief.rs`](../crates/bot/src/belief.rs), [`observe.rs`](../crates/bot/src/observe.rs), [`hp_evidence.rs`](../crates/bot/src/hp_evidence.rs))
 - **Player observation boundary**: Web workers, `ProtocolAgent`, `BlindAgent`, and `BlindSearcher` reconstruct roots strictly through [`ObservedPosition`](../crates/bot/src/position.rs) / [`LocalPlayer`](../crates/bot/src/player.rs) with symmetric hidden runtime timers ([`player_state.rs`](../crates/bot/src/player_state.rs)), `|teamsize|` opponent pick-count tracking ([`import.rs`](../crates/bot/src/import.rs)), live Hidden Power effectiveness narrowing, and deductive passive-item exclusions.
 - **Strict pool trust until contradiction**: While `Belief::alive` is non-empty over [`data/belief-pool-v3/belief-pool.json`](../data/belief-pool-v3/belief-pool.json) (`522` entries), candidate filtering and Turn 0 Team Preview remain exact.
