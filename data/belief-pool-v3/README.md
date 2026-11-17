@@ -1,6 +1,6 @@
 # belief-pool-v3 — the known-party opponent prior
 
-`belief-pool.json` (`471` entries) is the deployed known-party opponent prior:
+`belief-pool.json` (`522` entries) is the deployed known-party opponent prior:
 real-world parties including variants, plus generated sets only when present in
 the current playable catalog. Together with the bundled zero-prior Gen 2 species
 supplement (`crates/bot/src/belief_supplement_v1.json`) and off-pool EV/IV
@@ -26,7 +26,8 @@ compiled-preview compatibility status, run `cargo test` and consult
 
 - **Weight rule**: Baseline cluster entries carry `weight = 1 / cluster_size`
   (`×0.25` for machine-generated teams), while expanded real-world entries carry
-  weight `1` (`known-expansion.json`). Weights affect collision shells and
+  weight `1` (`1 / cluster_size` for multi-variant page series; see
+  `known-expansion.json`). Weights affect collision shells and
   weighted fallback sampling (`crates/bot/src/belief.rs`).
 - **Historical `bake-prior.json` (`221` entries)**: Built from `data/team-inventory-v1`
   (`103`), `data/team-selection-v2/evolved-teams.json` (`8`),

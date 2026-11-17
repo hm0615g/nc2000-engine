@@ -82,7 +82,9 @@ test('deployed expansion keeps only catalog-generated types and has 990 reusable
  assert.ok(pool.teams.some(t => t.id === 'mjj-2022-nrsk'));
  assert.ok(pool.teams.some(t => t.id === 'mjj-gym-Tokiwa'));
  assert.ok(pool.teams.some(t => t.id === 'mjj-2026-kabegon'));
+ assert.ok(pool.teams.some(t => t.id === 'mjj-type-QA-fuhen'));
+ assert.ok(pool.teams.some(t => t.id === 'mjj-2022-hapimu-v1' && t.weight < 1));
  assert.equal((await compatible(pool)).size, 990);
  assert.equal((await compatible(bakePrior)).size, 810);
- assert.equal(pool.teams.length, 471);
+ assert.equal(pool.teams.length, 522);
 });
