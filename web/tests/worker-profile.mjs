@@ -120,9 +120,14 @@ try {
           poolJson, side: 1, seed, endgame: { solverFraction: 0.1, milliseconds: 50 },
         });
         const budget = 512;
+        if (scenario === "late-flush") {
+          worker.onBelief = () => {
+            worker.onBelief = undefined;
+            setTimeout(() => worker.flush(), 125);
+          };
+        }
         const promise = worker.search(1, budget, seed, scenario !== "fixed");
         if (scenario === "early-flush") worker.flush();
-        if (scenario === "late-flush") setTimeout(() => worker.flush(), 125);
         if (scenario === "cancel") {
           worker.cancelAll();
           const result = await Promise.race([promise.then(() => "stale-result"), new Promise(resolve => setTimeout(() => resolve("cancelled"), 200))]);

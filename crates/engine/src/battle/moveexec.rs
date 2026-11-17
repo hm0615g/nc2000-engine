@@ -699,7 +699,9 @@ fn exec_move_cb_op(
         MoveCbOp::SwaggerTryHit => {
             let t = tpoke.unwrap();
             let user = source.unwrap();
-            if b.poke(t).boosts[0] >= 6 || b.get_stat(dex, t, 0, false, true, false) == 999 {
+            if b.poke(t).boosts[stat_idx::ATK] >= 6
+                || b.get_stat(dex, t, stat_idx::ATK, false, true, false) == 999
+            {
                 let ps = b.poke_str(user);
                 b.add(&["-miss", &ps]);
                 return RV::Null;
@@ -818,13 +820,15 @@ fn exec_move_cb_op(
         }
         MoveCbOp::BellyDrumHit => {
             let t = tpoke.unwrap();
-            if b.poke(t).boosts[0] >= 6 || b.poke(t).hp as f64 <= b.poke(t).maxhp as f64 / 2.0 {
+            if b.poke(t).boosts[stat_idx::ATK] >= 6
+                || b.poke(t).hp as f64 <= b.poke(t).maxhp as f64 / 2.0
+            {
                 return RV::False;
             }
             let maxhp = b.poke(t).maxhp as f64;
             b.direct_damage(dex, maxhp / 2.0, Some(t), None, EffectHandle::None);
             // max-out atk in +2 steps, stopping when 999 is reached
-            let original = b.poke(t).boosts[0];
+            let original = b.poke(t).boosts[stat_idx::ATK];
             let mut current = original as i32;
             let mut loop_stage;
             while current < 6 {
@@ -833,17 +837,17 @@ fn exec_move_cb_op(
                 if current < 6 {
                     current += 1;
                 }
-                b.poke_mut(t).boosts[0] = loop_stage as i8;
-                if b.get_stat(dex, t, 0, false, true, false) < 999 {
-                    b.poke_mut(t).boosts[0] = current as i8;
+                b.poke_mut(t).boosts[stat_idx::ATK] = loop_stage as i8;
+                if b.get_stat(dex, t, stat_idx::ATK, false, true, false) < 999 {
+                    b.poke_mut(t).boosts[stat_idx::ATK] = current as i8;
                     continue;
                 }
-                b.poke_mut(t).boosts[0] = (current - 1) as i8;
+                b.poke_mut(t).boosts[stat_idx::ATK] = (current - 1) as i8;
                 break;
             }
-            let boosts = b.poke(t).boosts[0] - original;
-            b.poke_mut(t).boosts[0] = original;
-            b.boost(dex, &[(0, boosts)], None, None, EffectHandle::None);
+            let boosts = b.poke(t).boosts[stat_idx::ATK] - original;
+            b.poke_mut(t).boosts[stat_idx::ATK] = original;
+            b.boost(dex, &[(stat_idx::ATK, boosts)], None, None, EffectHandle::None);
             RV::Undef
         }
         MoveCbOp::ConversionHit => {
@@ -1273,14 +1277,14 @@ pub fn resolve_future_move(b: &mut Battle, dex: &Dex, state: StateLoc, target: P
         const BOOST_TABLE: [f64; 7] = [1.0, 4.0 / 3.0, 5.0 / 3.0, 2.0, 7.0 / 3.0, 8.0 / 3.0, 3.0];
         let mut accuracy = 90.0f64;
         {
-            let acc_boost = b.poke(source).boosts[5].clamp(-6, 6);
+            let acc_boost = b.poke(source).boosts[stat_idx::ACC].clamp(-6, 6);
             if acc_boost > 0 {
                 accuracy *= BOOST_TABLE[acc_boost as usize];
             } else {
                 accuracy /= BOOST_TABLE[(-acc_boost) as usize];
             }
             // evasion (foresight zeroes positive evasion)
-            let mut eva = b.poke(target).boosts[6].clamp(-6, 6);
+            let mut eva = b.poke(target).boosts[stat_idx::EVA].clamp(-6, 6);
             let fs_cond = crate::cond_id!(dex, "foresight").unwrap();
             if eva > 0 && b.poke(target).has_volatile(fs_cond) {
                 eva = 0;
@@ -1956,8 +1960,8 @@ impl Battle {
             if !ohko && (0.0..=100.0).contains(&a) {
                 let acc = crate::compact::lookup_accuracy_threshold(
                     a as u8,
-                    self.poke(pokemon).boosts[5],
-                    self.poke(target).boosts[6],
+                    self.poke(pokemon).boosts[stat_idx::ACC],
+                    self.poke(target).boosts[stat_idx::EVA],
                     ignore_accuracy,
                     ignore_evasion,
                     ignore_positive_evasion,
@@ -1979,7 +1983,7 @@ impl Battle {
                     }
                 }
                 if !ignore_accuracy {
-                    let boost = self.poke(pokemon).boosts[5].clamp(-6, 6);
+                    let boost = self.poke(pokemon).boosts[stat_idx::ACC].clamp(-6, 6);
                     if boost > 0 {
                         acc *= POS_BOOST[boost as usize];
                     } else {
@@ -1987,7 +1991,7 @@ impl Battle {
                     }
                 }
                 if !ignore_evasion {
-                    let boost = self.poke(target).boosts[6].clamp(-6, 6);
+                    let boost = self.poke(target).boosts[stat_idx::EVA].clamp(-6, 6);
                     if boost > 0 && !ignore_positive_evasion {
                         acc *= NEG_BOOST[boost as usize];
                     } else if boost < 0 {

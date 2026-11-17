@@ -374,9 +374,6 @@ impl Agent for MaxWorldsBlindAgent {
         }
         for _ in 0..self.cfg.iterations {
             bs.step_one(dex, belief, obs);
-            if bs.should_early_stop() {
-                break;
-            }
         }
         let picked = bs.best().expect("non-empty choice list");
         self.think_ns += t0.elapsed().as_nanos() as u64;
@@ -533,9 +530,6 @@ fn eval_snapshot(
     }
     for _ in 0..cfg.iterations {
         bs.step_one(dex, &belief, &obs);
-        if bs.should_early_stop() {
-            break;
-        }
     }
     let wall_ms = t0.elapsed().as_secs_f64() * 1000.0;
     let best = bs.best().unwrap();

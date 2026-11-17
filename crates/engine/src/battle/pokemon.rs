@@ -19,11 +19,11 @@ impl Battle {
         let p = self.poke(id);
         let boost = if unboosted { 0 } else { p.boosts[stat] };
         let has_par_drop = p.status == Status::Par
-            && stat == 4
+            && stat == stat_idx::SPE
             && dt.par_cond.is_some_and(|c| p.has_volatile(c));
         let has_brn_drop = !unmodified
             && p.status == Status::Brn
-            && stat == 0
+            && stat == stat_idx::ATK
             && dt.brn_cond.is_some_and(|c| p.has_volatile(c));
         if fast_return {
             return crate::compact::get_stat_branchless(
@@ -98,8 +98,8 @@ impl Battle {
         crate::compact::hit_probability_branchless(
             base_pct,
             false,
-            self.poke(att).boosts[5],
-            self.poke(def).boosts[6],
+            self.poke(att).boosts[stat_idx::ACC],
+            self.poke(def).boosts[stat_idx::EVA],
             ms.ignore_accuracy,
             ms.ignore_evasion,
             ms.ignore_positive_evasion,
@@ -108,12 +108,12 @@ impl Battle {
 
     /// gen3 `pokemon.getActionSpeed()`.
     pub fn get_pokemon_action_speed(&self, dex: &Dex, id: PokeId) -> i32 {
-        let speed = self.get_stat(dex, id, 4, false, false, false);
+        let speed = self.get_stat(dex, id, stat_idx::SPE, false, false, false);
         if self.quick_claw_roll
             && self.poke(id).item.is_some()
             && self.poke(id).item == dex.known_items.quickclaw
         {
-            return 65535;
+            return QUICK_CLAW_ACTION_SPEED;
         }
         speed
     }

@@ -47,7 +47,7 @@ pub fn fixture(dex: &Dex, index: usize, high: bool) -> Battle {
 pub fn estimate(dex: &Dex, b: &Battle) -> f64 {
     let att = b.active_id(0).unwrap();
     let def = b.active_id(1).unwrap();
-    expected_hit_fraction(b, dex, att, def, dex.moves.id("hiddenpower").unwrap(), true)
+    expected_hit_fraction(b, dex, att, def, dex.moves.id("hiddenpower").unwrap())
         * f64::from(b.poke(def).hp)
 }
 

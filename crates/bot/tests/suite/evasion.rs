@@ -1,17 +1,6 @@
 //! Regression: the bot's threat/eval must track the gen-2 accuracy×evasion
 //! stage so a Double-Team / Baton-Pass evasion wall registers as danger (and
 //! phazing as relief) instead of being invisible.
-//!
-//! The reported weakness (sohehe-vs-puniu3 replay: Jolteon stacks Double Team
-//! to +6, Baton Passes the evasion, and the bot dithers) traced to
-//! `expected_hit_fraction` using only *base* move accuracy — a +6-evasion foe
-//! looked exactly as hittable as an unboosted one, so the search saw no danger
-//! and never valued phazing. The fix folds `Battle::hit_probability` (the real
-//! gen-2 accuracy roll) into the threat feature.
-//!
-//! `couple_evasion: false` in `EvalWeights` reproduces the pre-fix eval, so the
-//! tests below assert the *contrast* directly (blind before, correct after) and
-//! do not depend on any external old-eval build.
 
 use nc2000_bot::eval::{self, best_hit_fraction, expected_hit_fraction};
 use nc2000_bot::mcts::Playout;
@@ -50,10 +39,6 @@ fn start(dex: &Dex, p1: &[PokemonSet], p2: &[PokemonSet]) -> Battle {
 
 fn mid(dex: &Dex, name: &str) -> MoveId {
     dex.moves.id(&toid(name)).unwrap()
-}
-
-fn weights(couple: bool) -> EvalWeights {
-    EvalWeights { couple_evasion: couple, ..EvalWeights::default() }
 }
 
 /// The evasion-wall position: bot Crobat active, opponent Snorlax active with
@@ -108,33 +93,24 @@ fn hit_probability_applies_evasion_stage() {
 // ---- 2. the defect + contrast: the threat feature was blind to evasion ----
 
 #[test]
-fn threat_feature_blind_before_fix_collapses_after() {
+fn threat_feature_collapses_under_evasion() {
     let dex = super::common::dex();
     let b0 = wall(&dex, 0, 4);
+    let b2 = wall(&dex, 2, 4);
     let b6 = wall(&dex, 6, 4);
     let (cro0, snor0) = (b0.active_id(0).unwrap(), b0.active_id(1).unwrap());
+    let (cro2, snor2) = (b2.active_id(0).unwrap(), b2.active_id(1).unwrap());
     let (cro6, snor6) = (b6.active_id(0).unwrap(), b6.active_id(1).unwrap());
 
-    // Pre-fix (base accuracy only): the +6-evasion wall looks EXACTLY as
-    // hittable as the unboosted mon — the eval sees no danger. This is the bug.
-    let old0 = best_hit_fraction(&b0, &dex, cro0, snor0, false);
-    let old6 = best_hit_fraction(&b6, &dex, cro6, snor6, false);
-    assert!((old0 - old6).abs() < 1e-9, "pre-fix threat is blind to evasion");
-
-    // Post-fix: the same +6 wall collapses the bot's best hit fraction to well
-    // under half — the eval now feels the danger.
-    let new0 = best_hit_fraction(&b0, &dex, cro0, snor0, true);
-    let new6 = best_hit_fraction(&b6, &dex, cro6, snor6, true);
-    assert!((new0 - old0).abs() < 1e-9, "0-evasion unchanged by the fix");
-    assert!(new6 < 0.5 * new0, "fix collapses threat vs +6 evasion ({new6} vs {new0})");
+    let h0 = best_hit_fraction(&b0, &dex, cro0, snor0);
+    let h2 = best_hit_fraction(&b2, &dex, cro2, snor2);
+    let h6 = best_hit_fraction(&b6, &dex, cro6, snor6);
+    assert!(h0 > h2 && h2 > h6, "threat must decrease monotonically: {h0} > {h2} > {h6}");
+    assert!(h6 < 0.5 * h0, "threat must collapse vs +6 evasion ({h6} vs {h0})");
 }
 
 #[test]
 fn rollout_policy_stops_throwing_attacks_at_the_wall() {
-    // The heavy rollout ranks moves by `expected_hit_fraction`. Pre-fix it
-    // preferred the strong STAB attack even against a +6-evasion wall (it
-    // "believed" the attack lands); post-fix the never-miss move outranks the
-    // attack that now whiffs 2/3 of the time.
     let dex = super::common::dex();
     let b = wall(&dex, 6, 4);
     let cro = b.active_id(0).unwrap();
@@ -142,13 +118,9 @@ fn rollout_policy_stops_throwing_attacks_at_the_wall() {
     let sludge = mid(&dex, "sludgebomb");
     let swift = mid(&dex, "swift");
 
-    let sludge_old = expected_hit_fraction(&b, &dex, cro, snor, sludge, false);
-    let swift_old = expected_hit_fraction(&b, &dex, cro, snor, swift, false);
-    assert!(sludge_old > swift_old, "pre-fix: whiffing STAB outranks never-miss");
-
-    let sludge_new = expected_hit_fraction(&b, &dex, cro, snor, sludge, true);
-    let swift_new = expected_hit_fraction(&b, &dex, cro, snor, swift, true);
-    assert!(swift_new > sludge_new, "post-fix: never-miss outranks the whiffing STAB");
+    let sludge_h = expected_hit_fraction(&b, &dex, cro, snor, sludge);
+    let swift_h = expected_hit_fraction(&b, &dex, cro, snor, swift);
+    assert!(swift_h > sludge_h, "never-miss must outrank whiffing STAB at +6 evasion");
 }
 
 // ---- 3. the eval feels danger, and phazing value emerges -----------------
@@ -156,26 +128,20 @@ fn rollout_policy_stops_throwing_attacks_at_the_wall() {
 #[test]
 fn coupled_eval_feels_danger_and_rewards_phazing() {
     let dex = super::common::dex();
-    // A non-saturated operating point (moderate atk boost) so the sigmoid is
-    // responsive: measure the bot's (side-0) win estimate.
+    let w = EvalWeights::default();
+    let b0 = wall(&dex, 0, 2);
+    let b2 = wall(&dex, 2, 2);
     let b6 = wall(&dex, 6, 2);
-    let danger_new = eval::eval01(&b6, &dex, &weights(true));
-    let danger_old = eval::eval01(&b6, &dex, &weights(false));
-    // The physically-correct eval rates the +6-evasion position as strictly
-    // more dangerous than the evasion-blind eval does.
-    assert!(danger_new < danger_old, "coupled eval feels more danger ({danger_new} vs {danger_old})");
+    let e0 = eval::eval01(&b0, &dex, &w);
+    let e2 = eval::eval01(&b2, &dex, &w);
+    let e6 = eval::eval01(&b6, &dex, &w);
+    assert!(e0 > e2 && e2 > e6, "eval must fall as foe evasion rises: {e0} > {e2} > {e6}");
 
-    // Phazing value emerges: resetting the opponent's evasion (what Roar /
-    // Whirlwind achieve) recovers the bot's win estimate, and it recovers
-    // MORE under the coupled eval than the evasion-blind one — the threat
-    // channel is doing real work on top of the linear boost term.
     let mut reset = b6.clone();
     let snor = reset.active_id(1).unwrap();
     reset.poke_mut(snor).boosts[6] = 0;
-    let recover_new = eval::eval01(&reset, &dex, &weights(true)) - danger_new;
-    let recover_old = eval::eval01(&reset, &dex, &weights(false)) - danger_old;
-    assert!(recover_new > 0.05, "phazing must produce a real eval jump ({recover_new})");
-    assert!(recover_new > recover_old, "coupling adds phaze value ({recover_new} vs {recover_old})");
+    let recover = eval::eval01(&reset, &dex, &w) - e6;
+    assert!(recover > 0.05, "phazing must produce a real eval jump ({recover})");
 }
 
 // ---- 4. the search discovers phazing instead of dithering ----------------
@@ -185,7 +151,7 @@ fn skuct_pick(dex: &Dex, b: &Battle, iters: u32, seed: u64) -> SearchChoice {
     let cfg = RmConfig {
         iterations: iters,
         rule: SelRule::Ucb,
-        playout: Playout::Heavy { eps: 0.2, turns: 8, weights: weights(true) },
+        playout: Playout::Heavy { eps: 0.2, turns: 8, weights: EvalWeights::default() },
         ..Default::default()
     };
     RmAgent::new(cfg, seed).choose(b, dex, 0, &choices)

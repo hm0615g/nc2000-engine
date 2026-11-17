@@ -44,17 +44,13 @@ const GAMMA: f32 = 0.985;
 fn instant_heal_amount(cb: &CompactBattle, ms: &CompactMoveSpec, maxhp: i16) -> Option<i16> {
     if ms.is_half_heal {
         Some(maxhp / 2)
-    } else if ms.special_kind == 29 {
-        let amt = if cb.weather_turns > 0 {
-            match cb.weather_kind {
-                2 => maxhp,
-                1 | 3 => (maxhp / 4).max(1),
-                _ => (maxhp / 2).max(1),
-            }
+    } else if ms.special_kind == nc2000_engine::compact::SpecialMoveKind::WeatherHeal {
+        let weather = if cb.weather_turns > 0 {
+            cb.weather_kind
         } else {
-            (maxhp / 2).max(1)
+            CompactWeather::None
         };
-        Some(amt)
+        Some(weather.weather_heal_amount(maxhp))
     } else {
         None
     }
@@ -136,14 +132,12 @@ impl DmgKernel1D {
         let att_mon = &cb.mons[att_idx];
         let def_hp = cb.mons[def_idx].hp().max(1);
         let num_moves = table.mons[att_idx].num_moves as usize;
-        let is_disabled = (att_mon.vol_flags & vol_bit::DISABLE) != 0;
-        let dis_slot = ((att_mon.slot_refs >> 4) & 0x03) as usize;
         let last_mon = cb.sides[att_side].alive_mask.count_ones() <= 1;
 
         let mut best_kern = Self::zero();
         let mut best_score = 0.0f32;
         for m_i in 0..num_moves {
-            if att_mon.pp[m_i] == 0 || (is_disabled && m_i == dis_slot) {
+            if att_mon.pp[m_i] == 0 || att_mon.is_slot_disabled(m_i) {
                 continue;
             }
             let mspec = &table.move_specs[att_idx][m_i];
@@ -181,14 +175,12 @@ impl DmgKernel1D {
         let att_mon = &cb.mons[att_idx];
         let def_maxhp = table.mons[def_idx].maxhp.max(1);
         let num_moves = table.mons[att_idx].num_moves as usize;
-        let is_disabled = (att_mon.vol_flags & vol_bit::DISABLE) != 0;
-        let dis_slot = ((att_mon.slot_refs >> 4) & 0x03) as usize;
         let last_mon = cb.sides[att_side].alive_mask.count_ones() <= 1;
 
         let mut best_kern = Self::zero();
         let mut best_score = 0.0f32;
         for m_i in 0..num_moves {
-            if att_mon.pp[m_i] == 0 || (is_disabled && m_i == dis_slot) {
+            if att_mon.pp[m_i] == 0 || att_mon.is_slot_disabled(m_i) {
                 continue;
             }
             let mspec = &table.move_specs[att_idx][m_i];
@@ -249,14 +241,13 @@ impl DmgKernel1D {
         let att_idx = att_side * 3 + att_slot;
         let att_mon = &cb.mons[att_idx];
         let num_moves = table.mons[att_idx].num_moves as usize;
-        let is_disabled = (att_mon.vol_flags & vol_bit::DISABLE) != 0;
-        let dis_slot = ((att_mon.slot_refs >> 4) & 0x03) as usize;
 
         let mut st_slot = None;
         for m_i in 0..num_moves {
             if att_mon.pp[m_i] > 0
-                && !(is_disabled && m_i == dis_slot)
-                && table.move_specs[att_idx][m_i].special_kind == 10
+                && !att_mon.is_slot_disabled(m_i)
+                && table.move_specs[att_idx][m_i].special_kind
+                    == nc2000_engine::compact::SpecialMoveKind::SleepTalk
             {
                 st_slot = Some(m_i);
                 break;
@@ -334,7 +325,7 @@ impl DmgKernel1D {
         let att_spec = &table.mons[att_idx];
         let def_spec = &table.mons[def_idx];
 
-        let base_power = if mspec.var_bp_kind == 4 {
+        let base_power = if mspec.var_bp_kind == nc2000_engine::compact::VarBpKind::FlailReversal {
             let att_hp = if grid_mode {
                 att_spec.maxhp / 2
             } else {
@@ -359,7 +350,8 @@ impl DmgKernel1D {
             mspec.base_power as i32
         };
 
-        let is_super_fang = mspec.special_kind == 15;
+        let is_super_fang =
+            mspec.special_kind == nc2000_engine::compact::SpecialMoveKind::SuperFang;
         if mspec.fixed_damage == 0 && !is_super_fang && (mspec.is_status || base_power <= 0) {
             return Self::zero();
         }
@@ -409,7 +401,10 @@ impl DmgKernel1D {
         const CRIT_DEN: [u32; 6] = [0, 16, 8, 4, 3, 2];
         let scope_bonus = ((att_mon.item != 0) & att_spec.is_scope_lens) as usize;
         let c_stage = (mspec.crit_ratio as usize + scope_bonus).min(5);
-        let p_crit = if mspec.special_kind != 13 && c_stage > 0 {
+        let p_crit = if mspec.special_kind
+            != nc2000_engine::compact::SpecialMoveKind::FlailReversal
+            && c_stage > 0
+        {
             1.0 / (CRIT_DEN[c_stage] as f32)
         } else {
             0.0
@@ -440,13 +435,16 @@ impl DmgKernel1D {
             }
             d = d.min(997) + 2;
             if cb.weather_turns > 0 {
-                if cb.weather_kind == CompactWeather::Rain as u8 {
+                if cb.weather_kind == CompactWeather::Rain {
                     if mspec.is_water {
                         d = d * 3 / 2;
-                    } else if mspec.is_fire || mspec.special_kind == 23 {
+                    } else if mspec.is_fire
+                        || mspec.special_kind
+                            == nc2000_engine::compact::SpecialMoveKind::RainDance
+                    {
                         d /= 2;
                     }
-                } else if cb.weather_kind == CompactWeather::Sun as u8 {
+                } else if cb.weather_kind == CompactWeather::Sun {
                     if mspec.is_fire {
                         d = d * 3 / 2;
                     } else if mspec.is_water {
@@ -653,17 +651,18 @@ fn survival_curve_k_slots_with_mean_hp(
         0
     };
     let mut weather_rem = cb.weather_turns;
-    let sand_dmg: i16 =
-        if cb.weather_kind == 3 && (def_spec.type_mask & table.sandstorm_immune_mask) == 0 {
-            (maxhp / 8).max(1)
-        } else {
-            0
-        };
+    let sand_dmg: i16 = if cb.weather_kind == CompactWeather::Sandstorm
+        && (def_spec.type_mask & table.sandstorm_immune_mask) == 0
+    {
+        (maxhp / 8).max(1)
+    } else {
+        0
+    };
 
     // Defender confusion self-hit
     let def_miracle = def_mon.item != 0 && def_spec.is_miracleberry;
     let mut def_conf = if (def_mon.vol_flags & vol_bit::CONFUSION) != 0 && !def_miracle {
-        def_mon.timers[0].saturating_sub(1)
+        def_mon.timers[nc2000_engine::compact::timer_idx::CONFUSION].saturating_sub(1)
     } else {
         0
     };
@@ -683,11 +682,11 @@ fn survival_curve_k_slots_with_mean_hp(
     };
     let att_par = att_mon.status_raw() == Status::Par as u8 && !att_miracle;
     let mut att_conf = if (att_mon.vol_flags & vol_bit::CONFUSION) != 0 && !att_miracle {
-        att_mon.timers[0].saturating_sub(1)
+        att_mon.timers[nc2000_engine::compact::timer_idx::CONFUSION].saturating_sub(1)
     } else {
         0
     };
-    let mut att_rech = (att_mon.slot_refs & 0x80) != 0;
+    let mut att_rech = att_mon.must_recharge();
     let mut p_sub_up = if (def_mon.vol_flags & vol_bit::SUBSTITUTE) != 0 && def_mon.hp_pool[1] > 0 {
         1.0f32
     } else {
@@ -1059,7 +1058,7 @@ impl Side1DOps {
             0
         };
         let sand_dot = if cb.weather_turns > 0
-            && cb.weather_kind == 3
+            && cb.weather_kind == CompactWeather::Sandstorm
             && (spec.type_mask & table.sandstorm_immune_mask) == 0
         {
             (maxhp / 8).max(1)
@@ -1194,7 +1193,7 @@ impl Side1DOps {
                     } else if ms.is_rest {
                         hr = true;
                     }
-                    if ms.special_kind == 10 {
+                    if ms.special_kind == nc2000_engine::compact::SpecialMoveKind::SleepTalk {
                         hst = true;
                     }
                 }
@@ -1338,13 +1337,11 @@ fn eval_exact_root_table(
         if (m.vol_flags & vol_bit::SUBSTITUTE) != 0 {
             sub_hp_init[i] = m.sub_hp().max(1);
         }
-        let dis = (m.vol_flags & vol_bit::DISABLE) != 0;
-        let dis_slot = ((m.slot_refs >> 4) & 0x03) as usize;
         let mut hh_amt = 0i16;
         let mut hr = false;
         let mut hst = false;
         for m_i in 0..sp.num_moves as usize {
-            if m.pp[m_i] > 0 && !(dis && m_i == dis_slot) {
+            if m.pp[m_i] > 0 && !m.is_slot_disabled(m_i) {
                 let ms = &table.move_specs[idx[i]][m_i];
                 if let Some(amt) = instant_heal_amount(cb, ms, maxhp[i]) {
                     if amt > hh_amt {
@@ -1353,7 +1350,7 @@ fn eval_exact_root_table(
                 } else if ms.is_rest {
                     hr = true;
                 }
-                if ms.special_kind == 10 {
+                if ms.special_kind == nc2000_engine::compact::SpecialMoveKind::SleepTalk {
                     hst = true;
                 }
             }
@@ -1366,8 +1363,10 @@ fn eval_exact_root_table(
         let st_raw = m.status_raw();
         let is_frz = st_raw == Status::Frz as u8 && !miracle;
         let is_par = st_raw == Status::Par as u8 && !miracle;
-        let is_conf = (m.vol_flags & vol_bit::CONFUSION) != 0 && m.timers[0] > 1 && !miracle;
-        let is_rech = (m.slot_refs & 0x80) != 0;
+        let is_conf = (m.vol_flags & vol_bit::CONFUSION) != 0
+            && m.timers[nc2000_engine::compact::timer_idx::CONFUSION] > 1
+            && !miracle;
+        let is_rech = m.must_recharge();
 
         has_heal[i] = !perish && !is_frz && !is_rech && (hh || hr);
         heal_is_rest[i] = !hh && hr;
@@ -1415,7 +1414,7 @@ fn eval_exact_root_table(
             0
         };
         let sand_dot = if cb.weather_turns > 0
-            && cb.weather_kind == 3
+            && cb.weather_kind == CompactWeather::Sandstorm
             && (sp.type_mask & table.sandstorm_immune_mask) == 0
         {
             (maxhp[i] / 8).max(1)
@@ -1950,11 +1949,9 @@ fn l1_state_key(
     h.write_u64(sp1.static_fp);
 
     let avail_mask = |m: &nc2000_engine::compact::CompactMon, num_moves: u8| -> u8 {
-        let dis = (m.vol_flags & vol_bit::DISABLE) != 0;
-        let dis_slot = (m.slot_refs >> 4) & 0x03;
         let mut mask = 0u8;
         for m_i in 0..num_moves {
-            if m.pp[m_i as usize] > 0 && !(dis && m_i == dis_slot) {
+            if m.pp[m_i as usize] > 0 && !m.is_slot_disabled(m_i as usize) {
                 mask |= 1u8 << m_i;
             }
         }
@@ -2677,12 +2674,13 @@ fn side_has_usable_heal(cb: &CompactBattle, table: &MatchTable, side: usize, slo
     if (mon.vol_flags & vol_bit::PERISH_SONG) != 0 {
         return false;
     }
-    let dis = (mon.vol_flags & vol_bit::DISABLE) != 0;
-    let dis_slot = ((mon.slot_refs >> 4) & 0x03) as usize;
     for m_i in 0..table.mons[idx].num_moves as usize {
-        if mon.pp[m_i] > 0 && !(dis && m_i == dis_slot) {
+        if mon.pp[m_i] > 0 && !mon.is_slot_disabled(m_i) {
             let ms = &table.move_specs[idx][m_i];
-            if ms.is_half_heal || ms.is_rest || ms.special_kind == 29 {
+            if ms.is_half_heal
+                || ms.is_rest
+                || ms.special_kind == nc2000_engine::compact::SpecialMoveKind::WeatherHeal
+            {
                 return true;
             }
         }
@@ -2791,8 +2789,11 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
         let p0_prot = cb.mons[idx0].stall_counter() == 0
             && (0..table.mons[idx0].num_moves as usize)
                 .any(|m| cb.mons[idx0].pp[m] > 0 && table.move_specs[idx0][m].is_protect);
-        let p1_phaze = (0..table.mons[idx1].num_moves as usize)
-            .any(|m| cb.mons[idx1].pp[m] > 0 && table.move_specs[idx1][m].special_kind == 7);
+        let p1_phaze = (0..table.mons[idx1].num_moves as usize).any(|m| {
+            cb.mons[idx1].pp[m] > 0
+                && table.move_specs[idx1][m].special_kind
+                    == nc2000_engine::compact::SpecialMoveKind::Phaze
+        });
         let eff_hits = if p0_prot && hits > 0 { hits - 1 } else { hits };
         let use_phaze = p1_phaze && p1_perish >= 2;
         need_s0 = need_s0.max(eff_hits);
@@ -2809,8 +2810,11 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
         let p1_prot = cb.mons[idx1].stall_counter() == 0
             && (0..table.mons[idx1].num_moves as usize)
                 .any(|m| cb.mons[idx1].pp[m] > 0 && table.move_specs[idx1][m].is_protect);
-        let p0_phaze = (0..table.mons[idx0].num_moves as usize)
-            .any(|m| cb.mons[idx0].pp[m] > 0 && table.move_specs[idx0][m].special_kind == 7);
+        let p0_phaze = (0..table.mons[idx0].num_moves as usize).any(|m| {
+            cb.mons[idx0].pp[m] > 0
+                && table.move_specs[idx0][m].special_kind
+                    == nc2000_engine::compact::SpecialMoveKind::Phaze
+        });
         let eff_hits = if p1_prot && hits > 0 { hits - 1 } else { hits };
         let use_phaze = p0_phaze && p0_perish >= 2;
         need_s1 = need_s1.max(eff_hits);
@@ -2823,8 +2827,11 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
 
     let mut b3_hits: Option<usize> = None;
     if p1_perish == 0 && p1_trapped && !p0_trapped {
-        let p0_has_song = (0..table.mons[idx0].num_moves as usize)
-            .any(|m| cb.mons[idx0].pp[m] > 0 && table.move_specs[idx0][m].special_kind == 19);
+        let p0_has_song = (0..table.mons[idx0].num_moves as usize).any(|m| {
+            cb.mons[idx0].pp[m] > 0
+                && table.move_specs[idx0][m].special_kind
+                    == nc2000_engine::compact::SpecialMoveKind::PerishSong
+        });
         if p0_has_song {
             let p0_prot = (0..table.mons[idx0].num_moves as usize)
                 .any(|m| cb.mons[idx0].pp[m] > 0 && table.move_specs[idx0][m].is_protect);
@@ -2837,8 +2844,11 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
 
     let mut b4_hits: Option<usize> = None;
     if p0_perish == 0 && p0_trapped && !p1_trapped {
-        let p1_has_song = (0..table.mons[idx1].num_moves as usize)
-            .any(|m| cb.mons[idx1].pp[m] > 0 && table.move_specs[idx1][m].special_kind == 19);
+        let p1_has_song = (0..table.mons[idx1].num_moves as usize).any(|m| {
+            cb.mons[idx1].pp[m] > 0
+                && table.move_specs[idx1][m].special_kind
+                    == nc2000_engine::compact::SpecialMoveKind::PerishSong
+        });
         if p1_has_song {
             let p1_prot = (0..table.mons[idx1].num_moves as usize)
                 .any(|m| cb.mons[idx1].pp[m] > 0 && table.move_specs[idx1][m].is_protect);
@@ -2910,7 +2920,7 @@ pub fn compact_linear_diff(
         let spd0 = cb.mon_action_speed(table, 0, s0);
         let spd1 = cb.mon_action_speed(table, 1, s1);
         let is_frz = m0.status_raw() == Status::Frz as u8 || m1.status_raw() == Status::Frz as u8;
-        let is_rech = ((m0.slot_refs | m1.slot_refs) & 0x80) != 0;
+        let is_rech = m0.must_recharge() || m1.must_recharge();
         let exact_mechanics_override = spd0 == spd1
             || m0.status_raw() == Status::Slp as u8
             || m1.status_raw() == Status::Slp as u8
@@ -3029,7 +3039,10 @@ pub fn compact_rollout_linear_pick(
             return None;
         }
         for &c in cs {
-            if c < 4 && table.move_specs[att_idx][c as usize].special_kind == 10 {
+            if c < 4
+                && table.move_specs[att_idx][c as usize].special_kind
+                    == nc2000_engine::compact::SpecialMoveKind::SleepTalk
+            {
                 return Some(c);
             }
         }
@@ -3085,7 +3098,10 @@ pub fn compact_rollout_linear_pick(
             for &c in cs {
                 if c < 4 {
                     let ms = &table.move_specs[att_idx][c as usize];
-                    if ms.is_half_heal || ms.special_kind == 29 {
+                    if ms.is_half_heal
+                        || ms.special_kind
+                            == nc2000_engine::compact::SpecialMoveKind::WeatherHeal
+                    {
                         heal_act = Some(c);
                         break;
                     } else if ms.is_rest && heal_act.is_none() {
@@ -3097,13 +3113,16 @@ pub fn compact_rollout_linear_pick(
                 let foe_has_perish = (table.mons[def_idx].role_flags
                     & role_bit::PERISH_PHAZE_TRAP)
                     != 0
-                    && (0..table.mons[def_idx].num_moves as usize)
-                        .any(|m| foe.pp[m] > 0 && table.move_specs[def_idx][m].special_kind == 19);
+                    && (0..table.mons[def_idx].num_moves as usize).any(|m| {
+                        foe.pp[m] > 0
+                            && table.move_specs[def_idx][m].special_kind
+                                == nc2000_engine::compact::SpecialMoveKind::PerishSong
+                    });
                 if !foe_has_perish {
                     let me_faster = cb.mon_action_speed(table, side, att_slot)
                         > cb.mon_action_speed(table, def_side, def_slot);
                     if me_faster
-                        && cb.best_hit_fraction(table, side, att_slot, def_side, def_slot, true)
+                        && cb.best_hit_fraction(table, side, att_slot, def_side, def_slot)
                             >= 1.0
                     {
                         return None;
@@ -3407,18 +3426,18 @@ mod tests {
         assert!(r_clear > 0.25, "Moonlight Umbreon must beat heal-less mirror, got {r_clear}");
         assert!((r_clear + r_clear_rev).abs() < 1e-5, "antisymmetry clear: {r_clear} vs {r_clear_rev}");
 
-        // Sunny Day (`weather_kind = 2`): full-HP Moonlight >= clear Moonlight >= Rain (`weather_kind = 1`, 1/4 heal)
-        cb.weather_kind = 2;
+        // Sunny Day: full-HP Moonlight >= clear Moonlight >= Rain (1/4 heal)
+        cb.weather_kind = CompactWeather::Sun;
         cb.weather_turns = 5;
-        cb_rev.weather_kind = 2;
+        cb_rev.weather_kind = CompactWeather::Sun;
         cb_rev.weather_turns = 5;
         let r_sun = toeplitz_coupled_race(&cb, &table, 0, 0, 1, 0);
         let r_sun_rev = toeplitz_coupled_race(&cb_rev, &table_rev, 0, 0, 1, 0);
         assert!((r_sun + r_sun_rev).abs() < 1e-5, "antisymmetry sun: {r_sun} vs {r_sun_rev}");
 
-        cb.weather_kind = 1;
+        cb.weather_kind = CompactWeather::Rain;
         cb.weather_turns = 5;
-        cb_rev.weather_kind = 1;
+        cb_rev.weather_kind = CompactWeather::Rain;
         cb_rev.weather_turns = 5;
         let r_rain = toeplitz_coupled_race(&cb, &table, 0, 0, 1, 0);
         let r_rain_rev = toeplitz_coupled_race(&cb_rev, &table_rev, 0, 0, 1, 0);

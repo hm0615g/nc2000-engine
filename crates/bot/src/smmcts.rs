@@ -73,10 +73,10 @@ use crate::rng::SplitMix64;
 
 pub use crate::endgame_root::{
     reply_risk_and_mistake_ev, tactical_desperation_bonus, EndgameActionMetrics,
-    EndgameDecisionInfo, EndgameRegime, EndgameRootStats, EndgameRules,
+    EndgameDecisionInfo, EndgameRegime, EndgameRootStats,
 };
 pub(crate) use crate::endgame_root::cmp_visits_then_mean;
-pub use crate::mask::{dominated_actions, dominated_actions_with, MaskRules};
+pub use crate::mask::dominated_actions;
 pub(crate) use crate::mask::{dominated_reason, public_noop_reason};
 
 /// Selection rule for the root decision.
@@ -104,10 +104,6 @@ pub struct RmConfig {
     pub mix_actions: usize,
     /// UCB1 exploration constant.
     pub c: f64,
-    pub collapse_sleep_actions: bool,
-    pub root_revisit_interval: u32,
-    pub canonical_claw_key: bool,
-    pub unseen_claw_root: bool,
     /// Tree horizon in turns (same meaning as `MctsConfig::horizon`).
     pub horizon: u16,
     /// Rollout policy + leaf eval (shared with the M6 agent).
@@ -122,45 +118,15 @@ pub struct RmConfig {
     pub hp_buckets: i64,
     /// Full-width RM+ sweeps over the estimated root matrix.
     pub solve_sweeps: u32,
-    /// Rollout greedy pick scores status/setup moves by
-    /// `mcts::status_pseudo_score` instead of 0. Parked research arm, off in
-    /// the shipped rollout; gate record in `data/m16c-rollout-v2/README.md`.
-    pub rollout_status: bool,
-    /// Rollout greedy pick switches out of a bad matchup
-    /// (`mcts::ROLLOUT_SWITCH_TRIGGER`). Parked like `rollout_status`.
-    pub rollout_switch: bool,
-    /// Rollout sides leave the field at Perish count 1 when they can
-    /// (`mcts::perish_escape`).
-    pub rollout_perish: bool,
-    /// Rollout sides also play the Perish trap and its counter
-    /// (`mcts::perish_combo`); implies `rollout_perish`'s escape. Shipped
-    /// ON; gates and measurements in `data/perish-rollout-v1/README.md`.
-    pub rollout_combo: bool,
-    pub rollout_baton_pass: bool,
-    /// Drop damage-history fields from the node key. Sound only when no mon
-    /// can read them (Counter/Mirror Coat); the search checks that once at
-    /// construction and clears this flag if it cannot.
-    pub key_no_damage: bool,
-    /// Which optional root-mask rules this agent plays under. Default =
-    /// shipped; an arena arm flips one field to A/B a mask change, which is
-    /// the only harness that can see one at all (see `root_dominated`).
-    pub mask_rules: MaskRules,
-    /// Optional endgame decision & budget rules for decided/near-decided boards.
-    /// Default = all `false` (bit-identical to baseline).
-    pub endgame_rules: EndgameRules,
     /// Leaf tactical settlement & evaluation mode.
     pub settlement: crate::accounting::LeafSettlementMode,
 }
 
-
 impl RmConfig {
     pub fn rollout_rules(&self) -> RolloutRules {
         RolloutRules {
-            status: self.rollout_status,
-            switch: self.rollout_switch,
-            perish_escape: self.rollout_perish,
-            perish_combo: self.rollout_combo,
-            baton_pass: self.rollout_baton_pass,
+            perish_combo: true,
+            baton_pass: true,
             settlement: self.settlement,
         }
     }
@@ -174,24 +140,12 @@ impl Default for RmConfig {
             probe: 0.25,
             mix_actions: 3,
             c: 1.0,
-            collapse_sleep_actions: false,
-            root_revisit_interval: 0,
-            canonical_claw_key: true,
-            unseen_claw_root: true,
             horizon: 100,
             playout: Playout::heavy(),
             threshold: 0.5,
             hp_buckets: 16,
             solve_sweeps: 2000,
-            rollout_status: false,
-            rollout_switch: false,
-            rollout_perish: false,
-            rollout_combo: true,
-            rollout_baton_pass: true,
-            key_no_damage: false,
-            mask_rules: MaskRules::default(),
             settlement: crate::accounting::LeafSettlementMode::BlindSpotLeaf,
-            endgame_rules: EndgameRules::default(),
         }
     }
 }
@@ -230,14 +184,6 @@ pub enum SearchTrace<'a> {
 
 impl Node {
     pub(crate) fn at(sim: &mut Battle, dex: &Dex) -> Node {
-        Self::build(sim, dex, false)
-    }
-
-    fn build(
-        sim: &mut Battle,
-        dex: &Dex,
-        collapse_sleep: bool,
-    ) -> Node {
         use nc2000_engine::smallvec::{smallvec, SmallVec};
         let mut acts = [SmallVec::new(), SmallVec::new()];
         sim.legal_choices_into(dex, 0, &mut acts[0]);
@@ -245,21 +191,12 @@ impl Node {
         let preview = acts
             .iter()
             .any(|a| matches!(a.first(), Some(SearchChoice::Team(_))));
-        if collapse_sleep && !preview {
-            for side in 0..2 {
-                collapse_sleep_choices_smallvec(sim, dex, side, &mut acts[side]);
-            }
-        }
         Node {
             n: [smallvec![0; acts[0].len()], smallvec![0; acts[1].len()]],
             w: [smallvec![0.0; acts[0].len()], smallvec![0.0; acts[1].len()]],
             preview,
             acts,
         }
-    }
-
-    fn continuation(sim: &mut Battle, dex: &Dex, cfg: &RmConfig) -> Node {
-        Self::build(sim, dex, cfg.collapse_sleep_actions)
     }
 
     /// Blend a raw child trajectory return `raw_val0` toward the empirical-Bayes minimax value
@@ -316,8 +253,10 @@ pub fn collapse_sleep_choices(b: &Battle, dex: &Dex, side: usize, choices: &mut 
     let p = b.poke(id);
     if p.status != nc2000_engine::state::Status::Slp
         || p.status_state.get_int(nc2000_engine::state::DK::Time) <= 1
-        || p.item
-            .is_some_and(|item| matches!(dex.items.key(item), "mintberry" | "miracleberry"))
+        || p.item.is_some_and(|item| {
+            let si = Some(item);
+            si == dex.known_items.mintberry || si == dex.known_items.miracleberry
+        })
     {
         return;
     }
@@ -327,37 +266,6 @@ pub fn collapse_sleep_choices(b: &Battle, dex: &Dex, side: usize, choices: &mut 
             return true;
         };
         let ms = dex.move_static(*id);
-        if ms.sleep_usable || ms.callbacks.iter().any(|key| key == "beforeTurnCallback") {
-            return true;
-        }
-        let priority = (i16::from(ms.priority) + 128) as usize;
-        let first = !priorities[priority];
-        priorities[priority] = true;
-        first
-    });
-}
-
-pub(crate) fn collapse_sleep_choices_smallvec(
-    b: &Battle,
-    dex: &Dex,
-    side: usize,
-    choices: &mut nc2000_engine::smallvec::SmallVec<[SearchChoice; 6]>,
-) {
-    let Some(id) = b.active_id(side) else { return };
-    let p = b.poke(id);
-    if p.status != nc2000_engine::state::Status::Slp
-        || p.status_state.get_int(nc2000_engine::state::DK::Time) <= 1
-        || p.item
-            .is_some_and(|item| matches!(dex.items.key(item), "mintberry" | "miracleberry"))
-    {
-        return;
-    }
-    let mut priorities = [false; 256];
-    choices.retain(|action| {
-        let SearchChoice::Move(id) = *action else {
-            return true;
-        };
-        let ms = dex.move_static(id);
         if ms.sleep_usable || ms.callbacks.iter().any(|key| key == "beforeTurnCallback") {
             return true;
         }
@@ -409,12 +317,8 @@ pub(crate) fn build_search_cache(
     dex: &Dex,
     b: &Battle,
 ) -> nc2000_engine::battle::BattleSearchCache {
-    let (buckets, omit_damage) = if cfg.hp_buckets <= 0 {
-        (None, false)
-    } else {
-        (Some(cfg.hp_buckets), cfg.key_no_damage)
-    };
-    nc2000_engine::battle::BattleSearchCache::new(b, dex, buckets, omit_damage)
+    let buckets = (cfg.hp_buckets > 0).then_some(cfg.hp_buckets);
+    nc2000_engine::battle::BattleSearchCache::new(b, dex, buckets, false)
 }
 
 #[inline]
@@ -425,18 +329,9 @@ pub(crate) fn build_search_cache_with_template(
     own_side: usize,
     template: &nc2000_engine::battle::BattleSearchCache,
 ) -> nc2000_engine::battle::BattleSearchCache {
-    let (buckets, omit_damage) = if cfg.hp_buckets <= 0 {
-        (None, false)
-    } else {
-        (Some(cfg.hp_buckets), cfg.key_no_damage)
-    };
+    let buckets = (cfg.hp_buckets > 0).then_some(cfg.hp_buckets);
     nc2000_engine::battle::BattleSearchCache::new_with_own_side_template(
-        b,
-        dex,
-        buckets,
-        omit_damage,
-        own_side,
-        template,
+        b, dex, buckets, false, own_side, template,
     )
 }
 
@@ -445,32 +340,6 @@ pub(crate) fn build_search_cache_with_template(
 #[inline]
 pub fn key_for_test(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
     key_of(cfg, dex, b)
-}
-
-/// Public-only check for whether damage bookkeeping (`attacked_by` / `last_damage`) can be
-/// observed by future moves, without inspecting hidden opponent movesets.
-pub(crate) fn public_damage_bookkeeping_observable(
-    b: &Battle,
-    dex: &Dex,
-    viewer_side: usize,
-) -> bool {
-    if b.sides[viewer_side].roster.iter().any(|p| {
-        p.base_move_slots
-            .iter()
-            .chain(p.move_slots.iter())
-            .any(|slot| matches!(dex.moves.key(slot.id), "counter" | "mirrorcoat"))
-    }) {
-        return true;
-    }
-    let learnsets = crate::belief::format_learnsets();
-    b.sides[1 - viewer_side].roster.iter().any(|p| {
-        let sp_key = dex.species.key(p.base_species);
-        learnsets.species(sp_key).map_or(true, |ls| {
-            ls.moves
-                .iter()
-                .any(|m| matches!(m.as_str(), "counter" | "mirrorcoat"))
-        })
-    })
 }
 
 /// Node search key over canonicalized HP buckets.
@@ -528,19 +397,14 @@ pub(crate) fn key_of_with_claw_omit(
     force_omit_claw: bool,
     cache: Option<&nc2000_engine::battle::BattleSearchCache>,
 ) -> u64 {
-    let (buckets, omit_damage) = if cfg.hp_buckets <= 0 {
-        (None, false)
-    } else {
-        (Some(cfg.hp_buckets), cfg.key_no_damage)
-    };
+    let buckets = (cfg.hp_buckets > 0).then_some(cfg.hp_buckets);
     if let Some(c) = cache {
-        let omit_qc =
-            force_omit_claw || (cfg.canonical_claw_key && !quick_claw_observable_fast(b, dex, c));
+        let omit_qc = force_omit_claw || !quick_claw_observable_fast(b, dex, c);
         let saved_qc = b.quick_claw_roll;
         if omit_qc && saved_qc {
             b.quick_claw_roll = false;
         }
-        let key = b.search_key_with_cache(dex, buckets, omit_damage, false, c);
+        let key = b.search_key_with_cache(dex, buckets, false, false, c);
         if omit_qc && saved_qc {
             b.quick_claw_roll = saved_qc;
         }
@@ -549,13 +413,11 @@ pub(crate) fn key_of_with_claw_omit(
             if force_omit_claw {
                 let q = b.quick_claw_roll;
                 b.quick_claw_roll = false;
-                let k = b.search_key(buckets, omit_damage);
+                let k = b.search_key(buckets, false);
                 b.quick_claw_roll = q;
                 k
-            } else if cfg.canonical_claw_key {
-                b.search_key_canonical_claw(dex, buckets, omit_damage)
             } else {
-                b.search_key(buckets, omit_damage)
+                b.search_key_canonical_claw(dex, buckets, false)
             }
         );
         return key;
@@ -563,15 +425,11 @@ pub(crate) fn key_of_with_claw_omit(
     if force_omit_claw {
         let saved_qc = b.quick_claw_roll;
         b.quick_claw_roll = false;
-        let key = b.search_key(buckets, omit_damage);
+        let key = b.search_key(buckets, false);
         b.quick_claw_roll = saved_qc;
         return key;
     }
-    if cfg.canonical_claw_key {
-        b.search_key_canonical_claw(dex, buckets, omit_damage)
-    } else {
-        b.search_key(buckets, omit_damage)
-    }
+    b.search_key_canonical_claw(dex, buckets, false)
 }
 
 #[inline]
@@ -817,13 +675,15 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
             crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
             break leaf(sim, rng, false);
         }
-        if cfg.canonical_claw_key && cache.map_or(true, |c| c.any_quick_claw) {
-            let s0 = sim.sides[0]
-                .active
-                .is_some_and(|r| sim.sides[0].roster[r as usize].speed == 65535);
-            let s1 = sim.sides[1]
-                .active
-                .is_some_and(|r| sim.sides[1].roster[r as usize].speed == 65535);
+        if cache.map_or(true, |c| c.any_quick_claw) {
+            let s0 = sim.sides[0].active.is_some_and(|r| {
+                sim.sides[0].roster[r as usize].speed
+                    == nc2000_engine::state::QUICK_CLAW_ACTION_SPEED
+            });
+            let s1 = sim.sides[1].active.is_some_and(|r| {
+                sim.sides[1].roster[r as usize].speed
+                    == nc2000_engine::state::QUICK_CLAW_ACTION_SPEED
+            });
             if (s0 || s1) && sim.is_idle_move_request() {
                 let qc = sim.quick_claw_roll;
                 sim.quick_claw_roll = false;
@@ -849,7 +709,7 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
             None => {
                 // expand exactly one node per iteration, then settle leaf
                 let child = nodes.len();
-                nodes.push(Node::continuation(sim, dex, cfg));
+                nodes.push(Node::at(sim, dex));
                 table.insert(key, child);
                 if let Some(trace) = trace.as_deref_mut() {
                     trace(SearchTrace::Leaf {
@@ -1000,9 +860,6 @@ impl SkuctSearch {
     }
 
     fn with_rng(battle: &Battle, dex: &Dex, mut cfg: RmConfig, rng: SplitMix64) -> SkuctSearch {
-        if cfg.key_no_damage && battle.damage_bookkeeping_observable(dex) {
-            cfg.key_no_damage = false;
-        }
         if matches!(
             battle.request_state,
             nc2000_engine::state::RequestState::TeamPreview
@@ -1010,8 +867,6 @@ impl SkuctSearch {
             cfg.settlement,
             crate::accounting::LeafSettlementMode::BlindSpotLeaf
                 | crate::accounting::LeafSettlementMode::BlindSpotLeafNoRelay
-                | crate::accounting::LeafSettlementMode::BlindSpotRollout
-                | crate::accounting::LeafSettlementMode::BlindSpotBoth
         ) {
             cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
         }
@@ -1025,7 +880,7 @@ impl SkuctSearch {
         let root_dominated = [0usize, 1].map(|s| {
             nodes[0].acts[s]
                 .iter()
-                .map(|&c| dominated_reason(&root, dex, s, c, cfg.mask_rules).is_some())
+                .map(|&c| dominated_reason(&root, dex, s, c).is_some())
                 .collect::<Vec<bool>>()
         });
         let endgame = [0usize, 1].map(|s| EndgameRootStats::new(&root, dex, s, &nodes[0].acts[s]));
@@ -1090,29 +945,12 @@ impl SkuctSearch {
         )
     }
 
-    pub fn should_early_stop(&self, side: usize) -> bool {
-        let node = &self.nodes[0];
-        let sui = &self.root_dominated[side];
-        let safe = (0..node.acts[side].len()).any(|a| !sui.get(a).copied().unwrap_or(false));
-        let eligible = |a: usize| !safe || !sui.get(a).copied().unwrap_or(false);
-        self.endgame[side].should_early_stop(
-            self.cfg.endgame_rules,
-            self.done,
-            self.cfg.iterations,
-            self.is_preview(),
-            &node.n[side],
-            &node.w[side],
-            eligible,
-        )
-    }
-
     pub fn endgame_analysis(&self, side: usize) -> Option<EndgameDecisionInfo> {
         let node = &self.nodes[0];
         let sui = &self.root_dominated[side];
         let safe = (0..node.acts[side].len()).any(|a| !sui.get(a).copied().unwrap_or(false));
         let eligible = |a: usize| !safe || !sui.get(a).copied().unwrap_or(false);
         self.endgame[side].analyze(
-            self.cfg.endgame_rules,
             &node.acts[side],
             &node.n[side],
             &node.n[side],
@@ -1304,12 +1142,11 @@ impl SkuctSearch {
         // a guaranteed instant loss (2026-07-21 last-mon-Explosion report).
         let node = &self.nodes[0];
         let sui = &self.root_dominated[side];
-        if self.cfg.endgame_rules.decision_any() && !self.is_preview() {
+        if !self.is_preview() {
             let safe = (0..node.acts[side].len()).any(|a| !sui.get(a).copied().unwrap_or(false));
             let eligible = |a: usize| !safe || !sui.get(a).copied().unwrap_or(false);
             return self.endgame[side]
                 .select_best(
-                    self.cfg.endgame_rules,
                     &node.acts[side],
                     &node.n[side],
                     &node.n[side],
@@ -1378,9 +1215,6 @@ impl RmAgent {
                 late_n[cell] += 1;
                 late_w[cell] += r;
             }
-            if ts.should_early_stop(side) {
-                break;
-            }
         }
 
         let acts = ts.nodes[0].acts[side].to_vec();
@@ -1389,7 +1223,7 @@ impl RmAgent {
         if !mixed_root {
             let n = &ts.nodes[0].n[side];
             let w = &ts.nodes[0].w[side];
-            let best = if self.cfg.endgame_rules.decision_any() && !ts.is_preview() {
+            let best = if !ts.is_preview() {
                 ts.best(side)
                     .and_then(|c| acts.iter().position(|&a| a == c))
                     .unwrap_or_else(|| {
@@ -1648,9 +1482,6 @@ mod tests {
     #[test]
     fn canonical_claw_key_preserves_observable_rolls_and_restores_state() {
         let (dex, root) = setup();
-        let def = RmConfig::default();
-        assert!(def.canonical_claw_key);
-        assert!(def.unseen_claw_root);
         let mut states = vec![(root.clone(), false)];
         for slot in [0, 1] {
             let mut holder = root.clone();
@@ -1673,21 +1504,10 @@ mod tests {
         states.push((fainted, true));
         for (state, observable) in states {
             assert_eq!(state.quick_claw_roll_observable(&dex), observable);
-            for (hp_buckets, key_no_damage) in [
-                (0, false),
-                (16, false),
-                (16, true),
-            ] {
-                let cfg = RmConfig {
-                    hp_buckets,
-                    key_no_damage,
-                    canonical_claw_key: false,
-                    unseen_claw_root: false,
-                    ..Default::default()
-                };
+            for hp_buckets in [0, 16] {
                 let candidate = RmConfig {
-                    canonical_claw_key: true,
-                    ..cfg.clone()
+                    hp_buckets,
+                    ..Default::default()
                 };
                 let cache = build_search_cache(&candidate, &dex, &state);
                 let mut a = state.clone();
@@ -1695,8 +1515,6 @@ mod tests {
                 let mut b = state.clone();
                 b.quick_claw_roll = true;
                 let before = [a.state_key128(), b.state_key128()];
-                assert_ne!(key_of(&cfg, &dex, &mut a), key_of(&cfg, &dex, &mut b));
-                assert_eq!(key_of(&candidate, &dex, &mut a), key_of(&cfg, &dex, &mut a));
                 assert_eq!(
                     key_of(&candidate, &dex, &mut a) != key_of(&candidate, &dex, &mut b),
                     observable
@@ -1732,8 +1550,14 @@ mod tests {
         b0.quick_claw_roll = false;
         b1.quick_claw_roll = false;
         assert!(b0.is_idle_move_request() && b1.is_idle_move_request());
-        assert_ne!(b0.sides[0].roster[0].speed, 65535);
-        assert_eq!(b1.sides[0].roster[0].speed, 65535);
+        assert_ne!(
+            b0.sides[0].roster[0].speed,
+            nc2000_engine::state::QUICK_CLAW_ACTION_SPEED
+        );
+        assert_eq!(
+            b1.sides[0].roster[0].speed,
+            nc2000_engine::state::QUICK_CLAW_ACTION_SPEED
+        );
         let cfg = RmConfig::default();
         let cache = build_search_cache(&cfg, &dex, &b0);
         // Before stripping stale speed, raw hashes differ; after `run_iteration`'s

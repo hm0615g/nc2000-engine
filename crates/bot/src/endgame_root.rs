@@ -7,75 +7,6 @@ use nc2000_engine::state::Battle;
 
 use crate::mask::foe_blocks_status_or_volatile;
 
-/// Optional root decision & early-stop rules for won, near-won, and lost positions.
-///
-/// 1. `fast_win`: in completely winning positions ($\mu^* \ge 0.985$), prefer actions
-///    that minimize expected turns to win (`win_turns`) without increasing loss/downside risk.
-/// 2. `safe_win`: in near-winning positions ($\mu^* \ge 0.85$), penalize quadratic downside
-///    risk $E[(1 - R)^2]$, terminal loss rate, and worst-reply/worst-type drops to crush
-///    opponent comeback lines.
-/// 3. `comeback_loss`: in losing positions ($\mu^* \le 0.12$), weight opponent-mistake EV
-///    (payoff when the opponent misses their single best punishing reply), upside tail
-///    $\sqrt{E[R^2]}$, survival turns, and a static desperation tie-breaker.
-/// 4. `early_stop`: stop the search loop early when a 1-turn 100%-win KO or a fully
-///    saturated terminal root is locked in.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EndgameRules {
-    pub fast_win: bool,
-    pub safe_win: bool,
-    pub comeback_loss: bool,
-    pub early_stop: bool,
-}
-
-impl Default for EndgameRules {
-    #[inline]
-    fn default() -> Self {
-        Self::all_decision()
-    }
-}
-
-impl EndgameRules {
-    #[inline]
-    pub const fn none() -> Self {
-        Self {
-            fast_win: false,
-            safe_win: false,
-            comeback_loss: false,
-            early_stop: false,
-        }
-    }
-
-    #[inline]
-    pub const fn any(self) -> bool {
-        self.fast_win || self.safe_win || self.comeback_loss || self.early_stop
-    }
-
-    #[inline]
-    pub const fn decision_any(self) -> bool {
-        self.fast_win || self.safe_win || self.comeback_loss
-    }
-
-    #[inline]
-    pub const fn all_decision() -> Self {
-        Self {
-            fast_win: true,
-            safe_win: true,
-            comeback_loss: true,
-            early_stop: false,
-        }
-    }
-
-    #[inline]
-    pub const fn all_with_early_stop() -> Self {
-        Self {
-            fast_win: true,
-            safe_win: true,
-            comeback_loss: true,
-            early_stop: true,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EndgameRegime {
     Normal,
@@ -220,92 +151,8 @@ impl EndgameRootStats {
         self.survive_turns[act_idx] += survive_t;
     }
 
-    pub fn should_early_stop(
-        &self,
-        rules: EndgameRules,
-        done: u32,
-        target_iters: u32,
-        is_preview: bool,
-        total_visits: &[u32],
-        rewards: &[f64],
-        eligible: impl Fn(usize) -> bool,
-    ) -> bool {
-        if !rules.early_stop || is_preview || target_iters < 128 {
-            return false;
-        }
-        let min_done = (target_iters / 6).clamp(96, 1536);
-        if done < min_done || done % 32 != 0 {
-            return false;
-        }
-        let elig: Vec<usize> = (0..total_visits.len()).filter(|&i| eligible(i)).collect();
-        if elig.len() <= 1 {
-            return true;
-        }
-        let Some(&legacy_idx) = elig
-            .iter()
-            .max_by(|&&a, &&b| cmp_visits_then_mean(total_visits, total_visits, rewards, a, b))
-        else {
-            return false;
-        };
-        let min_ko_v = (target_iters / 30).clamp(32, 256);
-        // 1) Guaranteed 1-turn terminal KO lock: the leading action (or a fast_win
-        //    action when all alternatives are explored) has >= min_ko_v visits, 100%
-        //    terminal win rate, and mean win turns <= 1.001 (every simulation KOs immediately).
-        let n_leg = total_visits[legacy_idx];
-        if n_leg >= min_ko_v
-            && self.win_n[legacy_idx] == n_leg
-            && self.loss_n[legacy_idx] == 0
-            && (rewards[legacy_idx] / n_leg as f64) >= 0.999_999
-            && (self.win_turns[legacy_idx] / n_leg as f64) <= 1.001
-        {
-            return true;
-        }
-        if rules.fast_win && elig.iter().all(|&i| total_visits[i] >= 16) {
-            let leg_mean = rewards[legacy_idx] / n_leg.max(1) as f64;
-            if leg_mean >= 0.985 {
-                for &i in &elig {
-                    let n = total_visits[i];
-                    if n >= min_ko_v
-                        && self.win_n[i] == n
-                        && self.loss_n[i] == 0
-                        && (rewards[i] / n as f64) >= 0.999_999
-                        && (self.win_turns[i] / n as f64) <= 1.001
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-        // 2) Full root saturation after 50% budget: every eligible action has >= 24 visits
-        //    and all are 100% immediate/1-turn terminal losses or 100% immediate wins.
-        if done >= (target_iters / 2).max(128) && elig.iter().all(|&i| total_visits[i] >= 24) {
-            let all_dead_now = elig.iter().all(|&i| {
-                let n = total_visits[i];
-                self.loss_n[i] == n
-                    && self.win_n[i] == 0
-                    && rewards[i] == 0.0
-                    && (self.survive_turns[i] / n as f64) <= 1.5
-            });
-            if all_dead_now {
-                return true;
-            }
-            let all_won_fast = elig.iter().all(|&i| {
-                let n = total_visits[i];
-                self.loss_n[i] == 0
-                    && self.win_n[i] == n
-                    && (rewards[i] / n as f64) >= 0.999
-                    && (self.win_turns[i] / n as f64) <= 2.0
-            });
-            if all_won_fast {
-                return true;
-            }
-        }
-        false
-    }
-
     pub fn analyze(
         &self,
-        rules: EndgameRules,
         acts: &[SearchChoice],
         total_visits: &[u32],
         effective_visits: &[u32],
@@ -367,7 +214,7 @@ impl EndgameRootStats {
             })
             .collect();
 
-        if elig.len() <= 1 || n_max == 0 || !rules.decision_any() {
+        if elig.len() <= 1 || n_max == 0 {
             return Some(EndgameDecisionInfo {
                 regime: EndgameRegime::Normal,
                 mu_star: metrics[legacy_idx].mean,
@@ -417,7 +264,7 @@ impl EndgameRootStats {
                 && mu_legacy >= 0.91
                 && max_win_rate >= 0.85
                 && min_loss_rate <= 0.002);
-        if rules.fast_win && is_fast_win_regime {
+        if is_fast_win_regime {
             let top_win: Vec<usize> = well_sampled
                 .iter()
                 .copied()
@@ -501,8 +348,8 @@ impl EndgameRootStats {
         // terminal `win_rate` for unresolved horizon cutoffs. Only prefer an alternative
         // when it is well-sampled, preserves `mean` and terminal `win_rate`, and strictly
         // reduces terminal `loss_rate` or `trap_risk`.
-        if rules.safe_win && mu_star >= 0.75 && mu_legacy >= 0.72 {
-            let turn_w = if rules.fast_win && mu_star >= 0.90 {
+        if mu_star >= 0.75 && mu_legacy >= 0.72 {
+            let turn_w = if mu_star >= 0.90 {
                 0.004
             } else {
                 0.0
@@ -565,7 +412,7 @@ impl EndgameRootStats {
         // action has 0 terminal wins and 100% terminal losses.
         let is_comeback_regime =
             mu_star <= 0.08 || (mu_star <= 0.12 && max_win_rate <= 0.015 && min_loss_rate >= 0.85);
-        if rules.comeback_loss && is_comeback_regime {
+        if is_comeback_regime {
             let all_guaranteed_loss = elig.iter().all(|&i| {
                 self.win_n.get(i).copied().unwrap_or(0) == 0
                     && self.loss_n.get(i).copied().unwrap_or(0) == total_visits[i]
@@ -663,7 +510,6 @@ impl EndgameRootStats {
 
     pub fn select_best(
         &self,
-        rules: EndgameRules,
         acts: &[SearchChoice],
         total_visits: &[u32],
         effective_visits: &[u32],
@@ -671,14 +517,7 @@ impl EndgameRootStats {
         eligible: impl Fn(usize) -> bool,
         reply_metrics: impl Fn(usize, u32, f64) -> (f64, f64),
     ) -> Option<usize> {
-        let k = acts.len();
-        if !rules.decision_any() {
-            return (0..k)
-                .filter(|&i| eligible(i))
-                .max_by(|&a, &b| cmp_visits_then_mean(effective_visits, total_visits, rewards, a, b));
-        }
         self.analyze(
-            rules,
             acts,
             total_visits,
             effective_visits,
@@ -765,29 +604,30 @@ pub fn tactical_desperation_bonus(b: &Battle, dex: &Dex, side: usize, c: SearchC
     match c {
         SearchChoice::Move(id) => {
             let ms = dex.move_static(id);
+            let km = &dex.known_moves;
+            let sid = Some(id);
             let key = dex.moves.key(id);
             if me.status == Status::Slp {
                 return if ms.sleep_usable { 0.90 } else { 0.10 };
             }
             let mut bonus = 0.0_f64;
-            if me.status == Status::Frz && matches!(key, "flamewheel" | "sacredfire") {
+            if me.status == Status::Frz && (sid == km.flamewheel || sid == km.sacredfire) {
                 bonus += 0.70;
             }
-            let dmg =
-                crate::eval::expected_hit_fraction(b, dex, att, def, id, true).clamp(0.0, 1.5);
+            let dmg = crate::eval::expected_hit_fraction(b, dex, att, def, id).clamp(0.0, 1.5);
             bonus += 0.45 * dmg.min(1.0);
             if ms.priority > 0 && dmg > 0.0 {
                 bonus += 0.25;
             }
-            if matches!(key, "protect" | "detect" | "endure") {
+            if sid == km.protect || sid == km.detect || sid == km.endure {
                 bonus += 0.20;
             }
             if (ms.status.is_some() || ms.volatile_status.is_some())
-                && !foe_blocks_status_or_volatile(b, dex, side, att, def, key, ms)
+                && !foe_blocks_status_or_volatile(b, dex, side, att, def, id, key, ms)
             {
                 bonus += 0.25;
             }
-            if ms.has_boosts || matches!(key, "curse" | "bellydrum") {
+            if ms.has_boosts || sid == km.curse || sid == km.bellydrum {
                 bonus += 0.20;
             }
             if !ms.secondaries.is_empty() && dmg > 0.0 {
@@ -828,13 +668,12 @@ pub fn tactical_desperation_bonus(b: &Battle, dex: &Dex, side: usize, c: SearchC
 /// Evaluates `EndgameRootStats` once:
 /// 1. `FastWin`, `SafeWin`, and `ComebackLoss` regimes return `chosen_idx` directly
 ///    (protecting certified/near-won/desperate roots from equilibrium override).
-/// 2. `Normal` regime (or `EndgameRules::none()`) computes `base_idx` via
-///    `cmp_visits_then_mean`, then allows `equilibrium_override` to replace it only
-///    when `eq.override_value > eq.pure_guarantees[base_idx] + MIN_MIX_MARGIN`.
+/// 2. `Normal` regime computes `base_idx` (`chosen_idx`), then allows
+///    `equilibrium_override` to replace it only when
+///    `eq.override_value > eq.pure_guarantees[base_idx] + MIN_MIX_MARGIN`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn select_blind_root_choice(
     stats: &EndgameRootStats,
-    rules: EndgameRules,
     acts: &[SearchChoice],
     total_visits: &[u32],
     effective_visits: &[u32],
@@ -843,32 +682,24 @@ pub(crate) fn select_blind_root_choice(
     reply_metrics: impl Fn(usize, u32, f64) -> (f64, f64),
     equilibrium_override: impl FnOnce(usize) -> Option<SearchChoice>,
 ) -> Option<SearchChoice> {
-    let base_idx = if rules.decision_any() {
-        let info = stats.analyze(
-            rules,
-            acts,
-            total_visits,
-            effective_visits,
-            rewards,
-            &eligible,
-            reply_metrics,
-        )?;
-        if matches!(
-            info.regime,
-            EndgameRegime::FastWin | EndgameRegime::SafeWin | EndgameRegime::ComebackLoss
-        ) {
-            return Some(acts[info.chosen_idx]);
-        }
-        info.chosen_idx
-    } else {
-        (0..acts.len())
-            .filter(|&i| eligible(i))
-            .max_by(|&a, &b| cmp_visits_then_mean(effective_visits, total_visits, rewards, a, b))?
-    };
-    if let Some(choice) = equilibrium_override(base_idx) {
+    let info = stats.analyze(
+        acts,
+        total_visits,
+        effective_visits,
+        rewards,
+        &eligible,
+        reply_metrics,
+    )?;
+    if matches!(
+        info.regime,
+        EndgameRegime::FastWin | EndgameRegime::SafeWin | EndgameRegime::ComebackLoss
+    ) {
+        return Some(acts[info.chosen_idx]);
+    }
+    if let Some(choice) = equilibrium_override(info.chosen_idx) {
         return Some(choice);
     }
-    Some(acts[base_idx])
+    Some(acts[info.chosen_idx])
 }
 
 #[cfg(test)]
@@ -1000,7 +831,7 @@ mod tests {
     }
 
     #[test]
-    fn endgame_rules_fast_win_safe_win_comeback_loss_and_early_stop() {
+    fn endgame_regimes_fast_win_safe_win_and_comeback_loss() {
         let (dex, b) = setup();
         let acts = vec![mv(&dex, "agility"), mv(&dex, "thunderbolt")];
 
@@ -1036,66 +867,17 @@ mod tests {
         }
         let n = [155u32, 145];
         let w = [155.0f64, 145.0];
-        // `EndgameRules::none()` (ablation) preserves legacy argmax-visits (index 0),
-        // while `EndgameRules::default()` (shipped) selects the 1-turn KO (index 1).
         assert_eq!(
-            stats.select_best(
-                EndgameRules::none(),
-                &acts,
-                &n,
-                &n,
-                &w,
-                |_| true,
-                |_, _, m| (0.0, m)
-            ),
-            Some(0)
-        );
-        assert_eq!(
-            stats.select_best(
-                EndgameRules::default(),
-                &acts,
-                &n,
-                &n,
-                &w,
-                |_| true,
-                |_, _, m| (0.0, m)
-            ),
+            stats.select_best(&acts, &n, &n, &w, |_| true, |_, _, m| (0.0, m)),
             Some(1)
         );
         // FastWin picks index 1 (1-turn KO)
         let info = stats
-            .analyze(
-                EndgameRules {
-                    fast_win: true,
-                    ..EndgameRules::none()
-                },
-                &acts,
-                &n,
-                &n,
-                &w,
-                |_| true,
-                |_, _, m| (0.0, m),
-            )
+            .analyze(&acts, &n, &n, &w, |_| true, |_, _, m| (0.0, m))
             .unwrap();
         assert_eq!(info.regime, EndgameRegime::FastWin);
         assert_eq!(info.legacy_idx, 0);
         assert_eq!(info.chosen_idx, 1);
-        assert!(
-            stats.should_early_stop(
-                EndgameRules {
-                    fast_win: true,
-                    early_stop: true,
-                    ..EndgameRules::none()
-                },
-                128,
-                300,
-                false,
-                &n,
-                &w,
-                |_| true,
-            ),
-            "early_stop triggers when a 1-turn 100%-win KO is locked in"
-        );
 
         // 2. SafeWin: action 0 has slightly higher mean (0.9125) and visits (160) but 8.75%
         //    catastrophic terminal losses, whereas action 1 has mean 0.907 (140 visits) with
@@ -1133,10 +915,6 @@ mod tests {
         let sw = [146.0f64, 126.0 + 14.0 * 0.07];
         let safe_info = safe_stats
             .analyze(
-                EndgameRules {
-                    safe_win: true,
-                    ..EndgameRules::none()
-                },
                 &acts,
                 &sn,
                 &sn,
@@ -1185,10 +963,6 @@ mod tests {
         let lw = [155.0 * 0.02, 145.0 * 0.02];
         let loss_info = loss_stats
             .analyze(
-                EndgameRules {
-                    comeback_loss: true,
-                    ..EndgameRules::none()
-                },
                 &acts,
                 &ln,
                 &ln,
@@ -1233,15 +1007,7 @@ mod tests {
         let s1_n = [80u32, 80];
         let s1_w = [80.0f64, 80.0];
         let s1_info = s1_stats
-            .analyze(
-                EndgameRules::all_decision(),
-                &acts,
-                &s1_n,
-                &s1_n,
-                &s1_w,
-                |_| true,
-                |_, _, m| (0.0, m),
-            )
+            .analyze(&acts, &s1_n, &s1_n, &s1_w, |_| true, |_, _, m| (0.0, m))
             .unwrap();
         assert_eq!(s1_info.regime, EndgameRegime::FastWin);
         assert_eq!(

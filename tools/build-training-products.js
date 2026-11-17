@@ -54,8 +54,9 @@ async function validatePreviews() {
  const digest = text => crypto.createHash('sha256').update(text).digest('hex');
  const prior = read('data/belief-pool-v3/belief-pool.json');
  for (const p of ['data/compiled-preview-v1.json', 'data/team-pool-v2/preview-nash-matrix.json']) {
+  if (!fs.existsSync(p)) continue;
   const artifact = read(p);
-  const catalogMatches = artifact.inputs?.['data/team-pool-v2/team-pool.json'] === retirement.catalogSha256;
+  const catalogMatches = (artifact.catalogSha256 ?? artifact.inputs?.['data/team-pool-v2/team-pool.json']) === retirement.catalogSha256;
   if (!artifact.status && catalogMatches && artifact.priorDependencies?.version === 1) {
    if (artifact.policies) {
     const valid = await compatiblePolicyKeys(artifact, prior, dex, digest);

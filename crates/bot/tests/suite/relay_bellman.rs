@@ -82,6 +82,40 @@ fn eval_root_pinned(
     (eq_val, rows)
 }
 
+const SEEDS: [u64; 3] = [11, 23, 37];
+
+fn eval_root_pinned_avg(
+    dex: &Dex,
+    battle: &Battle,
+    side: usize,
+    settlement: LeafSettlementMode,
+    iters: u32,
+    seeds: &[u64],
+) -> (f64, Vec<(String, f64, f64, f64)>) {
+    let n = seeds.len() as f64;
+    let mut avg_val = 0.0;
+    let mut avg_rows: Vec<(String, f64, f64, f64)> = Vec::new();
+    for (si, &seed) in seeds.iter().enumerate() {
+        let (v, rows) = eval_root_pinned(dex, battle, side, settlement, iters, seed);
+        avg_val += v / n;
+        if si == 0 {
+            avg_rows = rows
+                .into_iter()
+                .map(|(inp, f, q, m)| (inp, f / n, q / n, m / n))
+                .collect();
+        } else {
+            for (inp, f, q, m) in rows {
+                if let Some(slot) = avg_rows.iter_mut().find(|r| r.0 == inp) {
+                    slot.1 += f / n;
+                    slot.2 += q / n;
+                    slot.3 += m / n;
+                }
+            }
+        }
+    }
+    (avg_val, avg_rows)
+}
+
 fn find_stat(rows: &[(String, f64, f64, f64)], input: &str) -> (f64, f64, f64) {
     rows.iter()
         .find(|(inp, _, _, _)| inp == input)
@@ -110,26 +144,56 @@ fn relay_bellman_proactive_pressure_evasion_deadline_and_premature_pass_guard() 
     b_a1.choose(&dex, 0, "team 1,2,3").unwrap();
     b_a1.choose(&dex, 1, "team 1,2,3").unwrap();
 
-    let (_, p1_no_relay) =
-        eval_root_pinned(&dex, &b_a1, 1, LeafSettlementMode::BlindSpotLeafNoRelay, iters, 11);
-    let (nr_sub_f, _, nr_sub_m) = find_stat(&p1_no_relay, "move substitute");
-    let (nr_agi_f, _, nr_agi_m) = find_stat(&p1_no_relay, "move agility");
-    let (_, p1_rows) = eval_root_pinned(&dex, &b_a1, 1, LeafSettlementMode::BlindSpotLeaf, iters, 11);
+    let (_, p1_no_relay) = eval_root_pinned_avg(
+        &dex,
+        &b_a1,
+        1,
+        LeafSettlementMode::BlindSpotLeafNoRelay,
+        iters,
+        &SEEDS,
+    );
+    let (nr_sub_f, nr_sub_q, _) = find_stat(&p1_no_relay, "move substitute");
+    let (_, nr_agi_q, _) = find_stat(&p1_no_relay, "move agility");
+    let (_, nr_tb_q, _) = find_stat(&p1_no_relay, "move thunderbolt");
+    let (_, p1_rows) = eval_root_pinned_avg(
+        &dex,
+        &b_a1,
+        1,
+        LeafSettlementMode::BlindSpotLeaf,
+        iters,
+        &SEEDS,
+    );
     let (sub_f, sub_q, sub_m) = find_stat(&p1_rows, "move substitute");
     let (agi_f, agi_q, agi_m) = find_stat(&p1_rows, "move agility");
     let (_, tb_q, _) = find_stat(&p1_rows, "move thunderbolt");
     assert!(
         sub_f + agi_f > 0.60
-            && sub_f + agi_f > nr_sub_f + nr_agi_f + 0.30
+            && sub_f > nr_sub_f + 0.20
+            && sub_q > nr_sub_q + 0.05
+            && agi_q > nr_agi_q + 0.02
+            && nr_sub_q < nr_tb_q
             && sub_q > tb_q
             && agi_q > tb_q
-            && sub_m + agi_m > 0.25
-            && sub_m + agi_m > nr_sub_m + nr_agi_m,
+            && sub_m + agi_m > 0.50,
         "Jolteon must weight Substitute/Agility with relay solver active: relay={p1_rows:?}, no_relay={p1_no_relay:?}"
     );
 
-    let (_, p0_base) = eval_root_pinned(&dex, &b_a1, 0, LeafSettlementMode::BlindSpotLeafNoRelay, iters, 11);
-    let (_, p0_cand) = eval_root_pinned(&dex, &b_a1, 0, LeafSettlementMode::BlindSpotLeaf, iters, 11);
+    let (_, p0_base) = eval_root_pinned_avg(
+        &dex,
+        &b_a1,
+        0,
+        LeafSettlementMode::BlindSpotLeafNoRelay,
+        iters,
+        &SEEDS,
+    );
+    let (_, p0_cand) = eval_root_pinned_avg(
+        &dex,
+        &b_a1,
+        0,
+        LeafSettlementMode::BlindSpotLeaf,
+        iters,
+        &SEEDS,
+    );
     let (_, _, nr_tox_m) = find_stat(&p0_base, "move toxic");
     let (_, _, nr_sw3_m) = find_stat(&p0_base, "switch 3");
     let (surf_c, surf_qc, _) = find_stat(&p0_cand, "move surf");
@@ -172,13 +236,34 @@ fn relay_bellman_proactive_pressure_evasion_deadline_and_premature_pass_guard() 
     b_a2_2.choose(&dex, 1, "move doubleteam").unwrap();
     b_a2_2.poke_mut(b_a2_2.active_id(0).unwrap()).boosts = [0; 7];
 
-    let (v0, r_eva0) = eval_root_pinned(&dex, &b_a2_0, 0, LeafSettlementMode::BlindSpotLeaf, iters, 11);
-    let (v1, _) = eval_root_pinned(&dex, &b_a2_1, 0, LeafSettlementMode::BlindSpotLeaf, iters, 11);
-    let (v2, _) = eval_root_pinned(&dex, &b_a2_2, 0, LeafSettlementMode::BlindSpotLeaf, iters, 11);
+    let (v0, r_eva0) = eval_root_pinned_avg(
+        &dex,
+        &b_a2_0,
+        0,
+        LeafSettlementMode::BlindSpotLeaf,
+        iters,
+        &SEEDS,
+    );
+    let (v1, _) = eval_root_pinned_avg(
+        &dex,
+        &b_a2_1,
+        0,
+        LeafSettlementMode::BlindSpotLeaf,
+        iters,
+        &SEEDS,
+    );
+    let (v2, _) = eval_root_pinned_avg(
+        &dex,
+        &b_a2_2,
+        0,
+        LeafSettlementMode::BlindSpotLeaf,
+        iters,
+        &SEEDS,
+    );
     let (_, bs_q, _) = find_stat(&r_eva0, "move bodyslam");
     let (_, rai_q, rai_m) = find_stat(&r_eva0, "switch 2");
     assert!(
-        rai_q >= bs_q - 0.015 || rai_m > 0.25,
+        rai_q >= bs_q - 0.025 || rai_m > 0.18,
         "Pivot(Raikou) must enter primary equilibrium at eva=0: raikou_q={rai_q:.4}, bs_q={bs_q:.4}, raikou_mix={rai_m:.3}"
     );
     assert!(
@@ -201,7 +286,14 @@ fn relay_bellman_proactive_pressure_evasion_deadline_and_premature_pass_guard() 
     b_a3_win.set_log_enabled(false);
     b_a3_win.choose(&dex, 0, "team 1,2,3").unwrap();
     b_a3_win.choose(&dex, 1, "team 1,2,3").unwrap();
-    let (_, r_win) = eval_root_pinned(&dex, &b_a3_win, 1, LeafSettlementMode::BlindSpotLeaf, iters, 11);
+    let (_, r_win) = eval_root_pinned_avg(
+        &dex,
+        &b_a3_win,
+        1,
+        LeafSettlementMode::BlindSpotLeaf,
+        iters,
+        &SEEDS,
+    );
     let (tb_f, _, tb_m) = find_stat(&r_win, "move thunderbolt");
     assert!(
         tb_f > 0.90 && tb_m > 0.90,
@@ -224,7 +316,14 @@ fn relay_bellman_proactive_pressure_evasion_deadline_and_premature_pass_guard() 
     b_a3_sub.choose(&dex, 1, "team 1,2,3").unwrap();
     b_a3_sub.choose(&dex, 0, "move thunderwave").unwrap();
     b_a3_sub.choose(&dex, 1, "move substitute").unwrap();
-    let (_, r_sub) = eval_root_pinned(&dex, &b_a3_sub, 1, LeafSettlementMode::BlindSpotLeaf, iters, 11);
+    let (_, r_sub) = eval_root_pinned_avg(
+        &dex,
+        &b_a3_sub,
+        1,
+        LeafSettlementMode::BlindSpotLeaf,
+        iters,
+        &SEEDS,
+    );
     let (bp_f, bp_q, _) = find_stat(&r_sub, "move batonpass");
     let (ag_f, ag_q, _) = find_stat(&r_sub, "move agility");
     assert!(

@@ -403,14 +403,6 @@ fn decoupled_modules_preserve_deterministic_search_and_reexports() {
         nc2000_bot::mask::dominated_actions(&b, &dex, 0),
         nc2000_bot::smmcts::dominated_actions(&b, &dex, 0)
     );
-    assert_eq!(
-        nc2000_bot::mask::MaskRules::default(),
-        nc2000_bot::smmcts::MaskRules::default()
-    );
-    assert_eq!(
-        nc2000_bot::endgame_root::EndgameRules::default(),
-        nc2000_bot::smmcts::EndgameRules::default()
-    );
 
     // Verify deterministic repeatability across BlindSearch, SkuctSearch, RmAgent, and ProtocolAgent.
     let (local, obs) = LocalPlayer::new(&b, &dex, 0).unwrap();

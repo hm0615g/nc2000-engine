@@ -1,6 +1,6 @@
 use super::common;
 use nc2000_bot::{
-    smmcts::{dominated_actions_with, MaskRules, SelRule},
+    smmcts::{dominated_actions, SelRule},
     Belief, BlindSearch, Observer, RmConfig,
 };
 use nc2000_engine::{
@@ -20,56 +20,31 @@ fn preserves_a_certified_winning_wait_without_changing_search() {
     let mut belief = Belief::pinned_from_battle(&preview, &observer);
     observer.observe(&b, &dex);
     belief.sync(&dex, &observer);
-    let searches: Vec<_> = [false, true]
-        .into_iter()
-        .map(|enabled| {
-            let mut search = BlindSearch::new(
-                &b,
-                &dex,
-                RmConfig {
-                    c: 0.4,
-                    rule: SelRule::Ucb,
-                    mask_rules: MaskRules {
-                        residual_damage_wait: enabled,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-                0,
-                81001,
-            );
-            search.step(&dex, &belief, &observer, 3000);
-            search
-        })
-        .collect();
-    let before = searches[0].best().unwrap();
-    let after = searches[1].best().unwrap();
+    let mut search = BlindSearch::new(
+        &b,
+        &dex,
+        RmConfig {
+            c: 0.4,
+            rule: SelRule::Ucb,
+            ..Default::default()
+        },
+        0,
+        81001,
+    );
+    search.step(&dex, &belief, &observer, 3000);
+    let chosen = search.best().unwrap();
     assert!(matches!(
-        before.to_input(&dex).as_str(),
-        "move return" | "move thundershock"
-    ));
-    assert!(matches!(
-        after.to_input(&dex).as_str(),
+        chosen.to_input(&dex).as_str(),
         "move toxic" | "move thunderwave"
     ));
     let mut probe = b.clone();
-    let mut losing_reply = false;
     for reply in probe.legal_choices(&dex, 1) {
-        let win = enumerate_step(&dex, &b, [Some(after), Some(reply)], 10000).unwrap();
+        let win = enumerate_step(&dex, &b, [Some(chosen), Some(reply)], 10000).unwrap();
         assert!(win
             .leaves
             .iter()
             .all(|l| l.battle.outcome() == Some(Outcome::P1Win)));
-        let old = enumerate_step(&dex, &b, [Some(before), Some(reply)], 10000).unwrap();
-        losing_reply |= old
-            .leaves
-            .iter()
-            .filter(|l| l.battle.outcome() == Some(Outcome::P2Win))
-            .map(|l| l.prob)
-            .sum::<f64>()
-            > 0.9;
     }
-    assert!(losing_reply);
 }
 
 #[test]
@@ -154,33 +129,23 @@ fn public_residual_effects_relax_only_noop_exclusions() {
                     continue;
                 }
                 b.refresh_battle_mask(&dex);
-                for enabled in [false, true] {
-                    let excluded = dominated_actions_with(
-                        &b,
-                        &dex,
-                        side,
-                        MaskRules {
-                            residual_damage_wait: enabled,
-                            ..Default::default()
-                        },
-                    );
-                    let masked = |key| {
-                        excluded
-                            .iter()
-                            .any(|(a, _)| a.to_input(&dex) == format!("move {key}"))
-                    };
-                    let residual = effect == "sandstorm"
-                        || (target == them
-                            && !matches!(effect, "none" | "par" | "awake_nightmare" | "rain"));
-                    assert_eq!(
-                        masked("snore"),
-                        !(enabled && residual),
-                        "{side} {target:?} {effect} {enabled}"
-                    );
-                    assert!(masked("explosion"));
-                    if b.has_sleeping_pokemon(1 - side) {
-                        assert!(masked("spore"));
-                    }
+                let excluded = dominated_actions(&b, &dex, side);
+                let masked = |key| {
+                    excluded
+                        .iter()
+                        .any(|(a, _)| a.to_input(&dex) == format!("move {key}"))
+                };
+                let residual = effect == "sandstorm"
+                    || (target == them
+                        && !matches!(effect, "none" | "par" | "awake_nightmare" | "rain"));
+                assert_eq!(
+                    masked("snore"),
+                    !residual,
+                    "{side} {target:?} {effect}"
+                );
+                assert!(masked("explosion"));
+                if b.has_sleeping_pokemon(1 - side) {
+                    assert!(masked("spore"));
                 }
             }
         }
@@ -189,7 +154,7 @@ fn public_residual_effects_relax_only_noop_exclusions() {
         sand.refresh_battle_mask(&dex);
         sand.poke_mut(them).types = nc2000_engine::dex::TypeList::one(dex.known_types.ground);
         assert!(
-            dominated_actions_with(&sand, &dex, side, MaskRules::default())
+            dominated_actions(&sand, &dex, side)
                 .iter()
                 .any(|(a, _)| a.to_input(&dex) == "move snore")
         );

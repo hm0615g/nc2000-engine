@@ -19,10 +19,12 @@ try {
   const poolJson=await(await fetch('/data/belief-pool-v3/belief-pool.json')).text();
   const artifact=await(await fetch('/data/compiled-preview-v1.json')).json();
   if(artifact.status)throw Error('catalog preview tables are retired');
+  if(artifact.build!=='policy-v1')throw Error(`unexpected build epoch: ${artifact.build}`);
+  if(artifact.inputs!==undefined)throw Error('compiled-preview artifact must not carry raw input lock hashes');
   const {compiledPreviewCompatibility,compiledPreviewPick}=await import('/src/compiled-preview.ts');
   const compatible = await compiledPreviewCompatibility(poolJson,embeddedDexJson());
   let invalidKeys = new Set(), validKeys = new Set();
-  const keys=new Set();let matchups=0;
+  const keys=new Set();let matchups=0;let sampleKey,sampleInfo;
   try{
    for(const own of catalog.teams)for(const foe of catalog.teams){
     const b=new Battle(dex,JSON.stringify(foe.sets),JSON.stringify(own.sets),'1,2,3,4');
@@ -32,6 +34,8 @@ try {
      const key=s.compiledPreviewKey(b);keys.add(key);
      const legal=JSON.parse(b.legalChoices(1));
      const build=s.compiledPreviewBuild(), info=s.previewCacheInfo();
+     if(build!==artifact.build)throw Error(`wasm build ${build} != artifact ${artifact.build}`);
+     if(compatible.has(key)&&!sampleKey){sampleKey=key;sampleInfo=info;}
      for(const seed of Array.from({length:64},(_,i)=>i)){
       const choice=compiledPreviewPick(build,key,seed,.4,info,compatible);
       if(compatible.has(key)) {
@@ -43,10 +47,13 @@ try {
     }finally{s.free();b.free();}
    }
   }finally{dex.free();}
-  return {matchups,uniqueKeys:keys.size,validKeys:validKeys.size,invalidKeys:invalidKeys.size,slotsPerKey:64,slotChecks:matchups*64,allLegal:true};
+  if(!sampleKey||compiledPreviewPick('policy-v0',sampleKey,0,.4,sampleInfo,compatible)!==undefined){
+   throw Error('mismatched policy epoch did not fall back to live search');
+  }
+  return {matchups,uniqueKeys:keys.size,validKeys:validKeys.size,invalidKeys:invalidKeys.size,slotsPerKey:64,slotChecks:matchups*64,allLegal:true,softCacheFallbackOk:true};
  },wasmPath);
  assert.equal(result.matchups,1089);assert.equal(result.uniqueKeys,990);
- const out=process.env.NC2000_CHECK_OUT ?? '../data/preview-training-v3';
+ const out=process.env.NC2000_CHECK_OUT ?? '../target';
  fs.mkdirSync(out,{recursive:true});
  fs.writeFileSync(path.join(out,'compiled-coverage.json'),JSON.stringify(result,null,2)+'\n');console.log(result);
 }finally{await browser?.close();await vite?.close();server.close();}

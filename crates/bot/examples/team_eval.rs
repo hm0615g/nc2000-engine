@@ -276,7 +276,7 @@ fn main() {
     let pool_row_fp = flag(&args, "--belief-pool").map(|p| file_fingerprint(&p));
     let pool_col_fp = flag(&args, "--belief-pool-col").map(|p| file_fingerprint(&p)).or_else(|| pool_row_fp.clone());
     let cond = json!({
-        "bot": nc2000_bot::m17e_artifact::solver_build_fingerprint(),
+        "bot": nc2000_bot::compiled_preview::POLICY_EPOCH,
         "belief_row": if spec_row.kind == Kind::Blind { pool_row_fp.clone() } else { None },
         "belief_col": if spec_col.kind == Kind::Blind { pool_col_fp.clone() } else { None },
         "max_turns": max_turns,

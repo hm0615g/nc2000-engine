@@ -10,6 +10,7 @@ use std::cell::RefCell;
 use nc2000_engine::compact::{
     get_damage_base_branchless, get_stat_branchless, hit_probability_branchless,
     lookup_accuracy_threshold, vol_bit, CompactBattle, CompactWeather, ItemStatKind, MatchTable,
+    SpecialMoveKind, VarBpKind, NO_MOVE_SLOT, NO_TYPE_ID,
 };
 use nc2000_engine::state::Status;
 
@@ -67,7 +68,7 @@ pub enum DisruptKind {
 pub struct AxisSpec {
     pub kind: BoostAxisKind,
     pub len: u8,
-    /// Move slot `0..4` on `u_R`, or `0xFF` when representing an already-held boost with no move.
+    /// Move slot `0..4` on `u_R`, or `NO_MOVE_SLOT` when representing an already-held boost with no move.
     pub move_slot: u8,
     /// HP cost in 25% buckets (`0` normally, `2` for `Belly Drum`).
     pub hp_cost: u8,
@@ -81,7 +82,7 @@ impl AxisSpec {
         Self {
             kind: BoostAxisKind::None,
             len: 1,
-            move_slot: 0xFF,
+            move_slot: NO_MOVE_SLOT,
             hp_cost: 0,
             flags: 0,
             stages: [0; 4],
@@ -125,9 +126,9 @@ impl SolvedRelaySubgame {
             key: RelayCacheKey { key_lo: 0, key_hi: 0 },
             axis1: AxisSpec::none(),
             axis2: AxisSpec::none(),
-            r_move_slots: [0xFF; MAX_R_ACTIONS],
-            d0_brk_slot: 0xFF,
-            d0_dis_slot: 0xFF,
+            r_move_slots: [NO_MOVE_SLOT; MAX_R_ACTIONS],
+            d0_brk_slot: NO_MOVE_SLOT,
+            d0_dis_slot: NO_MOVE_SLOT,
             d0_atk_frac_u8: 0,
             k1_len: 1,
             k2_len: 1,
@@ -256,12 +257,10 @@ fn mon_guaranteed_incapacitated(
     if st == Status::Slp as u8 && !has_berry {
         let rem = mon.status_counter().saturating_sub(1);
         if rem >= 1 {
-            let dis = (mon.vol_flags & vol_bit::DISABLE) != 0;
-            let dis_slot = ((mon.slot_refs >> 4) & 0x03) as usize;
             let has_st = (0..spec.num_moves as usize).any(|m_i| {
                 mon.pp[m_i] > 0
-                    && !(dis && m_i == dis_slot)
-                    && table.move_specs[idx][m_i].special_kind == 10
+                    && !mon.is_slot_disabled(m_i)
+                    && table.move_specs[idx][m_i].special_kind == SpecialMoveKind::SleepTalk
             });
             return (rem >= 1 && !has_st, rem.min(4), has_st);
         }
@@ -279,7 +278,7 @@ fn classify_self_boost_move(
     if !ms.is_status {
         return None;
     }
-    if ms.special_kind == 5 {
+    if ms.special_kind == SpecialMoveKind::Curse {
         let is_ghost =
             (table.mons[mon_idx].type_mask & (1u32 << (table.ghost_type & 31))) != 0;
         if !is_ghost {
@@ -294,7 +293,7 @@ fn classify_self_boost_move(
         }
         return None;
     }
-    if ms.special_kind == 6 {
+    if ms.special_kind == SpecialMoveKind::BellyDrum {
         return Some(AxisSpec {
             kind: BoostAxisKind::Offense,
             len: 2,
@@ -382,14 +381,12 @@ fn bind_boost_axes(cb: &CompactBattle, table: &MatchTable, side: usize, slot: us
     let idx = side * 3 + slot;
     let mon = &cb.mons[idx];
     let spec = &table.mons[idx];
-    let dis = (mon.vol_flags & vol_bit::DISABLE) != 0;
-    let dis_slot = ((mon.slot_refs >> 4) & 0x03) as usize;
 
     let mut cands = [AxisSpec::none(); 6];
     let mut n_cand = 0usize;
 
     for m_i in 0..spec.num_moves as usize {
-        if mon.pp[m_i] == 0 || (dis && m_i == dis_slot) {
+        if mon.pp[m_i] == 0 || mon.is_slot_disabled(m_i) {
             continue;
         }
         if let Some(ax) = classify_self_boost_move(table, idx, m_i) {
@@ -432,7 +429,7 @@ fn bind_boost_axes(cb: &CompactBattle, table: &MatchTable, side: usize, slot: us
             cands[n_cand] = AxisSpec {
                 kind,
                 len: 2,
-                move_slot: 0xFF,
+                move_slot: NO_MOVE_SLOT,
                 hp_cost: 0,
                 flags,
                 stages: [0, capped, capped, capped],
@@ -552,7 +549,7 @@ pub fn is_relay_eligible(cb: &CompactBattle, table: &MatchTable, side: usize) ->
     }
     let act_idx = side * 3 + act_slot;
     let act_mon = &cb.mons[act_idx];
-    if act_mon.hp() <= 0 || (act_mon.slot_refs & 0x80) != 0 {
+    if act_mon.hp() <= 0 || act_mon.must_recharge() {
         return false;
     }
     // Lock checks: Ghost Curse, imminent Perish Song, non-BP Encore >= 2 turns, Freeze/Sleep
@@ -568,18 +565,16 @@ pub fn is_relay_eligible(cb: &CompactBattle, table: &MatchTable, side: usize) ->
     }
 
     let spec = &table.mons[act_idx];
-    let dis = (act_mon.vol_flags & vol_bit::DISABLE) != 0;
-    let dis_slot = ((act_mon.slot_refs >> 4) & 0x03) as usize;
     let mut bp_slot: Option<usize> = None;
     let mut has_sub_move = false;
     let mut has_boost_move = false;
 
     for m_i in 0..spec.num_moves as usize {
-        if act_mon.pp[m_i] == 0 || (dis && m_i == dis_slot) {
+        if act_mon.pp[m_i] == 0 || act_mon.is_slot_disabled(m_i) {
             continue;
         }
         let ms = &table.move_specs[act_idx][m_i];
-        if ms.special_kind == 18 {
+        if ms.special_kind == SpecialMoveKind::BatonPass {
             bp_slot = Some(m_i);
         } else if ms.is_substitute {
             has_sub_move = true;
@@ -713,30 +708,27 @@ fn best_move_profile(
     let att_spec = &table.mons[att_idx];
     let def_spec = &table.mons[def_idx];
     let def_maxhp = def_spec.maxhp.max(1) as f32;
-    let dis = (att_mon.vol_flags & vol_bit::DISABLE) != 0;
-    let dis_slot = ((att_mon.slot_refs >> 4) & 0x03) as usize;
-    let weather = match cb.weather_kind {
-        w if cb.weather_turns > 0 && w == 1 => CompactWeather::Rain,
-        w if cb.weather_turns > 0 && w == 2 => CompactWeather::Sun,
-        w if cb.weather_turns > 0 && w == 3 => CompactWeather::Sandstorm,
-        _ => CompactWeather::None,
+    let weather = if cb.weather_turns > 0 {
+        cb.weather_kind
+    } else {
+        CompactWeather::None
     };
 
-    let mut best_slot = 0xFFu8;
+    let mut best_slot = NO_MOVE_SLOT;
     let mut best_ev = 0.0f32;
     let mut best_dmg_if_hit = 0.0f32;
     let mut best_acc = 1.0f32;
     let mut best_prio = 0i8;
 
     for m_i in 0..att_spec.num_moves as usize {
-        if att_mon.pp[m_i] == 0 || (dis && m_i == dis_slot) {
+        if att_mon.pp[m_i] == 0 || att_mon.is_slot_disabled(m_i) {
             continue;
         }
         let mspec = &table.move_specs[att_idx][m_i];
         if mspec.is_selfdestruct && !allow_selfdestruct {
             continue;
         }
-        let bp = if mspec.var_bp_kind == 4 {
+        let bp = if mspec.var_bp_kind == VarBpKind::FlailReversal {
             let ratio = ((att_hp_frac * 48.0).floor() as i32).max(1);
             if ratio < 2 {
                 200
@@ -754,7 +746,10 @@ fn best_move_profile(
         } else {
             mspec.base_power as i32
         };
-        if mspec.fixed_damage == 0 && mspec.special_kind != 15 && (mspec.is_status || bp <= 0) {
+        if mspec.fixed_damage == 0
+            && mspec.special_kind != SpecialMoveKind::SuperFang
+            && (mspec.is_status || bp <= 0)
+        {
             continue;
         }
         let (type_mod, is_immune) = table.effectiveness_ext(mspec.move_type, def_spec, false);
@@ -771,7 +766,7 @@ fn best_move_profile(
             mspec.ignore_positive_evasion,
         ) as f32;
 
-        let raw = if mspec.special_kind == 15 {
+        let raw = if mspec.special_kind == SpecialMoveKind::SuperFang {
             (0.5 * def_hp_frac * def_maxhp).max(1.0)
         } else if mspec.fixed_damage != 0 {
             if mspec.fixed_damage < 0 {
@@ -784,7 +779,7 @@ fn best_move_profile(
             let atk = stat_with_boost(cb, table, att_side, att_slot, ai, att_boosts[ai]);
             let def = stat_with_boost(cb, table, def_side, def_slot, di, def_boosts[di]);
             let has_tb_item = att_mon.item != 0
-                && mspec.move_type != 0xFF
+                && mspec.move_type != NO_TYPE_ID
                 && att_spec.item_boost_type == mspec.move_type;
             let base = get_damage_base_branchless(
                 att_spec.level as i32,
@@ -832,27 +827,25 @@ fn primary_disrupt_of(
     let idx = side * 3 + slot;
     let mon = &cb.mons[idx];
     let spec = &table.mons[idx];
-    let dis = (mon.vol_flags & vol_bit::DISABLE) != 0;
-    let dis_slot = ((mon.slot_refs >> 4) & 0x03) as usize;
 
     let mut best_kind = DisruptKind::None;
     let mut best_rank = 0u8;
-    let mut best_slot = 0xFFu8;
+    let mut best_slot = NO_MOVE_SLOT;
 
     for m_i in 0..spec.num_moves as usize {
-        if mon.pp[m_i] == 0 || (dis && m_i == dis_slot) {
+        if mon.pp[m_i] == 0 || mon.is_slot_disabled(m_i) {
             continue;
         }
         let ms = &table.move_specs[idx][m_i];
         let (kind, rank) = match ms.special_kind {
-            27 => (DisruptKind::Haze, 4),
-            8 => (
+            SpecialMoveKind::Haze => (DisruptKind::Haze, 4),
+            SpecialMoveKind::Encore => (
                 DisruptKind::Encore {
                     acc_pct: ms.base_acc_pct,
                 },
                 3,
             ),
-            7 => (
+            SpecialMoveKind::Phaze => (
                 DisruptKind::Phaze {
                     acc_pct: ms.base_acc_pct,
                 },
@@ -896,11 +889,9 @@ fn canonical_mon_key(cb: &CompactBattle, table: &MatchTable, side: usize, slot: 
     let mon = &cb.mons[idx];
     let spec = &table.mons[idx];
     let mut usable_mask = 0u8;
-    let dis = (mon.vol_flags & vol_bit::DISABLE) != 0;
-    let dis_slot = ((mon.slot_refs >> 4) & 0x03) as usize;
     let mut own_axis_mask = 0u8;
     for m_i in 0..spec.num_moves as usize {
-        if mon.pp[m_i] > 0 && !(dis && m_i == dis_slot) {
+        if mon.pp[m_i] > 0 && !mon.is_slot_disabled(m_i) {
             usable_mask |= 1 << m_i;
             if !include_b8 {
                 if let Some(ax) = classify_self_boost_move(table, idx, m_i) {
@@ -1110,22 +1101,20 @@ fn build_cold_lookup(
     let def_side = 1 - side;
     let def_slot = cb.sides[def_side].active_idx as usize;
 
-    let dis = (act_mon.vol_flags & vol_bit::DISABLE) != 0;
-    let dis_slot = ((act_mon.slot_refs >> 4) & 0x03) as usize;
-    let mut bp_move_slot = 0xFFu8;
-    let mut sub_move_slot = 0xFFu8;
+    let mut bp_move_slot = NO_MOVE_SLOT;
+    let mut sub_move_slot = NO_MOVE_SLOT;
     for m_i in 0..act_spec.num_moves as usize {
-        if act_mon.pp[m_i] == 0 || (dis && m_i == dis_slot) {
+        if act_mon.pp[m_i] == 0 || act_mon.is_slot_disabled(m_i) {
             continue;
         }
         let ms = &table.move_specs[act_idx][m_i];
-        if ms.special_kind == 18 && bp_move_slot == 0xFF {
+        if ms.special_kind == SpecialMoveKind::BatonPass && bp_move_slot == NO_MOVE_SLOT {
             bp_move_slot = m_i as u8;
-        } else if ms.is_substitute && sub_move_slot == 0xFF {
+        } else if ms.is_substitute && sub_move_slot == NO_MOVE_SLOT {
             sub_move_slot = m_i as u8;
         }
     }
-    if bp_move_slot == 0xFF {
+    if bp_move_slot == NO_MOVE_SLOT {
         return None;
     }
 
@@ -1162,8 +1151,8 @@ fn build_cold_lookup(
             recv_party_slots: probe.recv_party_slots,
             n_recv: probe.n_recv,
             n_def_bench: probe.n_def_bench,
-            def_break_slot: [d0_brk, 0xFF],
-            def_disrupt_slot: [d0_dis, 0xFF],
+            def_break_slot: [d0_brk, NO_MOVE_SLOT],
+            def_disrupt_slot: [d0_dis, NO_MOVE_SLOT],
             key: probe.key,
         },
         d0_atk_frac_u8,
@@ -1260,11 +1249,7 @@ fn mon_status_pen(w: &EvalWeights, status_raw: u8, slp_rem: u8) -> f32 {
     } else if status_raw == Status::Par as u8 {
         w.par
     } else if status_raw == Status::Slp as u8 {
-        if w.slp_time_scale {
-            w.slp * ((slp_rem as f64 + 1.0).min(3.0)) / 3.0
-        } else {
-            w.slp
-        }
+        w.slp * ((slp_rem as f64 + 1.0).min(3.0)) / 3.0
     } else if status_raw == Status::Frz as u8 {
         w.frz
     } else if status_raw == Status::Psn as u8 {
@@ -1426,13 +1411,11 @@ fn evaluate_single_receiver_sweep_ext(
             let b_idx = side * 3 + b_slot;
             let b_mon = &cb.mons[b_idx];
             let b_spec = &table.mons[b_idx];
-            let dis = (b_mon.vol_flags & vol_bit::DISABLE) != 0;
-            let dis_slot = ((b_mon.slot_refs >> 4) & 0x03) as usize;
             let d0_boosts = &cb.mons[def_side * 3 + d0_slot].boosts;
             let spe_b = stat_with_boost(cb, table, side, b_slot, 4, passed_boosts[4]);
             let spe_d0 = stat_with_boost(cb, table, def_side, d0_slot, 4, d0_boosts[4]);
             for m_i in 0..b_spec.num_moves as usize {
-                if b_mon.pp[m_i] == 0 || (dis && m_i == dis_slot) {
+                if b_mon.pp[m_i] == 0 || b_mon.is_slot_disabled(m_i) {
                     continue;
                 }
                 if let Some(ax) = classify_self_boost_move(table, b_idx, m_i) {
@@ -1519,7 +1502,9 @@ fn build_cached_foe_profiles(
     let b_idx = side * 3 + b_slot;
     for mi in 0..table.mons[b_idx].num_moves as usize {
         let ms = &table.move_specs[b_idx][mi];
-        if ms.var_bp_kind == 4 || ms.special_kind == 15 {
+        if ms.var_bp_kind == VarBpKind::FlailReversal
+            || ms.special_kind == SpecialMoveKind::SuperFang
+        {
             return None;
         }
     }
@@ -1528,7 +1513,7 @@ fn build_cached_foe_profiles(
         let m_slot = m_slot_u8 as usize;
         let m_idx = def_side * 3 + m_slot;
         for mi in 0..table.mons[m_idx].num_moves as usize {
-            if table.move_specs[m_idx][mi].special_kind == 15 {
+            if table.move_specs[m_idx][mi].special_kind == SpecialMoveKind::SuperFang {
                 return None;
             }
         }
@@ -2468,7 +2453,7 @@ fn solve_relay_subgame_into(
             def_arr[counter_canon_idx as usize].party_slot as usize,
         )
     } else {
-        (DisruptKind::None, 0xFF)
+        (DisruptKind::None, NO_MOVE_SLOT)
     };
     let n_outer_passes = if matches!(d0_disrupt, DisruptKind::Haze)
         || matches!(d1_disrupt, DisruptKind::Haze)
@@ -2526,10 +2511,11 @@ fn solve_relay_subgame_into(
             let spe_d = stat_with_boost(cb, table, def_side, d_slot, 4, d_boosts[4]);
 
             let r_has_var_bp = (0..table.mons[act_idx].num_moves as usize).any(|mi| {
-                table.move_specs[act_idx][mi].var_bp_kind == 4
-                    || table.move_specs[act_idx][mi].special_kind == 15
-            }) || (0..table.mons[d_idx_cur].num_moves as usize)
-                .any(|mi| table.move_specs[d_idx_cur][mi].special_kind == 15);
+                table.move_specs[act_idx][mi].var_bp_kind == VarBpKind::FlailReversal
+                    || table.move_specs[act_idx][mi].special_kind == SpecialMoveKind::SuperFang
+            }) || (0..table.mons[d_idx_cur].num_moves as usize).any(|mi| {
+                table.move_specs[d_idx_cur][mi].special_kind == SpecialMoveKind::SuperFang
+            });
             let (piv_c_slot, piv_c_hp) = if ell == 0 && has_counter_pivot {
                 let c_cand = &def_arr[counter_canon_idx as usize];
                 let c_slot = c_cand.party_slot as usize;
@@ -2561,7 +2547,7 @@ fn solve_relay_subgame_into(
                             cb, table, def_side, d_slot, d_hp_cur, d_boosts, side, act_slot, 1.0, &boosts_r, false,
                         )
                     } else {
-                        (0xFF, 0.0, 1.0, 0)
+                        (NO_MOVE_SLOT, 0.0, 1.0, 0)
                     };
 
                     // Hoist post-boost D-vs-R Break profiles once per (ell, k1, k2)
@@ -2589,7 +2575,7 @@ fn solve_relay_subgame_into(
                             cb, table, side, act_slot, 1.0, &boosts_r, def_side, d_slot, d_hp_cur, d_boosts, false,
                         )
                     } else {
-                        (0xFF, 0.0, 1.0, 0)
+                        (NO_MOVE_SLOT, 0.0, 1.0, 0)
                     };
                     let chip_c_base = if ell == 0 && has_counter_pivot && !r_has_var_bp {
                         let (_, dm_c, ac_c, _) = best_move_profile(
@@ -3114,8 +3100,8 @@ fn with_solved_relay<R, F: FnOnce(&SolvedRelaySubgame, &ActiveRelayLookup) -> R>
                     recv_party_slots: probe.recv_party_slots,
                     n_recv: probe.n_recv,
                     n_def_bench: probe.n_def_bench,
-                    def_break_slot: [solved.d0_brk_slot, 0xFF],
-                    def_disrupt_slot: [solved.d0_dis_slot, 0xFF],
+                    def_break_slot: [solved.d0_brk_slot, NO_MOVE_SLOT],
+                    def_disrupt_slot: [solved.d0_dis_slot, NO_MOVE_SLOT],
                     key: probe.key,
                 };
                 return Some((f_opt.take().unwrap())(solved, &lookup));
@@ -3553,7 +3539,6 @@ pub fn rollout_relay_pick(
                     def_side,
                     def_slot,
                     c as usize,
-                    true,
                 );
                 let faster = ms.priority > 0 || (ms.priority == 0 && me_spd > foe_spd);
                 if acc >= 0.995 && hit_frac >= 1.05 && (faster || foe_last) {

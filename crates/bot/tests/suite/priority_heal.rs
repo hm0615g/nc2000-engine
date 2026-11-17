@@ -1,4 +1,4 @@
-use nc2000_bot::smmcts::{dominated_actions_with, MaskRules};
+use nc2000_bot::smmcts::dominated_actions;
 use nc2000_engine::{battle::PokemonSet, dex::Dex, state::Battle};
 
 fn position(dex: &Dex, side: usize, foe: &str, reply: &str) -> Battle {
@@ -26,18 +26,10 @@ fn position(dex: &Dex, side: usize, foe: &str, reply: &str) -> Battle {
     b
 }
 
-fn masked(b: &Battle, dex: &Dex, side: usize, key: &str, enabled: bool) -> bool {
-    dominated_actions_with(
-        b,
-        dex,
-        side,
-        MaskRules {
-            priority_heal: enabled,
-            ..Default::default()
-        },
-    )
-    .iter()
-    .any(|(a, _)| a.to_input(dex) == format!("move {key}"))
+fn masked(b: &Battle, dex: &Dex, side: usize, key: &str) -> bool {
+    dominated_actions(b, dex, side)
+        .iter()
+        .any(|(a, _)| a.to_input(dex) == format!("move {key}"))
 }
 
 #[test]
@@ -51,9 +43,8 @@ fn priority_damage_makes_full_hp_recovery_work_on_both_sides() {
         ] {
             for heal in ["recover", "rest"] {
                 let mut b = position(&dex, side, species, reply);
-                assert!(masked(&b, &dex, side, heal, false));
-                assert!(!masked(&b, &dex, side, heal, true));
-                assert!(masked(&b, &dex, side, "explosion", true));
+                assert!(!masked(&b, &dex, side, heal));
+                assert!(masked(&b, &dex, side, "explosion"));
                 b.log.clear();
                 b.choose(&dex, side, &format!("move {heal}")).unwrap();
                 b.choose(&dex, 1 - side, &format!("move {reply}")).unwrap();
@@ -75,11 +66,11 @@ fn full_hp_exclusion_survives_when_the_species_cannot_preempt() {
     for side in 0..2 {
         let mut b = position(&dex, side, "Snorlax", "return");
         for heal in ["recover", "rest"] {
-            assert!(masked(&b, &dex, side, heal, true));
+            assert!(masked(&b, &dex, side, heal));
         }
         let id = b.active_id(side).unwrap();
         b.poke_mut(id).hp -= 1;
-        assert!(!masked(&b, &dex, side, "recover", true));
+        assert!(!masked(&b, &dex, side, "recover"));
     }
 }
 
@@ -88,16 +79,13 @@ fn hidden_moves_and_pp_do_not_change_exclusions() {
     let dex = super::common::dex();
     for species in ["Scizor", "Snorlax"] {
         let mut b = position(&dex, 0, species, "return");
-        let expected = dominated_actions_with(&b, &dex, 0, MaskRules::default());
+        let expected = dominated_actions(&b, &dex, 0);
         let id = b.active_id(1).unwrap();
         for key in ["quickattack", "machpunch", "extremespeed", "splash"] {
             for pp in [0, 1, 32] {
                 b.poke_mut(id).move_slots[0].id = dex.moves.id(key).unwrap();
                 b.poke_mut(id).move_slots[0].pp = pp;
-                assert_eq!(
-                    dominated_actions_with(&b, &dex, 0, MaskRules::default()),
-                    expected
-                );
+                assert_eq!(dominated_actions(&b, &dex, 0), expected);
             }
         }
     }
@@ -119,6 +107,6 @@ fn copied_moves_and_unknown_learnsets_keep_recovery_available() {
             }
             _ => unreachable!(),
         }
-        assert!(!masked(&b, &dex, 0, "recover", true), "{case}");
+        assert!(!masked(&b, &dex, 0, "recover"), "{case}");
     }
 }

@@ -62,6 +62,8 @@ use crate::smmcts::RmConfig;
 /// suspenders at preview — kept because they are harmless and still guard
 /// table policies fed from external files.
 pub const MAX_TOTAL_LEVEL: i32 = nc2000_engine::battle::MAX_TOTAL_LEVEL as i32;
+pub const HP_DEN_PERCENT: i32 = 100;
+pub const HP_DEN_PIXELS: i32 = 48;
 
 // ===================================================================== lines
 
@@ -133,8 +135,8 @@ impl TrackMon {
             switch_in_turn: 0,
             active: false,
             fainted: false,
-            pixels: 48,
-            hp_den: 48,
+            pixels: HP_DEN_PIXELS,
+            hp_den: HP_DEN_PIXELS,
             status: Status::None,
             rest: false,
             slept: 0,
@@ -2485,16 +2487,20 @@ fn set_item_raw(b: &mut Battle, id: PokeId, item: Option<nc2000_engine::dex::Ite
 /// knocked down to 99; the legacy pixel bar (den = 48) announces
 /// `floor(48*hp/maxhp)` clamped to >= 1.
 pub fn impute_hp(cur: i32, den: i32, maxhp: i32) -> i32 {
-    let den = if den > 0 { den } else { 48 };
+    let den = if den > 0 { den } else { HP_DEN_PIXELS };
     if cur <= 0 {
         return 0;
     }
     if cur >= den {
         return maxhp;
     }
-    let (lo, hi) = if den == 100 {
-        let lo = ((cur - 1) * maxhp) / 100 + 1;
-        let hi = if cur == 99 { maxhp - 1 } else { (cur * maxhp) / 100 };
+    let (lo, hi) = if den == HP_DEN_PERCENT {
+        let lo = ((cur - 1) * maxhp) / HP_DEN_PERCENT + 1;
+        let hi = if cur == HP_DEN_PERCENT - 1 {
+            maxhp - 1
+        } else {
+            (cur * maxhp) / HP_DEN_PERCENT
+        };
         (lo, hi)
     } else {
         let lo = if cur == 1 { 1 } else { (cur * maxhp + den - 1) / den };
@@ -2517,15 +2523,15 @@ pub fn impute_hp(cur: i32, den: i32, maxhp: i32) -> i32 {
 /// the importer assumed a /48 pixel bar on a /100 stream, inflating every foe
 /// HP by ~2.08x — and it is the M18 class-A gate's second assertion.
 pub fn announce_hp(hp: i32, maxhp: i32, den: i32) -> i32 {
-    let den = if den > 0 { den } else { 48 };
+    let den = if den > 0 { den } else { HP_DEN_PIXELS };
     if hp <= 0 {
         return 0;
     }
     if maxhp <= 0 || hp >= maxhp {
         return den;
     }
-    if den == 100 {
-        ((100 * hp + maxhp - 1) / maxhp).clamp(1, 99)
+    if den == HP_DEN_PERCENT {
+        ((HP_DEN_PERCENT * hp + maxhp - 1) / maxhp).clamp(1, HP_DEN_PERCENT - 1)
     } else {
         (den * hp / maxhp).clamp(1, den - 1)
     }

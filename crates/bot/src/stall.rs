@@ -131,11 +131,10 @@ pub fn classify_one_sided_heal(b: &Battle, dex: &Dex) -> Result<OneSidedHeal, Cl
     };
     let non_healer = 1 - healer;
     if let Some(item) = b.poke(audit.active[non_healer]).item {
-        let key = dex.items.key(item);
-        if is_hp_healing_item(key) {
+        if is_hp_healing_item(dex, item) {
             return Err(ClassifyError::NonHealerHealingItem {
                 side: non_healer,
-                item_key: key.to_string(),
+                item_key: dex.items.key(item).to_string(),
             });
         }
     }
@@ -212,11 +211,10 @@ fn audit_root(b: &Battle, dex: &Dex) -> Result<RootAudit, ClassifyError> {
         }
 
         if let Some(item) = p.item {
-            let key = dex.items.key(item);
-            if key == "mysteryberry" {
+            if Some(item) == dex.known_items.mysteryberry {
                 return Err(ClassifyError::MysteryBerry { side });
             }
-            if key == "leftovers" {
+            if Some(item) == dex.known_items.leftovers {
                 repeatable_heal[side] = true;
             }
         }
@@ -468,16 +466,21 @@ fn unsafe_move(key: &str) -> bool {
 
 fn move_can_heal(dex: &Dex, id: MoveId) -> bool {
     let m = dex.move_static(id);
+    let km = &dex.known_moves;
+    let s = Some(id);
     m.heal.is_some()
         || m.drain.is_some()
-        || matches!(
-            dex.moves.key(id),
-            "rest" | "moonlight" | "morningsun" | "synthesis" | "leechseed"
-        )
+        || s == km.rest
+        || s == km.moonlight
+        || s == km.morningsun
+        || s == km.synthesis
+        || s == km.leechseed
 }
 
-fn is_hp_healing_item(key: &str) -> bool {
-    matches!(key, "leftovers" | "berryjuice" | "berry" | "goldberry")
+fn is_hp_healing_item(dex: &Dex, item: nc2000_engine::dex::ItemId) -> bool {
+    let ki = &dex.known_items;
+    let s = Some(item);
+    s == ki.leftovers || s == ki.berryjuice || s == ki.berry || s == ki.goldberry
 }
 
 #[cfg(test)]

@@ -880,7 +880,7 @@ impl Battle {
             let id = dex
                 .moves
                 .id(&locked_id)
-                .or_else(|| dex.moves.id("recharge"))
+                .or(dex.known_moves.recharge)
                 .expect("locked move id interned");
             out.push(SearchChoice::Move(id));
             return;
@@ -894,7 +894,7 @@ impl Battle {
             }
         }
         if out.is_empty() {
-            out.push(SearchChoice::Move(dex.moves.id("struggle").unwrap()));
+            out.push(SearchChoice::Move(dex.known_moves.struggle.unwrap()));
         }
 
         // voluntary switches

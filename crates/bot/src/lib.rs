@@ -47,7 +47,6 @@ pub mod import;
 pub mod linear;
 pub mod mask;
 pub mod mcts;
-pub mod m17e_artifact;
 mod hp_evidence;
 pub mod observe;
 pub mod position;

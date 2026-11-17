@@ -10,10 +10,12 @@
   - `crates/wasm/build.sh nodejs` + `for s in smoke determinism parity kifu fork solver endgame destiny-bond priority-heal residual-wait own-recovery-wait preview-cache; do node "crates/wasm/tests-node/$s.js"; done`
   - `crates/wasm/build.sh && cd web && npm run build && npm run test:worker && npm run test:evaluate-worker && npm run test:policy && npm run test:e2e`
 
-## 2. Cryptographic & Artifact Locks
+## 2. Epoch & Cache Versioning
 
-- `data/compiled-preview-v1.json` (verified by `web/vite.config.ts` on `npm run build`) embeds SHA-256 locks over `Cargo.toml`, `Cargo.lock`, `crates/{engine,conformance,bot}/Cargo.toml`, `crates/{engine,bot}/build.rs`, `crates/{engine,conformance,bot}/src/**/*.rs`, `crates/bot/examples/{meta_eco.rs,meta_eco/catalog_preview.rs}`, and core `data/*.json` files (plus semantic prior checks on `data/belief-pool-v3/belief-pool.json`). `crates/bot/build.rs` computes `M17E_SOLVER_BUILD_FINGERPRINT` over `Cargo.toml`, `Cargo.lock`, `crates/{bot,engine,conformance}/Cargo.toml`, `crates/bot/build.rs`, `crates/{bot,engine,conformance}/src/**/*.rs`, and `crates/bot/examples/{endgame_exactness_corpus,anchor_gate}.rs`, and `crates/engine/build.rs` hashes `crates/engine/src/**/*.rs` into `ENGINE_FINGERPRINT`. Do not modify locked files unless intentionally re-baking or updating the allowlist.
-- When running `web/tests/compiled-preview-production.mjs` during verification, pass `NC2000_PREVIEW_CHECK_OUT=../tmp/prod-verification.json` to avoid dirtying tracked `data/preview-training-v3/production-verification.json`.
+- **2-axis epoch tracking**:
+  - `ENGINE_EPOCH = 1` in `crates/engine/src/replay.rs` governs compact replay (`NC2-…`) and kifu structural compatibility; bump only on breaking mechanics or replay format changes.
+  - `POLICY_EPOCH = "policy-v1"` in `crates/bot/src/compiled_preview.rs` governs compiled preview table compatibility (`data/compiled-preview-v1.json`). `web/vite.config.ts` and `web/src/compiled-preview.ts` validate `POLICY_EPOCH`, `dexSha256`, `catalogSha256`, and `priorSha256` / `priorDependencies`, treating mismatches as a soft-cache miss that falls back to live search rather than failing builds.
+- `tools/bundle-core-sdk.js` writes `dist/nc2000-core-sdk/engine-manifest.json` (untracked); `web/tests/compiled-preview-coverage.mjs` and `web/tests/compiled-preview-production.mjs` write verification outputs under `../target/` by default.
 
 ## 3. Research & Strength Roadmap
 

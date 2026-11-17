@@ -1,5 +1,5 @@
 use super::common;
-use nc2000_bot::smmcts::{dominated_actions_with, MaskRules, SelRule};
+use nc2000_bot::smmcts::{dominated_actions, SelRule};
 use nc2000_bot::{Agent, Belief, BlindSearch, MaxDamageAgent, Observer, RmConfig};
 use nc2000_engine::{
     battle::{enumerate::enumerate_step, EffectHandle, Outcome, PokemonSet, SearchChoice},
@@ -10,16 +10,10 @@ use serde_json::json;
 #[path = "../support/destiny_bond_wait.rs"]
 mod fixture;
 
-fn config(enabled: bool) -> RmConfig {
+fn config() -> RmConfig {
     RmConfig {
         rule: SelRule::Ucb,
         c: 0.4,
-        mask_rules: MaskRules {
-            destiny_bond_wait: enabled,
-            residual_damage_wait: false,
-            own_recovery_wait: false,
-            ..MaskRules::default()
-        },
         ..RmConfig::default()
     }
 }
@@ -37,57 +31,39 @@ fn final_mask_preserves_the_winning_wait_without_changing_search() {
         };
         obs.observe(&b, &dex);
         belief.sync(&dex, &obs);
-        let searches: Vec<_> = [false, true]
-            .into_iter()
-            .map(|enabled| {
-                let mut s = BlindSearch::new(&b, &dex, config(enabled), 0, 61001);
-                s.step(&dex, &belief, &obs, 3000);
-                s
-            })
-            .collect();
-        let before = searches[0].best().unwrap();
-        let after = searches[1].best().unwrap();
-        assert!(matches!(
-            before.to_input(&dex).as_str(),
-            "move shadowball" | "move psychic"
-        ));
+        let mut s = BlindSearch::new(&b, &dex, config(), 0, 61001);
+        s.step(&dex, &belief, &obs, 3000);
+        let chosen = s.best().unwrap();
         assert!(
-            after.to_input(&dex) == "move return"
-                || (!plain && after.to_input(&dex) == "move curse")
+            chosen.to_input(&dex) == "move return"
+                || (!plain && chosen.to_input(&dex) == "move curse")
         );
         let reply = SearchChoice::Move(dex.moves.id("haze").unwrap());
-        let attack = enumerate_step(&dex, &b, [Some(before), Some(reply)], 4096).unwrap();
-        assert!(attack
-            .leaves
-            .iter()
-            .all(|l| l.battle.outcome() == Some(Outcome::P2Win)));
-        let wait = enumerate_step(&dex, &b, [Some(after), Some(reply)], 4096).unwrap();
+        let wait = enumerate_step(&dex, &b, [Some(chosen), Some(reply)], 4096).unwrap();
         assert!(wait
             .leaves
             .iter()
             .all(|l| l.battle.outcome() != Some(Outcome::P2Win)));
         for seed in 62001..62009 {
-            for (first, expected) in [(before, Outcome::P2Win), (after, Outcome::P1Win)] {
-                let mut game = b.clone();
-                game.reseed(seed);
-                game.apply_choices(&dex, [Some(first), Some(reply)])
-                    .unwrap();
-                let mut greedy = MaxDamageAgent::conformant();
-                for _ in 0..100 {
-                    if game.outcome().is_some() {
-                        break;
-                    }
-                    let mut picks = [None, None];
-                    for (side, pick) in picks.iter_mut().enumerate() {
-                        let choices = game.legal_choices(&dex, side);
-                        if !choices.is_empty() {
-                            *pick = Some(greedy.choose(&game, &dex, side, &choices));
-                        }
-                    }
-                    game.apply_choices(&dex, picks).unwrap();
+            let mut game = b.clone();
+            game.reseed(seed);
+            game.apply_choices(&dex, [Some(chosen), Some(reply)])
+                .unwrap();
+            let mut greedy = MaxDamageAgent::conformant();
+            for _ in 0..100 {
+                if game.outcome().is_some() {
+                    break;
                 }
-                assert_eq!(game.outcome(), Some(expected), "plain={plain}, seed={seed}");
+                let mut picks = [None, None];
+                for (side, pick) in picks.iter_mut().enumerate() {
+                    let choices = game.legal_choices(&dex, side);
+                    if !choices.is_empty() {
+                        *pick = Some(greedy.choose(&game, &dex, side, &choices));
+                    }
+                }
+                game.apply_choices(&dex, picks).unwrap();
             }
+            assert_eq!(game.outcome(), Some(Outcome::P1Win), "plain={plain}, seed={seed}");
         }
     }
 }
@@ -129,17 +105,15 @@ fn only_the_opposing_active_bond_relaxes_noop_exclusions() {
             if let Some(target) = target {
                 b.add_volatile(&dex, target, "destinybond", None, EffectHandle::None);
             }
-            for enabled in [false, true] {
-                let excluded = dominated_actions_with(&b, &dex, side, config(enabled).mask_rules);
-                let masked = |name| {
-                    excluded
-                        .iter()
-                        .any(|(a, _)| *a == SearchChoice::Move(dex.moves.id(name).unwrap()))
-                };
-                assert_eq!(masked("snore"), !(enabled && target == Some(them)));
-                assert!(masked("explosion"));
-                assert!(masked("spore"));
-            }
+            let excluded = dominated_actions(&b, &dex, side);
+            let masked = |name| {
+                excluded
+                    .iter()
+                    .any(|(a, _)| *a == SearchChoice::Move(dex.moves.id(name).unwrap()))
+            };
+            assert_eq!(masked("snore"), target != Some(them));
+            assert!(masked("explosion"));
+            assert!(masked("spore"));
         }
     }
 }

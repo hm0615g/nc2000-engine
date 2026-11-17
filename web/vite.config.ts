@@ -82,47 +82,83 @@ function serveRepoData(): Plugin {
   };
 }
 
-// A production bundle must contain a complete artifact from these exact
-// policy inputs. Source changes require rebaking or a separately audited
-// exact-behavior migration; stale inputs are never accepted.
+function readEpochs(): { engineEpoch: string; policyEpoch: string } {
+  const replaySrc = fs.readFileSync(path.join(repoRoot, "crates/engine/src/replay.rs"), "utf8");
+  const previewSrc = fs.readFileSync(path.join(repoRoot, "crates/bot/src/compiled_preview.rs"), "utf8");
+  const engineMatch = replaySrc.match(/pub const ENGINE_EPOCH:\s*u32\s*=\s*(\d+)\s*;/);
+  const policyMatch = previewSrc.match(/pub const POLICY_EPOCH:\s*&str\s*=\s*"([^"]+)"\s*;/);
+  if (!engineMatch || !policyMatch) {
+    throw new Error("Could not parse ENGINE_EPOCH / POLICY_EPOCH from Rust sources.");
+  }
+  return { engineEpoch: engineMatch[1], policyEpoch: policyMatch[1] };
+}
+
+function sha256File(relative: string): string {
+  return createHash("sha256").update(fs.readFileSync(path.join(repoRoot, relative))).digest("hex");
+}
+
+// Soft preview cache: compiled previews accelerate Turn-0 Team Preview when
+// `POLICY_EPOCH`, dex, search coefficient, and shell priors match; on any
+// mismatch, builds warn and runtime seamlessly falls back to live search.
 function verifyCompiledPreview(): Plugin {
+  const { policyEpoch } = readEpochs();
   return {
     name: "verify-compiled-preview",
     apply: "build",
     enforce: "pre",
     async load(id) {
       if (!compiledPreviewEnabled || !id.endsWith('/data/compiled-preview-v1.json?raw')) return;
-      const artifact = JSON.parse(fs.readFileSync(path.join(dataDir, "compiled-preview-v1.json"), "utf8"));
-      if (!artifact.priorDependencies || artifact.status) return;
+      const previewPath = path.join(dataDir, "compiled-preview-v1.json");
+      if (!fs.existsSync(previewPath)) {
+        return `export default ${JSON.stringify(JSON.stringify({ format: "nc2000-compiled-preview-v1", build: policyEpoch, c: 0.4, priorSha256: "", dexSha256: "", iterations: 0, policies: {} }))};`;
+      }
+      const artifact = JSON.parse(fs.readFileSync(previewPath, "utf8"));
+      const profiles = JSON.parse(fs.readFileSync(path.join(dataDir, "search-profiles.json"), "utf8"));
+      const dexSha = sha256File("data/gen2stadium2.json");
+      if (artifact.status || artifact.format !== "nc2000-compiled-preview-v1" || artifact.build !== policyEpoch || artifact.c !== profiles.blind.c || artifact.dexSha256 !== dexSha) {
+        artifact.policies = {};
+        return `export default ${JSON.stringify(JSON.stringify(artifact))};`;
+      }
+      if (!artifact.priorDependencies) return;
       const prior = JSON.parse(fs.readFileSync(path.join(dataDir, "belief-pool-v3/belief-pool.json"), "utf8"));
       const dex = JSON.parse(fs.readFileSync(path.join(dataDir, "gen2stadium2.json"), "utf8"));
       const valid = await compatiblePolicyKeys(artifact, prior, dex,
         (text: string) => createHash("sha256").update(text).digest("hex"));
-      // Keep the full historical bake in the repo; only ship usable choices.
-      artifact.policies = Object.fromEntries(Object.entries(artifact.policies).filter(([key]) => valid.has(key)));
+      // Only ship policy keys whose shell priors still match.
+      artifact.policies = Object.fromEntries(Object.entries(artifact.policies ?? {}).filter(([key]) => valid.has(key)));
       return `export default ${JSON.stringify(JSON.stringify(artifact))};`;
     },
     async buildStart() {
       if (!compiledPreviewEnabled) return;
-      const artifact = JSON.parse(fs.readFileSync(path.join(dataDir, "compiled-preview-v1.json"), "utf8"));
+      const previewPath = path.join(dataDir, "compiled-preview-v1.json");
+      if (!fs.existsSync(previewPath)) {
+        this.warn("compiled-preview-v1.json not found; browser previews will use live search.");
+        return;
+      }
+      const artifact = JSON.parse(fs.readFileSync(previewPath, "utf8"));
       const catalog = JSON.parse(fs.readFileSync(path.join(dataDir, "team-pool-v2/team-pool.json"), "utf8"));
       const profiles = JSON.parse(fs.readFileSync(path.join(dataDir, "search-profiles.json"), "utf8"));
-      if (artifact.status === "retired-training-v3") {
-        for (const [relative, expected] of [
-          ["data/belief-pool-v3/belief-pool.json", artifact.retirement?.priorSha256],
-          ["data/team-pool-v2/team-pool.json", artifact.retirement?.catalogSha256],
-        ]) {
-          const actual = createHash("sha256").update(fs.readFileSync(path.join(repoRoot, relative))).digest("hex");
-          if (actual !== expected) throw new Error(`Stale training migration: ${relative}. Run tools/build-training-products.js.`);
-        }
-        return; // Explicitly retired policies; runtime always uses live search.
+      if (artifact.status) {
+        this.warn(`compiled-preview-v1.json status=${artifact.status}; browser previews will use live search.`);
+        return;
+      }
+      if (artifact.build !== policyEpoch) {
+        this.warn(`compiled-preview-v1.json build=${artifact.build} != ${policyEpoch}; browser previews will use live search.`);
+        return;
+      }
+      if (artifact.c !== profiles.blind.c) {
+        this.warn(`compiled-preview-v1.json c=${artifact.c} != ${profiles.blind.c}; browser previews will use live search.`);
+        return;
+      }
+      if (artifact.dexSha256 !== sha256File("data/gen2stadium2.json")) {
+        this.warn("compiled-preview-v1.json dexSha256 differs; browser previews will use live search.");
+        return;
       }
       const publicRosters = new Set(catalog.teams.map((t: { sets: { species: string; level: number }[] }) => JSON.stringify(t.sets.map(p => [p.species, p.level]))));
-      if (artifact.matchups !== catalog.teams.length * publicRosters.size)
-        throw new Error("Compiled previews do not cover the complete catalog matchup grid.");
-      if (artifact.format !== "nc2000-compiled-preview-v1" || !artifact.inputs || !artifact.matchups || Object.keys(artifact.policies ?? {}).length !== artifact.matchups)
-        throw new Error("Compiled previews are incomplete. Run compile_preview and tools/compile-preview-artifact.py.");
-      if (artifact.c !== profiles.blind.c) throw new Error("Compiled previews use a different search coefficient. Rebuild the preview artifact.");
+      if (artifact.format !== "nc2000-compiled-preview-v1" || artifact.matchups !== catalog.teams.length * publicRosters.size || Object.keys(artifact.policies ?? {}).length !== artifact.matchups) {
+        this.warn("compiled-preview-v1.json coverage is incomplete; missing keys will use live search.");
+        return;
+      }
       if (artifact.priorDependencies) {
         const prior = JSON.parse(fs.readFileSync(path.join(dataDir, "belief-pool-v3/belief-pool.json"), "utf8"));
         const dex = JSON.parse(fs.readFileSync(path.join(dataDir, "gen2stadium2.json"), "utf8"));
@@ -131,41 +167,21 @@ function verifyCompiledPreview(): Plugin {
         if (valid.size !== artifact.matchups)
           this.warn(`${artifact.matchups - valid.size} preview keys have changed shell priors and will use live search.`);
       }
-      for (const [relative, expected] of Object.entries(artifact.inputs)) {
-        if (relative === "data/belief-pool-v3/belief-pool.json" && artifact.priorDependencies) continue;
-        const actual = createHash("sha256").update(fs.readFileSync(path.join(repoRoot, relative))).digest("hex");
-        if (actual !== expected) throw new Error(`Stale compiled previews: ${relative}. Rebuild the preview artifact.`);
-      }
     },
   };
 }
 
 function evaluatorBuildId(): string {
+  const { engineEpoch, policyEpoch } = readEpochs();
   const hash = createHash("sha256");
-  const add = (relative: string) => {
-    const absolute = path.join(repoRoot, relative);
-    if (!fs.existsSync(absolute)) return;
-    if (fs.statSync(absolute).isDirectory()) {
-      for (const child of fs.readdirSync(absolute).sort())
-        add(`${relative}/${child}`);
-    } else {
-      hash.update(relative).update(fs.readFileSync(absolute));
-    }
-  };
+  hash.update(`engine:${engineEpoch}|policy:${policyEpoch}|`);
   for (const relative of [
-    "web/src",
-    "web/vite.config.ts",
-    "web/package-lock.json",
-    "Cargo.lock",
-    "Cargo.toml",
+    "data/gen2stadium2.json",
     "data/live-search.json",
     "data/search-profiles.json",
-    "crates/engine/src",
-    "crates/bot/src",
-    "crates/wasm/src",
-    "crates/wasm/pkg-web/nc2000_wasm_bg.wasm",
-  ])
-    add(relative);
+  ]) {
+    hash.update(relative).update(fs.readFileSync(path.join(repoRoot, relative)));
+  }
   hash.update(process.env.VITE_NC2000_TEST_BUDGET ?? "production");
   return hash.digest("hex");
 }

@@ -31,7 +31,83 @@ use std::sync::OnceLock;
 
 use crate::dex::{Accuracy, Category, Dex, ItemId, MoveId, SpeciesId};
 use crate::prng::Prng;
-use crate::state::{Battle, RequestKind, Status, DK};
+use crate::state::{stat_idx, Battle, RequestKind, Status, DK, QUICK_CLAW_ACTION_SPEED};
+
+/// Sentinel `fixed_damage` indicating level-based fixed damage (Seismic Toss / Night Shade).
+pub const FIXED_DAMAGE_LEVEL: i16 = -1;
+/// Sentinel move/slot index meaning no move slot.
+pub const NO_MOVE_SLOT: u8 = 0xFF;
+/// Sentinel stat index meaning no stat slot (`sec_boost.0` / `boosts[i].0`).
+pub const NO_STAT_IDX: u8 = 0xFF;
+/// Sentinel type id meaning typeless (`Struggle` / unknown).
+pub const NO_TYPE_ID: u8 = 0xFF;
+/// Flag bit OR'd onto `CompactMoveSpec::sec_boost.0` for secondary self-boosts (AncientPower etc.).
+pub const SELF_BOOST_FLAG: u8 = 0x80;
+/// Bit 7 on `sides[0].side_flags`: disables the mid-turn Baton Pass fix when set (test/ablation toggle).
+pub const SIDE0_DISABLE_BP_FIX: u8 = 0x80;
+/// Stat-index sentinel (`7` with `SELF_BOOST_FLAG`) encoding AncientPower's all-5-stat raise.
+pub const ANCIENTPOWER_ALL_STATS: u8 = 7;
+/// Saturated 10-bit speed field when Quick Claw triggers in [`ActionSortKey`].
+pub const COMPACT_QC_SATURATED_SPEED: u16 = 1023;
+
+/// Indices into [`CompactMon::timers`] (`[confusion, encore, disable, perish/stall]`).
+pub mod timer_idx {
+    pub const CONFUSION: usize = 0;
+    pub const ENCORE: usize = 1;
+    pub const DISABLE: usize = 2;
+    pub const PERISH_STALL: usize = 3;
+}
+
+/// Pre-classified special move mechanics tag on [`CompactMoveSpec`].
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum SpecialMoveKind {
+    #[default]
+    None = 0,
+    Reflect = 1,
+    LightScreen = 2,
+    Safeguard = 3,
+    Spikes = 4,
+    Curse = 5,
+    BellyDrum = 6,
+    Phaze = 7,
+    Encore = 8,
+    Disable = 9,
+    SleepTalk = 10,
+    Counter = 11,
+    MirrorCoat = 12,
+    FlailReversal = 13,
+    LevelDamage = 14,
+    SuperFang = 15,
+    Thief = 16,
+    PainSplit = 17,
+    BatonPass = 18,
+    PerishSong = 19,
+    DestinyBond = 20,
+    HealBell = 21,
+    PsychUp = 22,
+    RainDance = 23,
+    SunnyDay = 24,
+    Sandstorm = 25,
+    MeanLook = 26,
+    Haze = 27,
+    RapidSpin = 28,
+    WeatherHeal = 29,
+}
+
+/// Variable base power formula tag on [`CompactMoveSpec`].
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum VarBpKind {
+    #[default]
+    Static = 0,
+    Return = 1,
+    Frustration = 2,
+    HiddenPower = 3,
+    FlailReversal = 4,
+    Magnitude = 5,
+    Present = 6,
+}
 
 // =========================================================================
 // 1. ActionSortKey: Single-u32 Branchless Turn Ordering
@@ -77,7 +153,7 @@ impl ActionSortKey {
         } else {
             eff_speed as u32
         };
-        let qc_mask = (-(qc_active as i32) as u32) & 1023;
+        let qc_mask = (-(qc_active as i32) as u32) & (COMPACT_QC_SATURATED_SPEED as u32);
         let speed_bits = (clamped_speed | qc_mask) << 1;
         let tie = (tie_bit & 1) as u32;
         Self(phase_bits | prio_bits | speed_bits | tie)
@@ -164,8 +240,8 @@ pub const fn get_stat_branchless(
     let mut val = (stored_stat * STAT_NUM[(eff_boost + 6) as usize]) / 100;
 
     // Paralysis speed drop (÷4 = >> 2) and Burn attack drop (÷2 = >> 1).
-    let par_shift = ((stat_idx == 4) & has_par_speed_drop) as u32 * 2;
-    let brn_shift = ((stat_idx == 0) & (!unmodified) & has_brn_atk_drop) as u32;
+    let par_shift = ((stat_idx == stat_idx::SPE) & has_par_speed_drop) as u32 * 2;
+    let brn_shift = ((stat_idx == stat_idx::ATK) & (!unmodified) & has_brn_atk_drop) as u32;
     val >>= par_shift + brn_shift;
 
     // Clamp to [1, 999].
@@ -179,16 +255,18 @@ pub const fn get_stat_branchless(
     }
 
     // Reflect (stat 1) / Light Screen (stat 3) and Thick Club / Light Ball (×2 = << 1).
-    let screen_shift =
-        (!unboosted & (((stat_idx == 1) & has_reflect) | ((stat_idx == 3) & has_light_screen)))
-            as u32;
+    let screen_shift = (!unboosted
+        & (((stat_idx == stat_idx::DEF) & has_reflect)
+            | ((stat_idx == stat_idx::SPD) & has_light_screen))) as u32;
     let kind = item_stat_kind as u8;
     let item_double_shift =
-        (((kind == 1) & (stat_idx == 0)) | ((kind == 2) & (stat_idx == 2))) as u32;
+        (((kind == 1) & (stat_idx == stat_idx::ATK)) | ((kind == 2) & (stat_idx == stat_idx::SPA)))
+            as u32;
     val <<= screen_shift + item_double_shift;
 
     // Metal Powder on Ditto (×1.5 = val + (val >> 1)).
-    let is_metal = ((kind == 3) & ((stat_idx == 1) | (stat_idx == 3))) as i32;
+    let is_metal = ((kind == 3) & ((stat_idx == stat_idx::DEF) | (stat_idx == stat_idx::SPD)))
+        as i32;
     val += (val >> 1) & -is_metal;
 
     val
@@ -308,6 +386,24 @@ pub enum CompactWeather {
     Rain = 1,
     Sun = 2,
     Sandstorm = 3,
+}
+
+impl CompactWeather {
+    /// HP healed by Morning Sun / Moonlight / Synthesis under this active weather.
+    #[inline(always)]
+    pub const fn weather_heal_amount(self, maxhp: i16) -> i16 {
+        match self {
+            CompactWeather::Sun => maxhp,
+            CompactWeather::Rain | CompactWeather::Sandstorm => {
+                let q = maxhp / 4;
+                if q < 1 { 1 } else { q }
+            }
+            CompactWeather::None => {
+                let q = maxhp / 2;
+                if q < 1 { 1 } else { q }
+            }
+        }
+    }
 }
 
 /// Branchless computation of the pre-variance Gen 2 Stadium 2 damage (`[0, 3996]`).
@@ -512,22 +608,43 @@ impl CompactMon {
 
     #[inline(always)]
     pub const fn perish_turns(&self) -> u8 {
-        self.timers[3] & 0x07
+        self.timers[timer_idx::PERISH_STALL] & 0x07
     }
 
     #[inline(always)]
     pub fn set_perish_turns(&mut self, turns: u8) {
-        self.timers[3] = (self.timers[3] & !0x07) | (turns.min(7) & 0x07);
+        self.timers[timer_idx::PERISH_STALL] =
+            (self.timers[timer_idx::PERISH_STALL] & !0x07) | (turns.min(7) & 0x07);
     }
 
     #[inline(always)]
     pub const fn stall_counter(&self) -> u8 {
-        (self.timers[3] >> 3) & 0x07
+        (self.timers[timer_idx::PERISH_STALL] >> 3) & 0x07
     }
 
     #[inline(always)]
     pub fn set_stall_counter(&mut self, count: u8) {
-        self.timers[3] = (self.timers[3] & 0x07) | ((count.min(7) & 0x07) << 3);
+        self.timers[timer_idx::PERISH_STALL] =
+            (self.timers[timer_idx::PERISH_STALL] & 0x07) | ((count.min(7) & 0x07) << 3);
+    }
+
+    #[inline(always)]
+    pub const fn last_move_slot(&self) -> Option<u8> {
+        if (self.slot_refs & 0x40) != 0 {
+            Some(self.slot_refs & 0x03)
+        } else {
+            None
+        }
+    }
+
+    #[inline(always)]
+    pub fn set_last_move_slot(&mut self, slot: u8) {
+        self.slot_refs = (self.slot_refs & !0x43) | (slot & 0x03) | 0x40;
+    }
+
+    #[inline(always)]
+    pub fn clear_last_move_slot(&mut self) {
+        self.slot_refs &= !0x40;
     }
 
     #[inline(always)]
@@ -538,6 +655,35 @@ impl CompactMon {
     #[inline(always)]
     pub fn set_encore_slot(&mut self, slot: u8) {
         self.slot_refs = (self.slot_refs & !(0x03 << 2)) | ((slot & 0x03) << 2);
+    }
+
+    #[inline(always)]
+    pub const fn disable_slot(&self) -> u8 {
+        (self.slot_refs >> 4) & 0x03
+    }
+
+    #[inline(always)]
+    pub fn set_disable_slot(&mut self, slot: u8) {
+        self.slot_refs = (self.slot_refs & !(0x03 << 4)) | ((slot & 0x03) << 4);
+    }
+
+    #[inline(always)]
+    pub const fn is_slot_disabled(&self, slot: usize) -> bool {
+        (self.vol_flags & vol_bit::DISABLE) != 0 && (self.disable_slot() as usize) == slot
+    }
+
+    #[inline(always)]
+    pub const fn must_recharge(&self) -> bool {
+        (self.slot_refs & 0x80) != 0
+    }
+
+    #[inline(always)]
+    pub fn set_must_recharge(&mut self, on: bool) {
+        if on {
+            self.slot_refs |= 0x80;
+        } else {
+            self.slot_refs &= !0x80;
+        }
     }
 
     /// Apply damage to either Substitute (`hp_pool[1]`) or main HP (`hp_pool[0]`)
@@ -604,8 +750,8 @@ pub struct CompactBattle {
     pub sides: [CompactSide; 2],
     /// Current turn number (`1..=1001`): 2 bytes (offset 168..170).
     pub turn: u16,
-    /// Weather kind (`0` = None, `1` = Rain, `2` = Sun, `3` = Sandstorm): 1 byte.
-    pub weather_kind: u8,
+    /// Weather kind (`None`, `Rain`, `Sun`, `Sandstorm`): 1 byte.
+    pub weather_kind: CompactWeather,
     /// Weather remaining turns (`0..=5`): 1 byte.
     pub weather_turns: u8,
     /// Pre-rolled Quick Claw activation coin for the current turn: 1 byte.
@@ -726,22 +872,12 @@ pub struct CompactMoveSpec {
     /// Self-targeted or target-applied stat boosts (`[(stat_idx_or_ff, delta); 3]`).
     pub boosts: [(u8, i8); 3],
     pub boosts_self: bool,
-    /// Special move effect tag (`0` = None, `1` = Reflect, `2` = LightScreen, `3` = Safeguard,
-    /// `4` = Spikes, `5` = Curse, `6` = BellyDrum, `7` = Roar/Whirlwind, `8` = Encore,
-    /// `9` = Disable, `10` = SleepTalk, `11` = Counter, `12` = MirrorCoat, `13` = Flail/Reversal,
-    /// `14` = SeismicToss/NightShade, `15` = SuperFang, `16` = Thief, `17` = PainSplit,
-    /// `18` = BatonPass, `19` = PerishSong, `20` = DestinyBond, `21` = HealBell,
-    /// `22` = PsychUp, `23` = RainDance, `24` = SunnyDay, `25` = Sandstorm,
-    /// `26` = MeanLook/SpiderWeb, `27` = Haze).
-    pub special_kind: u8,
-    /// Variable base power kind (`0` = static, `1` = Return, `2` = Frustration,
-    /// `3` = HiddenPower, `4` = Flail/Reversal, `5` = Magnitude, `6` = Present).
-    pub var_bp_kind: u8,
+    /// Special move effect tag (`SpecialMoveKind`).
+    pub special_kind: SpecialMoveKind,
+    /// Variable base power kind (`VarBpKind`).
+    pub var_bp_kind: VarBpKind,
     /// Twice the expected hit count (`2` = single hit, `6` = 2..5 multihit, `2*n` = Fixed(n)).
     pub multihit_mean_x2: u8,
-    /// Rollout status pseudo-score kind (`0` = None, `1` = Sleep, `2` = Par, `3` = Spikes,
-    /// `4` = Heal, `5` = Curse, `6` = SwordsDance, `7` = Amnesia, `8` = BellyDrum).
-    pub pseudo_kind: u8,
 }
 
 /// Precompiled per-item metadata for O(1) lookup in `CompactBattle::from_battle`.
@@ -844,16 +980,16 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
     let normal_type = dex.known_types.normal.0;
     let fighting_type = dex.known_types.fighting.0;
     let flying_type = dex.known_types.flying.0;
-    let poison_type = tid_or("Poison", 0xFF);
+    let poison_type = tid_or("Poison", NO_TYPE_ID);
     let ground_type = dex.known_types.ground.0;
-    let rock_type = tid_or("Rock", 0xFF);
+    let rock_type = tid_or("Rock", NO_TYPE_ID);
     let ghost_type = dex.known_types.ghost.0;
-    let steel_type = tid_or("Steel", 0xFF);
+    let steel_type = tid_or("Steel", NO_TYPE_ID);
     let fire_type = dex.known_types.fire.0;
     let water_type = dex.known_types.water.0;
     let grass_type = dex.known_types.grass.0;
-    let electric_type = tid_or("Electric", 0xFF);
-    let ice_type = tid_or("Ice", 0xFF);
+    let electric_type = tid_or("Electric", NO_TYPE_ID);
+    let ice_type = tid_or("Ice", NO_TYPE_ID);
 
     let mut sandstorm_immune_mask = 0u32;
     for &t in &[rock_type, ground_type, steel_type] {
@@ -900,23 +1036,25 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
     let charge_bit = dex.flag_bit("charge");
     let protect_bit = dex.flag_bit("protect");
 
+    let km = &dex.known_moves;
+    let ki = &dex.known_items;
     let mut move_specs = Vec::with_capacity(dex.moves.len());
     for m_raw in 0..dex.moves.len() {
         let mid = MoveId(m_raw as u16);
         let ms = dex.move_static(mid);
         let mkey = dex.moves.key(mid);
         let var_bp_kind = match mkey {
-            "return" => 1,
-            "frustration" => 2,
-            "hiddenpower" => 3,
-            "flail" | "reversal" => 4,
-            "magnitude" => 5,
-            "present" => 6,
-            _ => 0,
+            "return" => VarBpKind::Return,
+            "frustration" => VarBpKind::Frustration,
+            "hiddenpower" => VarBpKind::HiddenPower,
+            "flail" | "reversal" => VarBpKind::FlailReversal,
+            "magnitude" => VarBpKind::Magnitude,
+            "present" => VarBpKind::Present,
+            _ => VarBpKind::Static,
         };
         let bp = match var_bp_kind {
-            5 => 71,
-            6 => 40,
+            VarBpKind::Magnitude => 71,
+            VarBpKind::Present => 40,
             _ => ms.base_power as i16,
         };
         let (base_acc_pct, always_hit) = match ms.accuracy {
@@ -928,7 +1066,7 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
         let mut sec_chance_256 = 0u8;
         let mut sec_status = 0u8;
         let mut sec_vol = 0u16;
-        let mut sec_boost = (0xFFu8, 0i8);
+        let mut sec_boost = (NO_STAT_IDX, 0i8);
         if let Some(sec) = ms.secondaries.first() {
             let ch = sec.chance.unwrap_or(100).clamp(0, 100);
             sec_chance_256 = (ch * 255 / 100).clamp(1, 255) as u8;
@@ -938,13 +1076,13 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
                 sec_boost = (st_i as u8, d);
             } else if let Some(se) = sec.self_effect.as_ref() {
                 if mkey == "ancientpower" {
-                    sec_boost = (0x80 | 7, 1);
+                    sec_boost = (SELF_BOOST_FLAG | ANCIENTPOWER_ALL_STATS, 1);
                 } else if let Some(&(st_i, d)) = se.boosts.first() {
-                    sec_boost = ((st_i as u8) | 0x80, d);
+                    sec_boost = ((st_i as u8) | SELF_BOOST_FLAG, d);
                 }
             }
         }
-        let mut boosts = [(0xFFu8, 0i8); 3];
+        let mut boosts = [(NO_STAT_IDX, 0i8); 3];
         let mut boosts_self = matches!(ms.target, "self" | "allySide" | "adjacentAllyOrSelf");
         let src_boosts = if !ms.boosts.is_empty() {
             &ms.boosts[..]
@@ -958,39 +1096,39 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
             boosts[b_i] = (st_i as u8, d);
         }
         let special_kind = match mkey {
-            "reflect" => 1,
-            "lightscreen" => 2,
-            "safeguard" => 3,
-            "spikes" => 4,
-            "curse" => 5,
-            "bellydrum" => 6,
-            "roar" | "whirlwind" => 7,
-            "encore" => 8,
-            "disable" => 9,
-            "sleeptalk" => 10,
-            "counter" => 11,
-            "mirrorcoat" => 12,
-            "flail" | "reversal" => 13,
-            "seismictoss" | "nightshade" => 14,
-            "superfang" => 15,
-            "thief" => 16,
-            "painsplit" => 17,
-            "batonpass" => 18,
-            "perishsong" => 19,
-            "destinybond" => 20,
-            "healbell" => 21,
-            "psychup" => 22,
-            "raindance" => 23,
-            "sunnyday" => 24,
-            "sandstorm" => 25,
-            "meanlook" | "spiderweb" => 26,
-            "haze" => 27,
-            "rapidspin" => 28,
-            "moonlight" | "morningsun" | "synthesis" => 29,
-            _ => 0,
+            "reflect" => SpecialMoveKind::Reflect,
+            "lightscreen" => SpecialMoveKind::LightScreen,
+            "safeguard" => SpecialMoveKind::Safeguard,
+            "spikes" => SpecialMoveKind::Spikes,
+            "curse" => SpecialMoveKind::Curse,
+            "bellydrum" => SpecialMoveKind::BellyDrum,
+            "roar" | "whirlwind" => SpecialMoveKind::Phaze,
+            "encore" => SpecialMoveKind::Encore,
+            "disable" => SpecialMoveKind::Disable,
+            "sleeptalk" => SpecialMoveKind::SleepTalk,
+            "counter" => SpecialMoveKind::Counter,
+            "mirrorcoat" => SpecialMoveKind::MirrorCoat,
+            "flail" | "reversal" => SpecialMoveKind::FlailReversal,
+            "seismictoss" | "nightshade" => SpecialMoveKind::LevelDamage,
+            "superfang" => SpecialMoveKind::SuperFang,
+            "thief" => SpecialMoveKind::Thief,
+            "painsplit" => SpecialMoveKind::PainSplit,
+            "batonpass" => SpecialMoveKind::BatonPass,
+            "perishsong" => SpecialMoveKind::PerishSong,
+            "destinybond" => SpecialMoveKind::DestinyBond,
+            "healbell" => SpecialMoveKind::HealBell,
+            "psychup" => SpecialMoveKind::PsychUp,
+            "raindance" => SpecialMoveKind::RainDance,
+            "sunnyday" => SpecialMoveKind::SunnyDay,
+            "sandstorm" => SpecialMoveKind::Sandstorm,
+            "meanlook" | "spiderweb" => SpecialMoveKind::MeanLook,
+            "haze" => SpecialMoveKind::Haze,
+            "rapidspin" => SpecialMoveKind::RapidSpin,
+            "moonlight" | "morningsun" | "synthesis" => SpecialMoveKind::WeatherHeal,
+            _ => SpecialMoveKind::None,
         };
         let fixed_damage = match ms.damage {
-            Some(crate::dex::FixedDamage::Level) => -1,
+            Some(crate::dex::FixedDamage::Level) => FIXED_DAMAGE_LEVEL,
             Some(crate::dex::FixedDamage::Amount(n)) => n.clamp(1, i16::MAX as i32) as i16,
             None => 0,
         };
@@ -1000,24 +1138,10 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
             Some(crate::dex::Multihit::Range(lo, hi)) => (lo + hi).clamp(2, 20) as u8,
             None => 2,
         };
-        let pseudo_kind = if ms.status == Some("slp") {
-            1
-        } else if ms.status == Some("par") {
-            2
-        } else if ms.side_condition == Some("spikes") {
-            3
-        } else if ms.heal.is_some() {
-            4
-        } else {
-            match mkey {
-                "curse" => 5,
-                "swordsdance" => 6,
-                "amnesia" => 7,
-                "bellydrum" => 8,
-                _ => 0,
-            }
-        };
 
+        let smid = Some(mid);
+        let is_half_heal = smid == km.recover || smid == km.softboiled || smid == km.milkdrink;
+        let is_rest = smid == km.rest;
         move_specs.push(CompactMoveSpec {
             id: mid,
             base_power: bp,
@@ -1034,23 +1158,31 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
             is_selfdestruct: ms.selfdestruct,
             is_water: ms.move_type.0 == water_type,
             is_fire: ms.move_type.0 == fire_type,
-            is_solarbeam: mkey == "solarbeam",
+            is_solarbeam: smid == km.solarbeam,
             bypasses_sub: (ms.flags & authentic_bit) != 0,
-            is_rest: mkey == "rest",
-            is_half_heal: matches!(mkey, "recover" | "softboiled" | "milkdrink"),
+            is_rest,
+            is_half_heal,
             is_recharge: ms.has_flag(dex, "recharge"),
             is_defrost: ms.has_flag(dex, "defrost"),
-            is_heal_cycle: matches!(mkey, "rest" | "recover" | "softboiled" | "milkdrink"),
+            is_heal_cycle: is_rest || is_half_heal,
             is_sleep_usable: ms.sleep_usable,
             can_sleep_talk: (ms.flags & (nosleeptalk_bit | charge_bit)) == 0,
-            is_protect: matches!(mkey, "protect" | "detect"),
-            is_endure: mkey == "endure",
+            is_protect: smid == km.protect || smid == km.detect,
+            is_endure: smid == km.endure,
             blocked_by_protect: (ms.flags & protect_bit) != 0,
-            is_substitute: mkey == "substitute",
+            is_substitute: smid == km.substitute,
             drain_half: ms.drain.is_some(),
             recoil_quarter: ms.recoil.is_some(),
             primary_status,
-            primary_vol: if ms.target == "self" || matches!(special_kind, 5 | 8 | 9 | 19 | 20) {
+            primary_vol: if ms.target == "self"
+                || matches!(
+                    special_kind,
+                    SpecialMoveKind::Curse
+                        | SpecialMoveKind::Encore
+                        | SpecialMoveKind::Disable
+                        | SpecialMoveKind::PerishSong
+                        | SpecialMoveKind::DestinyBond
+                ) {
                 0
             } else {
                 primary_vol
@@ -1065,30 +1197,30 @@ fn build_compact_dex_tables(dex: &Dex) -> CompactDexTables {
             var_bp_kind,
             fixed_damage,
             multihit_mean_x2,
-            pseudo_kind,
         });
     }
 
     let mut item_specs = Vec::with_capacity(dex.items.len());
     for i_raw in 0..dex.items.len() {
         let iid = ItemId(i_raw as u16);
+        let siid = Some(iid);
         let ikey = dex.items.key(iid);
         let boost_type = COMPACT_TYPE_BOOST_ITEMS
             .iter()
             .find(|&&(k, _)| k == ikey)
             .and_then(|&(_, t_name)| dex.type_id(t_name))
             .map(|t| t.0)
-            .unwrap_or(0xFF);
+            .unwrap_or(NO_TYPE_ID);
         item_specs.push(CompactItemSpec {
             boost_type,
-            is_quick_claw: Some(iid) == dex.known_items.quickclaw,
-            is_leftovers: ikey == "leftovers",
-            is_brightpowder: ikey == "brightpowder",
-            is_mintberry: ikey == "mintberry",
-            is_miracleberry: ikey == "miracleberry",
-            is_goldberry: ikey == "goldberry",
-            is_berry: ikey == "berry" || ikey == "berryjuice",
-            is_scope_lens: ikey == "scopelens",
+            is_quick_claw: siid == ki.quickclaw,
+            is_leftovers: siid == ki.leftovers,
+            is_brightpowder: siid == ki.brightpowder,
+            is_mintberry: siid == ki.mintberry,
+            is_miracleberry: siid == ki.miracleberry,
+            is_goldberry: siid == ki.goldberry,
+            is_berry: siid == ki.berry || siid == ki.berryjuice,
+            is_scope_lens: siid == ki.scopelens,
         });
     }
 
@@ -1199,7 +1331,7 @@ impl MatchTable {
         def_mon: &StaticMonSpec,
         foresight: bool,
     ) -> (i8, bool) {
-        if move_type == 0xFF {
+        if move_type == NO_TYPE_ID {
             return (0, false);
         }
         let mt = if (move_type as usize) < 20 {
@@ -1361,7 +1493,7 @@ fn build_static_mon_spec(
         .item
         .and_then(|i| dt.item_specs.get(i.0 as usize).copied())
         .unwrap_or(CompactItemSpec {
-            boost_type: 0xFF,
+            boost_type: NO_TYPE_ID,
             ..CompactItemSpec::default()
         });
 
@@ -1378,9 +1510,9 @@ fn build_static_mon_spec(
 
         let mut cm = dt.move_specs[slot.id.0 as usize];
         match cm.var_bp_kind {
-            1 => cm.base_power = return_bp,
-            2 => cm.base_power = ((255 - p.happiness as i32) * 10 / 25) as i16,
-            3 => {
+            VarBpKind::Return => cm.base_power = return_bp,
+            VarBpKind::Frustration => cm.base_power = ((255 - p.happiness as i32) * 10 / 25) as i16,
+            VarBpKind::HiddenPower => {
                 let hpt = p.hp_type.0;
                 cm.move_type = hpt;
                 cm.base_power = p.hp_power as i16;
@@ -1390,43 +1522,49 @@ fn build_static_mon_spec(
             }
             _ => {}
         }
-        if cm.is_half_heal || cm.special_kind == 29 {
+        if cm.is_half_heal || cm.special_kind == SpecialMoveKind::WeatherHeal {
             role_flags |= role_bit::HALF_HEAL;
         }
         if cm.is_rest {
             role_flags |= role_bit::REST;
         }
-        if cm.special_kind == 10 || cm.is_sleep_usable {
+        if cm.special_kind == SpecialMoveKind::SleepTalk || cm.is_sleep_usable {
             role_flags |= role_bit::SLEEP_USABLE;
         }
-        if matches!(cm.special_kind, 7 | 19 | 26) {
+        if matches!(
+            cm.special_kind,
+            SpecialMoveKind::Phaze | SpecialMoveKind::PerishSong | SpecialMoveKind::MeanLook
+        ) {
             role_flags |= role_bit::PERISH_PHAZE_TRAP;
         }
-        if cm.special_kind == 18 {
+        if cm.special_kind == SpecialMoveKind::BatonPass {
             role_flags |= role_bit::BATON_PASS;
         }
         if cm.is_protect {
             role_flags |= role_bit::PROTECT;
         }
         if !cm.boosts_self
-            && cm.boosts[0].0 == 0
+            && cm.boosts[0].0 == stat_idx::ATK as u8
             && cm.boosts[0].1 > 0
             && (cm.primary_vol & vol_bit::CONFUSION) != 0
         {
             role_flags |= role_bit::SWAGGER;
         }
-        if matches!(cm.special_kind, 7 | 27) {
+        if matches!(
+            cm.special_kind,
+            SpecialMoveKind::Phaze | SpecialMoveKind::Haze
+        ) {
             role_flags |= role_bit::PHAZE_OR_HAZE;
         }
         move_specs[m_i] = cm;
     }
 
     let stored_stats = [
-        p.stored_stats[0] as i16,
-        p.stored_stats[1] as i16,
-        p.stored_stats[2] as i16,
-        p.stored_stats[3] as i16,
-        p.stored_stats[4] as i16,
+        p.stored_stats[stat_idx::ATK] as i16,
+        p.stored_stats[stat_idx::DEF] as i16,
+        p.stored_stats[stat_idx::SPA] as i16,
+        p.stored_stats[stat_idx::SPD] as i16,
+        p.stored_stats[stat_idx::SPE] as i16,
     ];
     let item_stat_kind = ItemStatKind::classify(dex, p.species, p.item);
     let mut static_fp = 0xcbf29ce484222325u64;
@@ -1561,28 +1699,32 @@ impl CompactBattle {
                 }
                 let moves = static_mons[c_idx].moves;
 
-                let mut pp = [0u8; 4];
-                let mut vol_flags = 0u16;
-                let mut slot_refs = 0u8;
+                let mut c_mon = CompactMon {
+                    hp_pool: [p.hp.clamp(0, i16::MAX as i32) as i16, 0],
+                    pp: [0u8; 4],
+                    status_packed: 0,
+                    item: p.item.map(|i| (i.0 & 0x7F) as u8 + 1).unwrap_or(0),
+                    vol_flags: 0,
+                    timers: [0u8; 4],
+                    boosts: p.boosts,
+                    slot_refs: 0,
+                };
                 for m_i in 0..num_moves as usize {
                     let slot = p.move_slots[m_i];
-                    pp[m_i] = slot.pp.clamp(0, 64) as u8;
+                    c_mon.pp[m_i] = slot.pp.clamp(0, 64) as u8;
                     if slot.disabled {
-                        vol_flags |= vol_bit::DISABLE;
-                        slot_refs = (slot_refs & !(0x03 << 4)) | (((m_i as u8) & 0x03) << 4);
+                        c_mon.vol_flags |= vol_bit::DISABLE;
+                        c_mon.set_disable_slot(m_i as u8);
                     }
                 }
 
                 let mut sub_hp = 0i16;
-                let mut conf_turns = 0u8;
-                let mut enc_turns = 0u8;
-                let mut dis_turns = 0u8;
                 let mut perish_turns = 0u8;
                 let mut stall_cnt = 0u8;
                 let mut res_counter_packed = 0u8;
                 if let Some(last_m) = p.last_move_encore.or(p.last_move) {
                     if let Some(m_i) = (0..num_moves as usize).find(|&i| moves[i] == last_m) {
-                        slot_refs = (slot_refs & !0x43) | ((m_i as u8) & 0x03) | 0x40;
+                        c_mon.set_last_move_slot(m_i as u8);
                     }
                 }
 
@@ -1592,31 +1734,32 @@ impl CompactBattle {
                         if scid == dt.sub_cond {
                             sub_hp = vst.get_int(DK::Hp).max(0) as i16;
                             if sub_hp > 0 {
-                                vol_flags |= vol_bit::SUBSTITUTE;
+                                c_mon.vol_flags |= vol_bit::SUBSTITUTE;
                             }
                         } else if scid == dt.conf_cond {
-                            vol_flags |= vol_bit::CONFUSION;
-                            conf_turns = vst.get_int(DK::Time).clamp(0, 255) as u8;
+                            c_mon.vol_flags |= vol_bit::CONFUSION;
+                            c_mon.timers[timer_idx::CONFUSION] =
+                                vst.get_int(DK::Time).clamp(0, 255) as u8;
                         } else if scid == dt.flinch_cond {
-                            vol_flags |= vol_bit::FLINCH;
+                            c_mon.vol_flags |= vol_bit::FLINCH;
                         } else if scid == dt.dbond_cond {
-                            vol_flags |= vol_bit::DESTINY_BOND;
+                            c_mon.vol_flags |= vol_bit::DESTINY_BOND;
                         } else if scid == dt.par_cond {
-                            vol_flags |= vol_bit::PAR_SPEED_DROP;
+                            c_mon.vol_flags |= vol_bit::PAR_SPEED_DROP;
                         } else if scid == dt.brn_cond {
-                            vol_flags |= vol_bit::BRN_ATK_DROP;
+                            c_mon.vol_flags |= vol_bit::BRN_ATK_DROP;
                         } else if scid == dt.seed_cond {
-                            vol_flags |= vol_bit::LEECH_SEED;
+                            c_mon.vol_flags |= vol_bit::LEECH_SEED;
                         } else if scid == dt.night_cond {
-                            vol_flags |= vol_bit::NIGHTMARE;
+                            c_mon.vol_flags |= vol_bit::NIGHTMARE;
                         } else if scid == dt.curse_cond {
-                            vol_flags |= vol_bit::CURSE;
+                            c_mon.vol_flags |= vol_bit::CURSE;
                         } else if scid == dt.fore_cond {
-                            vol_flags |= vol_bit::FORESIGHT;
+                            c_mon.vol_flags |= vol_bit::FORESIGHT;
                         } else if scid == dt.prot_cond {
-                            vol_flags |= vol_bit::PROTECT;
+                            c_mon.vol_flags |= vol_bit::PROTECT;
                         } else if scid == dt.end_cond {
-                            vol_flags |= vol_bit::ENDURE;
+                            c_mon.vol_flags |= vol_bit::ENDURE;
                         } else if scid == dt.stall_cond {
                             let c = vst
                                 .get(DK::Counter)
@@ -1638,32 +1781,33 @@ impl CompactBattle {
                                 7
                             };
                         } else if scid == dt.enc_cond {
-                            vol_flags |= vol_bit::ENCORE;
-                            enc_turns = vst.duration.unwrap_or(0).clamp(0, 255) as u8;
+                            c_mon.vol_flags |= vol_bit::ENCORE;
+                            c_mon.timers[timer_idx::ENCORE] =
+                                vst.duration.unwrap_or(0).clamp(0, 255) as u8;
                             if let Some(enc_mid) = vst.get_move() {
                                 if let Some(m_i) =
                                     (0..num_moves as usize).find(|&i| moves[i] == enc_mid)
                                 {
-                                    slot_refs =
-                                        (slot_refs & !(0x03 << 2)) | (((m_i as u8) & 0x03) << 2);
+                                    c_mon.set_encore_slot(m_i as u8);
                                 }
                             }
                         } else if scid == dt.dis_cond {
-                            vol_flags |= vol_bit::DISABLE;
-                            dis_turns = vst.duration.unwrap_or(0).clamp(0, 255) as u8;
+                            c_mon.vol_flags |= vol_bit::DISABLE;
+                            c_mon.timers[timer_idx::DISABLE] =
+                                vst.duration.unwrap_or(0).clamp(0, 255) as u8;
                         } else if scid == dt.perish_cond {
-                            vol_flags |= vol_bit::PERISH_SONG;
+                            c_mon.vol_flags |= vol_bit::PERISH_SONG;
                             perish_turns = vst.duration.unwrap_or(0).clamp(0, 7) as u8;
                         } else if scid == dt.res_cond {
                             res_counter_packed =
                                 (vst.get_int(DK::Counter).clamp(0, 15) as u8) | 0x10;
                         } else if scid == dt.recharge_cond {
-                            slot_refs |= 0x80;
+                            c_mon.set_must_recharge(true);
                         }
                     }
                 }
                 if p.trapped {
-                    vol_flags |= vol_bit::TRAPPED_OR_LOCKED;
+                    c_mon.vol_flags |= vol_bit::TRAPPED_OR_LOCKED;
                 }
 
                 let status_counter = match p.status {
@@ -1672,16 +1816,7 @@ impl CompactBattle {
                     _ => 0,
                 };
 
-                let mut c_mon = CompactMon {
-                    hp_pool: [p.hp.clamp(0, i16::MAX as i32) as i16, sub_hp],
-                    pp,
-                    status_packed: 0,
-                    item: p.item.map(|i| (i.0 & 0x7F) as u8 + 1).unwrap_or(0),
-                    vol_flags,
-                    timers: [conf_turns, enc_turns, dis_turns, 0],
-                    boosts: p.boosts,
-                    slot_refs,
-                };
+                c_mon.hp_pool[1] = sub_hp;
                 c_mon.set_perish_turns(perish_turns);
                 c_mon.set_stall_counter(stall_cnt);
                 c_mon.set_status(p.status as u8, status_counter);
@@ -1758,10 +1893,10 @@ impl CompactBattle {
         }
 
         let weather_kind = match battle.field.weather {
-            w if w.is_some() && w == dt.rain_cond => CompactWeather::Rain as u8,
-            w if w.is_some() && w == dt.sun_cond => CompactWeather::Sun as u8,
-            w if w.is_some() && w == dt.sand_cond => CompactWeather::Sandstorm as u8,
-            _ => CompactWeather::None as u8,
+            w if w.is_some() && w == dt.rain_cond => CompactWeather::Rain,
+            w if w.is_some() && w == dt.sun_cond => CompactWeather::Sun,
+            w if w.is_some() && w == dt.sand_cond => CompactWeather::Sandstorm,
+            _ => CompactWeather::None,
         };
         let weather_turns = battle
             .field
@@ -1923,9 +2058,9 @@ impl CompactBattle {
         let mon = &self.mons[p_idx];
         let spec = &table.mons[p_idx];
         if self.quick_claw_roll != 0 && mon.item != 0 && spec.is_quick_claw {
-            return 65535;
+            return QUICK_CLAW_ACTION_SPEED;
         }
-        self.mon_stat(table, side, party_slot, 4, false, false)
+        self.mon_stat(table, side, party_slot, stat_idx::SPE, false, false)
     }
 
     /// Compute hit probability for `m_slot` used by `(att_side, att_slot)` against `(def_side, def_slot)`.
@@ -1945,8 +2080,8 @@ impl CompactBattle {
         hit_probability_branchless(
             mspec.base_acc_pct,
             mspec.always_hit,
-            self.mons[att_idx].boosts[5],
-            self.mons[def_idx].boosts[6],
+            self.mons[att_idx].boosts[stat_idx::ACC],
+            self.mons[def_idx].boosts[stat_idx::EVA],
             mspec.ignore_accuracy,
             mspec.ignore_evasion,
             mspec.ignore_positive_evasion,
@@ -1964,7 +2099,6 @@ impl CompactBattle {
         def_side: usize,
         def_slot: usize,
         m_slot: usize,
-        couple_evasion: bool,
     ) -> (f64, f64) {
         let att_idx = att_side * 3 + att_slot;
         let def_idx = def_side * 3 + def_slot;
@@ -1974,7 +2108,7 @@ impl CompactBattle {
         let def_mon = &self.mons[def_idx];
         let def_spec = &table.mons[def_idx];
 
-        let base_power = if mspec.var_bp_kind == 4 {
+        let base_power = if mspec.var_bp_kind == VarBpKind::FlailReversal {
             let ratio = ((att_mon.hp() as f64 * 48.0 / att_spec.maxhp.max(1) as f64).floor() as i32)
                 .max(1);
             if ratio < 2 {
@@ -1994,7 +2128,10 @@ impl CompactBattle {
             mspec.base_power as i32
         };
 
-        if mspec.fixed_damage == 0 && mspec.special_kind != 15 && (mspec.is_status || base_power <= 0) {
+        if mspec.fixed_damage == 0
+            && mspec.special_kind != SpecialMoveKind::SuperFang
+            && (mspec.is_status || base_power <= 0)
+        {
             return (0.0, 0.0);
         }
 
@@ -2005,23 +2142,17 @@ impl CompactBattle {
             return (0.0, 0.0);
         }
 
-        let acc = if couple_evasion {
-            hit_probability_branchless(
-                mspec.base_acc_pct,
-                mspec.always_hit,
-                att_mon.boosts[5],
-                def_mon.boosts[6],
-                mspec.ignore_accuracy,
-                mspec.ignore_evasion,
-                mspec.ignore_positive_evasion,
-            )
-        } else if mspec.always_hit {
-            1.0
-        } else {
-            mspec.base_acc_pct as f64 / 100.0
-        };
+        let acc = hit_probability_branchless(
+            mspec.base_acc_pct,
+            mspec.always_hit,
+            att_mon.boosts[stat_idx::ACC],
+            def_mon.boosts[stat_idx::EVA],
+            mspec.ignore_accuracy,
+            mspec.ignore_evasion,
+            mspec.ignore_positive_evasion,
+        );
 
-        let raw = if mspec.special_kind == 15 {
+        let raw = if mspec.special_kind == SpecialMoveKind::SuperFang {
             (def_mon.hp() / 2).max(1) as f64
         } else if mspec.fixed_damage != 0 {
             if mspec.fixed_damage < 0 {
@@ -2030,10 +2161,14 @@ impl CompactBattle {
                 mspec.fixed_damage as f64
             }
         } else {
-            let (ai, di) = if mspec.is_physical { (0, 1) } else { (2, 3) };
+            let (ai, di) = if mspec.is_physical {
+                (stat_idx::ATK, stat_idx::DEF)
+            } else {
+                (stat_idx::SPA, stat_idx::SPD)
+            };
             let atk = self.mon_stat(table, att_side, att_slot, ai, false, false) as f64;
             let mut defense = self.mon_stat(table, def_side, def_slot, di, false, false) as f64;
-            if mspec.is_selfdestruct && di == 1 {
+            if mspec.is_selfdestruct && di == stat_idx::DEF {
                 defense = (defense / 2.0).floor().max(1.0);
             }
             let mut dmg = ((att_spec.level as f64 * 2.0 / 5.0 + 2.0).floor()
@@ -2043,20 +2178,20 @@ impl CompactBattle {
                 / 50.0)
                 .floor();
             if att_mon.item != 0
-                && mspec.move_type != 0xFF
+                && mspec.move_type != NO_TYPE_ID
                 && att_spec.item_boost_type == mspec.move_type
             {
                 dmg += (dmg / 10.0).floor();
             }
             let mut core = dmg.clamp(1.0, 997.0) + 2.0;
             if self.weather_turns > 0 {
-                if (mspec.is_water && self.weather_kind == CompactWeather::Rain as u8)
-                    || (mspec.is_fire && self.weather_kind == CompactWeather::Sun as u8)
+                if (mspec.is_water && self.weather_kind == CompactWeather::Rain)
+                    || (mspec.is_fire && self.weather_kind == CompactWeather::Sun)
                 {
                     core = (core * 1.5).floor();
                 } else if ((mspec.is_fire || mspec.is_solarbeam)
-                    && self.weather_kind == CompactWeather::Rain as u8)
-                    || (mspec.is_water && self.weather_kind == CompactWeather::Sun as u8)
+                    && self.weather_kind == CompactWeather::Rain)
+                    || (mspec.is_water && self.weather_kind == CompactWeather::Sun)
                 {
                     core = (core / 2.0).floor();
                 }
@@ -2093,7 +2228,6 @@ impl CompactBattle {
         def_side: usize,
         def_slot: usize,
         m_slot: usize,
-        couple_evasion: bool,
     ) -> f64 {
         self.expected_hit_fraction_with_acc(
             table,
@@ -2102,7 +2236,6 @@ impl CompactBattle {
             def_side,
             def_slot,
             m_slot,
-            couple_evasion,
         )
         .0
     }
@@ -2116,7 +2249,6 @@ impl CompactBattle {
         att_slot: usize,
         def_side: usize,
         def_slot: usize,
-        couple_evasion: bool,
     ) -> f64 {
         let att_idx = att_side * 3 + att_slot;
         let def_idx = def_side * 3 + def_slot;
@@ -2125,8 +2257,6 @@ impl CompactBattle {
         let def_mon = &self.mons[def_idx];
         let def_spec = &table.mons[def_idx];
         let num_moves = att_spec.num_moves as usize;
-        let is_disabled = (att_mon.vol_flags & vol_bit::DISABLE) != 0;
-        let dis_slot = ((att_mon.slot_refs >> 4) & 0x03) as usize;
         let foresight = (def_mon.vol_flags & vol_bit::FORESIGHT) != 0;
         let level_factor = (att_spec.level as f64 * 2.0 / 5.0 + 2.0).floor();
         let def_hp = def_mon.hp().max(1) as f64;
@@ -2135,11 +2265,11 @@ impl CompactBattle {
         let mut best = 0.0f64;
 
         for m_i in 0..num_moves {
-            if att_mon.pp[m_i] == 0 || (is_disabled && m_i == dis_slot) {
+            if att_mon.pp[m_i] == 0 || att_mon.is_slot_disabled(m_i) {
                 continue;
             }
             let mspec = &table.move_specs[att_idx][m_i];
-            let base_power = if mspec.var_bp_kind == 4 {
+            let base_power = if mspec.var_bp_kind == VarBpKind::FlailReversal {
                 let ratio =
                     ((att_mon.hp() as f64 * 48.0 / att_spec.maxhp.max(1) as f64).floor() as i32)
                         .max(1);
@@ -2160,7 +2290,7 @@ impl CompactBattle {
                 mspec.base_power as i32
             };
             if mspec.fixed_damage == 0
-                && mspec.special_kind != 15
+                && mspec.special_kind != SpecialMoveKind::SuperFang
                 && (mspec.is_status || base_power <= 0)
             {
                 continue;
@@ -2170,22 +2300,16 @@ impl CompactBattle {
             if is_immune {
                 continue;
             }
-            let acc = if couple_evasion {
-                hit_probability_branchless(
-                    mspec.base_acc_pct,
-                    mspec.always_hit,
-                    att_mon.boosts[5],
-                    def_mon.boosts[6],
-                    mspec.ignore_accuracy,
-                    mspec.ignore_evasion,
-                    mspec.ignore_positive_evasion,
-                )
-            } else if mspec.always_hit {
-                1.0
-            } else {
-                mspec.base_acc_pct as f64 / 100.0
-            };
-            let raw = if mspec.special_kind == 15 {
+            let acc = hit_probability_branchless(
+                mspec.base_acc_pct,
+                mspec.always_hit,
+                att_mon.boosts[stat_idx::ACC],
+                def_mon.boosts[stat_idx::EVA],
+                mspec.ignore_accuracy,
+                mspec.ignore_evasion,
+                mspec.ignore_positive_evasion,
+            );
+            let raw = if mspec.special_kind == SpecialMoveKind::SuperFang {
                 (def_mon.hp() / 2).max(1) as f64
             } else if mspec.fixed_damage != 0 {
                 if mspec.fixed_damage < 0 {
@@ -2197,15 +2321,19 @@ impl CompactBattle {
                 let (atk, mut defense) = if mspec.is_physical {
                     *phys_stats.get_or_insert_with(|| {
                         (
-                            self.mon_stat(table, att_side, att_slot, 0, false, false) as f64,
-                            self.mon_stat(table, def_side, def_slot, 1, false, false) as f64,
+                            self.mon_stat(table, att_side, att_slot, stat_idx::ATK, false, false)
+                                as f64,
+                            self.mon_stat(table, def_side, def_slot, stat_idx::DEF, false, false)
+                                as f64,
                         )
                     })
                 } else {
                     *spec_stats.get_or_insert_with(|| {
                         (
-                            self.mon_stat(table, att_side, att_slot, 2, false, false) as f64,
-                            self.mon_stat(table, def_side, def_slot, 3, false, false) as f64,
+                            self.mon_stat(table, att_side, att_slot, stat_idx::SPA, false, false)
+                                as f64,
+                            self.mon_stat(table, def_side, def_slot, stat_idx::SPD, false, false)
+                                as f64,
                         )
                     })
                 };
@@ -2214,20 +2342,20 @@ impl CompactBattle {
                 }
                 let mut dmg = (level_factor * base_power as f64 * atk / defense / 50.0).floor();
                 if att_mon.item != 0
-                    && mspec.move_type != 0xFF
+                    && mspec.move_type != NO_TYPE_ID
                     && att_spec.item_boost_type == mspec.move_type
                 {
                     dmg += (dmg / 10.0).floor();
                 }
                 let mut core = dmg.clamp(1.0, 997.0) + 2.0;
                 if self.weather_turns > 0 {
-                    if (mspec.is_water && self.weather_kind == CompactWeather::Rain as u8)
-                        || (mspec.is_fire && self.weather_kind == CompactWeather::Sun as u8)
+                    if (mspec.is_water && self.weather_kind == CompactWeather::Rain)
+                        || (mspec.is_fire && self.weather_kind == CompactWeather::Sun)
                     {
                         core = (core * 1.5).floor();
                     } else if ((mspec.is_fire || mspec.is_solarbeam)
-                        && self.weather_kind == CompactWeather::Rain as u8)
-                        || (mspec.is_water && self.weather_kind == CompactWeather::Sun as u8)
+                        && self.weather_kind == CompactWeather::Rain)
+                        || (mspec.is_water && self.weather_kind == CompactWeather::Sun)
                     {
                         core = (core / 2.0).floor();
                     }
@@ -2258,7 +2386,7 @@ impl CompactBattle {
         if cfg!(debug_assertions) {
             let mut ref_best = 0.0f64;
             for m_i in 0..num_moves {
-                if att_mon.pp[m_i] == 0 || (is_disabled && m_i == dis_slot) {
+                if att_mon.pp[m_i] == 0 || att_mon.is_slot_disabled(m_i) {
                     continue;
                 }
                 let v = self.expected_hit_fraction(
@@ -2268,7 +2396,6 @@ impl CompactBattle {
                     def_side,
                     def_slot,
                     m_i,
-                    couple_evasion,
                 );
                 if v > ref_best {
                     ref_best = v;
@@ -2292,8 +2419,8 @@ impl CompactBattle {
         let p_idx = side * 3 + (self.sides[side].active_idx as usize);
         let mon = &self.mons[p_idx];
         let spec = &table.mons[p_idx];
-        let speed = self.active_stat(table, side, 4, false, false);
-        let must_recharge = (mon.slot_refs & 0x80) != 0;
+        let speed = self.active_stat(table, side, stat_idx::SPE, false, false);
+        let must_recharge = mon.must_recharge();
         let is_switch = !must_recharge && action_code >= 4;
         let phase = if is_switch {
             ActionPhase::Switch
@@ -2406,7 +2533,7 @@ impl CompactBattle {
             | vol_bit::CURSE
             | vol_bit::PERISH_SONG;
         let saved_vols = self.mons[old_idx].vol_flags & pass_mask;
-        let saved_conf_t = self.mons[old_idx].timers[0];
+        let saved_conf_t = self.mons[old_idx].timers[timer_idx::CONFUSION];
         let saved_perish_t = self.mons[old_idx].perish_turns();
 
         // Clear volatile state and boosts on outgoing active Pokemon.
@@ -2440,7 +2567,7 @@ impl CompactBattle {
             self.mons[new_idx].boosts = saved_boosts;
             self.mons[new_idx].hp_pool[1] = saved_sub;
             self.mons[new_idx].vol_flags |= saved_vols;
-            self.mons[new_idx].timers[0] = saved_conf_t;
+            self.mons[new_idx].timers[timer_idx::CONFUSION] = saved_conf_t;
             self.mons[new_idx].set_perish_turns(saved_perish_t);
         }
         if self.mons[new_idx].status_raw() == Status::Par as u8 {
@@ -2486,8 +2613,8 @@ impl CompactBattle {
         }
 
         // Hyper Beam recharge turn wastes the turn.
-        if (self.mons[att_idx].slot_refs & 0x80) != 0 {
-            self.mons[att_idx].slot_refs &= !0x80;
+        if self.mons[att_idx].must_recharge() {
+            self.mons[att_idx].set_must_recharge(false);
             self.mons[att_idx].vol_flags &= !vol_bit::DESTINY_BOND;
             self.exec_after_move_self(table, side);
             return;
@@ -2495,7 +2622,7 @@ impl CompactBattle {
 
         let num_moves = table.mons[att_idx].num_moves as usize;
         let is_disabled = (self.mons[att_idx].vol_flags & vol_bit::DISABLE) != 0;
-        let dis_slot = ((self.mons[att_idx].slot_refs >> 4) & 0x03) as usize;
+        let dis_slot = self.mons[att_idx].disable_slot() as usize;
         let mut move_slot = move_slot;
         let mut is_struggle = false;
         if (self.mons[att_idx].vol_flags & vol_bit::ENCORE) != 0 {
@@ -2524,7 +2651,7 @@ impl CompactBattle {
         }
         let mut mspec = if is_struggle {
             CompactMoveSpec {
-                move_type: 0xFF,
+                move_type: NO_TYPE_ID,
                 base_power: 50,
                 base_acc_pct: 100,
                 crit_ratio: 1,
@@ -2532,8 +2659,8 @@ impl CompactBattle {
                 blocked_by_protect: true,
                 recoil_quarter: true,
                 multihit_mean_x2: 2,
-                sec_boost: (0xFF, 0),
-                boosts: [(0xFF, 0); 3],
+                sec_boost: (NO_STAT_IDX, 0),
+                boosts: [(NO_STAT_IDX, 0); 3],
                 ..CompactMoveSpec::default()
             }
         } else {
@@ -2574,8 +2701,8 @@ impl CompactBattle {
 
         // Confusion check.
         if (self.mons[att_idx].vol_flags & vol_bit::CONFUSION) != 0 {
-            let rem = self.mons[att_idx].timers[0].saturating_sub(1);
-            self.mons[att_idx].timers[0] = rem;
+            let rem = self.mons[att_idx].timers[timer_idx::CONFUSION].saturating_sub(1);
+            self.mons[att_idx].timers[timer_idx::CONFUSION] = rem;
             if rem == 0 {
                 self.mons[att_idx].vol_flags &= !vol_bit::CONFUSION;
             } else if rng.random_chance(1, 2) {
@@ -2602,15 +2729,14 @@ impl CompactBattle {
 
         // Deduct PP and record last executed move slot (Struggle spends no move-slot PP).
         if is_struggle {
-            self.mons[att_idx].slot_refs &= !0x40;
+            self.mons[att_idx].clear_last_move_slot();
         } else {
             if self.mons[att_idx].pp[move_slot] == 0 {
                 self.exec_after_move_self(table, side);
                 return;
             }
             self.mons[att_idx].pp[move_slot] -= 1;
-            self.mons[att_idx].slot_refs =
-                (self.mons[att_idx].slot_refs & !0x43) | ((move_slot as u8) & 0x03) | 0x40;
+            self.mons[att_idx].set_last_move_slot(move_slot as u8);
         }
 
         // Sleep-usable moves (Sleep Talk, Snore) fail when the user is awake.
@@ -2620,7 +2746,7 @@ impl CompactBattle {
         }
 
         // Sleep Talk: randomly call one of the user's other sleep-talkable moves.
-        if mspec.special_kind == 10 {
+        if mspec.special_kind == SpecialMoveKind::SleepTalk {
             let mut candidates = [0usize; 4];
             let mut n_cand = 0usize;
             let num_moves = table.mons[att_idx].num_moves as usize;
@@ -2664,17 +2790,14 @@ impl CompactBattle {
             self.exec_after_move_self(table, side);
             return;
         }
-        if mspec.special_kind == 29 {
+        if mspec.special_kind == SpecialMoveKind::WeatherHeal {
             let maxhp = table.mons[att_idx].maxhp;
-            let heal = if self.weather_turns > 0 {
-                match self.weather_kind {
-                    2 => maxhp,                  // Sun: full maxhp
-                    1 | 3 => (maxhp / 4).max(1), // Rain / Sandstorm: 1/4 maxhp
-                    _ => (maxhp / 2).max(1),
-                }
+            let weather = if self.weather_turns > 0 {
+                self.weather_kind
             } else {
-                (maxhp / 2).max(1)
+                CompactWeather::None
             };
+            let heal = weather.weather_heal_amount(maxhp);
             self.mons[att_idx].hp_pool[0] = (self.mons[att_idx].hp() + heal).min(maxhp);
             self.exec_after_move_self(table, side);
             return;
@@ -2732,14 +2855,25 @@ impl CompactBattle {
             }
         }
 
-        if !mspec.is_status && (mspec.base_power > 0 || matches!(mspec.special_kind, 11..=15) || mspec.fixed_damage != 0) {
+        if !mspec.is_status
+            && (mspec.base_power > 0
+                || matches!(
+                    mspec.special_kind,
+                    SpecialMoveKind::Counter
+                        | SpecialMoveKind::MirrorCoat
+                        | SpecialMoveKind::FlailReversal
+                        | SpecialMoveKind::LevelDamage
+                        | SpecialMoveKind::SuperFang
+                )
+                || mspec.fixed_damage != 0)
+        {
             let def_had_dbond = (self.mons[def_idx].vol_flags & vol_bit::DESTINY_BOND) != 0;
             let def_had_sub = self.mons[def_idx].sub_hp() > 0 && !mspec.bypasses_sub;
             let def_endure = (self.mons[def_idx].vol_flags & vol_bit::ENDURE) != 0 && !def_had_sub;
             let max_endure_dmg = (self.mons[def_idx].hp() - 1).max(0);
             let mut dealt = 0i16;
             let mut hit_landed = false;
-            if mspec.special_kind == 11 {
+            if mspec.special_kind == SpecialMoveKind::Counter {
                 // Counter: double last physical damage taken this turn.
                 let (_, is_immune) = table.effectiveness_ext(mspec.move_type, &table.mons[def_idx], def_foresight);
                 if !is_immune && self.hurt_cat_this_turn[side] == 1 && self.hurt_damage_this_turn[side] > 0 {
@@ -2750,7 +2884,7 @@ impl CompactBattle {
                     dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
                     hit_landed = true;
                 }
-            } else if mspec.special_kind == 12 {
+            } else if mspec.special_kind == SpecialMoveKind::MirrorCoat {
                 // Mirror Coat: double last special damage taken this turn.
                 let (_, is_immune) = table.effectiveness_ext(mspec.move_type, &table.mons[def_idx], def_foresight);
                 if !is_immune && self.hurt_cat_this_turn[side] == 2 && self.hurt_damage_this_turn[side] > 0 {
@@ -2761,7 +2895,7 @@ impl CompactBattle {
                     dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
                     hit_landed = true;
                 }
-            } else if mspec.special_kind == 14 || mspec.fixed_damage != 0 {
+            } else if mspec.special_kind == SpecialMoveKind::LevelDamage || mspec.fixed_damage != 0 {
                 // Seismic Toss / Night Shade / Fixed Damage.
                 let (_, is_immune) = table.effectiveness_ext(mspec.move_type, &table.mons[def_idx], def_foresight);
                 if !is_immune {
@@ -2776,7 +2910,7 @@ impl CompactBattle {
                     dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
                     hit_landed = true;
                 }
-            } else if mspec.special_kind == 15 {
+            } else if mspec.special_kind == SpecialMoveKind::SuperFang {
                 // Super Fang: halves target's current HP (min 1).
                 let (_, is_immune) = table.effectiveness_ext(mspec.move_type, &table.mons[def_idx], def_foresight);
                 if !is_immune {
@@ -2791,18 +2925,21 @@ impl CompactBattle {
                 const CRIT_DEN: [u32; 6] = [0, 16, 8, 4, 3, 2];
                 let scope_bonus = ((self.mons[att_idx].item != 0) & table.mons[att_idx].is_scope_lens) as usize;
                 let c_stage = (mspec.crit_ratio as usize + scope_bonus).min(5);
-                let is_crit = (mspec.special_kind != 13)
+                let is_crit = (mspec.special_kind != SpecialMoveKind::FlailReversal)
                     && c_stage > 0
                     && rng.random_chance(1, CRIT_DEN[c_stage]);
 
-                let atk_stat = if mspec.is_physical { 0 } else { 2 };
-                let def_stat = if mspec.is_physical { 1 } else { 3 };
+                let (atk_stat, def_stat) = if mspec.is_physical {
+                    (stat_idx::ATK, stat_idx::DEF)
+                } else {
+                    (stat_idx::SPA, stat_idx::SPD)
+                };
                 let ignore_boosts =
                     is_crit & (self.mons[att_idx].boosts[atk_stat] <= self.mons[def_idx].boosts[def_stat]);
                 let atk = self.active_stat(table, side, atk_stat, ignore_boosts, ignore_boosts);
                 let def = self.active_stat(table, foe_side, def_stat, ignore_boosts, false);
 
-                let bp = if mspec.special_kind == 13 {
+                let bp = if mspec.special_kind == SpecialMoveKind::FlailReversal {
                     // Flail / Reversal 6-band HP power table.
                     let ratio = (self.mons[att_idx].hp() as i32 * 48) / (table.mons[att_idx].maxhp.max(1) as i32);
                     if ratio <= 1 {
@@ -2824,17 +2961,12 @@ impl CompactBattle {
 
                 let (type_mod, is_immune) = table.effectiveness_ext(mspec.move_type, &table.mons[def_idx], def_foresight);
                 let weather = if self.weather_turns > 0 {
-                    match self.weather_kind {
-                        1 => CompactWeather::Rain,
-                        2 => CompactWeather::Sun,
-                        3 => CompactWeather::Sandstorm,
-                        _ => CompactWeather::None,
-                    }
+                    self.weather_kind
                 } else {
                     CompactWeather::None
                 };
                 let has_type_boost = (self.mons[att_idx].item != 0)
-                    & (mspec.move_type != 0xFF)
+                    & (mspec.move_type != NO_TYPE_ID)
                     & (table.mons[att_idx].item_boost_type == mspec.move_type);
 
                 let base_dmg = get_damage_base_branchless(
@@ -2856,7 +2988,7 @@ impl CompactBattle {
                     is_immune,
                 );
                 if base_dmg > 0 {
-                    let no_var = mspec.special_kind == 13;
+                    let no_var = mspec.special_kind == SpecialMoveKind::FlailReversal;
                     let roll = if no_var { 255 } else { 217 + rng.random(39) };
                     let mut final_dmg = apply_roll_branchless(base_dmg, roll, no_var);
                     if mspec.multihit_mean_x2 > 2 {
@@ -2900,11 +3032,14 @@ impl CompactBattle {
 
             // Hyper Beam sets mustrecharge on any non-immune hit (even on KO or Substitute).
             if mspec.is_recharge && hit_landed && self.mons[att_idx].hp() > 0 {
-                self.mons[att_idx].slot_refs |= 0x80;
+                self.mons[att_idx].set_must_recharge(true);
             }
 
             // Rapid Spin clears Spikes, Leech Seed, and trap on hit when user survives.
-            if mspec.special_kind == 28 && hit_landed && self.mons[att_idx].hp() > 0 {
+            if mspec.special_kind == SpecialMoveKind::RapidSpin
+                && hit_landed
+                && self.mons[att_idx].hp() > 0
+            {
                 self.sides[side].side_flags &= !0x03;
                 self.mons[att_idx].vol_flags &= !(vol_bit::LEECH_SEED | vol_bit::TRAPPED_OR_LOCKED);
             }
@@ -2946,25 +3081,30 @@ impl CompactBattle {
                 if mspec.sec_vol != 0 {
                     self.mons[def_idx].vol_flags |= mspec.sec_vol;
                     if (mspec.sec_vol & vol_bit::CONFUSION) != 0 {
-                        self.mons[def_idx].timers[0] = (2 + rng.random(4)) as u8;
+                        self.mons[def_idx].timers[timer_idx::CONFUSION] =
+                            (2 + rng.random(4)) as u8;
                     }
                 }
-                if mspec.sec_boost.0 != 0xFF {
-                    let is_self_boost = (mspec.sec_boost.0 & 0x80) != 0;
+                if mspec.sec_boost.0 != NO_STAT_IDX {
+                    let is_self_boost = (mspec.sec_boost.0 & SELF_BOOST_FLAG) != 0;
                     let b_idx = if is_self_boost { att_idx } else { def_idx };
-                    let st_i = (mspec.sec_boost.0 & 0x7F) as usize;
-                    if is_self_boost && st_i == 7 {
+                    let st_i = mspec.sec_boost.0 & !SELF_BOOST_FLAG;
+                    if is_self_boost && st_i == ANCIENTPOWER_ALL_STATS {
                         for stat_i in 0..5usize {
                             self.mons[b_idx].boosts[stat_i] =
                                 (self.mons[b_idx].boosts[stat_i] + mspec.sec_boost.1).clamp(-6, 6);
                         }
-                    } else if st_i < 7 {
-                        self.mons[b_idx].boosts[st_i] =
-                            (self.mons[b_idx].boosts[st_i] + mspec.sec_boost.1).clamp(-6, 6);
+                    } else if (st_i as usize) < 7 {
+                        let st = st_i as usize;
+                        self.mons[b_idx].boosts[st] =
+                            (self.mons[b_idx].boosts[st] + mspec.sec_boost.1).clamp(-6, 6);
                     }
                 }
             }
-            if mspec.special_kind == 16 && self.mons[att_idx].item == 0 && self.mons[def_idx].item != 0 {
+            if mspec.special_kind == SpecialMoveKind::Thief
+                && self.mons[att_idx].item == 0
+                && self.mons[def_idx].item != 0
+            {
                 // Thief steals target's held item.
                 self.mons[att_idx].item = self.mons[def_idx].item;
                 self.mons[def_idx].item = 0;
@@ -2976,7 +3116,7 @@ impl CompactBattle {
         }
 
         if !mspec.is_selfdestruct
-            && mspec.special_kind != 18
+            && mspec.special_kind != SpecialMoveKind::BatonPass
             && self.mons[att_idx].hp() > 0
             && self.mons[def_idx].hp() > 0
             && self.outcome == 0
@@ -3071,7 +3211,7 @@ impl CompactBattle {
             self.mons[idx].set_status(Status::Slp as u8, turns);
         } else if status_code == Status::Frz as u8 {
             if (target_tmask & (1u32 << (table.ice_type & 31))) != 0
-                || (self.weather_turns > 0 && self.weather_kind == CompactWeather::Sun as u8)
+                || (self.weather_turns > 0 && self.weather_kind == CompactWeather::Sun)
             {
                 return;
             }
@@ -3122,7 +3262,7 @@ impl CompactBattle {
         } else if spec.is_miracleberry && (st != 0 || (mon.vol_flags & vol_bit::CONFUSION) != 0) {
             mon.set_status(Status::None as u8, 0);
             mon.vol_flags &= !(vol_bit::CONFUSION | vol_bit::PAR_SPEED_DROP | vol_bit::BRN_ATK_DROP);
-            mon.timers[0] = 0;
+            mon.timers[timer_idx::CONFUSION] = 0;
             mon.item = 0;
         } else if spec.is_goldberry && mon.hp() <= spec.maxhp / 2 {
             mon.hp_pool[0] = (mon.hp() + 30).min(spec.maxhp);
@@ -3147,49 +3287,52 @@ impl CompactBattle {
         rng: &mut Prng,
     ) {
         match mspec.special_kind {
-            1 => {
+            SpecialMoveKind::Reflect => {
                 if self.sides[side].reflect_turns == 0 {
                     self.sides[side].reflect_turns = 5;
                 }
             }
-            2 => {
+            SpecialMoveKind::LightScreen => {
                 if self.sides[side].lightscreen_turns == 0 {
                     self.sides[side].lightscreen_turns = 5;
                 }
             }
-            3 => {
+            SpecialMoveKind::Safeguard => {
                 if self.sides[side].safeguard_turns == 0 {
                     self.sides[side].safeguard_turns = 5;
                 }
             }
-            4 => {
+            SpecialMoveKind::Spikes => {
                 if (self.sides[foe_side].side_flags & 0x03) == 0 {
                     self.sides[foe_side].side_flags |= 1;
                 }
             }
-            5 => {
+            SpecialMoveKind::Curse => {
                 // Curse: non-Ghost (+1 Atk, +1 Def, -1 Spe), Ghost (-50% HP, inflicts Curse).
                 let is_ghost = (table.mons[att_idx].type_mask & (1u32 << (table.ghost_type & 31))) != 0;
                 if !is_ghost {
-                    self.mons[att_idx].boosts[0] = (self.mons[att_idx].boosts[0] + 1).clamp(-6, 6);
-                    self.mons[att_idx].boosts[1] = (self.mons[att_idx].boosts[1] + 1).clamp(-6, 6);
-                    self.mons[att_idx].boosts[4] = (self.mons[att_idx].boosts[4] - 1).clamp(-6, 6);
+                    self.mons[att_idx].boosts[stat_idx::ATK] =
+                        (self.mons[att_idx].boosts[stat_idx::ATK] + 1).clamp(-6, 6);
+                    self.mons[att_idx].boosts[stat_idx::DEF] =
+                        (self.mons[att_idx].boosts[stat_idx::DEF] + 1).clamp(-6, 6);
+                    self.mons[att_idx].boosts[stat_idx::SPE] =
+                        (self.mons[att_idx].boosts[stat_idx::SPE] - 1).clamp(-6, 6);
                 } else if self.mons[def_idx].sub_hp() == 0 && (self.mons[def_idx].vol_flags & vol_bit::CURSE) == 0 {
                     let cost = (table.mons[att_idx].maxhp / 2).max(1);
                     self.mons[att_idx].apply_damage_branchless(cost, true);
                     self.mons[def_idx].vol_flags |= vol_bit::CURSE;
                 }
             }
-            6 => {
+            SpecialMoveKind::BellyDrum => {
                 // Belly Drum: costs 50% maxhp and sets Attack stage to +6.
                 let cost = table.mons[att_idx].maxhp / 2;
-                if self.mons[att_idx].hp() > cost && self.mons[att_idx].boosts[0] < 6 {
+                if self.mons[att_idx].hp() > cost && self.mons[att_idx].boosts[stat_idx::ATK] < 6 {
                     self.mons[att_idx].hp_pool[0] -= cost;
-                    self.mons[att_idx].boosts[0] = 6;
+                    self.mons[att_idx].boosts[stat_idx::ATK] = 6;
                     self.check_berry_triggers(table, side);
                 }
             }
-            7 => {
+            SpecialMoveKind::Phaze => {
                 // Roar / Whirlwind: in Gen 2, fails if user moves before target; otherwise force-switches foe to a random alive bench member.
                 if moved_second {
                     let mask = self.sides[foe_side].alive_mask & !(1 << self.sides[foe_side].active_idx);
@@ -3203,42 +3346,42 @@ impl CompactBattle {
                     }
                 }
             }
-            8 => {
+            SpecialMoveKind::Encore => {
                 // Encore: locks target into its last move for 3..6 turns when target has no Sub.
                 if self.mons[def_idx].sub_hp() == 0
                     && (self.mons[def_idx].vol_flags & vol_bit::ENCORE) == 0
-                    && (self.mons[def_idx].slot_refs & 0x40) != 0
                 {
-                    let lm = (self.mons[def_idx].slot_refs & 0x03) as usize;
-                    if lm < table.mons[def_idx].num_moves as usize
-                        && self.mons[def_idx].pp[lm] > 0
-                        && table.move_specs[def_idx][lm].special_kind != 8
-                    {
-                        self.mons[def_idx].vol_flags |= vol_bit::ENCORE;
-                        self.mons[def_idx].timers[1] = (3 + rng.random(4)) as u8;
-                        self.mons[def_idx].set_encore_slot(lm as u8);
+                    if let Some(lm) = self.mons[def_idx].last_move_slot().map(|s| s as usize) {
+                        if lm < table.mons[def_idx].num_moves as usize
+                            && self.mons[def_idx].pp[lm] > 0
+                            && table.move_specs[def_idx][lm].special_kind != SpecialMoveKind::Encore
+                        {
+                            self.mons[def_idx].vol_flags |= vol_bit::ENCORE;
+                            self.mons[def_idx].timers[timer_idx::ENCORE] =
+                                (3 + rng.random(4)) as u8;
+                            self.mons[def_idx].set_encore_slot(lm as u8);
+                        }
                     }
                 }
             }
-            9 => {
+            SpecialMoveKind::Disable => {
                 // Disable: disables target's last move for 2..7 turns when target has no Sub.
                 if self.mons[def_idx].sub_hp() == 0
                     && (self.mons[def_idx].vol_flags & vol_bit::DISABLE) == 0
-                    && (self.mons[def_idx].slot_refs & 0x40) != 0
                 {
-                    let lm = (self.mons[def_idx].slot_refs & 0x03) as usize;
-                    if lm < table.mons[def_idx].num_moves as usize
-                        && self.mons[def_idx].pp[lm] > 0
-                    {
-                        self.mons[def_idx].vol_flags |= vol_bit::DISABLE;
-                        self.mons[def_idx].timers[2] = (2 + rng.random(6)) as u8;
-                        self.mons[def_idx].slot_refs =
-                            (self.mons[def_idx].slot_refs & !(0x03 << 4))
-                                | (((lm as u8) & 0x03) << 4);
+                    if let Some(lm) = self.mons[def_idx].last_move_slot().map(|s| s as usize) {
+                        if lm < table.mons[def_idx].num_moves as usize
+                            && self.mons[def_idx].pp[lm] > 0
+                        {
+                            self.mons[def_idx].vol_flags |= vol_bit::DISABLE;
+                            self.mons[def_idx].timers[timer_idx::DISABLE] =
+                                (2 + rng.random(6)) as u8;
+                            self.mons[def_idx].set_disable_slot(lm as u8);
+                        }
                     }
                 }
             }
-            17 => {
+            SpecialMoveKind::PainSplit => {
                 // Pain Split: average HP when target has no Substitute.
                 if self.mons[def_idx].sub_hp() == 0 {
                     let avg = ((self.mons[att_idx].hp() + self.mons[def_idx].hp()) / 2).max(1);
@@ -3246,11 +3389,11 @@ impl CompactBattle {
                     self.mons[def_idx].hp_pool[0] = avg.min(table.mons[def_idx].maxhp);
                 }
             }
-            18 => {
+            SpecialMoveKind::BatonPass => {
                 // Baton Pass: switch to best alive bench receiver passing boosts/sub/volatiles.
                 let mask = self.sides[side].alive_mask & !(1 << self.sides[side].active_idx);
                 if mask != 0 {
-                    let bp_fix = (self.sides[0].side_flags & 0x80) == 0;
+                    let bp_fix = (self.sides[0].side_flags & SIDE0_DISABLE_BP_FIX) == 0;
                     let mut best_slot = mask.trailing_zeros() as u8;
                     if !bp_fix {
                         let mut best_hp = -1i32;
@@ -3285,7 +3428,6 @@ impl CompactBattle {
                                         s_i as usize,
                                         foe_side,
                                         foe_slot,
-                                        true,
                                     );
                                     let saved = self.mons[idx].boosts;
                                     self.mons[idx].boosts = passed_boosts;
@@ -3295,7 +3437,6 @@ impl CompactBattle {
                                         s_i as usize,
                                         foe_side,
                                         foe_slot,
-                                        true,
                                     );
                                     self.mons[idx].boosts = saved;
                                     (boosted_h - base_h).clamp(0.0, 1.0)
@@ -3313,7 +3454,7 @@ impl CompactBattle {
                     self.exec_switch(table, side, best_slot.min(2), true);
                 }
             }
-            19 => {
+            SpecialMoveKind::PerishSong => {
                 // Perish Song
                 if self.sides[side].alive_mask.count_ones() > 1 {
                     for &idx in &[att_idx, def_idx] {
@@ -3324,12 +3465,12 @@ impl CompactBattle {
                     }
                 }
             }
-            20 => {
+            SpecialMoveKind::DestinyBond => {
                 if self.sides[side].alive_mask.count_ones() > 1 {
                     self.mons[att_idx].vol_flags |= vol_bit::DESTINY_BOND;
                 }
             }
-            21 => {
+            SpecialMoveKind::HealBell => {
                 // Heal Bell cures party statuses.
                 for p_i in 0..3usize {
                     let m = &mut self.mons[side * 3 + p_i];
@@ -3339,29 +3480,29 @@ impl CompactBattle {
                     }
                 }
             }
-            22 => {
+            SpecialMoveKind::PsychUp => {
                 // Psych Up
                 self.mons[att_idx].boosts = self.mons[def_idx].boosts;
             }
-            23 => {
-                self.weather_kind = CompactWeather::Rain as u8;
+            SpecialMoveKind::RainDance => {
+                self.weather_kind = CompactWeather::Rain;
                 self.weather_turns = 5;
             }
-            24 => {
-                self.weather_kind = CompactWeather::Sun as u8;
+            SpecialMoveKind::SunnyDay => {
+                self.weather_kind = CompactWeather::Sun;
                 self.weather_turns = 5;
             }
-            25 => {
-                self.weather_kind = CompactWeather::Sandstorm as u8;
+            SpecialMoveKind::Sandstorm => {
+                self.weather_kind = CompactWeather::Sandstorm;
                 self.weather_turns = 5;
             }
-            26 => {
+            SpecialMoveKind::MeanLook => {
                 // Mean Look / Spider Web
                 if self.mons[def_idx].sub_hp() == 0 {
                     self.mons[def_idx].vol_flags |= vol_bit::TRAPPED_OR_LOCKED;
                 }
             }
-            27 => {
+            SpecialMoveKind::Haze => {
                 // Haze
                 self.mons[att_idx].boosts = [0; 7];
                 self.mons[def_idx].boosts = [0; 7];
@@ -3380,7 +3521,14 @@ impl CompactBattle {
             }
         }
         if mspec.primary_vol != 0
-            && !matches!(mspec.special_kind, 5 | 8 | 9 | 19 | 20)
+            && !matches!(
+                mspec.special_kind,
+                SpecialMoveKind::Curse
+                    | SpecialMoveKind::Encore
+                    | SpecialMoveKind::Disable
+                    | SpecialMoveKind::PerishSong
+                    | SpecialMoveKind::DestinyBond
+            )
             && mspec.primary_vol != vol_bit::DESTINY_BOND
             && self.mons[def_idx].sub_hp() == 0
         {
@@ -3391,7 +3539,8 @@ impl CompactBattle {
             if !seed_immune && !night_fail {
                 self.mons[def_idx].vol_flags |= mspec.primary_vol;
                 if (mspec.primary_vol & vol_bit::CONFUSION) != 0 {
-                    self.mons[def_idx].timers[0] = (2 + rng.random(4)) as u8;
+                    self.mons[def_idx].timers[timer_idx::CONFUSION] =
+                        (2 + rng.random(4)) as u8;
                 }
             }
         }
@@ -3409,8 +3558,8 @@ impl CompactBattle {
     /// Gen 2 end-of-turn `Residual` (Weather, Leftovers, Perish Song, Screens).
     #[inline]
     fn exec_residuals(&mut self, table: &MatchTable, rng: &mut Prng) {
-        let s0 = self.active_stat(table, 0, 4, false, false);
-        let s1 = self.active_stat(table, 1, 4, false, false);
+        let s0 = self.active_stat(table, 0, stat_idx::SPE, false, false);
+        let s1 = self.active_stat(table, 1, stat_idx::SPE, false, false);
         let first = if s0 == s1 {
             (rng.random(2) == 1) as usize
         } else {
@@ -3419,11 +3568,11 @@ impl CompactBattle {
         let order = [first, first ^ 1];
 
         // Weather countdown and Sandstorm damage.
-        if self.weather_kind != 0 {
+        if self.weather_kind != CompactWeather::None {
             self.weather_turns = self.weather_turns.saturating_sub(1);
             if self.weather_turns == 0 {
-                self.weather_kind = 0;
-            } else if self.weather_kind == CompactWeather::Sandstorm as u8 {
+                self.weather_kind = CompactWeather::None;
+            } else if self.weather_kind == CompactWeather::Sandstorm {
                 for &side in &order {
                     let p_idx = self.sides[side].active_idx as usize;
                     let idx = side * 3 + p_idx;
@@ -3484,19 +3633,19 @@ impl CompactBattle {
             }
             if (self.mons[idx].vol_flags & vol_bit::ENCORE) != 0 {
                 let enc_slot = self.mons[idx].encore_slot() as usize;
-                let rem = self.mons[idx].timers[1].saturating_sub(1);
-                self.mons[idx].timers[1] = rem;
+                let rem = self.mons[idx].timers[timer_idx::ENCORE].saturating_sub(1);
+                self.mons[idx].timers[timer_idx::ENCORE] = rem;
                 if rem == 0
                     || enc_slot >= spec.num_moves as usize
                     || self.mons[idx].pp[enc_slot] == 0
                 {
                     self.mons[idx].vol_flags &= !vol_bit::ENCORE;
-                    self.mons[idx].timers[1] = 0;
+                    self.mons[idx].timers[timer_idx::ENCORE] = 0;
                 }
             }
             if (self.mons[idx].vol_flags & vol_bit::DISABLE) != 0 {
-                let rem = self.mons[idx].timers[2].saturating_sub(1);
-                self.mons[idx].timers[2] = rem;
+                let rem = self.mons[idx].timers[timer_idx::DISABLE].saturating_sub(1);
+                self.mons[idx].timers[timer_idx::DISABLE] = rem;
                 if rem == 0 {
                     self.mons[idx].vol_flags &= !vol_bit::DISABLE;
                 }
@@ -3611,7 +3760,7 @@ impl CompactBattle {
     /// with 2 bench options remaining (`request == 2`).
     pub fn step_switch(&mut self, table: &MatchTable, switch_actions: [u8; 2]) {
         let mut rng = Prng::new(self.prng_seed);
-        let bp_fix = (self.sides[0].side_flags & 0x80) == 0;
+        let bp_fix = (self.sides[0].side_flags & SIDE0_DISABLE_BP_FIX) == 0;
         for side in 0..2usize {
             if self.sides[side].request == 2 {
                 let act = switch_actions[side];
@@ -3690,25 +3839,20 @@ impl CompactBattle {
         let mut n = 0;
         let idx = side * 3 + side_st.active_idx as usize;
         let mon = &self.mons[idx];
-        if (mon.slot_refs & 0x80) != 0 {
+        if mon.must_recharge() {
             out[0] = 0; // Forced Recharge turn cannot choose other moves or switch
             return 1;
         }
         let num_moves = table.mons[idx].num_moves as usize;
-        let is_disabled = (mon.vol_flags & vol_bit::DISABLE) != 0;
-        let dis_slot = ((mon.slot_refs >> 4) & 0x03) as usize;
         if (mon.vol_flags & vol_bit::ENCORE) != 0 {
             let enc_slot = mon.encore_slot() as usize;
-            if enc_slot < num_moves
-                && mon.pp[enc_slot] > 0
-                && !(is_disabled && enc_slot == dis_slot)
-            {
+            if enc_slot < num_moves && mon.pp[enc_slot] > 0 && !mon.is_slot_disabled(enc_slot) {
                 out[0] = enc_slot as u8;
                 n = 1;
             }
         } else {
             for m in 0..num_moves {
-                if mon.pp[m] > 0 && !(is_disabled && m == dis_slot) {
+                if mon.pp[m] > 0 && !mon.is_slot_disabled(m) {
                     out[n] = m as u8;
                     n += 1;
                 }
@@ -4332,14 +4476,14 @@ mod tests {
             // Moonlight weather scaling: Clear=1/2, Sun=maxhp, Rain=1/4
             let mut cb_moon = base;
             cb_moon.mons[0].hp_pool[0] = 10;
-            cb_moon.weather_kind = CompactWeather::Sun as u8;
+            cb_moon.weather_kind = CompactWeather::Sun;
             cb_moon.weather_turns = 3;
             cb_moon.step_turn(&t, [2, 1]);
             assert_eq!(cb_moon.mons[0].hp(), t.mons[0].maxhp);
 
             let mut cb_rain = base;
             cb_rain.mons[0].hp_pool[0] = 10;
-            cb_rain.weather_kind = CompactWeather::Rain as u8;
+            cb_rain.weather_kind = CompactWeather::Rain;
             cb_rain.weather_turns = 3;
             cb_rain.step_turn(&t, [2, 1]);
             assert_eq!(cb_rain.mons[0].hp(), 10 + (t.mons[0].maxhp / 4).max(1));
@@ -4380,24 +4524,24 @@ mod tests {
             b.choose(&dex, 0, "team 1").unwrap();
             b.choose(&dex, 1, "team 1").unwrap();
             let (t, mut cb) = CompactBattle::from_battle(&b, &dex);
-            let sf = cb.expected_hit_fraction(&t, 0, 0, 1, 0, 0, true);
+            let sf = cb.expected_hit_fraction(&t, 0, 0, 1, 0, 0);
             assert!(sf > 0.4 && sf < 0.6, "Super Fang expected hit fraction ~0.5: {sf}");
-            cb.weather_kind = CompactWeather::Rain as u8;
+            cb.weather_kind = CompactWeather::Rain;
             cb.weather_turns = 3;
-            let fw_rain = cb.expected_hit_fraction(&t, 0, 0, 1, 0, 1, true);
-            let surf_rain = cb.expected_hit_fraction(&t, 1, 0, 0, 0, 0, true);
-            let sb_rain = cb.expected_hit_fraction(&t, 1, 0, 0, 0, 1, true);
-            cb.weather_kind = CompactWeather::None as u8;
+            let fw_rain = cb.expected_hit_fraction(&t, 0, 0, 1, 0, 1);
+            let surf_rain = cb.expected_hit_fraction(&t, 1, 0, 0, 0, 0);
+            let sb_rain = cb.expected_hit_fraction(&t, 1, 0, 0, 0, 1);
+            cb.weather_kind = CompactWeather::None;
             cb.weather_turns = 0;
-            let fw_clear = cb.expected_hit_fraction(&t, 0, 0, 1, 0, 1, true);
-            let surf_clear = cb.expected_hit_fraction(&t, 1, 0, 0, 0, 0, true);
-            let sb_clear = cb.expected_hit_fraction(&t, 1, 0, 0, 0, 1, true);
+            let fw_clear = cb.expected_hit_fraction(&t, 0, 0, 1, 0, 1);
+            let surf_clear = cb.expected_hit_fraction(&t, 1, 0, 0, 0, 0);
+            let sb_clear = cb.expected_hit_fraction(&t, 1, 0, 0, 0, 1);
             assert!(fw_rain < fw_clear);
             assert!(surf_rain > surf_clear);
             assert!(sb_rain < sb_clear);
             // cfg!(debug_assertions) inside best_hit_fraction checks bit-for-bit equality with expected_hit_fraction:
-            let _ = cb.best_hit_fraction(&t, 0, 0, 1, 0, true);
-            let _ = cb.best_hit_fraction(&t, 1, 0, 0, 0, true);
+            let _ = cb.best_hit_fraction(&t, 0, 0, 1, 0);
+            let _ = cb.best_hit_fraction(&t, 1, 0, 0, 0);
         }
 
         // 8. Hyper Beam mustrecharge, Haze clearing status speed/atk drops, Pain Split vs Sub,
@@ -4422,13 +4566,13 @@ mod tests {
             let mut cb_hb = base;
             cb_hb.prng_seed = 1;
             cb_hb.step_turn(&t, [0, 2]); // Hyper Beam vs Spikes (Steel resists Normal -> non-KO)
-            assert_ne!(cb_hb.mons[0].slot_refs & 0x80, 0, "Hyper Beam hit must set mustrecharge");
+            assert!(cb_hb.mons[0].must_recharge(), "Hyper Beam hit must set mustrecharge");
             let mut legal = [0u8; 7];
             let n_legal = cb_hb.legal_actions(&t, 0, &mut legal);
             assert_eq!(&legal[..n_legal], &[0]);
             cb_hb.mons[0].vol_flags |= vol_bit::DESTINY_BOND;
             cb_hb.step_turn(&t, [0, 2]); // Recharge turn aborts any armed DBond via onMoveAborted
-            assert_eq!(cb_hb.mons[0].slot_refs & 0x80, 0);
+            assert!(!cb_hb.mons[0].must_recharge());
             assert_eq!(cb_hb.mons[0].vol_flags & vol_bit::DESTINY_BOND, 0);
 
             // Haze clears PAR_SPEED_DROP and BRN_ATK_DROP alongside boosts.

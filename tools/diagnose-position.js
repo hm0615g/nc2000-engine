@@ -24,7 +24,30 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+const { execSync } = require('child_process');
+
 const REPO = path.resolve(__dirname, '..');
+
+function resolveManifest() {
+  for (const candidate of [
+    path.join(REPO, 'engine-manifest.json'),
+    path.join(REPO, 'dist/nc2000-core-sdk/engine-manifest.json'),
+  ]) {
+    if (fs.existsSync(candidate)) {
+      return JSON.parse(fs.readFileSync(candidate, 'utf8'));
+    }
+  }
+  return null;
+}
+
+function resolveGitSha(manifest) {
+  if (manifest?.engine_git_sha) return manifest.engine_git_sha;
+  try {
+    return execSync('git rev-parse HEAD', { cwd: REPO, encoding: 'utf8' }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
 
 let wasmModule = null;
 let wasmDexInstance = null;
@@ -124,12 +147,10 @@ function parseArgs() {
 function runSelfCheck() {
   try {
     const { wasm, dex } = getWasm();
-    const manifestPath = path.join(REPO, 'engine-manifest.json');
-    let manifest = null;
+    const manifest = resolveManifest();
     let manifestVerified = false;
 
-    if (fs.existsSync(manifestPath)) {
-      manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    if (manifest) {
       const wasmBgPath = path.join(REPO, 'crates/wasm/pkg-node/nc2000_wasm_bg.wasm');
       if (fs.existsSync(wasmBgPath)) {
         const wasmSha = crypto.createHash('sha256').update(fs.readFileSync(wasmBgPath)).digest('hex');
@@ -139,7 +160,7 @@ function runSelfCheck() {
 
     const report = {
       status: 'OK',
-      engine_git_sha: manifest ? manifest.engine_git_sha : 'unknown',
+      engine_git_sha: resolveGitSha(manifest),
       manifest_present: manifest !== null,
       manifest_verified: manifestVerified,
       wasm_loaded: true,
@@ -349,16 +370,13 @@ function runDiagnosis() {
     verdict = 'CATEGORY_C3_HORIZON_DESPERATION';
   }
 
-  const manifestPath = path.join(REPO, 'engine-manifest.json');
-  const manifest = fs.existsSync(manifestPath)
-    ? JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-    : null;
+  const manifest = resolveManifest();
 
   const positionHash = crypto.createHash('sha256').update(specRaw).digest('hex').slice(0, 16);
 
   const report = {
     schema: 'nc2000-triage-report-v1',
-    engine_sha: manifest?.engine_git_sha || 'unknown',
+    engine_sha: resolveGitSha(manifest),
     position_hash: positionHash,
     spec_valid: true,
     verdict,

@@ -2,7 +2,7 @@
 //! must not do.
 
 use super::common;
-use nc2000_bot::smmcts::{dominated_actions, dominated_actions_with, MaskRules};
+use nc2000_bot::smmcts::dominated_actions;
 use nc2000_engine::battle::{EffectHandle, PokemonSet, SearchChoice};
 use nc2000_engine::dex::Dex;
 use nc2000_engine::state::{Battle, PokeId, Status, DK};
@@ -79,41 +79,17 @@ fn no_shadowing_of_downstream_rules() {
     asleep.set_status(dex, me, "slp", Some(me), EffectHandle::None, true);
     asleep.poke_mut(me).status_state.set_int(DK::Time, 3);
     let shipped = reasons(dominated_actions(&asleep, dex, 0), dex, "snore");
-    let legacy = reasons(
-        dominated_actions_with(
-            &asleep,
-            dex,
-            0,
-            MaskRules {
-                sleep_talk_awake: false,
-                ..MaskRules::default()
-            },
-        ),
-        dex,
-        "snore",
-    );
 
     // (b) user AWAKE but SLOWER: same non-shadowing guarantee.
     let mut slow = b.clone();
     slow.poke_mut(foe).boosts[4] = 6;
     let shipped_s = reasons(dominated_actions(&slow, dex, 0), dex, "snore");
-    let legacy_s = reasons(
-        dominated_actions_with(
-            &slow,
-            dex,
-            0,
-            MaskRules {
-                sleep_talk_awake: false,
-                ..MaskRules::default()
-            },
-        ),
-        dex,
-        "snore",
-    );
 
-    assert!(!legacy.is_empty(), "legacy mask must refuse Snore into a stranded Ghost");
-    assert_eq!(shipped, legacy, "the awake-Sleep-Talk rule shadowed the type-immunity rule");
-    assert_eq!(shipped_s, legacy_s, "same, for an awake but slower user");
+    assert!(
+        !shipped.is_empty() && shipped.iter().all(|w| !w.starts_with("Sleep Talk")),
+        "shipped mask must refuse Snore via downstream type-immunity: {shipped:?}"
+    );
+    assert_eq!(shipped, shipped_s, "same, for an awake but slower user");
 }
 
 #[test]

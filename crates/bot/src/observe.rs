@@ -341,7 +341,7 @@ impl Observer {
         for (slot, ms) in spec.sides[opp].mons.iter().enumerate() {
             if slot < obs.mons.len() {
                 obs.opp_hp[slot] = if ms.fainted {
-                    Some((0, 100))
+                    Some((0, crate::import::HP_DEN_PERCENT as u32))
                 } else if ms.hp_den > 0 {
                     Some((ms.hp_num.max(0) as u32, ms.hp_den as u32))
                 } else {
@@ -700,8 +700,9 @@ impl Observer {
                             if num < den && !self.opp_leftovers_healed {
                                 dirty |= self.exclude_items(m, ITEM_LEFTOVERS);
                             }
-                            if (den == 100 && num * 2 < 100)
-                                || (den != 100 && (num + 1) * 2 <= den)
+                            let pct = crate::import::HP_DEN_PERCENT as u32;
+                            if (den == pct && num * 2 < pct)
+                                || (den != pct && (num + 1) * 2 <= den)
                             {
                                 dirty |= self.exclude_items(
                                     m,
@@ -756,7 +757,7 @@ impl Observer {
                     self.called_locked.iter_mut().for_each(|c| *c = None);
                     self.opp_confused = false;
                     if let Some(m) = self.opp_subject(subj).or(self.opp_active) {
-                        self.opp_hp[m] = Some((0, 100));
+                        self.opp_hp[m] = Some((0, crate::import::HP_DEN_PERCENT as u32));
                         self.opp_status[m] = Status::None;
                     }
                     self.opp_active = None;
@@ -1077,7 +1078,7 @@ impl Observer {
     fn parse_hp_status(s: &str) -> (Option<(u32, u32)>, Status) {
         let s = s.trim();
         if s == "0 fnt" || s.starts_with("0 ") {
-            return (Some((0, 100)), Status::None);
+            return (Some((0, crate::import::HP_DEN_PERCENT as u32)), Status::None);
         }
         let mut iter = s.split_whitespace();
         let hp = iter.next().and_then(|frac| {

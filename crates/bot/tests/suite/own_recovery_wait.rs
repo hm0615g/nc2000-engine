@@ -1,6 +1,6 @@
 use super::common;
 use nc2000_bot::{
-    smmcts::{dominated_actions_with, MaskRules, SelRule},
+    smmcts::{dominated_actions, SelRule},
     Belief, BlindSearch, Observer, RmConfig,
 };
 use nc2000_engine::{
@@ -8,7 +8,7 @@ use nc2000_engine::{
     state::{Battle, PokeId, Status},
 };
 
-#[path = "../../examples/own_recovery_support/mod.rs"]
+#[path = "../support/own_recovery_wait.rs"]
 mod fixture;
 
 #[test]
@@ -19,34 +19,20 @@ fn recovery_wait_preserves_search_and_removes_retaliation_loss() {
     let mut belief = Belief::pinned_from_battle(&preview, &obs);
     obs.observe(&b, dex);
     belief.sync(dex, &obs);
-    let searches: Vec<_> = [false, true]
-        .into_iter()
-        .map(|enabled| {
-            let mut s = BlindSearch::new(
-                &b,
-                dex,
-                RmConfig {
-                    c: 0.4,
-                    rule: SelRule::Ucb,
-                    mask_rules: MaskRules {
-                        own_recovery_wait: enabled,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-                0,
-                91001,
-            );
-            s.step(dex, &belief, &obs, 3000);
-            s
-        })
-        .collect();
+    let mut s = BlindSearch::new(
+        &b,
+        dex,
+        RmConfig {
+            c: 0.4,
+            rule: SelRule::Ucb,
+            ..Default::default()
+        },
+        0,
+        91001,
+    );
+    s.step(dex, &belief, &obs, 3000);
     assert!(matches!(
-        searches[0].best().unwrap().to_input(dex).as_str(),
-        "move return" | "move bodyslam"
-    ));
-    assert!(matches!(
-        searches[1].best().unwrap().to_input(dex).as_str(),
+        s.best().unwrap().to_input(dex).as_str(),
         "move toxic" | "move thunderwave"
     ));
 }
@@ -107,28 +93,25 @@ fn only_a_living_injured_active_holder_relaxes_noops_and_never_forfeit_guards() 
                 "zero_hp" => b.poke_mut(me).hp = 0,
                 _ => {}
             }
-            let old = dominated_actions_with(
-                &b,
-                &dex,
-                side,
-                MaskRules {
-                    own_recovery_wait: false,
-                    ..Default::default()
-                },
-            );
-            let new = dominated_actions_with(&b, &dex, side, MaskRules::default());
+            let excluded = dominated_actions(&b, &dex, side);
+            if case == "fainted" {
+                assert!(excluded.is_empty(), "{side} {case}");
+                continue;
+            }
             if case != "injured" {
-                assert_eq!(old, new, "{side} {case}");
+                for key in ["snore", "sleeptalk", "explosion", "spore"] {
+                    let a = SearchChoice::Move(dex.moves.id(key).unwrap());
+                    assert!(excluded.iter().any(|(c, _)| *c == a), "{side} {case} {key}");
+                }
                 continue;
             }
             for key in ["snore", "sleeptalk"] {
                 let a = SearchChoice::Move(dex.moves.id(key).unwrap());
-                assert!(old.iter().any(|(c, _)| *c == a));
-                assert!(!new.iter().any(|(c, _)| *c == a));
+                assert!(!excluded.iter().any(|(c, _)| *c == a), "{side} {key}");
             }
             for key in ["explosion", "spore"] {
                 let a = SearchChoice::Move(dex.moves.id(key).unwrap());
-                assert!(new.iter().any(|(c, _)| *c == a), "{side} {key}");
+                assert!(excluded.iter().any(|(c, _)| *c == a), "{side} {key}");
             }
         }
     }

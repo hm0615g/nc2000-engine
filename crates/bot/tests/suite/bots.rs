@@ -292,7 +292,7 @@ fn conformant_baseline_sees_callback_powered_moves() {
             }
             if !dmg
                 .iter()
-                .any(|&id| eval::expected_hit_fraction(&battle, &dex, att, def, id, true) > 0.0)
+                .any(|&id| eval::expected_hit_fraction(&battle, &dex, att, def, id) > 0.0)
             {
                 continue;
             }
@@ -302,7 +302,7 @@ fn conformant_baseline_sees_callback_powered_moves() {
             let conformant = MaxDamageAgent::conformant().choose(&battle, &dex, 0, &choices);
             let is_hit = |c: SearchChoice| match c {
                 SearchChoice::Move(id) => {
-                    eval::expected_hit_fraction(&battle, &dex, att, def, id, true) > 0.0
+                    eval::expected_hit_fraction(&battle, &dex, att, def, id) > 0.0
                 }
                 _ => false,
             };

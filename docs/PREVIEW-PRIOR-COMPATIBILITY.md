@@ -11,21 +11,20 @@ weight ratios within each shell before hashing. Team IDs, descriptions, JSON
 formatting, team/roster order, equivalent even IVs, and proportional rescaling
 do not invalidate policies. Move slot order remains part of the set identity,
 as in the native bake. Nicknames, abilities, and natures are not engine inputs
-to this Gen 2 preview game. Dex and source changes retain their existing strict
-checks; semantic prior compatibility does not authorize source migration.
+to this Gen 2 preview game. Dex and catalog/epoch dependencies retain their strict
+checks; semantic prior compatibility does not bypass `POLICY_EPOCH`.
 
-The artifacts retain their original `priorSha256` and `inputs` provenance.
-`priorDependencies` records the bake's shell fingerprints. Metadata can only
-be attached by `tools/preview-prior-metadata.mjs` while all original bake inputs
-still match. Fresh activation installs this metadata automatically. The raw
-bake manifest remains a record of the original, pre-metadata bake files.
+The artifacts record `priorSha256`, `dexSha256`, `catalogSha256`, and
+`policyEpoch` (`POLICY_EPOCH`). `priorDependencies` records the bake's shell
+fingerprints; metadata can be attached by `tools/preview-prior-metadata.mjs`
+while `dexSha256` and `priorSha256` still match.
 
 At runtime each key requires matching fingerprints for both shells. Affected
 keys use live preview search until recomputed; unaffected keys keep their
 original quantized choices. The build reports the number of affected keys,
 rather than retiring the whole artifact. A legacy artifact without semantic
 evidence retains the strict whole-file prior check. Changed catalog, dex,
-coefficient, and source dependencies are not exempted by this change.
+coefficient, and `POLICY_EPOCH` mismatches fall back cleanly to live preview search.
 
 ## Full bakes and partial invalidation behavior
 
@@ -38,6 +37,7 @@ reject incompatible custom priors and fall back to live search using
 `data/live-search.json`.
 
 Rebuilding or expanding the opponent prior does not alter own-team catalog sets
-or Nash draw weights. For the current compiled preview artifact status and
-re-bake workflow, see [`data/preview-training-v3/README.md`](../data/preview-training-v3/README.md)
+or Nash draw weights. For the compiled preview artifact and re-bake workflow,
+see [`data/compiled-preview-v1.json`](../data/compiled-preview-v1.json),
+[`crates/bot/examples/meta_eco/catalog_preview.rs`](../crates/bot/examples/meta_eco/catalog_preview.rs),
 and [`data/belief-pool-v3/README.md`](../data/belief-pool-v3/README.md).

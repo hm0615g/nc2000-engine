@@ -11,7 +11,14 @@ use crate::{
     state::Battle,
 };
 
-include!(concat!(env!("OUT_DIR"), "/replay_version.rs"));
+/// Bump manually ONLY when `Battle` state transitions, PRNG draws, or legal-choice ordering change.
+pub const ENGINE_EPOCH: u32 = 1;
+
+/// Replay compatibility tag for `ENGINE_EPOCH`. Epoch 1 preserves the historical tag
+/// checked by `NC2-…` records and `fixtures/replay/transition-compatible.json`.
+pub const ENGINE_FINGERPRINT: [u8; 16] = [
+    41, 101, 229, 191, 83, 13, 34, 22, 119, 166, 40, 224, 139, 210, 186, 231,
+];
 
 pub const PREFIX: &str = "NC2-";
 const HEADER: usize = 48;

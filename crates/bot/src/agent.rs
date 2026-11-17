@@ -229,7 +229,7 @@ impl Agent for MaxDamageAgent {
                             // current HP is order-identical to ranking by
                             // expected damage: the divisor is the same for
                             // every move at one decision.
-                            crate::eval::expected_hit_fraction(battle, dex, att, def, *id, true)
+                            crate::eval::expected_hit_fraction(battle, dex, att, def, *id)
                         } else {
                             Self::move_score(dex, battle.poke(att), battle.poke(def), *id)
                         }
