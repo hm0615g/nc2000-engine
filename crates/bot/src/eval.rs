@@ -433,6 +433,17 @@ pub fn eval_leaf_blindspot_cached(
     compact_eval_leaf_blindspot(&cb, &table, w)
 }
 
+#[inline]
+pub fn eval_leaf_blindspot_norelay_cached(
+    b: &Battle,
+    dex: &Dex,
+    w: &EvalWeights,
+    roster_cache: Option<&nc2000_engine::compact::RosterCompactCache>,
+) -> f64 {
+    let (table, cb) = CompactBattle::from_battle_with_roster_cache(b, dex, roster_cache);
+    compact_eval_leaf_blindspot_norelay(&cb, &table, w)
+}
+
 
 /// Best expected hit fraction over the attacker's usable move slots
 /// (unclamped: >1 = expected OHKO with margin). `couple_evasion` folds the
@@ -788,19 +799,42 @@ pub fn compact_eval_leaf(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights
     0.5 + w.leaf_alpha * (compact_eval01(cb, table, w) - 0.5)
 }
 
-/// Leaf evaluation on `CompactBattle` with surgical blind-spot balance-sheet accounting.
+/// Leaf evaluation on `CompactBattle` with surgical blind-spot balance-sheet accounting
+/// and Setup-Relay simultaneous-move Bellman subgame lift.
 #[inline]
 pub fn compact_eval_leaf_blindspot(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
     assert!((0.0..=1.0).contains(&w.leaf_alpha), "leaf alpha must be in [0,1]");
     0.5 + w.leaf_alpha * (compact_eval01_blindspot(cb, table, w) - 0.5)
 }
 
+/// Ablation leaf evaluation without Setup-Relay Bellman lift (`-relay`).
+#[inline]
+pub fn compact_eval_leaf_blindspot_norelay(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    w: &EvalWeights,
+) -> f64 {
+    assert!((0.0..=1.0).contains(&w.leaf_alpha), "leaf alpha must be in [0,1]");
+    0.5 + w.leaf_alpha * (compact_eval01_blindspot_norelay(cb, table, w) - 0.5)
+}
 
 /// Win-probability-shaped eval in `(0, 1)` from side 0's perspective on `CompactBattle`,
-/// adding `compact_blindspot_diff` (strictly antisymmetric, `0.0` on `1v1` so exact
-/// Schur-Bellman / Toeplitz M17e anchors remain 0-ULP invariant).
+/// adding `compact_false_boost_refund_diff` and `relay::apply_relay_leaf_lift`
+/// (strictly antisymmetric, `0.0` on `1v1` so exact Schur-Bellman / Toeplitz M17e anchors
+/// remain 0-ULP invariant).
 #[inline]
 pub fn compact_eval01_blindspot(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
+    let v_base = compact_eval01_blindspot_norelay(cb, table, w);
+    crate::relay::apply_relay_leaf_lift(cb, table, w, v_base)
+}
+
+/// Static blind-spot win probability before the Setup-Relay Bellman subgame lift.
+#[inline]
+pub fn compact_eval01_blindspot_norelay(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    w: &EvalWeights,
+) -> f64 {
     let s0 = compact_side_score(cb, table, w, 0);
     let s1 = compact_side_score(cb, table, w, 1);
     let mut diff = s0 - s1;
@@ -940,15 +974,22 @@ fn compact_side_false_boost_refund(
         }
     }
 
-    // 2. Encore lock on a boosted setup mon without Baton Pass: positive boosts cannot be leveraged
-    // while locked into a non-attacking encored move.
-    if (act_mon.vol_flags & vol_bit::ENCORE) != 0 && !has_bp {
-        for i in 0..7 {
-            if act_mon.boosts[i] > 0 {
-                if i == 0 && atk_refunded {
-                    continue;
+    // 2. Encore lock on a boosted setup mon: positive boosts cannot be leveraged while locked
+    // into a non-Baton-Pass move (prevents rewarding Encore-locked Double Team / Agility spam).
+    if (act_mon.vol_flags & vol_bit::ENCORE) != 0 {
+        let enc_slot = act_mon.encore_slot() as usize;
+        let enc_is_bp = has_bp
+            && enc_slot < (table.mons[act_idx].num_moves as usize)
+            && table.move_specs[act_idx][enc_slot].special_kind == 18;
+        if !enc_is_bp {
+            let refund_mult = if has_bp { 0.80 } else { 0.50 };
+            for i in 0..7 {
+                if act_mon.boosts[i] > 0 {
+                    if i == 0 && atk_refunded {
+                        continue;
+                    }
+                    delta -= refund_mult * w.boost[i] * (act_mon.boosts[i] as f64);
                 }
-                delta -= 0.50 * w.boost[i] * (act_mon.boosts[i] as f64);
             }
         }
     }

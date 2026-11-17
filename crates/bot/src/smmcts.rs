@@ -810,8 +810,10 @@ pub(crate) fn leaf_eval_cached(
     match &cfg.playout {
         Playout::Uniform => crate::mcts::hp_eval(sim),
         Playout::Heavy { weights, .. } => {
-            if cfg.settlement.uses_blindspot_leaf() {
+            if cfg.settlement.uses_relay_bellman() {
                 crate::eval::eval_leaf_blindspot_cached(sim, dex, weights, rc)
+            } else if cfg.settlement.uses_blindspot_leaf() {
+                crate::eval::eval_leaf_blindspot_norelay_cached(sim, dex, weights, rc)
             } else {
                 crate::eval::eval_leaf_cached(sim, dex, weights, rc)
             }
@@ -902,6 +904,7 @@ impl SkuctSearch {
         ) && matches!(
             cfg.settlement,
             crate::accounting::LeafSettlementMode::BlindSpotLeaf
+                | crate::accounting::LeafSettlementMode::BlindSpotLeafNoRelay
                 | crate::accounting::LeafSettlementMode::BlindSpotRollout
                 | crate::accounting::LeafSettlementMode::BlindSpotBoth
         ) {

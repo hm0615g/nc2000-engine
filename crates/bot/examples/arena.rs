@@ -101,8 +101,8 @@ enum AgentSpec {
     SkUctNs { iterations: u32, c: f64, buckets: i64 },
     /// Damage-bookkeeping-free key abstraction.
     SkUctAbs { iterations: u32, c: f64, buckets: i64 },
-    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, endgame: EndgameRules },
-    Open { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, endgame: EndgameRules },
+    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, relay: bool, endgame: EndgameRules },
+    Open { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, relay: bool, endgame: EndgameRules },
     Exploit(Box<AgentSpec>),
     ExploitControl(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
@@ -223,6 +223,7 @@ struct ParsedSearchSpec {
     m16c: M16c,
     mixed: bool,
     bp: bool,
+    relay: bool,
     endgame: EndgameRules,
 }
 
@@ -236,6 +237,7 @@ fn parse_search_spec(
     let mut m16c = M16c::default();
     let mut mixed = false;
     let mut bp = true;
+    let mut relay = true;
     let mut endgame = EndgameRules::default();
     for part in &parts[1..] {
         if part.is_empty() {
@@ -251,6 +253,10 @@ fn parse_search_spec(
                     bp = true;
                 } else if tok == "-bp" {
                     bp = false;
+                } else if tok == "relay" {
+                    relay = true;
+                } else if tok == "-relay" || tok == "norelay" {
+                    relay = false;
                 } else if apply_endgame_token(&mut endgame, tok) {
                     // handled
                 } else if !apply_rollout_token(&mut perish, &mut m16c, tok) {
@@ -275,6 +281,7 @@ fn parse_search_spec(
         m16c,
         mixed,
         bp,
+        relay,
         endgame,
     })
 }
@@ -294,6 +301,7 @@ fn parse_blind(parts: &[&str], mask: MaskRules) -> Result<AgentSpec, String> {
         m16c: s.m16c,
         mixed: s.mixed,
         bp: s.bp,
+        relay: s.relay,
         endgame: s.endgame,
     })
 }
@@ -381,6 +389,7 @@ fn parse_open(parts: &[&str]) -> Result<AgentSpec, String> {
         m16c: s.m16c,
         mixed: s.mixed,
         bp: s.bp,
+        relay: s.relay,
         endgame: s.endgame,
     })
 }
@@ -564,7 +573,7 @@ impl AgentSpec {
                 },
                 seed,
             )),
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, endgame } => {
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, endgame } => {
                 let agent = BlindAgent::new(
                     RmConfig {
                         iterations: *iterations,
@@ -577,6 +586,11 @@ impl AgentSpec {
                         rollout_status: m16c.status,
                         rollout_switch: m16c.switch,
                         rollout_baton_pass: *bp,
+                        settlement: if *relay {
+                            nc2000_bot::LeafSettlementMode::BlindSpotLeaf
+                        } else {
+                            nc2000_bot::LeafSettlementMode::BlindSpotLeafNoRelay
+                        },
                         endgame_rules: *endgame,
                         ..Default::default()
                     },
@@ -586,7 +600,7 @@ impl AgentSpec {
                 );
                 Box::new(if *mixed {agent.with_adaptive_mixture((u64::from(*iterations) * 2 / 5) as u32)} else {agent})
             },
-            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, endgame } => {
+            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, endgame } => {
                 let agent = OpenAgent::new(
                     RmConfig {
                         iterations: *iterations,
@@ -599,6 +613,11 @@ impl AgentSpec {
                         rollout_status: m16c.status,
                         rollout_switch: m16c.switch,
                         rollout_baton_pass: *bp,
+                        settlement: if *relay {
+                            nc2000_bot::LeafSettlementMode::BlindSpotLeaf
+                        } else {
+                            nc2000_bot::LeafSettlementMode::BlindSpotLeafNoRelay
+                        },
                         endgame_rules: *endgame,
                         ..Default::default()
                     },
@@ -655,8 +674,8 @@ impl AgentSpec {
             AgentSpec::SkUctAbs { iterations, c, buckets } => {
                 format!("skuctabs:{iterations}:{c}:{buckets}")
             }
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, endgame } => {
-                let rollout = format!("{}{}{}{}{}", perish.label(), m16c.label(), if *mixed {":mix"} else {""}, if *bp {""} else {":-bp"}, endgame_label(endgame));
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, endgame } => {
+                let rollout = format!("{}{}{}{}{}{}", perish.label(), m16c.label(), if *mixed {":mix"} else {""}, if *bp {""} else {":-bp"}, if *relay {""} else {":-relay"}, endgame_label(endgame));
                 if *mask == legacy_mask() {
                     return format!("blindlegacy:{iterations}:{c}:{buckets}{rollout}");
                 }
@@ -670,13 +689,14 @@ impl AgentSpec {
                     if diff.is_empty() { String::new() } else { format!(":{}", diff.join(",")) };
                 format!("blind:{iterations}:{c}:{buckets}{suffix}{rollout}")
             }
-            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, endgame } => {
+            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, endgame } => {
                 let rollout = format!(
-                    "{}{}{}{}{}",
+                    "{}{}{}{}{}{}",
                     perish.label(),
                     m16c.label(),
                     if *mixed { ":mix" } else { "" },
                     if *bp { "" } else { ":-bp" },
+                    if *relay { "" } else { ":-relay" },
                     endgame_label(endgame),
                 );
                 let diff: Vec<String> = mask_fields(mask)
@@ -940,6 +960,7 @@ fn main() {
             // 6-h >= 3 needs h >= 4), so this concentrates the firing rate, it
             // does not force it.
             ("--sleeptalk-min", &["sleeptalk", "snore"][..]),
+            ("--bp-min", &["batonpass"][..]),
         ] {
             if let Some(n) = flag(&args, name).map(|v| v.parse::<usize>().unwrap()) {
                 let before = teams.len();

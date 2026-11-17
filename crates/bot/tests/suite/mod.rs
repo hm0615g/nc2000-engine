@@ -26,6 +26,7 @@ mod preview_tables;
 mod priority_heal;
 mod priority_substitute;
 mod priority_substitute_format;
+mod relay_bellman;
 mod report_4296;
 mod residual_wait;
 mod root_mix_probes;

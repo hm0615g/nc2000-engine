@@ -56,6 +56,7 @@ pub mod player_state;
 pub mod pick_prior;
 pub mod preview;
 pub mod prior;
+pub mod relay;
 pub mod rng;
 pub mod root_policy;
 pub mod runner;

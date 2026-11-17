@@ -40,8 +40,11 @@ impl Spec {
                 "-perish_combo" | "-perish_escape" => (perish, combo) = (false, false),
                 "bp" => baton_pass = true,
                 "-bp" => baton_pass = false,
+                "relay" | "bsleaf" => settlement = nc2000_bot::LeafSettlementMode::BlindSpotLeaf,
+                "-relay" | "norelay" => {
+                    settlement = nc2000_bot::LeafSettlementMode::BlindSpotLeafNoRelay
+                }
                 "legacy" => settlement = nc2000_bot::LeafSettlementMode::LegacyRollout,
-                "bsleaf" => settlement = nc2000_bot::LeafSettlementMode::BlindSpotLeaf,
                 "bsroll" => settlement = nc2000_bot::LeafSettlementMode::BlindSpotRollout,
                 "bsboth" => settlement = nc2000_bot::LeafSettlementMode::BlindSpotBoth,
                 n => nums.push(n.parse::<f64>().unwrap_or_else(|_| panic!("bad field {n}"))),

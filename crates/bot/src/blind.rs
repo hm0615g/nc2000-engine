@@ -1071,6 +1071,7 @@ impl BlindSearch {
         ) && matches!(
             cfg.settlement,
             crate::accounting::LeafSettlementMode::BlindSpotLeaf
+                | crate::accounting::LeafSettlementMode::BlindSpotLeafNoRelay
                 | crate::accounting::LeafSettlementMode::BlindSpotRollout
                 | crate::accounting::LeafSettlementMode::BlindSpotBoth
         ) {

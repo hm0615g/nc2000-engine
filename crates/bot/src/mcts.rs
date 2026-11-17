@@ -329,8 +329,10 @@ pub fn playout_value_cached(
             return match playout {
                 Playout::Uniform => hp_eval(sim),
                 Playout::Heavy { weights, .. } => {
-                    if rules.settlement.uses_blindspot_leaf() {
+                    if rules.settlement.uses_relay_bellman() {
                         eval::eval_leaf_blindspot_cached(sim, dex, weights, roster_cache)
+                    } else if rules.settlement.uses_blindspot_leaf() {
+                        eval::eval_leaf_blindspot_norelay_cached(sim, dex, weights, roster_cache)
                     } else {
                         eval::eval_leaf_cached(sim, dex, weights, roster_cache)
                     }
@@ -357,8 +359,10 @@ pub fn playout_value_cached(
         return match playout {
             Playout::Uniform => hp_eval(sim),
             Playout::Heavy { weights, .. } => {
-                if rules.settlement.uses_blindspot_leaf() {
+                if rules.settlement.uses_relay_bellman() {
                     eval::eval_leaf_blindspot_cached(sim, dex, weights, roster_cache)
+                } else if rules.settlement.uses_blindspot_leaf() {
+                    eval::eval_leaf_blindspot_norelay_cached(sim, dex, weights, roster_cache)
                 } else {
                     eval::eval_leaf_cached(sim, dex, weights, roster_cache)
                 }
@@ -391,6 +395,8 @@ pub fn compact_playout_value(
     rng: &mut SplitMix64,
     rules: RolloutRules,
 ) -> f64 {
+    let start_turn = cb.turn;
+    let mut pivot_token = [1u8; 2];
     loop {
         match cb.outcome {
             1 => {
@@ -412,14 +418,17 @@ pub fn compact_playout_value(
             return match playout {
                 Playout::Uniform => compact_hp_eval(cb, table),
                 Playout::Heavy { weights, .. } => {
-                    if rules.settlement.uses_blindspot_leaf() {
+                    if rules.settlement.uses_relay_bellman() {
                         eval::compact_eval_leaf_blindspot(cb, table, weights)
+                    } else if rules.settlement.uses_blindspot_leaf() {
+                        eval::compact_eval_leaf_blindspot_norelay(cb, table, weights)
                     } else {
                         eval::compact_eval_leaf(cb, table, weights)
                     }
                 }
             };
         }
+        let turn_offset = cb.turn.saturating_sub(start_turn).min(255) as u8;
         let mut picks = [7u8; 2];
         for s in 0..2usize {
             if cb.sides[s].request == 0 {
@@ -428,10 +437,74 @@ pub fn compact_playout_value(
             let mut cs = [0u8; 7];
             let n = cb.legal_actions(table, s, &mut cs);
             if n > 0 {
-                picks[s] = compact_playout_pick(cb, table, playout, s, &cs[..n], rng, rules);
+                picks[s] = compact_playout_pick_ctx(
+                    cb,
+                    table,
+                    playout,
+                    s,
+                    &cs[..n],
+                    turn_offset,
+                    &mut pivot_token,
+                    rng,
+                    rules,
+                );
             }
         }
+        apply_compact_actions_with_bp_target(cb, table, picks);
+    }
+}
+
+/// Apply compact rollout actions while honoring directed Baton Pass receiver codes
+/// (`((recv_slot + 1) << 4) | move_slot`) without touching `crates/engine`.
+#[inline]
+fn apply_compact_actions_with_bp_target(
+    cb: &mut nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+    picks: [u8; 2],
+) {
+    if picks[0] < 16 && picks[1] < 16 {
         cb.apply_actions(table, picks);
+        return;
+    }
+    let raw_picks = [
+        if picks[0] >= 16 { picks[0] & 3 } else { picks[0] },
+        if picks[1] >= 16 { picks[1] & 3 } else { picks[1] },
+    ];
+    let backup = *cb;
+    let mut masked_bits = [0u8; 2];
+    for s in 0..2usize {
+        if picks[s] >= 16 && cb.sides[s].request == 1 {
+            let recv_slot = ((picks[s] >> 4).wrapping_sub(1)).min(2);
+            let act_slot = cb.sides[s].active_idx.min(2);
+            let foe = 1 - s;
+            let foe_act = cb.sides[foe].active_idx as usize;
+            let foe_phazing = raw_picks[foe] < 4
+                && foe_act < 3
+                && table.move_specs[foe * 3 + foe_act][raw_picks[foe] as usize].special_kind == 7;
+            let keep = (1u8 << act_slot) | (1u8 << recv_slot);
+            if !foe_phazing && (cb.sides[s].alive_mask & (1u8 << recv_slot)) != 0 {
+                masked_bits[s] = cb.sides[s].alive_mask & !keep;
+                cb.sides[s].alive_mask &= keep;
+            }
+        }
+    }
+    cb.apply_actions(table, raw_picks);
+    // Restore hidden alive bench bits; if a directed receiver fainted mid-turn while a 3rd mon
+    // was masked (avoiding single-bench auto-switch), replay cleanly with unmasked alive_mask.
+    let mut need_fallback = false;
+    for s in 0..2usize {
+        if masked_bits[s] != 0 {
+            let recv_slot = ((picks[s] >> 4).wrapping_sub(1)).min(2) as usize;
+            if cb.mons[s * 3 + recv_slot].hp() <= 0 || cb.mons[s * 3 + backup.sides[s].active_idx as usize].hp() <= 0 {
+                need_fallback = true;
+            } else {
+                cb.sides[s].alive_mask |= masked_bits[s];
+            }
+        }
+    }
+    if need_fallback {
+        *cb = backup;
+        cb.apply_actions(table, raw_picks);
     }
 }
 
@@ -466,7 +539,24 @@ fn compact_playout_pick(
     rng: &mut SplitMix64,
     rules: RolloutRules,
 ) -> u8 {
-    let pick = compact_ordinary_pick(cb, table, playout, side, cs, rng, rules);
+    let mut pivot_token = [1u8; 2];
+    compact_playout_pick_ctx(cb, table, playout, side, cs, 0, &mut pivot_token, rng, rules)
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline]
+fn compact_playout_pick_ctx(
+    cb: &nc2000_engine::compact::CompactBattle,
+    table: &nc2000_engine::compact::MatchTable,
+    playout: &Playout,
+    side: usize,
+    cs: &[u8],
+    turn_offset: u8,
+    pivot_token: &mut [u8; 2],
+    rng: &mut SplitMix64,
+    rules: RolloutRules,
+) -> u8 {
+    let pick = compact_ordinary_pick(cb, table, playout, side, cs, turn_offset, pivot_token, rng, rules);
     if rules.perish_escape || rules.perish_combo {
         if let Some(escape) = compact_perish_escape(cb, table, side, cs) {
             return escape;
@@ -480,6 +570,7 @@ fn compact_playout_pick(
     pick
 }
 
+#[allow(clippy::too_many_arguments)]
 #[inline]
 fn compact_ordinary_pick(
     cb: &nc2000_engine::compact::CompactBattle,
@@ -487,12 +578,14 @@ fn compact_ordinary_pick(
     playout: &Playout,
     side: usize,
     cs: &[u8],
+    turn_offset: u8,
+    pivot_token: &mut [u8; 2],
     rng: &mut SplitMix64,
     rules: RolloutRules,
 ) -> u8 {
-    let eps = match playout {
+    let (eps, weights_opt) = match playout {
         Playout::Uniform => return cs[rng.below(cs.len())],
-        Playout::Heavy { eps, .. } => *eps,
+        Playout::Heavy { eps, weights, .. } => (*eps, Some(weights)),
     };
     if cs.len() == 1 {
         return cs[0];
@@ -500,7 +593,33 @@ fn compact_ordinary_pick(
     if rng.next_f64() < eps {
         return cs[rng.below(cs.len())];
     }
-    compact_greedy_pick(cb, table, side, cs, rng, rules)
+    let mut eff_rules = rules;
+    if turn_offset < 5
+        && rules.baton_pass
+        && rules.settlement.uses_relay_bellman()
+        && (cb.sides[0].side_flags & 0x80) == 0
+    {
+        if let Some(weights) = weights_opt {
+            match crate::relay::rollout_relay_pick(
+                cb,
+                table,
+                weights,
+                side,
+                cs,
+                turn_offset,
+                pivot_token,
+                eps <= 0.0,
+                rng,
+            ) {
+                crate::relay::RelayRolloutDecision::Chosen(act) => return act,
+                crate::relay::RelayRolloutDecision::GateClosedSuppressLegacyBp => {
+                    eff_rules.baton_pass = false;
+                }
+                crate::relay::RelayRolloutDecision::NotApplicable => {}
+            }
+        }
+    }
+    compact_greedy_pick(cb, table, playout, side, cs, rng, eff_rules)
 }
 
 #[inline]
@@ -914,6 +1033,7 @@ fn compact_blindspot_tactical_override(
 fn compact_greedy_pick(
     cb: &nc2000_engine::compact::CompactBattle,
     table: &nc2000_engine::compact::MatchTable,
+    playout: &Playout,
     side: usize,
     cs: &[u8],
     rng: &mut SplitMix64,
@@ -1023,6 +1143,48 @@ fn compact_greedy_pick(
                 return tac_act;
             }
         }
+        // Landed Baton Pass receiver behind an intact Substitute (`!has_bp && team_has_bp`):
+        // spend the passed Substitute to click Swords Dance / Growth once when active foe cannot
+        // bypass Substitute (`Phaze`/`Haze`/`Encore`) and we cannot already OHKO.
+        if rules.settlement.uses_relay_bellman()
+            && (cb.sides[0].side_flags & 0x80) == 0
+            && (table.mons[att_idx].role_flags & nc2000_engine::compact::role_bit::BATON_PASS) == 0
+            && ((table.mons[side * 3].role_flags
+                | table.mons[side * 3 + 1].role_flags
+                | table.mons[side * 3 + 2].role_flags)
+                & nc2000_engine::compact::role_bit::BATON_PASS)
+                != 0
+        {
+            use nc2000_engine::compact::{role_bit, vol_bit};
+            let stay_score = best.map_or(0.0, |(_, s, _)| s);
+            let me = &cb.mons[att_idx];
+            let foe_idx = def_side * 3 + def_slot;
+            if stay_score < 0.92
+                && (me.vol_flags & vol_bit::SUBSTITUTE) != 0
+                && (me.vol_flags & (vol_bit::ENCORE | vol_bit::PERISH_SONG)) == 0
+                && me.boosts[0] < 2
+                && me.boosts[2] < 2
+                && (table.mons[foe_idx].role_flags & role_bit::PHAZE_OR_HAZE) == 0
+            {
+                let foe_has_encore = (0..table.mons[foe_idx].num_moves as usize).any(|mi| {
+                    cb.mons[foe_idx].pp[mi] > 0 && table.move_specs[foe_idx][mi].special_kind == 8
+                });
+                if !foe_has_encore {
+                    for &c in cs {
+                        if c < 4 {
+                            let ms = &table.move_specs[att_idx][c as usize];
+                            if ms.is_status
+                                && ms.boosts_self
+                                && ((ms.boosts[0].0 == 0 && ms.boosts[0].1 >= 2)
+                                    || (ms.boosts[0].0 == 2 && ms.boosts[0].1 >= 1))
+                            {
+                                return c;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if rules.baton_pass
             && (cb.sides[0].side_flags & 0x80) == 0
             && (table.mons[att_idx].role_flags
@@ -1127,10 +1289,20 @@ fn compact_greedy_pick(
         && att_slot < 3
         && cb.mons[att_idx].hp() > 0
         && (cb.mons[att_idx].boosts[0] > 0
+            || cb.mons[att_idx].boosts[1] > 0
             || cb.mons[att_idx].boosts[2] > 0
+            || cb.mons[att_idx].boosts[3] > 0
+            || cb.mons[att_idx].boosts[6] > 0
             || has_sub_or_spe)
         && (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
         && cb.mons[def_side * 3 + def_slot].hp() > 0;
+    if passing_alive && rules.settlement.uses_relay_bellman() {
+        if let Playout::Heavy { weights, .. } = playout {
+            if let Some(sw) = crate::relay::best_midturn_bp_switch(cb, table, weights, side, cs) {
+                return sw;
+            }
+        }
+    }
     for &c in cs {
         if (4..7).contains(&c) {
             let slot = (c - 4) as usize;
@@ -1205,9 +1377,9 @@ fn decode_compact_choice(
     side: usize,
     act: u8,
 ) -> SearchChoice {
-    if act < 4 {
+    if act < 4 || act >= 16 {
         let act_slot = cb.sides[side].active_idx as usize;
-        SearchChoice::Move(table.mons[side * 3 + act_slot].moves[act as usize])
+        SearchChoice::Move(table.mons[side * 3 + act_slot].moves[(act & 3) as usize])
     } else if (4..7).contains(&act) {
         SearchChoice::Switch(act - 3)
     } else {

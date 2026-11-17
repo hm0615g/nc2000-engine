@@ -23,8 +23,9 @@ Authoritative snapshot of `crates/bot` playing-strength mechanisms, measured-nul
   - Forced switches (`Request::Switch`) use UCB1 visit allocation and mean tie-breaking; flat `(visits, mean)` ties break deterministically toward `Move` before `Switch` across all entrypoints.
   - Exact column-generation Bayesian root LP ([`root_policy.rs`](../crates/bot/src/root_policy.rs)) runs over eligible actions (`min_own_v = (max_v / 8).max(4).min(max_v)`) with conservative cell shrinkage, `override_value` LCB gating (`MIN_MIX_MARGIN = 0.02`), and `SafeWin` / `FastWin` / `ComebackLoss` + Spikes/status-aware `tactical_desperation_bonus` ([`endgame_root.rs`](../crates/bot/src/endgame_root.rs)).
 
-### 1.4 Rollout, Endgame Linear Valuation & Certified Solver ([`mcts.rs`](../crates/bot/src/mcts.rs), [`linear.rs`](../crates/bot/src/linear.rs), [`bounds.rs`](../crates/bot/src/bounds.rs))
+### 1.4 Rollout, Setup-Relay Subgame, Endgame Linear Valuation & Certified Solver ([`mcts.rs`](../crates/bot/src/mcts.rs), [`relay.rs`](../crates/bot/src/relay.rs), [`linear.rs`](../crates/bot/src/linear.rs), [`bounds.rs`](../crates/bot/src/bounds.rs))
 - **Continuation (`mcts.rs`, `eval.rs`)**: 8-turn `CompactBattle` heavy playout with `RmConfig::rollout_combo = true` (Perish trap/escape/phaze rules) and `LeafSettlementMode::BlindSpotLeaf`.
+- **Setup-Relay simultaneous-move Bellman subgame (`relay.rs`)**: Prices multi-turn `Substitute` + boost + `Baton Pass` chains (`n0 + n1 >= 4`, `0-ULP` no-op on `1v1`) via a cached 2-axis simultaneous-move Bellman subgame solver (`RelayCache`, `512` sets $\times$ `4` ways) and tree-initiated rollout continuation (executing behind-`Sub` boost stacking, directed `Baton Pass` receiver encoding, and on-field `Roar`/`Whirlwind`/`Haze`/`Encore` disruption without uninitiated rollout switches; `+1.4%`, `0.514 ± 0.009`, `z = +3.05` over `1,600` CRN games on `belief-pool-v3`).
 - **Low-piece stage-game valuation (`linear.rs`)**: When `n0 + n1 <= 3`, `compact_linear_diff` / `compact_rollout_linear_pick` apply Schur-Bellman / Toeplitz stage-game valuation (eliminating full-HP recovery passivity in 1v1–2v1 endgames).
 - **Certified exact/interval solver (`exact.rs`, `bounds.rs`, `stall.rs`)**: Integer-damage-quotiented lazy interval solver (`BoundSolver`) with pointwise matrix dominance pruning and `TwoSidedHeal` resource-DAG scheduling (`?solver` door and `endgame_exactness_corpus` / `anchor_gate`).
 
@@ -46,14 +47,12 @@ Authoritative snapshot of `crates/bot` playing-strength mechanisms, measured-nul
 
 ## 3. Open Structural Frontiers (at `81,000` Iterations)
 
-1. **Multi-turn `Baton Pass` + evasion/boost chain horizon**:
-   - When an opponent chains `Substitute` + `Double Team` / `Swords Dance` + `Baton Pass` (e.g., `Jolteon` passing to `Marowak`), `rollout_status = false` halts opponent setup compounding at the tree leaf, so early counter-switches or phazers can look no better than staying in until the pass completes.
-2. **Long-horizon recovery-PP exhaustion vs pooled `w.pp`**:
+1. **Long-horizon recovery-PP exhaustion vs pooled `w.pp`**:
    - [`eval::compact_side_score`](../crates/bot/src/eval.rs) pools all 12 move slots across 3 Pokémon into `w.pp * (sum_pp / sum_max_pp)` (`w.pp = 0.2`, `~0.001` per recovery PP), and `solve_schur_bellman_2d` in [`linear.rs`](../crates/bot/src/linear.rs) assumes infinite PP (`GAMMA = 0.985`). Relevant only in deep stall/evasion games where tree lookahead cannot reach recovery depletion.
-3. **Off-pool cold-start belief calibration**:
+2. **Off-pool cold-start belief calibration**:
    - Improving early-turn move/item/spread joint priors after known-pool contradiction before all 4 moves are revealed. Always evaluate against `OpenAgent` oracle controls and held-out human rosters via [`crates/bot/examples/belief_probe.rs`](../crates/bot/examples/belief_probe.rs) — never rely on `BlindAgent`-vs-`BlindAgent` self-play alone (`offpool_fallback_gauntlet`) or raw spectator-reveal counts (which under-count passive/reactive moves) or hard Gen 2 damage-roll / speed-tie exclusions.
-4. **`n0 + n1 >= 4` leaf-frontier switch lock**:
-   - `linear.rs` activates only when `n0 + n1 <= 3`, while `rollout_switch = false` locks both actives for 8 rollout turns after the tree leaf (and `eval.rs` prices `w.spikes = 1.5` on grounded bench slots only). Any candidate targeting `4+`-alive horizon valuation must clear the concrete-position seed-noise screen before CRN duels; naive static leaf adjustments already measured `0.500`.
+3. **`n0 + n1 >= 4` non-relay leaf-frontier switch lock**:
+   - `linear.rs` activates only when `n0 + n1 <= 3` and `relay.rs` prices `Substitute` + boost + `Baton Pass` chains, while `rollout_switch = false` otherwise locks both actives for 8 rollout turns after the tree leaf (and `eval.rs` prices `w.spikes = 1.5` on grounded bench slots only). Any candidate targeting general `4+`-alive horizon valuation must clear the concrete-position seed-noise screen before CRN duels; naive static leaf adjustments already measured `0.500`.
 
 ---
 
