@@ -330,7 +330,16 @@ pub fn playout_value_cached(
                 Playout::Uniform => hp_eval(sim),
                 Playout::Heavy { weights, .. } => {
                     if rules.settlement.uses_relay_bellman() {
-                        eval::eval_leaf_blindspot_cached(sim, dex, weights, roster_cache)
+                        if rules.settlement.uses_stall_solver() {
+                            eval::eval_leaf_blindspot_cached(sim, dex, weights, roster_cache)
+                        } else {
+                            eval::eval_leaf_blindspot_nostall_cached(
+                                sim,
+                                dex,
+                                weights,
+                                roster_cache,
+                            )
+                        }
                     } else if rules.settlement.uses_blindspot_leaf() {
                         eval::eval_leaf_blindspot_norelay_cached(sim, dex, weights, roster_cache)
                     } else {
@@ -360,7 +369,11 @@ pub fn playout_value_cached(
             Playout::Uniform => hp_eval(sim),
             Playout::Heavy { weights, .. } => {
                 if rules.settlement.uses_relay_bellman() {
-                    eval::eval_leaf_blindspot_cached(sim, dex, weights, roster_cache)
+                    if rules.settlement.uses_stall_solver() {
+                        eval::eval_leaf_blindspot_cached(sim, dex, weights, roster_cache)
+                    } else {
+                        eval::eval_leaf_blindspot_nostall_cached(sim, dex, weights, roster_cache)
+                    }
                 } else if rules.settlement.uses_blindspot_leaf() {
                     eval::eval_leaf_blindspot_norelay_cached(sim, dex, weights, roster_cache)
                 } else {
@@ -419,7 +432,11 @@ pub fn compact_playout_value(
                 Playout::Uniform => compact_hp_eval(cb, table),
                 Playout::Heavy { weights, .. } => {
                     if rules.settlement.uses_relay_bellman() {
-                        eval::compact_eval_leaf_blindspot(cb, table, weights)
+                        if rules.settlement.uses_stall_solver() {
+                            eval::compact_eval_leaf_blindspot(cb, table, weights)
+                        } else {
+                            eval::compact_eval_leaf_blindspot_nostall(cb, table, weights)
+                        }
                     } else if rules.settlement.uses_blindspot_leaf() {
                         eval::compact_eval_leaf_blindspot_norelay(cb, table, weights)
                     } else {
@@ -843,7 +860,7 @@ fn compact_side_has_usable_heal(
     for m_i in 0..table.mons[idx].num_moves as usize {
         if mon.pp[m_i] > 0 && !(dis && m_i == dis_slot) {
             let ms = &table.move_specs[idx][m_i];
-            if ms.is_rest || ms.is_half_heal {
+            if ms.is_rest || ms.is_half_heal || ms.special_kind == 29 {
                 return true;
             }
         }
@@ -1068,7 +1085,13 @@ fn compact_greedy_pick(
         && (cb.sides[side].alive_mask & (1 << att_slot)) != 0
         && (cb.sides[def_side].alive_mask & (1 << def_slot)) != 0
     {
-        if let Some(la_pick) = crate::linear::compact_rollout_linear_pick(cb, table, side, cs) {
+        if let Some(la_pick) = crate::linear::compact_rollout_linear_pick_ext(
+            cb,
+            table,
+            side,
+            cs,
+            rules.settlement.uses_stall_solver(),
+        ) {
             return la_pick;
         }
         let bs_rollout = rules.settlement.uses_blindspot_rollout();

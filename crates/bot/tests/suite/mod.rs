@@ -33,4 +33,5 @@ mod root_mix_probes;
 mod root_pruning;
 mod sleep_clause;
 mod sleep_equivalence;
+mod stall_bellman;
 mod teamgen;

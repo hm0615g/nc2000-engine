@@ -4610,7 +4610,13 @@ fn build_refs(dex: &Dex, sets: &[PokemonSet], mons: &[MonObs]) -> Option<Vec<Pok
 fn consistent(dex: &Dex, refs: &[Pokemon], mons: &[MonObs]) -> bool {
     refs.iter().zip(mons).enumerate().all(|(slot, (r, mo))| {
         crate::hp_evidence::consistent(dex, r, mo.hp_type_mask)
-            && !crate::observe::Observer::is_item_excluded_for_slot(dex, mons, slot, r.item)
+            && !crate::observe::Observer::is_item_excluded_for_slot_with_refs(
+                dex,
+                Some(refs),
+                mons,
+                slot,
+                r.item,
+            )
             && mo
                 .revealed_moves
                 .iter()

@@ -101,8 +101,8 @@ enum AgentSpec {
     SkUctNs { iterations: u32, c: f64, buckets: i64 },
     /// Damage-bookkeeping-free key abstraction.
     SkUctAbs { iterations: u32, c: f64, buckets: i64 },
-    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, relay: bool, endgame: EndgameRules },
-    Open { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, relay: bool, endgame: EndgameRules },
+    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, relay: bool, stall: bool, endgame: EndgameRules },
+    Open { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, relay: bool, stall: bool, endgame: EndgameRules },
     Exploit(Box<AgentSpec>),
     ExploitControl(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
@@ -224,6 +224,7 @@ struct ParsedSearchSpec {
     mixed: bool,
     bp: bool,
     relay: bool,
+    stall: bool,
     endgame: EndgameRules,
 }
 
@@ -238,6 +239,7 @@ fn parse_search_spec(
     let mut mixed = false;
     let mut bp = true;
     let mut relay = true;
+    let mut stall = true;
     let mut endgame = EndgameRules::default();
     for part in &parts[1..] {
         if part.is_empty() {
@@ -257,6 +259,10 @@ fn parse_search_spec(
                     relay = true;
                 } else if tok == "-relay" || tok == "norelay" {
                     relay = false;
+                } else if tok == "stall" {
+                    stall = true;
+                } else if tok == "-stall" || tok == "nostall" {
+                    stall = false;
                 } else if apply_endgame_token(&mut endgame, tok) {
                     // handled
                 } else if !apply_rollout_token(&mut perish, &mut m16c, tok) {
@@ -282,6 +288,7 @@ fn parse_search_spec(
         mixed,
         bp,
         relay,
+        stall,
         endgame,
     })
 }
@@ -302,6 +309,7 @@ fn parse_blind(parts: &[&str], mask: MaskRules) -> Result<AgentSpec, String> {
         mixed: s.mixed,
         bp: s.bp,
         relay: s.relay,
+        stall: s.stall,
         endgame: s.endgame,
     })
 }
@@ -390,6 +398,7 @@ fn parse_open(parts: &[&str]) -> Result<AgentSpec, String> {
         mixed: s.mixed,
         bp: s.bp,
         relay: s.relay,
+        stall: s.stall,
         endgame: s.endgame,
     })
 }
@@ -573,7 +582,7 @@ impl AgentSpec {
                 },
                 seed,
             )),
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, endgame } => {
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, stall, endgame } => {
                 let agent = BlindAgent::new(
                     RmConfig {
                         iterations: *iterations,
@@ -586,10 +595,10 @@ impl AgentSpec {
                         rollout_status: m16c.status,
                         rollout_switch: m16c.switch,
                         rollout_baton_pass: *bp,
-                        settlement: if *relay {
-                            nc2000_bot::LeafSettlementMode::BlindSpotLeaf
-                        } else {
-                            nc2000_bot::LeafSettlementMode::BlindSpotLeafNoRelay
+                        settlement: match (*relay, *stall) {
+                            (true, true) => nc2000_bot::LeafSettlementMode::BlindSpotLeaf,
+                            (true, false) => nc2000_bot::LeafSettlementMode::BlindSpotLeafNoStall,
+                            (false, _) => nc2000_bot::LeafSettlementMode::BlindSpotLeafNoRelay,
                         },
                         endgame_rules: *endgame,
                         ..Default::default()
@@ -600,7 +609,7 @@ impl AgentSpec {
                 );
                 Box::new(if *mixed {agent.with_adaptive_mixture((u64::from(*iterations) * 2 / 5) as u32)} else {agent})
             },
-            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, endgame } => {
+            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, stall, endgame } => {
                 let agent = OpenAgent::new(
                     RmConfig {
                         iterations: *iterations,
@@ -613,10 +622,10 @@ impl AgentSpec {
                         rollout_status: m16c.status,
                         rollout_switch: m16c.switch,
                         rollout_baton_pass: *bp,
-                        settlement: if *relay {
-                            nc2000_bot::LeafSettlementMode::BlindSpotLeaf
-                        } else {
-                            nc2000_bot::LeafSettlementMode::BlindSpotLeafNoRelay
+                        settlement: match (*relay, *stall) {
+                            (true, true) => nc2000_bot::LeafSettlementMode::BlindSpotLeaf,
+                            (true, false) => nc2000_bot::LeafSettlementMode::BlindSpotLeafNoStall,
+                            (false, _) => nc2000_bot::LeafSettlementMode::BlindSpotLeafNoRelay,
                         },
                         endgame_rules: *endgame,
                         ..Default::default()
@@ -674,8 +683,8 @@ impl AgentSpec {
             AgentSpec::SkUctAbs { iterations, c, buckets } => {
                 format!("skuctabs:{iterations}:{c}:{buckets}")
             }
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, endgame } => {
-                let rollout = format!("{}{}{}{}{}{}", perish.label(), m16c.label(), if *mixed {":mix"} else {""}, if *bp {""} else {":-bp"}, if *relay {""} else {":-relay"}, endgame_label(endgame));
+            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, stall, endgame } => {
+                let rollout = format!("{}{}{}{}{}{}{}", perish.label(), m16c.label(), if *mixed {":mix"} else {""}, if *bp {""} else {":-bp"}, if *relay {""} else {":-relay"}, if *stall {""} else {":-stall"}, endgame_label(endgame));
                 if *mask == legacy_mask() {
                     return format!("blindlegacy:{iterations}:{c}:{buckets}{rollout}");
                 }
@@ -689,14 +698,15 @@ impl AgentSpec {
                     if diff.is_empty() { String::new() } else { format!(":{}", diff.join(",")) };
                 format!("blind:{iterations}:{c}:{buckets}{suffix}{rollout}")
             }
-            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, endgame } => {
+            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, relay, stall, endgame } => {
                 let rollout = format!(
-                    "{}{}{}{}{}{}",
+                    "{}{}{}{}{}{}{}",
                     perish.label(),
                     m16c.label(),
                     if *mixed { ":mix" } else { "" },
                     if *bp { "" } else { ":-bp" },
                     if *relay { "" } else { ":-relay" },
+                    if *stall { "" } else { ":-stall" },
                     endgame_label(endgame),
                 );
                 let diff: Vec<String> = mask_fields(mask)
@@ -951,8 +961,17 @@ fn main() {
                 })
                 .count()
         };
+        const HEAL_KEYS: &[&str] = &[
+            "rest",
+            "recover",
+            "softboiled",
+            "milkdrink",
+            "moonlight",
+            "morningsun",
+            "synthesis",
+        ];
         for (name, keys) in [
-            ("--heal-min", &["rest", "recover", "softboiled", "milkdrink"][..]),
+            ("--heal-min", HEAL_KEYS),
             ("--phaze-min", &["roar", "whirlwind"][..]),
             // `--sleeptalk-min 1` selects the teams that can exercise the
             // awake-Sleep-Talk rule at all. No value GUARANTEES a carrier in
@@ -968,6 +987,12 @@ fn main() {
                 eprintln!("{name} {n}: {before} -> {} teams", teams.len());
                 assert!(teams.len() >= 2, "{name} {n} left fewer than 2 teams");
             }
+        }
+        if let Some(n) = flag(&args, "--heal-max").map(|v| v.parse::<usize>().unwrap()) {
+            let before = teams.len();
+            teams.retain(|sets| carries(sets, HEAL_KEYS) <= n);
+            eprintln!("--heal-max {n}: {before} -> {} teams", teams.len());
+            assert!(teams.len() >= 2, "--heal-max {n} left fewer than 2 teams");
         }
         // `--perish-min 1` selects the teams that carry a trapper which can
         // also sing (Mean Look / Spider Web AND Perish Song on one set) —
