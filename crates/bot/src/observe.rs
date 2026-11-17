@@ -230,12 +230,6 @@ pub struct Observer {
     own_active_alive: bool,
     own_type_modified: bool,
     pending_hp: Option<(usize, SpeciesId)>,
-    cumulative_move_count: u64,
-    prev_public_pp_spent: u64,
-    pending_cycle_hash: u64,
-    history_hashes: [u64; 8],
-    history_len: u8,
-    history_cursor: u8,
     revision: u64,
 }
 
@@ -390,12 +384,6 @@ impl Observer {
             own_active_alive: false,
             own_type_modified: false,
             pending_hp: None,
-            cumulative_move_count: 0,
-            prev_public_pp_spent: 0,
-            pending_cycle_hash: 0,
-            history_hashes: [0; 8],
-            history_len: 0,
-            history_cursor: 0,
             revision: 0,
         }
     }
@@ -460,12 +448,6 @@ impl Observer {
             own_active_alive: false,
             own_type_modified: false,
             pending_hp: None,
-            cumulative_move_count: 0,
-            prev_public_pp_spent: 0,
-            pending_cycle_hash: 0,
-            history_hashes: [0; 8],
-            history_len: 0,
-            history_cursor: 0,
             revision: 0,
         }
     }
@@ -486,46 +468,6 @@ impl Observer {
     /// Bumped whenever new information arrives (belief sync trigger).
     pub fn revision(&self) -> u64 {
         self.revision
-    }
-
-    #[inline]
-    pub fn cumulative_move_count(&self) -> u64 {
-        self.cumulative_move_count
-    }
-
-    #[inline]
-    pub fn history_hashes(&self) -> &[u64] {
-        &self.history_hashes[..(self.history_len as usize)]
-    }
-
-    /// Record a root public cycle hash into the 8-slot ring buffer without bumping `revision`.
-    #[inline]
-    pub fn record_cycle_hash(&mut self, hash: u64) {
-        if hash == 0 {
-            return;
-        }
-        let len = self.history_len as usize;
-        if self.history_hashes[..len].contains(&hash) {
-            return;
-        }
-        let idx = (self.history_cursor as usize) & 7;
-        self.history_hashes[idx] = hash;
-        self.history_cursor = self.history_cursor.wrapping_add(1) & 7;
-        if self.history_len < 8 {
-            self.history_len += 1;
-        }
-    }
-
-    /// Idempotently advance the root public cycle hash across decisions: promotes the previous
-    /// decision's hash into `history_hashes` only when the board has moved to a distinct hash.
-    #[inline]
-    pub fn advance_root_cycle_hash(&mut self, current_hash: u64) {
-        if self.pending_cycle_hash != 0 && self.pending_cycle_hash != current_hash {
-            self.record_cycle_hash(self.pending_cycle_hash);
-        }
-        if current_hash != 0 {
-            self.pending_cycle_hash = current_hash;
-        }
     }
 
     /// True if `item_id` is impossible for opponent slot `slot` given
@@ -616,7 +558,6 @@ impl Observer {
         }
 
         // ---- channel 2: incremental protocol-log scan (log-on battles)
-        let had_new_log = battle.log.len() > self.log_pos;
         if battle.log.len() < self.log_pos {
             // log was cleared (set_log_enabled(false)); lose the tail
             self.log_pos = battle.log.len();
@@ -626,22 +567,6 @@ impl Observer {
             dirty |= self.scan_line(&line, dex);
         }
         self.log_pos = battle.log.len();
-
-        // Log-off fallback: advance `cumulative_move_count` whenever public PP spent changes
-        let mut pub_pp_spent = 0u64;
-        for side_st in &battle.sides {
-            for p in &side_st.roster {
-                for s in &p.base_move_slots {
-                    pub_pp_spent = pub_pp_spent.wrapping_add(s.maxpp.saturating_sub(s.pp) as u64);
-                }
-            }
-        }
-        if !had_new_log && pub_pp_spent != self.prev_public_pp_spent {
-            self.cumulative_move_count = self
-                .cumulative_move_count
-                .wrapping_add(pub_pp_spent.abs_diff(self.prev_public_pp_spent).max(1));
-        }
-        self.prev_public_pp_spent = pub_pp_spent;
 
         if dirty {
             self.revision += 1;
@@ -762,9 +687,6 @@ impl Observer {
                 }
             }
             "move" => {
-                if !parts.iter().any(|p| p.starts_with("[from] ")) {
-                    self.cumulative_move_count = self.cumulative_move_count.wrapping_add(1);
-                }
                 dirty |= self.scan_move(&parts, dex);
             }
             "turn" => {

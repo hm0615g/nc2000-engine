@@ -130,11 +130,18 @@ fn relay_bellman_proactive_pressure_evasion_deadline_and_premature_pass_guard() 
 
     let (_, p0_base) = eval_root_pinned(&dex, &b_a1, 0, LeafSettlementMode::BlindSpotLeafNoRelay, iters, 11);
     let (_, p0_cand) = eval_root_pinned(&dex, &b_a1, 0, LeafSettlementMode::BlindSpotLeaf, iters, 11);
-    let (surf_b, _, _) = find_stat(&p0_base, "move surf");
-    let (surf_c, _, _) = find_stat(&p0_cand, "move surf");
+    let (_, _, nr_tox_m) = find_stat(&p0_base, "move toxic");
+    let (_, _, nr_sw3_m) = find_stat(&p0_base, "switch 3");
+    let (surf_c, surf_qc, _) = find_stat(&p0_cand, "move surf");
+    let (ib_c, ib_qc, _) = find_stat(&p0_cand, "move icebeam");
+    let (_, tox_qc, tox_mc) = find_stat(&p0_cand, "move toxic");
+    let (_, sw3_qc, sw3_mc) = find_stat(&p0_cand, "switch 3");
     assert!(
-        surf_c > surf_b + 0.10 && surf_c > 0.30,
-        "Suicune must shift decisively toward Surf pressure vs Jolteon Sub/BP: base={surf_b:.3}, cand={surf_c:.3}"
+        surf_c + ib_c > 0.55
+            && surf_qc.max(ib_qc) > tox_qc
+            && surf_qc.max(ib_qc) > sw3_qc
+            && (tox_mc + sw3_mc) > (nr_tox_m + nr_sw3_m) + 0.25,
+        "Suicune must maintain top-Q Sub-breaking pressure while countering Jolteon Relay mix: base={p0_base:?}, cand={p0_cand:?}"
     );
 
     // 2. Test A2: Snorlax + Raikou [Roar] vs Zapdos [Double Team, Sub, BP] + Marowak

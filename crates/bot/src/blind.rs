@@ -79,7 +79,7 @@ use crate::prior::BeliefPrior;
 use crate::rng::SplitMix64;
 #[cfg(test)]
 use crate::smmcts::key_of;
-use crate::smmcts::{key_of_cached, Node, RmConfig, SkuctSearch};
+use crate::smmcts::{key_of_cached, run_iteration_cached, Node, RmConfig, SkuctSearch};
 
 enum BeliefSource {
     Pool {
@@ -303,13 +303,6 @@ impl ImperfectInfoCore {
                 .local
                 .position(dex, &mut g.belief, &g.observer, &mut self.rng)
                 .expect("player reconstruction failed");
-            if !is_preview {
-                let h = crate::smmcts::public_cycle_hash(
-                    pos.model(),
-                    g.observer.cumulative_move_count(),
-                );
-                g.observer.advance_root_cycle_hash(h);
-            }
             let has_prior = g.belief.has_preview_prior(&g.observer);
             (pos, has_prior)
         };
@@ -1105,7 +1098,6 @@ impl BlindSearch {
         ) && matches!(
             cfg.settlement,
             crate::accounting::LeafSettlementMode::BlindSpotLeaf
-                | crate::accounting::LeafSettlementMode::BlindSpotLeafNoStall
                 | crate::accounting::LeafSettlementMode::BlindSpotLeafNoRelay
                 | crate::accounting::LeafSettlementMode::BlindSpotRollout
                 | crate::accounting::LeafSettlementMode::BlindSpotBoth
@@ -1661,7 +1653,7 @@ impl BlindSearch {
             self.max_depth = self.max_depth.max(iter_depth);
             v
         } else {
-            let v = crate::smmcts::run_iteration_with_history_cached(
+            let v = run_iteration_cached(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.nodes,
@@ -1673,22 +1665,7 @@ impl BlindSearch {
                 force,
                 &mut joint,
                 &mut iter_depth,
-                &mut |sim, rng, rollout| {
-                    crate::smmcts::default_leaf_cached(
-                        &self.cfg,
-                        sim,
-                        dex,
-                        self.turn_cap,
-                        rng,
-                        rollout,
-                        Some(&cache),
-                    )
-                },
-                None,
-                None,
                 Some(&cache),
-                obs.history_hashes(),
-                obs.cumulative_move_count(),
             );
             self.depth_sum += u64::from(iter_depth);
             self.max_depth = self.max_depth.max(iter_depth);
@@ -1967,7 +1944,7 @@ impl BlindSearch {
             self.max_depth = self.max_depth.max(iter_depth);
             v
         } else {
-            let v = crate::smmcts::run_iteration_with_history_cached(
+            let v = run_iteration_cached(
                 &self.cfg,
                 &mut self.rng,
                 &mut self.nodes,
@@ -1979,22 +1956,7 @@ impl BlindSearch {
                 force,
                 &mut joint,
                 &mut iter_depth,
-                &mut |sim, rng, rollout| {
-                    crate::smmcts::default_leaf_cached(
-                        &self.cfg,
-                        sim,
-                        dex,
-                        self.turn_cap,
-                        rng,
-                        rollout,
-                        Some(&cache),
-                    )
-                },
-                None,
-                None,
                 Some(&cache),
-                obs.history_hashes(),
-                obs.cumulative_move_count(),
             );
             self.depth_sum += u64::from(iter_depth);
             self.max_depth = self.max_depth.max(iter_depth);

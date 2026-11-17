@@ -6,12 +6,9 @@ pub enum LeafSettlementMode {
     /// Legacy 8-turn `eps = 0.2` rollout + `eval::compact_eval_leaf`.
     #[default]
     LegacyRollout,
-    /// Shipped default: Setup-Relay simultaneous-move Bellman leaf lift + finite-PP stall solver
-    /// + equilibrium-gated rollout continuation on top of `eval::compact_eval_leaf_blindspot`.
+    /// Shipped default: Setup-Relay simultaneous-move Bellman leaf lift + equilibrium-gated
+    /// rollout continuation on top of `eval::compact_eval_leaf_blindspot`.
     BlindSpotLeaf,
-    /// Ablation baseline without the finite-PP stall solver (`-stall`): Setup-Relay Bellman
-    /// leaf lift + infinite-PP `GAMMA = 0.985` stage-game baseline (`HEAD` parity).
-    BlindSpotLeafNoStall,
     /// Ablation baseline without the Setup-Relay Bellman solver (`-relay`): legacy 8-turn
     /// `eps = 0.2` rollout + static `eval::compact_eval_leaf_blindspot_norelay`.
     BlindSpotLeafNoRelay,
@@ -27,20 +24,12 @@ impl LeafSettlementMode {
     pub const fn uses_blindspot_leaf(self) -> bool {
         matches!(
             self,
-            Self::BlindSpotLeaf
-                | Self::BlindSpotLeafNoStall
-                | Self::BlindSpotLeafNoRelay
-                | Self::BlindSpotBoth
+            Self::BlindSpotLeaf | Self::BlindSpotLeafNoRelay | Self::BlindSpotBoth
         )
     }
 
     #[inline]
     pub const fn uses_relay_bellman(self) -> bool {
-        matches!(self, Self::BlindSpotLeaf | Self::BlindSpotLeafNoStall)
-    }
-
-    #[inline]
-    pub const fn uses_stall_solver(self) -> bool {
         matches!(self, Self::BlindSpotLeaf)
     }
 

@@ -2778,21 +2778,9 @@ impl ProtocolAgent {
             }
         }
 
-        let pos = {
-            let obs = self.observer.as_ref().unwrap();
+        let pos =
             self.tracker
-                .reconstruct_position(dex, &self.own_sets, belief, obs, &req, &mut self.rng)?
-        };
-        if !req.team_preview && !req.wait {
-            if let Some(obs_mut) = self.observer.as_mut() {
-                let h = crate::smmcts::public_cycle_hash(
-                    pos.model(),
-                    obs_mut.cumulative_move_count(),
-                );
-                obs_mut.advance_root_cycle_hash(h);
-            }
-        }
-        let obs = self.observer.as_ref().unwrap();
+                .reconstruct_position(dex, &self.own_sets, belief, obs, &req, &mut self.rng)?;
         let battle = pos.model().clone();
         // search + preview policy
         let mut search =

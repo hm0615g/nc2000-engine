@@ -434,17 +434,6 @@ pub fn eval_leaf_blindspot_cached(
 }
 
 #[inline]
-pub fn eval_leaf_blindspot_nostall_cached(
-    b: &Battle,
-    dex: &Dex,
-    w: &EvalWeights,
-    roster_cache: Option<&nc2000_engine::compact::RosterCompactCache>,
-) -> f64 {
-    let (table, cb) = CompactBattle::from_battle_with_roster_cache(b, dex, roster_cache);
-    compact_eval_leaf_blindspot_nostall(&cb, &table, w)
-}
-
-#[inline]
 pub fn eval_leaf_blindspot_norelay_cached(
     b: &Battle,
     dex: &Dex,
@@ -803,42 +792,6 @@ pub fn expected_hit_fraction(
 
 use nc2000_engine::compact::{vol_bit, CompactBattle, MatchTable};
 
-const fn const_exp_neg(x: f64) -> f64 {
-    if x <= 0.0 {
-        return 1.0;
-    }
-    let y = -x / 32.0;
-    let mut term = 1.0;
-    let mut sum = 1.0;
-    let mut k = 1;
-    while k <= 14 {
-        term *= y / (k as f64);
-        sum += term;
-        k += 1;
-    }
-    let s1 = sum * sum;
-    let s2 = s1 * s1;
-    let s4 = s2 * s2;
-    let s8 = s4 * s4;
-    let s16 = s8 * s8;
-    s16 * s16
-}
-
-const fn build_pp_scarce_penalty_table(tau: f64) -> [f64; 65] {
-    let mut out = [0.0; 65];
-    let norm = 1.0 - const_exp_neg(5.0 / tau);
-    let mut i = 0;
-    while i < 5 {
-        let u = (1.0 - const_exp_neg((i as f64) / tau)) / norm;
-        out[i] = -(1.0 - u);
-        i += 1;
-    }
-    out
-}
-
-const PP_SCARCE_25: [f64; 65] = build_pp_scarce_penalty_table(2.5);
-const PP_SCARCE_20: [f64; 65] = build_pp_scarce_penalty_table(2.0);
-
 /// Leaf evaluation on `CompactBattle` mirroring [`eval_leaf`].
 #[inline]
 pub fn compact_eval_leaf(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
@@ -846,23 +799,12 @@ pub fn compact_eval_leaf(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights
     0.5 + w.leaf_alpha * (compact_eval01(cb, table, w) - 0.5)
 }
 
-/// Leaf evaluation on `CompactBattle` with surgical blind-spot balance-sheet accounting,
-/// finite-PP stall solver + shadow pricing, and Setup-Relay simultaneous-move Bellman subgame lift.
+/// Leaf evaluation on `CompactBattle` with surgical blind-spot balance-sheet accounting
+/// and Setup-Relay simultaneous-move Bellman subgame lift.
 #[inline]
 pub fn compact_eval_leaf_blindspot(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
     assert!((0.0..=1.0).contains(&w.leaf_alpha), "leaf alpha must be in [0,1]");
     0.5 + w.leaf_alpha * (compact_eval01_blindspot(cb, table, w) - 0.5)
-}
-
-/// Ablation leaf evaluation without finite-PP stall solver (`-stall`).
-#[inline]
-pub fn compact_eval_leaf_blindspot_nostall(
-    cb: &CompactBattle,
-    table: &MatchTable,
-    w: &EvalWeights,
-) -> f64 {
-    assert!((0.0..=1.0).contains(&w.leaf_alpha), "leaf alpha must be in [0,1]");
-    0.5 + w.leaf_alpha * (compact_eval01_blindspot_nostall(cb, table, w) - 0.5)
 }
 
 /// Ablation leaf evaluation without Setup-Relay Bellman lift (`-relay`).
@@ -877,22 +819,12 @@ pub fn compact_eval_leaf_blindspot_norelay(
 }
 
 /// Win-probability-shaped eval in `(0, 1)` from side 0's perspective on `CompactBattle`,
-/// adding `compact_false_boost_refund_diff`, `compact_pp_shadow_diff` (`n0 + n1 >= 4`),
-/// finite-PP endurance Bellman solver, and `relay::apply_relay_leaf_lift`.
+/// adding `compact_false_boost_refund_diff` and `relay::apply_relay_leaf_lift`
+/// (strictly antisymmetric, `0.0` on `1v1` so exact Schur-Bellman / Toeplitz M17e anchors
+/// remain 0-ULP invariant).
 #[inline]
 pub fn compact_eval01_blindspot(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
-    let v_base = compact_eval01_blindspot_impl(cb, table, w, true);
-    crate::relay::apply_relay_leaf_lift(cb, table, w, v_base)
-}
-
-/// Ablation win probability without the finite-PP stall solver (`-stall`, `HEAD` parity).
-#[inline]
-pub fn compact_eval01_blindspot_nostall(
-    cb: &CompactBattle,
-    table: &MatchTable,
-    w: &EvalWeights,
-) -> f64 {
-    let v_base = compact_eval01_blindspot_impl(cb, table, w, false);
+    let v_base = compact_eval01_blindspot_norelay(cb, table, w);
     crate::relay::apply_relay_leaf_lift(cb, table, w, v_base)
 }
 
@@ -903,30 +835,13 @@ pub fn compact_eval01_blindspot_norelay(
     table: &MatchTable,
     w: &EvalWeights,
 ) -> f64 {
-    let is_1v1 =
-        cb.sides[0].alive_mask.count_ones() == 1 && cb.sides[1].alive_mask.count_ones() == 1;
-    compact_eval01_blindspot_impl(cb, table, w, is_1v1)
-}
-
-#[inline]
-fn compact_eval01_blindspot_impl(
-    cb: &CompactBattle,
-    table: &MatchTable,
-    w: &EvalWeights,
-    stall_pp: bool,
-) -> f64 {
+    let s0 = compact_side_score(cb, table, w, 0);
+    let s1 = compact_side_score(cb, table, w, 1);
+    let mut diff = s0 - s1;
     let n0 = cb.sides[0].alive_mask.count_ones();
     let n1 = cb.sides[1].alive_mask.count_ones();
-    let include_flat_pp =
-        !(stall_pp && n0 == 1 && n1 == 1 && crate::linear::is_1v1_pp_scarce(cb, table));
-    let s0 = compact_side_score_ext(cb, table, w, 0, include_flat_pp);
-    let s1 = compact_side_score_ext(cb, table, w, 1, include_flat_pp);
-    let mut diff = s0 - s1;
     if n0 > 1 || n1 > 1 {
         diff += compact_false_boost_refund_diff(cb, table, w);
-        if stall_pp && n0 + n1 >= 4 {
-            diff += compact_pp_shadow_diff(cb, table, w);
-        }
     }
     let mut old_rm = 0.0;
     if w.race != 0.0 {
@@ -936,206 +851,8 @@ fn compact_eval01_blindspot_impl(
     if w.exchange != 0.0 {
         diff += w.exchange * compact_exchange_margin(cb, table, w);
     }
-    diff +=
-        crate::linear::compact_linear_diff_ext(cb, table, diff, old_rm, w.race, w.scale, stall_pp);
+    diff += crate::linear::compact_linear_diff(cb, table, diff, old_rm, w.race, w.scale);
     1.0 / (1.0 + (-(w.scale * diff)).exp())
-}
-
-/// Opponent-conditioned concave PP shadow price differential for `n0 + n1 >= 4`.
-/// Strictly antisymmetric: `compact_side_pp_shadow(0) - compact_side_pp_shadow(1)`.
-#[inline]
-pub fn compact_pp_shadow_diff(
-    cb: &CompactBattle,
-    table: &MatchTable,
-    w: &EvalWeights,
-) -> f64 {
-    if cb.sides[0].alive_mask.count_ones() + cb.sides[1].alive_mask.count_ones() < 4 {
-        return 0.0;
-    }
-    compact_side_pp_shadow(cb, table, w, 0) - compact_side_pp_shadow(cb, table, w, 1)
-}
-
-#[inline]
-fn compact_side_pp_shadow(
-    cb: &CompactBattle,
-    table: &MatchTable,
-    w: &EvalWeights,
-    s: usize,
-) -> f64 {
-    let me_mask = cb.sides[s].alive_mask;
-    let mut any_scarce_me = false;
-    for u in 0..3usize {
-        if (me_mask & (1 << u)) != 0 {
-            let u_idx = s * 3 + u;
-            let u_mon = &cb.mons[u_idx];
-            if u_mon.hp() > 0 {
-                for m in 0..table.mons[u_idx].num_moves as usize {
-                    if u_mon.pp[m] < 3 {
-                        any_scarce_me = true;
-                        break;
-                    }
-                }
-            }
-            if any_scarce_me {
-                break;
-            }
-        }
-    }
-    if !any_scarce_me {
-        return 0.0;
-    }
-
-    let foe = 1 - s;
-    let foe_mask = cb.sides[foe].alive_mask;
-
-    let mut foe_is_stall = [false; 3];
-    let mut any_foe_stall = false;
-    let mut foe_has_setup_or_bp = false;
-    let mut foe_atk_pp: u32 = 0;
-
-    for v in 0..3usize {
-        if (foe_mask & (1 << v)) == 0 {
-            continue;
-        }
-        let f_idx = foe * 3 + v;
-        let f_mon = &cb.mons[f_idx];
-        if f_mon.hp() <= 0 {
-            continue;
-        }
-        let f_spec = &table.mons[f_idx];
-        if (f_mon.vol_flags & vol_bit::SUBSTITUTE) != 0
-            || f_mon.boosts.iter().any(|&b| b > 0)
-        {
-            foe_has_setup_or_bp = true;
-        }
-        let f_dis = (f_mon.vol_flags & vol_bit::DISABLE) != 0;
-        let f_dis_slot = ((f_mon.slot_refs >> 4) & 0x03) as usize;
-        let f_perish = (f_mon.vol_flags & vol_bit::PERISH_SONG) != 0;
-        for m in 0..f_spec.num_moves as usize {
-            let pp = f_mon.pp[m];
-            let ms = &table.move_specs[f_idx][m];
-            if pp > 0 && !(f_dis && m == f_dis_slot) {
-                if !f_perish && (ms.is_half_heal || ms.special_kind == 29 || ms.is_rest) {
-                    foe_is_stall[v] = true;
-                    any_foe_stall = true;
-                }
-                if ms.boosts_self
-                    || matches!(ms.pseudo_kind, 5..=8)
-                    || ms.is_substitute
-                    || ms.special_kind == 18
-                {
-                    foe_has_setup_or_bp = true;
-                }
-                if !ms.is_status && !ms.is_selfdestruct {
-                    foe_atk_pp += pp as u32;
-                }
-            }
-        }
-    }
-
-    let foe_atk_pressure = ((foe_atk_pp as f64) / 32.0).clamp(0.0, 1.0);
-    let me_last = me_mask.count_ones() <= 1;
-    let mut total = 0.0f64;
-
-    for u in 0..3usize {
-        if (me_mask & (1 << u)) == 0 {
-            continue;
-        }
-        let u_idx = s * 3 + u;
-        let u_mon = &cb.mons[u_idx];
-        if u_mon.hp() <= 0 {
-            continue;
-        }
-        let u_spec = &table.mons[u_idx];
-        let num_m = u_spec.num_moves as usize;
-        if !(0..num_m).any(|m| u_mon.pp[m] < 3) {
-            continue;
-        }
-
-        let mut hit_frac = [[-1.0f64; 3]; 4];
-        for m in 0..num_m {
-            let pp = (u_mon.pp[m] as usize).min(64);
-            if pp >= 3 {
-                continue;
-            }
-            let ms = &table.move_specs[u_idx][m];
-
-            // 1. Break shadow price (`tau = 2.5`), active only when move `m` crosses `d_thresh = 0.36` vs foe stall
-            if any_foe_stall && !ms.is_status && !(me_last && ms.is_selfdestruct) {
-                let mut max_gap = 0.0f64;
-                for v in 0..3usize {
-                    if !foe_is_stall[v] {
-                        continue;
-                    }
-                    if hit_frac[m][v] < 0.0 {
-                        hit_frac[m][v] =
-                            cb.expected_hit_fraction(table, s, u, foe, v, m, w.couple_evasion);
-                    }
-                    let d_m = hit_frac[m][v];
-                    if d_m < 0.36 {
-                        continue;
-                    }
-                    let mut d_other = 0.0f64;
-                    for m2 in 0..num_m {
-                        if m2 != m && u_mon.pp[m2] > 0 {
-                            let ms2 = &table.move_specs[u_idx][m2];
-                            if ms2.is_status || (me_last && ms2.is_selfdestruct) {
-                                continue;
-                            }
-                            if hit_frac[m2][v] < 0.0 {
-                                hit_frac[m2][v] = cb.expected_hit_fraction(
-                                    table,
-                                    s,
-                                    u,
-                                    foe,
-                                    v,
-                                    m2,
-                                    w.couple_evasion,
-                                );
-                            }
-                            if hit_frac[m2][v] > d_other {
-                                d_other = hit_frac[m2][v];
-                            }
-                        }
-                    }
-                    if d_other >= 0.38 {
-                        continue;
-                    }
-                    let gap = ((d_m.min(0.55) - d_other.max(0.20)) / 0.25).clamp(0.0, 1.0);
-                    if gap > max_gap {
-                        max_gap = gap;
-                    }
-                }
-                if max_gap > 0.0 {
-                    total += 0.08 * max_gap * PP_SCARCE_25[pp];
-                }
-            }
-
-            // 2. Scarce instant heal shadow price (`tau = 2.0`), conditioned on foe attack PP
-            if foe_atk_pressure > 0.0 && (ms.is_half_heal || ms.special_kind == 29) {
-                let w_h = if u_spec.max_pp[m] <= 8 { 0.08 } else { 0.05 };
-                total += w_h * foe_atk_pressure * PP_SCARCE_20[pp];
-            }
-
-            // 3. Control / Spite shadow price (`tau = 2.0`)
-            if foe_has_setup_or_bp
-                && matches!(ms.special_kind, 7 | 8 | 19 | 27)
-            {
-                total += 0.06 * PP_SCARCE_20[pp];
-            } else if any_foe_stall
-                && ms.is_status
-                && ms.move_type == table.ghost_type
-                && ms.special_kind == 0
-                && ms.primary_vol == 0
-                && ms.primary_status == 0
-                && ms.boosts[0].0 == 0xFF
-            {
-                total += 0.05 * PP_SCARCE_20[pp];
-            }
-        }
-    }
-
-    total
 }
 
 /// Strictly antisymmetric balance-sheet adjustment in `compact_eval01_blindspot`:
@@ -1356,11 +1073,8 @@ fn compact_side_false_boost_refund(
 /// Win-probability-shaped eval in `(0, 1)` from side 0's perspective on `CompactBattle`.
 #[inline]
 pub fn compact_eval01(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
-    let is_1v1 =
-        cb.sides[0].alive_mask.count_ones() == 1 && cb.sides[1].alive_mask.count_ones() == 1;
-    let include_flat_pp = !(is_1v1 && crate::linear::is_1v1_pp_scarce(cb, table));
-    let s0 = compact_side_score_ext(cb, table, w, 0, include_flat_pp);
-    let s1 = compact_side_score_ext(cb, table, w, 1, include_flat_pp);
+    let s0 = compact_side_score(cb, table, w, 0);
+    let s1 = compact_side_score(cb, table, w, 1);
     let mut diff = s0 - s1;
     let mut old_rm = 0.0;
     if w.race != 0.0 {
@@ -1370,17 +1084,16 @@ pub fn compact_eval01(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -
     if w.exchange != 0.0 {
         diff += w.exchange * compact_exchange_margin(cb, table, w);
     }
-    diff += crate::linear::compact_linear_diff_ext(cb, table, diff, old_rm, w.race, w.scale, is_1v1);
+    diff += crate::linear::compact_linear_diff(cb, table, diff, old_rm, w.race, w.scale);
     1.0 / (1.0 + (-(w.scale * diff)).exp())
 }
 
 #[inline]
-fn compact_side_score_ext(
+fn compact_side_score(
     cb: &CompactBattle,
     table: &MatchTable,
     w: &EvalWeights,
     s: usize,
-    include_linear_pp: bool,
 ) -> f64 {
     let side_st = &cb.sides[s];
     let mut score = 0.0;
@@ -1430,7 +1143,7 @@ fn compact_side_score_ext(
             pp_den += spec.max_pp[m_i] as f64;
         }
     }
-    if include_linear_pp && pp_den > 0.0 {
+    if pp_den > 0.0 {
         score += w.pp * pp_num / pp_den;
     }
     if w.spikes != 0.0 && spikes_exposed > 0 {

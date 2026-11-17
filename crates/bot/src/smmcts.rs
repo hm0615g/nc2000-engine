@@ -647,60 +647,6 @@ pub(crate) fn select_ucb_counts(
 /// root's per-action means, and everything below the root selects normally.
 /// Returns the iteration's side-0 reward and writes the root joint's action
 /// indices into `root_joint`.
-/// Determinization-invariant public cycle hash over `(active_species, 16-bucket HP, status,
-/// stat_stages, spikes/screens, living_count, move_epoch)`. Collides only when both players
-/// return to the same public board bucket with zero moves executed (`move_epoch` unchanged).
-#[inline]
-pub fn public_cycle_hash(b: &Battle, move_epoch: u64) -> u64 {
-    #[inline]
-    fn mix64(mut x: u64) -> u64 {
-        x ^= x >> 30;
-        x = x.wrapping_mul(0xbf58_476d_1ce4_e5b9);
-        x ^= x >> 27;
-        x = x.wrapping_mul(0x94d0_49bb_1331_11eb);
-        x ^ (x >> 31)
-    }
-
-    #[inline]
-    fn side_pub_hash(b: &Battle, s: usize) -> u64 {
-        let side = &b.sides[s];
-        let mut h = 0x9e37_79b9_7f4a_7c15u64 ^ (side.pokemon_left.max(0) as u64);
-        let mut cond_xor = 0u64;
-        for &(cid, _) in &side.side_conditions {
-            cond_xor ^= mix64((cid.0 as u64).wrapping_add(0x517c_c1b7_2722_0a95));
-        }
-        h = mix64(h ^ cond_xor);
-        if let Some(act_r) = side.active {
-            let p = &side.roster[act_r as usize];
-            let hp_b16 = if p.hp <= 0 || p.fainted {
-                0u64
-            } else {
-                (((p.hp as u64) * 16 + (p.maxhp.max(1) as u64) - 1) / (p.maxhp.max(1) as u64))
-                    .clamp(1, 16)
-            };
-            h = mix64(
-                h ^ ((p.base_species.0 as u64) << 16)
-                    ^ ((p.level as u64) << 8)
-                    ^ (hp_b16 << 3)
-                    ^ (p.status as u8 as u64),
-            );
-            let mut packed_boosts = 0u64;
-            for (i, &st) in p.boosts.iter().enumerate() {
-                packed_boosts |= (((st + 6).clamp(0, 12) as u64) & 0xF) << (i * 4);
-            }
-            h = mix64(h ^ packed_boosts);
-        }
-        h
-    }
-
-    let h0 = side_pub_hash(b, 0);
-    let h1 = side_pub_hash(b, 1);
-    let combined = mix64(h0 ^ h1.rotate_left(31) ^ (b.field.weather.map_or(0, |w| w.0 as u64 + 1) << 48))
-        ^ mix64(move_epoch.wrapping_add(0x6c62_272e_07bb_0142));
-    let out = mix64(combined);
-    if out == 0 { 1 } else { out }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_iteration_cached(
     cfg: &RmConfig,
@@ -716,7 +662,7 @@ pub(crate) fn run_iteration_cached(
     depth_out: &mut u32,
     cache: Option<&nc2000_engine::battle::BattleSearchCache>,
 ) -> f64 {
-    run_iteration_with_history_cached(
+    run_iteration_with_root_child_value_cached(
         cfg,
         rng,
         nodes,
@@ -732,8 +678,6 @@ pub(crate) fn run_iteration_cached(
         None,
         None,
         cache,
-        &[],
-        0,
     )
 }
 
@@ -754,9 +698,9 @@ pub(crate) fn run_iteration_with_leaf_cached(
     trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
     cache: Option<&nc2000_engine::battle::BattleSearchCache>,
 ) -> f64 {
-    run_iteration_with_history_cached(
+    run_iteration_with_root_child_value_cached(
         cfg, rng, nodes, table, sim, dex, turn_cap, start, force_root, root_joint, depth_out, leaf,
-        trace, None, cache, &[], 0,
+        trace, None, cache,
     )
 }
 
@@ -774,82 +718,14 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
     root_joint: &mut [usize; 2],
     depth_out: &mut u32,
     leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
-    trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
-    root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
-    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
-) -> f64 {
-    run_iteration_with_history_cached(
-        cfg,
-        rng,
-        nodes,
-        table,
-        sim,
-        dex,
-        turn_cap,
-        start,
-        force_root,
-        root_joint,
-        depth_out,
-        leaf,
-        trace,
-        root_child_value,
-        cache,
-        &[],
-        0,
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn run_iteration_with_history_cached(
-    cfg: &RmConfig,
-    rng: &mut SplitMix64,
-    nodes: &mut Vec<Node>,
-    table: &mut FxHashMap<u64, usize>,
-    sim: &mut Battle,
-    dex: &Dex,
-    turn_cap: u16,
-    start: usize,
-    force_root: [Option<usize>; 2],
-    root_joint: &mut [usize; 2],
-    depth_out: &mut u32,
-    leaf: &mut (impl FnMut(&mut Battle, &mut SplitMix64, bool) -> f64 + ?Sized),
     mut trace: Option<&mut dyn FnMut(SearchTrace<'_>)>,
     mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
     cache: Option<&nc2000_engine::battle::BattleSearchCache>,
-    outer_history: &[u64],
-    base_epoch: u64,
 ) -> f64 {
     let mut path_buf = [(0usize, 0usize, 0usize); 32];
     let mut path_len = 0usize;
     let mut path_overflow: Vec<(usize, usize, usize)> = Vec::new();
     let mut node_idx = start;
-
-    let mut seen_hashes = [(0u64, 0u8); 16];
-    let mut seen_len = 0usize;
-    let mut outer_has_repeat = false;
-    if cfg.settlement.uses_stall_solver()
-        && !matches!(
-            sim.request_state,
-            nc2000_engine::state::RequestState::TeamPreview
-        )
-    {
-        for &h in outer_history.iter().take(8) {
-            if h != 0 {
-                if let Some(slot) = seen_hashes[..seen_len].iter_mut().find(|(kh, _)| *kh == h) {
-                    slot.1 = slot.1.saturating_add(1);
-                    outer_has_repeat = true;
-                } else if seen_len < seen_hashes.len() {
-                    seen_hashes[seen_len] = (h, 1);
-                    seen_len += 1;
-                }
-            }
-        }
-    }
-    let track_cycles = outer_has_repeat;
-    let mut cur_epoch = base_epoch;
-    let mut epoch_root_pushed = false;
-    let mut contract_plens = [0u8; 8];
-    let mut n_contracts = 0usize;
 
     // ---- selection until a leaf: terminal, horizon, or unexpanded state
     let reward0 = loop {
@@ -911,49 +787,11 @@ pub(crate) fn run_iteration_with_history_cached(
             crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
             break leaf(sim, rng, false);
         }
-        let any_move = matches!(joint[0], Some(SearchChoice::Move(_)))
-            || matches!(joint[1], Some(SearchChoice::Move(_)));
-        let is_double_switch = matches!(
-            joint,
-            [Some(SearchChoice::Switch(_)), Some(SearchChoice::Switch(_))]
-        );
-        if track_cycles && is_double_switch && !epoch_root_pushed {
-            let root_h = public_cycle_hash(sim, cur_epoch);
-            if let Some(slot) = seen_hashes[..seen_len]
-                .iter_mut()
-                .find(|(kh, _)| *kh == root_h)
-            {
-                slot.1 = slot.1.saturating_add(1);
-            } else if seen_len < seen_hashes.len() {
-                seen_hashes[seen_len] = (root_h, 1);
-                seen_len += 1;
-            }
-            epoch_root_pushed = true;
-        }
         sim.apply_choices(dex, joint)
             .expect("cached legal choice rejected (state_key collision?)");
         if let Some(o) = sim.outcome() {
             crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, Some(o)));
             break outcome_reward(o);
-        }
-        if track_cycles {
-            if any_move {
-                cur_epoch = cur_epoch.wrapping_add(1);
-                seen_len = 0;
-                epoch_root_pushed = false;
-            } else if is_double_switch {
-                let h = public_cycle_hash(sim, cur_epoch);
-                if let Some(slot) = seen_hashes[..seen_len].iter_mut().find(|(kh, _)| *kh == h) {
-                    slot.1 = slot.1.saturating_add(1);
-                    if slot.1 >= 3 && n_contracts < contract_plens.len() {
-                        contract_plens[n_contracts] = path_len.min(255) as u8;
-                        n_contracts += 1;
-                    }
-                } else if seen_len < seen_hashes.len() {
-                    seen_hashes[seen_len] = (h, 1);
-                    seen_len += 1;
-                }
-            }
         }
         if at_root {
             if let Some(value) = root_child_value
@@ -1029,33 +867,20 @@ pub(crate) fn run_iteration_with_history_cached(
         }
     };
 
-    let mut path_nodes = [(start as u32, 0u32); 32];
+    let mut path_nodes = [start; 32];
     let mut path_nodes_len = 0usize;
-    for (p_idx, &(ni, _, _)) in path_buf[..path_len].iter().enumerate() {
-        if path_nodes_len == 0 || path_nodes[path_nodes_len - 1].0 as usize != ni {
+    for &(ni, _, _) in &path_buf[..path_len] {
+        if path_nodes_len == 0 || path_nodes[path_nodes_len - 1] != ni {
             if path_nodes_len < path_nodes.len() {
-                path_nodes[path_nodes_len] = (ni as u32, p_idx as u32);
+                path_nodes[path_nodes_len] = ni;
                 path_nodes_len += 1;
             }
         }
     }
     let mut val0 = reward0;
     let mut root_reward0 = reward0;
-    let mut next_c_rev = n_contracts;
-    if path_nodes_len == 0 && n_contracts > 0 {
-        for _ in 0..n_contracts {
-            val0 = 0.5 + 0.5 * (val0 - 0.5);
-        }
-        root_reward0 = val0;
-    }
     for idx in (0..path_nodes_len).rev() {
-        let (ni_u32, first_p_u32) = path_nodes[idx];
-        let ni = ni_u32 as usize;
-        let first_p_idx = first_p_u32 as usize;
-        while next_c_rev > 0 && (contract_plens[next_c_rev - 1] as usize) > first_p_idx {
-            val0 = 0.5 + 0.5 * (val0 - 0.5);
-            next_c_rev -= 1;
-        }
+        let ni = path_nodes[idx];
         for &(p_ni, s, ai) in &path_buf[..path_len] {
             if p_ni == ni {
                 nodes[ni].w[s][ai] += if s == 0 { val0 } else { 1.0 - val0 };
@@ -1091,11 +916,7 @@ pub(crate) fn leaf_eval_cached(
         Playout::Uniform => crate::mcts::hp_eval(sim),
         Playout::Heavy { weights, .. } => {
             if cfg.settlement.uses_relay_bellman() {
-                if cfg.settlement.uses_stall_solver() {
-                    crate::eval::eval_leaf_blindspot_cached(sim, dex, weights, rc)
-                } else {
-                    crate::eval::eval_leaf_blindspot_nostall_cached(sim, dex, weights, rc)
-                }
+                crate::eval::eval_leaf_blindspot_cached(sim, dex, weights, rc)
             } else if cfg.settlement.uses_blindspot_leaf() {
                 crate::eval::eval_leaf_blindspot_norelay_cached(sim, dex, weights, rc)
             } else {
@@ -1188,7 +1009,6 @@ impl SkuctSearch {
         ) && matches!(
             cfg.settlement,
             crate::accounting::LeafSettlementMode::BlindSpotLeaf
-                | crate::accounting::LeafSettlementMode::BlindSpotLeafNoStall
                 | crate::accounting::LeafSettlementMode::BlindSpotLeafNoRelay
                 | crate::accounting::LeafSettlementMode::BlindSpotRollout
                 | crate::accounting::LeafSettlementMode::BlindSpotBoth
