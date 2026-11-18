@@ -6,7 +6,7 @@
 //!   budget_probe counterfactual --games GAMES.json --conv CONV.jsonl --pair 81000,243000 --out CF.jsonl [--trials 24] [--cont-iters 27000] [--threads 10] [--seed 1]
 //!   budget_probe duel --iters-a 243000 --iters-b 81000 --out DUEL.jsonl [--pairs 256] [--pair-start 0] [--preview-iters 243000] [--preview-cache PREV.json] [--seed 20261017003] [--threads 10]
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -804,11 +804,24 @@ fn cmd_convergence(args: &[String]) {
                     let m1 = ranked.first().map_or(0.5, |&i| means[i]);
                     let m2 = ranked.get(1).map_or(0.5, |&i| means[i]);
                     let best_idx = actions.iter().position(|&a| a == best).unwrap();
-                    let eq_overrides = eq.as_ref().is_some_and(|e| {
-                        e.override_value
-                            > e.pure_guarantees[eg.chosen_idx]
-                                + nc2000_bot::root_policy::MIN_MIX_MARGIN
+                    // Match best(): endgame choices return before the LP draw.
+                    let eq_override = eq.as_ref().filter(|e| {
+                        eg.regime == EndgameRegime::Normal
+                            && bs.iterations() >= 64
+                            && e.override_value
+                                > e.pure_guarantees[eg.chosen_idx]
+                                    + nc2000_bot::root_policy::MIN_MIX_MARGIN
                     });
+                    let action_stats: Vec<_> = ranked.iter().map(|&i| json!({
+                        "action": actions[i].to_input(dex),
+                        "visits": visits[i],
+                        "mean": means[i],
+                        "eq_probability": eq.as_ref().map(|e| e.policy[i]),
+                    })).collect();
+                    let mut reply_visits = BTreeMap::<String, u32>::new();
+                    for (_, reply, count, _) in bs.root_matrix() {
+                        *reply_visits.entry(reply.to_input(dex)).or_default() += count;
+                    }
 
                     ckpts_json.push(json!({
                         "iters": target_it,
@@ -818,7 +831,10 @@ fn cmd_convergence(args: &[String]) {
                         "endgame_choice": actions[eg.chosen_idx].to_input(dex),
                         "regime": regime_label(eg.regime),
                         "endgame_override": eg.chosen_idx != eg.legacy_idx,
-                        "eq_override": eq_overrides,
+                        "eq_override": eq_override.is_some(),
+                        "eq_mixed": eq_override.is_some_and(|e| e.policy.iter().filter(|&&p| p > 0.0).count() > 1),
+                        "action_stats": action_stats,
+                        "reply_visits": reply_visits,
                         "mean_depth": (bs.mean_depth() * 1000.0).round() / 1000.0,
                         "max_depth": bs.max_depth(),
                         "nodes": bs.node_count(),
@@ -869,7 +885,7 @@ fn cmd_convergence(args: &[String]) {
         let mut flips = 0usize;
         let mut legacy_flips = 0usize;
         let mut switch_flips = 0usize;
-        let mut eq_flip_caused = 0usize;
+        let mut eq_involved = 0usize;
         for r in &rows {
             let ca = &r["checkpoints"][idx_a];
             let cb = &r["checkpoints"][idx_b];
@@ -881,7 +897,7 @@ fn cmd_convergence(args: &[String]) {
                     switch_flips += 1;
                 }
                 if ca["eq_override"].as_bool().unwrap() || cb["eq_override"].as_bool().unwrap() {
-                    eq_flip_caused += 1;
+                    eq_involved += 1;
                 }
             }
             if ca["legacy"].as_str().unwrap() != cb["legacy"].as_str().unwrap() {
@@ -896,7 +912,7 @@ fn cmd_convergence(args: &[String]) {
             "legacy_flips": legacy_flips,
             "legacy_flip_rate": (legacy_flips as f64 / n * 10000.0).round() / 10000.0,
             "move_switch_flips": switch_flips,
-            "eq_involved_flips": eq_flip_caused,
+            "eq_involved_flips": eq_involved,
         }));
     }
 
@@ -1045,7 +1061,7 @@ fn cmd_counterfactual(args: &[String]) {
 
     let total_jobs = disagreements.len() * trials;
     let cursor = AtomicUsize::new(0);
-    let job_scores: Mutex<Vec<(usize, usize, f64, f64)>> = Mutex::new(Vec::with_capacity(total_jobs));
+    let job_scores = Mutex::new(Vec::with_capacity(total_jobs));
     std::thread::scope(|scope| {
         for _ in 0..threads.min(total_jobs).max(1) {
             let (dex, catalog, pool, bundle, disagreements, cursor, job_scores) = (
@@ -1074,7 +1090,7 @@ fn cmd_counterfactual(args: &[String]) {
                 let b_seed = trial_rng.next();
                 let arm_rngs = [trial_rng.next(), trial_rng.next()];
 
-                let run_arm = |forced_str: &str| -> f64 {
+                let run_arm = |forced_str: &str| {
                     let (mut b, mut pl) =
                         replay_to_step(dex, catalog, pool, game, dis.step_idx, cont_iters);
                     b.reseed(b_seed);
@@ -1114,12 +1130,14 @@ fn cmd_counterfactual(args: &[String]) {
                         Some(Outcome::P2Win) => 0.0,
                         Some(Outcome::Tie) | None => 0.5,
                     };
-                    if side == 0 { p1 } else { 1.0 - p1 }
+                    let reply = if side == 0 { ch1 } else { ch0 };
+                    (if side == 0 { p1 } else { 1.0 - p1 }, reply)
                 };
 
-                let s_lo = run_arm(&dis.lo_choice);
-                let s_hi = run_arm(&dis.hi_choice);
-                job_scores.lock().unwrap().push((f_idx, t_idx, s_lo, s_hi));
+                let (s_lo, reply) = run_arm(&dis.lo_choice);
+                let (s_hi, other_reply) = run_arm(&dis.hi_choice);
+                assert_eq!(reply, other_reply, "paired arms differ before the forced move");
+                job_scores.lock().unwrap().push((f_idx, s_lo, s_hi, reply));
             });
         }
     });
@@ -1128,7 +1146,11 @@ fn cmd_counterfactual(args: &[String]) {
     let mut per_fork: Vec<Vec<f64>> = vec![Vec::with_capacity(trials); disagreements.len()];
     let mut per_fork_lo = vec![0.0; disagreements.len()];
     let mut per_fork_hi = vec![0.0; disagreements.len()];
-    for (f_idx, _t_idx, s_lo, s_hi) in scores {
+    let mut reply_counts = vec![BTreeMap::<String, usize>::new(); disagreements.len()];
+    for (f_idx, s_lo, s_hi, reply) in scores {
+        if let Some(choice) = reply {
+            *reply_counts[f_idx].entry(choice.to_input(&dex)).or_default() += 1;
+        }
         per_fork[f_idx].push(s_hi - s_lo);
         per_fork_lo[f_idx] += s_lo;
         per_fork_hi[f_idx] += s_hi;
@@ -1145,6 +1167,7 @@ fn cmd_counterfactual(args: &[String]) {
         let row = json!({
             "pos_idx": dis.pos_idx,
             "game_idx": dis.game_idx,
+            "step_idx": dis.step_idx,
             "turn": dis.turn,
             "side": dis.side,
             "lo_choice": dis.lo_choice,
@@ -1154,6 +1177,9 @@ fn cmd_counterfactual(args: &[String]) {
             "lo_mean": per_fork_lo[i] / trials as f64,
             "hi_mean": per_fork_hi[i] / trials as f64,
             "hi_minus_lo": diff,
+            "pairs_hi_better": per_fork[i].iter().filter(|&&d| d > 0.0).count(),
+            "pairs_lo_better": per_fork[i].iter().filter(|&&d| d < 0.0).count(),
+            "reply_counts": reply_counts[i],
             "trials": trials,
         });
         serde_json::to_writer(&mut writer, &row).unwrap();
