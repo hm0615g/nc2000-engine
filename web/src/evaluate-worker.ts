@@ -86,7 +86,10 @@ async function run(run: EvaluationRun, beliefJson: string) {
               // No compiled lookup, table injection or preview cache. Both
               // sides search every selection using the common live budget.
               for (let n = 0; n < budget; n += 32) {
-                agent.step(Math.min(32, budget - n));
+                const slice = Math.min(32, budget - n);
+                const done = run.config.adaptiveBudget && !preview
+                  ? agent.stepAdaptiveBattle(slice) : agent.step(slice);
+                if (done < n + slice) break;
                 if (performance.now() - lastProgress > 500) {
                   send({
                     type: "progress",

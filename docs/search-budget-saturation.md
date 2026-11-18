@@ -72,7 +72,7 @@ P95 iterations reached the cap in every spectator profile. Increasing the cap fr
 
 ### Protocol and reproduction
 
-The experiment continues the ordinary blind search in `8d0180fe` and the interrupted budget study in `8e2e9f49`. The local experiment branch `experiment/search-saturation-duels` at `e81f7f19` contains the probes and analysis tools. The shipped fixed battle profile is 81k.
+The experiment continues the ordinary blind search in `8d0180fe` and the interrupted budget study in `8e2e9f49`. The local experiment branch `experiment/search-saturation-duels` at `e81f7f19` contains the probes and analysis tools. The live default now uses the tested adaptive 243k cap at ordinary width, with 13.5k checkpoints and a 0.01 reward gap. The previous live default was fixed 81k.
 
 We sampled teams by draw weight from `team-pool-v2` and used `belief-pool-v3` for inference. Each seat used its own precomputed 27k preview choice, shared across swaps and matchups for the same schedule. Swapping which agent occupied each seat preserved the teams, battle RNG and two independent seat RNG seeds. Each matchup score is the mean over full games, with a draw or turn cap worth half a point. The two-sided 95% intervals and one-sided 95% limits come from the exact empirical bootstrap distribution over whole seat pairs. Reusing a schedule across matchups pairs their results. Schedules 0–47 screened the candidate profiles and selected the alternative width. Schedules 48–239 tested the 189k candidate. The cheaper-profile follow-up used schedules 240–431. Self-play estimates depend on the team distribution and opponent.
 

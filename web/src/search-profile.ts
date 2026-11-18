@@ -15,7 +15,7 @@ export type Strength = keyof typeof live.battle;
 const isStrength = (value: unknown): value is Strength =>
   typeof value === "string" && Object.prototype.hasOwnProperty.call(live.battle, value);
 export const DEFAULT_STRENGTH: Strength = isStrength(live.defaultStrength)
-  ? live.defaultStrength : "strong";
+  ? live.defaultStrength : "adaptive";
 export const PRODUCT_ITERATIONS = live.battle[DEFAULT_STRENGTH];
 export const PREVIEW_ITERATIONS = live.unknownPreview;
 export function liveBudget(strength: Strength, preview = false): number {

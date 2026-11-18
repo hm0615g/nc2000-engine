@@ -3,8 +3,8 @@
 // remount it cleanly.
 //
 // Product policy: every game is blind (info-mode.ts) and searches with the
-// blind search policy. The player chooses a fixed live iteration budget
-// (data/live-search.json). `/` and its alias `?blind` are the same door.
+// blind search policy. The default adaptive battle budget is configured in
+// data/live-search.json. `/` and its alias `?blind` are the same door.
 //
 // Three team files, three questions (docs/TEAM-POOL-REBUILD-PLAN.md):
 // - the catalog (team-pool-v2): the built-in parties a human can pick, and

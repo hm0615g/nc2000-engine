@@ -1,10 +1,11 @@
-//! Opt-in iteration budget for one legacy blind battle decision.
+//! Adaptive iteration budget for one legacy blind battle decision.
 use crate::blind::BlindSearch;
 use crate::{Belief, Observer};
 use nc2000_engine::{battle::SearchChoice, dex::Dex};
 
 pub const BATTLE_CAP: u32 = 243_000;
-const INTERVAL: u32 = 27_000;
+const INTERVAL: u32 = 13_500;
+const MIN_GAP: f64 = 0.01;
 
 #[derive(Default)]
 pub(crate) struct AdaptiveBattleBudget {
@@ -66,7 +67,7 @@ fn unique_leader(eligible: &[bool], visits: &[u32], means: &[f64]) -> Option<usi
     for i in 0..visits.len() {
         if i != leader
             && eligible[i]
-            && (visits[i] == 0 || visits[i] >= cutoff || means[leader] - means[i] < 0.02)
+            && (visits[i] == 0 || visits[i] >= cutoff || means[leader] - means[i] < MIN_GAP)
         {
             return None;
         }
@@ -85,7 +86,8 @@ mod tests {
         assert_eq!(unique_leader(&both, &[99, 800], &[0.5, 0.7]), Some(1));
         assert_eq!(unique_leader(&both, &[800, 100], &[0.7, 0.6]), None);
         assert_eq!(unique_leader(&both, &[800, 0], &[0.7, 0.5]), None);
-        assert_eq!(unique_leader(&both, &[800, 99], &[0.7, 0.69]), None);
+        assert_eq!(unique_leader(&both, &[800, 99], &[0.7, 0.685]), Some(0));
+        assert_eq!(unique_leader(&both, &[800, 99], &[0.7, 0.695]), None);
         assert_eq!(unique_leader(&both, &[800, 800], &[0.9, 0.5]), None);
         assert_eq!(
             unique_leader(&[false, true, true], &[999, 800, 99], &[0.9, 0.7, 0.6]),

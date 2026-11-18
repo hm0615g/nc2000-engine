@@ -102,7 +102,7 @@ function focusIsOrphaned(): boolean {
 }
 
 /** Subtle bot-think status while the human deliberates: "thinking" =
- * fixed budget running; input timing never changes that budget. Hidden from screen
+ * search in progress; input timing does not set the budget. Hidden from screen
  * readers entirely — the ticking counter must not reach the SR (the
  * polite announcer speaks the meaningful transitions instead). */
 export function ThinkChip(props: { thinking: Thinking | null }) {

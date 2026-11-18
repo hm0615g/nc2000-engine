@@ -126,12 +126,8 @@ function ResultTable({ run }: { run: EvaluationRun }) {
   );
 }
 
-/** A budget as the page shows it: the product's own budget is named as
- * such, anything else is marked as a quick run. */
-function budgetLabel(n: number): string {
-  return n === PRODUCT_ITERATIONS
-    ? toolText("productBudget", n.toLocaleString())
-    : toolText("quickBudget", n.toLocaleString());
+function budgetLabel(config: EvaluationConfig): string {
+  return toolText(config.adaptiveBudget ? "adaptiveBudget" : "fixedBudget", config.iterations.toLocaleString());
 }
 
 function GameLogs({ run }: { run: EvaluationRun }) {
@@ -269,6 +265,7 @@ export function Evaluate() {
           player: validation.player,
           opponents: validation.opponents,
           iterations: budget,
+          adaptiveBudget: DEFAULT_STRENGTH === "adaptive",
           previewIterations: liveBudget(DEFAULT_STRENGTH, true),
           c: searchProfile("blind").c,
           turnLimit: 500,
@@ -406,7 +403,7 @@ export function Evaluate() {
               }}
             >
               {history.map((r) => (
-                <option key={r.id} value={r.id}>{toolText("runSummary", r.createdAt.slice(0, 16).replace("T", " "), completedCount(r), budgetLabel(r.config.iterations))}</option>
+                <option key={r.id} value={r.id}>{toolText("runSummary", r.createdAt.slice(0, 16).replace("T", " "), completedCount(r), budgetLabel(r.config))}</option>
               ))}
             </select>
           </label>
@@ -587,7 +584,7 @@ export function Evaluate() {
           <p class="eval-warning">{toolText("configurationChanged")}</p>
         )}
         {run && (
-          <p>{toolText("completedGames", completedCount(run), run.targetPairs * 2, budgetLabel(run.config.iterations), run.config.previewIterations.toLocaleString())}</p>
+          <p>{toolText("completedGames", completedCount(run), run.targetPairs * 2, budgetLabel(run.config), run.config.previewIterations.toLocaleString())}</p>
         )}
         {run && (
           <progress

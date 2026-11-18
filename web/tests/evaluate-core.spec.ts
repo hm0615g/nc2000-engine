@@ -131,6 +131,7 @@ test("resume identity ignores canonicalization notices but rejects changed condi
   ).toBe(true);
   for (const patch of [
     { iterations: 10000 },
+    { adaptiveBudget: true },
     { previewIterations: 81000 },
     { build: "other" },
     { beliefHash: "other" },

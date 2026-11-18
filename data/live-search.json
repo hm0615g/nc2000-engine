@@ -1,5 +1,5 @@
 {
-  "defaultStrength": "strong",
+  "defaultStrength": "adaptive",
   "battle": {
     "standard": 27000,
     "strong": 81000,
