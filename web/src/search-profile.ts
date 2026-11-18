@@ -9,18 +9,12 @@ const testBudget =
     ? Number(import.meta.env.VITE_NC2000_TEST_BUDGET)
     : Number.NaN;
 
-/** Default live battle budget, never the test override. Selection has a
- * separate policy; this number alone does not reproduce the whole product. */
-export type Strength = keyof typeof live.battle;
-const isStrength = (value: unknown): value is Strength =>
-  typeof value === "string" && Object.prototype.hasOwnProperty.call(live.battle, value);
-export const DEFAULT_STRENGTH: Strength = isStrength(live.defaultStrength)
-  ? live.defaultStrength : "adaptive";
-export const PRODUCT_ITERATIONS = live.battle[DEFAULT_STRENGTH];
+/** Production cap for adaptive battle search. Team Preview has its own budget. */
+export const PRODUCT_ITERATIONS = live.battle.adaptive;
 export const PREVIEW_ITERATIONS = live.unknownPreview;
-export function liveBudget(strength: Strength, preview = false): number {
+export function liveBudget(preview = false): number {
   return Number.isSafeInteger(testBudget) && testBudget > 0
-    ? testBudget : preview ? live.unknownPreview : live.battle[strength];
+    ? testBudget : preview ? PREVIEW_ITERATIONS : PRODUCT_ITERATIONS;
 }
 
 /** Live play is "blind"; "open" is the retired profile, only for replaying

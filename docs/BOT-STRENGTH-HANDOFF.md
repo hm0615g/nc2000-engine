@@ -90,7 +90,7 @@ Cross-checking schedule-vs-depth replay audits on `8d0180fe` against paired full
 ## 1. Shipped Search, Root, Endgame & Belief Stack
 
 ### 1.1 Budgets & Profiles
-- **Live Web budgets ([`data/live-search.json`](../data/live-search.json))**: Fixed `battle.strong = 81,000` iterations per battle decision and `unknownPreview = 729,000` iterations when Team Preview misses [`data/compiled-preview-v1.json`](../data/compiled-preview-v1.json).
+- **Live Web budgets**: Battle decisions use the adaptive cap in `battle.adaptive`. Team Preview searches for `unknownPreview` iterations on a compiled table miss. [Live search configuration](../data/live-search.json)
 - **Profile baseline ([`data/search-profiles.json`](../data/search-profiles.json))**: `blind` UCB `c = 0.4` (`27,000` profile baseline used by `?evaluate`, `?fork`, and offline probes; `open` is retired except historical kifu/fork replay).
 
 **2026-11-19 adaptive budget saturation.** In 4,608 full games across three schedule sets, ordinary-width adaptive 135k scored 194–190 against adaptive 189k. From 189k, increasing the cap to 405k or 729k had one-sided 95% upper score gains of 2.9 and 3.9 percentage points. Fixed 243k and fixed 729k scored slightly higher against adaptive 135k and 189k, with intervals that still allow gains above five points. The practical early-stop profile uses UCB `c = 0.4`, checks every 13.5k and a 0.01 reward gap. On 48 matched WASM decisions the 135k cap took 0.30 / 1.58 s at P50 / P95, compared with 0.74 / 0.98 s for fixed 81k. On a fresh 384-game comparison fixed 81k scored 189–195 against fixed 243k. [Full results, latency curve and reproduction](search-budget-saturation.md).

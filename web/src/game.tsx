@@ -64,7 +64,7 @@ import { announce, announceAssertive } from "./announcer";
 import { moveNote } from "./behavior-notes";
 import { noteRef } from "./tooltip";
 import type { SelectedTeam } from "./app";
-import { DEFAULT_STRENGTH, liveBudget } from "./search-profile";
+import { liveBudget } from "./search-profile";
 import { Modal } from "./modal";
 import { sheetMon } from "./set-info";
 import { MonSheet, TeamSheets } from "./team-sheet";
@@ -131,9 +131,6 @@ export function ThinkChip(props: { thinking: Thinking | null }) {
  * (-item / -enditem), the same public channel the bot's observer reads;
  * per-item reveal TRACKING (chip going ? -> Leftovers) is out of scope. */
 const UNKNOWN_ITEM = "?";
-
-const battleStrength = new URLSearchParams(globalThis.location?.search).get("budget") === "adaptive"
-  ? "adaptive" : DEFAULT_STRENGTH;
 
 export function Game(props: {
   /** The opponent prior the bot's belief narrows down (belief-pool-v3). */
@@ -253,7 +250,7 @@ export function Game(props: {
           seed: randomSeed32(),
           priorJson: props.priorJson,
           pickPriorJson: props.pickPriorJson,
-          adaptiveBudget: battleStrength === "adaptive",
+          adaptiveBudget: true,
         },
       )
       .then(() => {
@@ -345,7 +342,7 @@ export function Game(props: {
 
   async function searchBot(req: Request, legal: Choice[]) {
     const bot = botRef.current!;
-    const budget = liveBudget(battleStrength, legal[0].kind === "team");
+    const budget = liveBudget(legal[0].kind === "team");
     // Start before the human commits to hide latency. The worker finishes
     // independently of when the human chooses.
     const ponder = req.needs[HUMAN] && req.picks[HUMAN] === null;
