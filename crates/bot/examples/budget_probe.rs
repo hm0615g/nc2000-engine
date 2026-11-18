@@ -3,6 +3,8 @@
 //! Subcommands (all emit single-line JSON on stdout per M2M convention):
 //!   budget_probe collect-positions --out GAMES.json [--pairs 16] [--iters 81000] [--preview-iters 243000] [--seed 20261017003] [--threads 10]
 //!   budget_probe convergence --games GAMES.json --out CONV.jsonl [--samples 200] [--checkpoints 3000,9000,27000,81000,243000,729000] [--threads 10] [--seed 1]
+//!     Use --slot GAME,STEP,SIDE (zero-based) to select a searched decision, and
+//!     --joint-trials N to resample each eligible row and always-observed reply after the last checkpoint.
 //!   budget_probe counterfactual --games GAMES.json --conv CONV.jsonl --pair 81000,243000 --out CF.jsonl [--trials 24] [--cont-iters 27000] [--threads 10] [--seed 1]
 //!   budget_probe duel --iters-a 243000 --iters-b 81000 --out DUEL.jsonl [--pairs 256] [--pair-start 0] [--preview-iters 243000] [--preview-cache PREV.json] [--seed 20261017003] [--threads 10]
 
@@ -693,10 +695,64 @@ fn regime_label(r: EndgameRegime) -> &'static str {
     }
 }
 
+fn resample_joint_cells(
+    search: &mut BlindSearch,
+    dex: &Dex,
+    player: &ReplayableBlindPlayer,
+    trials: u32,
+    seed: u64,
+) -> Value {
+    let (eligible, _) = search.root_policy_evidence();
+    let mut schedule = Vec::new();
+    for (i, allowed) in eligible.into_iter().enumerate() {
+        if !allowed {
+            continue;
+        }
+        for &(reply, available) in search.root_replies() {
+            if available == search.iterations() {
+                schedule.push((i, reply));
+            }
+        }
+    }
+    let before: HashMap<_, _> = search
+        .root_matrix()
+        .into_iter()
+        .map(|(i, reply, n, mean)| ((i, reply), (n, mean)))
+        .collect();
+    let mut rng = SplitMix64::new(seed);
+    for _ in 0..trials {
+        for i in (1..schedule.len()).rev() {
+            schedule.swap(i, rng.below(i + 1));
+        }
+        for &(i, reply) in &schedule {
+            search.step_forced_joint(dex, &player.belief, &player.observer, i, reply);
+        }
+    }
+    // A newly sampled world may lack a requested reply. Attribute every
+    // sample to the cell actually visited, including any fallback replies.
+    let mut cells = Vec::new();
+    for (i, reply, n, mean) in search.root_matrix() {
+        let (old_n, old_mean) = before.get(&(i, reply)).copied().unwrap_or_default();
+        let added = n - old_n;
+        if added > 0 {
+            cells.push(json!({
+                "action": search.actions()[i].to_input(dex),
+                "reply": reply.to_input(dex),
+                "requested": if schedule.contains(&(i, reply)) { trials } else { 0 },
+                "visits": added,
+                "mean": (f64::from(n) * mean - f64::from(old_n) * old_mean) / f64::from(added),
+            }));
+        }
+    }
+    json!({"trials_per_cell":trials, "scheduled_cells":schedule.len(), "cells":cells})
+}
+
 fn cmd_convergence(args: &[String]) {
     let games_path = PathBuf::from(flag(args, "--games").expect("--games PATH"));
     let out_path = PathBuf::from(flag(args, "--out").expect("--out PATH"));
     let samples: usize = flag(args, "--samples").map_or(200, |v| v.parse().unwrap());
+    let slot = flag(args, "--slot");
+    let joint_trials: u32 = flag(args, "--joint-trials").map_or(0, |v| v.parse().unwrap());
     let seed: u64 = flag(args, "--seed").map_or(1, |v| v.parse().unwrap());
     let threads: usize = flag(args, "--threads").map_or_else(default_threads, |v| v.parse().unwrap());
     let max_worlds: Option<usize> = flag(args, "--max-worlds").map(|v| v.parse().unwrap());
@@ -726,6 +782,14 @@ fn cmd_convergence(args: &[String]) {
                 }
             }
         }
+    }
+    if let Some(slot) = slot {
+        let parts: Vec<usize> = slot.split(',').map(|v| v.parse().unwrap()).collect();
+        let [game, step, side] = parts[..] else {
+            panic!("--slot requires GAME,STEP,SIDE")
+        };
+        all_slots.retain(|&s| s == (game, step, side));
+        assert_eq!(all_slots.len(), 1, "no searched decision at --slot {slot}");
     }
     let mut rng = SplitMix64::new(seed ^ 0x51A9_2026_1118_0001);
     let mut indices: Vec<usize> = (0..all_slots.len()).collect();
@@ -815,12 +879,19 @@ fn cmd_convergence(args: &[String]) {
                     let action_stats: Vec<_> = ranked.iter().map(|&i| json!({
                         "action": actions[i].to_input(dex),
                         "visits": visits[i],
+                        "joint_probe_visits": bs.joint_probe_visits()[i],
                         "mean": means[i],
                         "eq_probability": eq.as_ref().map(|e| e.policy[i]),
                     })).collect();
                     let mut reply_visits = BTreeMap::<String, u32>::new();
-                    for (_, reply, count, _) in bs.root_matrix() {
-                        *reply_visits.entry(reply.to_input(dex)).or_default() += count;
+                    let mut joint_cells = Vec::new();
+                    for (own, reply, count, mean) in bs.root_matrix() {
+                        let reply = reply.to_input(dex);
+                        *reply_visits.entry(reply.clone()).or_default() += count;
+                        joint_cells.push(json!({
+                            "action": actions[own].to_input(dex), "reply": reply,
+                            "visits": count, "mean": mean,
+                        }));
                     }
 
                     ckpts_json.push(json!({
@@ -835,6 +906,7 @@ fn cmd_convergence(args: &[String]) {
                         "eq_mixed": eq_override.is_some_and(|e| e.policy.iter().filter(|&&p| p > 0.0).count() > 1),
                         "action_stats": action_stats,
                         "reply_visits": reply_visits,
+                        "joint_cells": joint_cells,
                         "mean_depth": (bs.mean_depth() * 1000.0).round() / 1000.0,
                         "max_depth": bs.max_depth(),
                         "nodes": bs.node_count(),
@@ -849,7 +921,7 @@ fn cmd_convergence(args: &[String]) {
                     }));
                 }
 
-                rows.lock().unwrap().push(json!({
+                let mut row = json!({
                     "pos_idx": pos_idx,
                     "game_idx": gi,
                     "step_idx": step_idx,
@@ -859,7 +931,11 @@ fn cmd_convergence(args: &[String]) {
                     "n_choices": legal.len(),
                     "alive_cands": alive_cands,
                     "checkpoints": ckpts_json,
-                }));
+                });
+                if joint_trials > 0 {
+                    row["joint_resample"] = resample_joint_cells(&mut bs, dex, p, joint_trials, seed);
+                }
+                rows.lock().unwrap().push(row);
             });
         }
     });
