@@ -580,15 +580,14 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
     mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
     cache: Option<&nc2000_engine::battle::BattleSearchCache>,
 ) -> f64 {
-    let mut path_buf = [(0usize, 0usize, 0usize); 32];
-    let mut path_len = 0usize;
-    let mut path_overflow: Vec<(usize, usize, usize)> = Vec::new();
+    let mut path = nc2000_engine::smallvec::SmallVec::<[(usize, [Option<usize>; 2]); 16]>::new();
     let mut node_idx = start;
 
     // ---- selection until a leaf: terminal, horizon, or unexpanded state
     let reward0 = loop {
         let at_root = node_idx == start;
         let mut joint = [None, None];
+        let mut selected = [None; 2];
         for s in 0..2 {
             let k = nodes[node_idx].acts[s].len();
             if k == 0 {
@@ -605,18 +604,16 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
                     }
                     _ => select_ucb(cfg, rng, &mut nodes[node_idx], s),
                 };
-                if path_len < path_buf.len() {
-                    path_buf[path_len] = (node_idx, s, ai);
-                    path_len += 1;
-                } else {
-                    path_overflow.push((node_idx, s, ai));
-                }
+                selected[s] = Some(ai);
                 ai
             };
             joint[s] = Some(nodes[node_idx].acts[s][ai]);
             if at_root {
                 root_joint[s] = ai;
             }
+        }
+        if selected.iter().any(Option::is_some) {
+            path.push((node_idx, selected));
         }
         if let Some(trace) = trace.as_deref_mut() {
             let node = &nodes[node_idx];
@@ -727,34 +724,7 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
         }
     };
 
-    let mut path_nodes = [start; 32];
-    let mut path_nodes_len = 0usize;
-    for &(ni, _, _) in &path_buf[..path_len] {
-        if path_nodes_len == 0 || path_nodes[path_nodes_len - 1] != ni {
-            if path_nodes_len < path_nodes.len() {
-                path_nodes[path_nodes_len] = ni;
-                path_nodes_len += 1;
-            }
-        }
-    }
-    let mut val0 = reward0;
-    let mut root_reward0 = reward0;
-    for idx in (0..path_nodes_len).rev() {
-        let ni = path_nodes[idx];
-        for &(p_ni, s, ai) in &path_buf[..path_len] {
-            if p_ni == ni {
-                nodes[ni].w[s][ai] += if s == 0 { val0 } else { 1.0 - val0 };
-            }
-        }
-        if ni == start {
-            root_reward0 = val0;
-        } else if val0 > 0.000_001 && val0 < 0.999_999 {
-            val0 = nodes[ni].backed_up_value(val0);
-        }
-    }
-    for (ni, s, ai) in path_overflow {
-        nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
-    }
+    let root_reward0 = back_up_path(nodes, &path, start, reward0);
     if let Some(trace) = trace {
         trace(SearchTrace::Result {
             battle: sim,
@@ -762,6 +732,30 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
         });
     }
     root_reward0
+}
+
+fn back_up_path(
+    nodes: &mut [Node],
+    path: &[(usize, [Option<usize>; 2])],
+    root: usize,
+    reward0: f64,
+) -> f64 {
+    let mut value = reward0;
+    let mut root_value = reward0;
+    for &(index, actions) in path.iter().rev() {
+        let node = &mut nodes[index];
+        for (side, pick) in actions.into_iter().enumerate() {
+            if let Some(action) = pick {
+                node.w[side][action] += if side == 0 { value } else { 1.0 - value };
+            }
+        }
+        if index == root {
+            root_value = value;
+        } else if value > 0.000_001 && value < 0.999_999 {
+            value = node.backed_up_value(value);
+        }
+    }
+    root_value
 }
 
 #[inline]
@@ -1450,6 +1444,31 @@ impl Agent for RmAgent {
 mod tests {
     use super::*;
     use nc2000_engine::battle::PokemonSet;
+
+    #[test]
+    fn deep_child_value_reaches_root_across_inline_capacity() {
+        use nc2000_engine::smallvec::smallvec;
+        for depth in [2, 16, 17, 33] {
+            let mut nodes: Vec<_> = (0..depth).map(|_| Node {
+                acts: std::array::from_fn(|_| smallvec![SearchChoice::Switch(2), SearchChoice::Switch(3)]),
+                n: [smallvec![1, 0], smallvec![1, 0]],
+                w: [smallvec![0.0, 0.0], smallvec![0.0, 0.0]],
+                preview: false,
+            }).collect();
+            let child = depth - 1;
+            nodes[child].n = [smallvec![10, 0], smallvec![10, 0]];
+            nodes[child].w = [smallvec![9.0, 0.0], smallvec![0.0, 0.0]];
+            let path: Vec<_> = (0..depth).map(|i| (i, [Some(0), Some(0)])).collect();
+            let leaf = 0.25;
+            let root = back_up_path(&mut nodes, &path, 0, leaf);
+            let expected = nodes[child].backed_up_value(leaf);
+            assert!(expected > leaf);
+            assert_eq!(root, expected, "depth {depth}");
+            for node in &nodes[..child] {
+                assert_eq!((node.w[0][0], node.w[1][0]), (expected, 1.0 - expected));
+            }
+        }
+    }
 
     fn team() -> Vec<PokemonSet> {
         // from_fixture does not validate movesets — purpose-built slots
