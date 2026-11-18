@@ -4,6 +4,23 @@ Authoritative snapshot of `crates/bot` playing-strength mechanisms, measured-nul
 
 ---
 
+## Next session — opponent switch coverage (2026-11-18)
+
+**Start from `master` at `d855b479`.** It includes the public Rest wake-turn fix (`dde5bb91`) and the joint-action probe (`8c4ca02e`). The open question is why the opponent's switch stops receiving visits when Raikou's choice changes its payoff. On turn 35 the corrected search sampled the switch 545 times by 243k and still had 545 visits at 729k. An independently searched 9k opponent switched in all 48 fresh continuations.
+
+1. **Replay the same position.** The previous run directory is recorded in `/tmp/nc2000-current-reply-audit`. Its `focal.json` contains the recorded positions, `pre-grid.jsonl` the original payoff matrix, and `post-focal-cf.jsonl` the corrected continuation results. From the repository root, replay the corrected search with:
+
+   ```sh
+   audit=$(cat /tmp/nc2000-current-reply-audit)
+   cargo run --release -p nc2000-bot --example budget_probe -- convergence \
+     --games "$audit/focal.json" --slot 1,37,0 --checkpoints 54000,243000,729000 \
+     --joint-trials 4096 --seed 20261123 --out "$audit/turn35-next.jsonl"
+   ```
+
+   If the temporary files have expired, regenerate the source games at `8c4ca02e` with `budget_probe collect-positions --pairs 3 --iters 3000 --preview-iters 27000 --seed 20261017003 --out GAMES.json`. Use that same file with both revisions. Turn 33 (`1,35,1`) and turn 6 (`0,6,1`) are the controls.
+2. **Test the cause before changing allocation.** For each fixed Raikou action, compare the switch and stay-in rewards in ordinary `joint_cells` and fresh `joint_resample` cells. Reweight both sets using the same distribution over Raikou's actions. Check whether that changes the opponent's UCB ranking, then whether it changes Raikou's executed policy. The 48/48 switch frequency describes this continuation opponent and hidden roster.
+3. **Decide on a candidate using playing strength.** Compare the change in policy-weighted continuation score on fresh games with matched seeds, then run seat-swapped games at equal 81k, 243k, 729k and adaptive budgets. The earlier allocator (`experiment/root-reply-coverage`, `10b2f395`) raised switch visits but picked a worse action on turn 33. The separate deep-backup fix (`experiment/deep-backup-path`, `2d29f0b3`) has a depth-17 regression test and awaits broader validation on deep battle and preview trees.
+
 ## 1. Shipped Search, Root, Endgame & Belief Stack
 
 ### 1.1 Budgets & Profiles
