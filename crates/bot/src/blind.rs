@@ -844,6 +844,35 @@ pub(crate) fn root_search_key_cached(
     key
 }
 
+fn party_order_matters(dex: &Dex, roster: &[Pokemon]) -> bool {
+    roster.iter().any(|mon| {
+        mon.base_move_slots.iter().chain(&mon.move_slots).any(|slot| {
+            matches!(dex.moves.key(slot.id),
+                "beatup" | "metronome" | "mimic" | "mirrormove" | "sketch" | "transform")
+        })
+    })
+}
+
+fn canonicalize_unseen_bench(dex: &Dex, sim: &mut Battle, opponent: usize) {
+    if sim.request_state == nc2000_engine::state::RequestState::TeamPreview
+        || sim.mid_turn || !sim.queue.is_empty()
+    {
+        return;
+    }
+    let side = &sim.sides[opponent];
+    let &[_, second, third] = side.party.as_slice() else { return };
+    if second <= third || [second, third].iter().any(|&slot| {
+        let mon = &side.roster[usize::from(slot)];
+        mon.previously_switched_in != 0 || mon.is_active || mon.fainted
+    }) || sim.sides.iter().any(|side| party_order_matters(dex, &side.roster)) {
+        return;
+    }
+    let side = &mut sim.sides[opponent];
+    side.party.swap(1, 2);
+    side.roster[usize::from(third)].position = 1;
+    side.roster[usize::from(second)].position = 2;
+}
+
 fn root_type_key(battle: &Battle) -> u64 {
     battle.type_key()
 }
@@ -1306,6 +1335,8 @@ impl BlindSearch {
                 }
                 let can_cache = self.rng.0 == rng_probe.0
                     && sim.sides[opp].party.as_slice() == &party_key[..party_len];
+                // Cache by the raw draw. An imputed move can make two bench orders distinct.
+                canonicalize_unseen_bench(dex, &mut sim, opp);
                 let cache = Arc::new(crate::smmcts::build_search_cache_with_template(
                     &self.cfg,
                     dex,
@@ -1348,6 +1379,7 @@ impl BlindSearch {
             None => Box::new(self.base.clone()),
         };
         belief.determinize_in_place_planned(dex, &mut sim, obs, plan_pick, &mut self.rng);
+        canonicalize_unseen_bench(dex, &mut sim, 1 - self.side);
         let sampled_qc = sim.quick_claw_roll;
         let opp = 1 - self.side;
         if zero_preview_qc {
@@ -2269,22 +2301,7 @@ impl BlindSearch {
 
     pub fn prune_preview_aliases(&mut self, dex: &Dex) -> usize {
         if !self.is_preview()
-            || self.base.sides[self.side].roster.iter().any(|p| {
-                p.base_move_slots
-                    .iter()
-                    .chain(p.move_slots.iter())
-                    .any(|m| {
-                        matches!(
-                            dex.moves.key(m.id),
-                            "beatup"
-                                | "metronome"
-                                | "mimic"
-                                | "mirrormove"
-                                | "sketch"
-                                | "transform"
-                        )
-                    })
-            })
+            || party_order_matters(dex, &self.base.sides[self.side].roster)
         {
             return 0;
         }
@@ -3186,6 +3203,39 @@ fn resample_hidden_timers(
 #[cfg(test)]
 mod mixed_selection_tests {
     use super::*;
+
+    #[test]
+    fn canonicalizes_only_unseen_interchangeable_bench_slots() {
+        let dex = conformance::load_dex();
+        let team: Vec<nc2000_engine::battle::PokemonSet> = ["Snorlax", "Zapdos", "Raikou"]
+            .map(|species| serde_json::from_value(serde_json::json!({
+                "name": species, "species": species, "level": 50, "moves": ["Rest"]
+            })).unwrap()).to_vec();
+        let mut base = Battle::from_fixture(&dex, "1,2,3,4", &team, &team).unwrap();
+        for side in 0..2 {
+            base.choose(&dex, side, "team 1,3,2").unwrap();
+        }
+        for opponent in 0..2 {
+            let mut sim = base.clone();
+            let saved = sim.sides[1-opponent].party.clone();
+            canonicalize_unseen_bench(&dex, &mut sim, opponent);
+            assert_eq!(sim.sides[opponent].party.as_slice(), &[0, 1, 2]);
+            assert_eq!(sim.sides[1-opponent].party, saved);
+            for (pos, &slot) in sim.sides[opponent].party.iter().enumerate() {
+                assert_eq!(sim.sides[opponent].roster[usize::from(slot)].position as usize, pos);
+            }
+            let mut seen = base.clone();
+            seen.sides[opponent].roster[2].previously_switched_in = 1;
+            canonicalize_unseen_bench(&dex, &mut seen, opponent);
+            assert_eq!(seen.sides[opponent].party, base.sides[opponent].party);
+            for move_id in ["beatup", "metronome", "mimic", "mirrormove", "sketch", "transform"] {
+                let mut ordered = base.clone();
+                ordered.sides[opponent].roster[2].move_slots[0].id = dex.moves.id(move_id).unwrap();
+                canonicalize_unseen_bench(&dex, &mut ordered, opponent);
+                assert_eq!(ordered.sides[opponent].party, base.sides[opponent].party);
+            }
+        }
+    }
 
     #[test]
     fn forced_steps_preserve_masks_and_skip_preview() {
