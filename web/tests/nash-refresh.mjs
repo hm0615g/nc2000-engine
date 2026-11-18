@@ -2,6 +2,8 @@
 // node web/tests/nash-refresh.mjs GAMES.jsonl NEW_OUTPUT_DIR [workers]
 // Each game specifies the two team IDs, their search seeds and the battle seed.
 // Optional picks force a preview action in a paired counterfactual.
+// Optional mixtures name each side's disclosed team distribution. Both players
+// then use live preview and receive only the opposing pool and player frames.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -19,11 +21,21 @@ const compiled = path.join(root, 'web/src/compiled-preview.ts');
 const live = data('live-search');
 const { c } = data('search-profiles').blind;
 
+const candidateFile = 'nash-refresh-v1/candidate';
+const incumbentFile = 'kodoku-r3/conclusion-equilibrium-deme';
 const teamFiles = [
   'kodoku-beq-v1/novel_evolved_teams',
   'team-pool-v2/team-pool',
-  'kodoku-r3/conclusion-equilibrium-deme',
+  incumbentFile,
 ];
+
+async function buildCompiledPicker() {
+  const bundle = await build({ configFile: false, logLevel: 'silent',
+    define: { __COMPILED_PREVIEW_ENABLED__: 'true' },
+    build: { write: false, lib: { entry: compiled, formats: ['es'], fileName: 'picker' } },
+  });
+  return 'data:text/javascript;base64,' + Buffer.from(bundle[0].output[0].code).toString('base64');
+}
 
 async function start() {
   const [, , taskFile, output, n = '8'] = process.argv;
@@ -31,26 +43,25 @@ async function start() {
   const records = source.startsWith('[')
     ? JSON.parse(source)
     : source.split('\n').map(line => JSON.parse(line));
-  const tasks = records.map(({ block, cell, rowSeat, ids, seeds, battleSeed, picks }) =>
-    ({ block, cell, rowSeat, ids, seeds, battleSeed, ...(picks ? { picks } : {}) }));
+  const tasks = records.map(({ block, cell, rowSeat, ids, seeds, battleSeed, picks, mixtures }) =>
+    ({ block, cell, rowSeat, ids, seeds, battleSeed, ...(picks ? { picks } : {}), ...(mixtures ? { mixtures } : {}) }));
   assert(tasks.length && Number.isSafeInteger(+n) && +n > 0);
   fs.mkdirSync(output); // refuse to mix builds or overwrite an earlier run
-  const bundle = await build({ configFile: false, logLevel: 'silent',
-    define: { __COMPILED_PREVIEW_ENABLED__: 'true' },
-    build: { write: false, lib: { entry: compiled, formats: ['es'], fileName: 'picker' } },
-  });
-  const picker = 'data:text/javascript;base64,' + Buffer.from(bundle[0].output[0].code).toString('base64');
-  const inputs = ['compiled-preview-v1', 'belief-pool-v3/belief-pool', ...teamFiles, 'live-search', 'search-profiles'];
+  const picker = tasks.some(task => !task.mixtures) ? await buildCompiledPicker() : null;
+  const inputs = [...teamFiles, 'live-search', 'search-profiles'];
+  if (picker) inputs.push('compiled-preview-v1', 'belief-pool-v3/belief-pool');
+  const hasDisclosure = tasks.some(task => task.mixtures);
+  if (hasDisclosure) inputs.push(candidateFile);
   const stamp = {
     tasks: hash(fs.readFileSync(taskFile)),
     wasm: hash(fs.readFileSync(path.join(root, 'crates/wasm/pkg-node/nc2000_wasm_bg.wasm'))),
-    picker: hash(picker),
+    ...(picker ? { picker: hash(picker) } : {}),
     data: Object.fromEntries(inputs.map(k => [k, hash(read('data/' + k + '.json'))])),
   };
   fs.writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(stamp));
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(+n, tasks.length) }, () => new Promise((resolve, reject) => {
-    const thread = new Worker(new URL(import.meta.url), { workerData: { picker } });
+    const thread = new Worker(new URL(import.meta.url), { workerData: { picker, hasDisclosure } });
     thread.on('error', reject);
     thread.on('exit', code => code ? reject(Error('worker exit ' + code)) : resolve());
     thread.on('message', result => {
@@ -66,19 +77,40 @@ async function start() {
 }
 
 async function worker() {
-  const pool = read('data/belief-pool-v3/belief-pool.json');
-  const { compiledPreviewCompatibility, compiledPreviewPick } = await import(workerData.picker);
-  const allowed = await compiledPreviewCompatibility(pool, wasm.embeddedDexJson());
-  assert(allowed.size > 0);
+  let pool, compiledPreviewPick, allowed;
+  if (workerData.picker) {
+    pool = read('data/belief-pool-v3/belief-pool.json');
+    const module = await import(workerData.picker);
+    compiledPreviewPick = module.compiledPreviewPick;
+    allowed = await module.compiledPreviewCompatibility(pool, wasm.embeddedDexJson());
+    assert(allowed.size > 0);
+  }
   const dex = new wasm.Dex();
   const validator = new wasm.Validator(dex);
   const teams = new Map();
   for (const name of teamFiles) {
     for (const t of data(name).teams) teams.set(t.id, JSON.stringify(t.sets));
   }
+  const disclosed = workerData.hasDisclosure ? {
+    candidate: data(candidateFile).teams,
+    incumbent: data(incumbentFile).teams,
+    deme: [{ id: 'deme-r1-00-s0030', weight: 1, sets: JSON.parse(teams.get('deme-r1-00-s0030')) }],
+  } : {};
+  for (const members of Object.values(disclosed)) {
+    assert(Math.abs(members.reduce((sum, t) => sum + t.weight, 0) - 1) < 1e-10);
+    for (const t of members) {
+      assert(t.weight > 0);
+      assert.deepEqual(t.sets, JSON.parse(teams.get(t.id)));
+    }
+  }
   parentPort.on('message', task => {
     if (!task) { parentPort.close(); return; }
-    const { ids, seeds, battleSeed, picks = [] } = task;
+    const { ids, seeds, battleSeed, picks = [], mixtures } = task;
+    if (mixtures) {
+      assert.equal(mixtures.length, 2);
+      assert.equal(picks.length, 0);
+      for (const [side, mix] of mixtures.entries()) assert(disclosed[mix].some(t => t.id === ids[side]));
+    }
     const sets = ids.map(id => {
       const team = teams.get(id);
       assert(team && JSON.parse(validator.validateTeam(team)).ok, 'invalid ' + id);
@@ -87,12 +119,14 @@ async function worker() {
     const battle = new wasm.Battle(dex, ...sets, wasm.deriveBattleSeed(battleSeed));
     const channels = [new wasm.PlayerChannel(0), new wasm.PlayerChannel(1)];
     const agents = sets.map((team, side) => {
-      const agent = new wasm.ProtocolSearcher(dex, side, pool, seeds[side], c);
+      const prior = mixtures ? JSON.stringify({ teams: disclosed[mixtures[1-side]] }) : pool;
+      const agent = new wasm.ProtocolSearcher(dex, side, prior, seeds[side], c);
       agent.setOwnTeam(team);
       return agent;
     });
     const preview = [];
     const began = performance.now();
+    const previewBeliefs = [];
     let first = true;
     while (!battle.outcome() && battle.turn() < 500) {
       const inputs = JSON.parse(battle.needsChoice()).map((needs, side) => {
@@ -103,7 +137,13 @@ async function worker() {
         assert(agent.onRequest(JSON.stringify(frame.request)));
         let input;
         let source = 'live';
-        if (first) {
+        if (mixtures) {
+          // Audit externally. Neither agent receives the opposing realized ID.
+          const belief = JSON.parse(agent.beliefInfo());
+          assert(!belief.fallback && belief.candidates.includes(ids[1-side]), 'disclosure lost the played team');
+          if (first) previewBeliefs[side] = belief.candidates;
+        }
+        if (first && !mixtures) {
           input = compiledPreviewPick(agent.compiledPreviewBuild(), agent.compiledPreviewKey(),
             seeds[side], c, agent.previewPublicInfo(), allowed);
           const legal = pick => frame.legal_actions.some(a => a.replaceAll(' ', '') === pick.replaceAll(' ', ''));
@@ -126,7 +166,7 @@ async function worker() {
       first = false;
     }
     const result = { ...task, preview, outcome: battle.outcome() ?? 'cap', turns: battle.turn(),
-      ms: Math.round(performance.now() - began) };
+      ms: Math.round(performance.now() - began), ...(mixtures ? { previewBeliefs } : {}) };
     for (const object of [...agents, ...channels, battle]) object.free();
     parentPort.postMessage(result);
   });
