@@ -4,22 +4,43 @@ Authoritative snapshot of `crates/bot` playing-strength mechanisms, measured-nul
 
 ---
 
-## Next session — opponent switch coverage (2026-11-18)
+## Opponent switch coverage on turn 35 (2026-11-18)
 
-**Start from `master` at `d855b479`.** It includes the public Rest wake-turn fix (`dde5bb91`) and the joint-action probe (`8c4ca02e`). The open question is why the opponent's switch stops receiving visits when Raikou's choice changes its payoff. On turn 35 the corrected search sampled the switch 545 times by 243k and still had 545 visits at 729k. An independently searched 9k opponent switched in all 48 fresh continuations.
+In the wake-corrected search at `641900f9`, Zapdos's switch received 545 visits by 54k and still had 545 at 729k. All 486,000 visits after 243k went to Zapdos's Rest. Raikou executed pure Rest at both budgets. Replaying from Zapdos's own observation gave five root types and selected the switch at 9k, 54k, 243k and 729k. At 9k that search faced Raikou's Rest on 3,210/9,000 iterations. The two players' searches valued replies under different information and action distributions.
 
-1. **Replay the same position.** The previous run directory is recorded in `/tmp/nc2000-current-reply-audit`. Its `focal.json` contains the recorded positions, `pre-grid.jsonl` the original payoff matrix, and `post-focal-cf.jsonl` the corrected continuation results. From the repository root, replay the corrected search with:
+**Why visits stalled.** The opponent's [root UCB selector](../crates/bot/src/smmcts.rs) pools each reply's reward over the Raikou actions it happened to face. At 243k, Zapdos's switch faced Rest on 507/545 visits (93.0%), while Zapdos's Rest faced it on 237,642/238,435 (99.7%). Using each column's own history, the switch's UCB was 0.31445 against 0.31697 for Rest. Giving every column the same Raikou policy (100% Rest) and keeping the visit counts fixed reversed the ranking to 0.32166 against 0.31684. The switch ranked first among all four replies. The same reversal held at 729k. With 545 switch visits its exploration bonus grew only from 0.06034 to 0.06295 over those 486,000 further iterations.
 
-   ```sh
-   audit=$(cat /tmp/nc2000-current-reply-audit)
-   cargo run --release -p nc2000-bot --example budget_probe -- convergence \
-     --games "$audit/focal.json" --slot 1,37,0 --checkpoints 54000,243000,729000 \
-     --joint-trials 4096 --seed 20261123 --out "$audit/turn35-next.jsonl"
-   ```
+The table gives **Zapdos's mean reward** at 243k. Rest was its most visited stay-in reply. The fresh columns use only new returns from 4,096 forced visits per eligible action pair, shuffled each round on a copy replayed to the same checkpoint (schedule seed `20261123`).
 
-   If the temporary files have expired, regenerate the source games at `8c4ca02e` with `budget_probe collect-positions --pairs 3 --iters 3000 --preview-iters 27000 --seed 20261017003 --out GAMES.json`. Use that same file with both revisions. Turn 33 (`1,35,1`) and turn 6 (`0,6,1`) are the controls.
-2. **Test the cause before changing allocation.** For each fixed Raikou action, compare the switch and stay-in rewards in ordinary `joint_cells` and fresh `joint_resample` cells. Reweight both sets using the same distribution over Raikou's actions. Check whether that changes the opponent's UCB ranking, then whether it changes Raikou's executed policy. The 48/48 switch frequency describes this continuation opponent and hidden roster.
-3. **Decide on a candidate using playing strength.** Compare the change in policy-weighted continuation score on fresh games with matched seeds, then run seat-swapped games at equal 81k, 243k, 729k and adaptive budgets. The earlier allocator (`experiment/root-reply-coverage`, `10b2f395`) raised switch visits but picked a worse action on turn 33. The separate deep-backup fix (`experiment/deep-backup-path`, `2d29f0b3`) has a depth-17 regression test and awaits broader validation on deep battle and preview trees.
+| Raikou action | Ordinary vs Zapdos Rest | Ordinary vs switch (visits) | Fresh vs Zapdos Rest | Fresh vs switch |
+| --- | ---: | ---: | ---: | ---: |
+| Rest | 0.314 | 0.261 (507) | 0.317 | 0.311 |
+| Thunder | 0.354 | 0.143 (35) | 0.350 | 0.239 |
+| Hidden Power Ice | 0.364 | 0.500 (2) | 0.409 | 0.340 |
+| Switch | 0.000 | 0.000 (1) | 0.083 | 0.232 |
+
+**Effect on the move played.** In a second replay of the original tree, we replaced only the four opponent root reward sums at 243k with the corresponding mean against Raikou's Rest times the original visit count. The tree then searched normally to 729k. Using ordinary cells made Zapdos switch on the very next iteration, but it ended at 580 switch visits and Raikou still played pure Rest.
+
+Using fresh cells from four shuffle seeds (`20261123` through `20261126`) produced 1,416 / 28,619 / 25,071 / 2,834 switch visits at 729k. Seeds 23 and 26 ranked Thunder first for Zapdos immediately after the reset and left Raikou on pure Rest. Seeds 24 and 25 ranked the switch first and changed Raikou to a Rest/Thunder mixture with 43.96% and 48.46% Thunder. Both draws selected Thunder. All four runs began from the same ordinary tree. These are schedule replicates on one position.
+
+In 96 fresh paired continuations of that position (9k per player, seed `2026112701`), Raikou scored 69/96 with Thunder and 48/96 with Rest. Of the discordant pairs, 35 favored Thunder and 14 favored Rest. Zapdos switched in 93/96 pairs. Weighting those scores by the two mixed policies gives gains of 9.62 and 10.60 percentage points over pure Rest on this roster. The other two resets give zero gain. The ordinary controls reproduced turn 33's pure switch and turn 6's 74.14% → 74.49% Self-Destruct mixture from 243k to 729k.
+
+**Reproduction.** Use the recorded games in the directory named by `/tmp/nc2000-current-reply-audit`. If they expire, regenerate them at `8c4ca02e` with `budget_probe collect-positions --pairs 3 --iters 3000 --preview-iters 27000 --seed 20261017003 --out GAMES.json`. On the local diagnostic branch `experiment/root-reply-reweight-audit` (`3a8e4fc6`), the following replays the seed-24 intervention. For the ordinary control, read `.checkpoints[-1].joint_cells[]` in place of `.joint_resample.cells[]`. To reproduce the unmodified 729k matrix, extend the first command's checkpoints to `54000,243000,729000`. The turn 33 and turn 6 control slots are `1,35,1` and `0,6,1`.
+
+```sh
+audit=$(cat /tmp/nc2000-current-reply-audit)
+out=$(mktemp -d)
+probe() { cargo run --quiet --release -p nc2000-bot --example budget_probe -- "$@"; }
+probe convergence --games "$audit/focal.json" --slot 1,37,0 --checkpoints 54000,243000 \
+  --joint-trials 4096 --seed 20261124 --out "$out/cells.jsonl"
+reset=$(jq -c '{after:243000,means:([.joint_resample.cells[] | select(.action=="move rest") | {key:.reply,value:(1-.mean)}] | from_entries)}' "$out/cells.jsonl")
+probe convergence --games "$audit/focal.json" --slot 1,37,0 --checkpoints 243000,243001,729000 \
+  --reply-reset "$reset" --out "$out/reweighted.jsonl"
+probe counterfactual --games "$audit/focal.json" --conv "$out/reweighted.jsonl" \
+  --pair 243000,729000 --trials 96 --cont-iters 9000 --seed 2026112701 --out "$out/paired.jsonl"
+```
+
+**Open strength question.** Fresh estimates cost 65,536 additional iterations on a separate tree. A deployable allocator must account for that cost within its budget. Test its policy-weighted score on fresh games with matched seeds before seat-swapped comparisons at equal 81k, 243k, 729k and adaptive budgets. The earlier allocator (`10b2f395`) increased coverage but chose a weaker move on turn 33. The independent depth-17 backup fix (`2d29f0b3`) awaits broader validation on deep battle and preview trees.
 
 ## 1. Shipped Search, Root, Endgame & Belief Stack
 
