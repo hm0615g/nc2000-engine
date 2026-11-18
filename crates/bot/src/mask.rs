@@ -523,6 +523,17 @@ fn own_other_party_asleep_under_clause(b: &Battle, dex: &Dex, side: usize, att: 
         })
 }
 
+/// Rest sets its own source and a public counter of three. Ordinary sleep
+/// can have the same remaining time in a sampled world.
+pub(crate) fn public_rest_timer(b: &Battle, user: PokeId) -> Option<i64> {
+    use nc2000_engine::state::{Status, DK};
+    let mon = b.poke(user);
+    (mon.status == Status::Slp
+        && mon.status_state.source == Some(user)
+        && mon.status_state.get_int(DK::StartTime) == 3)
+        .then(|| mon.status_state.get_int(DK::Time))
+}
+
 /// Guards turn-order-independent public self-fail rules so masking a harmless
 /// 0-effect pass never starves the sole non-losing wait option on the last mon
 /// (e.g. awake `Sleep Talk` avoiding `Destiny Bond` / `Mirror Coat` / recoil KO).
@@ -597,7 +608,7 @@ fn can_safely_mask_public_self_noop(
             return living_own >= 2;
         }
         // Do not let another self-failing move mutually justify masking this one.
-        if oms.sleep_usable && me.status != Status::Slp {
+        if oms.sleep_usable && (me.status != Status::Slp || public_rest_timer(b, att) == Some(1)) {
             return false;
         }
         if osid == km.substitute && (me_has_sub || me.hp <= me.maxhp / 4 || me.maxhp == 1) {
@@ -852,7 +863,10 @@ fn raw_public_noop_reason(
     if can_safely_mask_public_self_noop(b, dex, side, c) {
         use nc2000_engine::state::Status;
         let me = b.poke(att);
-        // 1. Awake Sleep Talk / Snore when no opponent action can put `att` into live sleep before our move.
+        if ms.sleep_usable && public_rest_timer(b, att) == Some(1) {
+            return Some("Rest sleep ends before this move executes");
+        }
+        // An awake user can still be put to sleep before it moves.
         if ms.sleep_usable && me.status != Status::Slp {
             let own_safeguard = dex
                 .conds_id("safeguard")
@@ -1094,10 +1108,8 @@ fn noop_reason(
     // (slp/onBeforeMove) decrements the counter and then returns `Undef` for a
     // `sleep_usable` move, so a user put to sleep this very turn still gets a
     // working Sleep Talk. In-distribution, not theoretical — 15 of the 32
-    // meta-pool teams carry a sleep move. No switch gate: the rule never reads
-    // the foe. A mon that wakes on its OWN turn is untouched by construction:
-    // the sleep counter is hidden, so at the decision its status still reads
-    // `Slp` (24 such Sleep Talks in the 570-battle corpus).
+    // meta-pool teams carry a sleep move. Ordinary sleep has a hidden
+    // counter. The public Rest timer is handled in raw_public_noop_reason.
     //
     // Found by battle-4070 (2026-08-19): Suicune, alone against a Rest-
     // stalling Umbreon, spent 6 of its 64 last-mon turns on an awake Sleep
@@ -1638,6 +1650,54 @@ mod dominated_action_tests {
         b.choose(&dex, 0, "team 1, 2, 3").unwrap();
         b.choose(&dex, 1, "team 2, 1, 3").unwrap();
         (dex, b)
+    }
+
+    #[test]
+    fn rest_wake_turn_preserves_hidden_sleep_and_strategic_waits() {
+        use nc2000_engine::state::DK;
+        let (dex, mut b) = st_setup();
+        let me = b.active_id(0).unwrap();
+        let foe = b.active_id(1).unwrap();
+        let play = |b: &mut Battle, own: &str| {
+            b.choose(&dex, 0, own).unwrap();
+            b.choose(&dex, 1, "move splash").unwrap();
+        };
+        let masked = |b: &Battle, key: &str| {
+            super::public_noop_reason(b, &dex, 0, mv(&dex, key)).is_some()
+        };
+        b.poke_mut(me).hp -= 10;
+        play(&mut b, "move rest");
+        for remaining in [3, 2] {
+            assert_eq!(b.poke(me).status_state.get_int(DK::Time), remaining);
+            assert!(!masked(&b, "sleeptalk") && !masked(&b, "snore"));
+            play(&mut b, "move surf");
+        }
+        assert_eq!(b.poke(me).status_state.get_int(DK::Time), 1);
+        for key in ["sleeptalk", "snore"] {
+            assert!(masked(&b, key));
+            let mut after = b.clone();
+            play(&mut after, &format!("move {key}"));
+            assert_eq!(after.poke(me).status, Status::None);
+            assert_eq!(after.poke(foe).hp, b.poke(foe).hp);
+        }
+        let mut hidden = b.clone();
+        hidden.poke_mut(me).status_state.source = Some(foe);
+        assert!(!masked(&hidden, "sleeptalk") && !masked(&hidden, "snore"));
+
+        let mut stranded = b.clone();
+        strand(&mut stranded, 0);
+        stranded.sides[0].pokemon_left = 1;
+        for slot in &mut stranded.poke_mut(me).move_slots {
+            if !dex.move_static(slot.id).sleep_usable {
+                slot.pp = 0;
+            }
+        }
+        assert_eq!(stranded.legal_choices(&dex, 0).len(), 2);
+        assert!(!masked(&stranded, "sleeptalk") && !masked(&stranded, "snore"));
+
+        b.poke_mut(foe).status = Status::Tox;
+        assert!(super::wait_exempt(&b, &dex, 0));
+        assert!(!masked(&b, "sleeptalk") && !masked(&b, "snore"));
     }
 
     #[test]

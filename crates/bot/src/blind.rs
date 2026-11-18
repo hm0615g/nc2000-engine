@@ -2320,15 +2320,10 @@ impl BlindSearch {
     }
 
     pub fn prune_rest_aliases(&mut self, dex: &Dex) -> usize {
-        use nc2000_engine::state::{Status, DK};
         let Some(id) = self.base.active_id(self.side) else {
             return 0;
         };
-        let own = self.base.poke(id);
-        if own.status != Status::Slp
-            || own.status_state.source != Some(id)
-            || own.status_state.get_int(DK::StartTime) != 3
-        {
+        if crate::mask::public_rest_timer(&self.base, id).is_none() {
             return 0;
         }
         let allowed = self
