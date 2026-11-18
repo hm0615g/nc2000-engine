@@ -1,0 +1,44 @@
+{
+  "wasm": "fd18b046ceb110bffe7664686ace7d969e6ec029b89b1d677b0e1ea578cfc5b4",
+  "picker": "3ff03b35fba964cf6841640dad9b80ce4a9e6a616fad2841f39906f4745282b3",
+  "data": {
+    "compiled-preview-v1": "fed2220b37d24c4d8998f73b65f50d7cc1e24d5b32213457bb8fa8782c2989cc",
+    "belief-pool-v3/belief-pool": "0ed0f01e8c9c27563d25f0bd1afa976789fdd08e8c4cf3a6c480c746942f3f71",
+    "kodoku-r3/conclusion-equilibrium-deme": "dc4eba46a6291d52c4985a124d3a50ccfca3891220a8a431652ab2a1ef36c437",
+    "team-pool-v2/team-pool": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
+    "kodoku-beq-v1/novel_evolved_teams": "4b547b37bd41fcc110922efde101d83824615ab4f0c0438993f443ab3f746bd1",
+    "live-search": "ecab15ee3c9b96adc849da2c8f045084a6a238944e173fd5cdafc81762b5ee67",
+    "search-profiles": "157d49892b62fe4bb310e0a0d7f985ecabe6084ddcd5cad2e65ded65a2d9b862"
+  },
+  "botCommit": "0325ea9a2b8ebd4d5a49a3b7357e4ca483fae0c0",
+  "phases": {
+    "pilot": {
+      "games": 112,
+      "sha256": "2905a351e6a24ff85ea599dc98a82516161516d3bc31291ad8760d5de49339de"
+    },
+    "preview": {
+      "games": 18,
+      "sha256": "752984aa4da3972afd32933c28549953a2c194c0b3d8eae9cdafe56077d5f819"
+    },
+    "holdout": {
+      "games": 16,
+      "sha256": "8c2737a60c4832d67d7fb9d3e2bd79ccca7a0e874876a8e172d0f82412707493"
+    },
+    "response": {
+      "games": 16,
+      "sha256": "6b8e159c7e12208f4122043fc479e6946a9c47c4613474eb6050d332f53534c2"
+    },
+    "expansion": {
+      "games": 16,
+      "sha256": "db457d4e3ad1692c48c016092dc98ed8f8434ec5445497fa7be703fe1cf709d7"
+    }
+  },
+  "colabHoldoutIndices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ]
+}
