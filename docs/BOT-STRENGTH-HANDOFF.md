@@ -6,6 +6,8 @@ Authoritative snapshot of `crates/bot` playing-strength mechanisms, measured-nul
 
 ## Opponent switch coverage on turn 35 (2026-11-18)
 
+The ordinary allocator remains the default after the [equal-budget strength comparison](#equal-budget-strength-comparison).
+
 In the wake-corrected search at `641900f9`, Zapdos's switch received 545 visits by 54k and still had 545 at 729k. All 486,000 visits after 243k went to Zapdos's Rest. Raikou executed pure Rest at both budgets. Replaying from Zapdos's own observation gave five root types and selected the switch at 9k, 54k, 243k and 729k. At 9k that search faced Raikou's Rest on 3,210/9,000 iterations. The two players' searches valued replies under different information and action distributions.
 
 **Why visits stalled.** The opponent's [root UCB selector](../crates/bot/src/smmcts.rs) pools each reply's reward over the Raikou actions it happened to face. At 243k, Zapdos's switch faced Rest on 507/545 visits (93.0%), while Zapdos's Rest faced it on 237,642/238,435 (99.7%). Using each column's own history, the switch's UCB was 0.31445 against 0.31697 for Rest. Giving every column the same Raikou policy (100% Rest) and keeping the visit counts fixed reversed the ranking to 0.32166 against 0.31684. The switch ranked first among all four replies. The same reversal held at 729k. With 545 switch visits its exploration bonus grew only from 0.06034 to 0.06295 over those 486,000 further iterations.
@@ -40,7 +42,35 @@ probe counterfactual --games "$audit/focal.json" --conv "$out/reweighted.jsonl" 
   --pair 243000,729000 --trials 96 --cont-iters 9000 --seed 2026112701 --out "$out/paired.jsonl"
 ```
 
-**Open strength question.** Fresh estimates cost 65,536 additional iterations on a separate tree. A deployable allocator must account for that cost within its budget. Test its policy-weighted score on fresh games with matched seeds before seat-swapped comparisons at equal 81k, 243k, 729k and adaptive budgets. The earlier allocator (`10b2f395`) increased coverage but chose a weaker move on turn 33. The independent depth-17 backup fix (`2d29f0b3`) awaits broader validation on deep battle and preview trees.
+### Equal-budget strength comparison
+
+On the experimental branch `experiment/budgeted-reply-reweight` (`95293242`), the candidate with probes scored 60–68 in the primary 81k comparison. Its 95% seat-pair bootstrap interval was 39.06–54.69%. The adoption criteria were a lower bound above 50% and a median time ratio of at most 1.05.
+
+Both variants froze the current execution probabilities every 256 iterations starting at 512. For each hidden root type, they reweighted the cell rewards for each legal reply to that common own-action distribution, shrinking sparse cells toward their reply's historical marginal with eight pseudo-visits. The resulting offset was added to the live opponent UCB score. The probe variant also spent every 32nd type visit after warm-up on a uniformly sampled legal reply and an independent sample from the frozen own policy. Forced probes counted within the budget. With the experiment disabled, all non-timing checkpoint fields matched the baseline across 48 positions and ten checkpoints.
+
+Applying the candidate’s sparse-cell correction to the ordinary 243k turn-35 checkpoint raised switch UCB from 0.31445 to 0.32154, ahead of Rest at 0.31684. On the original turn-35 seed, the 729k switch count was 545 for ordinary search, 565 for reweighting alone and 170,826 with probes. Probes changed Raikou's executed choice from Rest to Thunder and extended adaptive search from 54k to 243k. In a new 48-pair 9k continuation sample, Thunder scored 27/48 and Rest 25/48. The same change in allocation cost 25 percentage points on the turn-33 control at 729k, where switching scored 34/48 and Thunder 22/48. The turn-6 control gained 3.19 points in policy-weighted score. Across the three search seeds (XOR 0, 131, 1597), the probe variant's turn-33 differences at 729k were −25.00, +27.41 and 0 points.
+
+On 48 fresh games we sampled one decision per game and scored every changed execution distribution, including changes in mixing probabilities that preserved the chosen action. There were 20 distinct action contrasts, each evaluated with 32 paired 9k continuations. The entries below are mean score changes in percentage points over all 48 positions, with 95% game-bootstrap intervals. The continuation estimates condition on the recorded rosters.
+
+| Battle budget | Reweight only | Reweight with probes |
+| --- | ---: | ---: |
+| 81k | −0.49 [−1.84, +0.61] | +0.21 [−0.36, +0.91] |
+| 243k | −0.90 [−2.14, +0.01] | −0.15 [−0.98, +0.38] |
+| 729k | −1.04 [−2.54, +0.26] | −0.44 [−1.02, 0.00] |
+| Adaptive, 243k cap | −0.90 [−2.14, +0.01] | −0.15 [−0.98, +0.38] |
+
+At 81k, reweighting changed the policy on 8/48 decisions and probes changed it on 10/48. Median search times on these positions over two passes in reverse arm order were 824 ms (ordinary), 849 ms (reweight) and 833 ms (probes). Mean adaptive iterations on the sampled decisions were 172,125, 188,438 and 185,625, respectively. Only the probe variant had a positive 81k point estimate and advanced to the independent seat-swapped comparison.
+
+| Equal battle budget | Candidate W–L | Score (95% paired CI) | Median ms, candidate / ordinary |
+| --- | ---: | ---: | ---: |
+| 81k | 60–68 | 46.88% [39.06, 54.69] | 891 / 891 |
+| 243k | 11–13 | 45.83% [25.00, 66.67] | 2,798 / 2,744 |
+| 729k | 8–8 | 50.00% [25.00, 75.00] | 9,200 / 9,414 |
+| Adaptive, 243k cap | 14–10 | 58.33% [41.67, 75.00] | 2,604 / 2,316 |
+
+Across the adaptive games the candidate used 191,900 iterations per searched battle decision and the baseline used 176,045. All games finished before the turn cap. The three secondary comparisons have only 8–12 seat pairs each.
+
+To reproduce on `95293242`, build the release `budget_probe` example. Collect 48 games with `collect-positions --pairs 48 --iters 3000 --preview-iters 27000 --seed 2026112801 --out GAMES.json`, then run `python3 tools/bench-reply-policies.py GAMES.json NEW_OUTPUT_DIR --probe target/release/examples/budget_probe`. For the independent full-game comparison use `budget_probe duel --reply-mode probe --iters-a 81000 --iters-b 81000 --pairs 64 --preview-iters 27000 --seed 2026112806 --out duel-81k.jsonl`. Use 12 pairs at 243k, 8 pairs at 729k and 12 pairs with `--adaptive` at the 243k cap, with a separate output file for each. Focal continuations used seed `2026112804`, 48 paired trials and 9k search. The independent depth-17 backup experiment remains at `2d29f0b3`.
 
 ## 1. Shipped Search, Root, Endgame & Belief Stack
 
