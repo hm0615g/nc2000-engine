@@ -17,3 +17,15 @@ Within each familiar shell, compare the existing disclosure, its best-looking si
 For each shell, nominate the best alternative and play it and the base profile on six fresh, common blocks against the actual initial mixture. Keep the alternative only if it scores higher. Recheck the three leading outside singletons on those common blocks and admit the leader if it scores above half. Hashes break screening ties. Fit one conditional profile per distinct visible roster and mix their outer weights by regret matching on the seat-symmetrized shell game. Direct tests of the assembled mixture cover dropping types, moving mass, new mutants, cross-roster weights and outside teams.
 
 Freeze the final shortlist before testing it: the leading within-pool proposal, the leading outside party and the best remaining screened proposal each receive 16 fresh independent seat-pairs. They share seeds across challengers. Report the largest observed score, and simultaneous bounds for that tested shortlist. If a challenger exceeds 50% in screening and reaches 65% on the fresh pairs, try one further explicit redistribution towards it under the resources available. The 65% threshold chooses an engineering follow-up; it is not a statistical equilibrium certificate.
+
+## Replaying the experiment
+
+Each `*-games.jsonl` can serve directly as the task file for the production runner. The archived rows include actual sets by ID, seeds, picks, final outcomes and action hashes. Set `NASH_POOLS` to the corresponding pool definition. Use a new output directory for each replay. For example, from the project root with the Node WASM target built:
+
+```sh
+NASH_POOLS=data/nash-camouflage-v1/screen-pools.json node web/tests/nash-refresh.mjs data/nash-camouflage-v1/screen-games.jsonl target/camouflage-screen-replay 8
+```
+
+The response, refinement and shell-fit stages all use `response-pools.json`. The deviation screen uses `final-pools.json`. Independent confirmation uses `confirmation-pools.json`. Any redistribution and its final check use `repair-pools.json`. The `mixtures` and `ids` arrays follow seat order. The first logical player sits in the seat named by `rowSeat`. A full-screen replay includes all matched singleton controls.
+
+The eight [Colab replays](colab-parity.json) matched local CPU execution on both selections, every action hash, turn count and outcome. They are duplicate checks and contribute no additional statistical observations.
