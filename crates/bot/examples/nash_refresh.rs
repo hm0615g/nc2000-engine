@@ -3,9 +3,13 @@
 //! Usage (from any directory):
 //!   nash_refresh GAMES.jsonl NEW_OUTPUT_DIR [workers]
 //!
-//! Environment variables (matching `web/tests/nash-refresh.mjs`):
-//!   NASH_POOLS=FILE      Optional extra `{teams, mixtures}` JSON file.
-//!   NASH_SAVE_LOGS=1     Save full battle protocol logs to `NEW_OUTPUT_DIR/logs/<index>.json`.
+//! Environment variables (matching `web/tests/nash-refresh.mjs` plus native extensions):
+//!   NASH_POOLS=FILE          Optional extra `{teams, mixtures}` JSON file.
+//!   NASH_SAVE_LOGS=1         Save full battle protocol logs to `NEW_OUTPUT_DIR/logs/<index>.json`.
+//!   NASH_PREVIEW_ITERS=N     Override live preview iterations (default: `live-search.json` `unknownPreview`).
+//!   NASH_BATTLE_ITERS=N      Override battle iteration cap/budget (default: `live-search.json` `battle.adaptive`).
+//!   NASH_BATTLE_MODE=MODE    `adaptive` (default) or `fixed` (fixed `agent.step(N)` per battle decision).
+//!   NASH_PREVIEW_CACHE=0|1   Exact singleflight Turn-0 live preview cache (default: `1`).
 //!
 //! Emits a single-line JSON summary on stdout. Uses `ProtocolAgent` + `PlayerChannel`
 //! + `DecisionSampler` with identical configuration to `crates/wasm/src/lib.rs`
@@ -16,11 +20,11 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use nc2000_bot::compiled_preview;
-use nc2000_bot::decision::{DecisionSampler, PolicyMode};
+use nc2000_bot::decision::{DecisionPolicy, DecisionSampler, PolicyMode};
 use nc2000_bot::player::PlayerChannel;
 use nc2000_bot::preview::{MetaPool, MetaTeam};
 use nc2000_bot::smmcts::SelRule;
@@ -43,7 +47,9 @@ const TEAM_FILES: [&str; 3] = [
 
 #[derive(Clone, Deserialize, Serialize)]
 struct Task {
+    #[serde(default)]
     block: Value,
+    #[serde(default)]
     cell: Value,
     #[serde(rename = "rowSeat")]
     row_seat: usize,
@@ -227,15 +233,127 @@ fn canonical_no_spaces(s: &str) -> String {
     s.chars().filter(|&ch| ch != ' ').collect()
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BattleMode {
+    Adaptive,
+    Fixed,
+}
+
+impl BattleMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            BattleMode::Adaptive => "adaptive",
+            BattleMode::Fixed => "fixed",
+        }
+    }
+}
+
+struct CachedPreview {
+    policy: Option<DecisionPolicy<String>>,
+}
+
+struct PreviewCache {
+    slots: Mutex<HashMap<[u8; 32], Arc<OnceLock<CachedPreview>>>>,
+    hits: AtomicUsize,
+    misses: AtomicUsize,
+}
+
+impl PreviewCache {
+    fn new() -> Self {
+        Self {
+            slots: Mutex::new(HashMap::new()),
+            hits: AtomicUsize::new(0),
+            misses: AtomicUsize::new(0),
+        }
+    }
+
+    fn get_or_compute(
+        &self,
+        key: [u8; 32],
+        compute: impl FnOnce() -> Option<DecisionPolicy<String>>,
+    ) -> Option<DecisionPolicy<String>> {
+        let cell = {
+            let mut map = self.slots.lock().unwrap();
+            map.entry(key)
+                .or_insert_with(|| Arc::new(OnceLock::new()))
+                .clone()
+        };
+        let mut computed = false;
+        let entry = cell.get_or_init(|| {
+            computed = true;
+            CachedPreview { policy: compute() }
+        });
+        if computed {
+            self.misses.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.hits.fetch_add(1, Ordering::Relaxed);
+        }
+        entry.policy.clone()
+    }
+}
+
+fn preview_cache_key(
+    side: usize,
+    seed: u32,
+    preview_iters: u32,
+    blind_c: f64,
+    own_sets_json: &str,
+    frame_lines: &[String],
+    req_json: &str,
+    prior: &MetaPool,
+    agent: &ProtocolAgent,
+    team_json_map: &HashMap<String, String>,
+) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update([side as u8]);
+    h.update(seed.to_le_bytes());
+    h.update(preview_iters.to_le_bytes());
+    h.update(blind_c.to_bits().to_le_bytes());
+    h.update((own_sets_json.len() as u64).to_le_bytes());
+    h.update(own_sets_json.as_bytes());
+    h.update((frame_lines.len() as u64).to_le_bytes());
+    for line in frame_lines {
+        h.update((line.len() as u64).to_le_bytes());
+        h.update(line.as_bytes());
+    }
+    h.update((req_json.len() as u64).to_le_bytes());
+    h.update(req_json.as_bytes());
+    if let Some(belief) = agent.belief() {
+        let alive = belief.alive();
+        h.update([1u8]);
+        h.update((alive.len() as u64).to_le_bytes());
+        for &idx in alive {
+            let cand = &prior.teams[idx];
+            let sets_json = team_json_map
+                .get(&cand.id)
+                .map(String::as_str)
+                .unwrap_or("");
+            h.update((cand.id.len() as u64).to_le_bytes());
+            h.update(cand.id.as_bytes());
+            h.update((sets_json.len() as u64).to_le_bytes());
+            h.update(sets_json.as_bytes());
+            let w_bits = cand.weight.map(f64::to_bits).unwrap_or(u64::MAX);
+            h.update(w_bits.to_le_bytes());
+        }
+    } else {
+        h.update([0u8]);
+    }
+    h.finalize().into()
+}
+
 struct SharedState {
     dex: Dex,
     teams: HashMap<String, Vec<PokemonSet>>,
+    team_json_map: HashMap<String, String>,
     disclosed: HashMap<String, MetaPool>,
     default_pool: Option<MetaPool>,
     picker: Option<CompiledPreviewPicker>,
-    live: LiveSearchCfg,
+    preview_iters: u32,
+    battle_iters: u32,
+    battle_mode: BattleMode,
     blind_c: f64,
     log_dir: Option<PathBuf>,
+    preview_cache: Option<PreviewCache>,
 }
 
 fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
@@ -290,8 +408,8 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
         ..RmConfig::default()
     };
 
-    let mut agents: [ProtocolAgent; 2] = std::array::from_fn(|side| {
-        let prior = if let Some(mixtures) = &task.mixtures {
+    let priors: [MetaPool; 2] = std::array::from_fn(|side| {
+        if let Some(mixtures) = &task.mixtures {
             shared.disclosed[&mixtures[1 - side]].clone()
         } else {
             shared
@@ -299,11 +417,14 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
                 .as_ref()
                 .expect("default belief pool required when mixtures absent")
                 .clone()
-        };
+        }
+    });
+
+    let mut agents: [ProtocolAgent; 2] = std::array::from_fn(|side| {
         let mut agent = ProtocolAgent::new(
             &shared.dex,
             side,
-            prior,
+            priors[side].clone(),
             cfg.clone(),
             task.seeds[side] as u64,
         );
@@ -386,25 +507,78 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
             }
 
             if chosen.is_none() {
-                if policies[side] == "current" {
-                    let n = if first {
-                        shared.live.unknown_preview
+                let cached_policy = if first
+                    && agent.belief().is_some_and(|b| !b.is_fallback())
+                {
+                    if let Some(cache) = &shared.preview_cache {
+                        let own_json = shared
+                            .team_json_map
+                            .get(&task.ids[side])
+                            .map(String::as_str)
+                            .unwrap_or("");
+                        let key = preview_cache_key(
+                            side,
+                            task.seeds[side],
+                            shared.preview_iters,
+                            shared.blind_c,
+                            own_json,
+                            &frame.lines,
+                            &req_json,
+                            &priors[side],
+                            agent,
+                            &shared.team_json_map,
+                        );
+                        let dex = &shared.dex;
+                        let preview_iters = shared.preview_iters;
+                        let is_current = policies[side] == "current";
+                        Some(cache.get_or_compute(key, || {
+                            if is_current {
+                                agent
+                                    .step_adaptive_battle(dex, preview_iters)
+                                    .expect("step_adaptive_battle");
+                            } else {
+                                agent.step(dex, preview_iters).expect("step");
+                            }
+                            agent.decision_policy(dex, PolicyMode::Legacy)
+                        }))
                     } else {
-                        shared.live.battle.adaptive
-                    };
-                    agent
-                        .step_adaptive_battle(&shared.dex, n)
-                        .expect("step_adaptive_battle");
+                        None
+                    }
                 } else {
-                    let n = if first {
-                        shared.live.unknown_preview
-                    } else {
-                        81_000
-                    };
-                    agent.step(&shared.dex, n).expect("step");
-                }
+                    None
+                };
+
+                let policy = match cached_policy {
+                    Some(p) => p,
+                    None => {
+                        if first {
+                            if policies[side] == "current" {
+                                agent
+                                    .step_adaptive_battle(&shared.dex, shared.preview_iters)
+                                    .expect("step_adaptive_battle");
+                            } else {
+                                agent.step(&shared.dex, shared.preview_iters).expect("step");
+                            }
+                        } else if policies[side] == "current" {
+                            match shared.battle_mode {
+                                BattleMode::Adaptive => {
+                                    agent
+                                        .step_adaptive_battle(&shared.dex, shared.battle_iters)
+                                        .expect("step_adaptive_battle");
+                                }
+                                BattleMode::Fixed => {
+                                    agent.step(&shared.dex, shared.battle_iters).expect("step");
+                                }
+                            }
+                        } else {
+                            agent.step(&shared.dex, 81_000).expect("step");
+                        }
+                        agent.decision_policy(&shared.dex, PolicyMode::Legacy)
+                    }
+                };
+
                 if decisions[side].committed().is_none() {
-                    if let Some(policy) = agent.decision_policy(&shared.dex, PolicyMode::Legacy) {
+                    if let Some(policy) = policy {
                         if policy.source() == "request-projected" {
                             agent.projections += 1;
                         }
@@ -693,6 +867,30 @@ fn main() {
         .ok()
         .and_then(|p| fs::read(p).ok())
         .unwrap_or_default();
+    let preview_iters: u32 = env::var("NASH_PREVIEW_ITERS")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(|s| s.parse().expect("invalid NASH_PREVIEW_ITERS"))
+        .unwrap_or(live.unknown_preview);
+    let battle_iters: u32 = env::var("NASH_BATTLE_ITERS")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(|s| s.parse().expect("invalid NASH_BATTLE_ITERS"))
+        .unwrap_or(live.battle.adaptive);
+    let battle_mode = match env::var("NASH_BATTLE_MODE").ok().as_deref() {
+        None | Some("") | Some("adaptive") => BattleMode::Adaptive,
+        Some("fixed") => BattleMode::Fixed,
+        Some(other) => panic!("invalid NASH_BATTLE_MODE: {other} (expected adaptive or fixed)"),
+    };
+    let preview_cache_enabled = match env::var("NASH_PREVIEW_CACHE").ok().as_deref() {
+        None | Some("") | Some("1") | Some("true") => true,
+        Some("0") | Some("false") => false,
+        Some(other) => panic!("invalid NASH_PREVIEW_CACHE: {other}"),
+    };
+    let is_custom_budget = preview_iters != live.unknown_preview
+        || battle_iters != live.battle.adaptive
+        || battle_mode != BattleMode::Adaptive;
+
     let mut manifest = serde_json::Map::new();
     if let Some(ref pt) = pools_text {
         manifest.insert("poolsSha256".into(), json!(sha256_hex(pt.as_bytes())));
@@ -700,6 +898,17 @@ fn main() {
     manifest.insert("tasks".into(), json!(sha256_hex(&task_bytes)));
     manifest.insert("runner".into(), json!("native-rust"));
     manifest.insert("nativeBinary".into(), json!(sha256_hex(&exe_bytes)));
+    if is_custom_budget {
+        manifest.insert(
+            "budget".into(),
+            json!({
+                "previewIters": preview_iters,
+                "battleIters": battle_iters,
+                "battleMode": battle_mode.as_str(),
+            }),
+        );
+    }
+    manifest.insert("previewCache".into(), json!(preview_cache_enabled));
     manifest.insert("data".into(), Value::Object(data_hashes));
     fs::write(
         output.join("manifest.json"),
@@ -710,12 +919,16 @@ fn main() {
     let shared = Arc::new(SharedState {
         dex,
         teams,
+        team_json_map,
         disclosed,
         default_pool,
         picker,
-        live,
+        preview_iters,
+        battle_iters,
+        battle_mode,
         blind_c: profiles.blind.c,
         log_dir,
+        preview_cache: preview_cache_enabled.then(PreviewCache::new),
     });
 
     let wall_start = Instant::now();
@@ -742,6 +955,17 @@ fn main() {
         }
     });
 
+    let (cache_hits, cache_misses) = shared
+        .preview_cache
+        .as_ref()
+        .map(|c| {
+            (
+                c.hits.load(Ordering::Relaxed),
+                c.misses.load(Ordering::Relaxed),
+            )
+        })
+        .unwrap_or((0, 0));
+
     println!(
         "{}",
         json!({
@@ -749,6 +973,8 @@ fn main() {
             "output": output.display().to_string(),
             "workers": n_workers,
             "wall_ms": (wall_start.elapsed().as_secs_f64() * 1000.0).round() as u64,
+            "preview_cache_hits": cache_hits,
+            "preview_cache_misses": cache_misses,
         })
     );
 }
