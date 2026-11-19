@@ -13,6 +13,7 @@ from screen import HERE, write
 CONFIGS = {
     "screen": "screen", "response": "response", "refine": "response", "fit": "response",
     "deviation": "final", "confirmation": "confirmation", "repair": "repair", "recheck": "repair",
+    "stratified": "confirmation",
 }
 TASK_FIELDS = ("ids", "seeds", "battleSeed", "rowSeat", "cell", "mixtures", "block")
 
@@ -76,7 +77,11 @@ def export(cfg, name):
 def main():
     confirmation = load("confirmation-summary.json")
     repaired = confirmation["try_redistribution"]
-    phases = list(CONFIGS) if repaired else list(CONFIGS)[:-2]
+    phases = ["screen", "response", "refine", "fit", "deviation", "confirmation"]
+    if repaired:
+        phases.extend(["repair", "recheck"])
+    if (HERE / "stratified-schedule.jsonl").exists():
+        phases.append("stratified")
     counts = audit(phases)
     name = load("repair-summary.json")["selected"] if repaired else "proposed"
     cfg = load(("repair" if repaired else "confirmation") + "-pools.json")
@@ -102,6 +107,7 @@ def main():
         "games": sum(n["games"] for n in counts.values()),
         "outside_parties_screened": len(load("response-design.json")["outside"]),
         "direct_deviations_screened": len(load("confirmation-design.json")["screen_scores"]),
+        **({"stratified_repeat": load("stratified-summary.json")} if "stratified" in phases else {}),
         "bounds": "Two-sided simultaneous 95% Hoeffding intervals on independent seat-pair scores, Bonferroni across the final held-out opponents.",
     })
 
