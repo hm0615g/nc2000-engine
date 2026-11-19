@@ -1,0 +1,12 @@
+{
+  "within_shell": {
+    "D5": "D5-mut",
+    "S4": "S4-tilt",
+    "incumbent": "incumbent-tilt"
+  },
+  "outsiders": [
+    "red-v10-s1105-r2-s0155",
+    "rental-cban-8",
+    "mjj-2010-garap-a"
+  ]
+}
