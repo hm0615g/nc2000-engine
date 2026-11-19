@@ -1,0 +1,57 @@
+{
+  "candidates": {
+    "D5": [
+      "D5",
+      "deme-r1-00-s0030-beq-g2-c3-legal",
+      "D5-tilt",
+      "D5-mut"
+    ],
+    "S4": [
+      "S4",
+      "sample-07-beq-g2-c4",
+      "S4-tilt",
+      "S4-mut"
+    ],
+    "incumbent": [
+      "incumbent",
+      "apex-c04-bug-3atkstar-boomgen",
+      "incumbent-tilt",
+      "incumbent-mut",
+      "apex-equal"
+    ]
+  },
+  "outside": [
+    "rental-cban-8",
+    "sample-12",
+    "sample-17-orig",
+    "nb-sample-13-0",
+    "red-v5-r1-s0097",
+    "sample-08",
+    "rental-cban-13",
+    "mjj-2014-thdrcomb",
+    "sample-11",
+    "sample-06",
+    "red-v10-s1105-r2-s0155",
+    "mjj-2010-garap-a",
+    "mjj-2020-rraikou",
+    "sample-02",
+    "sib-r1-n4-red-v6-r1-s0064-s07",
+    "hc75-top8-tsuru",
+    "sample-09",
+    "sample-22-orig",
+    "sample-14",
+    "pb-100",
+    "pb-85",
+    "pb-62",
+    "pb-6",
+    "pb-96",
+    "pb-89",
+    "pb-13",
+    "pb-46"
+  ],
+  "novel": {
+    "D5": "deme-r1-00-s0030-beq-g2-c3-legal-cam1-tbolt-ttar",
+    "S4": "sample-07-beq-g2-c4-cam1-surf-boom-cloyster",
+    "incumbent": "apex-c04-bug-3atkstar-boomgen-cam1-boom-lax"
+  }
+}
