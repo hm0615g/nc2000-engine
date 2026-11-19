@@ -22,6 +22,8 @@ Against Sample07, Deme's five-type mix scored 50.0% with the full distribution d
 
 The [s0155 follow-up](s0155/README.md) tested three one-move variants in 158 further games. The leading parent–Counter Blissey mixture lost its screening advantage on new seeds, and both supported-roster guard scores fell. The seven-type research candidate above remains the reference for subsequent searches.
 
+A [Sample17 entry test](sample17/README.md) allocated half the s0155 weight (13.64% overall) to Sample17. The 176-game comparison favored the proposal. The 96-game independent check gave Sample17 and Sample07 higher scores against it. The seven-type pool remains the research reference.
+
 ## Initial paired screen
 
 D5 comprises the original Deme and four archived descendants, sampled uniformly. All four descendants failed current legality because Raikou cannot learn Crunch. Each new `-legal` ID replaces that single slot with the parent's Sleep Talk or, if Sleep Talk is already present, Thunder. S4 comprises the four existing Sample07 types with equal weights. APEX4 starts at the deployed proportions. All 13 sets passed production validation, and the full opponent preview frames within each family were byte-identical on a common seed.

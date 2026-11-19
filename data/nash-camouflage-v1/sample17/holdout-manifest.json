@@ -1,0 +1,19 @@
+{
+  "poolsSha256": "fa8a5c98ccfbc7da9d76711edfe35b79dcf53a45a37d95993cb82100bc6bc857",
+  "tasks": "b351369975cb2eca53b88d5695ff24f05c8c677dc9d02c20ded8fc703038e40c",
+  "wasm": "fd18b046ceb110bffe7664686ace7d969e6ec029b89b1d677b0e1ea578cfc5b4",
+  "data": {
+    "kodoku-beq-v1/novel_evolved_teams": "4b547b37bd41fcc110922efde101d83824615ab4f0c0438993f443ab3f746bd1",
+    "team-pool-v2/team-pool": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
+    "kodoku-r3/conclusion-equilibrium-deme": "dc4eba46a6291d52c4985a124d3a50ccfca3891220a8a431652ab2a1ef36c437",
+    "live-search": "ecab15ee3c9b96adc849da2c8f045084a6a238944e173fd5cdafc81762b5ee67",
+    "search-profiles": "157d49892b62fe4bb310e0a0d7f985ecabe6084ddcd5cad2e65ded65a2d9b862",
+    "nash-refresh-v1/candidate": "bd9fe4a7eb63c22e926df245083760b598c99c198df6cf2f63a4d13d50762977"
+  },
+  "runner": "b99e1b8f225fbf63e8ba8a08a949b6202212a1897761b140f99af52770224275",
+  "records": "4d3e331a2f88ae80a14f35670aa790ec501c21abf800f2a752863a2cb0d53b64",
+  "games": 96,
+  "distinct_seeds": 24,
+  "ties": 0,
+  "caps": 0
+}
