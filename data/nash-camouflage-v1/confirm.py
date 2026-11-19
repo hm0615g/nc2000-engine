@@ -33,18 +33,19 @@ def heldout():
                 assert r["preview"][1-side]==k["preview"][1-side]
                 retained["opponent_pick_changes"]+=r["preview"][side]!=k["preview"][side]
                 retained["outcome_changes"]+=r["outcome"]!=k["outcome"]
-    decision=results[worst]["score"]>=.65 and design["screen_scores"][worst]>.5
+    qualifying=[n for n in leaders if results[n]["score"]>=.65 and design["screen_scores"][n]>.5]
+    target=max(qualifying,key=lambda n:results[n]["score"]) if qualifying else None
     return {"heldout":results,"worst":worst,"max_observed_gain":results[worst]["score"]-.5,
             "tested_upper_gain":max(r["interval"][1] for r in results.values())-.5,
             "candidate_camouflage":{**interval(diff,span=2),**retained} if diff else {"score":0,"reason":"singleton"},
-            "try_redistribution":decision}
+            "try_redistribution":bool(qualifying),"repair_target":target}
 
 
 def repair():
     report=heldout();write("confirmation-summary.json",report)
     if not report["try_redistribution"]:return
     cfg=load("confirmation-pools.json")
-    worst=report["worst"]
+    worst=report["repair_target"]
     second=next(n for n in sorted(report["heldout"],key=lambda n:-report["heldout"][n]["score"]) if n!=worst)
     paths=["proposed"]
     for percent in [25,50,75]:

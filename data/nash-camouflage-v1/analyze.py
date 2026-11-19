@@ -112,6 +112,8 @@ def stage_one():
         values,weights=[],[]
         diffs=[[],[]]
         changes=[Counter(),Counter()]
+        by_type=[defaultdict(list),defaultdict(list)]
+        switches=[Counter(),Counter()]
         for (a,b,k),(v,rows) in pairs.items():
             if (a,b)!=(left,right):continue
             ta,tb=rows[0]["ids"]
@@ -121,14 +123,22 @@ def stage_one():
             for side,disclosure in enumerate([(ta,b,k),(a,tb,k)]):
                 if disclosure not in pairs:continue
                 other,controls=pairs[disclosure]
-                diffs[side].append((v-other) * (1 if side==0 else -1))
+                delta=(v-other) * (1 if side==0 else -1)
+                diffs[side].append(delta)
+                by_type[side][[ta,tb][side]].append(delta * [rw[tb],lw[ta]][side])
                 for row,control in zip(rows,controls):
                     for field in ("battleSeed","seeds","ids","rowSeat"):
                         assert row[field]==control[field]
                     own=logical(row,"preview")[side]["input"]
                     assert own==logical(control,"preview")[side]["input"]
-                    changes[side]["opponent_pick_changes"]+=logical(row,"preview")[1-side]!=logical(control,"preview")[1-side]
-                    changes[side]["outcome_changes"]+=row["outcome"]!=control["outcome"]
+                    mixed_pick=logical(row,"preview")[1-side]["input"]
+                    revealed_pick=logical(control,"preview")[1-side]["input"]
+                    if mixed_pick!=revealed_pick:
+                        switches[side][(mixed_pick,revealed_pick)]+=1
+                    changes[side]["opponent_pick_changes"]+=mixed_pick!=revealed_pick
+                    changed=row["outcome"]!=control["outcome"]
+                    changes[side]["outcome_changes"]+=changed
+                    changes[side]["outcome_changes_same_preview"]+=changed and mixed_pick==revealed_pick
         assert len(values)==len(lw)*len(rw)
         scored=interval(values,weights)
         evidence[left+" vs "+right]=scored
@@ -138,7 +148,9 @@ def stage_one():
                 names2=[left,right][::(-1 if side else 1)]
                 delta=interval(ds,weights,span=2)
                 mixed=matrix[[x,y][side],[y,x][side]]
-                camouflage[" vs ".join(names2)] = {**delta,"mixed":float(mixed),"singleton_weighted":float(mixed-delta["score"]),**changes[side]}
+                camouflage[" vs ".join(names2)] = {**delta,"mixed":float(mixed),"singleton_weighted":float(mixed-delta["score"]),**changes[side],
+                    "gain_by_type":{t:sum(vs) for t,vs in by_type[side].items()},
+                    "opponent_pick_transitions":[{"mixed":u,"singleton":v,"games":cnt} for (u,v),cnt in switches[side].most_common()]}
     inner_scores={}
     for name,types in rankings.items():
         inner_scores[name]={}
