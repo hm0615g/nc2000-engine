@@ -26,5 +26,11 @@
     "colab_ms": 245203,
     "local_node": "22.23.3",
     "colab_node": "22.23.4"
+  },
+  "results_sha256": {
+    "games.jsonl": "aeb5c1ad9e9764d849d12117f2fb072c3918b5b35628665034de0a4e8c6abb88",
+    "repeat-games.jsonl": "30ebae06eb914b687edde381099365458a96dca0f4d9c58dd2e4f476591303ed",
+    "budget-games.jsonl": "4451e00b64b83dc8725ae35938c0f84ef8b922f05169edad7b71d8421f9e2bdf",
+    "pick-games.jsonl": "e28d852298d84d2bc4ef4c82957d506197ffe4c4a3d098b1241aa4093d79a3c7"
   }
 }

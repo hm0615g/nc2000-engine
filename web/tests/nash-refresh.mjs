@@ -164,15 +164,16 @@ async function worker() {
             input = picks[side];
           }
         }
-        if (first && mixtures && picks[side]) {
-          assert(frame.legal_actions.some(a => a.replaceAll(' ', '') === picks[side].replaceAll(' ', '')));
-          input = picks[side];
-          source = 'forced';
-        }
         if (!input) {
           if (policies[side] === 'current') agent.stepAdaptiveBattle(first ? live.unknownPreview : live.battle.adaptive);
           else agent.step(first ? live.unknownPreview : 81000);
           input = JSON.parse(agent.commitDecision('legacy')).input;
+        }
+        // Preserve preview search and decision RNG before applying the paired override.
+        if (first && mixtures && picks[side]) {
+          assert(frame.legal_actions.some(a => a.replaceAll(' ', '') === picks[side].replaceAll(' ', '')));
+          input = picks[side];
+          source = 'forced';
         }
         if (first) preview[side] = { source, input };
         return input;

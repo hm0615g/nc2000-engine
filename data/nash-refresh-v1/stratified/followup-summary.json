@@ -1,0 +1,151 @@
+{
+  "independent_repeat": {
+    "score": 0.6807607239804782,
+    "pair_hoeffding_95": [
+      0.44634157109553774,
+      0.9151798768654186
+    ],
+    "blocks": 40,
+    "wins": 52,
+    "losses": 28,
+    "ties": 0,
+    "caps": 0
+  },
+  "pooled": {
+    "score": 0.6101457120015118,
+    "pair_hoeffding_95": [
+      0.4748037509801874,
+      0.7454876730228361
+    ],
+    "blocks": 120,
+    "two_look_simultaneous_95": [
+      0.46263527841076524,
+      0.7576561455922584
+    ],
+    "observed_stratified_se": 0.03303847358313451
+  },
+  "equal_budget": {
+    "current/current81": {
+      "score": 0.7032670322042889,
+      "pair_hoeffding_95": [
+        0.37174828691439404,
+        1
+      ],
+      "blocks": 20,
+      "wins": 30,
+      "losses": 10,
+      "ties": 0,
+      "caps": 0,
+      "relative_to": {
+        "current/old": {
+          "reference": {
+            "score": 0.6700126164476213,
+            "pair_hoeffding_95": [
+              0.3384938711577265,
+              1
+            ],
+            "blocks": 20
+          },
+          "difference": {
+            "score": 0.033254415756667474,
+            "pair_hoeffding_95": [
+              -0.6297830748231222,
+              0.6962919063364571
+            ],
+            "blocks": 20
+          }
+        },
+        "current/current": {
+          "reference": {
+            "score": 0.563304881547153,
+            "pair_hoeffding_95": [
+              0.23178613625725814,
+              0.8948236268370477
+            ],
+            "blocks": 20
+          },
+          "difference": {
+            "score": 0.1399621506571359,
+            "pair_hoeffding_95": [
+              -0.5230753399226538,
+              0.8029996412369256
+            ],
+            "blocks": 20
+          }
+        }
+      }
+    },
+    "current81/old": {
+      "score": 0.6884785520390437,
+      "pair_hoeffding_95": [
+        0.3569598067491489,
+        1
+      ],
+      "blocks": 20,
+      "wins": 28,
+      "losses": 12,
+      "ties": 0,
+      "caps": 0,
+      "relative_to": {
+        "old/old": {
+          "reference": {
+            "score": 0.46401513973714564,
+            "pair_hoeffding_95": [
+              0.1324963944472508,
+              0.7955338850270405
+            ],
+            "blocks": 20
+          },
+          "difference": {
+            "score": 0.22446341230189806,
+            "pair_hoeffding_95": [
+              -0.43857407827789163,
+              0.8875009028816877
+            ],
+            "blocks": 20
+          }
+        },
+        "current/old": {
+          "reference": {
+            "score": 0.6700126164476213,
+            "pair_hoeffding_95": [
+              0.3384938711577265,
+              1
+            ],
+            "blocks": 20
+          },
+          "difference": {
+            "score": 0.018465935591422327,
+            "pair_hoeffding_95": [
+              -0.6445715549883674,
+              0.681503426171212
+            ],
+            "blocks": 20
+          }
+        }
+      }
+    }
+  },
+  "forced_previews": {
+    "old/old with current/old picks": {
+      "games": 8,
+      "changed_picks": 8,
+      "outcome_changed_by_picks": 4,
+      "initial_disagreements": 6,
+      "disagreements_after_override": 4,
+      "base_candidate_points": 4.0,
+      "override_candidate_points": 4.0,
+      "focal_candidate_points": 4.0
+    },
+    "current/old with current/current picks": {
+      "games": 8,
+      "changed_picks": 8,
+      "outcome_changed_by_picks": 5,
+      "initial_disagreements": 5,
+      "disagreements_after_override": 4,
+      "base_candidate_points": 4.0,
+      "override_candidate_points": 5.0,
+      "focal_candidate_points": 3.0
+    }
+  }
+}
