@@ -20,6 +20,8 @@ The seven phases used 948 games, with zero ties and zero turn caps. Eight additi
 
 Against Sample07, Deme's five-type mix scored 50.0% with the full distribution disclosed and 37.5% when its realized type was identified. Against Deme, Sample07 scored 50.0% and 55.0% under those two conditions. Against Sample07, APEX4 scored 36.88% and 22.50%. In the final candidate's separate 32-game paired comparison against the APEX Snorlax challenger, it won 23 times under the full distribution and 20 times with the realized type disclosed. Opponent selections changed in 14 games and seven outcomes changed. The estimated gain was 9.38 percentage points, with a conservative 95% interval of −58.53 to +77.28 points. [Initial controls](screen-summary.json) · [Final controls](confirmation-summary.json)
 
+The [s0155 follow-up](s0155/README.md) tested three one-move variants in 158 further games. The leading parent–Counter Blissey mixture lost its screening advantage on new seeds, and both supported-roster guard scores fell. The seven-type research candidate above remains the reference for subsequent searches.
+
 ## Initial paired screen
 
 D5 comprises the original Deme and four archived descendants, sampled uniformly. All four descendants failed current legality because Raikou cannot learn Crunch. Each new `-legal` ID replaces that single slot with the parent's Sleep Talk or, if Sleep Talk is already present, Thunder. S4 comprises the four existing Sample07 types with equal weights. APEX4 starts at the deployed proportions. All 13 sets passed production validation, and the full opponent preview frames within each family were byte-identical on a common seed.
