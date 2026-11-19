@@ -1,0 +1,266 @@
+[
+  {
+    "block": 0,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.03977432867271718
+  },
+  {
+    "block": 1,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.03977432867271718
+  },
+  {
+    "block": 2,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.03977432867271718
+  },
+  {
+    "block": 3,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.03977432867271718
+  },
+  {
+    "block": 4,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.03977432867271718
+  },
+  {
+    "block": 5,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.03977432867271718
+  },
+  {
+    "block": 6,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.03977432867271718
+  },
+  {
+    "block": 7,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.03977432867271718
+  },
+  {
+    "block": 8,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.04545637562596249
+  },
+  {
+    "block": 9,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.04545637562596249
+  },
+  {
+    "block": 10,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.04545637562596249
+  },
+  {
+    "block": 11,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.036364829544821
+  },
+  {
+    "block": 12,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.036364829544821
+  },
+  {
+    "block": 13,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.036364829544821
+  },
+  {
+    "block": 14,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.04091043323792363
+  },
+  {
+    "block": 15,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.04091043323792363
+  },
+  {
+    "block": 16,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.04091043323792363
+  },
+  {
+    "block": 17,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.04091043323792363
+  },
+  {
+    "block": 18,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.045450003692369595
+  },
+  {
+    "block": 19,
+    "opponent": "sample-17-orig",
+    "stratum": "transfer",
+    "weight": 0.045450003692369595
+  },
+  {
+    "block": 20,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.045450003692369595
+  },
+  {
+    "block": 21,
+    "opponent": "sample-17-orig",
+    "stratum": "transfer",
+    "weight": 0.045450003692369595
+  },
+  {
+    "block": 22,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.045450003692369595
+  },
+  {
+    "block": 23,
+    "opponent": "sample-17-orig",
+    "stratum": "transfer",
+    "weight": 0.045450003692369595
+  },
+  {
+    "block": 24,
+    "opponent": "sample07",
+    "stratum": "shared",
+    "weight": 0.2159124972307228
+  },
+  {
+    "block": 25,
+    "opponent": "sample07",
+    "stratum": "shared",
+    "weight": 0.2159124972307228
+  },
+  {
+    "block": 26,
+    "opponent": "sample07",
+    "stratum": "shared",
+    "weight": 0.2159124972307228
+  },
+  {
+    "block": 27,
+    "opponent": "sample07",
+    "stratum": "shared",
+    "weight": 0.2159124972307228
+  },
+  {
+    "block": 28,
+    "opponent": "sample07",
+    "stratum": "transfer",
+    "weight": 0.034087502769277196
+  },
+  {
+    "block": 29,
+    "opponent": "sample07",
+    "stratum": "transfer",
+    "weight": 0.034087502769277196
+  },
+  {
+    "block": 30,
+    "opponent": "sample07",
+    "stratum": "transfer",
+    "weight": 0.034087502769277196
+  },
+  {
+    "block": 31,
+    "opponent": "sample07",
+    "stratum": "transfer",
+    "weight": 0.034087502769277196
+  },
+  {
+    "block": 32,
+    "opponent": "incumbent",
+    "stratum": "shared",
+    "weight": 0.4318249944614456
+  },
+  {
+    "block": 33,
+    "opponent": "incumbent",
+    "stratum": "shared",
+    "weight": 0.4318249944614456
+  },
+  {
+    "block": 34,
+    "opponent": "incumbent",
+    "stratum": "transfer",
+    "weight": 0.06817500553855439
+  },
+  {
+    "block": 35,
+    "opponent": "incumbent",
+    "stratum": "transfer",
+    "weight": 0.06817500553855439
+  },
+  {
+    "block": 36,
+    "opponent": "red-v10-s1105-r2-s0155",
+    "stratum": "shared",
+    "weight": 0.4318249944614456
+  },
+  {
+    "block": 37,
+    "opponent": "red-v10-s1105-r2-s0155",
+    "stratum": "shared",
+    "weight": 0.4318249944614456
+  },
+  {
+    "block": 38,
+    "opponent": "red-v10-s1105-r2-s0155",
+    "stratum": "transfer",
+    "weight": 0.06817500553855439
+  },
+  {
+    "block": 39,
+    "opponent": "red-v10-s1105-r2-s0155",
+    "stratum": "transfer",
+    "weight": 0.06817500553855439
+  },
+  {
+    "block": 40,
+    "opponent": "D5",
+    "stratum": "shared",
+    "weight": 0.4318249944614456
+  },
+  {
+    "block": 41,
+    "opponent": "D5",
+    "stratum": "shared",
+    "weight": 0.4318249944614456
+  },
+  {
+    "block": 42,
+    "opponent": "D5",
+    "stratum": "transfer",
+    "weight": 0.06817500553855439
+  },
+  {
+    "block": 43,
+    "opponent": "D5",
+    "stratum": "transfer",
+    "weight": 0.06817500553855439
+  }
+]
