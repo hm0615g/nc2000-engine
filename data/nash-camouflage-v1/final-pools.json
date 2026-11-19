@@ -1,0 +1,2222 @@
+{
+  "teams": [
+    {
+      "id": "deme-r1-00-s0030-beq-g2-c3-legal",
+      "source": "deme-r1-00-s0030-beq-g2-c3",
+      "sets": [
+        {
+          "name": "Tyranitar",
+          "species": "Tyranitar",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Rock Slide",
+            "Crunch",
+            "Dynamic Punch",
+            "Ice Beam"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Skarmory",
+          "species": "Skarmory",
+          "item": "Never-Melt Ice",
+          "ability": "No Ability",
+          "moves": [
+            "Drill Peck",
+            "Curse",
+            "Toxic",
+            "Rest"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Marowak",
+          "species": "Marowak",
+          "item": "Thick Club",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Fire Blast",
+            "Rock Slide",
+            "Swords Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Double-Edge",
+            "Curse",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Raikou",
+          "species": "Raikou",
+          "item": "Magnet",
+          "ability": "No Ability",
+          "moves": [
+            "Thunder",
+            "Hidden Power Ice",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 22,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Suicune",
+          "species": "Suicune",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Surf",
+            "Ice Beam",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 2,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ]
+    },
+    {
+      "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal",
+      "source": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0",
+      "sets": [
+        {
+          "name": "Tyranitar",
+          "species": "Tyranitar",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Rock Slide",
+            "Crunch",
+            "Dynamic Punch",
+            "Earthquake"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Skarmory",
+          "species": "Skarmory",
+          "item": "Never-Melt Ice",
+          "ability": "No Ability",
+          "moves": [
+            "Drill Peck",
+            "Steel Wing",
+            "Toxic",
+            "Rest"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Marowak",
+          "species": "Marowak",
+          "item": "Thick Club",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Fire Blast",
+            "Rock Slide",
+            "Swords Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Double-Edge",
+            "Curse",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Raikou",
+          "species": "Raikou",
+          "item": "Mystic Water",
+          "ability": "No Ability",
+          "moves": [
+            "Thunder",
+            "Hidden Power Ice",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 22,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Suicune",
+          "species": "Suicune",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Surf",
+            "Ice Beam",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 2,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ]
+    },
+    {
+      "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal",
+      "source": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4",
+      "sets": [
+        {
+          "name": "Tyranitar",
+          "species": "Tyranitar",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Rock Slide",
+            "Crunch",
+            "Dynamic Punch",
+            "Fire Blast"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Skarmory",
+          "species": "Skarmory",
+          "item": "Magnet",
+          "ability": "No Ability",
+          "moves": [
+            "Drill Peck",
+            "Curse",
+            "Toxic",
+            "Rest"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Marowak",
+          "species": "Marowak",
+          "item": "Thick Club",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Fire Blast",
+            "Rock Slide",
+            "Swords Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Double-Edge",
+            "Curse",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Raikou",
+          "species": "Raikou",
+          "item": "Never-Melt Ice",
+          "ability": "No Ability",
+          "moves": [
+            "Sleep Talk",
+            "Hidden Power Ice",
+            "Rest",
+            "Thunder"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 22,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Suicune",
+          "species": "Suicune",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Surf",
+            "Ice Beam",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 2,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ]
+    },
+    {
+      "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal",
+      "source": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5",
+      "sets": [
+        {
+          "name": "Tyranitar",
+          "species": "Tyranitar",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Rock Slide",
+            "Crunch",
+            "Fire Blast",
+            "Ice Beam"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Skarmory",
+          "species": "Skarmory",
+          "item": "Never-Melt Ice",
+          "ability": "No Ability",
+          "moves": [
+            "Drill Peck",
+            "Curse",
+            "Toxic",
+            "Rest"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Marowak",
+          "species": "Marowak",
+          "item": "Thick Club",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Fire Blast",
+            "Rock Slide",
+            "Swords Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Double-Edge",
+            "Curse",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Raikou",
+          "species": "Raikou",
+          "item": "Magnet",
+          "ability": "No Ability",
+          "moves": [
+            "Thunder",
+            "Thunderbolt",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 2,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Suicune",
+          "species": "Suicune",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Surf",
+            "Ice Beam",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 2,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ]
+    },
+    {
+      "id": "deme-r1-00-s0030-beq-g2-c3-legal-cam1-tbolt-ttar",
+      "source": "deme-r1-00-s0030-beq-g2-c3-legal",
+      "sets": [
+        {
+          "name": "Tyranitar",
+          "species": "Tyranitar",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Rock Slide",
+            "Crunch",
+            "Thunderbolt",
+            "Ice Beam"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Skarmory",
+          "species": "Skarmory",
+          "item": "Never-Melt Ice",
+          "ability": "No Ability",
+          "moves": [
+            "Drill Peck",
+            "Curse",
+            "Toxic",
+            "Rest"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Marowak",
+          "species": "Marowak",
+          "item": "Thick Club",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Fire Blast",
+            "Rock Slide",
+            "Swords Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Double-Edge",
+            "Curse",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Raikou",
+          "species": "Raikou",
+          "item": "Magnet",
+          "ability": "No Ability",
+          "moves": [
+            "Thunder",
+            "Hidden Power Ice",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 22,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Suicune",
+          "species": "Suicune",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Surf",
+            "Ice Beam",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 2,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ]
+    },
+    {
+      "id": "sample-07-beq-g2-c4-cam1-surf-boom-cloyster",
+      "source": "sample-07-beq-g2-c4",
+      "sets": [
+        {
+          "name": "Electrode",
+          "species": "Electrode",
+          "item": "Miracle Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Thunderbolt",
+            "Explosion",
+            "Reflect",
+            "Thunder Wave"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Tauros",
+          "species": "Tauros",
+          "item": "Berserk Gene",
+          "ability": "No Ability",
+          "moves": [
+            "Double-Edge",
+            "Fire Blast",
+            "Earthquake",
+            "Hyper Beam"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Cloyster",
+          "species": "Cloyster",
+          "item": "Gold Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Ice Beam",
+            "Explosion",
+            "Surf",
+            "Spikes"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Marowak",
+          "species": "Marowak",
+          "item": "Thick Club",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Rock Slide",
+            "Hidden Power Bug",
+            "Swords Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 26,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Pink Bow",
+          "ability": "No Ability",
+          "moves": [
+            "Body Slam",
+            "Earthquake",
+            "Self-Destruct",
+            "Curse"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Zapdos",
+          "species": "Zapdos",
+          "item": "Mint Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Thunderbolt",
+            "Hidden Power Ice",
+            "Whirlwind",
+            "Rest"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 22,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        }
+      ]
+    },
+    {
+      "id": "apex-c04-bug-3atkstar-boomgen-cam1-boom-lax",
+      "source": "apex-c04-bug-3atkstar-boomgen",
+      "sets": [
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Curse",
+            "Double-Edge",
+            "Rest",
+            "Self-Destruct"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Cloyster",
+          "species": "Cloyster",
+          "item": "Gold Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Explosion",
+            "Ice Beam",
+            "Reflect",
+            "Spikes"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Gengar",
+          "species": "Gengar",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Explosion",
+            "Fire Punch",
+            "Ice Punch",
+            "Thunderbolt"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Heracross",
+          "species": "Heracross",
+          "item": "Mint Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Curse",
+            "Earthquake",
+            "Megahorn",
+            "Rest"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Marowak",
+          "species": "Marowak",
+          "item": "Thick Club",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Hidden Power Bug",
+            "Rock Slide",
+            "Swords Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 26,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Starmie",
+          "species": "Starmie",
+          "item": "Miracle Berry",
+          "ability": "No Ability",
+          "moves": [
+            "Ice Beam",
+            "Psychic",
+            "Recover",
+            "Surf"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 2,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ]
+    }
+  ],
+  "mixtures": {
+    "D5": [
+      {
+        "id": "deme-r1-00-s0030",
+        "weight": 0.2
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-legal",
+        "weight": 0.2
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal",
+        "weight": 0.2
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal",
+        "weight": 0.2
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal",
+        "weight": 0.2
+      }
+    ],
+    "S4": [
+      {
+        "id": "sample-07",
+        "weight": 0.25
+      },
+      {
+        "id": "sample-07-beq-g1-c4",
+        "weight": 0.25
+      },
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.25
+      },
+      {
+        "id": "sample-07-beq-g1-c3",
+        "weight": 0.25
+      }
+    ],
+    "deme-r1-00-s0030": [
+      {
+        "id": "deme-r1-00-s0030",
+        "weight": 1.0
+      }
+    ],
+    "deme-r1-00-s0030-beq-g2-c3-legal": [
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-legal",
+        "weight": 1.0
+      }
+    ],
+    "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal": [
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal",
+        "weight": 1.0
+      }
+    ],
+    "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal": [
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal",
+        "weight": 1.0
+      }
+    ],
+    "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal": [
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal",
+        "weight": 1.0
+      }
+    ],
+    "sample-07": [
+      {
+        "id": "sample-07",
+        "weight": 1.0
+      }
+    ],
+    "sample-07-beq-g1-c4": [
+      {
+        "id": "sample-07-beq-g1-c4",
+        "weight": 1.0
+      }
+    ],
+    "sample-07-beq-g2-c4": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 1.0
+      }
+    ],
+    "sample-07-beq-g1-c3": [
+      {
+        "id": "sample-07-beq-g1-c3",
+        "weight": 1.0
+      }
+    ],
+    "apex-c04-bug-3atkstar-boomgen": [
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 1.0
+      }
+    ],
+    "red-v10-s1105-r2-s0142": [
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 1.0
+      }
+    ],
+    "apex-c08-surgical-142": [
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 1.0
+      }
+    ],
+    "red-v10-s1105-r1-s0148": [
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 1.0
+      }
+    ],
+    "initial": [
+      {
+        "id": "deme-r1-00-s0030",
+        "weight": 0.038902923551367374
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-legal",
+        "weight": 0.038902923551367374
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal",
+        "weight": 0.038902923551367374
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal",
+        "weight": 0.038902923551367374
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal",
+        "weight": 0.038902923551367374
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.20137134556079078
+      },
+      {
+        "id": "sample-07-beq-g1-c4",
+        "weight": 0.20137134556079078
+      },
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.20137134556079078
+      },
+      {
+        "id": "sample-07-beq-g1-c3",
+        "weight": 0.20137134556079078
+      }
+    ],
+    "D5-tilt": [
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-legal",
+        "weight": 0.7
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal",
+        "weight": 0.3
+      }
+    ],
+    "deme-r1-00-s0030-beq-g2-c3-legal-cam1-tbolt-ttar": [
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-legal-cam1-tbolt-ttar",
+        "weight": 1.0
+      }
+    ],
+    "D5-mut": [
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-legal",
+        "weight": 0.5
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-legal-cam1-tbolt-ttar",
+        "weight": 0.5
+      }
+    ],
+    "S4-tilt": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.7
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.3
+      }
+    ],
+    "sample-07-beq-g2-c4-cam1-surf-boom-cloyster": [
+      {
+        "id": "sample-07-beq-g2-c4-cam1-surf-boom-cloyster",
+        "weight": 1.0
+      }
+    ],
+    "S4-mut": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.5
+      },
+      {
+        "id": "sample-07-beq-g2-c4-cam1-surf-boom-cloyster",
+        "weight": 0.5
+      }
+    ],
+    "incumbent-tilt": [
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.7
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.3
+      }
+    ],
+    "apex-c04-bug-3atkstar-boomgen-cam1-boom-lax": [
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen-cam1-boom-lax",
+        "weight": 1.0
+      }
+    ],
+    "incumbent-mut": [
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.5
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen-cam1-boom-lax",
+        "weight": 0.5
+      }
+    ],
+    "apex-equal": [
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.25
+      },
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 0.25
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.25
+      },
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.25
+      }
+    ],
+    "previous": [
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.2398990684190291
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.19002523289524273
+      },
+      {
+        "id": "sample-07-beq-g1-c4",
+        "weight": 0.19002523289524273
+      },
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.19002523289524273
+      },
+      {
+        "id": "sample-07-beq-g1-c3",
+        "weight": 0.19002523289524273
+      }
+    ],
+    "rental-cban-8": [
+      {
+        "id": "rental-cban-8",
+        "weight": 1.0
+      }
+    ],
+    "sample-12": [
+      {
+        "id": "sample-12",
+        "weight": 1.0
+      }
+    ],
+    "sample-17-orig": [
+      {
+        "id": "sample-17-orig",
+        "weight": 1.0
+      }
+    ],
+    "nb-sample-13-0": [
+      {
+        "id": "nb-sample-13-0",
+        "weight": 1.0
+      }
+    ],
+    "red-v5-r1-s0097": [
+      {
+        "id": "red-v5-r1-s0097",
+        "weight": 1.0
+      }
+    ],
+    "sample-08": [
+      {
+        "id": "sample-08",
+        "weight": 1.0
+      }
+    ],
+    "rental-cban-13": [
+      {
+        "id": "rental-cban-13",
+        "weight": 1.0
+      }
+    ],
+    "mjj-2014-thdrcomb": [
+      {
+        "id": "mjj-2014-thdrcomb",
+        "weight": 1.0
+      }
+    ],
+    "sample-11": [
+      {
+        "id": "sample-11",
+        "weight": 1.0
+      }
+    ],
+    "sample-06": [
+      {
+        "id": "sample-06",
+        "weight": 1.0
+      }
+    ],
+    "red-v10-s1105-r2-s0155": [
+      {
+        "id": "red-v10-s1105-r2-s0155",
+        "weight": 1.0
+      }
+    ],
+    "mjj-2010-garap-a": [
+      {
+        "id": "mjj-2010-garap-a",
+        "weight": 1.0
+      }
+    ],
+    "mjj-2020-rraikou": [
+      {
+        "id": "mjj-2020-rraikou",
+        "weight": 1.0
+      }
+    ],
+    "sample-02": [
+      {
+        "id": "sample-02",
+        "weight": 1.0
+      }
+    ],
+    "sib-r1-n4-red-v6-r1-s0064-s07": [
+      {
+        "id": "sib-r1-n4-red-v6-r1-s0064-s07",
+        "weight": 1.0
+      }
+    ],
+    "hc75-top8-tsuru": [
+      {
+        "id": "hc75-top8-tsuru",
+        "weight": 1.0
+      }
+    ],
+    "sample-09": [
+      {
+        "id": "sample-09",
+        "weight": 1.0
+      }
+    ],
+    "sample-22-orig": [
+      {
+        "id": "sample-22-orig",
+        "weight": 1.0
+      }
+    ],
+    "sample-14": [
+      {
+        "id": "sample-14",
+        "weight": 1.0
+      }
+    ],
+    "pb-100": [
+      {
+        "id": "pb-100",
+        "weight": 1.0
+      }
+    ],
+    "pb-85": [
+      {
+        "id": "pb-85",
+        "weight": 1.0
+      }
+    ],
+    "pb-62": [
+      {
+        "id": "pb-62",
+        "weight": 1.0
+      }
+    ],
+    "pb-6": [
+      {
+        "id": "pb-6",
+        "weight": 1.0
+      }
+    ],
+    "pb-96": [
+      {
+        "id": "pb-96",
+        "weight": 1.0
+      }
+    ],
+    "pb-89": [
+      {
+        "id": "pb-89",
+        "weight": 1.0
+      }
+    ],
+    "pb-13": [
+      {
+        "id": "pb-13",
+        "weight": 1.0
+      }
+    ],
+    "pb-46": [
+      {
+        "id": "pb-46",
+        "weight": 1.0
+      }
+    ],
+    "proposed": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.3181946293817374
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.13636912687788746
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.10909448863446301
+      },
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 0.08182086647584726
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.04091043323792363
+      },
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.04091043323792363
+      },
+      {
+        "id": "red-v10-s1105-r2-s0155",
+        "weight": 0.27270002215421757
+      }
+    ],
+    "outer-tilt": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.5090973146908687
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.21818456343894374
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.05454724431723151
+      },
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 0.04091043323792363
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.020455216618961814
+      },
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.020455216618961814
+      },
+      {
+        "id": "red-v10-s1105-r2-s0155",
+        "weight": 0.13635001107710878
+      }
+    ],
+    "outer-even": [
+      {
+        "id": "deme-r1-00-s0030",
+        "weight": 0.05
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-legal",
+        "weight": 0.05
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal",
+        "weight": 0.05
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal",
+        "weight": 0.05
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal",
+        "weight": 0.05
+      },
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.175
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.075
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.1
+      },
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 0.075
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.0375
+      },
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.0375
+      },
+      {
+        "id": "red-v10-s1105-r2-s0155",
+        "weight": 0.25
+      }
+    ],
+    "add-deme-r1-00-s0030-beq-g2-c3-legal-cam1-tbolt-ttar": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.25455570350539
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.10909530150230998
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.08727559090757042
+      },
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 0.0654566931806778
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.0327283465903389
+      },
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.0327283465903389
+      },
+      {
+        "id": "red-v10-s1105-r2-s0155",
+        "weight": 0.21816001772337407
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-legal-cam1-tbolt-ttar",
+        "weight": 0.2
+      }
+    ],
+    "add-sample-07-beq-g2-c4-cam1-surf-boom-cloyster": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.25455570350539
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.10909530150230998
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.08727559090757042
+      },
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 0.0654566931806778
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.0327283465903389
+      },
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.0327283465903389
+      },
+      {
+        "id": "red-v10-s1105-r2-s0155",
+        "weight": 0.21816001772337407
+      },
+      {
+        "id": "sample-07-beq-g2-c4-cam1-surf-boom-cloyster",
+        "weight": 0.2
+      }
+    ],
+    "add-apex-c04-bug-3atkstar-boomgen-cam1-boom-lax": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.25455570350539
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.10909530150230998
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.08727559090757042
+      },
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 0.0654566931806778
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.0327283465903389
+      },
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.0327283465903389
+      },
+      {
+        "id": "red-v10-s1105-r2-s0155",
+        "weight": 0.21816001772337407
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen-cam1-boom-lax",
+        "weight": 0.2
+      }
+    ],
+    "drop-sample-07-beq-g2-c4": [
+      {
+        "id": "sample-07",
+        "weight": 0.20001181092813577
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.16000825651393139
+      },
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 0.12000619238544855
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.06000309619272427
+      },
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.06000309619272427
+      },
+      {
+        "id": "red-v10-s1105-r2-s0155",
+        "weight": 0.3999675477870358
+      }
+    ],
+    "drop-sample-07": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.36843822897557127
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.12632073728452464
+      },
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 0.09474055296339348
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.04737027648169674
+      },
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.04737027648169674
+      },
+      {
+        "id": "red-v10-s1105-r2-s0155",
+        "weight": 0.3157599278131171
+      }
+    ],
+    "drop-apex-c04-bug-3atkstar-boomgen": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.35715867207289365
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.15306800231695442
+      },
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 0.09184011708540918
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.04592005854270459
+      },
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.04592005854270459
+      },
+      {
+        "id": "red-v10-s1105-r2-s0155",
+        "weight": 0.3060930914393336
+      }
+    ],
+    "drop-red-v10-s1105-r2-s0142": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.34654961952842867
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.14852126551218373
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.11881612710554294
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.0445560476645786
+      },
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.0445560476645786
+      },
+      {
+        "id": "red-v10-s1105-r2-s0155",
+        "weight": 0.2970008925246875
+      }
+    ],
+    "drop-apex-c08-surgical-142": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.33176737648807386
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.1421860184948888
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.11374796725478961
+      },
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 0.0853109754410922
+      },
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.0426554877205461
+      },
+      {
+        "id": "red-v10-s1105-r2-s0155",
+        "weight": 0.28433217460060944
+      }
+    ],
+    "drop-red-v10-s1105-r1-s0148": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.33176737648807386
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.1421860184948888
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.11374796725478961
+      },
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 0.0853109754410922
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.0426554877205461
+      },
+      {
+        "id": "red-v10-s1105-r2-s0155",
+        "weight": 0.28433217460060944
+      }
+    ],
+    "drop-red-v10-s1105-r2-s0155": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.4375012224312316
+      },
+      {
+        "id": "sample-07",
+        "weight": 0.18750052389909924
+      },
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 0.14999930146786772
+      },
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 0.11249947610090077
+      },
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 0.05624973805045039
+      },
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 0.05624973805045039
+      }
+    ]
+  }
+}
