@@ -93,12 +93,29 @@ def control(profile,b):
     return ORIGINAL if realized(profile,b) == PARENT else "pure-" + profile.split("-",1)[1]
 
 
+def disclosure_contrast(matches, profile, blocks):
+    deltas = []
+    switches = 0
+    changed_results = 0
+    for b in blocks:
+        hidden, hs = matches[profile,FOE,b]
+        known, ks = matches[control(profile,b),FOE,b]
+        for a,k in zip(hs,ks,strict=True):
+            assert all(a[f] == k[f] for f in ("ids","battleSeed","rowSeat","seeds"))
+            own = a["rowSeat"]
+            assert a["preview"][own] == k["preview"][own]
+            switches += a["preview"][1-own] != k["preview"][1-own]
+            changed_results += a["outcome"] != k["outcome"]
+        deltas.append(hidden-known)
+    return {"delta":interval(deltas,span=2), "changed_opponent_selections":switches,
+            "changed_results":changed_results}
+
+
 def nominate():
     data = scores("screen")
     profiles = [p+k for k in EDITS for p in ("pure-", "mixed-")]
     result = {p: mean(data[p,FOE,b][0] for b in range(4)) for p in [ORIGINAL,*profiles]}
-    camouflage = {p: mean(data[p,FOE,b][0]-data[control(p,b),FOE,b][0] for b in range(4))
-                  for p in profiles if p.startswith("mixed-")}
+    camouflage = {p: disclosure_contrast(data,p,range(4)) for p in profiles if p.startswith("mixed-")}
     best = max(profiles, key=lambda p: (result[p], p.startswith("pure-")))
     nominee = best if result[best] > result[ORIGINAL] else None
     write("screen-summary.json", {"scores":result,"matched_camouflage":camouflage,"nominee":nominee})
@@ -159,18 +176,7 @@ def summarize():
         start += len(weights)
     camo = None
     if nominee.startswith("mixed-"):
-        deltas = []
-        switches = 0
-        for b in range(6,12):
-            hidden, hs = matches[nominee,FOE,b]
-            known, ks = matches[control(nominee,b),FOE,b]
-            for a,k in zip(hs,ks,strict=True):
-                assert all(a[f] == k[f] for f in ("ids","battleSeed","rowSeat","seeds"))
-                own = a["rowSeat"]
-                assert a["preview"][own] == k["preview"][own]
-                switches += a["preview"][1-own] != k["preview"][1-own]
-            deltas.append(hidden-known)
-        camo = {"delta":interval(deltas,span=2),"changed_opponent_selections":switches}
+        camo = disclosure_contrast(matches,nominee,range(6,12))
     promote = (overall["delta"]["score"] > 1e-12 and shell["delta"]["score"] > 0
                and all(g["delta"]["score"] >= -1e-12 for g in guards.values()))
     write("result.json",{"nominee":nominee,"pool_vs_sample17":overall,"s0155_vs_sample17":shell,
