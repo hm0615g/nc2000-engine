@@ -47,6 +47,8 @@ async function start() {
     ({ block, cell, rowSeat, ids, seeds, battleSeed, ...(picks ? { picks } : {}), ...(mixtures ? { mixtures } : {}), ...(policies ? { policies } : {}) }));
   assert(tasks.length && Number.isSafeInteger(+n) && +n > 0);
   fs.mkdirSync(output); // refuse to mix builds or overwrite an earlier run
+  const logDir = process.env.NASH_SAVE_LOGS === '1' ? path.join(output, 'logs') : null;
+  if (logDir) fs.mkdirSync(logDir);
   const picker = tasks.some(task => !task.mixtures) ? await buildCompiledPicker() : null;
   const inputs = [...teamFiles, 'live-search', 'search-profiles'];
   if (picker) inputs.push('compiled-preview-v1', 'belief-pool-v3/belief-pool');
@@ -66,7 +68,7 @@ async function start() {
   fs.writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(stamp));
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(+n, tasks.length) }, () => new Promise((resolve, reject) => {
-    const thread = new Worker(new URL(import.meta.url), { workerData: { picker, hasDisclosure, oldPath, poolsText } });
+    const thread = new Worker(new URL(import.meta.url), { workerData: { picker, hasDisclosure, oldPath, poolsText, logDir } });
     thread.on('error', reject);
     thread.on('exit', code => code ? reject(Error('worker exit ' + code)) : resolve());
     thread.on('message', result => {
@@ -199,6 +201,7 @@ async function worker() {
     }
     const result = { ...task, preview, outcome: battle.outcome() ?? 'cap', turns: battle.turn(),
       actionSha256: transcript.digest('hex'), ms: Math.round(performance.now() - began), ...(mixtures ? { previewBeliefs } : {}) };
+    if (workerData.logDir) fs.writeFileSync(path.join(workerData.logDir, task.index + '.json'), battle.takeNewLog());
     for (const object of [...agents, ...channels, battle]) object.free();
     parentPort.postMessage(result);
   });
