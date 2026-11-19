@@ -136,13 +136,15 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         for s_idx, (dm, n_pairs) in enumerate(zip(def_members, stratum_counts)):
             did = dm["id"]
             for rep in range(n_pairs):
-                # Pair block shares seeds across both seats
-                tag = f"nc2000/screen/{args.seed_tag}/s{s_idx}/r{rep}"
-                # Challenger seed depends on (rep, defender_shell) so variants in same shell share preview!
+                # Pair block shares seeds across both seats.
+                # Challenger seed depends on (rep, defender_shell) so variants in the same
+                # defender shell hit the exact Turn-0 preview cache without approximation.
                 def_shell_hash = hashlib.sha256(
                     json.dumps(shell_signature(def_teams[s_idx]["sets"])).encode()
                 ).hexdigest()[:8]
-                seed_ch = u32_hash(f"{tag}/ch/{def_shell_hash}/{cname if args.independent_seeds else 'shared'}")
+                tag = f"nc2000/screen/{args.seed_tag}/s{s_idx}/r{rep}"
+                ch_tag = f"nc2000/screen/{args.seed_tag}/sh{def_shell_hash}/r{rep}"
+                seed_ch = u32_hash(f"{ch_tag}/ch/{cname if args.independent_seeds else 'shared'}")
                 seed_def = u32_hash(f"{tag}/def/{did}")
                 battle_seed = u32_hash(f"{tag}/battle")
                 for row_seat in (0, 1):
