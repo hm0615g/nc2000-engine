@@ -2,6 +2,19 @@
 
 Compare the former 40/30/15/15 APEX4 pool and the retained seven-type candidate with the same production policy, full opposing distributions, and hidden realized types and trios. The 13.64% Sample17 entry proposal was rejected and is excluded. A worse matchup after the pool change and a winning challenger against the current pool are separate outcomes.
 
+## Result
+
+The five-team screen and two fresh checks used 230 local production games. Neither follow-up reproduced a winning matchup against the seven-type pool or an increase over the former APEX4 pool. Each percentage below is the challenger's score at the published defender weights.
+
+| Challenger | Screen, former → current | Independent, former → current |
+| --- | ---: | ---: |
+| pb-122, Jolteon–Marowak | 57.5% → 58.9% | 56.0% → 39.6% (20 seat pairs per pool) |
+| hc75-1st-show, Misdreavus–Alakazam | 7.5% → 38.4% | 37.7% → 36.8% (10 seat pairs per pool) |
+
+Against the current pool, Jolteon appeared in 28/40 games and attempted Baton Pass in 9/40. Misdreavus appeared in 14/20 and attempted Perish Song in 11/20. The latter team scored an estimated 80.0% conditional on s0155, a small-stratum observation. The primary 95% interval for the full current pool was 8.8–70.4%; the secondary interval was 0–89.9%. The three other challengers received screen data only. The seven-type research candidate is retained.
+
+[Screen](screen-summary.json) · [Primary check](holdout-summary.json) · [Secondary check](secondary-summary.json). All 230 games ended before the cap, with no ties. Optional raw logs are captured from the completed battle using `NASH_SAVE_LOGS=1`. One archived confirmation replay matched the original selections, action hash, outcome and turn count with this switch enabled; it is excluded from the totals.
+
 Each new challenger is an unmodified legal singleton. Its unordered six species differ from every team in the prior 67-deviation screen and from the other four entrants. The tactics below motivated the choices. A bot can select a different plan from the same six.
 
 | Team | Reason for testing |

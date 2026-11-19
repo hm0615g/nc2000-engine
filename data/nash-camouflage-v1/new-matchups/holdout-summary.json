@@ -1,0 +1,90 @@
+{
+  "current-seven": {
+    "score": 0.3959082183953496,
+    "blocks": 20,
+    "interval": [
+      0.08804345625490728,
+      0.703772980535792
+    ],
+    "usage": {
+      "games": 40,
+      "featured_user_selected": 28,
+      "featured_move_attempted": 9,
+      "selection_counts": {
+        "Cloyster": 30,
+        "Marowak": 28,
+        "Jolteon": 28,
+        "Exeggutor": 22,
+        "Raikou": 12
+      },
+      "move_games": {
+        "Cloyster / Ice Beam": 24,
+        "Marowak / Earthquake": 24,
+        "Jolteon / Thunderbolt": 23,
+        "Jolteon / Charm": 21,
+        "Cloyster / Spikes": 20,
+        "Cloyster / Curse": 19,
+        "Cloyster / Explosion": 19,
+        "Exeggutor / Explosion": 13,
+        "Marowak / Swords Dance": 10,
+        "Jolteon / Agility": 10,
+        "Raikou / Hidden Power": 10,
+        "Jolteon / Baton Pass": 9,
+        "Exeggutor / Stun Spore": 9,
+        "Marowak / Rock Slide": 8,
+        "Exeggutor / Psychic": 8,
+        "Exeggutor / Reflect": 7,
+        "Raikou / Thunderbolt": 7,
+        "Raikou / Reflect": 7,
+        "Marowak / Hidden Power": 3,
+        "Raikou / Rest": 3
+      }
+    }
+  },
+  "incumbent": {
+    "score": 0.5604528429990302,
+    "blocks": 20,
+    "interval": [
+      0.25258808085858786,
+      0.8683176051394725
+    ],
+    "usage": {
+      "games": 40,
+      "featured_user_selected": 40,
+      "featured_move_attempted": 13,
+      "selection_counts": {
+        "Cloyster": 40,
+        "Marowak": 40,
+        "Jolteon": 40
+      },
+      "move_games": {
+        "Jolteon / Thunderbolt": 37,
+        "Jolteon / Charm": 33,
+        "Marowak / Earthquake": 33,
+        "Marowak / Swords Dance": 29,
+        "Cloyster / Ice Beam": 28,
+        "Cloyster / Explosion": 25,
+        "Cloyster / Spikes": 23,
+        "Cloyster / Curse": 22,
+        "Jolteon / Baton Pass": 13,
+        "Marowak / Rock Slide": 11,
+        "Jolteon / Agility": 10,
+        "Marowak / Hidden Power": 2
+      }
+    }
+  },
+  "by_current_shell": {
+    "APEX4": 0.32500000000000007,
+    "Sample07": 0.43600336424547986,
+    "red-v10-s1105-r2-s0155": 0.39999123771579315
+  },
+  "change": {
+    "score": -0.16454462460368052,
+    "blocks": 20,
+    "interval": [
+      -0.7802741488845653,
+      0.45118489967720415
+    ]
+  },
+  "nominee": "pb-122"
+}
