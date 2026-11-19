@@ -1,0 +1,162 @@
+{
+  "challengers": {
+    "sample-17-orig": {
+      "base-seven": {
+        "score": 0.5016949376423565,
+        "blocks": 24,
+        "interval": [
+          0.22366234109885247,
+          0.7797275341858605
+        ]
+      },
+      "enter-sample17": {
+        "score": 0.47896993579617175,
+        "blocks": 24,
+        "interval": [
+          0.2009373392526677,
+          0.7570025323396758
+        ]
+      },
+      "delta": {
+        "score": -0.022725001846184797,
+        "blocks": 24,
+        "interval": [
+          -0.5787901949331928,
+          0.5333401912408233
+        ]
+      },
+      "shared_games": 42,
+      "identical_shared_action_hashes": 42
+    },
+    "sample07": {
+      "base-seven": {
+        "score": 0.6761312541539158,
+        "blocks": 8,
+        "interval": [
+          0.08240527961587807,
+          1
+        ]
+      },
+      "enter-sample17": {
+        "score": 0.6590875027692772,
+        "blocks": 8,
+        "interval": [
+          0.06536152823123942,
+          1
+        ]
+      },
+      "delta": {
+        "score": -0.017043751384638598,
+        "blocks": 8,
+        "interval": [
+          -1,
+          1
+        ]
+      },
+      "shared_games": 8,
+      "identical_shared_action_hashes": 8
+    },
+    "incumbent": {
+      "base-seven": {
+        "score": 0.5681750055385544,
+        "blocks": 4,
+        "interval": [
+          0,
+          1
+        ]
+      },
+      "enter-sample17": {
+        "score": 0.5,
+        "blocks": 4,
+        "interval": [
+          0,
+          1
+        ]
+      },
+      "delta": {
+        "score": -0.06817500553855439,
+        "blocks": 4,
+        "interval": [
+          -1,
+          1
+        ]
+      },
+      "shared_games": 4,
+      "identical_shared_action_hashes": 4
+    },
+    "red-v10-s1105-r2-s0155": {
+      "base-seven": {
+        "score": 0.06817500553855439,
+        "blocks": 4,
+        "interval": [
+          0,
+          0.9078303310634303
+        ]
+      },
+      "enter-sample17": {
+        "score": 0.0,
+        "blocks": 4,
+        "interval": [
+          0,
+          0.8396553255248759
+        ]
+      },
+      "delta": {
+        "score": -0.06817500553855439,
+        "blocks": 4,
+        "interval": [
+          -1,
+          1
+        ]
+      },
+      "shared_games": 4,
+      "identical_shared_action_hashes": 4
+    },
+    "D5": {
+      "base-seven": {
+        "score": 0.3181750055385544,
+        "blocks": 4,
+        "interval": [
+          0,
+          1
+        ]
+      },
+      "enter-sample17": {
+        "score": 0.3181750055385544,
+        "blocks": 4,
+        "interval": [
+          0,
+          1
+        ]
+      },
+      "delta": {
+        "score": 0.0,
+        "blocks": 4,
+        "interval": [
+          -1,
+          1
+        ]
+      },
+      "shared_games": 4,
+      "identical_shared_action_hashes": 4
+    }
+  },
+  "worst": {
+    "base-seven": "sample07",
+    "enter-sample17": "sample07"
+  },
+  "peak": {
+    "base-seven": 0.6761312541539158,
+    "enter-sample17": 0.6590875027692772
+  },
+  "advance": true,
+  "fresh_sample17_vs_original_one_sided_95_upper": 0.7522481544408044,
+  "archive_plus_new_descriptive": {
+    "score": 0.49588906016072176,
+    "blocks": 50,
+    "interval": [
+      0.2954830532531103,
+      0.6962950670683332
+    ]
+  }
+}
