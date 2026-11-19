@@ -73,11 +73,27 @@ def assemble():
         return tuple(sorted((t["id"],round(t["weight"],10)) for t in pools(cfg)[n]))
     seen={signature("proposed")}
     jobs=[]
-    for n in alternatives+design["outside"]:
+    probes = []
+    proposed = cfg["mixtures"]["proposed"]
+    support = {t["id"] for t in proposed}
+    for base, mutant in design["novel"].items():
+        probes.extend(t["id"] for t in pools(cfg)[base])
+        if mutant not in support:
+            name = "add-" + mutant
+            cfg["mixtures"][name] = compose(["proposed",mutant],[.8,.2],pools(cfg))
+            probes.append(name)
+    if len(proposed) > 1:
+        for member in proposed:
+            name = "drop-" + member["id"]
+            kept = [t for t in proposed if t["id"] != member["id"]]
+            total = sum(t["weight"] for t in kept)
+            cfg["mixtures"][name] = [dict(t, weight=t["weight"]/total) for t in kept]
+            probes.append(name)
+    for n in alternatives+design["outside"]+probes:
         sig=signature(n)
         if sig in seen:continue
         seen.add(sig)
-        jobs.append((n,"proposed",1 if n in design["outside"] else 3))
+        jobs.append((n,"proposed",3 if n in alternatives else 1))
     write("final-pools.json",cfg)
     save_games(HERE/"deviation-schedule.jsonl",trials("deviation",jobs,cfg))
 
