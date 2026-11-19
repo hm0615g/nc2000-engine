@@ -259,6 +259,7 @@ fn build_schedules(
     dex: &Dex,
     catalog: &WeightedCatalog,
     pool: &Arc<MetaPool>,
+    pair_start: usize,
     pairs: usize,
     seed: u64,
     preview_iters: u32,
@@ -321,7 +322,8 @@ fn build_schedules(
         }
     }
 
-    let missing: Vec<usize> = (0..pairs)
+    let range_start = pair_start.min(pairs);
+    let missing: Vec<usize> = (range_start..pairs)
         .filter(|i| !cached.contains_key(&(*i, preview_iters)))
         .collect();
     if !missing.is_empty() {
@@ -370,8 +372,14 @@ fn build_schedules(
             if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
                 std::fs::create_dir_all(parent).unwrap();
             }
-            let mut entries: Vec<Value> = Vec::with_capacity(pairs);
-            for i in 0..pairs {
+            let mut indices: Vec<usize> = cached
+                .keys()
+                .filter(|&&(_, it)| it == preview_iters)
+                .map(|&(i, _)| i)
+                .collect();
+            indices.sort_unstable();
+            let mut entries: Vec<Value> = Vec::with_capacity(indices.len());
+            for i in indices {
                 let (pa, pb) = cached[&(i, preview_iters)];
                 entries.push(json!({
                     "pair_idx": i,
@@ -389,7 +397,7 @@ fn build_schedules(
         }
     }
 
-    for s in &mut raw {
+    for s in &mut raw[range_start..pairs] {
         let (pa, pb) = cached[&(s.pair_idx, preview_iters)];
         s.preview_a = pa;
         s.preview_b = pb;
@@ -556,6 +564,7 @@ fn cmd_collect_positions(args: &[String]) {
         &dex,
         &catalog,
         &pool,
+        0,
         pairs,
         seed,
         preview_iters,
@@ -1314,6 +1323,7 @@ fn cmd_duel(args: &[String]) {
         &dex,
         &catalog,
         &pool,
+        pair_start,
         total_pairs_needed,
         seed,
         preview_iters,
@@ -1322,13 +1332,29 @@ fn cmd_duel(args: &[String]) {
     );
 
     let mut existing: HashMap<usize, Value> = HashMap::new();
+    let mut had_corrupt_line = false;
+    let mut valid_lines: Vec<String> = Vec::new();
     if out_path.exists() {
         for line in BufReader::new(File::open(&out_path).unwrap()).lines() {
-            let line = line.unwrap();
+            let line = match line {
+                Ok(l) => l,
+                Err(_) => {
+                    had_corrupt_line = true;
+                    continue;
+                }
+            };
             if line.trim().is_empty() {
                 continue;
             }
-            let row: Value = serde_json::from_str(&line).unwrap();
+            let row: Value = match serde_json::from_str(&line) {
+                Ok(v) => v,
+                Err(_) => {
+                    // Tolerate truncated trailing JSONL line from Spot preemption.
+                    had_corrupt_line = true;
+                    continue;
+                }
+            };
+            valid_lines.push(line);
             if row["iters_a"].as_u64() == Some(u64::from(iters_a))
                 && row["iters_b"].as_u64() == Some(u64::from(iters_b))
                 && row["seed"].as_u64() == Some(seed)
@@ -1353,6 +1379,13 @@ fn cmd_duel(args: &[String]) {
 
     if let Some(parent) = out_path.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent).unwrap();
+    }
+    if had_corrupt_line {
+        let mut clean = BufWriter::new(File::create(&out_path).unwrap());
+        for l in &valid_lines {
+            writeln!(clean, "{l}").unwrap();
+        }
+        clean.flush().unwrap();
     }
     let append = out_path.exists() && !existing.is_empty();
     let file = if append {
