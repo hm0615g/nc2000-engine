@@ -96,21 +96,24 @@ def cmd_prepare(args: argparse.Namespace) -> None:
         if t["id"] not in base_ids:
             extra_teams[t["id"]] = t["sets"]
 
-    # Load challengers from catalog (deduplicated by ordered shell signature unless --all-variants)
+    # Load challengers from catalog, deduplicated by exact canonical set hash
+    # (never dropping distinct variants that share a public shell).
     cat_doc = json.loads(args.catalog.read_text())
     cat_teams = cat_doc["teams"]
     challengers: list[tuple[str, list[dict[str, Any]]]] = []
-    seen_shells: set[Any] = set()
+    seen_sets: set[str] = set()
     id_filter = set(args.ids.split(",")) if args.ids else None
 
     for t in cat_teams:
         tid = t["id"]
         if id_filter is not None and tid not in id_filter:
             continue
-        sig = shell_signature(t["sets"])
-        if not args.all_variants and sig in seen_shells:
+        set_hash = hashlib.sha256(
+            json.dumps(t["sets"], sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        if not args.all_variants and set_hash in seen_sets:
             continue
-        seen_shells.add(sig)
+        seen_sets.add(set_hash)
         if tid not in base_ids:
             extra_teams[tid] = t["sets"]
         challengers.append((tid, [{"id": tid, "weight": 1.0}]))
@@ -121,30 +124,22 @@ def cmd_prepare(args: argparse.Namespace) -> None:
     for cname, members in challengers:
         mixtures[f"ch:{cname}"] = members
 
-    # Build deterministic stratified seat-swapped schedule.
-    # For each defender stratum s and pair k, reuse challenger search_seed across
-    # variants sharing the same defender shell to maximize exact Turn-0 preview cache hits.
+    # Build deterministic stratified seat-swapped schedule with strictly
+    # independent seeds per (stratum, rep) so stratified_bounds and sequential
+    # confidence sequences remain statistically valid.
     def_weights = [m["weight"] for m in def_members]
     stratum_counts = allocate_stratum_counts(def_weights, args.pairs)
 
     schedule: list[dict[str, Any]] = []
     for cname, c_members in challengers:
         ch_mix = f"ch:{cname}"
-        # For singleton challenger, id is c_members[0]["id"]
         cid = c_members[0]["id"]
         block_idx = 0
         for s_idx, (dm, n_pairs) in enumerate(zip(def_members, stratum_counts)):
             did = dm["id"]
             for rep in range(n_pairs):
-                # Pair block shares seeds across both seats.
-                # Challenger seed depends on (rep, defender_shell) so variants in the same
-                # defender shell hit the exact Turn-0 preview cache without approximation.
-                def_shell_hash = hashlib.sha256(
-                    json.dumps(shell_signature(def_teams[s_idx]["sets"])).encode()
-                ).hexdigest()[:8]
                 tag = f"nc2000/screen/{args.seed_tag}/s{s_idx}/r{rep}"
-                ch_tag = f"nc2000/screen/{args.seed_tag}/sh{def_shell_hash}/r{rep}"
-                seed_ch = u32_hash(f"{ch_tag}/ch/{cname if args.independent_seeds else 'shared'}")
+                seed_ch = u32_hash(f"{tag}/ch/{cname if args.independent_seeds else 'shared'}")
                 seed_def = u32_hash(f"{tag}/def/{did}")
                 battle_seed = u32_hash(f"{tag}/battle")
                 for row_seat in (0, 1):

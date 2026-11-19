@@ -249,8 +249,25 @@ def cmd_merge(args: argparse.Namespace) -> None:
     print(json.dumps({"ledger": str(args.ledger), "added": added, "total_games": len(existing)}))
 
 
+def parse_profile_weights(label: str) -> dict[str, float]:
+    """Parse canonical `id1:w1+id2:w2` label into normalized conditional weights."""
+    out: dict[str, float] = {}
+    for part in label.split("+"):
+        tid, w_str = part.rsplit(":", 1)
+        out[tid] = out.get(tid, 0.0) + float(w_str)
+    tot = sum(out.values())
+    return {k: v / tot for k, v in out.items()} if tot > 0 else out
+
+
 def cmd_summary(args: argparse.Namespace) -> None:
-    pair_games: dict[tuple[str, str], list[float]] = defaultdict(list)
+    import math
+
+    # Group seat pairs per ordered (profile_a, profile_b, id_a, id_b, battleSeed, seeds_pair)
+    # so conditional mixture weights q_A(v_a) * q_B(v_b) are applied strictly without
+    # unweighted pooling bias.
+    raw_cells: dict[tuple[str, str], dict[tuple[str, str], dict[tuple[Any, ...], list[float]]]] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(list))
+    )
     labels: dict[str, str] = {}
     total = 0
     for line in args.ledger.open():
@@ -259,28 +276,66 @@ def cmd_summary(args: argparse.Namespace) -> None:
         r = json.loads(line)
         total += 1
         p0, p1 = r["profiles"]
+        id0, id1 = r["ids"]
         labels[p0] = r["profile_labels"][0]
         labels[p1] = r["profile_labels"][1]
         s0 = row_score(r["outcome"], 0)
-        pair_games[(p0, p1)].append(s0)
-        pair_games[(p1, p0)].append(1.0 - s0)
+        bseed = int(r["battleSeed"])
+        seeds_sorted = tuple(sorted(int(x) for x in r["seeds"]))
+        raw_cells[(p0, p1)][(id0, id1)][(bseed, seeds_sorted)].append(s0)
+        raw_cells[(p1, p0)][(id1, id0)][(bseed, seeds_sorted)].append(1.0 - s0)
 
-    top_pairs = sorted(
-        ((a, b, len(v), sum(v) / len(v)) for (a, b), v in pair_games.items() if a < b),
-        key=lambda t: -t[2],
-    )[: args.top]
+    matchups = []
+    for (a, b), cell_map in raw_cells.items():
+        if a >= b:
+            continue
+        qa = parse_profile_weights(labels[a])
+        qb = parse_profile_weights(labels[b])
+        covered_mass = 0.0
+        weighted_sum = 0.0
+        var_sum = 0.0
+        n_games = 0
+        n_pairs = 0
+        for va, wa in qa.items():
+            for vb, wb in qb.items():
+                pair_dict = cell_map.get((va, vb))
+                if not pair_dict:
+                    continue
+                unit_scores = [sum(vs) / len(vs) for vs in pair_dict.values()]
+                n_games += sum(len(vs) for vs in pair_dict.values())
+                n_pairs += len(unit_scores)
+                m = sum(unit_scores) / len(unit_scores)
+                w_cell = wa * wb
+                covered_mass += w_cell
+                weighted_sum += w_cell * m
+                v = (
+                    sum((x - m) ** 2 for x in unit_scores) / (len(unit_scores) - 1)
+                    if len(unit_scores) > 1
+                    else 0.25
+                )
+                var_sum += (w_cell ** 2) * v / len(unit_scores)
+        if covered_mass <= 0:
+            continue
+        score_a = weighted_sum / covered_mass
+        se_a = math.sqrt(var_sum) / covered_mass
+        ci_lo = max(0.0, score_a - 1.96 * se_a)
+        ci_hi = min(1.0, score_a + 1.96 * se_a)
+        matchups.append({
+            "a": labels[a],
+            "b": labels[b],
+            "games": n_games,
+            "pairs": n_pairs,
+            "covered_mass": round(covered_mass, 4),
+            "weighted_score_a": round(score_a, 4),
+            "se_a": round(se_a, 4),
+            "ci95_a": [round(ci_lo, 4), round(ci_hi, 4)],
+        })
+
+    matchups.sort(key=lambda r: (-r["games"], -r["covered_mass"]))
     print(json.dumps({
         "total_games": total,
         "distinct_profiles": len(labels),
-        "top_shell_matchups": [
-            {
-                "a": labels[a],
-                "b": labels[b],
-                "games": n,
-                "score_a": round(sc, 4),
-            }
-            for a, b, n, sc in top_pairs
-        ],
+        "top_shell_matchups": matchups[: args.top],
     }))
 
 
