@@ -52,9 +52,11 @@ async function start() {
   if (picker) inputs.push('compiled-preview-v1', 'belief-pool-v3/belief-pool');
   const hasDisclosure = tasks.some(task => task.mixtures);
   if (hasDisclosure) inputs.push(candidateFile);
+  const poolsText = process.env.NASH_POOLS ? fs.readFileSync(process.env.NASH_POOLS, 'utf8') : null;
   const needsOld = tasks.some(t => t.policies?.includes('old'));
   const oldPath = needsOld ? path.resolve(process.env.NASH_OLD_WASM) : null;
   const stamp = {
+    ...(poolsText ? { poolsSha256: hash(poolsText) } : {}),
     ...(needsOld ? { oldWasm: hash(fs.readFileSync(path.join(oldPath, 'nc2000_wasm_bg.wasm'))) } : {}),
     tasks: hash(fs.readFileSync(taskFile)),
     wasm: hash(fs.readFileSync(path.join(root, 'crates/wasm/pkg-node/nc2000_wasm_bg.wasm'))),
@@ -64,7 +66,7 @@ async function start() {
   fs.writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(stamp));
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(+n, tasks.length) }, () => new Promise((resolve, reject) => {
-    const thread = new Worker(new URL(import.meta.url), { workerData: { picker, hasDisclosure, oldPath } });
+    const thread = new Worker(new URL(import.meta.url), { workerData: { picker, hasDisclosure, oldPath, poolsText } });
     thread.on('error', reject);
     thread.on('exit', code => code ? reject(Error('worker exit ' + code)) : resolve());
     thread.on('message', result => {
@@ -101,6 +103,19 @@ async function worker() {
     incumbent: data(incumbentFile).teams,
     deme: [{ id: 'deme-r1-00-s0030', weight: 1, sets: JSON.parse(teams.get('deme-r1-00-s0030')) }],
   } : {};
+  if (workerData.poolsText) {
+    const extra = JSON.parse(workerData.poolsText);
+    for (const t of extra.teams) {
+      assert(!teams.has(t.id), 'extra team ID already exists: ' + t.id);
+      assert(JSON.parse(validator.validateTeam(JSON.stringify(t.sets))).ok, 'invalid team: ' + t.id);
+      teams.set(t.id, JSON.stringify(t.sets));
+    }
+    for (const [name, members] of Object.entries(extra.mixtures)) {
+      assert(!Object.hasOwn(disclosed, name), 'duplicate mixture: ' + name);
+      assert(new Set(members.map(t => t.id)).size === members.length);
+      disclosed[name] = members.map(({ id, weight }) => ({ id, weight, sets: JSON.parse(teams.get(id)) }));
+    }
+  }
   for (const members of Object.values(disclosed)) {
     assert(Math.abs(members.reduce((sum, t) => sum + t.weight, 0) - 1) < 1e-10);
     for (const t of members) {
