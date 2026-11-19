@@ -1,0 +1,7 @@
+# Stratified disclosed-pool revalidation
+
+Schedule fixed before observing new outcomes. The primary matchup is the existing five-type candidate against the deployed APEX4 weights. Both players know the opponent's exact distribution. Each of 20 type pairs has four independent seed blocks played in both seats. Seeds are the first three big-endian uint32 words of SHA-256 of `nc2000/disclosed-apex/20261119/v1/{block}`, in candidate-search, incumbent-search and battle order. Each policy searches its own preview. A public 500-turn cap counts as half a point and is reported separately.
+
+The primary endpoint is the sum of seat-pair means weighted by the product of published probabilities. Its pointwise two-sided 95% Hoeffding radius is sqrt(log(40) / 2 × sum of squared cell weights divided by four). There is one primary look after 160 games. A lower bound above 0.5 rejects APEX4 against this candidate.
+
+The first two blocks per cell are shared with the three historical-policy arms. These 80-game contrasts use the same current battle engine as the primary arm. The historical agent comes from a8ba973c, the adoption of the current mixture. It uses 729k live preview and fixed 81k battle search. The current agent uses 729k live preview and adaptive 243k battle search. Report paired differences over the matching blocks separately from independent evidence. If the primary interval crosses 0.5, use one additional independent schedule with identical stratification and its own interval. Subsequent analysis of a selected contrast is exploratory.

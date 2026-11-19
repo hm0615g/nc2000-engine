@@ -8,9 +8,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
-import { build } from 'vite';
 import wasm from '../../crates/wasm/pkg-node/nc2000_wasm.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -30,6 +29,7 @@ const teamFiles = [
 ];
 
 async function buildCompiledPicker() {
+  const { build } = await import('vite');
   const bundle = await build({ configFile: false, logLevel: 'silent',
     define: { __COMPILED_PREVIEW_ENABLED__: 'true' },
     build: { write: false, lib: { entry: compiled, formats: ['es'], fileName: 'picker' } },
@@ -43,8 +43,8 @@ async function start() {
   const records = source.startsWith('[')
     ? JSON.parse(source)
     : source.split('\n').map(line => JSON.parse(line));
-  const tasks = records.map(({ block, cell, rowSeat, ids, seeds, battleSeed, picks, mixtures }) =>
-    ({ block, cell, rowSeat, ids, seeds, battleSeed, ...(picks ? { picks } : {}), ...(mixtures ? { mixtures } : {}) }));
+  const tasks = records.map(({ block, cell, rowSeat, ids, seeds, battleSeed, picks, mixtures, policies }) =>
+    ({ block, cell, rowSeat, ids, seeds, battleSeed, ...(picks ? { picks } : {}), ...(mixtures ? { mixtures } : {}), ...(policies ? { policies } : {}) }));
   assert(tasks.length && Number.isSafeInteger(+n) && +n > 0);
   fs.mkdirSync(output); // refuse to mix builds or overwrite an earlier run
   const picker = tasks.some(task => !task.mixtures) ? await buildCompiledPicker() : null;
@@ -52,7 +52,10 @@ async function start() {
   if (picker) inputs.push('compiled-preview-v1', 'belief-pool-v3/belief-pool');
   const hasDisclosure = tasks.some(task => task.mixtures);
   if (hasDisclosure) inputs.push(candidateFile);
+  const needsOld = tasks.some(t => t.policies?.includes('old'));
+  const oldPath = needsOld ? path.resolve(process.env.NASH_OLD_WASM) : null;
   const stamp = {
+    ...(needsOld ? { oldWasm: hash(fs.readFileSync(path.join(oldPath, 'nc2000_wasm_bg.wasm'))) } : {}),
     tasks: hash(fs.readFileSync(taskFile)),
     wasm: hash(fs.readFileSync(path.join(root, 'crates/wasm/pkg-node/nc2000_wasm_bg.wasm'))),
     ...(picker ? { picker: hash(picker) } : {}),
@@ -61,7 +64,7 @@ async function start() {
   fs.writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(stamp));
   let next = 0;
   await Promise.all(Array.from({ length: Math.min(+n, tasks.length) }, () => new Promise((resolve, reject) => {
-    const thread = new Worker(new URL(import.meta.url), { workerData: { picker, hasDisclosure } });
+    const thread = new Worker(new URL(import.meta.url), { workerData: { picker, hasDisclosure, oldPath } });
     thread.on('error', reject);
     thread.on('exit', code => code ? reject(Error('worker exit ' + code)) : resolve());
     thread.on('message', result => {
@@ -86,6 +89,8 @@ async function worker() {
     assert(allowed.size > 0);
   }
   const dex = new wasm.Dex();
+  const old = workerData.oldPath ? (await import(pathToFileURL(path.join(workerData.oldPath, 'nc2000_wasm.js')))).default : null;
+  const oldDex = old ? new old.Dex() : null;
   const validator = new wasm.Validator(dex);
   const teams = new Map();
   for (const name of teamFiles) {
@@ -105,10 +110,11 @@ async function worker() {
   }
   parentPort.on('message', task => {
     if (!task) { parentPort.close(); return; }
-    const { ids, seeds, battleSeed, picks = [], mixtures } = task;
+    const { ids, seeds, battleSeed, picks = [], mixtures, policies = ['current', 'current'] } = task;
+    assert(policies.length === 2 && policies.every(p => ['current', 'old', 'current81'].includes(p)));
     if (mixtures) {
       assert.equal(mixtures.length, 2);
-      assert.equal(picks.length, 0);
+      assert(picks.length === 0 || picks.length === 2);
       for (const [side, mix] of mixtures.entries()) assert(disclosed[mix].some(t => t.id === ids[side]));
     }
     const sets = ids.map(id => {
@@ -120,13 +126,16 @@ async function worker() {
     const channels = [new wasm.PlayerChannel(0), new wasm.PlayerChannel(1)];
     const agents = sets.map((team, side) => {
       const prior = mixtures ? JSON.stringify({ teams: disclosed[mixtures[1-side]] }) : pool;
-      const agent = new wasm.ProtocolSearcher(dex, side, prior, seeds[side], c);
+      const historical = policies[side] === 'old';
+      const api = historical ? old : wasm;
+      const agent = new api.ProtocolSearcher(historical ? oldDex : dex, side, prior, seeds[side], c);
       agent.setOwnTeam(team);
       return agent;
     });
     const preview = [];
     const began = performance.now();
     const previewBeliefs = [];
+    const transcript = createHash('sha256');
     let first = true;
     while (!battle.outcome() && battle.turn() < 500) {
       const inputs = JSON.parse(battle.needsChoice()).map((needs, side) => {
@@ -155,18 +164,25 @@ async function worker() {
             input = picks[side];
           }
         }
+        if (first && mixtures && picks[side]) {
+          assert(frame.legal_actions.some(a => a.replaceAll(' ', '') === picks[side].replaceAll(' ', '')));
+          input = picks[side];
+          source = 'forced';
+        }
         if (!input) {
-          agent.stepAdaptiveBattle(first ? live.unknownPreview : live.battle.adaptive);
+          if (policies[side] === 'current') agent.stepAdaptiveBattle(first ? live.unknownPreview : live.battle.adaptive);
+          else agent.step(first ? live.unknownPreview : 81000);
           input = JSON.parse(agent.commitDecision('legacy')).input;
         }
         if (first) preview[side] = { source, input };
         return input;
       });
+      transcript.update(JSON.stringify(inputs) + '\n');
       for (const [side, input] of inputs.entries()) if (input) battle.applyChoice(side, input);
       first = false;
     }
     const result = { ...task, preview, outcome: battle.outcome() ?? 'cap', turns: battle.turn(),
-      ms: Math.round(performance.now() - began), ...(mixtures ? { previewBeliefs } : {}) };
+      actionSha256: transcript.digest('hex'), ms: Math.round(performance.now() - began), ...(mixtures ? { previewBeliefs } : {}) };
     for (const object of [...agents, ...channels, battle]) object.free();
     parentPort.postMessage(result);
   });
