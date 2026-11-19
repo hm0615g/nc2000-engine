@@ -54,7 +54,7 @@ def design():
     save_games(HERE/"screen-schedule.jsonl",schedule)
 
 
-def holdout_schedule(name,cfg):
+def holdout_schedule(name,cfg,stage="holdout",blocks=20):
     # Couple the common APEX4 draw exactly. Split the remaining probability at
     # both distributions' cumulative type boundaries to preserve both marginals.
     cur,old=pools(cfg)[CURRENT],pools(cfg)[OLD]
@@ -76,7 +76,7 @@ def holdout_schedule(name,cfg):
         for t in policy:
             assert abs(sum(s[2] for s in strata if s[col]==t["id"])-t["weight"])<1e-10
     counts=[1]*len(strata)
-    for _ in range(20-len(strata)):
+    for _ in range(blocks-len(strata)):
         k=max(range(len(strata)),key=lambda k:strata[k][2]**2/(counts[k]*(counts[k]+1)))
         counts[k]+=1
     rows=[];weights=[]
@@ -84,9 +84,9 @@ def holdout_schedule(name,cfg):
         for _ in range(n):
             k=len(weights);weights.append(w/n)
             for p,tid in [(CURRENT,new),(OLD,former)]:
-                rows.extend(pair("coverage-holdout",k,k,[name,tid],[name,p]))
-    write("holdout-weights.json",weights)
-    save_games(HERE/"holdout-schedule.jsonl",rows)
+                rows.extend(pair("coverage-"+stage,k,k,[name,tid],[name,p]))
+    write(stage+"-weights.json",weights)
+    save_games(HERE/(stage+"-schedule.jsonl"),rows)
 
 
 
@@ -118,7 +118,7 @@ def collect(stage,directory):
     out=HERE/(stage+"-games.jsonl")
     seeds={r["battleSeed"] for r in rows}
     for f in HERE.parent.rglob("*-games.jsonl"):
-        if f!=out and HERE not in f.parents or (f==HERE/"screen-games.jsonl" and stage=="holdout"):
+        if f != out:
             assert all(json.loads(l)["battleSeed"] not in seeds for l in f.read_text().splitlines())
     matches=paired(rows,read("pools.json"))
     save_games(out,rows)
@@ -161,10 +161,19 @@ def screen(directory):
     holdout_schedule(nominee,cfg)
 
 
-def holdout(directory):
-    name=read("screen-summary.json")["nominee"]
-    matches=collect("holdout",directory)
-    weights=read("holdout-weights.json")
+def deterioration():
+    results=read("screen-summary.json")["challengers"]
+    name=max(results,key=lambda n:results[n]["change"])
+    assert name!=read("screen-summary.json")["nominee"]
+    write("secondary-nominee.json",{"nominee":name})
+    holdout_schedule(name,read("pools.json"),stage="secondary",blocks=10)
+
+
+def holdout(directory,stage="holdout"):
+    summary="screen-summary.json" if stage=="holdout" else "secondary-nominee.json"
+    name=read(summary)["nominee"]
+    matches=collect(stage,directory)
+    weights=read(stage+"-weights.json")
     result={}
     values={}
     for policy in (CURRENT,OLD):
@@ -173,7 +182,6 @@ def holdout(directory):
         result[policy]=dict(**interval(values[policy],weights),
             usage=move_summary([r for _,pair_rows in blocks for r in pair_rows],name))
     strata=defaultdict(list)
-    cfg=read("pools.json")
     for b,w in enumerate(weights):
         v,rows=matches[name,CURRENT,b]
         _,old_rows=matches[name,OLD,b]
@@ -185,11 +193,15 @@ def holdout(directory):
     result["by_current_shell"]={k:sum(v*w for v,w in vs)/sum(w for _,w in vs) for k,vs in strata.items()}
     result["change"]=interval([a-b for a,b in zip(values[CURRENT],values[OLD])],weights,span=2)
     result["nominee"]=name
-    write("holdout-summary.json",result)
+    write(stage+"-summary.json",result)
 
 
 if __name__=="__main__":
     if sys.argv[1:]==["design"]:
         design()
+    elif sys.argv[1:]==["deterioration"]:
+        deterioration()
+    elif sys.argv[1]=="secondary":
+        holdout(Path(sys.argv[2]),"secondary")
     else:
         {"screen":screen,"holdout":holdout}[sys.argv[1]](Path(sys.argv[2]))

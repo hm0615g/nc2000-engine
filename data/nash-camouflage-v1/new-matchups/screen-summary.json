@@ -1,0 +1,35 @@
+{
+  "challengers": {
+    "hc75-1st-show": {
+      "current-seven": 0.38408710582588307,
+      "incumbent": 0.075,
+      "change": 0.30908710582588306,
+      "nomination_score": -0.11591289417411693
+    },
+    "pb-137": {
+      "current-seven": 0.23409977562706202,
+      "incumbent": 0.275,
+      "change": -0.040900224372938,
+      "nomination_score": -0.265900224372938
+    },
+    "pb-122": {
+      "current-seven": 0.5886397800579055,
+      "incumbent": 0.575,
+      "change": 0.01363978005790556,
+      "nomination_score": 0.01363978005790556
+    },
+    "sample-24": {
+      "current-seven": 0.265900224372938,
+      "incumbent": 0.22499999999999998,
+      "change": 0.040900224372938,
+      "nomination_score": -0.23409977562706202
+    },
+    "pb-95": {
+      "current-seven": 0.259081818833284,
+      "incumbent": 0.2,
+      "change": 0.059081818833284006,
+      "nomination_score": -0.24091818116671598
+    }
+  },
+  "nominee": "pb-122"
+}
