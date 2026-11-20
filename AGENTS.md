@@ -33,3 +33,12 @@ Before any Castle bot investigation or change, read docs/CASTLE-INCIDENT-STATUS.
 - For non-ASCII file content, pass ASCII-safe encoded bytes (for example base64), then decode with explicit UTF-8 inside the script.
 - Check the complete command for non-ASCII characters before presenting it; test syntax, expected output, and repeated execution when feasible.
 - After every fix, update the incident status, exact tests and results, and commit/push status. Do not mark untested work as completed.
+
+<!-- castle-fork-push-guard-v1 -->
+## Fork-only push verification
+- The writable repository is hm0615g/nc2000-engine on review-local-changes.
+- The origin remote may refer to puniu3/nc2000-engine (upstream, read-only).
+- Never assume origin is the fork and never run git push origin without verifying its URL.
+- Fetch the fork first, require fast-forward ancestry, and push to the explicit fork URL without --force.
+- Confirm the fork branch SHA after pushing; record the actual result in the incident status document.
+- Provide the full executable command inline, ASCII-only, runnable from any directory.
