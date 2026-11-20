@@ -152,6 +152,60 @@ CAMO_INCUMBENTS: list[dict[str, Any]] = [
 ]
 
 
+# 10 active production opponents for Sample07 inner-weight (q) optimization.
+# Includes camouflaged incumbents (APEX4, D5, s0155), retained/deferred challengers
+# (sample-08, pb-96, deme-r3-r0-s0013, pb-58, pb-132__74c6b5), and Iter-1 S07 counters
+# (rental-cban-8, mjj-2014-thdrcomb__56b67d).
+S07_QOPT_OPPONENTS: list[dict[str, Any]] = [
+    {
+        "name": "APEX4",
+        "kind": "camo",
+        "members": [
+            {"id": "apex-c04-bug-3atkstar-boomgen", "weight": 0.40},
+            {"id": "red-v10-s1105-r2-s0142", "weight": 0.30},
+            {"id": "apex-c08-surgical-142", "weight": 0.15},
+            {"id": "red-v10-s1105-r1-s0148", "weight": 0.15},
+        ],
+    },
+    {
+        "name": "D5",
+        "kind": "camo",
+        "members": [
+            {"id": "deme-r1-00-s0030", "weight": 0.20},
+            {"id": "deme-r1-00-s0030-beq-g2-c3-legal", "weight": 0.20},
+            {"id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal", "weight": 0.20},
+            {"id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal", "weight": 0.20},
+            {"id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal", "weight": 0.20},
+        ],
+    },
+    {"name": "s0155", "kind": "bare", "members": [{"id": "red-v10-s1105-r2-s0155", "weight": 1.0}]},
+    {"name": "sample-08", "kind": "bare", "members": [{"id": "sample-08", "weight": 1.0}]},
+    {"name": "pb-96", "kind": "bare", "members": [{"id": "pb-96", "weight": 1.0}]},
+    {"name": "deme-r3-r0-s0013", "kind": "bare", "members": [{"id": "deme-r3-r0-s0013", "weight": 1.0}]},
+    {"name": "pb-58", "kind": "bare", "members": [{"id": "pb-58", "weight": 1.0}]},
+    {"name": "pb-132__74c6b5", "kind": "bare", "members": [{"id": "pb-132__74c6b5", "weight": 1.0}]},
+    {"name": "rental-cban-8", "kind": "bare", "members": [{"id": "rental-cban-8", "weight": 1.0}]},
+    {"name": "mjj-2014-thdrcomb__56b67d", "kind": "bare", "members": [{"id": "mjj-2014-thdrcomb__56b67d", "weight": 1.0}]},
+]
+
+S07_CANDIDATE_PROFILES: list[dict[str, Any]] = [
+    {
+        "name": "S07_30_70",
+        "members": [
+            {"id": "sample-07-beq-g2-c4", "weight": 0.30, "bare_pairs": 2},
+            {"id": "sample-07", "weight": 0.70, "bare_pairs": 4},
+        ],
+    },
+    {
+        "name": "S07_50_50",
+        "members": [
+            {"id": "sample-07-beq-g2-c4", "weight": 0.50, "bare_pairs": 3},
+            {"id": "sample-07", "weight": 0.50, "bare_pairs": 3},
+        ],
+    },
+]
+
+
 def u32_hash(tag: str) -> int:
     return int.from_bytes(hashlib.sha256(tag.encode("utf-8")).digest()[:4], "big")
 
@@ -1432,6 +1486,259 @@ def cmd_analyze_camo_check(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: prepare-s07-qopt & analyze-s07-qopt (Sample07 inner-q optimization)
+# ---------------------------------------------------------------------------
+
+def cmd_prepare_s07_qopt(args: argparse.Namespace) -> None:
+    _, all_sets = load_full_catalog()
+    p0_doc = json.loads((ROOT / "target/nash-work/psro-v1/pools-p0.json").read_text())
+    for t in p0_doc.get("teams", []):
+        all_sets[t["id"]] = t["sets"]
+    base_teams, _ = LEDGER.load_catalog_and_mixtures(None)
+
+    needed_ids: set[str] = set()
+    mixtures: dict[str, list[dict[str, Any]]] = {}
+    for prof in S07_CANDIDATE_PROFILES:
+        mixtures[prof["name"]] = [{"id": m["id"], "weight": float(m["weight"])} for m in prof["members"]]
+        for m in prof["members"]:
+            needed_ids.add(m["id"])
+    for opp in S07_QOPT_OPPONENTS:
+        mname = opp["name"] if opp["kind"] == "camo" else f"s:{opp['members'][0]['id']}"
+        mixtures[mname] = [{"id": m["id"], "weight": float(m["weight"])} for m in opp["members"]]
+        for m in opp["members"]:
+            needed_ids.add(m["id"])
+
+    extra_teams = [{"id": tid, "sets": all_sets[tid]} for tid in sorted(needed_ids) if tid not in base_teams]
+    out_dir: Path = args.out_dir or (args.work_dir / "prod-s07-qopt")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pools_path = out_dir / "pools.json"
+    pools_path.write_text(json.dumps({"teams": extra_teams, "mixtures": mixtures}, separators=(",", ":")) + "\n")
+
+    # Non-split chunks: group each (S07_profile, opponent_pair) into ~24-36 game chunks
+    opp_groups = [
+        ("APEX4",),
+        ("D5",),
+        ("s0155", "sample-08"),
+        ("pb-96", "deme-r3-r0-s0013"),
+        ("pb-58", "pb-132__74c6b5"),
+        ("rental-cban-8", "mjj-2014-thdrcomb__56b67d"),
+    ]
+    opp_by_name = {o["name"]: o for o in S07_QOPT_OPPONENTS}
+    rows: list[dict[str, Any]] = []
+    chunk_breaks: list[int] = [0]
+    blk = 0
+    seed_prefix = args.seed_prefix
+
+    for prof in S07_CANDIDATE_PROFILES:
+        pname = prof["name"]
+        for grp in opp_groups:
+            for oname in grp:
+                opp = opp_by_name[oname]
+                omname = oname if opp["kind"] == "camo" else f"s:{opp['members'][0]['id']}"
+                opp_shell_rep = 0
+                if opp["kind"] == "camo":
+                    # Complete 100% subcell coverage: 1 pair per (s07_var, opp_var)
+                    # -> 8 pairs (16g) vs APEX4, 10 pairs (20g) vs D5
+                    for om in opp["members"]:
+                        oid = om["id"]
+                        for s_idx, sm in enumerate(prof["members"]):
+                            sid = sm["id"]
+                            tag = f"{seed_prefix}/{pname}/{sid}/vs/{oname}/{oid}/r0"
+                            ss = u32_hash(f"{tag}/s07")
+                            so = u32_hash(f"{tag}/opp")
+                            bs = u32_hash(f"{tag}/battle")
+                            # 2 independent preview seeds per (s07_var, opp_shell) and (opp_var, s07_shell)
+                            ps = u32_hash(f"{seed_prefix}/{pname}/{sid}/vs/{oname}/prev-s-k{opp_shell_rep % 2}")
+                            po = u32_hash(f"{seed_prefix}/{pname}/vs/{oname}/{oid}/prev-o-k{s_idx % 2}")
+                            for row_seat in (0, 1):
+                                if row_seat == 0:
+                                    ids, seeds, pseeds, mix = [sid, oid], [ss, so], [ps, po], [pname, omname]
+                                else:
+                                    ids, seeds, pseeds, mix = [oid, sid], [so, ss], [po, ps], [omname, pname]
+                                rows.append({
+                                    "block": blk,
+                                    "cell": {
+                                        "kind": "s07_qopt",
+                                        "profile": pname,
+                                        "s07_id": sid,
+                                        "opponent": oname,
+                                        "opp_id": oid,
+                                        "rep": 0,
+                                    },
+                                    "rowSeat": row_seat,
+                                    "ids": ids,
+                                    "seeds": seeds,
+                                    "previewSeeds": pseeds,
+                                    "battleSeed": bs,
+                                    "mixtures": mix,
+                                })
+                            blk += 1
+                            opp_shell_rep += 1
+                else:
+                    oid = opp["members"][0]["id"]
+                    for sm in prof["members"]:
+                        sid = sm["id"]
+                        n_p = int(sm["bare_pairs"])
+                        s_buckets = 2 if n_p >= 3 else 1
+                        for vrep in range(n_p):
+                            tag = f"{seed_prefix}/{pname}/{sid}/vs/{oname}/{oid}/r{vrep}"
+                            ss = u32_hash(f"{tag}/s07")
+                            so = u32_hash(f"{tag}/opp")
+                            bs = u32_hash(f"{tag}/battle")
+                            ps = u32_hash(f"{seed_prefix}/{pname}/{sid}/vs/{oname}/prev-s-k{vrep % s_buckets}")
+                            po = u32_hash(f"{seed_prefix}/{pname}/vs/{oname}/{oid}/prev-o-k{opp_shell_rep % 2}")
+                            for row_seat in (0, 1):
+                                if row_seat == 0:
+                                    ids, seeds, pseeds, mix = [sid, oid], [ss, so], [ps, po], [pname, omname]
+                                else:
+                                    ids, seeds, pseeds, mix = [oid, sid], [so, ss], [po, ps], [omname, pname]
+                                rows.append({
+                                    "block": blk,
+                                    "cell": {
+                                        "kind": "s07_qopt",
+                                        "profile": pname,
+                                        "s07_id": sid,
+                                        "opponent": oname,
+                                        "opp_id": oid,
+                                        "rep": vrep,
+                                    },
+                                    "rowSeat": row_seat,
+                                    "ids": ids,
+                                    "seeds": seeds,
+                                    "previewSeeds": pseeds,
+                                    "battleSeed": bs,
+                                    "mixtures": mix,
+                                })
+                            blk += 1
+                            opp_shell_rep += 1
+            chunk_breaks.append(len(rows))
+
+    sched_path = out_dir / "schedule.jsonl"
+    sched_path.write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
+    meta = {
+        "kind": "s07-qopt",
+        "pools": str(pools_path),
+        "profiles": S07_CANDIDATE_PROFILES,
+        "opponents": S07_QOPT_OPPONENTS,
+        "chunk_breaks": chunk_breaks,
+        "total_pairs": blk,
+        "total_games": len(rows),
+        "preview_iters": args.preview_iters,
+        "battle_iters": args.battle_iters,
+        "battle_mode": args.battle_mode,
+    }
+    (out_dir / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "prepare-s07-qopt",
+        "dir": str(out_dir),
+        "profiles": [p["name"] for p in S07_CANDIDATE_PROFILES],
+        "opponents": len(S07_QOPT_OPPONENTS),
+        "chunks": len(chunk_breaks) - 1,
+        "pairs": blk,
+        "games": len(rows),
+    }))
+
+
+def cmd_analyze_s07_qopt(args: argparse.Namespace) -> None:
+    run_dir: Path = args.dir
+    meta = json.loads((run_dir / "meta.json").read_text())
+    profiles: list[dict[str, Any]] = meta["profiles"]
+    opponents: list[dict[str, Any]] = meta["opponents"]
+
+    raw: dict[tuple[str, str, str, str, int], list[float]] = defaultdict(list)
+    for line in (run_dir / "results.jsonl").open():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        c = r["cell"]
+        raw[(c["profile"], c["s07_id"], c["opponent"], c["opp_id"], int(c["rep"]))].append(
+            seat_score(r["outcome"], int(r["rowSeat"]))
+        )
+
+    cell_pairs: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+    for (pname, sid, oname, oid, _rep), scs in raw.items():
+        if len(scs) == 2:
+            cell_pairs[(pname, sid, oname, oid)].append(0.5 * (scs[0] + scs[1]))
+
+    hits = misses = 0
+    for df in sorted((run_dir / "chunks").glob("chunk-*.done.json")):
+        d = json.loads(df.read_text())
+        inner = json.loads(d["remote_stdout_last"]) if "remote_stdout_last" in d else d
+        hits += int(inner.get("preview_cache_hits", 0))
+        misses += int(inner.get("preview_cache_misses", 0))
+
+    summary_rows: list[dict[str, Any]] = []
+    for prof in profiles:
+        pname = prof["name"]
+        per_opp: dict[str, dict[str, Any]] = {}
+        eq_ev = 0.0
+        eq_var = 0.0
+        for opp in opponents:
+            oname = opp["name"]
+            ev = 0.0
+            var = 0.0
+            by_s07: dict[str, float] = {}
+            for sm in prof["members"]:
+                sid = sm["id"]
+                sw = float(sm["weight"])
+                s_ev = 0.0
+                for om in opp["members"]:
+                    oid = om["id"]
+                    ow = float(om["weight"])
+                    ps = cell_pairs[(pname, sid, oname, oid)]
+                    mu, se = pair_cell_stats(ps)
+                    ev += (sw * ow) * mu
+                    var += ((sw * ow) ** 2) * (se ** 2)
+                    s_ev += ow * mu
+                by_s07[sid] = round(s_ev, 4)
+            se_opp = math.sqrt(var)
+            per_opp[oname] = {
+                "mean": round(ev, 4),
+                "se": round(se_opp, 4),
+                "by_s07_variant": by_s07,
+            }
+            eq_ev += ev / len(opponents)
+            eq_var += var / (len(opponents) ** 2)
+        eq_se = math.sqrt(eq_var)
+        summary_rows.append({
+            "profile": pname,
+            "mean_vs_10opp": round(eq_ev, 4),
+            "se": round(eq_se, 4),
+            "l95": round(max(0.0, eq_ev - 1.70 * eq_se), 4),
+            "u95": round(min(1.0, eq_ev + 1.70 * eq_se), 4),
+            "min_opp": round(min(v["mean"] for v in per_opp.values()), 4),
+            "per_opponent": per_opp,
+        })
+
+    report = {
+        "dir": str(run_dir),
+        "games": sum(len(v) * 2 for v in cell_pairs.values()),
+        "preview_cache_hits": hits,
+        "preview_cache_misses": misses,
+        "preview_cache_hit_rate": round(hits / max(1, hits + misses), 4),
+        "profiles": summary_rows,
+    }
+    out_path = args.out or (run_dir / "s07-qopt-report.json")
+    out_path.write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "analyze-s07-qopt",
+        "out": str(out_path),
+        "games": report["games"],
+        "cache_hit_rate": report["preview_cache_hit_rate"],
+        "profiles": [
+            {
+                "profile": r["profile"],
+                "mean_10": r["mean_vs_10opp"],
+                "se": r["se"],
+                "min_opp": r["min_opp"],
+                "per_opp": {k: v["mean"] for k, v in r["per_opponent"].items()},
+            }
+            for r in summary_rows
+        ],
+    }))
+
+
+# ---------------------------------------------------------------------------
 # Subcommand: self-test
 # ---------------------------------------------------------------------------
 
@@ -1549,6 +1856,20 @@ def main() -> None:
     p_acc.add_argument("--dir", type=Path, required=True)
     p_acc.add_argument("--out", type=Path, default=None)
     p_acc.set_defaults(func=cmd_analyze_camo_check)
+
+    p_psq = sub.add_parser("prepare-s07-qopt")
+    p_psq.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_psq.add_argument("--out-dir", type=Path, default=None)
+    p_psq.add_argument("--seed-prefix", type=str, default="nc2000/elim-v1/s07-qopt")
+    p_psq.add_argument("--preview-iters", type=int, default=729000)
+    p_psq.add_argument("--battle-iters", type=int, default=243000)
+    p_psq.add_argument("--battle-mode", choices=["fixed", "adaptive"], default="adaptive")
+    p_psq.set_defaults(func=cmd_prepare_s07_qopt)
+
+    p_asq = sub.add_parser("analyze-s07-qopt")
+    p_asq.add_argument("--dir", type=Path, required=True)
+    p_asq.add_argument("--out", type=Path, default=None)
+    p_asq.set_defaults(func=cmd_analyze_s07_qopt)
 
     args = ap.parse_args()
     args.func(args)
