@@ -226,7 +226,14 @@ def run_local_shard(
 
 
 def run_colab_shard(
-    session: str, shard: Path, out_dir: Path, tag: str, preview_iters: int, battle_iters: int, workers: int
+    session: str,
+    shard: Path,
+    out_dir: Path,
+    tag: str,
+    preview_iters: int,
+    battle_iters: int,
+    workers: int,
+    timeout_s: int = 1800,
 ) -> dict[str, Any]:
     if out_dir.exists():
         shutil.rmtree(out_dir)
@@ -253,7 +260,10 @@ meta["session"] = {session!r}
 meta["total_s"] = round(time.time() - t0, 1)
 print(json.dumps(meta))
 """
-    stdout = run_cmd(["colab", "--auth", "adc", "exec", "-s", session, "--timeout", "7200"], stdin_text=script)
+    stdout = run_cmd(
+        ["colab", "--auth", "adc", "exec", "-s", session, "--timeout", str(timeout_s)],
+        stdin_text=script,
+    )
     run_cmd(["colab", "--auth", "adc", "download", "-s", session, r_tar, str(l_tar)])
     with tarfile.open(l_tar, "r:gz") as tf:
         tf.extractall(out_dir, filter="data")
@@ -263,6 +273,133 @@ print(json.dumps(meta))
         if line.startswith("{") and line.endswith("}"):
             return json.loads(line)
     return {"session": session}
+
+
+def execute_chunked_stage(
+    stage_dir: Path,
+    tag: str,
+    schedule_rows: list[dict[str, Any]],
+    binary: Path,
+    pools: Path,
+    local_workers: int,
+    colab_sessions: list[str],
+    colab_workers: int,
+    chunk_games: int,
+    preview_iters: int,
+    battle_iters: int,
+    colab_timeout_s: int = 1800,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Execute schedule via a resumable dynamic work-queue of small pair-aligned chunks.
+
+    Each Colab exec handles at most `chunk_games` games (~10-16 min) so websocket
+    disconnects cannot stall the stage; failed Colab chunks automatically return
+    to the queue for local M6 completion.
+    """
+    import queue
+
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    sched_path = stage_dir / "schedule.jsonl"
+    lines = [json.dumps(r) for r in schedule_rows]
+    sched_path.write_text("\n".join(lines) + "\n")
+
+    # Pair-aligned chunks (even number of lines per chunk)
+    cg = max(2, chunk_games - (chunk_games % 2))
+    chunks_dir = stage_dir / "chunks"
+    chunks_dir.mkdir(parents=True, exist_ok=True)
+
+    work_q: queue.Queue[tuple[int, Path, Path]] = queue.Queue()
+    chunk_out_dirs: list[Path] = []
+    chunk_idx = 0
+    for start in range(0, len(lines), cg):
+        chunk_lines = lines[start : start + cg]
+        c_sched = chunks_dir / f"chunk-{chunk_idx:03d}.jsonl"
+        c_out = chunks_dir / f"out-{chunk_idx:03d}"
+        c_done = chunks_dir / f"chunk-{chunk_idx:03d}.done"
+        if not c_sched.exists():
+            c_sched.write_text("\n".join(chunk_lines) + "\n")
+        chunk_out_dirs.append(c_out)
+        if not c_done.exists():
+            work_q.put((chunk_idx, c_sched, c_out))
+        chunk_idx += 1
+
+    metas: list[dict[str, Any]] = []
+    meta_lock = __import__("threading").Lock()
+    progress_file = stage_dir / "chunk-progress.jsonl"
+
+    def record_meta(rec: dict[str, Any]) -> None:
+        with meta_lock:
+            metas.append(rec)
+            with progress_file.open("a") as fh:
+                fh.write(json.dumps(rec) + "\n")
+
+    def local_worker_loop() -> None:
+        while True:
+            try:
+                idx, c_sched, c_out = work_q.get_nowait()
+            except queue.Empty:
+                return
+            try:
+                m = run_local_shard(binary, pools, c_sched, c_out, local_workers, preview_iters, battle_iters)
+                (chunks_dir / f"chunk-{idx:03d}.done").write_text("local\n")
+                record_meta({"chunk": idx, "worker": "local", **m})
+            finally:
+                work_q.task_done()
+
+    def colab_worker_loop(session: str) -> None:
+        while True:
+            try:
+                idx, c_sched, c_out = work_q.get_nowait()
+            except queue.Empty:
+                return
+            try:
+                m = run_colab_shard(
+                    session, c_sched, c_out, f"{tag}-c{idx:03d}",
+                    preview_iters, battle_iters, colab_workers, timeout_s=colab_timeout_s,
+                )
+                (chunks_dir / f"chunk-{idx:03d}.done").write_text(f"{session}\n")
+                record_meta({"chunk": idx, "worker": session, **m})
+                work_q.task_done()
+            except Exception as e:
+                record_meta({"chunk": idx, "worker": session, "error": str(e)})
+                # Re-queue failed chunk for local M6 and retire this broken Colab worker
+                work_q.put((idx, c_sched, c_out))
+                work_q.task_done()
+                if session in colab_sessions:
+                    colab_sessions.remove(session)
+                return
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1 + len(colab_sessions)) as ex:
+        futs = [ex.submit(local_worker_loop)]
+        for sess in list(colab_sessions):
+            futs.append(ex.submit(colab_worker_loop, sess))
+        for fut in futs:
+            fut.result()
+
+    # Safety sweep: if a Colab worker re-queued a chunk after local_worker_loop exited, drain locally
+    while not work_q.empty():
+        idx, c_sched, c_out = work_q.get_nowait()
+        m = run_local_shard(binary, pools, c_sched, c_out, local_workers, preview_iters, battle_iters)
+        (chunks_dir / f"chunk-{idx:03d}.done").write_text("local-drain\n")
+        record_meta({"chunk": idx, "worker": "local-drain", **m})
+        work_q.task_done()
+
+    expected_keys = {(int(r["block"]), int(r["rowSeat"])) for r in schedule_rows}
+    collected: dict[tuple[int, int], dict[str, Any]] = {}
+    for d in chunk_out_dirs:
+        for p in sorted(d.glob("*.json")):
+            if p.name == "manifest.json":
+                continue
+            r = json.loads(p.read_text())
+            k = (int(r["block"]), int(r["rowSeat"]))
+            if k in expected_keys:
+                collected[k] = r
+    missing = expected_keys - set(collected.keys())
+    assert not missing, f"{tag} missing {len(missing)} games"
+    ordered = [collected[(int(r["block"]), int(r["rowSeat"]))] for r in schedule_rows]
+    with (stage_dir / "results.jsonl").open("w") as fh:
+        for rec in ordered:
+            fh.write(json.dumps(rec) + "\n")
+    return ordered, metas
 
 
 def execute_stage(
@@ -575,6 +712,191 @@ def cmd_run(args: argparse.Namespace) -> None:
             stop_colab_sessions(args.colab_sessions)
 
 
+def cmd_step2(args: argparse.Namespace) -> None:
+    """Step 2a (uniform 60g across all 661 teams + fixed cut rule) -> Step 2b (120g top contenders)."""
+    work_dir = args.dir
+    cand_doc = json.loads((work_dir / "candidates.json").read_text())
+    cand_rows = cand_doc["teams"]
+    cand_ids = [t["id"] for t in cand_rows]
+    shell_of = {t["id"]: t["shell_hash"] for t in cand_rows}
+    meta_by_id = {t["id"]: t for t in cand_rows}
+    pools = work_dir / "pools.json"
+    active_colab = list(args.colab_sessions)
+    t0 = time.monotonic()
+
+    try:
+        s1a_res = [json.loads(l) for l in (work_dir / "stage1a" / "results.jsonl").open() if l.strip()]
+        s1b_res = [json.loads(l) for l in (work_dir / "stage1b" / "results.jsonl").open() if l.strip()]
+        agg_prev = aggregate_results([s1a_res, s1b_res])
+
+        # Step 2a: bring every candidate with < 6 reps/anchor up to exact 6 reps/anchor (30 pairs = 60 games)
+        need_2a = [cid for cid in cand_ids if len(agg_prev[cid][ANCHORS[0][0]]) < 6]
+        s2a_dir = work_dir / "step2a"
+        if (s2a_dir / "results.jsonl").exists():
+            s2a_res = [json.loads(l) for l in (s2a_dir / "results.jsonl").open() if l.strip()]
+        else:
+            s2a_sched = build_schedule(need_2a, 2, 6, args.seed_tag)
+            s2a_res, _ = execute_chunked_stage(
+                s2a_dir, "s2a", s2a_sched, args.binary, pools,
+                args.local_workers, active_colab, args.colab_workers,
+                args.chunk_games, args.preview_iters, args.battle_iters,
+                colab_timeout_s=args.colab_timeout,
+            )
+
+        # Evaluate exact unbiased 60-game standings & fixed cut rule (u95 < cut_u95 AND max_anchor_mean < 0.50 + shell protection)
+        agg60 = aggregate_results([s1a_res, s1b_res, s2a_res])
+        rng = random.Random(2026112002)
+        prelim: dict[str, dict[str, Any]] = {}
+        surviving_shells: set[str] = set()
+
+        for cid in cand_ids:
+            amap = agg60[cid]
+            all_xs = [x for a, _ in ANCHORS for x in amap[a]]
+            assert len(all_xs) == 30, f"{cid} has {len(all_xs)} pairs after Step 2a (expected 30)"
+            mean = sum(all_xs) / len(all_xs)
+            u95 = conservative_upper_95(all_xs, len(all_xs) * 2, rng)
+            per_anchor = {}
+            max_a_mean = 0.0
+            for a, _ in ANCHORS:
+                xs = amap[a]
+                am = sum(xs) / len(xs)
+                per_anchor[a] = {"pairs": len(xs), "mean": round(am, 4)}
+                max_a_mean = max(max_a_mean, am)
+            indiv_pass = not (u95 < args.cut_overall_u95 and max_a_mean < args.rps_anchor_mean)
+            reason = (
+                "cut_provably_weak"
+                if not indiv_pass
+                else ("survive_rps_ge50" if u95 < args.cut_overall_u95 else "survive_overall")
+            )
+            if indiv_pass:
+                surviving_shells.add(shell_of[cid])
+            prelim[cid] = {
+                "id": cid,
+                "shell_hash": shell_of[cid],
+                "species": meta_by_id[cid]["species"],
+                "source": meta_by_id[cid]["source"],
+                "pairs": len(all_xs),
+                "overall_mean": round(mean, 4),
+                "overall_u95": round(u95, 4),
+                "max_anchor_mean": round(max_a_mean, 4),
+                "per_anchor": per_anchor,
+                "individual_pass": indiv_pass,
+                "reason": reason,
+            }
+
+        surv2a, cut2a, sh_rescued = [], [], []
+        for cid in cand_ids:
+            rec = prelim[cid]
+            if rec["individual_pass"]:
+                rec["final_status"] = "survive"
+                surv2a.append(rec)
+            elif rec["shell_hash"] in surviving_shells:
+                rec["final_status"] = "survive_shell_protected"
+                rec["reason"] = "shell_protected"
+                surv2a.append(rec)
+                sh_rescued.append(rec)
+            else:
+                rec["final_status"] = "cut"
+                cut2a.append(rec)
+
+        surv2a.sort(key=lambda r: (-r["overall_mean"], -r["max_anchor_mean"], r["id"]))
+        cut2a.sort(key=lambda r: (-r["overall_mean"], r["id"]))
+
+        # Select Step 2b contenders: overall_mean >= step2b_min_mean OR max_anchor_mean >= step2b_anchor_mean
+        contenders_2b = [
+            r["id"]
+            for r in surv2a
+            if r["overall_mean"] >= args.step2b_min_mean or r["max_anchor_mean"] >= args.step2b_anchor_mean
+        ]
+        # Ensure we don't exceed max_2b if threshold was unexpectedly wide (keep top by overall + anchor specialists)
+        if args.step2b_max > 0 and len(contenders_2b) > args.step2b_max:
+            contenders_2b = contenders_2b[: args.step2b_max]
+
+        step2a_report = {
+            "wall_s": round(time.monotonic() - t0, 1),
+            "step2a_new_games": len(s2a_res),
+            "counts": {
+                "total_60g": len(cand_ids),
+                "survivors": len(surv2a),
+                "shell_protected": len(sh_rescued),
+                "cut": len(cut2a),
+                "surviving_shells": len(surviving_shells),
+                "cut_shells": len({r["shell_hash"] for r in cut2a}),
+                "advanced_to_step2b": len(contenders_2b),
+            },
+            "survivors": surv2a,
+            "cut": cut2a,
+        }
+        (work_dir / "step2a-report.json").write_text(json.dumps(step2a_report, indent=2))
+
+        # Step 2b: reps [6, 12) => +30 pairs (+60 games) -> cumulative 60 pairs (120 games, SE ~4.3%)
+        s2b_dir = work_dir / "step2b"
+        s2b_res: list[dict[str, Any]] = []
+        if contenders_2b and not args.skip_2b:
+            if (s2b_dir / "results.jsonl").exists():
+                s2b_res = [json.loads(l) for l in (s2b_dir / "results.jsonl").open() if l.strip()]
+            else:
+                s2b_sched = build_schedule(contenders_2b, 6, 12, args.seed_tag)
+                s2b_res, _ = execute_chunked_stage(
+                    s2b_dir, "s2b", s2b_sched, args.binary, pools,
+                    args.local_workers, active_colab, args.colab_workers,
+                    args.chunk_games, args.preview_iters, args.battle_iters,
+                    colab_timeout_s=args.colab_timeout,
+                )
+
+        if args.colab_sessions:
+            stop_colab_sessions(args.colab_sessions)
+            active_colab.clear()
+
+        agg120 = aggregate_results([s1a_res, s1b_res, s2a_res, s2b_res])
+        rng2 = random.Random(2026112003)
+        ranked_2b = []
+        for cid in contenders_2b:
+            amap = agg120[cid]
+            all_xs = [x for a, _ in ANCHORS for x in amap[a]]
+            mean = sum(all_xs) / len(all_xs)
+            var = sum((x - mean) ** 2 for x in all_xs) / max(len(all_xs) - 1, 1)
+            se = math.sqrt(var / len(all_xs))
+            u95 = conservative_upper_95(all_xs, len(all_xs) * 2, rng2)
+            per_a = {a: {"pairs": len(amap[a]), "mean": round(sum(amap[a]) / len(amap[a]), 4)} for a, _ in ANCHORS}
+            ranked_2b.append({
+                "id": cid,
+                "shell_hash": shell_of[cid],
+                "species": meta_by_id[cid]["species"],
+                "source": meta_by_id[cid]["source"],
+                "pairs": len(all_xs),
+                "overall_mean": round(mean, 4),
+                "se": round(se, 4),
+                "overall_u95": round(u95, 4),
+                "max_anchor_mean": round(max(v["mean"] for v in per_a.values()), 4),
+                "per_anchor": per_a,
+            })
+        ranked_2b.sort(key=lambda r: (-r["overall_mean"], -r["max_anchor_mean"], r["id"]))
+
+        step2b_report = {
+            "wall_s": round(time.monotonic() - t0, 1),
+            "step2a_counts": step2a_report["counts"],
+            "step2b_new_games": len(s2b_res),
+            "contenders_120g": ranked_2b,
+        }
+        out_path = work_dir / "step2b-report.json"
+        out_path.write_text(json.dumps(step2b_report, indent=2))
+        print(json.dumps({
+            "ok": True,
+            "wall_s": step2b_report["wall_s"],
+            "step2a_counts": step2a_report["counts"],
+            "step2b_games": len(s2b_res),
+            "top15_120g": [
+                {"id": r["id"], "mean": r["overall_mean"], "se": r["se"], "max_a": r["max_anchor_mean"]}
+                for r in ranked_2b[:15]
+            ],
+            "report": str(out_path),
+        }))
+    finally:
+        if args.colab_sessions:
+            stop_colab_sessions(args.colab_sessions)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -602,6 +924,25 @@ def main() -> None:
     p_run.add_argument("--cut-overall-u95", type=float, default=0.35)
     p_run.add_argument("--cut-anchor-u95", type=float, default=0.55)
     p_run.set_defaults(func=cmd_run)
+
+    p_s2 = sub.add_parser("step2")
+    p_s2.add_argument("--dir", type=Path, default=ROOT / "target/nash-work/phase1-cut")
+    p_s2.add_argument("--binary", type=Path, default=ROOT / "target/native-pgo/release/examples/nash_refresh")
+    p_s2.add_argument("--seed-tag", type=str, default="v1")
+    p_s2.add_argument("--local-workers", type=int, default=10)
+    p_s2.add_argument("--colab-sessions", nargs="*", default=[])
+    p_s2.add_argument("--colab-workers", type=int, default=8)
+    p_s2.add_argument("--chunk-games", type=int, default=400)
+    p_s2.add_argument("--colab-timeout", type=int, default=1800)
+    p_s2.add_argument("--preview-iters", type=int, default=81000)
+    p_s2.add_argument("--battle-iters", type=int, default=9000)
+    p_s2.add_argument("--cut-overall-u95", type=float, default=0.40)
+    p_s2.add_argument("--rps-anchor-mean", type=float, default=0.50)
+    p_s2.add_argument("--step2b-min-mean", type=float, default=0.45)
+    p_s2.add_argument("--step2b-anchor-mean", type=float, default=0.6667)
+    p_s2.add_argument("--step2b-max", type=int, default=180)
+    p_s2.add_argument("--skip-2b", action="store_true")
+    p_s2.set_defaults(func=cmd_step2)
 
     args = ap.parse_args()
     args.func(args)
