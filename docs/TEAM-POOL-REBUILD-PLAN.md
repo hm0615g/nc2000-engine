@@ -48,19 +48,20 @@ The offline pipeline is split into explicit versioned directories and tools:
 4. **Product generation & verification (step 6)** (`tools/build-team-products-v2.js`):
    Assembles the shipped catalog and checks memberships, canonical sets, draw
    weights, and prior/training alignment. Current compiled preview policies
-   computed against the active catalog and prior are documented in
-   [`data/preview-training-v3/README.md`](../data/preview-training-v3/README.md)
-   and [`PREVIEW-PRIOR-COMPATIBILITY.md`](./PREVIEW-PRIOR-COMPATIBILITY.md).
+   computed against the active catalog and prior are stored in
+   [`data/compiled-preview-v1.json`](../data/compiled-preview-v1.json)
+   (baked via [`crates/bot/examples/meta_eco/catalog_preview.rs`](../crates/bot/examples/meta_eco/catalog_preview.rs))
+   and documented in [`PREVIEW-PRIOR-COMPATIBILITY.md`](./PREVIEW-PRIOR-COMPATIBILITY.md).
 
 ## Progress
 
 The blind rebuild (`c = 0.4`, unified catalog + broad opponent prior) and
-subsequent `training-v3` normalization, prior expansion, and `preview-training-v3`
-compiled-preview bake are complete and live. For current artifact counts,
-fingerprints, and verification outputs, consult the authoritative data
-directories directly rather than duplicating snapshots here:
+subsequent `training-v3` normalization, prior expansion, and compiled-preview
+bake are complete and live. For current artifact counts, fingerprints, and
+verification outputs, consult the authoritative data directories directly rather
+than duplicating snapshots here:
 
 - Catalog: [`data/team-pool-v2/README.md`](../data/team-pool-v2/README.md)
 - Opponent prior: [`data/belief-pool-v3/README.md`](../data/belief-pool-v3/README.md)
 - Training & spread checks: [`data/training-v3/README.md`](../data/training-v3/README.md)
-- Compiled preview bake: [`data/preview-training-v3/README.md`](../data/preview-training-v3/README.md)
+- Compiled preview bake: [`data/compiled-preview-v1.json`](../data/compiled-preview-v1.json) & [`crates/bot/examples/meta_eco/catalog_preview.rs`](../crates/bot/examples/meta_eco/catalog_preview.rs)

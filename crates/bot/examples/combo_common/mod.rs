@@ -14,9 +14,6 @@ pub struct Spec {
     blind: bool,
     iterations: u32,
     c: f64,
-    perish: bool,
-    combo: bool,
-    baton_pass: bool,
     settlement: nc2000_bot::LeafSettlementMode,
 }
 
@@ -30,20 +27,14 @@ impl Spec {
         };
         let mut nums = Vec::new();
         let shipped = RmConfig::default();
-        let (mut perish, mut combo) = (shipped.rollout_perish, shipped.rollout_combo);
-        let mut baton_pass = shipped.rollout_baton_pass;
         let mut settlement = shipped.settlement;
         for p in &parts[1..] {
             match *p {
-                "perish_escape" => (perish, combo) = (true, false),
-                "perish_combo" => (perish, combo) = (false, true),
-                "-perish_combo" | "-perish_escape" => (perish, combo) = (false, false),
-                "bp" => baton_pass = true,
-                "-bp" => baton_pass = false,
+                "relay" | "bsleaf" => settlement = nc2000_bot::LeafSettlementMode::BlindSpotLeaf,
+                "-relay" | "norelay" => {
+                    settlement = nc2000_bot::LeafSettlementMode::BlindSpotLeafNoRelay
+                }
                 "legacy" => settlement = nc2000_bot::LeafSettlementMode::LegacyRollout,
-                "bsleaf" => settlement = nc2000_bot::LeafSettlementMode::BlindSpotLeaf,
-                "bsroll" => settlement = nc2000_bot::LeafSettlementMode::BlindSpotRollout,
-                "bsboth" => settlement = nc2000_bot::LeafSettlementMode::BlindSpotBoth,
                 n => nums.push(n.parse::<f64>().unwrap_or_else(|_| panic!("bad field {n}"))),
             }
         }
@@ -51,9 +42,6 @@ impl Spec {
             blind,
             iterations: nums.first().map_or(1000, |&n| n as u32),
             c: nums.get(1).copied().unwrap_or(1.0),
-            perish,
-            combo,
-            baton_pass,
             settlement,
         }
     }
@@ -63,9 +51,6 @@ impl Spec {
             iterations: self.iterations,
             rule: SelRule::Ucb,
             c: self.c,
-            rollout_perish: self.perish,
-            rollout_combo: self.combo,
-            rollout_baton_pass: self.baton_pass,
             settlement: self.settlement,
             ..Default::default()
         };

@@ -340,6 +340,10 @@ pub struct BayesianEquilibrium {
     pub best_pure_action: usize,
 }
 
+pub(crate) fn min_equilibrium_visits(max_visits: u32) -> u32 {
+    (max_visits / 8).max(4).min(max_visits)
+}
+
 /// Solve the empirical-Bayes shrunk Bayesian root game across sampled determinized worlds:
 /// `\max_{p \in \Delta} \sum_k w_k \min_j \sum_i p_i \hat{V}_k(i, j)`.
 pub fn solve_bayesian_equilibrium(
@@ -392,7 +396,7 @@ pub fn solve_bayesian_equilibrium_with_priors(
         .map(|&i| global_visits[i])
         .max()
         .unwrap_or(0);
-    let min_own_v = (max_v / 8).max(4).min(max_v);
+    let min_own_v = min_equilibrium_visits(max_v);
     let mut actions: Vec<usize> = all_elig
         .iter()
         .copied()

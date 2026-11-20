@@ -42,7 +42,13 @@ impl HpTransitionKey {
             if pokemon.hp<=0 || pokemon.hp>pokemon.maxhp || pokemon.fainted || pokemon.transformed
                 || !matches!(pokemon.status,Status::None|Status::Par|Status::Slp|Status::Frz) {return None;}
             if pokemon.volatiles.iter().any(|(id,_)|dex.conds.key(*id)!="parspeeddrop") {return None;}
-            if pokemon.item.is_some_and(|item|!matches!(dex.items.key(item),"mintberry"|"miracleberry"|"brightpowder"|"quickclaw")) {return None;}
+            if pokemon.item.is_some_and(|item| {
+                let ki = &dex.known_items;
+                let si = Some(item);
+                si != ki.mintberry && si != ki.miracleberry && si != ki.brightpowder && si != ki.quickclaw
+            }) {
+                return None;
+            }
             let Some(SearchChoice::Move(id))=choices[side] else {return None;};
             if !pokemon.move_slots.iter().any(|slot|slot.id==id && slot.pp>0 && !slot.disabled) {return None;}
             if !matches!(dex.moves.key(id),"bodyslam"|"hydropump"|"icebeam"|"fireblast"|"thunderbolt"|"thunder"|"earthquake"|"seismictoss"|"tackle"|"splash") {

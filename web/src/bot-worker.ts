@@ -29,6 +29,7 @@ export type WorkerRequest =
         priorJson?: string;
         pickPriorJson?: string;
         compiledPreview?: boolean;
+        adaptiveBudget?: boolean;
         endgame?: EndgameSettings;
         actionPolicy?: ActionPolicyMode;
       };
@@ -114,6 +115,7 @@ let forked: {
   positioned: boolean;
   endgame?: EndgameSettings;
   live?: boolean;
+  adaptiveBudget?: boolean;
 } | null = null;
 
 function dropForked() {
@@ -147,7 +149,7 @@ async function handle(m: WorkerRequest): Promise<void> {
       ps.setOwnTeam(m.ownTeam);
       if (m.searcher.priorJson) post({ t: "prior", report: ps.setBeliefPrior(m.searcher.priorJson) });
       if (m.searcher.pickPriorJson) post({ t: "pickPrior", report: ps.setPickPrior(m.searcher.pickPriorJson) });
-      forked = { channel: null, searcher: ps, positioned: false, live: true, endgame: m.searcher.endgame };
+      forked = { channel: null, searcher: ps, positioned: false, live: true, adaptiveBudget: m.searcher.adaptiveBudget, endgame: m.searcher.endgame };
       break;
     }
     case "fork": {
@@ -196,9 +198,9 @@ async function handle(m: WorkerRequest): Promise<void> {
 const SLICE_TARGET_MS = 125;
 let slice = 250;
 
-function stepAdaptive(s: { step(n: number): number }, n: number): number {
+function stepSlice(step: (n: number) => number, n: number): number {
   const t0 = performance.now();
-  const done = s.step(n);
+  const done = step(n);
   const dt = performance.now() - t0;
   if (n >= slice) {
     // only full slices inform the estimate
@@ -285,13 +287,16 @@ async function runForkSearch(m: SearchMsg): Promise<void> {
       policy: f.searcher.rootPolicy(), ms: performance.now() - t0, wasmMemoryBytes: wasmMemory.buffer.byteLength, src: "search", endgame: f.searcher.endgameStats() });
     return;
   }
+  const step = f.adaptiveBudget && actionPolicy === "legacy"
+    ? (n: number) => f.searcher.stepAdaptiveBattle(n)
+    : (n: number) => f.searcher.step(n);
   let done = 0;
   for (;;) {
     if (gen !== myGen) return;
     const target = m.budget;
     if (done >= target) break;
-    const next = stepAdaptive(f.searcher, Math.min(slice, target - done));
-    if (next === done) break; // a forced choice: the searcher does not step
+    const next = stepSlice(step, Math.min(slice, target - done));
+    if (next === done) break; // forced or adaptively settled
     done = next;
     post({ t: "progress", id: m.id, done, budget: m.budget });
     await new Promise((r) => setTimeout(r, 0));

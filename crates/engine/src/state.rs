@@ -41,6 +41,20 @@ pub struct PokeId {
     pub slot: u8,
 }
 
+/// Sentinel action speed when Quick Claw activates (`gen2stadium2` `getActionSpeed`).
+pub const QUICK_CLAW_ACTION_SPEED: i32 = 65_535;
+
+/// Indices into [`Boosts`] (`[atk, def, spa, spd, spe, acc, eva]`).
+pub mod stat_idx {
+    pub const ATK: usize = 0;
+    pub const DEF: usize = 1;
+    pub const SPA: usize = 2;
+    pub const SPD: usize = 3;
+    pub const SPE: usize = 4;
+    pub const ACC: usize = 5;
+    pub const EVA: usize = 6;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Status {
     None,

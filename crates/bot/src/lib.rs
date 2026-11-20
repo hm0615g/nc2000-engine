@@ -27,6 +27,7 @@
 static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 pub mod accounting;
+pub mod adaptive_budget;
 pub mod agent;
 pub mod analysis;
 pub mod belief;
@@ -47,7 +48,6 @@ pub mod import;
 pub mod linear;
 pub mod mask;
 pub mod mcts;
-pub mod m17e_artifact;
 mod hp_evidence;
 pub mod observe;
 pub mod position;
@@ -56,6 +56,7 @@ pub mod player_state;
 pub mod pick_prior;
 pub mod preview;
 pub mod prior;
+pub mod relay;
 pub mod rng;
 pub mod root_policy;
 pub mod runner;

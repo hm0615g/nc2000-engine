@@ -42,7 +42,8 @@ try {
   if (ids.has(partyId)) throw Error(`Duplicate known ID: ${partyId}`);
   const old = baseline.teams.find(t => t.id === originalId);
   const origin = source === 'catalog' ? record.provenance.origin : 'human';
-  const weight = old?.weight ?? (origin === 'human' ? 1 : .25);
+  const sourceWeight = source === 'majinjima' && typeof record.weight === 'number' ? record.weight : null;
+  const weight = old?.weight ?? sourceWeight ?? (origin === 'human' ? 1 : .25);
   teams.push({id: partyId, weight, provenance: {origin, source: path, sourceId: originalId}, sets});
   additions.push({id: partyId, source: path, weight, shell: materialShell(teamMaterial(sets, dex))});
   types.add(type); ids.add(partyId);

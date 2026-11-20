@@ -134,7 +134,7 @@ fn main() {
                 }
 
                 let t0 = Instant::now();
-                let ehf = eval::expected_hit_fraction(&b, &dex, att, def, mv, true);
+                let ehf = eval::expected_hit_fraction(&b, &dex, att, def, mv);
                 eval_ns += t0.elapsed().as_nanos();
                 eval_calls += 1;
 

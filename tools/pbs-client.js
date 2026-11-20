@@ -62,7 +62,7 @@ if (args.help || args.h) {
   --team SPEC          pool:nash | pool:tier-a | pool:random | pool:ID | FILE.json
                        (default determined by --tier)
   --iters N            Override search iterations for BOTH battle and preview
-                       (default: Web strong, battle=81000 / preview=729000)
+                       (default: Web adaptive battle cap=243000 / preview=729000)
   --preview-iters N    Override preview only; takes precedence over --iters
   --seed N             RNG / searcher seed (default 1)
   --poll-ms MS         Polling interval while waiting for opponent (default 2500)
@@ -173,9 +173,9 @@ const ANOMALY_LOG_PATH = args['no-anomaly-log']
 
 const profileText = fs.readFileSync(path.join(REPO, 'data/search-profiles.json'), 'utf8');
 const PROFILE = JSON.parse(profileText).blind;
-// The standard Castle policy shares the standalone Web strong budgets.
-// Explicit --iters keeps its historical meaning (both phases); an optional
-// --preview-iters overrides just the preview for controlled experiments.
+// Default Castle battle search uses the Web adaptive policy (243k cap).
+// Explicit --iters retains fixed-budget semantics for BOTH battle and preview;
+// --preview-iters overrides preview independently.
 const LIVE_SEARCH = JSON.parse(fs.readFileSync(path.join(REPO, 'data/live-search.json'), 'utf8'));
 function readPositiveIters(value, name) {
   if (typeof value !== 'string' || !/^[1-9][0-9]*$/.test(value)) {
@@ -185,15 +185,16 @@ function readPositiveIters(value, name) {
   if (!Number.isSafeInteger(result)) throw new Error(`--${name} is out of range`);
   return result;
 }
-const ITERS = args.iters === undefined
-  ? Number(LIVE_SEARCH.battle.strong)
+const ADAPTIVE_BATTLE = args.iters === undefined;
+const ITERS = ADAPTIVE_BATTLE
+  ? Number(LIVE_SEARCH.battle.adaptive)
   : readPositiveIters(args.iters, 'iters');
 const PREVIEW_ITERS = args['preview-iters'] !== undefined
   ? readPositiveIters(args['preview-iters'], 'preview-iters')
   : args.iters !== undefined ? ITERS : Number(LIVE_SEARCH.unknownPreview);
 if (!Number.isSafeInteger(ITERS) || ITERS <= 0 ||
     !Number.isSafeInteger(PREVIEW_ITERS) || PREVIEW_ITERS <= 0) {
-  throw new Error('Web strong search budgets must be positive safe integers');
+  throw new Error('Castle search budgets must be positive safe integers');
 }
 
 // ------------------------------------------------------------------ data & i18n
@@ -4139,7 +4140,7 @@ function assertRepositoryOutput(filename) {
   'OUTPUT_SYMLINK_OUTSIDE_REPOSITORY:' + target);
 }
 
-function chooseObservedAction(prepared, {isRandom, iterations, chooseIndex = rngInt}) {
+function chooseObservedAction(prepared, {isRandom, iterations, adaptiveBattle = false, chooseIndex = rngInt}) {
   assert.equal(prepared?.status, 'READY', 'OBSERVATION_NOT_READY');
   const {searcher: current, built} = prepared;
   assert.ok(current && built && Array.isArray(built.expectedNativeInputs) &&
@@ -4155,9 +4156,15 @@ function chooseObservedAction(prepared, {isRandom, iterations, chooseIndex = rng
     bestChoice = built.expectedNativeInputs[0];
     mappingPath = 'observed:only-option';
   } else {
-    current.step(iterations);
+    if (adaptiveBattle) {
+      assert.equal(typeof current.stepAdaptiveBattle, 'function',
+        'ADAPTIVE_WASM_REBUILD_REQUIRED: crates/wasm/build.sh nodejs');
+      current.stepAdaptiveBattle(iterations);
+    } else {
+      current.step(iterations);
+    }
     bestChoice = current.best();
-    mappingPath = 'observed:search';
+    mappingPath = adaptiveBattle ? 'observed:adaptive-search' : 'observed:search';
   }
   assert.ok(built.expectedNativeInputs.includes(bestChoice), 'UNMAPPED_SEARCH_ACTION');
   const mapping = built.mapNativeInput(bestChoice);
@@ -4924,7 +4931,8 @@ async function playOneGame(gameIdx, dependencies = {}) {
           assert.equal(prepared.status, 'READY', 'OBSERVATION_NOT_READY');
           const {built, spec, report} = prepared;
           const {battleTurn, actionType, isForceSwitch} = built.ui;
-          const decisionPolicy = dependencies.decisionPolicy || {isRandom: RANDOM, iterations: ITERS};
+          const decisionPolicy = dependencies.decisionPolicy ||
+            {isRandom: RANDOM, iterations: ITERS, adaptiveBattle: ADAPTIVE_BATTLE};
           const selected = chooseObservedAction(prepared, decisionPolicy);
           const {bestChoice, rootPolicy, mappingPath, mapping} = selected;
           const chosenMoveValue = mapping.value;

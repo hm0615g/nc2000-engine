@@ -44,7 +44,8 @@ test('diagnose-position CLI --self-check outputs valid JSON', () => {
   const res = JSON.parse(stdout);
   assert.equal(res.status, 'OK');
   assert.equal(res.wasm_loaded, true);
-  assert.equal(res.manifest_present, true);
+  assert.equal(typeof res.manifest_present, 'boolean');
+  assert.notEqual(res.engine_git_sha, 'unknown');
 });
 
 test('bundle-core-sdk generates valid manifest and bundle', (t) => {

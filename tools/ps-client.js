@@ -21,7 +21,7 @@
 // Usage:
 //   node tools/ps-client.js --server ws://127.0.0.1:8123 --name BOTNAME \
 //     --team pool:0|pool:random|FILE.json [--challenge USER | --accept any|U1,U2] \
-//     [--games N] [--iters 30000 | --web-policy strong|standard] [--seed 1] [--mode blind|open] \
+//     [--games N] [--iters N | --web-policy adaptive] [--seed 1] [--mode blind|open] \
 //     [--opp-team-file FILE.json] [--random] [--timer] \
 //     [--belief-prior FILE.json|auto] \
 //     [--password PW] [--loginserver URL] [--format gen2nintendocup2000noohkostadium2strict] \
@@ -98,15 +98,12 @@ if (args.help || args.h) {
                     shared secret for server-fed dynamic open (environment;
                     at least 32 characters; required when --mode open has no
                     --opp-team-file)
-  --iters N         legacy/manual search iterations per decision (default
-                    27000 in blind mode, 30000 in open mode)
-  --web-policy P    use the browser product search policy in blind or open mode:
-                    strong (default browser strength) or standard.
-                    Battle budgets and team-preview policy come from
-                    data/live-search.json. Blind mode may use compatible
-                    data/compiled-preview-v1.json policies; open mode always
-                    runs the fixed live team-preview budget. Cannot be combined
-                    with --iters
+  --iters N         fixed search iterations per decision (also disables adaptive
+                    default; preview stays at five times N)
+  --web-policy P    Web budget policy (adaptive by default in blind mode);
+                    battle cap and preview budget from data/live-search.json.
+                    Adaptive battle search uses stepAdaptiveBattle when supported.
+                    Cannot be combined with --iters; open mode uses fixed search
   --seed N          searcher / random-mode seed (default 1)
   --search-runtime R
                     search implementation for non-random play:
@@ -169,7 +166,9 @@ const PROFILE = SEARCH_PROFILES[MODE];
 const LIVE_SEARCH = require('../data/live-search.json');
 const WEB_POLICY = args['web-policy'] === true
     ? String(LIVE_SEARCH.defaultStrength)
-    : args['web-policy'] ? String(args['web-policy']) : '';
+    : args['web-policy'] ? String(args['web-policy'])
+    : (MODE === 'blind' && args.iters === undefined
+        ? String(LIVE_SEARCH.defaultStrength) : '');
 if (WEB_POLICY && args.iters !== undefined) {
     throw new Error('--web-policy and --iters cannot be combined');
 }
@@ -184,6 +183,10 @@ const ITERS = WEB_POLICY
 const PREVIEW_ITERS = WEB_POLICY
     ? Number(LIVE_SEARCH.unknownPreview)
     : ITERS * 5;
+const WEB_ADAPTIVE = WEB_POLICY === 'adaptive' && MODE === 'blind';
+if (WEB_POLICY === 'adaptive' && MODE !== 'blind') {
+    throw new Error('Web adaptive policy is supported only in blind mode');
+}
 if (!Number.isSafeInteger(ITERS) || ITERS <= 0) {
     throw new Error('search iteration count must be a positive integer');
 }
@@ -200,6 +203,9 @@ const SEARCH_RUNTIME = String(args['search-runtime'] || 'wasm');
 
 if (!['wasm', 'native'].includes(SEARCH_RUNTIME)) {
 	throw new Error('--search-runtime must be wasm or native');
+}
+if (WEB_ADAPTIVE && SEARCH_RUNTIME !== 'wasm' && !RANDOM) {
+    throw new Error('Web adaptive battle search requires --search-runtime wasm');
 }
 
 const NATIVE_WORKER_BIN =
@@ -741,9 +747,13 @@ if (WEB_POLICY) {
 const SEARCH_SLICE_TARGET_MS = 125;
 let searchSlice = 250;
 
-async function stepAdaptive(searcher, n) {
+async function stepAdaptive(searcher, n, adaptiveBattle = false) {
+	const step = adaptiveBattle ? searcher.stepAdaptiveBattle : searcher.step;
+	if (typeof step !== 'function') {
+		throw new Error('Adaptive search requires rebuilt WASM: crates/wasm/build.sh nodejs');
+	}
 	const t0 = performance.now();
-	const done = await searcher.step(n);
+	const done = await step.call(searcher, n);
 	const dt = performance.now() - t0;
 
 	if (n >= searchSlice) {
@@ -1202,7 +1212,8 @@ class BattleDriver {
 
 			const next = await stepAdaptive(
 				this.searcher,
-				Math.min(searchSlice, target - done)
+				Math.min(searchSlice, target - done),
+				WEB_ADAPTIVE && !req.teamPreview
 			);
 
 			// Forced/baked decisions can legitimately refuse to advance.

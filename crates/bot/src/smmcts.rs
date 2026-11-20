@@ -73,10 +73,10 @@ use crate::rng::SplitMix64;
 
 pub use crate::endgame_root::{
     reply_risk_and_mistake_ev, tactical_desperation_bonus, EndgameActionMetrics,
-    EndgameDecisionInfo, EndgameRegime, EndgameRootStats, EndgameRules,
+    EndgameDecisionInfo, EndgameRegime, EndgameRootStats,
 };
 pub(crate) use crate::endgame_root::cmp_visits_then_mean;
-pub use crate::mask::{dominated_actions, dominated_actions_with, MaskRules};
+pub use crate::mask::dominated_actions;
 pub(crate) use crate::mask::{dominated_reason, public_noop_reason};
 
 /// Selection rule for the root decision.
@@ -104,10 +104,6 @@ pub struct RmConfig {
     pub mix_actions: usize,
     /// UCB1 exploration constant.
     pub c: f64,
-    pub collapse_sleep_actions: bool,
-    pub root_revisit_interval: u32,
-    pub canonical_claw_key: bool,
-    pub unseen_claw_root: bool,
     /// Tree horizon in turns (same meaning as `MctsConfig::horizon`).
     pub horizon: u16,
     /// Rollout policy + leaf eval (shared with the M6 agent).
@@ -122,45 +118,15 @@ pub struct RmConfig {
     pub hp_buckets: i64,
     /// Full-width RM+ sweeps over the estimated root matrix.
     pub solve_sweeps: u32,
-    /// Rollout greedy pick scores status/setup moves by
-    /// `mcts::status_pseudo_score` instead of 0. Parked research arm, off in
-    /// the shipped rollout; gate record in `data/m16c-rollout-v2/README.md`.
-    pub rollout_status: bool,
-    /// Rollout greedy pick switches out of a bad matchup
-    /// (`mcts::ROLLOUT_SWITCH_TRIGGER`). Parked like `rollout_status`.
-    pub rollout_switch: bool,
-    /// Rollout sides leave the field at Perish count 1 when they can
-    /// (`mcts::perish_escape`).
-    pub rollout_perish: bool,
-    /// Rollout sides also play the Perish trap and its counter
-    /// (`mcts::perish_combo`); implies `rollout_perish`'s escape. Shipped
-    /// ON; gates and measurements in `data/perish-rollout-v1/README.md`.
-    pub rollout_combo: bool,
-    pub rollout_baton_pass: bool,
-    /// Drop damage-history fields from the node key. Sound only when no mon
-    /// can read them (Counter/Mirror Coat); the search checks that once at
-    /// construction and clears this flag if it cannot.
-    pub key_no_damage: bool,
-    /// Which optional root-mask rules this agent plays under. Default =
-    /// shipped; an arena arm flips one field to A/B a mask change, which is
-    /// the only harness that can see one at all (see `root_dominated`).
-    pub mask_rules: MaskRules,
-    /// Optional endgame decision & budget rules for decided/near-decided boards.
-    /// Default = all `false` (bit-identical to baseline).
-    pub endgame_rules: EndgameRules,
     /// Leaf tactical settlement & evaluation mode.
     pub settlement: crate::accounting::LeafSettlementMode,
 }
 
-
 impl RmConfig {
     pub fn rollout_rules(&self) -> RolloutRules {
         RolloutRules {
-            status: self.rollout_status,
-            switch: self.rollout_switch,
-            perish_escape: self.rollout_perish,
-            perish_combo: self.rollout_combo,
-            baton_pass: self.rollout_baton_pass,
+            perish_combo: true,
+            baton_pass: true,
             settlement: self.settlement,
         }
     }
@@ -174,24 +140,12 @@ impl Default for RmConfig {
             probe: 0.25,
             mix_actions: 3,
             c: 1.0,
-            collapse_sleep_actions: false,
-            root_revisit_interval: 0,
-            canonical_claw_key: false,
-            unseen_claw_root: false,
             horizon: 100,
             playout: Playout::heavy(),
             threshold: 0.5,
             hp_buckets: 16,
             solve_sweeps: 2000,
-            rollout_status: false,
-            rollout_switch: false,
-            rollout_perish: false,
-            rollout_combo: true,
-            rollout_baton_pass: true,
-            key_no_damage: false,
-            mask_rules: MaskRules::default(),
             settlement: crate::accounting::LeafSettlementMode::BlindSpotLeaf,
-            endgame_rules: EndgameRules::default(),
         }
     }
 }
@@ -230,14 +184,6 @@ pub enum SearchTrace<'a> {
 
 impl Node {
     pub(crate) fn at(sim: &mut Battle, dex: &Dex) -> Node {
-        Self::build(sim, dex, false)
-    }
-
-    fn build(
-        sim: &mut Battle,
-        dex: &Dex,
-        collapse_sleep: bool,
-    ) -> Node {
         use nc2000_engine::smallvec::{smallvec, SmallVec};
         let mut acts = [SmallVec::new(), SmallVec::new()];
         sim.legal_choices_into(dex, 0, &mut acts[0]);
@@ -245,21 +191,12 @@ impl Node {
         let preview = acts
             .iter()
             .any(|a| matches!(a.first(), Some(SearchChoice::Team(_))));
-        if collapse_sleep && !preview {
-            for side in 0..2 {
-                collapse_sleep_choices_smallvec(sim, dex, side, &mut acts[side]);
-            }
-        }
         Node {
             n: [smallvec![0; acts[0].len()], smallvec![0; acts[1].len()]],
             w: [smallvec![0.0; acts[0].len()], smallvec![0.0; acts[1].len()]],
             preview,
             acts,
         }
-    }
-
-    fn continuation(sim: &mut Battle, dex: &Dex, cfg: &RmConfig) -> Node {
-        Self::build(sim, dex, cfg.collapse_sleep_actions)
     }
 
     /// Blend a raw child trajectory return `raw_val0` toward the empirical-Bayes minimax value
@@ -316,8 +253,10 @@ pub fn collapse_sleep_choices(b: &Battle, dex: &Dex, side: usize, choices: &mut 
     let p = b.poke(id);
     if p.status != nc2000_engine::state::Status::Slp
         || p.status_state.get_int(nc2000_engine::state::DK::Time) <= 1
-        || p.item
-            .is_some_and(|item| matches!(dex.items.key(item), "mintberry" | "miracleberry"))
+        || p.item.is_some_and(|item| {
+            let si = Some(item);
+            si == dex.known_items.mintberry || si == dex.known_items.miracleberry
+        })
     {
         return;
     }
@@ -327,37 +266,6 @@ pub fn collapse_sleep_choices(b: &Battle, dex: &Dex, side: usize, choices: &mut 
             return true;
         };
         let ms = dex.move_static(*id);
-        if ms.sleep_usable || ms.callbacks.iter().any(|key| key == "beforeTurnCallback") {
-            return true;
-        }
-        let priority = (i16::from(ms.priority) + 128) as usize;
-        let first = !priorities[priority];
-        priorities[priority] = true;
-        first
-    });
-}
-
-pub(crate) fn collapse_sleep_choices_smallvec(
-    b: &Battle,
-    dex: &Dex,
-    side: usize,
-    choices: &mut nc2000_engine::smallvec::SmallVec<[SearchChoice; 6]>,
-) {
-    let Some(id) = b.active_id(side) else { return };
-    let p = b.poke(id);
-    if p.status != nc2000_engine::state::Status::Slp
-        || p.status_state.get_int(nc2000_engine::state::DK::Time) <= 1
-        || p.item
-            .is_some_and(|item| matches!(dex.items.key(item), "mintberry" | "miracleberry"))
-    {
-        return;
-    }
-    let mut priorities = [false; 256];
-    choices.retain(|action| {
-        let SearchChoice::Move(id) = *action else {
-            return true;
-        };
-        let ms = dex.move_static(id);
         if ms.sleep_usable || ms.callbacks.iter().any(|key| key == "beforeTurnCallback") {
             return true;
         }
@@ -409,12 +317,8 @@ pub(crate) fn build_search_cache(
     dex: &Dex,
     b: &Battle,
 ) -> nc2000_engine::battle::BattleSearchCache {
-    let (buckets, omit_damage) = if cfg.hp_buckets <= 0 {
-        (None, false)
-    } else {
-        (Some(cfg.hp_buckets), cfg.key_no_damage)
-    };
-    nc2000_engine::battle::BattleSearchCache::new(b, dex, buckets, omit_damage)
+    let buckets = (cfg.hp_buckets > 0).then_some(cfg.hp_buckets);
+    nc2000_engine::battle::BattleSearchCache::new(b, dex, buckets, false)
 }
 
 #[inline]
@@ -425,18 +329,9 @@ pub(crate) fn build_search_cache_with_template(
     own_side: usize,
     template: &nc2000_engine::battle::BattleSearchCache,
 ) -> nc2000_engine::battle::BattleSearchCache {
-    let (buckets, omit_damage) = if cfg.hp_buckets <= 0 {
-        (None, false)
-    } else {
-        (Some(cfg.hp_buckets), cfg.key_no_damage)
-    };
+    let buckets = (cfg.hp_buckets > 0).then_some(cfg.hp_buckets);
     nc2000_engine::battle::BattleSearchCache::new_with_own_side_template(
-        b,
-        dex,
-        buckets,
-        omit_damage,
-        own_side,
-        template,
+        b, dex, buckets, false, own_side, template,
     )
 }
 
@@ -447,32 +342,6 @@ pub fn key_for_test(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
     key_of(cfg, dex, b)
 }
 
-/// Public-only check for whether damage bookkeeping (`attacked_by` / `last_damage`) can be
-/// observed by future moves, without inspecting hidden opponent movesets.
-pub(crate) fn public_damage_bookkeeping_observable(
-    b: &Battle,
-    dex: &Dex,
-    viewer_side: usize,
-) -> bool {
-    if b.sides[viewer_side].roster.iter().any(|p| {
-        p.base_move_slots
-            .iter()
-            .chain(p.move_slots.iter())
-            .any(|slot| matches!(dex.moves.key(slot.id), "counter" | "mirrorcoat"))
-    }) {
-        return true;
-    }
-    let learnsets = crate::belief::format_learnsets();
-    b.sides[1 - viewer_side].roster.iter().any(|p| {
-        let sp_key = dex.species.key(p.base_species);
-        learnsets.species(sp_key).map_or(true, |ls| {
-            ls.moves
-                .iter()
-                .any(|m| matches!(m.as_str(), "counter" | "mirrorcoat"))
-        })
-    })
-}
-
 /// Node search key over canonicalized HP buckets.
 #[inline]
 pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
@@ -480,26 +349,97 @@ pub(crate) fn key_of(cfg: &RmConfig, dex: &Dex, b: &mut Battle) -> u64 {
 }
 
 #[inline]
+fn quick_claw_observable_fast(
+    b: &Battle,
+    dex: &Dex,
+    cache: &nc2000_engine::battle::BattleSearchCache,
+) -> bool {
+    if !cache.any_quick_claw {
+        return false;
+    }
+    let Some(item) = dex.known_items.quickclaw else {
+        return false;
+    };
+    if cache.selected
+        && b.started
+        && b.turn > 0
+        && b.request_state != nc2000_engine::state::RequestState::TeamPreview
+        && b.queue.is_empty()
+    {
+        let mut has_fainted_holder = false;
+        for side in &b.sides {
+            for &slot in &side.party {
+                if let Some(p) = side.roster.get(slot as usize) {
+                    if p.item == Some(item) {
+                        if !p.fainted || p.hp > 0 {
+                            return true;
+                        }
+                        has_fainted_holder = true;
+                    }
+                }
+            }
+        }
+        if !has_fainted_holder {
+            return false;
+        }
+        return b.mid_turn
+            || b.request_state != nc2000_engine::state::RequestState::Move
+            || !b.is_idle_move_request();
+    }
+    b.quick_claw_roll_observable(dex)
+}
+
+#[inline]
+pub(crate) fn key_of_with_claw_omit(
+    cfg: &RmConfig,
+    dex: &Dex,
+    b: &mut Battle,
+    force_omit_claw: bool,
+    cache: Option<&nc2000_engine::battle::BattleSearchCache>,
+) -> u64 {
+    let buckets = (cfg.hp_buckets > 0).then_some(cfg.hp_buckets);
+    if let Some(c) = cache {
+        let omit_qc = force_omit_claw || !quick_claw_observable_fast(b, dex, c);
+        let saved_qc = b.quick_claw_roll;
+        if omit_qc && saved_qc {
+            b.quick_claw_roll = false;
+        }
+        let key = b.search_key_with_cache(dex, buckets, false, false, c);
+        if omit_qc && saved_qc {
+            b.quick_claw_roll = saved_qc;
+        }
+        debug_assert_eq!(
+            key,
+            if force_omit_claw {
+                let q = b.quick_claw_roll;
+                b.quick_claw_roll = false;
+                let k = b.search_key(buckets, false);
+                b.quick_claw_roll = q;
+                k
+            } else {
+                b.search_key_canonical_claw(dex, buckets, false)
+            }
+        );
+        return key;
+    }
+    if force_omit_claw {
+        let saved_qc = b.quick_claw_roll;
+        b.quick_claw_roll = false;
+        let key = b.search_key(buckets, false);
+        b.quick_claw_roll = saved_qc;
+        return key;
+    }
+    b.search_key_canonical_claw(dex, buckets, false)
+}
+
+#[inline]
 pub(crate) fn key_of_cached(
     cfg: &RmConfig,
     dex: &Dex,
-    b: &Battle,
+    b: &mut Battle,
     cache: Option<&nc2000_engine::battle::BattleSearchCache>,
 ) -> u64 {
-    let hash = |b: &Battle, buckets, omit_damage| {
-        if let Some(c) = cache {
-            b.search_key_with_cache(dex, buckets, omit_damage, cfg.canonical_claw_key, c)
-        } else if cfg.canonical_claw_key {
-            b.search_key_canonical_claw(dex, buckets, omit_damage)
-        } else {
-            b.search_key(buckets, omit_damage)
-        }
-    };
-    if cfg.hp_buckets <= 0 {
-        hash(b, None, false)
-    } else {
-        hash(b, Some(cfg.hp_buckets), cfg.key_no_damage)
-    }
+    key_of_with_claw_omit(cfg, dex, b, false, cache)
 }
 
 /// UCB1 (untried-first, then mean + c·sqrt(ln N / n)).
@@ -640,15 +580,14 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
     mut root_child_value: Option<&mut dyn FnMut(&Battle) -> Option<f64>>,
     cache: Option<&nc2000_engine::battle::BattleSearchCache>,
 ) -> f64 {
-    let mut path_buf = [(0usize, 0usize, 0usize); 32];
-    let mut path_len = 0usize;
-    let mut path_overflow: Vec<(usize, usize, usize)> = Vec::new();
+    let mut path = nc2000_engine::smallvec::SmallVec::<[(usize, [Option<usize>; 2]); 16]>::new();
     let mut node_idx = start;
 
     // ---- selection until a leaf: terminal, horizon, or unexpanded state
     let reward0 = loop {
         let at_root = node_idx == start;
         let mut joint = [None, None];
+        let mut selected = [None; 2];
         for s in 0..2 {
             let k = nodes[node_idx].acts[s].len();
             if k == 0 {
@@ -665,18 +604,16 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
                     }
                     _ => select_ucb(cfg, rng, &mut nodes[node_idx], s),
                 };
-                if path_len < path_buf.len() {
-                    path_buf[path_len] = (node_idx, s, ai);
-                    path_len += 1;
-                } else {
-                    path_overflow.push((node_idx, s, ai));
-                }
+                selected[s] = Some(ai);
                 ai
             };
             joint[s] = Some(nodes[node_idx].acts[s][ai]);
             if at_root {
                 root_joint[s] = ai;
             }
+        }
+        if selected.iter().any(Option::is_some) {
+            path.push((node_idx, selected));
         }
         if let Some(trace) = trace.as_deref_mut() {
             let node = &nodes[node_idx];
@@ -735,6 +672,31 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
             crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, sim.outcome()));
             break leaf(sim, rng, false);
         }
+        if cache.map_or(true, |c| c.any_quick_claw) {
+            let s0 = sim.sides[0].active.is_some_and(|r| {
+                sim.sides[0].roster[r as usize].speed
+                    == nc2000_engine::state::QUICK_CLAW_ACTION_SPEED
+            });
+            let s1 = sim.sides[1].active.is_some_and(|r| {
+                sim.sides[1].roster[r as usize].speed
+                    == nc2000_engine::state::QUICK_CLAW_ACTION_SPEED
+            });
+            if (s0 || s1) && sim.is_idle_move_request() {
+                let qc = sim.quick_claw_roll;
+                sim.quick_claw_roll = false;
+                if s0 {
+                    if let Some(id) = sim.active_id(0) {
+                        sim.update_speed(dex, id);
+                    }
+                }
+                if s1 {
+                    if let Some(id) = sim.active_id(1) {
+                        sim.update_speed(dex, id);
+                    }
+                }
+                sim.quick_claw_roll = qc;
+            }
+        }
         let key = key_of_cached(cfg, dex, sim, cache);
         match table.get(&key) {
             Some(&child) => {
@@ -744,7 +706,7 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
             None => {
                 // expand exactly one node per iteration, then settle leaf
                 let child = nodes.len();
-                nodes.push(Node::continuation(sim, dex, cfg));
+                nodes.push(Node::at(sim, dex));
                 table.insert(key, child);
                 if let Some(trace) = trace.as_deref_mut() {
                     trace(SearchTrace::Leaf {
@@ -762,34 +724,7 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
         }
     };
 
-    let mut path_nodes = [start; 32];
-    let mut path_nodes_len = 0usize;
-    for &(ni, _, _) in &path_buf[..path_len] {
-        if path_nodes_len == 0 || path_nodes[path_nodes_len - 1] != ni {
-            if path_nodes_len < path_nodes.len() {
-                path_nodes[path_nodes_len] = ni;
-                path_nodes_len += 1;
-            }
-        }
-    }
-    let mut val0 = reward0;
-    let mut root_reward0 = reward0;
-    for idx in (0..path_nodes_len).rev() {
-        let ni = path_nodes[idx];
-        for &(p_ni, s, ai) in &path_buf[..path_len] {
-            if p_ni == ni {
-                nodes[ni].w[s][ai] += if s == 0 { val0 } else { 1.0 - val0 };
-            }
-        }
-        if ni == start {
-            root_reward0 = val0;
-        } else if val0 > 0.000_001 && val0 < 0.999_999 {
-            val0 = nodes[ni].backed_up_value(val0);
-        }
-    }
-    for (ni, s, ai) in path_overflow {
-        nodes[ni].w[s][ai] += if s == 0 { reward0 } else { 1.0 - reward0 };
-    }
+    let root_reward0 = back_up_path(nodes, &path, start, reward0);
     if let Some(trace) = trace {
         trace(SearchTrace::Result {
             battle: sim,
@@ -797,6 +732,30 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
         });
     }
     root_reward0
+}
+
+fn back_up_path(
+    nodes: &mut [Node],
+    path: &[(usize, [Option<usize>; 2])],
+    root: usize,
+    reward0: f64,
+) -> f64 {
+    let mut value = reward0;
+    let mut root_value = reward0;
+    for &(index, actions) in path.iter().rev() {
+        let node = &mut nodes[index];
+        for (side, pick) in actions.into_iter().enumerate() {
+            if let Some(action) = pick {
+                node.w[side][action] += if side == 0 { value } else { 1.0 - value };
+            }
+        }
+        if index == root {
+            root_value = value;
+        } else if value > 0.000_001 && value < 0.999_999 {
+            value = node.backed_up_value(value);
+        }
+    }
+    root_value
 }
 
 #[inline]
@@ -810,8 +769,10 @@ pub(crate) fn leaf_eval_cached(
     match &cfg.playout {
         Playout::Uniform => crate::mcts::hp_eval(sim),
         Playout::Heavy { weights, .. } => {
-            if cfg.settlement.uses_blindspot_leaf() {
+            if cfg.settlement.uses_relay_bellman() {
                 crate::eval::eval_leaf_blindspot_cached(sim, dex, weights, rc)
+            } else if cfg.settlement.uses_blindspot_leaf() {
+                crate::eval::eval_leaf_blindspot_norelay_cached(sim, dex, weights, rc)
             } else {
                 crate::eval::eval_leaf_cached(sim, dex, weights, rc)
             }
@@ -893,17 +854,13 @@ impl SkuctSearch {
     }
 
     fn with_rng(battle: &Battle, dex: &Dex, mut cfg: RmConfig, rng: SplitMix64) -> SkuctSearch {
-        if cfg.key_no_damage && battle.damage_bookkeeping_observable(dex) {
-            cfg.key_no_damage = false;
-        }
         if matches!(
             battle.request_state,
             nc2000_engine::state::RequestState::TeamPreview
         ) && matches!(
             cfg.settlement,
             crate::accounting::LeafSettlementMode::BlindSpotLeaf
-                | crate::accounting::LeafSettlementMode::BlindSpotRollout
-                | crate::accounting::LeafSettlementMode::BlindSpotBoth
+                | crate::accounting::LeafSettlementMode::BlindSpotLeafNoRelay
         ) {
             cfg.settlement = crate::accounting::LeafSettlementMode::LegacyRollout;
         }
@@ -917,7 +874,7 @@ impl SkuctSearch {
         let root_dominated = [0usize, 1].map(|s| {
             nodes[0].acts[s]
                 .iter()
-                .map(|&c| dominated_reason(&root, dex, s, c, cfg.mask_rules).is_some())
+                .map(|&c| dominated_reason(&root, dex, s, c).is_some())
                 .collect::<Vec<bool>>()
         });
         let endgame = [0usize, 1].map(|s| EndgameRootStats::new(&root, dex, s, &nodes[0].acts[s]));
@@ -982,29 +939,12 @@ impl SkuctSearch {
         )
     }
 
-    pub fn should_early_stop(&self, side: usize) -> bool {
-        let node = &self.nodes[0];
-        let sui = &self.root_dominated[side];
-        let safe = (0..node.acts[side].len()).any(|a| !sui.get(a).copied().unwrap_or(false));
-        let eligible = |a: usize| !safe || !sui.get(a).copied().unwrap_or(false);
-        self.endgame[side].should_early_stop(
-            self.cfg.endgame_rules,
-            self.done,
-            self.cfg.iterations,
-            self.is_preview(),
-            &node.n[side],
-            &node.w[side],
-            eligible,
-        )
-    }
-
     pub fn endgame_analysis(&self, side: usize) -> Option<EndgameDecisionInfo> {
         let node = &self.nodes[0];
         let sui = &self.root_dominated[side];
         let safe = (0..node.acts[side].len()).any(|a| !sui.get(a).copied().unwrap_or(false));
         let eligible = |a: usize| !safe || !sui.get(a).copied().unwrap_or(false);
         self.endgame[side].analyze(
-            self.cfg.endgame_rules,
             &node.acts[side],
             &node.n[side],
             &node.n[side],
@@ -1196,12 +1136,11 @@ impl SkuctSearch {
         // a guaranteed instant loss (2026-07-21 last-mon-Explosion report).
         let node = &self.nodes[0];
         let sui = &self.root_dominated[side];
-        if self.cfg.endgame_rules.decision_any() && !self.is_preview() {
+        if !self.is_preview() {
             let safe = (0..node.acts[side].len()).any(|a| !sui.get(a).copied().unwrap_or(false));
             let eligible = |a: usize| !safe || !sui.get(a).copied().unwrap_or(false);
             return self.endgame[side]
                 .select_best(
-                    self.cfg.endgame_rules,
                     &node.acts[side],
                     &node.n[side],
                     &node.n[side],
@@ -1270,9 +1209,6 @@ impl RmAgent {
                 late_n[cell] += 1;
                 late_w[cell] += r;
             }
-            if ts.should_early_stop(side) {
-                break;
-            }
         }
 
         let acts = ts.nodes[0].acts[side].to_vec();
@@ -1281,7 +1217,7 @@ impl RmAgent {
         if !mixed_root {
             let n = &ts.nodes[0].n[side];
             let w = &ts.nodes[0].w[side];
-            let best = if self.cfg.endgame_rules.decision_any() && !ts.is_preview() {
+            let best = if !ts.is_preview() {
                 ts.best(side)
                     .and_then(|c| acts.iter().position(|&a| a == c))
                     .unwrap_or_else(|| {
@@ -1509,6 +1445,31 @@ mod tests {
     use super::*;
     use nc2000_engine::battle::PokemonSet;
 
+    #[test]
+    fn deep_child_value_reaches_root_across_inline_capacity() {
+        use nc2000_engine::smallvec::smallvec;
+        for depth in [2, 16, 17, 33] {
+            let mut nodes: Vec<_> = (0..depth).map(|_| Node {
+                acts: std::array::from_fn(|_| smallvec![SearchChoice::Switch(2), SearchChoice::Switch(3)]),
+                n: [smallvec![1, 0], smallvec![1, 0]],
+                w: [smallvec![0.0, 0.0], smallvec![0.0, 0.0]],
+                preview: false,
+            }).collect();
+            let child = depth - 1;
+            nodes[child].n = [smallvec![10, 0], smallvec![10, 0]];
+            nodes[child].w = [smallvec![9.0, 0.0], smallvec![0.0, 0.0]];
+            let path: Vec<_> = (0..depth).map(|i| (i, [Some(0), Some(0)])).collect();
+            let leaf = 0.25;
+            let root = back_up_path(&mut nodes, &path, 0, leaf);
+            let expected = nodes[child].backed_up_value(leaf);
+            assert!(expected > leaf);
+            assert_eq!(root, expected, "depth {depth}");
+            for node in &nodes[..child] {
+                assert_eq!((node.w[0][0], node.w[1][0]), (expected, 1.0 - expected));
+            }
+        }
+    }
+
     fn team() -> Vec<PokemonSet> {
         // from_fixture does not validate movesets — purpose-built slots
         serde_json::from_str(
@@ -1540,7 +1501,6 @@ mod tests {
     #[test]
     fn canonical_claw_key_preserves_observable_rolls_and_restores_state() {
         let (dex, root) = setup();
-        assert!(!RmConfig::default().canonical_claw_key);
         let mut states = vec![(root.clone(), false)];
         for slot in [0, 1] {
             let mut holder = root.clone();
@@ -1563,34 +1523,70 @@ mod tests {
         states.push((fainted, true));
         for (state, observable) in states {
             assert_eq!(state.quick_claw_roll_observable(&dex), observable);
-            for (hp_buckets, key_no_damage) in [
-                (0, false),
-                (16, false),
-                (16, true),
-            ] {
-                let cfg = RmConfig {
+            for hp_buckets in [0, 16] {
+                let candidate = RmConfig {
                     hp_buckets,
-                    key_no_damage,
                     ..Default::default()
                 };
-                let candidate = RmConfig {
-                    canonical_claw_key: true,
-                    ..cfg.clone()
-                };
+                let cache = build_search_cache(&candidate, &dex, &state);
                 let mut a = state.clone();
                 a.quick_claw_roll = false;
                 let mut b = state.clone();
                 b.quick_claw_roll = true;
                 let before = [a.state_key128(), b.state_key128()];
-                assert_ne!(key_of(&cfg, &dex, &mut a), key_of(&cfg, &dex, &mut b));
-                assert_eq!(key_of(&candidate, &dex, &mut a), key_of(&cfg, &dex, &mut a));
                 assert_eq!(
                     key_of(&candidate, &dex, &mut a) != key_of(&candidate, &dex, &mut b),
                     observable
                 );
+                assert_eq!(
+                    key_of_cached(&candidate, &dex, &mut a, Some(&cache)),
+                    key_of(&candidate, &dex, &mut a)
+                );
+                assert_eq!(
+                    key_of_cached(&candidate, &dex, &mut b, Some(&cache)),
+                    key_of(&candidate, &dex, &mut b)
+                );
                 assert_eq!(before, [a.state_key128(), b.state_key128()]);
             }
         }
+    }
+
+    #[test]
+    fn canonical_claw_strips_stale_previous_turn_65535_speed_at_idle_continuation() {
+        let (dex, mut b0) = setup();
+        b0.sides[0].roster[0].item = dex.known_items.quickclaw;
+        b0.sides[1].roster[0].hp = b0.sides[1].roster[0].maxhp;
+        let mut b1 = b0.clone();
+        // Simulate two trajectories reaching the exact same Turn 2 idle board
+        // (`quick_claw_roll == false`), differing only in whether Turn 1 had
+        // `quick_claw_roll == true` during Turn 1 Residual (`speed == 65535`).
+        b0.quick_claw_roll = false;
+        b0.choose(&dex, 0, "move reflect").unwrap();
+        b0.choose(&dex, 1, "move confuseray").unwrap();
+        b1.quick_claw_roll = true;
+        b1.choose(&dex, 0, "move reflect").unwrap();
+        b1.choose(&dex, 1, "move confuseray").unwrap();
+        b0.quick_claw_roll = false;
+        b1.quick_claw_roll = false;
+        assert!(b0.is_idle_move_request() && b1.is_idle_move_request());
+        assert_ne!(
+            b0.sides[0].roster[0].speed,
+            nc2000_engine::state::QUICK_CLAW_ACTION_SPEED
+        );
+        assert_eq!(
+            b1.sides[0].roster[0].speed,
+            nc2000_engine::state::QUICK_CLAW_ACTION_SPEED
+        );
+        let cfg = RmConfig::default();
+        let cache = build_search_cache(&cfg, &dex, &b0);
+        // Before stripping stale speed, raw hashes differ; after `run_iteration`'s
+        // idle canonicalization, they merge and still produce identical transitions.
+        let id = b1.active_id(0).unwrap();
+        b1.update_speed(&dex, id);
+        assert_eq!(
+            key_of_cached(&cfg, &dex, &mut b0, Some(&cache)),
+            key_of_cached(&cfg, &dex, &mut b1, Some(&cache))
+        );
     }
 
 }

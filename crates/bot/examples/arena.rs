@@ -74,7 +74,7 @@ use std::sync::Arc;
 use conformance::fixture::{corpus_files, repo_root, Fixture};
 use conformance::load_dex;
 use nc2000_bot::preview::{load_meta_pool, MetaPool};
-use nc2000_bot::smmcts::{EndgameRules, MaskRules, SelRule};
+use nc2000_bot::smmcts::SelRule;
 use nc2000_bot::{
     run_duel, Agent, BakedPreviewAgent, BlindAgent, BrAgent, CounterPickAgent, DuelSpec,
     EvalWeights, MaxDamageAgent, MctsAgent, MctsConfig, OpenAgent, Playout, PreviewMode,
@@ -96,13 +96,8 @@ enum AgentSpec {
     Mcts5 { iterations: u32, c: f64 },
     Rm { iterations: u32, probe: f64, threshold: f64, buckets: i64 },
     SkUct { iterations: u32, c: f64, buckets: i64 },
-    /// M16c rollout arm: status pseudo-scoring + bad-matchup voluntary switching
-    /// in `greedy_pick`. Off by default, as shipped.
-    SkUctNs { iterations: u32, c: f64, buckets: i64 },
-    /// Damage-bookkeeping-free key abstraction.
-    SkUctAbs { iterations: u32, c: f64, buckets: i64 },
-    Blind { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, endgame: EndgameRules },
-    Open { iterations: u32, c: f64, buckets: i64, mask: MaskRules, perish: PerishRollout, m16c: M16c, mixed: bool, bp: bool, endgame: EndgameRules },
+    Blind { iterations: u32, c: f64, buckets: i64, mixed: bool, relay: bool },
+    Open { iterations: u32, c: f64, buckets: i64, mixed: bool, relay: bool },
     Exploit(Box<AgentSpec>),
     ExploitControl(Box<AgentSpec>),
     Baked { inner: Box<AgentSpec>, mode: PreviewMode },
@@ -116,127 +111,18 @@ fn opt_num<T: std::str::FromStr>(parts: &[&str], i: usize, what: &str) -> Result
         .transpose()
 }
 
-/// The ablation arm of the 2026-08-19 Sleep Talk A/B, kept as a name.
-fn legacy_mask() -> MaskRules {
-    MaskRules { sleep_talk_awake: false, ..MaskRules::default() }
-}
-
-/// Every `MaskRules` field, as the token that names it on the command line.
-/// One place, so a new rule cannot be parseable but unprintable (or the
-/// reverse) — an arm whose label does not say what it ran is how an A/B gets
-/// misfiled.
-fn mask_fields(m: &MaskRules) -> [(&'static str, bool); 7] {
-    [
-        ("destiny_bond_wait", m.destiny_bond_wait),
-        ("residual_damage_wait", m.residual_damage_wait),
-        ("own_recovery_wait", m.own_recovery_wait),
-        ("priority_heal", m.priority_heal),
-        ("sleep_talk_awake", m.sleep_talk_awake),
-        ("immunity_ignores_switch_read", m.immunity_ignores_switch_read),
-        ("immunity_all_switchins", m.immunity_all_switchins),
-    ]
-}
-
-fn apply_mask_token(m: &mut MaskRules, tok: &str) -> Result<(), String> {
-    let (on, name) = match tok.strip_prefix('-') {
-        Some(rest) => (false, rest),
-        None => (true, tok),
-    };
-    let norm: String =
-        name.chars().map(|c| if c == '-' { '_' } else { c.to_ascii_lowercase() }).collect();
-    match norm.as_str() {
-        "destiny_bond_wait" => m.destiny_bond_wait = on,
-        "residual_damage_wait" => m.residual_damage_wait = on,
-        "own_recovery_wait" => m.own_recovery_wait = on,
-        "priority_heal" => m.priority_heal = on,
-        "sleep_talk_awake" => m.sleep_talk_awake = on,
-        "immunity_ignores_switch_read" => m.immunity_ignores_switch_read = on,
-        "immunity_all_switchins" => m.immunity_all_switchins = on,
-        other => {
-            let known: Vec<&str> =
-                mask_fields(&MaskRules::default()).iter().map(|(n, _)| *n).collect();
-            return Err(format!("unknown mask rule `{other}` (known: {})", known.join(", ")));
-        }
-    }
-    Ok(())
-}
-
-fn apply_endgame_token(e: &mut EndgameRules, tok: &str) -> bool {
-    let (on, name) = match tok.strip_prefix('-') {
-        Some(rest) => (false, rest),
-        None => (true, tok),
-    };
-    let norm: String =
-        name.chars().map(|c| if c == '-' { '_' } else { c.to_ascii_lowercase() }).collect();
-    match norm.as_str() {
-        "fast_win" => e.fast_win = on,
-        "safe_win" => e.safe_win = on,
-        "comeback_loss" => e.comeback_loss = on,
-        "early_stop" => e.early_stop = on,
-        "endgame" => {
-            e.fast_win = on;
-            e.safe_win = on;
-            e.comeback_loss = on;
-        }
-        "endgame_es" => {
-            e.fast_win = on;
-            e.safe_win = on;
-            e.comeback_loss = on;
-            e.early_stop = on;
-        }
-        _ => return false,
-    }
-    true
-}
-
-fn endgame_label(e: &EndgameRules) -> String {
-    if *e == EndgameRules::default() {
-        return String::new();
-    }
-    if *e == EndgameRules::none() {
-        return ":-endgame".into();
-    }
-    if *e == EndgameRules::all_with_early_stop() {
-        return ":early_stop".into();
-    }
-    let def = EndgameRules::default();
-    let mut parts = Vec::new();
-    for (name, cur, d) in [
-        ("fast_win", e.fast_win, def.fast_win),
-        ("safe_win", e.safe_win, def.safe_win),
-        ("comeback_loss", e.comeback_loss, def.comeback_loss),
-        ("early_stop", e.early_stop, def.early_stop),
-    ] {
-        if cur != d {
-            parts.push(if cur { name.into() } else { format!("-{name}") });
-        }
-    }
-    format!(":{}", parts.join(","))
-}
-
 struct ParsedSearchSpec {
     iterations: u32,
     c: f64,
     buckets: i64,
-    mask: MaskRules,
-    perish: PerishRollout,
-    m16c: M16c,
     mixed: bool,
-    bp: bool,
-    endgame: EndgameRules,
+    relay: bool,
 }
 
-fn parse_search_spec(
-    parts: &[&str],
-    kind: &str,
-    mut mask: MaskRules,
-) -> Result<ParsedSearchSpec, String> {
+fn parse_search_spec(parts: &[&str], kind: &str) -> Result<ParsedSearchSpec, String> {
     let mut nums: Vec<&str> = Vec::new();
-    let mut perish = PerishRollout::shipped();
-    let mut m16c = M16c::default();
     let mut mixed = false;
-    let mut bp = true;
-    let mut endgame = EndgameRules::default();
+    let mut relay = true;
     for part in &parts[1..] {
         if part.is_empty() {
             return Err(format!("empty field in a {kind} spec"));
@@ -245,16 +131,11 @@ fn parse_search_spec(
             nums.push(part);
         } else {
             for tok in part.split(',').filter(|t| !t.is_empty()) {
-                if tok == "mix" {
-                    mixed = true;
-                } else if tok == "bp" {
-                    bp = true;
-                } else if tok == "-bp" {
-                    bp = false;
-                } else if apply_endgame_token(&mut endgame, tok) {
-                    // handled
-                } else if !apply_rollout_token(&mut perish, &mut m16c, tok) {
-                    apply_mask_token(&mut mask, tok)?;
+                match tok {
+                    "mix" => mixed = true,
+                    "relay" => relay = true,
+                    "-relay" | "norelay" => relay = false,
+                    other => return Err(format!("unknown token `{other}` in a {kind} spec")),
                 }
             }
         }
@@ -270,118 +151,30 @@ fn parse_search_spec(
         iterations,
         c: opt_num(&nums, 1, "c")?.unwrap_or(1.0),
         buckets: opt_num(&nums, 2, "buckets")?.unwrap_or(16),
-        mask,
-        perish,
-        m16c,
         mixed,
-        bp,
-        endgame,
+        relay,
     })
 }
 
-/// `blind`'s fields: numeric ones keep their positions, non-numeric ones are
-/// comma-separated mask-rule tokens. Splitting on "starts with a digit"
-/// rather than on position is what lets `blind:300:immunity_all_switchins`
-/// mean iters=300 with the default c and buckets.
-fn parse_blind(parts: &[&str], mask: MaskRules) -> Result<AgentSpec, String> {
-    let s = parse_search_spec(parts, "blind", mask)?;
+fn parse_blind(parts: &[&str]) -> Result<AgentSpec, String> {
+    let s = parse_search_spec(parts, "blind")?;
     Ok(AgentSpec::Blind {
         iterations: s.iterations,
         c: s.c,
         buckets: s.buckets,
-        mask: s.mask,
-        perish: s.perish,
-        m16c: s.m16c,
         mixed: s.mixed,
-        bp: s.bp,
-        endgame: s.endgame,
+        relay: s.relay,
     })
 }
 
-/// Which Perish rollout rules an open/blind spec runs (`mcts::RolloutRules`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PerishRollout {
-    Off,
-    /// `perish_escape`: `RmConfig::rollout_perish`.
-    Escape,
-    /// `perish_combo`: `RmConfig::rollout_combo` (escape included).
-    Combo,
-}
-
-impl PerishRollout {
-    fn shipped() -> PerishRollout {
-        let cfg = RmConfig::default();
-        match (cfg.rollout_combo, cfg.rollout_perish) {
-            (true, _) => PerishRollout::Combo,
-            (false, true) => PerishRollout::Escape,
-            (false, false) => PerishRollout::Off,
-        }
-    }
-
-    /// Empty for the shipped rules, so a plain spec's label never changes.
-    fn label(self) -> &'static str {
-        if self == PerishRollout::shipped() {
-            return "";
-        }
-        match self {
-            PerishRollout::Off => ":-perish_combo",
-            PerishRollout::Escape => ":perish_escape",
-            PerishRollout::Combo => ":perish_combo",
-        }
-    }
-}
-
-/// The parked M16c rollout upgrades an open/blind spec turns on.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct M16c {
-    status: bool,
-    switch: bool,
-}
-
-impl M16c {
-    fn label(self) -> &'static str {
-        match (self.status, self.switch) {
-            (false, false) => "",
-            (true, true) => ":m16c",
-            (true, false) => ":m16c_status",
-            (false, true) => ":m16c_switch",
-        }
-    }
-}
-
-/// `perish_escape` / `perish_combo` / `m16c[_status|_switch]` / their `-`
-/// forms; false when `tok` names something else.
-fn apply_rollout_token(perish: &mut PerishRollout, m16c: &mut M16c, tok: &str) -> bool {
-    let (on, name) = match tok.strip_prefix('-') {
-        Some(rest) => (false, rest),
-        None => (true, tok),
-    };
-    match name {
-        "m16c" => (m16c.status, m16c.switch) = (on, on),
-        "m16c_status" => m16c.status = on,
-        "m16c_switch" => m16c.switch = on,
-        "perish_escape" | "perish_combo" if !on => *perish = PerishRollout::Off,
-        "perish_escape" => *perish = PerishRollout::Escape,
-        "perish_combo" => *perish = PerishRollout::Combo,
-        _ => return false,
-    }
-    true
-}
-
-/// `open`'s fields match [`parse_blind`]'s: numeric ones keep their positions,
-/// non-numeric ones are comma-separated rollout / mix / mask tokens.
 fn parse_open(parts: &[&str]) -> Result<AgentSpec, String> {
-    let s = parse_search_spec(parts, "open", MaskRules::default())?;
+    let s = parse_search_spec(parts, "open")?;
     Ok(AgentSpec::Open {
         iterations: s.iterations,
         c: s.c,
         buckets: s.buckets,
-        mask: s.mask,
-        perish: s.perish,
-        m16c: s.m16c,
         mixed: s.mixed,
-        bp: s.bp,
-        endgame: s.endgame,
+        relay: s.relay,
     })
 }
 
@@ -408,23 +201,12 @@ impl AgentSpec {
                 threshold: opt_num(&parts, 3, "threshold")?.unwrap_or(0.5),
                 buckets: opt_num(&parts, 4, "buckets")?.unwrap_or(16),
             }),
-            "skuctm16c" => Ok(AgentSpec::SkUctNs {
-                iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
-                c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
-                buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
-            }),
-            "skuctabs" => Ok(AgentSpec::SkUctAbs {
-                iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
-                c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
-                buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
-            }),
             "skuct" => Ok(AgentSpec::SkUct {
                 iterations: opt_num(&parts, 1, "iters")?.unwrap_or(1000),
                 c: opt_num(&parts, 2, "c")?.unwrap_or(1.0),
                 buckets: opt_num(&parts, 3, "buckets")?.unwrap_or(16),
             }),
-            "blind" => parse_blind(&parts, MaskRules::default()),
-            "blindlegacy" => parse_blind(&parts, legacy_mask()),
+            "blind" => parse_blind(&parts),
             "open" => parse_open(&parts),
             "exploit" => {
                 let inner = s.strip_prefix("exploit:").ok_or("exploit needs an inner spec")?;
@@ -458,7 +240,6 @@ impl AgentSpec {
             | AgentSpec::Mcts5 { iterations, .. }
             | AgentSpec::Rm { iterations, .. }
             | AgentSpec::SkUct { iterations, .. }
-            | AgentSpec::SkUctNs { iterations, .. }
             | AgentSpec::Blind { iterations, .. }
             | AgentSpec::Open { iterations, .. } => *iterations,
             AgentSpec::Exploit(inner) | AgentSpec::ExploitControl(inner) => inner.iterations(),
@@ -541,43 +322,18 @@ impl AgentSpec {
                 },
                 seed,
             )),
-            AgentSpec::SkUctAbs { iterations, c, buckets } => Box::new(RmAgent::new(
-                RmConfig {
-                    iterations: *iterations,
-                    rule: SelRule::Ucb,
-                    c: *c,
-                    hp_buckets: *buckets,
-                    key_no_damage: true,
-                    ..Default::default()
-                },
-                seed,
-            )),
-            AgentSpec::SkUctNs { iterations, c, buckets } => Box::new(RmAgent::new(
-                RmConfig {
-                    iterations: *iterations,
-                    rule: SelRule::Ucb,
-                    c: *c,
-                    hp_buckets: *buckets,
-                    rollout_status: true,
-                    rollout_switch: true,
-                    ..Default::default()
-                },
-                seed,
-            )),
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, endgame } => {
+            AgentSpec::Blind { iterations, c, buckets, mixed, relay } => {
                 let agent = BlindAgent::new(
                     RmConfig {
                         iterations: *iterations,
                         rule: SelRule::Ucb,
                         c: *c,
                         hp_buckets: *buckets,
-                        mask_rules: *mask,
-                        rollout_perish: *perish == PerishRollout::Escape,
-                        rollout_combo: *perish == PerishRollout::Combo,
-                        rollout_status: m16c.status,
-                        rollout_switch: m16c.switch,
-                        rollout_baton_pass: *bp,
-                        endgame_rules: *endgame,
+                        settlement: if *relay {
+                            nc2000_bot::LeafSettlementMode::BlindSpotLeaf
+                        } else {
+                            nc2000_bot::LeafSettlementMode::BlindSpotLeafNoRelay
+                        },
                         ..Default::default()
                     },
                     pool.expect("blind agents need the meta pool").clone(),
@@ -586,20 +342,18 @@ impl AgentSpec {
                 );
                 Box::new(if *mixed {agent.with_adaptive_mixture((u64::from(*iterations) * 2 / 5) as u32)} else {agent})
             },
-            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, endgame } => {
+            AgentSpec::Open { iterations, c, buckets, mixed, relay } => {
                 let agent = OpenAgent::new(
                     RmConfig {
                         iterations: *iterations,
                         rule: SelRule::Ucb,
                         c: *c,
                         hp_buckets: *buckets,
-                        mask_rules: *mask,
-                        rollout_perish: *perish == PerishRollout::Escape,
-                        rollout_combo: *perish == PerishRollout::Combo,
-                        rollout_status: m16c.status,
-                        rollout_switch: m16c.switch,
-                        rollout_baton_pass: *bp,
-                        endgame_rules: *endgame,
+                        settlement: if *relay {
+                            nc2000_bot::LeafSettlementMode::BlindSpotLeaf
+                        } else {
+                            nc2000_bot::LeafSettlementMode::BlindSpotLeafNoRelay
+                        },
                         ..Default::default()
                     },
                     tables.cloned(),
@@ -649,45 +403,21 @@ impl AgentSpec {
             AgentSpec::SkUct { iterations, c, buckets } => {
                 format!("skuct:{iterations}:{c}:{buckets}")
             }
-            AgentSpec::SkUctNs { iterations, c, buckets } => {
-                format!("skuctm16c:{iterations}:{c}:{buckets}")
-            }
-            AgentSpec::SkUctAbs { iterations, c, buckets } => {
-                format!("skuctabs:{iterations}:{c}:{buckets}")
-            }
-            AgentSpec::Blind { iterations, c, buckets, mask, perish, m16c, mixed, bp, endgame } => {
-                let rollout = format!("{}{}{}{}{}", perish.label(), m16c.label(), if *mixed {":mix"} else {""}, if *bp {""} else {":-bp"}, endgame_label(endgame));
-                if *mask == legacy_mask() {
-                    return format!("blindlegacy:{iterations}:{c}:{buckets}{rollout}");
-                }
-                let diff: Vec<String> = mask_fields(mask)
-                    .into_iter()
-                    .zip(mask_fields(&MaskRules::default()))
-                    .filter(|((_, cur), (_, def))| cur != def)
-                    .map(|((name, cur), _)| if cur { name.into() } else { format!("-{name}") })
-                    .collect();
-                let suffix =
-                    if diff.is_empty() { String::new() } else { format!(":{}", diff.join(",")) };
-                format!("blind:{iterations}:{c}:{buckets}{suffix}{rollout}")
-            }
-            AgentSpec::Open { iterations, c, buckets, mask, perish, m16c, mixed, bp, endgame } => {
-                let rollout = format!(
-                    "{}{}{}{}{}",
-                    perish.label(),
-                    m16c.label(),
+            AgentSpec::Blind { iterations, c, buckets, mixed, relay } => {
+                let suffix = format!(
+                    "{}{}",
                     if *mixed { ":mix" } else { "" },
-                    if *bp { "" } else { ":-bp" },
-                    endgame_label(endgame),
+                    if *relay { "" } else { ":-relay" },
                 );
-                let diff: Vec<String> = mask_fields(mask)
-                    .into_iter()
-                    .zip(mask_fields(&MaskRules::default()))
-                    .filter(|((_, cur), (_, def))| cur != def)
-                    .map(|((name, cur), _)| if cur { name.into() } else { format!("-{name}") })
-                    .collect();
-                let suffix =
-                    if diff.is_empty() { String::new() } else { format!(":{}", diff.join(",")) };
-                format!("open:{iterations}:{c}:{buckets}{suffix}{rollout}")
+                format!("blind:{iterations}:{c}:{buckets}{suffix}")
+            }
+            AgentSpec::Open { iterations, c, buckets, mixed, relay } => {
+                let suffix = format!(
+                    "{}{}",
+                    if *mixed { ":mix" } else { "" },
+                    if *relay { "" } else { ":-relay" },
+                );
+                format!("open:{iterations}:{c}:{buckets}{suffix}")
             }
             AgentSpec::Exploit(inner) => format!("exploit:{}", inner.label()),
             AgentSpec::ExploitControl(inner) => format!("exploit-control:{}", inner.label()),
@@ -931,8 +661,17 @@ fn main() {
                 })
                 .count()
         };
+        const HEAL_KEYS: &[&str] = &[
+            "rest",
+            "recover",
+            "softboiled",
+            "milkdrink",
+            "moonlight",
+            "morningsun",
+            "synthesis",
+        ];
         for (name, keys) in [
-            ("--heal-min", &["rest", "recover", "softboiled", "milkdrink"][..]),
+            ("--heal-min", HEAL_KEYS),
             ("--phaze-min", &["roar", "whirlwind"][..]),
             // `--sleeptalk-min 1` selects the teams that can exercise the
             // awake-Sleep-Talk rule at all. No value GUARANTEES a carrier in
@@ -940,6 +679,7 @@ fn main() {
             // 6-h >= 3 needs h >= 4), so this concentrates the firing rate, it
             // does not force it.
             ("--sleeptalk-min", &["sleeptalk", "snore"][..]),
+            ("--bp-min", &["batonpass"][..]),
         ] {
             if let Some(n) = flag(&args, name).map(|v| v.parse::<usize>().unwrap()) {
                 let before = teams.len();
@@ -947,6 +687,31 @@ fn main() {
                 eprintln!("{name} {n}: {before} -> {} teams", teams.len());
                 assert!(teams.len() >= 2, "{name} {n} left fewer than 2 teams");
             }
+        }
+        if let Some(n) = flag(&args, "--claw-min").map(|v| v.parse::<usize>().unwrap()) {
+            let before = teams.len();
+            teams.retain(|sets| {
+                sets.iter()
+                    .filter(|s| {
+                        let id: String = s
+                            .item
+                            .chars()
+                            .filter(|c| c.is_ascii_alphanumeric())
+                            .flat_map(|c| c.to_lowercase())
+                            .collect();
+                        id == "quickclaw"
+                    })
+                    .count()
+                    >= n
+            });
+            eprintln!("--claw-min {n}: {before} -> {} teams", teams.len());
+            assert!(teams.len() >= 2, "--claw-min {n} left fewer than 2 teams");
+        }
+        if let Some(n) = flag(&args, "--heal-max").map(|v| v.parse::<usize>().unwrap()) {
+            let before = teams.len();
+            teams.retain(|sets| carries(sets, HEAL_KEYS) <= n);
+            eprintln!("--heal-max {n}: {before} -> {} teams", teams.len());
+            assert!(teams.len() >= 2, "--heal-max {n} left fewer than 2 teams");
         }
         // `--perish-min 1` selects the teams that carry a trapper which can
         // also sing (Mean Look / Spider Web AND Perish Song on one set) —
@@ -1186,7 +951,7 @@ mod artifact_tests {
 
     #[test]
     fn mixed_agent_specs_keep_their_mode_when_labeled() {
-        for input in ["blind:27000:0.4:mix", "blindlegacy:100:mix", "blind:100:mix,-perish_combo"] {
+        for input in ["blind:27000:0.4:mix", "blind:100:mix,-relay"] {
             let spec = AgentSpec::parse(input).unwrap();
             assert!(matches!(spec, AgentSpec::Blind {mixed:true, ..}));
             let label = spec.label();

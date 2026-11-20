@@ -348,10 +348,10 @@ fn is_zero_u16(mask: &u16) -> bool { *mask == 0 }
 fn is_false(b: &bool) -> bool { !*b }
 
 fn full_hp() -> i32 {
-    100
+    crate::import::HP_DEN_PERCENT
 }
 fn hp_den_default() -> i32 {
-    100
+    crate::import::HP_DEN_PERCENT
 }
 
 impl Default for MonSpec {
@@ -367,8 +367,8 @@ impl Default for MonSpec {
             switch_in_turn: 0,
             active: false,
             fainted: false,
-            hp_num: 100,
-            hp_den: 100,
+            hp_num: crate::import::HP_DEN_PERCENT,
+            hp_den: crate::import::HP_DEN_PERCENT,
             hp_exact: None,
             status: String::new(),
             rest: false,

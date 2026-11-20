@@ -62,6 +62,8 @@ use crate::smmcts::RmConfig;
 /// suspenders at preview — kept because they are harmless and still guard
 /// table policies fed from external files.
 pub const MAX_TOTAL_LEVEL: i32 = nc2000_engine::battle::MAX_TOTAL_LEVEL as i32;
+pub const HP_DEN_PERCENT: i32 = 100;
+pub const HP_DEN_PIXELS: i32 = 48;
 
 // ===================================================================== lines
 
@@ -133,8 +135,8 @@ impl TrackMon {
             switch_in_turn: 0,
             active: false,
             fainted: false,
-            pixels: 48,
-            hp_den: 48,
+            pixels: HP_DEN_PIXELS,
+            hp_den: HP_DEN_PIXELS,
             status: Status::None,
             rest: false,
             slept: 0,
@@ -2485,16 +2487,20 @@ fn set_item_raw(b: &mut Battle, id: PokeId, item: Option<nc2000_engine::dex::Ite
 /// knocked down to 99; the legacy pixel bar (den = 48) announces
 /// `floor(48*hp/maxhp)` clamped to >= 1.
 pub fn impute_hp(cur: i32, den: i32, maxhp: i32) -> i32 {
-    let den = if den > 0 { den } else { 48 };
+    let den = if den > 0 { den } else { HP_DEN_PIXELS };
     if cur <= 0 {
         return 0;
     }
     if cur >= den {
         return maxhp;
     }
-    let (lo, hi) = if den == 100 {
-        let lo = ((cur - 1) * maxhp) / 100 + 1;
-        let hi = if cur == 99 { maxhp - 1 } else { (cur * maxhp) / 100 };
+    let (lo, hi) = if den == HP_DEN_PERCENT {
+        let lo = ((cur - 1) * maxhp) / HP_DEN_PERCENT + 1;
+        let hi = if cur == HP_DEN_PERCENT - 1 {
+            maxhp - 1
+        } else {
+            (cur * maxhp) / HP_DEN_PERCENT
+        };
         (lo, hi)
     } else {
         let lo = if cur == 1 { 1 } else { (cur * maxhp + den - 1) / den };
@@ -2517,15 +2523,15 @@ pub fn impute_hp(cur: i32, den: i32, maxhp: i32) -> i32 {
 /// the importer assumed a /48 pixel bar on a /100 stream, inflating every foe
 /// HP by ~2.08x — and it is the M18 class-A gate's second assertion.
 pub fn announce_hp(hp: i32, maxhp: i32, den: i32) -> i32 {
-    let den = if den > 0 { den } else { 48 };
+    let den = if den > 0 { den } else { HP_DEN_PIXELS };
     if hp <= 0 {
         return 0;
     }
     if maxhp <= 0 || hp >= maxhp {
         return den;
     }
-    if den == 100 {
-        ((100 * hp + maxhp - 1) / maxhp).clamp(1, 99)
+    if den == HP_DEN_PERCENT {
+        ((HP_DEN_PERCENT * hp + maxhp - 1) / maxhp).clamp(1, HP_DEN_PERCENT - 1)
     } else {
         (den * hp / maxhp).clamp(1, den - 1)
     }
@@ -2568,6 +2574,7 @@ pub struct ProtocolAgent {
     rng: SplitMix64,
     battle: Option<Battle>,
     search: Option<BlindSearch>,
+    adaptive_budget: Option<crate::adaptive_budget::AdaptiveBattleBudget>,
     baked: Option<SearchChoice>,
     forced: Option<String>,
     request: Option<Request>,
@@ -2605,6 +2612,7 @@ impl ProtocolAgent {
             rng: SplitMix64::new(seed),
             battle: None,
             search: None,
+            adaptive_budget: None,
             baked: None,
             forced: None,
             request: None,
@@ -2787,6 +2795,7 @@ impl ProtocolAgent {
             BlindSearch::from_observation(&pos, dex, self.cfg.clone(), self.side, self.rng.next());
         self.baked = None;
         self.forced = None;
+        let mut adaptive_budget = Some(Default::default());
         if search.is_preview() {
             // PS enforces Max Total Level at preview; the engine's
             // enumeration doesn't — mask overweight picks out of the root
@@ -2848,6 +2857,9 @@ impl ProtocolAgent {
             a.sort();
             s2.sort();
             if a != s2 {
+                // The submitted pick may be projected onto a different legal
+                // set. Evidence about the synthetic winner cannot settle it.
+                adaptive_budget = None;
                 self.legality_drift += 1;
             }
             if legal.len() == 1 {
@@ -2856,6 +2868,7 @@ impl ProtocolAgent {
         }
         self.battle = Some(battle);
         self.search = Some(search);
+        self.adaptive_budget = adaptive_budget;
         self.request = Some(req);
         Ok(true)
     }
@@ -2873,6 +2886,24 @@ impl ProtocolAgent {
         let belief = self.belief.as_ref().ok_or("no belief")?;
         let obs = self.observer.as_ref().ok_or("no observer")?;
         Ok(search.step(dex, belief, obs, n))
+    }
+
+    /// Legacy battle policy with deterministic early stopping. An ordinary
+    /// step() can still extend the same tree for a fixed-budget comparison.
+    /// Preview keeps its own caller-supplied budget.
+    pub fn step_adaptive_battle(&mut self, dex: &Dex, n: u32) -> Result<u32, String> {
+        let search = self.search.as_mut().ok_or("adaptive step before request")?;
+        if self.baked.is_some() || self.forced.is_some() {
+            return Ok(search.iterations());
+        }
+        let belief = self.belief.as_ref().ok_or("no belief")?;
+        let obs = self.observer.as_ref().ok_or("no observer")?;
+        if let Some(budget) = &mut self.adaptive_budget {
+            Ok(budget.step(search, dex, belief, obs, n))
+        } else {
+            let remaining = crate::adaptive_budget::BATTLE_CAP.saturating_sub(search.iterations());
+            Ok(search.step(dex, belief, obs, n.min(remaining)))
+        }
     }
 
     pub fn iterations(&self) -> u32 {

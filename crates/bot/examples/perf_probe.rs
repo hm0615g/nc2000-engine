@@ -92,10 +92,6 @@ fn positions(dex: &Dex, pool: &MetaPool) -> Vec<Position> {
 fn measure(p: &Position, dex: &Dex, pool: &MetaPool, mode: &str, iters: u32, id: usize) -> Value {
     let mut belief = Belief::new(dex, pool, &p.observer);
     belief.sync(dex, &p.observer);
-    let nobp = mode.ends_with("-nobp");
-    let base_mode = mode
-        .strip_suffix("-nobp")
-        .unwrap_or(mode);
     let playout = nc2000_bot::Playout::Heavy {
         eps: 0.2,
         turns: 8,
@@ -106,15 +102,14 @@ fn measure(p: &Position, dex: &Dex, pool: &MetaPool, mode: &str, iters: u32, id:
         c: 0.4,
         rule: SelRule::Ucb,
         playout,
-        rollout_baton_pass: !nobp,
         ..Default::default()
     };
     let start = Instant::now();
-    let signature = match base_mode {
+    let signature = match mode {
         "blind" | "budget" => {
             let mut s = BlindSearch::new(&p.battle, dex, cfg, 0, id as u64 + 71);
             let mut completed = 0;
-            if base_mode == "budget" {
+            if mode == "budget" {
                 while start.elapsed().as_secs_f64() < iters as f64 {
                     s.step(dex,&belief,&p.observer,64);
                     completed += 64;

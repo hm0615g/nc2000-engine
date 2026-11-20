@@ -254,7 +254,7 @@ fn damage_estimate_respects_public_immunity_removal() {
             let att = b.active_id(side).unwrap();
             let def = b.active_id(1-side).unwrap();
             let mid = dex.moves.id(key).unwrap();
-            assert_eq!(expected_hit_fraction(&b, &dex, att, def, mid, true), 0.0);
+            assert_eq!(expected_hit_fraction(&b, &dex, att, def, mid), 0.0);
             foresight(&mut b, &dex, side);
             let choices = if side == 0 {
                 [SearchChoice::Move(mid), SearchChoice::Move(dex.moves.id("splash").unwrap())]
@@ -265,13 +265,13 @@ fn damage_estimate_respects_public_immunity_removal() {
             assert!(outcomes.pending.is_empty());
             let native_damage: f64 = outcomes.leaves.iter().map(|leaf| leaf.prob * f64::from(b.poke(def).hp-leaf.battle.poke(def).hp)).sum();
             assert_eq!(native_damage > 0.0, restored);
-            let estimate = expected_hit_fraction(&b, &dex, att, def, mid, true);
+            let estimate = expected_hit_fraction(&b, &dex, att, def, mid);
             assert_eq!(estimate > 0.0, restored, "{key}, side {side}, native {native_damage}, estimate {estimate}");
             if key == "seismictoss" {
                 assert!((estimate * f64::from(b.poke(def).hp) - native_damage).abs() < 1e-8);
             }
             b.remove_volatile(&dex, def, "foresight");
-            assert_eq!(expected_hit_fraction(&b, &dex, att, def, mid, true), 0.0);
+            assert_eq!(expected_hit_fraction(&b, &dex, att, def, mid), 0.0);
         }
     }
 }

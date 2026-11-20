@@ -134,6 +134,7 @@ export class BotWorker {
       priorJson?: string;
       pickPriorJson?: string;
       compiledPreview?: boolean;
+      adaptiveBudget?: boolean;
       endgame?: EndgameSettings;
       actionPolicy?: ActionPolicyMode;
     },
@@ -178,7 +179,7 @@ export class BotWorker {
   }
 
   /** Search the mirror battle's current decision point for `side`.
-   * Live searches stop at exactly budget, even when launched while the
+   * The live iteration limit also applies when launched while the
    * human is choosing. `ponder` is retained for the opt-in solver experiment.
    * A later apply/newBattle/cancelAll supersedes the search: its promise
    * then never settles (callers holding a stale promise are per-game and

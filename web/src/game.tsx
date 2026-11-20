@@ -64,7 +64,7 @@ import { announce, announceAssertive } from "./announcer";
 import { moveNote } from "./behavior-notes";
 import { noteRef } from "./tooltip";
 import type { SelectedTeam } from "./app";
-import { DEFAULT_STRENGTH, liveBudget } from "./search-profile";
+import { liveBudget } from "./search-profile";
 import { Modal } from "./modal";
 import { sheetMon } from "./set-info";
 import { MonSheet, TeamSheets } from "./team-sheet";
@@ -102,7 +102,7 @@ function focusIsOrphaned(): boolean {
 }
 
 /** Subtle bot-think status while the human deliberates: "thinking" =
- * fixed budget running; input timing never changes that budget. Hidden from screen
+ * search in progress; input timing does not set the budget. Hidden from screen
  * readers entirely — the ticking counter must not reach the SR (the
  * polite announcer speaks the meaningful transitions instead). */
 export function ThinkChip(props: { thinking: Thinking | null }) {
@@ -250,6 +250,7 @@ export function Game(props: {
           seed: randomSeed32(),
           priorJson: props.priorJson,
           pickPriorJson: props.pickPriorJson,
+          adaptiveBudget: true,
         },
       )
       .then(() => {
@@ -341,9 +342,9 @@ export function Game(props: {
 
   async function searchBot(req: Request, legal: Choice[]) {
     const bot = botRef.current!;
-    const budget = liveBudget(DEFAULT_STRENGTH, legal[0].kind === "team");
+    const budget = liveBudget(legal[0].kind === "team");
     // Start before the human commits to hide latency. The worker finishes
-    // exactly this budget regardless of when the human chooses.
+    // independently of when the human chooses.
     const ponder = req.needs[HUMAN] && req.picks[HUMAN] === null;
     // A non-ponder search is a genuine wait for the human — say so once.
     // Ponder searches run behind the human's own deliberation: silent.
@@ -365,7 +366,7 @@ export function Game(props: {
     else {
       const turn = battleRef.current?.turn() ?? 0;
       const acts = r.policy.actions;
-      if (turn > 0 && acts.length > 0) {
+      if (turn > 0 && r.policy.iterations > 0 && acts.length > 0) {
         const chosen = acts.find(a => a.input === r.best) ?? acts.reduce((a, b) => (b.visits > a.visits ? b : a), acts[0]);
         const botMean = Math.max(0, Math.min(1, chosen.mean));
         setWinRates(prev => [...prev, { turn, winRate: 1 - botMean }]);

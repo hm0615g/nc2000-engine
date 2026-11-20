@@ -341,7 +341,7 @@ impl Observer {
         for (slot, ms) in spec.sides[opp].mons.iter().enumerate() {
             if slot < obs.mons.len() {
                 obs.opp_hp[slot] = if ms.fainted {
-                    Some((0, 100))
+                    Some((0, crate::import::HP_DEN_PERCENT as u32))
                 } else if ms.hp_den > 0 {
                     Some((ms.hp_num.max(0) as u32, ms.hp_den as u32))
                 } else {
@@ -479,6 +479,21 @@ impl Observer {
         slot: usize,
         item_id: Option<ItemId>,
     ) -> bool {
+        Self::is_item_excluded_for_slot_with_refs(dex, None, mons, slot, item_id)
+    }
+
+    /// Variant of [`Self::is_item_excluded_for_slot`] for checking a complete
+    /// candidate roster `refs`: skips the cross-slot Item Clause exclusion when
+    /// `refs` itself explicitly assigns the same item to both `j` and `slot`
+    /// (supporting custom non-Item-Clause open-sheet fixtures while remaining
+    /// bit-identical on all Item-Clause teams).
+    pub fn is_item_excluded_for_slot_with_refs(
+        dex: &Dex,
+        refs: Option<&[nc2000_engine::state::Pokemon]>,
+        mons: &[MonObs],
+        slot: usize,
+        item_id: Option<ItemId>,
+    ) -> bool {
         let Some(mo) = mons.get(slot) else { return false };
         if let Some(known) = mo.item.original {
             return known != item_id;
@@ -489,11 +504,11 @@ impl Observer {
                 if !mo.preview_has_item {
                     return true;
                 }
-                if mons
-                    .iter()
-                    .enumerate()
-                    .any(|(j, other)| j != slot && other.item.original == Some(Some(id)))
-                {
+                if mons.iter().enumerate().any(|(j, other)| {
+                    j != slot
+                        && other.item.original == Some(Some(id))
+                        && refs.and_then(|rs| rs.get(j)).and_then(|rj| rj.item) != Some(id)
+                }) {
                     return true;
                 }
                 let bit = item_exclusion_bit(dex.items.key(id));
@@ -685,8 +700,9 @@ impl Observer {
                             if num < den && !self.opp_leftovers_healed {
                                 dirty |= self.exclude_items(m, ITEM_LEFTOVERS);
                             }
-                            if (den == 100 && num * 2 < 100)
-                                || (den != 100 && (num + 1) * 2 <= den)
+                            let pct = crate::import::HP_DEN_PERCENT as u32;
+                            if (den == pct && num * 2 < pct)
+                                || (den != pct && (num + 1) * 2 <= den)
                             {
                                 dirty |= self.exclude_items(
                                     m,
@@ -741,7 +757,7 @@ impl Observer {
                     self.called_locked.iter_mut().for_each(|c| *c = None);
                     self.opp_confused = false;
                     if let Some(m) = self.opp_subject(subj).or(self.opp_active) {
-                        self.opp_hp[m] = Some((0, 100));
+                        self.opp_hp[m] = Some((0, crate::import::HP_DEN_PERCENT as u32));
                         self.opp_status[m] = Status::None;
                     }
                     self.opp_active = None;
@@ -1062,7 +1078,7 @@ impl Observer {
     fn parse_hp_status(s: &str) -> (Option<(u32, u32)>, Status) {
         let s = s.trim();
         if s == "0 fnt" || s.starts_with("0 ") {
-            return (Some((0, 100)), Status::None);
+            return (Some((0, crate::import::HP_DEN_PERCENT as u32)), Status::None);
         }
         let mut iter = s.split_whitespace();
         let hp = iter.next().and_then(|frac| {

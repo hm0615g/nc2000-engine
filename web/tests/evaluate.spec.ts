@@ -110,6 +110,7 @@ test("local wasm plays both sides, resumes in memory, separates changed configur
     timeout: 120000,
   });
   const initial = await exported(page);
+  expect(initial.config.adaptiveBudget).toBe(true);
   expect(initial.pairs).toHaveLength(1);
   expect(initial.pairs[0].games.map((g) => g.playerSide)).toEqual([0, 1]);
   expect(initial.pairs[0].games.map((g) => g.outcome)).toEqual(["win", "win"]);

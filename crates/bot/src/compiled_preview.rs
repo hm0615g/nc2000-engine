@@ -17,6 +17,9 @@ pub fn key(battle: &Battle, side: usize) -> Option<String> {
     Some(serde_json::json!([own, foe]).to_string())
 }
 
+/// Bump manually ONLY when team-preview / search policy intentionally changes.
+pub const POLICY_EPOCH: &str = "policy-v1";
+
 pub fn build_fingerprint() -> &'static str {
-    env!("M17E_SOLVER_BUILD_FINGERPRINT")
+    POLICY_EPOCH
 }

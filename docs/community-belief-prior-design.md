@@ -1,34 +1,21 @@
-# Community-Data Belief Prior — Design & Contract
+# Community-Data Priors (`BeliefPrior` & `PickPrior`) — Design & Contract
 
-> **Status**: Implemented as an opt-in, inert-by-default marginal prior
-> (`BeliefPrior` in [`crates/bot/src/prior.rs`](../crates/bot/src/prior.rs))
-> for hidden-team ladder / protocol play. Do **not** place a file at
-> `data/belief-prior-v0.json`; normal Web doors remain governed exclusively by
-> [`data/belief-pool-v3/belief-pool.json`](../data/belief-pool-v3/belief-pool.json)
-> and [`crates/bot/src/belief.rs`](../crates/bot/src/belief.rs).
+> **Status**: Implemented as opt-in, inert-by-default priors (`BeliefPrior` in [`crates/bot/src/prior.rs`](../crates/bot/src/prior.rs) and `PickPrior` in [`crates/bot/src/pick_prior.rs`](../crates/bot/src/pick_prior.rs)) for hidden-team ladder / protocol play and setup-panel overrides. Do **not** place a file at `data/belief-prior-v0.json`; normal Web doors remain governed by [`data/belief-pool-v3/belief-pool.json`](../data/belief-pool-v3/belief-pool.json) and [`crates/bot/src/belief.rs`](../crates/bot/src/belief.rs) unless explicitly configured.
 
 ---
 
 ## 1. Purpose & Architecture
 
-`BeliefPrior` separates declarative community move marginals from certified
-engine/search code:
+`BeliefPrior` and `PickPrior` separate declarative community frequency tables from certified engine/search code:
 
-- **Code = certified invariants**: Revealed moves, species, levels, genders, HP,
-  PP, status, and legality always override the prior. A bad data edit can only
-  worsen unrevealed-slot guesses (Class B suboptimality) and must never cause a
-  tactical blunder against revealed facts (Class A) or a runtime crash.
-- **Data = opt-in per-`(species, move)` marginal weights**: Sampled via ISMCTS
-  determinization in `Belief` (`crates/bot/src/belief.rs`) when filling unseen
-  slots after full-pool fallback. No conditional cross-move correlations are
-  stored.
-- **Total, malformed-robust parser**: `BeliefPrior::parse` clamps/normalizes
-  weights, ignores unknown keys, records structured `warnings`, and falls back
-  cleanly instead of panicking or throwing.
+- **Code = certified invariants**: Revealed moves, species, levels, genders, HP buckets, PP, status, `|teamsize|`, and legality always override any installed prior. A bad table can only worsen unrevealed-slot or unrevealed-pick guesses and must never cause a tactical blunder against revealed facts or a runtime crash.
+- **`BeliefPrior` (`prior.rs`)**: Opt-in per-species marginal weights (`moves`, `items`, `lead`) applied once when building off-pool `FallbackCandPool` loadouts and lead sampling (without double-counting in `LoadoutDraw`).
+- **`PickPrior` (`pick_prior.rs`)**: Opt-in 3-of-6 opponent selection frequency table (`nc2000-pick-prior-v1`) conditioned on `(team, enemy_preview, side)` with smoothing and backoff, consumed during Team Preview and hidden bench sampling.
+- **Total, malformed-robust parsers**: Invalid or unknown entries clamp/normalize or fall back cleanly without panicking.
 
 ---
 
-## 2. Data Format
+## 2. `BeliefPrior` Data Format
 
 ```json
 {
@@ -51,27 +38,16 @@ engine/search code:
 ```
 
 - Keys use lowercase PS IDs (`snorlax`, `bodyslam`).
-- `moves` probabilities represent `P(species carries move)` (carry marginals),
-  not raw spectator reveal rates `P(carries) * P(uses | carries)`.
-- `items` is consumed by off-pool fallback imputation (when an item is unrevealed) via `LoadoutDraw` and `FallbackCandPool`.
-- `lead` is consumed by off-pool fallback imputation (`fallback_lead_weights` -> `sample_hidden_party` and Team Preview `sample_preview_prior`).
+- `moves` probabilities represent `P(species carries move)` (carry marginals), not raw spectator reveal rates `P(carries) * P(uses | carries)`.
+- `items` weights unrevealed held-item synthesis in `FallbackCandPool`; `lead` weights off-pool lead sampling (`fallback_lead_weights` / `sample_preview_prior`).
 
 ---
 
 ## 3. Code & Tooling Pointers
 
-- **Prior parser & sampler integration**: [`crates/bot/src/prior.rs`](../crates/bot/src/prior.rs),
-  [`crates/bot/src/belief.rs`](../crates/bot/src/belief.rs),
-  [`crates/bot/src/corpus.rs`](../crates/bot/src/corpus.rs)
-- **WASM / protocol ladder wiring**: `ProtocolSearcher.setBeliefPrior` and
-  `ProtocolSearcher.beliefPriorInfo` in [`crates/wasm/src/lib.rs`](../crates/wasm/src/lib.rs)
-  (`pinOpponent` explicitly clears any installed prior to an empty table).
-- **Showdown client CLI flag**: `tools/ps-client.js --belief-prior <FILE>`
-  (probes the table on startup and logs warnings/species counts; refused when
-  combined with `--mode open` or `--random`).
+- **Native parsers & belief integration**: [`crates/bot/src/prior.rs`](../crates/bot/src/prior.rs), [`crates/bot/src/pick_prior.rs`](../crates/bot/src/pick_prior.rs), [`crates/bot/src/belief.rs`](../crates/bot/src/belief.rs), [`crates/bot/src/blind.rs`](../crates/bot/src/blind.rs), [`crates/bot/src/import.rs`](../crates/bot/src/import.rs)
+- **WASM & Web wiring**: `setBeliefPrior` / `beliefPriorInfo` and `setPickPrior` / `pickPriorInfo` in [`crates/wasm/src/lib.rs`](../crates/wasm/src/lib.rs) and [`web/src/belief-prior.ts`](../web/src/belief-prior.ts) (`pinOpponent` clears installed priors).
+- **Showdown client CLI flags**: `tools/ps-client.js --belief-prior <FILE> --pick-prior <FILE>` (refused when combined with `--mode open` or `--random`).
 - **Offline counters & safety gates**:
-  - Marginal counter (`moves` from complete sets vs spectator reveals):
-    [`crates/bot/examples/count_belief_prior.rs`](../crates/bot/examples/count_belief_prior.rs)
-  - Reveal-dominance gate (verifies hand-edited tables never erase revealed
-    moves or violate legality):
-    [`crates/bot/examples/reveal_dominance_gate.rs`](../crates/bot/examples/reveal_dominance_gate.rs)
+  - Marginal counter: [`crates/bot/examples/count_belief_prior.rs`](../crates/bot/examples/count_belief_prior.rs)
+  - Reveal-dominance gate: [`crates/bot/examples/reveal_dominance_gate.rs`](../crates/bot/examples/reveal_dominance_gate.rs)

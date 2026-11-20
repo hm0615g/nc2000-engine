@@ -14,9 +14,9 @@
  * Verified Castle Discord workflow (`#2000-一撃なし`):
  * 1. Idles with zero traffic to `psense.lib.net` until a user `@mentions` the bot.
  * 2. Determines strength/party tier from the `@mention` text:
- *    - Default (`tier = "default"`): `81,000` iterations (`c = 0.4`) + `pool:nash` (APEX4 equilibrium mixture).
+ *    - Default (`tier = "default"`): adaptive battle search (cap `243,000`, `c = 0.4`) + `pool:nash` (APEX4 equilibrium mixture).
  *    - Mercy / Handicap (`tier = "mercy"`, triggered by `手加減`, `別パ`, `サブ`, `Tier A`, etc.):
- *      `81,000` iterations (`c = 0.4`) + `pool:tier-a` (8 iconic human-origin Tier A teams).
+ *      adaptive battle search (cap `243,000`, `c = 0.4`) + `pool:tier-a` (8 iconic human-origin Tier A teams).
  * 3. Replies `"応戦します"` (via Discord Reply) to the challenger's message:
  *    - When the challenger replies `第1へ` / `第2にて` / `では第三でお願いします` (or the `アナウンス [APP]`
  *      bot posts the `[第1]` through `[第6]` link), our bot posts `"よろしくお願いします"` and
@@ -144,11 +144,21 @@ function loadConfig(cliArgs = {}) {
     return String(val).split(',').map(s => s.trim()).filter(Boolean);
   };
 
-  // Web strong's preview budget is independent of --iters passed to the child.
-  // Preserve existing PBS_ITERS behavior and allow a separate preview override.
+  // Never pass a default --iters: its presence disables adaptive battle search
+  // in pbs-client.js. Explicit CLI/env/file overrides still use fixed search.
+  const liveSearch = require('../data/live-search.json');
+  const battleBudgetSource = cliArgs.iters ?? process.env.PBS_ITERS ?? fileCfg.iters;
+  const battleItersExplicit = battleBudgetSource !== undefined &&
+    battleBudgetSource !== null;
+  const battleBudgetText = String(battleItersExplicit
+    ? battleBudgetSource : liveSearch.battle.adaptive);
+  if (!/^[1-9][0-9]*$/.test(battleBudgetText) ||
+      !Number.isSafeInteger(Number(battleBudgetText))) {
+    throw new Error('PBS_ITERS must be a positive safe integer');
+  }
   const previewBudgetSource = cliArgs['preview-iters'] ??
     process.env.PBS_PREVIEW_ITERS ?? fileCfg.previewIters ??
-    require('../data/live-search.json').unknownPreview;
+    liveSearch.unknownPreview;
   const previewBudgetText = String(previewBudgetSource);
   if (!/^[1-9][0-9]*$/.test(previewBudgetText) ||
       !Number.isSafeInteger(Number(previewBudgetText))) {
@@ -182,7 +192,8 @@ function loadConfig(cliArgs = {}) {
       process.env.POST_MATCH_THANKS_TEXT ??
       fileCfg.postMatchThanksText ??
       'ありがとうございました',
-    iters: parseInt(cliArgs.iters || process.env.PBS_ITERS || fileCfg.iters || '81000', 10),
+    iters: Number(battleBudgetText),
+    adaptiveBattle: !battleItersExplicit,
     previewIters: Number(previewBudgetText),
     hostTimeoutSec: parseInt(
       cliArgs['host-timeout-sec'] || process.env.HOST_TIMEOUT_SEC || fileCfg.hostTimeoutSec || '240',
@@ -637,7 +648,6 @@ class CastleDiscordBot {
       '--pass', this.config.pbsPass,
       '--msg', this.config.pbsMsg,
       '--tier', tier,
-      '--iters', String(this.config.iters),
       '--preview-iters', String(this.config.previewIters),
       '--games', '1',
       '--mode', 'host',
@@ -645,6 +655,9 @@ class CastleDiscordBot {
       '--host-timeout-sec', String(this.config.hostTimeoutSec),
       '--seed', String(Date.now() % 1000000),
     ];
+    if (!this.config.adaptiveBattle) {
+      cliArgs.push('--iters', String(this.config.iters));
+    }
     if (this.config.traceDir) {
       cliArgs.push('--trace-dir', this.config.traceDir);
     }

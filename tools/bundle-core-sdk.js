@@ -90,7 +90,6 @@ function main() {
 
   const manifestJson = JSON.stringify(manifest, null, 2) + '\n';
   fs.writeFileSync(path.join(OUT_DIR, 'engine-manifest.json'), manifestJson);
-  fs.writeFileSync(path.join(REPO, 'engine-manifest.json'), manifestJson);
 
   let zipPath = null;
   if (DO_ZIP) {

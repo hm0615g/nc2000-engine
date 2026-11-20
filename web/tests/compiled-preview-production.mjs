@@ -24,6 +24,8 @@ try {
   };
   const artifact = JSON.parse(fs.readFileSync('../data/compiled-preview-v1.json', 'utf8'));
   assert.equal(artifact.status, undefined, 'production previews must be active');
+  assert.equal(artifact.build, 'policy-v1', 'production previews must target policy-v1');
+  assert.equal(artifact.inputs, undefined, 'compiled-preview artifact must not carry raw input lock hashes');
   const compatible = await compatiblePolicyKeys(artifact,
     JSON.parse(fs.readFileSync('../data/belief-pool-v3/belief-pool.json')),
     JSON.parse(fs.readFileSync('../data/gen2stadium2.json')),
@@ -153,7 +155,7 @@ try {
     } finally { worker.terminate(); }
   }, { base, expected });
   assert.equal(result.catalogPairs, 1089); assert.equal(result.sideCases, 2178); assert.deepEqual(errors, []);
-  const output = process.env.NC2000_PREVIEW_CHECK_OUT || '../data/preview-training-v3/production-verification.json';
+  const output = process.env.NC2000_PREVIEW_CHECK_OUT || '../target/production-verification.json';
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(output, JSON.stringify(result, null, 2) + '\n');
   console.log(JSON.stringify(result, null, 2));

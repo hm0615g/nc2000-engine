@@ -21,7 +21,7 @@ try {
     await wasm.default();
     const { default: Evaluator } = await import("/src/evaluate-worker.ts?worker");
     const { appendGame, completedGames, pairSchedule } = await import("/src/evaluate-core.ts");
-    const { liveBudget, DEFAULT_STRENGTH } = await import("/src/search-profile.ts");
+    const { liveBudget } = await import("/src/search-profile.ts");
     const { BotWorker } = await import("/src/bot.ts");
     const { loadEngine } = await import("/src/engine.ts");
     const { readTeam } = await import("/src/evaluate-input.ts");
@@ -101,7 +101,8 @@ try {
         } finally { bot.terminate(); }
       }
       const production = makeRun([{ species: "Mewtwo", level: 100, moves: ["Psychic"] }],
-        [{ species: "Magikarp", level: 1, moves: ["Splash"] }], liveBudget(DEFAULT_STRENGTH, true), liveBudget(DEFAULT_STRENGTH), 500);
+        [{ species: "Magikarp", level: 1, moves: ["Splash"] }], liveBudget(true), liveBudget(), 500);
+      production.config.adaptiveBudget = true;
       const actual = await execute(production);
       verifyReplays(actual.run);
       check(actual.run.pairs[0].games.every(g => g.outcome === "win" && g.selections.every(s => s.iterations === production.config.previewIterations)), "production budgets/results wrong");
@@ -118,9 +119,9 @@ try {
     } finally { dex.free(); }
   }, `/@fs${fileURLToPath(new URL("../../crates/wasm/pkg-web/nc2000_wasm.js", import.meta.url))}`);
   assert.equal(result.production.preview, 729000);
-  assert.equal(result.production.battle, 81000);
+  assert.equal(result.production.battle, 243000);
   assert.deepEqual(result.capped, ["cap", "cap"]);
-  console.log(JSON.stringify(result, null, 2));
+  console.log(JSON.stringify(result));
 } finally {
   await browser?.close();
   await vite?.close();

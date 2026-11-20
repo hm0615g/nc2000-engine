@@ -15,6 +15,8 @@ export interface EvaluationConfig {
   player: EvaluationTeam;
   opponents: EvaluationOpponent[];
   iterations: number;
+  /** Older saved runs used fixed battle budgets. */
+  adaptiveBudget?: boolean;
   previewIterations: number;
   c: number;
   turnLimit: number;
@@ -143,6 +145,7 @@ export function sameConfig(a: EvaluationConfig, b: EvaluationConfig): boolean {
     build: config.build,
     beliefHash: config.beliefHash,
     iterations: config.iterations,
+    adaptiveBudget: config.adaptiveBudget ?? false,
     previewIterations: config.previewIterations,
     c: config.c,
     turnLimit: config.turnLimit,

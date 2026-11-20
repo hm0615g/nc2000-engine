@@ -51,4 +51,5 @@ data/pbs-castle-logs/
 data/pbs-castle-logs.zip
 .claude/settings.local.json
 .gemini/settings.local.json
+/engine-manifest.json
 

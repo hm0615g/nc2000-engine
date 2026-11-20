@@ -38,7 +38,7 @@ import {
   sha256,
   type OpponentDraft,
 } from "./evaluate-input";
-import { DEFAULT_STRENGTH, PRODUCT_ITERATIONS, PREVIEW_ITERATIONS, liveBudget, searchProfile } from "./search-profile";
+import { PRODUCT_ITERATIONS, PREVIEW_ITERATIONS, liveBudget, searchProfile } from "./search-profile";
 import { logsHtml, outcomeLabel } from "./evaluate-export";
 import { kifuUrl } from "./kifu-code";
 import { TeamEditor, type EditorDex } from "./evaluate-team-editor";
@@ -126,12 +126,8 @@ function ResultTable({ run }: { run: EvaluationRun }) {
   );
 }
 
-/** A budget as the page shows it: the product's own budget is named as
- * such, anything else is marked as a quick run. */
-function budgetLabel(n: number): string {
-  return n === PRODUCT_ITERATIONS
-    ? toolText("productBudget", n.toLocaleString())
-    : toolText("quickBudget", n.toLocaleString());
+function budgetLabel(config: EvaluationConfig): string {
+  return toolText(config.adaptiveBudget ? "adaptiveBudget" : "fixedBudget", config.iterations.toLocaleString());
 }
 
 function GameLogs({ run }: { run: EvaluationRun }) {
@@ -253,14 +249,8 @@ export function Evaluate() {
     }
     return { player, opponents, playerError, opponentError };
   }, [ready, party, entries, locale()]);
-  const testBudget =
-    import.meta.env.MODE === "test"
-      ? Number(import.meta.env.VITE_NC2000_TEST_BUDGET)
-      : NaN;
-  const budget =
-    Number.isSafeInteger(testBudget) && testBudget > 0
-      ? testBudget
-      : PRODUCT_ITERATIONS;
+  const iterations = liveBudget();
+  const previewIterations = liveBudget(true);
   const config: EvaluationConfig | null =
     validation.player && validation.opponents
       ? {
@@ -268,8 +258,9 @@ export function Evaluate() {
           beliefHash: belief.hash,
           player: validation.player,
           opponents: validation.opponents,
-          iterations: budget,
-          previewIterations: liveBudget(DEFAULT_STRENGTH, true),
+          iterations,
+          adaptiveBudget: true,
+          previewIterations,
           c: searchProfile("blind").c,
           turnLimit: 500,
         }
@@ -406,7 +397,7 @@ export function Evaluate() {
               }}
             >
               {history.map((r) => (
-                <option key={r.id} value={r.id}>{toolText("runSummary", r.createdAt.slice(0, 16).replace("T", " "), completedCount(r), budgetLabel(r.config.iterations))}</option>
+                <option key={r.id} value={r.id}>{toolText("runSummary", r.createdAt.slice(0, 16).replace("T", " "), completedCount(r), budgetLabel(r.config))}</option>
               ))}
             </select>
           </label>
@@ -551,8 +542,8 @@ export function Evaluate() {
           {!validCount && (
             <p class="eval-error">{toolText("evenGames")}</p>
           )}
-          {Number.isFinite(testBudget) && (
-            <p class="eval-warning">{toolText("testBudget", budget)}</p>
+          {(iterations !== PRODUCT_ITERATIONS || previewIterations !== PREVIEW_ITERATIONS) && (
+            <p class="eval-warning">{toolText("testBudget", iterations)}</p>
           )}
           <p class="eval-muted">{toolText("budgetHelp", PRODUCT_ITERATIONS.toLocaleString(), PREVIEW_ITERATIONS.toLocaleString())}</p>
         </section>
@@ -587,7 +578,7 @@ export function Evaluate() {
           <p class="eval-warning">{toolText("configurationChanged")}</p>
         )}
         {run && (
-          <p>{toolText("completedGames", completedCount(run), run.targetPairs * 2, budgetLabel(run.config.iterations), run.config.previewIterations.toLocaleString())}</p>
+          <p>{toolText("completedGames", completedCount(run), run.targetPairs * 2, budgetLabel(run.config), run.config.previewIterations.toLocaleString())}</p>
         )}
         {run && (
           <progress

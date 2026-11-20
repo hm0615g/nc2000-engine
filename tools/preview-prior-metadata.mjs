@@ -8,14 +8,15 @@ const read = p => JSON.parse(fs.readFileSync(p, 'utf8'));
 const paths = process.argv.slice(2);
 if (!paths.length) throw Error('Usage: node tools/preview-prior-metadata.mjs ARTIFACT...');
 const priorPath = 'data/belief-pool-v3/belief-pool.json';
-const shells = await priorSnapshot(read(priorPath), read('data/gen2stadium2.json'), digest);
+const dexPath = 'data/gen2stadium2.json';
+const priorSha = digest(fs.readFileSync(priorPath));
+const dexSha = digest(fs.readFileSync(dexPath));
+const shells = await priorSnapshot(read(priorPath), read(dexPath), digest);
 for (const path of paths) {
   const artifact = read(path);
   if (artifact.status) throw Error(`Cannot migrate retired artifact: ${path}`);
-  for (const [input, expected] of Object.entries(artifact.inputs)) {
-    if (digest(fs.readFileSync(input)) !== expected) throw Error(`Stale bake input: ${input}`);
-  }
-  if ((artifact.priorSha256 || artifact.inputs[priorPath]) !== digest(fs.readFileSync(priorPath))) throw Error('Prior mismatch');
+  if (artifact.dexSha256 && artifact.dexSha256 !== dexSha) throw Error('Dex mismatch');
+  if (artifact.priorSha256 && artifact.priorSha256 !== priorSha) throw Error('Prior mismatch');
   artifact.priorDependencies = { version: 1, shells };
   fs.writeFileSync(path, JSON.stringify(artifact) + '\n');
 }
