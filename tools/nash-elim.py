@@ -3896,23 +3896,23 @@ def cmd_analyze_camo_screen(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Subcommand: prepare-camo-prod & analyze-camo-prod (Prod 243k/729k Showdown vs Incumbent Triangle)
+# Subcommand: prepare-camo-prod & analyze-camo-prod (Camo-4 Core Precision + CRN thdr:zap-talk vs thdr:bare)
 # ---------------------------------------------------------------------------
 
-CAMO_PROD_MATCHUPS: list[tuple[str, str, int, str]] = [
-    # --- Part 1: Incumbent triangle precision (72 games) ---
-    ("S07_50_50", "APEX4", 2, "tri"),          # 2p x 2 x 4 = 16p = 32g (-> 48g)
-    ("S07_50_50", "D5", 2, "tri"),             # 2p x 2 x 5 = 20p = 40g (-> 60g)
-    # --- Part 2: Top 3 camouflaged challengers vs Incumbent Triangle (288 games) ---
-    ("thdr:zap-talk", "D5", 2, "chal"),        # 2p x 2 x 5 = 20p = 40g
-    ("thdr:zap-talk", "APEX4", 2, "chal"),     # 2p x 2 x 4 = 16p = 32g
-    ("thdr:zap-talk", "S07_50_50", 3, "chal"), # 3p x 2 x 2 = 12p = 24g
-    ("thdr:lax-curse", "D5", 2, "chal"),       # 2p x 2 x 5 = 20p = 40g
-    ("thdr:lax-curse", "APEX4", 2, "chal"),    # 2p x 2 x 4 = 16p = 32g
-    ("thdr:lax-curse", "S07_50_50", 3, "chal"),# 3p x 2 x 2 = 12p = 24g
-    ("cban8:lax-drum", "D5", 2, "chal"),       # 2p x 2 x 5 = 20p = 40g
-    ("cban8:lax-drum", "APEX4", 2, "chal"),    # 2p x 2 x 4 = 16p = 32g
-    ("cban8:lax-drum", "S07_50_50", 3, "chal"),# 3p x 2 x 2 = 12p = 24g
+CAMO_PROD_CORE_EDGES: list[tuple[str, str, int]] = [
+    ("S07_50_50", "APEX4", 2),         # 2p x 2 x 4 = 16p = 32g (-> 48g)
+    ("S07_50_50", "D5", 2),            # 2p x 2 x 5 = 20p = 40g (-> 60g)
+    ("D5", "PB132_50_50", 2),          # 2p x 5 x 2 = 20p = 40g (-> 60g)
+]
+
+# CRN-paired opponents for thdr:zap-talk vs thdr:bare (total 120g each = 240g)
+# n_tot = total pairs per opponent variant (split evenly: even reps -> base, odd reps -> mutant for zap-talk;
+# thdr:bare plays all reps with base on IDENTICAL CRN seeds!)
+CAMO_PROD_THDR_OPPS: list[tuple[str, int]] = [
+    ("D5", 4),           # 4p x 5 = 20p = 40g (20g base-slice + 20g mut-slice)
+    ("APEX4", 4),        # 4p x 4 = 16p = 32g (16g base-slice + 16g mut-slice)
+    ("S07_50_50", 6),    # 6p x 2 = 12p = 24g (12g base-slice + 12g mut-slice)
+    ("PB132_50_50", 6),  # 6p x 2 = 12p = 24g (12g base-slice + 12g mut-slice)
 ]
 
 
@@ -3931,20 +3931,21 @@ def cmd_prepare_camo_prod(args: argparse.Namespace) -> None:
         "S07_50_50": STEP_B_PROFILES["S07_50_50"],
         "APEX4": STEP_B_PROFILES["APEX4"],
         "D5": STEP_B_PROFILES["D5"],
+        "PB132_50_50": STEP_B_PROFILES["PB132_50_50"],
         "thdr:zap-talk": shell_groups["mjj-2014-thdrcomb__56b67d"]["profiles"]["thdr:zap-talk"],
-        "thdr:lax-curse": shell_groups["mjj-2014-thdrcomb__56b67d"]["profiles"]["thdr:lax-curse"],
-        "cban8:lax-drum": shell_groups["rental-cban-8"]["profiles"]["cban8:lax-drum"],
+        "thdr:bare": [{"id": "mjj-2014-thdrcomb__56b67d", "weight": 1.0}],
     }
 
     needed_ids: set[str] = set()
     mixtures: dict[str, list[dict[str, Any]]] = {}
     for pname, mems in profiles.items():
-        mixtures[pname] = [{"id": m["id"], "weight": float(m["weight"])} for m in mems]
+        mname = pname if pname != "thdr:bare" else "s:mjj-2014-thdrcomb__56b67d"
+        mixtures[mname] = [{"id": m["id"], "weight": float(m["weight"])} for m in mems]
         for m in mems:
             needed_ids.add(m["id"])
 
     extra_teams = [{"id": tid, "sets": all_sets[tid]} for tid in sorted(needed_ids) if tid not in base_teams]
-    out_dir: Path = args.out_dir or (args.work_dir / "prod-camo-showdown")
+    out_dir: Path = args.out_dir or (args.work_dir / "prod-camo-v2")
     out_dir.mkdir(parents=True, exist_ok=True)
     pools_path = out_dir / "pools.json"
     pools_path.write_text(json.dumps({"teams": extra_teams, "mixtures": mixtures}, separators=(",", ":")) + "\n")
@@ -3954,7 +3955,8 @@ def cmd_prepare_camo_prod(args: argparse.Namespace) -> None:
     blk = 0
     seed_prefix = args.seed_prefix
 
-    for rname, cname, n_p, kind in CAMO_PROD_MATCHUPS:
+    # Part 1: 3 thin camouflaged-core edges (112 games)
+    for rname, cname, n_p in CAMO_PROD_CORE_EDGES:
         rmems = profiles[rname]
         cmems = profiles[cname]
         r_rep: dict[str, int] = defaultdict(int)
@@ -3964,12 +3966,12 @@ def cmd_prepare_camo_prod(args: argparse.Namespace) -> None:
             for cm in cmems:
                 cid = cm["id"]
                 for vrep in range(n_p):
-                    tag = f"{seed_prefix}/{kind}/{rname}/{rid}/vs/{cname}/{cid}/r{vrep}"
+                    tag = f"{seed_prefix}/core/{rname}/{rid}/vs/{cname}/{cid}/r{vrep}"
                     sr = u32_hash(f"{tag}/r")
                     sc = u32_hash(f"{tag}/c")
                     bs = u32_hash(f"{tag}/battle")
-                    pr = u32_hash(f"{seed_prefix}/{kind}/{rname}/{rid}/vs/{cname}/prev-r-k{r_rep[rid] % 2}")
-                    pc = u32_hash(f"{seed_prefix}/{kind}/{rname}/vs/{cname}/{cid}/prev-c-k{c_rep[cid] % 2}")
+                    pr = u32_hash(f"{seed_prefix}/core/{rname}/{rid}/vs/{cname}/prev-r-k{r_rep[rid] % 2}")
+                    pc = u32_hash(f"{seed_prefix}/core/{rname}/vs/{cname}/{cid}/prev-c-k{c_rep[cid] % 2}")
                     for row_seat in (0, 1):
                         if row_seat == 0:
                             ids, seeds, pseeds, mix = [rid, cid], [sr, sc], [pr, pc], [rname, cname]
@@ -3978,7 +3980,7 @@ def cmd_prepare_camo_prod(args: argparse.Namespace) -> None:
                         rows.append({
                             "block": blk,
                             "cell": {
-                                "kind": f"camo_prod_{kind}",
+                                "kind": "camo_prod_core",
                                 "row": rname,
                                 "col": cname,
                                 "row_id": rid,
@@ -3997,12 +3999,63 @@ def cmd_prepare_camo_prod(args: argparse.Namespace) -> None:
                     c_rep[cid] += 1
         chunk_breaks.append(len(rows))
 
+    # Part 2: Exact CRN paired thdr:zap-talk vs thdr:bare across all 4 camo-core opponents (240 games)
+    thdr_profs = ["thdr:zap-talk", "thdr:bare"]
+    for pname in thdr_profs:
+        cmems = profiles[pname]
+        pmix = pname if pname != "thdr:bare" else "s:mjj-2014-thdrcomb__56b67d"
+        for oname, n_tot in CAMO_PROD_THDR_OPPS:
+            omems = profiles[oname]
+            c_rep: dict[str, int] = defaultdict(int)
+            o_rep: dict[str, int] = defaultdict(int)
+            for om in omems:
+                oid = om["id"]
+                for rep in range(n_tot):
+                    # Shared CRN seed per (oname, oid, rep) between thdr:zap-talk and thdr:bare!
+                    # Even reps: zap-talk plays base; odd reps: zap-talk plays mutant.
+                    cid = cmems[0]["id"] if len(cmems) == 1 else cmems[rep % 2]["id"]
+                    is_mut = int(cid != "mjj-2014-thdrcomb__56b67d")
+                    tag = f"{seed_prefix}/thdr-crn/vs/{oname}/{oid}/r{rep}"
+                    sc = u32_hash(f"{tag}/c")
+                    so = u32_hash(f"{tag}/o")
+                    bs = u32_hash(f"{tag}/battle")
+                    pc = u32_hash(f"{seed_prefix}/thdr-crn/vs/{oname}/prev-c-k{c_rep[cid] % 2}")
+                    po = u32_hash(f"{seed_prefix}/thdr-crn/vs/{oname}/{oid}/prev-o-k{o_rep[oid] % 2}")
+                    for row_seat in (0, 1):
+                        if row_seat == 0:
+                            ids, seeds, pseeds, mix = [cid, oid], [sc, so], [pc, po], [pmix, oname]
+                        else:
+                            ids, seeds, pseeds, mix = [oid, cid], [so, sc], [po, pc], [oname, pmix]
+                        rows.append({
+                            "block": blk,
+                            "cell": {
+                                "kind": "camo_prod_thdr",
+                                "profile": pname,
+                                "cand_id": cid,
+                                "is_mutant": is_mut,
+                                "opponent": oname,
+                                "opp_id": oid,
+                                "rep": rep,
+                            },
+                            "rowSeat": row_seat,
+                            "ids": ids,
+                            "seeds": seeds,
+                            "previewSeeds": pseeds,
+                            "battleSeed": bs,
+                            "mixtures": mix,
+                        })
+                    blk += 1
+                    c_rep[cid] += 1
+                    o_rep[oid] += 1
+            chunk_breaks.append(len(rows))
+
     (out_dir / "schedule.jsonl").write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
     meta = {
-        "kind": "camo-prod",
+        "kind": "camo-prod-v2",
         "pools": str(pools_path),
         "profiles": profiles,
-        "matchups": [[r, c, k] for r, c, _, k in CAMO_PROD_MATCHUPS],
+        "core_edges": [[r, c, n] for r, c, n in CAMO_PROD_CORE_EDGES],
+        "thdr_opps": [[o, n] for o, n in CAMO_PROD_THDR_OPPS],
         "chunk_breaks": chunk_breaks,
         "total_pairs": blk,
         "total_games": len(rows),
@@ -4015,7 +4068,8 @@ def cmd_prepare_camo_prod(args: argparse.Namespace) -> None:
         "cmd": "prepare-camo-prod",
         "dir": str(out_dir),
         "chunks": len(chunk_breaks) - 1,
-        "pairs": blk,
+        "core_games": sum(chunk_breaks[i + 1] - chunk_breaks[i] for i in range(len(CAMO_PROD_CORE_EDGES))),
+        "thdr_crn_games": len(rows) - sum(chunk_breaks[i + 1] - chunk_breaks[i] for i in range(len(CAMO_PROD_CORE_EDGES))),
         "games": len(rows),
     }))
 
@@ -4028,126 +4082,240 @@ def cmd_analyze_camo_prod(args: argparse.Namespace) -> None:
     meta = json.loads((run_dir / "meta.json").read_text())
     profiles: dict[str, list[dict[str, Any]]] = meta["profiles"]
 
-    # 1. Parse fresh prod-camo-showdown results
-    raw: dict[tuple[str, str, str, str, int], list[float]] = defaultdict(list)
+    core_raw: dict[tuple[str, str, str, str, int], list[float]] = defaultdict(list)
+    thdr_raw: dict[tuple[str, str, str, int], list[float]] = defaultdict(list)
+    thdr_mut: dict[tuple[str, str, str, int], int] = {}
+    thdr_opp_pick: dict[tuple[str, str, str, int, int], str] = {}
+
     for line in (run_dir / "results.jsonl").open():
         if not line.strip():
             continue
         r = json.loads(line)
         c = r["cell"]
-        raw[(c["row"], c["col"], c["row_id"], c["col_id"], int(c["rep"]))].append(
-            seat_score(r["outcome"], int(r["rowSeat"]))
-        )
-    cell_pairs: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
-    for (rn, cn, rid, cid, _rep), scs in raw.items():
-        if len(scs) == 2:
-            cell_pairs[(rn, cn, rid, cid)].append(0.5 * (scs[0] + scs[1]))
+        rs = int(r["rowSeat"])
+        sc = seat_score(r["outcome"], rs)
+        if c["kind"] == "camo_prod_core":
+            core_raw[(c["row"], c["col"], c["row_id"], c["col_id"], int(c["rep"]))].append(sc)
+        elif c["kind"] == "camo_prod_thdr":
+            k = (c["profile"], c["opponent"], c["opp_id"], int(c["rep"]))
+            thdr_raw[k].append(sc)
+            thdr_mut[k] = int(c["is_mutant"])
+            pr = r.get("preview")
+            if isinstance(pr, list) and len(pr) == 2 and isinstance(pr[1 - rs], dict):
+                thdr_opp_pick[(*k, rs)] = pr[1 - rs].get("input", "")
 
-    def calc_fresh(rn: str, cn: str) -> dict[str, Any]:
+    core_pairs: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+    for (rn, cn, rid, cid, _rep), scs in core_raw.items():
+        if len(scs) == 2:
+            core_pairs[(rn, cn, rid, cid)].append(0.5 * (scs[0] + scs[1]))
+
+    def calc_core_fresh(rn: str, cn: str) -> dict[str, Any]:
         ev = 0.0
         var = 0.0
         ng = 0
-        by_row_var: dict[str, float] = {}
+        by_r: dict[str, float] = {}
         for rm in profiles[rn]:
             rid, rw = rm["id"], float(rm["weight"])
             rev = 0.0
             for cm in profiles[cn]:
                 cid, cw = cm["id"], float(cm["weight"])
-                ps = cell_pairs[(rn, cn, rid, cid)]
+                ps = core_pairs[(rn, cn, rid, cid)]
                 mu, se = pair_cell_stats(ps)
                 ev += (rw * cw) * mu
                 var += ((rw * cw) ** 2) * (se ** 2)
                 rev += cw * mu
                 ng += len(ps) * 2
-            by_row_var[rid] = round(rev, 4)
-        return {"mean": round(ev, 4), "se": round(math.sqrt(var), 4), "games": ng, "by_row_var": by_row_var}
+            by_r[rid] = round(rev, 4)
+        return {"mean": round(ev, 4), "se": round(math.sqrt(var), 4), "games": ng, "by_row_var": by_r}
 
-    # 2. Pool fresh triangle edges with prior Step C triangle (S07_50_50, APEX4, D5)
+    # 1. Reconstruct 4-shell camouflaged core [S07_50_50, APEX4, D5, PB132_50_50] (ALL 6 edges now 40-80g!)
     rep_c = json.loads((work_dir / "prod-step-c/step-c-core-report.json").read_text())
     rd = rep_c["core_solves"]["S07_50_50__sample-08"]
     sh_c = rd["shells"]
 
-    tri = ["S07_50_50", "APEX4", "D5"]
-    tmat = [[0.5] * 3 for _ in range(3)]
-    tsem = [[0.0] * 3 for _ in range(3)]
-    tgm = [[0] * 3 for _ in range(3)]
-    tri_edges: dict[str, Any] = {}
-    for i in range(3):
-        for j in range(i + 1, 3):
-            a, b = tri[i], tri[j]
+    camo4 = ["S07_50_50", "APEX4", "D5", "PB132_50_50"]
+    cmat = [[0.5] * 4 for _ in range(4)]
+    csem = [[0.0] * 4 for _ in range(4)]
+    cgm = [[0] * 4 for _ in range(4)]
+    edge_details: dict[str, Any] = {}
+    fresh_edge_set = {(r, c) for r, c, _ in CAMO_PROD_CORE_EDGES}
+
+    for i in range(4):
+        for j in range(i + 1, 4):
+            a, b = camo4[i], camo4[j]
             ia, ib = sh_c.index(a), sh_c.index(b)
             mp, sep, gp = rd["matrix"][ia][ib], rd["se_matrix"][ia][ib], rd["games_matrix"][ia][ib]
-            if (a, b) in (("S07_50_50", "APEX4"), ("S07_50_50", "D5")):
-                fr = calc_fresh(a, b)
+            if (a, b) in fresh_edge_set:
+                fr = calc_core_fresh(a, b)
                 mf, sef, gf = fr["mean"], fr["se"], fr["games"]
                 mu = (mp * gp + mf * gf) / (gp + gf)
                 se = math.sqrt((gp * sep) ** 2 + (gf * sef) ** 2) / (gp + gf)
                 ng = gp + gf
-                tri_edges[f"{a} vs {b}"] = {
+                edge_details[f"{a} vs {b}"] = {
                     "prior": round(mp, 4), "prior_g": gp,
-                    "fresh": mf, "fresh_g": gf, "fresh_by_s07": fr["by_row_var"],
+                    "fresh": mf, "fresh_g": gf, "fresh_by_row": fr["by_row_var"],
                     "pooled": round(mu, 4), "se": round(se, 4), "games": ng,
                 }
             else:
                 mu, se, ng = mp, sep, gp
-                tri_edges[f"{a} vs {b}"] = {"pooled": round(mu, 4), "se": round(se, 4), "games": ng}
-            tmat[i][j] = mu
-            tmat[j][i] = 1.0 - mu
-            tsem[i][j] = se
-            tsem[j][i] = se
-            tgm[i][j] = ng
-            tgm[j][i] = ng
+                edge_details[f"{a} vs {b}"] = {"pooled": round(mu, 4), "se": round(se, 4), "games": ng}
+            cmat[i][j] = mu
+            cmat[j][i] = 1.0 - mu
+            csem[i][j] = se
+            csem[j][i] = se
+            cgm[i][j] = ng
+            cgm[j][i] = ng
 
-    tri_nash = STATS.solve_symmetric_nash(tmat, iters=60_000)
+    w4_pt = STATS.solve_symmetric_nash(cmat, iters=60_000)
     rng = random.Random(20261121)
-    tbw = []
+    bw4 = []
     for _ in range(500):
-        mb = [[0.5] * 3 for _ in range(3)]
-        for i in range(3):
-            for j in range(i + 1, 3):
-                x = max(0.0, min(1.0, tmat[i][j] + rng.gauss(0.0, tsem[i][j])))
+        mb = [[0.5] * 4 for _ in range(4)]
+        for i in range(4):
+            for j in range(i + 1, 4):
+                x = max(0.0, min(1.0, cmat[i][j] + rng.gauss(0.0, csem[i][j])))
                 mb[i][j] = x
                 mb[j][i] = 1.0 - x
-        tbw.append(STATS.solve_symmetric_nash(mb, iters=6_000))
-    tri_summary = {
-        tri[i]: {
-            "point": round(tri_nash[i], 4),
-            "boot_mean": round(sum(b[i] for b in tbw) / len(tbw), 4),
-            "boot_p_gt_5pct": round(sum(1 for b in tbw if b[i] > 0.05) / len(tbw), 3),
+        bw4.append(STATS.solve_symmetric_nash(mb, iters=6_000))
+    camo4_nash = {
+        camo4[i]: {
+            "point": round(w4_pt[i], 4),
+            "boot_mean": round(sum(b[i] for b in bw4) / len(bw4), 4),
+            "boot_p_gt_5pct": round(sum(1 for b in bw4 if b[i] > 0.05) / len(bw4), 3),
         }
-        for i in range(3)
+        for i in range(4)
     }
 
-    # 3. Evaluate all 3 camouflaged challengers vs Updated Incumbent Triangle Nash + 4-shell Nash solve
-    chals = ["thdr:zap-talk", "thdr:lax-curse", "cban8:lax-drum"]
-    chal_out: list[dict[str, Any]] = []
-    for ch in chals:
-        per_inc = {inc: calc_fresh(ch, inc) for inc in tri}
-        ev_tri = sum(tri_nash[i] * per_inc[tri[i]]["mean"] for i in range(3))
-        se_tri = math.sqrt(sum((tri_nash[i] * per_inc[tri[i]]["se"]) ** 2 for i in range(3)))
-        ev_eq = sum(per_inc[inc]["mean"] for inc in tri) / 3.0
-        se_eq = math.sqrt(sum(per_inc[inc]["se"] ** 2 for inc in tri)) / 3.0
+    # 2. Exact CRN comparison: thdr:zap-talk vs thdr:bare across all 4 camo-core opponents
+    t_pair = {k: 0.5 * (v[0] + v[1]) for k, v in thdr_raw.items() if len(v) == 2}
+    thdr_summary: dict[str, Any] = {}
+    crn_per_opp: dict[str, Any] = {}
+    base_diffs_all: list[float] = []
+    mut_diffs_all: list[float] = []
+    opp_shifts = 0
+    opp_tot = 0
 
-        # Solve 4-shell Nash: [S07_50_50, APEX4, D5, ch]
-        m4 = [[0.5] * 4 for _ in range(4)]
-        for i in range(3):
-            for j in range(3):
-                m4[i][j] = tmat[i][j]
-            m4[3][i] = per_inc[tri[i]]["mean"]
-            m4[i][3] = 1.0 - per_inc[tri[i]]["mean"]
-        w4 = STATS.solve_symmetric_nash(m4, iters=60_000)
-        chal_out.append({
-            "profile": ch,
-            "ev_vs_tri_nash": round(ev_tri, 4),
-            "se_vs_tri_nash": round(se_tri, 4),
-            "l95_vs_tri_nash": round(max(0.0, ev_tri - 1.68 * se_tri), 4),
-            "u95_vs_tri_nash": round(min(1.0, ev_tri + 1.68 * se_tri), 4),
-            "mean_vs_3inc": round(ev_eq, 4),
-            "se_vs_3inc": round(se_eq, 4),
-            "per_incumbent": per_inc,
-            "nash4_weights": {nm: round(w4[idx], 4) for idx, nm in enumerate(tri + [ch])},
-        })
-    chal_out.sort(key=lambda x: (-x["ev_vs_tri_nash"], -x["mean_vs_3inc"]))
+    for pname in ("thdr:zap-talk", "thdr:bare"):
+        per_opp: dict[str, Any] = {}
+        eq_ev = 0.0
+        eq_var = 0.0
+        for op in camo4:
+            ev = 0.0
+            var = 0.0
+            ng = 0
+            b_vals: list[float] = []
+            m_vals: list[float] = []
+            for om in profiles[op]:
+                oid, ow = om["id"], float(om["weight"])
+                reps = sorted(k[3] for k in t_pair if k[0] == pname and k[1] == op and k[2] == oid)
+                ps = [t_pair[(pname, op, oid, rp)] for rp in reps]
+                mu, se = pair_cell_stats(ps)
+                ev += ow * mu
+                var += (ow ** 2) * (se ** 2)
+                ng += len(ps) * 2
+                for rp in reps:
+                    if thdr_mut[(pname, op, oid, rp)] == 0:
+                        b_vals.append(t_pair[(pname, op, oid, rp)])
+                    else:
+                        m_vals.append(t_pair[(pname, op, oid, rp)])
+            per_opp[op] = {
+                "mean": round(ev, 4),
+                "se": round(math.sqrt(var), 4),
+                "games": ng,
+                "base_mean": round(sum(b_vals) / len(b_vals), 4) if b_vals else None,
+                "mut_mean": round(sum(m_vals) / len(m_vals), 4) if m_vals else None,
+            }
+            eq_ev += ev / 4.0
+            eq_var += var / 16.0
+        ev_c4 = sum(w4_pt[i] * per_opp[camo4[i]]["mean"] for i in range(4))
+        se_c4 = math.sqrt(sum((w4_pt[i] * per_opp[camo4[i]]["se"]) ** 2 for i in range(4)))
+        thdr_summary[pname] = {
+            "mean_vs_camo4": round(eq_ev, 4),
+            "se_vs_camo4": round(math.sqrt(eq_var), 4),
+            "ev_vs_camo4_nash": round(ev_c4, 4),
+            "se_vs_camo4_nash": round(se_c4, 4),
+            "l95_vs_camo4_nash": round(max(0.0, ev_c4 - 1.67 * se_c4), 4),
+            "u95_vs_camo4_nash": round(min(1.0, ev_c4 + 1.67 * se_c4), 4),
+            "per_opponent": per_opp,
+        }
+
+    # Exact paired CRN delta: (thdr:zap-talk - thdr:bare)
+    crn_d_eq = 0.0
+    crn_v_eq = 0.0
+    for op in camo4:
+        dev = 0.0
+        dvar = 0.0
+        b_op: list[float] = []
+        m_op: list[float] = []
+        for om in profiles[op]:
+            oid, ow = om["id"], float(om["weight"])
+            reps = sorted(k[3] for k in t_pair if k[0] == "thdr:zap-talk" and k[1] == op and k[2] == oid)
+            dps = []
+            for rp in reps:
+                if ("thdr:bare", op, oid, rp) not in t_pair:
+                    continue
+                df = t_pair[("thdr:zap-talk", op, oid, rp)] - t_pair[("thdr:bare", op, oid, rp)]
+                dps.append(df)
+                if thdr_mut[("thdr:zap-talk", op, oid, rp)] == 0:
+                    b_op.append(df)
+                    base_diffs_all.append(df)
+                else:
+                    m_op.append(df)
+                    mut_diffs_all.append(df)
+                for rs in (0, 1):
+                    p1 = thdr_opp_pick.get(("thdr:zap-talk", op, oid, rp, rs))
+                    p0 = thdr_opp_pick.get(("thdr:bare", op, oid, rp, rs))
+                    if p1 and p0:
+                        opp_tot += 1
+                        if p1 != p0:
+                            opp_shifts += 1
+            dmu, dse = pair_cell_stats(dps)
+            dev += ow * dmu
+            dvar += (ow ** 2) * (dse ** 2)
+        crn_per_opp[op] = {
+            "delta": round(dev, 4),
+            "se": round(math.sqrt(dvar), 4),
+            "base_slice_delta": round(sum(b_op) / len(b_op), 4) if b_op else None,
+            "mut_slice_delta": round(sum(m_op) / len(m_op), 4) if m_op else None,
+        }
+        crn_d_eq += dev / 4.0
+        crn_v_eq += dvar / 16.0
+    crn_se_eq = math.sqrt(crn_v_eq)
+    b_all_mu, b_all_se = pair_cell_stats(base_diffs_all) if base_diffs_all else (0.0, 0.0)
+    m_all_mu, m_all_se = pair_cell_stats(mut_diffs_all) if mut_diffs_all else (0.0, 0.0)
+
+    # 3. Solve 5-shell fully-camouflaged core Nash: [S07_50_50, APEX4, D5, PB132_50_50, thdr:zap-talk]
+    camo5 = camo4 + ["thdr:zap-talk"]
+    m5 = [[0.5] * 5 for _ in range(5)]
+    s5 = [[0.0] * 5 for _ in range(5)]
+    for i in range(4):
+        for j in range(4):
+            m5[i][j] = cmat[i][j]
+            s5[i][j] = csem[i][j]
+        mu_t = thdr_summary["thdr:zap-talk"]["per_opponent"][camo4[i]]["mean"]
+        se_t = thdr_summary["thdr:zap-talk"]["per_opponent"][camo4[i]]["se"]
+        m5[4][i] = mu_t
+        m5[i][4] = 1.0 - mu_t
+        s5[4][i] = se_t
+        s5[i][4] = se_t
+    w5_pt = STATS.solve_symmetric_nash(m5, iters=60_000)
+    bw5 = []
+    for _ in range(500):
+        mb = [[0.5] * 5 for _ in range(5)]
+        for i in range(5):
+            for j in range(i + 1, 5):
+                x = max(0.0, min(1.0, m5[i][j] + rng.gauss(0.0, s5[i][j])))
+                mb[i][j] = x
+                mb[j][i] = 1.0 - x
+        bw5.append(STATS.solve_symmetric_nash(mb, iters=6_000))
+    camo5_nash = {
+        camo5[i]: {
+            "point": round(w5_pt[i], 4),
+            "boot_mean": round(sum(b[i] for b in bw5) / len(bw5), 4),
+            "boot_p_gt_5pct": round(sum(1 for b in bw5 if b[i] > 0.05) / len(bw5), 3),
+        }
+        for i in range(5)
+    }
 
     hits = misses = 0
     for df in sorted((run_dir / "chunks").glob("chunk-*.done.json")):
@@ -4158,11 +4326,23 @@ def cmd_analyze_camo_prod(args: argparse.Namespace) -> None:
 
     report = {
         "dir": str(run_dir),
-        "games": sum(len(v) * 2 for v in cell_pairs.values()),
+        "games": sum(len(v) * 2 for v in core_pairs.values()) + len(t_pair) * 2,
         "cache_hit_rate": round(hits / max(1, hits + misses), 4),
-        "incumbent_triangle_edges": tri_edges,
-        "incumbent_triangle_nash": tri_summary,
-        "challengers": chal_out,
+        "camo4_edges": edge_details,
+        "camo4_nash": camo4_nash,
+        "thdr_summary": thdr_summary,
+        "thdr_crn_delta": {
+            "mean_delta": round(crn_d_eq, 4),
+            "se": round(crn_se_eq, 4),
+            "z": round(crn_d_eq / crn_se_eq, 2) if crn_se_eq > 1e-9 else 0.0,
+            "base_slice_delta": round(b_all_mu, 4),
+            "base_slice_se": round(b_all_se, 4),
+            "mut_slice_delta": round(m_all_mu, 4),
+            "mut_slice_se": round(m_all_se, 4),
+            "opp_preview_shift_rate": round(opp_shifts / max(1, opp_tot), 3),
+            "per_opponent": crn_per_opp,
+        },
+        "camo5_nash": camo5_nash,
     }
     out_path = args.out or (run_dir / "camo-prod-report.json")
     out_path.write_text(json.dumps(report, indent=2) + "\n")
@@ -4171,19 +4351,20 @@ def cmd_analyze_camo_prod(args: argparse.Namespace) -> None:
         "out": str(out_path),
         "games": report["games"],
         "cache_hit_rate": report["cache_hit_rate"],
-        "tri_nash": {k: v["point"] for k, v in tri_summary.items()},
-        "tri_boot": {k: v["boot_mean"] for k, v in tri_summary.items()},
-        "challengers": [
-            {
-                "profile": c["profile"],
-                "ev_tri": c["ev_vs_tri_nash"],
-                "se": c["se_vs_tri_nash"],
-                "mean3": c["mean_vs_3inc"],
-                "nash4_w": c["nash4_weights"][c["profile"]],
-                "per_inc": {k: v["mean"] for k, v in c["per_incumbent"].items()},
-            }
-            for c in chal_out
-        ],
+        "camo4_pt": {k: v["point"] for k, v in camo4_nash.items()},
+        "camo4_boot": {k: v["boot_mean"] for k, v in camo4_nash.items()},
+        "thdr_zap_talk": {
+            "mean4": thdr_summary["thdr:zap-talk"]["mean_vs_camo4"],
+            "ev_c4": thdr_summary["thdr:zap-talk"]["ev_vs_camo4_nash"],
+            "bare_mean4": thdr_summary["thdr:bare"]["mean_vs_camo4"],
+            "crn_delta": report["thdr_crn_delta"]["mean_delta"],
+            "crn_z": report["thdr_crn_delta"]["z"],
+            "base_d": report["thdr_crn_delta"]["base_slice_delta"],
+            "mut_d": report["thdr_crn_delta"]["mut_slice_delta"],
+            "shift": report["thdr_crn_delta"]["opp_preview_shift_rate"],
+        },
+        "camo5_pt": {k: v["point"] for k, v in camo5_nash.items()},
+        "camo5_boot": {k: v["boot_mean"] for k, v in camo5_nash.items()},
     }))
 
 
