@@ -2859,6 +2859,322 @@ def cmd_analyze_step_c(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: prepare-s08-upgrade & analyze-s08-upgrade (Fix sample-08 dead Miltank slot)
+# ---------------------------------------------------------------------------
+
+S08_UPGRADE_OPPONENTS: list[tuple[str, int]] = [
+    ("S07_50_50", 4),                  # 4p x 2 = 16g
+    ("APEX4", 2),                      # 2p x 4 = 16g
+    ("D5", 2),                         # 2p x 5 = 20g
+    ("PB132_50_50", 4),                # 4p x 2 = 16g
+    ("mjj-2014-thdrcomb__56b67d", 8),  # 8p x 1 = 16g
+    ("rental-cban-8", 8),              # 8p x 1 = 16g
+    ("pb-58", 8),                      # 8p x 1 = 16g
+]
+
+
+def build_s08_upgrade_candidates(all_sets: dict[str, list[dict[str, Any]]]) -> dict[str, list[dict[str, Any]]]:
+    """Build 14 legal Slot-3 (Miltank Lv55 -> active mon) upgrades of sample-08 + controls."""
+    import copy
+    import subprocess
+
+    base = copy.deepcopy(all_sets["sample-08"])
+
+    def pick_mon(team_id: str, species: str, level: int | None = None, item: str | None = None) -> dict[str, Any]:
+        for m in all_sets[team_id]:
+            if m["species"] == species:
+                x = copy.deepcopy(m)
+                if level is not None:
+                    x["level"] = level
+                if item is not None:
+                    x["item"] = item
+                return x
+        raise KeyError(f"{species} not found in {team_id}")
+
+    def make_upgrade(new_slot3: dict[str, Any], cloyster_item: str | None = None) -> list[dict[str, Any]]:
+        t = copy.deepcopy(base)
+        t[2] = new_slot3
+        if cloyster_item is not None:
+            t[3]["item"] = cloyster_item
+        return t
+
+    cands: dict[str, list[dict[str, Any]]] = {
+        "sample-08": base,
+        "rental-cban-2": copy.deepcopy(all_sets["rental-cban-2"]),
+        # --- Group 1: Lv50 partners (pair ALONGSIDE Zapdos Lv55) ---
+        "s08-u-wak50": make_upgrade(pick_mon("sample-07", "Marowak", level=50, item="Thick Club")),
+        "s08-u-gar50": make_upgrade(pick_mon("apex-c04-bug-3atkstar-boomgen", "Gengar", level=50, item="Miracle Berry"), cloyster_item="PRZ Cure Berry"),
+        "s08-u-gar50-prz": make_upgrade(pick_mon("apex-c04-bug-3atkstar-boomgen", "Gengar", level=50, item="PRZ Cure Berry")),
+        "s08-u-lix50": make_upgrade(pick_mon("mjj-2014-thdrcomb__56b67d", "Steelix", level=50, item="Pink Bow")),
+        "s08-u-cune50": make_upgrade(pick_mon("pb-58", "Suicune", level=50, item="Bright Powder")),
+        "s08-u-skarm50": make_upgrade(pick_mon("deme-r1-00-s0030", "Skarmory", level=50, item="PRZ Cure Berry")),
+        "s08-u-star50": make_upgrade(pick_mon("apex-c04-bug-3atkstar-boomgen", "Starmie", level=50, item="PRZ Cure Berry")),
+        "s08-u-hera50": make_upgrade(pick_mon("pb-132__74c6b5", "Heracross", level=50, item="Bright Powder")),
+        # --- Group 2: Lv55 alternative aces (cover Zapdos Lv55 tough matchups) ---
+        "s08-u-ttar55": make_upgrade(pick_mon("pb-132__74c6b5", "Tyranitar", level=55, item="Miracle Berry"), cloyster_item="PRZ Cure Berry"),
+        "s08-u-wak55": make_upgrade(pick_mon("sample-07", "Marowak", level=55, item="Thick Club")),
+        "s08-u-gar55": make_upgrade(pick_mon("pb-58", "Gengar", level=55, item="Miracle Berry"), cloyster_item="PRZ Cure Berry"),
+        "s08-u-star55": make_upgrade(pick_mon("apex-c04-bug-3atkstar-boomgen", "Starmie", level=55, item="PRZ Cure Berry")),
+        "s08-u-tauros55": make_upgrade(pick_mon("sample-07", "Tauros", level=55, item="Pink Bow")),
+        "s08-u-venu55": make_upgrade(pick_mon("pb-58", "Venusaur", level=55, item="PRZ Cure Berry")),
+    }
+
+    # Validate 100% of candidate teams via crates/wasm/pkg-node Validator
+    js_check = (
+        "const wasm = require('./crates/wasm/pkg-node/nc2000_wasm.js');"
+        "const fs = require('fs');"
+        "const data = JSON.parse(fs.readFileSync(0, 'utf8'));"
+        "const dex = new wasm.Dex();"
+        "const v = new wasm.Validator(dex);"
+        "const errs = {};"
+        "for (const [id, sets] of Object.entries(data)) {"
+        "  const r = JSON.parse(v.validateTeam(JSON.stringify(sets)));"
+        "  if (!r.ok) errs[id] = r.errors;"
+        "}"
+        "console.log(JSON.stringify({ ok: Object.keys(errs).length === 0, checked: Object.keys(data).length, errs }));"
+    )
+    proc = subprocess.run(
+        ["node", "-e", js_check],
+        input=json.dumps(cands),
+        text=True,
+        capture_output=True,
+        cwd=str(ROOT),
+        check=True,
+    )
+    verdict = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert verdict["ok"], f"Validator rejected s08 upgrade candidates: {verdict['errs']}"
+    return cands
+
+
+def cmd_prepare_s08_upgrade(args: argparse.Namespace) -> None:
+    _, raw_sets = load_full_catalog()
+    p0_doc = json.loads((ROOT / "target/nash-work/psro-v1/pools-p0.json").read_text())
+    for t in p0_doc.get("teams", []):
+        raw_sets[t["id"]] = t["sets"]
+    base_teams, _ = LEDGER.load_catalog_and_mixtures(None)
+
+    cands_map = build_s08_upgrade_candidates(raw_sets)
+    if args.candidates:
+        wanted = [s.strip() for s in args.candidates.split(",") if s.strip()]
+        cands_map = {k: cands_map[k] for k in wanted}
+
+    all_sets = dict(raw_sets)
+    all_sets.update(cands_map)
+
+    needed_ids: set[str] = set(cands_map.keys())
+    mixtures: dict[str, list[dict[str, Any]]] = {f"s:{cid}": [{"id": cid, "weight": 1.0}] for cid in cands_map}
+    opp_spec = [(op, int(args.pair_scale * np)) for op, np in S08_UPGRADE_OPPONENTS]
+    for op, _ in opp_spec:
+        mems = STEP_B_PROFILES[op]
+        mname = op if len(mems) > 1 else f"s:{mems[0]['id']}"
+        mixtures[mname] = [{"id": m["id"], "weight": float(m["weight"])} for m in mems]
+        for m in mems:
+            needed_ids.add(m["id"])
+
+    extra_teams = [{"id": tid, "sets": all_sets[tid]} for tid in sorted(needed_ids) if tid not in base_teams or tid in cands_map]
+    # Deduplicate by id (prefer synthesized cands_map)
+    seen_et: dict[str, dict[str, Any]] = {}
+    for et in extra_teams:
+        seen_et[et["id"]] = et
+    extra_teams = [seen_et[k] for k in sorted(seen_et)]
+
+    out_dir: Path = args.out_dir or (args.work_dir / "s08-upgrade-9k")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pools_path = out_dir / "pools.json"
+    pools_path.write_text(json.dumps({"teams": extra_teams, "mixtures": mixtures}, separators=(",", ":")) + "\n")
+
+    # Common random numbers across candidates for low-variance paired deltas vs sample-08!
+    rows: list[dict[str, Any]] = []
+    chunk_breaks: list[int] = [0]
+    blk = 0
+    seed_prefix = args.seed_prefix
+    cand_ids = list(cands_map.keys())
+
+    for cid in cand_ids:
+        cmix = f"s:{cid}"
+        for oname, n_p in opp_spec:
+            omems = STEP_B_PROFILES[oname]
+            omix = oname if len(omems) > 1 else f"s:{omems[0]['id']}"
+            cand_rep = 0
+            for om in omems:
+                oid = om["id"]
+                for vrep in range(n_p):
+                    # Shared seed per (oname, oid, vrep) across candidates for paired CRN comparison!
+                    tag = f"{seed_prefix}/crn/vs/{oname}/{oid}/r{vrep}"
+                    sc = u32_hash(f"{tag}/c")
+                    so = u32_hash(f"{tag}/o")
+                    bs = u32_hash(f"{tag}/battle")
+                    pc = u32_hash(f"{seed_prefix}/crn/vs/{oname}/prev-c-k{cand_rep % 2}")
+                    po = u32_hash(f"{seed_prefix}/crn/vs/{oname}/{oid}/prev-o-k{vrep % 2}")
+                    for row_seat in (0, 1):
+                        if row_seat == 0:
+                            ids, seeds, pseeds, mix = [cid, oid], [sc, so], [pc, po], [cmix, omix]
+                        else:
+                            ids, seeds, pseeds, mix = [oid, cid], [so, sc], [po, pc], [omix, cmix]
+                        rows.append({
+                            "block": blk,
+                            "cell": {
+                                "kind": "s08_upgrade",
+                                "candidate": cid,
+                                "opponent": oname,
+                                "opp_id": oid,
+                                "rep": vrep,
+                            },
+                            "rowSeat": row_seat,
+                            "ids": ids,
+                            "seeds": seeds,
+                            "previewSeeds": pseeds,
+                            "battleSeed": bs,
+                            "mixtures": mix,
+                        })
+                    blk += 1
+                    cand_rep += 1
+        chunk_breaks.append(len(rows))
+
+    sched_path = out_dir / "schedule.jsonl"
+    sched_path.write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
+    meta = {
+        "kind": "s08-upgrade",
+        "pools": str(pools_path),
+        "candidates": cand_ids,
+        "opponents": [[op, np] for op, np in opp_spec],
+        "chunk_breaks": chunk_breaks,
+        "total_pairs": blk,
+        "total_games": len(rows),
+        "preview_iters": args.preview_iters,
+        "battle_iters": args.battle_iters,
+        "battle_mode": args.battle_mode,
+    }
+    (out_dir / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "prepare-s08-upgrade",
+        "dir": str(out_dir),
+        "candidates": len(cand_ids),
+        "chunks": len(chunk_breaks) - 1,
+        "pairs": blk,
+        "games": len(rows),
+    }))
+
+
+def cmd_analyze_s08_upgrade(args: argparse.Namespace) -> None:
+    run_dir: Path = args.dir
+    meta = json.loads((run_dir / "meta.json").read_text())
+    cand_ids: list[str] = meta["candidates"]
+    opponents: list[str] = [op for op, _ in meta["opponents"]]
+
+    # Per (cand, opp, opp_id, rep) paired score + slot pick counts
+    raw: dict[tuple[str, str, str, int], list[float]] = defaultdict(list)
+    slot_cnt: dict[str, Counter[int]] = defaultdict(Counter)
+    g_cnt: Counter[str] = Counter()
+
+    for line in (run_dir / "results.jsonl").open():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        c = r["cell"]
+        cid = c["candidate"]
+        rs = int(r["rowSeat"])
+        raw[(cid, c["opponent"], c["opp_id"], int(c["rep"]))].append(seat_score(r["outcome"], rs))
+        pr = r.get("preview")
+        if isinstance(pr, list) and len(pr) == 2 and isinstance(pr[rs], dict):
+            inp = pr[rs].get("input", "")
+            if inp.startswith("team "):
+                g_cnt[cid] += 1
+                for s in inp[5:].split(","):
+                    slot_cnt[cid][int(s.strip())] += 1
+
+    pair_sc: dict[tuple[str, str, str, int], float] = {
+        k: 0.5 * (v[0] + v[1]) for k, v in raw.items() if len(v) == 2
+    }
+
+    # Compute per-opponent stratified mean + exact paired delta vs baseline sample-08
+    out_rows: list[dict[str, Any]] = []
+    for cid in cand_ids:
+        per_opp: dict[str, float] = {}
+        eq_ev = 0.0
+        eq_var = 0.0
+        delta_ev = 0.0
+        delta_var = 0.0
+        for oname in opponents:
+            ev = 0.0
+            var = 0.0
+            dev = 0.0
+            dvar = 0.0
+            for om in STEP_B_PROFILES[oname]:
+                oid, ow = om["id"], float(om["weight"])
+                reps = sorted(k[3] for k in pair_sc if k[0] == cid and k[1] == oname and k[2] == oid)
+                ps = [pair_sc[(cid, oname, oid, rp)] for rp in reps]
+                mu, se = pair_cell_stats(ps)
+                ev += ow * mu
+                var += (ow ** 2) * (se ** 2)
+                if "sample-08" in cand_ids:
+                    dps = [
+                        pair_sc[(cid, oname, oid, rp)] - pair_sc[("sample-08", oname, oid, rp)]
+                        for rp in reps
+                        if ("sample-08", oname, oid, rp) in pair_sc
+                    ]
+                    dmu, dse = pair_cell_stats(dps)
+                    dev += ow * dmu
+                    dvar += (ow ** 2) * (dse ** 2)
+            per_opp[oname] = round(ev, 4)
+            eq_ev += ev / len(opponents)
+            eq_var += var / (len(opponents) ** 2)
+            delta_ev += dev / len(opponents)
+            delta_var += dvar / (len(opponents) ** 2)
+        n = max(1, g_cnt[cid])
+        slots = [round(slot_cnt[cid][i] / n, 3) for i in range(1, 7)]
+        se_tot = math.sqrt(eq_var)
+        dse_tot = math.sqrt(delta_var)
+        out_rows.append({
+            "id": cid,
+            "mean_vs_core7": round(eq_ev, 4),
+            "se": round(se_tot, 4),
+            "delta_vs_s08": round(delta_ev, 4),
+            "delta_se": round(dse_tot, 4),
+            "delta_z": round(delta_ev / dse_tot, 2) if dse_tot > 1e-9 else 0.0,
+            "min_opp": round(min(per_opp.values()), 4),
+            "slot3_pick": slots[2],
+            "min_slot_pick": min(slots),
+            "slots": slots,
+            "per_opponent": per_opp,
+        })
+
+    out_rows.sort(key=lambda x: (-x["mean_vs_core7"], -x["min_opp"]))
+    hits = misses = 0
+    for df in sorted((run_dir / "chunks").glob("chunk-*.done.json")):
+        d = json.loads(df.read_text())
+        inner = json.loads(d["remote_stdout_last"]) if "remote_stdout_last" in d else d
+        hits += int(inner.get("preview_cache_hits", 0))
+        misses += int(inner.get("preview_cache_misses", 0))
+
+    report = {
+        "dir": str(run_dir),
+        "games": len(pair_sc) * 2,
+        "cache_hit_rate": round(hits / max(1, hits + misses), 4),
+        "rows": out_rows,
+    }
+    out_path = args.out or (run_dir / "s08-upgrade-report.json")
+    out_path.write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "analyze-s08-upgrade",
+        "out": str(out_path),
+        "games": report["games"],
+        "cache_hit_rate": report["cache_hit_rate"],
+        "ranking": [
+            {
+                "id": r["id"],
+                "mean": r["mean_vs_core7"],
+                "delta": r["delta_vs_s08"],
+                "z": r["delta_z"],
+                "slot3": r["slot3_pick"],
+                "min_opp": r["min_opp"],
+            }
+            for r in out_rows
+        ],
+    }))
+
+
+# ---------------------------------------------------------------------------
 # Subcommand: self-test
 # ---------------------------------------------------------------------------
 
@@ -3034,6 +3350,22 @@ def main() -> None:
     p_asc.add_argument("--boot", type=int, default=500)
     p_asc.add_argument("--out", type=Path, default=None)
     p_asc.set_defaults(func=cmd_analyze_step_c)
+
+    p_psu = sub.add_parser("prepare-s08-upgrade")
+    p_psu.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_psu.add_argument("--out-dir", type=Path, default=None)
+    p_psu.add_argument("--candidates", type=str, default=None)
+    p_psu.add_argument("--pair-scale", type=float, default=1.0)
+    p_psu.add_argument("--seed-prefix", type=str, default="nc2000/elim-v1/s08-up")
+    p_psu.add_argument("--preview-iters", type=int, default=81000)
+    p_psu.add_argument("--battle-iters", type=int, default=9000)
+    p_psu.add_argument("--battle-mode", choices=["fixed", "adaptive"], default="fixed")
+    p_psu.set_defaults(func=cmd_prepare_s08_upgrade)
+
+    p_asu = sub.add_parser("analyze-s08-upgrade")
+    p_asu.add_argument("--dir", type=Path, required=True)
+    p_asu.add_argument("--out", type=Path, default=None)
+    p_asu.set_defaults(func=cmd_analyze_s08_upgrade)
 
     args = ap.parse_args()
     args.func(args)
