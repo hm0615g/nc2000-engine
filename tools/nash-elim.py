@@ -1739,6 +1739,248 @@ def cmd_analyze_s07_qopt(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: prepare-step-a & analyze-step-a (Gap-fill vs Camo Incumbents + S07_0_100 + PB132_50_50)
+# ---------------------------------------------------------------------------
+
+STEP_A_PROFILES: dict[str, list[dict[str, Any]]] = {
+    "APEX4": [
+        {"id": "apex-c04-bug-3atkstar-boomgen", "weight": 0.40},
+        {"id": "red-v10-s1105-r2-s0142", "weight": 0.30},
+        {"id": "apex-c08-surgical-142", "weight": 0.15},
+        {"id": "red-v10-s1105-r1-s0148", "weight": 0.15},
+    ],
+    "D5": [
+        {"id": "deme-r1-00-s0030", "weight": 0.20},
+        {"id": "deme-r1-00-s0030-beq-g2-c3-legal", "weight": 0.20},
+        {"id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal", "weight": 0.20},
+        {"id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal", "weight": 0.20},
+        {"id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal", "weight": 0.20},
+    ],
+    "s0155": [{"id": "red-v10-s1105-r2-s0155", "weight": 1.00}],
+    "S07_30_70": [
+        {"id": "sample-07-beq-g2-c4", "weight": 0.30},
+        {"id": "sample-07", "weight": 0.70},
+    ],
+    "S07_50_50": [
+        {"id": "sample-07-beq-g2-c4", "weight": 0.50},
+        {"id": "sample-07", "weight": 0.50},
+    ],
+    "S07_0_100": [{"id": "sample-07", "weight": 1.00}],
+    "PB132_50_50": [
+        {"id": "pb-132__74c6b5", "weight": 0.50},
+        {"id": "pb-131__65e4fe", "weight": 0.50},
+    ],
+    "rental-cban-8": [{"id": "rental-cban-8", "weight": 1.00}],
+    "mjj-2014-thdrcomb__56b67d": [{"id": "mjj-2014-thdrcomb__56b67d", "weight": 1.00}],
+    "sample-17-orig": [{"id": "sample-17-orig", "weight": 1.00}],
+}
+
+# Each entry is (row_profile, col_profile, subcell_pairs_map_or_int)
+# Int means uniform pairs per (row_var, col_var) subcell; dict[(row_id, col_id)] overrides.
+STEP_A_MATCHUPS: list[tuple[str, str, Any]] = [
+    ("rental-cban-8", "APEX4", 2),                                          # 8p = 16g
+    ("rental-cban-8", "D5", 2),                                             # 10p = 20g
+    ("mjj-2014-thdrcomb__56b67d", "APEX4", 2),                              # 8p = 16g
+    ("mjj-2014-thdrcomb__56b67d", "D5", 2),                                 # 10p = 20g
+    ("sample-17-orig", "D5", 2),                                            # 10p = 20g
+    ("sample-17-orig", "S07_30_70", {("sample-17-orig", "sample-07-beq-g2-c4"): 2, ("sample-17-orig", "sample-07"): 4}),  # 6p = 12g
+    ("sample-17-orig", "S07_50_50", 3),                                     # 6p = 12g
+    ("PB132_50_50", "S07_30_70", 2),                                        # 8p = 16g
+    ("PB132_50_50", "APEX4", 1),                                            # 8p = 16g
+    ("PB132_50_50", "D5", 1),                                               # 10p = 20g
+    ("PB132_50_50", "s0155", 3),                                            # 6p = 12g
+    ("S07_0_100", "APEX4", 2),                                              # 8p = 16g
+    ("S07_0_100", "D5", 2),                                                 # 10p = 20g
+]
+
+
+def cmd_prepare_step_a(args: argparse.Namespace) -> None:
+    _, all_sets = load_full_catalog()
+    p0_doc = json.loads((ROOT / "target/nash-work/psro-v1/pools-p0.json").read_text())
+    for t in p0_doc.get("teams", []):
+        all_sets[t["id"]] = t["sets"]
+    base_teams, _ = LEDGER.load_catalog_and_mixtures(None)
+
+    # Verify same-shell preview visibility within every multi-member profile
+    for pname, members in STEP_A_PROFILES.items():
+        if len(members) > 1:
+            sigs = {
+                tuple((m["species"], m["level"], m.get("gender")) for m in all_sets[mem["id"]])
+                for mem in members
+            }
+            assert len(sigs) == 1, f"Profile {pname} has mismatched preview signatures: {sigs}"
+
+    needed_ids: set[str] = set()
+    mixtures: dict[str, list[dict[str, Any]]] = {}
+    for pname, members in STEP_A_PROFILES.items():
+        mname = pname if len(members) > 1 else f"s:{members[0]['id']}"
+        mixtures[mname] = [{"id": m["id"], "weight": float(m["weight"])} for m in members]
+        for m in members:
+            needed_ids.add(m["id"])
+
+    extra_teams = [{"id": tid, "sets": all_sets[tid]} for tid in sorted(needed_ids) if tid not in base_teams]
+    out_dir: Path = args.out_dir or (args.work_dir / "prod-step-a")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pools_path = out_dir / "pools.json"
+    pools_path.write_text(json.dumps({"teams": extra_teams, "mixtures": mixtures}, separators=(",", ":")) + "\n")
+
+    rows: list[dict[str, Any]] = []
+    chunk_breaks: list[int] = [0]
+    blk = 0
+    seed_prefix = args.seed_prefix
+
+    for rname, cname, pair_spec in STEP_A_MATCHUPS:
+        rmems = STEP_A_PROFILES[rname]
+        cmems = STEP_A_PROFILES[cname]
+        rmix = rname if len(rmems) > 1 else f"s:{rmems[0]['id']}"
+        cmix = cname if len(cmems) > 1 else f"s:{cmems[0]['id']}"
+        r_var_rep: dict[str, int] = defaultdict(int)
+        c_var_rep: dict[str, int] = defaultdict(int)
+
+        for rm in rmems:
+            rid = rm["id"]
+            for cm in cmems:
+                cid = cm["id"]
+                n_p = int(pair_spec[(rid, cid)]) if isinstance(pair_spec, dict) else int(pair_spec)
+                for vrep in range(n_p):
+                    tag = f"{seed_prefix}/{rname}/{rid}/vs/{cname}/{cid}/r{vrep}"
+                    sr = u32_hash(f"{tag}/r")
+                    sc = u32_hash(f"{tag}/c")
+                    bs = u32_hash(f"{tag}/battle")
+                    pr = u32_hash(f"{seed_prefix}/{rname}/{rid}/vs/{cname}/prev-r-k{r_var_rep[rid] % 2}")
+                    pc = u32_hash(f"{seed_prefix}/{rname}/vs/{cname}/{cid}/prev-c-k{c_var_rep[cid] % 2}")
+                    for row_seat in (0, 1):
+                        if row_seat == 0:
+                            ids, seeds, pseeds, mix = [rid, cid], [sr, sc], [pr, pc], [rmix, cmix]
+                        else:
+                            ids, seeds, pseeds, mix = [cid, rid], [sc, sr], [pc, pr], [cmix, rmix]
+                        rows.append({
+                            "block": blk,
+                            "cell": {
+                                "kind": "step_a",
+                                "row": rname,
+                                "col": cname,
+                                "row_id": rid,
+                                "col_id": cid,
+                                "rep": vrep,
+                            },
+                            "rowSeat": row_seat,
+                            "ids": ids,
+                            "seeds": seeds,
+                            "previewSeeds": pseeds,
+                            "battleSeed": bs,
+                            "mixtures": mix,
+                        })
+                    blk += 1
+                    r_var_rep[rid] += 1
+                    c_var_rep[cid] += 1
+        chunk_breaks.append(len(rows))
+
+    sched_path = out_dir / "schedule.jsonl"
+    sched_path.write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
+    meta = {
+        "kind": "step-a",
+        "pools": str(pools_path),
+        "profiles": STEP_A_PROFILES,
+        "matchups": [[r, c] for r, c, _ in STEP_A_MATCHUPS],
+        "chunk_breaks": chunk_breaks,
+        "total_pairs": blk,
+        "total_games": len(rows),
+        "preview_iters": args.preview_iters,
+        "battle_iters": args.battle_iters,
+        "battle_mode": args.battle_mode,
+    }
+    (out_dir / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "prepare-step-a",
+        "dir": str(out_dir),
+        "matchups": len(STEP_A_MATCHUPS),
+        "chunks": len(chunk_breaks) - 1,
+        "pairs": blk,
+        "games": len(rows),
+    }))
+
+
+def cmd_analyze_step_a(args: argparse.Namespace) -> None:
+    run_dir: Path = args.dir
+    meta = json.loads((run_dir / "meta.json").read_text())
+    profiles: dict[str, list[dict[str, Any]]] = meta["profiles"]
+    matchups: list[list[str]] = meta["matchups"]
+
+    raw: dict[tuple[str, str, str, str, int], list[float]] = defaultdict(list)
+    for line in (run_dir / "results.jsonl").open():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        c = r["cell"]
+        raw[(c["row"], c["col"], c["row_id"], c["col_id"], int(c["rep"]))].append(
+            seat_score(r["outcome"], int(r["rowSeat"]))
+        )
+
+    cell_pairs: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+    for (rname, cname, rid, cid, _rep), scs in raw.items():
+        if len(scs) == 2:
+            cell_pairs[(rname, cname, rid, cid)].append(0.5 * (scs[0] + scs[1]))
+
+    hits = misses = 0
+    for df in sorted((run_dir / "chunks").glob("chunk-*.done.json")):
+        d = json.loads(df.read_text())
+        inner = json.loads(d["remote_stdout_last"]) if "remote_stdout_last" in d else d
+        hits += int(inner.get("preview_cache_hits", 0))
+        misses += int(inner.get("preview_cache_misses", 0))
+
+    results: list[dict[str, Any]] = []
+    for rname, cname in matchups:
+        ev = 0.0
+        var = 0.0
+        pairs_total = 0
+        by_sub: dict[str, dict[str, Any]] = {}
+        for rm in profiles[rname]:
+            rid, rw = rm["id"], float(rm["weight"])
+            for cm in profiles[cname]:
+                cid, cw = cm["id"], float(cm["weight"])
+                ps = cell_pairs[(rname, cname, rid, cid)]
+                mu, se = pair_cell_stats(ps)
+                ev += (rw * cw) * mu
+                var += ((rw * cw) ** 2) * (se ** 2)
+                pairs_total += len(ps)
+                by_sub[f"{rid}__vs__{cid}"] = {"weight": round(rw * cw, 4), "pairs": len(ps), "mean": round(mu, 4)}
+        se_tot = math.sqrt(var)
+        results.append({
+            "row": rname,
+            "col": cname,
+            "pairs": pairs_total,
+            "games": pairs_total * 2,
+            "mean": round(ev, 4),
+            "se": round(se_tot, 4),
+            "l95": round(max(0.0, ev - 1.80 * se_tot), 4),
+            "u95": round(min(1.0, ev + 1.80 * se_tot), 4),
+            "by_subcell": by_sub,
+        })
+
+    report = {
+        "dir": str(run_dir),
+        "games": sum(r["games"] for r in results),
+        "preview_cache_hits": hits,
+        "preview_cache_misses": misses,
+        "preview_cache_hit_rate": round(hits / max(1, hits + misses), 4),
+        "matchups": results,
+    }
+    out_path = args.out or (run_dir / "step-a-report.json")
+    out_path.write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "analyze-step-a",
+        "out": str(out_path),
+        "games": report["games"],
+        "cache_hit_rate": report["preview_cache_hit_rate"],
+        "summary": [
+            {"matchup": f"{r['row']} vs {r['col']}", "mean": r["mean"], "se": r["se"], "games": r["games"]}
+            for r in results
+        ],
+    }))
+
+
+# ---------------------------------------------------------------------------
 # Subcommand: self-test
 # ---------------------------------------------------------------------------
 
@@ -1870,6 +2112,20 @@ def main() -> None:
     p_asq.add_argument("--dir", type=Path, required=True)
     p_asq.add_argument("--out", type=Path, default=None)
     p_asq.set_defaults(func=cmd_analyze_s07_qopt)
+
+    p_psa = sub.add_parser("prepare-step-a")
+    p_psa.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_psa.add_argument("--out-dir", type=Path, default=None)
+    p_psa.add_argument("--seed-prefix", type=str, default="nc2000/elim-v1/step-a")
+    p_psa.add_argument("--preview-iters", type=int, default=729000)
+    p_psa.add_argument("--battle-iters", type=int, default=243000)
+    p_psa.add_argument("--battle-mode", choices=["fixed", "adaptive"], default="adaptive")
+    p_psa.set_defaults(func=cmd_prepare_step_a)
+
+    p_asa = sub.add_parser("analyze-step-a")
+    p_asa.add_argument("--dir", type=Path, required=True)
+    p_asa.add_argument("--out", type=Path, default=None)
+    p_asa.set_defaults(func=cmd_analyze_step_a)
 
     args = ap.parse_args()
     args.func(args)
