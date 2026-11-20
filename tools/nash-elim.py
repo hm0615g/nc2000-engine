@@ -2971,12 +2971,7 @@ def cmd_prepare_s08_upgrade(args: argparse.Namespace) -> None:
         for m in mems:
             needed_ids.add(m["id"])
 
-    extra_teams = [{"id": tid, "sets": all_sets[tid]} for tid in sorted(needed_ids) if tid not in base_teams or tid in cands_map]
-    # Deduplicate by id (prefer synthesized cands_map)
-    seen_et: dict[str, dict[str, Any]] = {}
-    for et in extra_teams:
-        seen_et[et["id"]] = et
-    extra_teams = [seen_et[k] for k in sorted(seen_et)]
+    extra_teams = [{"id": tid, "sets": all_sets[tid]} for tid in sorted(needed_ids) if tid not in base_teams]
 
     out_dir: Path = args.out_dir or (args.work_dir / "s08-upgrade-9k")
     out_dir.mkdir(parents=True, exist_ok=True)
