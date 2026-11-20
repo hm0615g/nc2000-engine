@@ -21,3 +21,15 @@
 
 - Playing-strength architecture, measured-null dead ends, and open `81k` frontiers: see [`docs/BOT-STRENGTH-HANDOFF.md`](docs/BOT-STRENGTH-HANDOFF.md).
 - Do NOT consult gitignored local scratch/archive directories (`findings/`, `tmp/`, `.git/sota/`) for current architecture or open bottlenecks; verify claims directly against [`docs/BOT-STRENGTH-HANDOFF.md`](docs/BOT-STRENGTH-HANDOFF.md) and live code under `crates/`.
+
+## Castle and Discord bot operation
+Before any Castle bot investigation or change, read docs/CASTLE-INCIDENT-STATUS.md. After each fix, update status and tests there. Provide all executable scripts inline as a single copy-and-paste command runnable from any directory.
+
+<!-- ascii-copy-paste-rule-v1 -->
+## Mandatory ASCII-only copy-and-paste commands
+- Every executable command provided to the user must be a COMPLETE, single copy-and-paste block, runnable from any working directory.
+- The entire command, including heredoc content, code comments, and string literals, must use ASCII characters only.
+- Never put raw Japanese or other non-ASCII text directly in pasted Python, Node.js, or shell source. Terminal encoding has repeatedly corrupted such text and caused Python SyntaxError.
+- For non-ASCII file content, pass ASCII-safe encoded bytes (for example base64), then decode with explicit UTF-8 inside the script.
+- Check the complete command for non-ASCII characters before presenting it; test syntax, expected output, and repeated execution when feasible.
+- After every fix, update the incident status, exact tests and results, and commit/push status. Do not mark untested work as completed.
