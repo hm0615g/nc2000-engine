@@ -99,6 +99,59 @@ B9_IDS = [
 ]
 
 
+# 7 Solid-3 top bare challengers to verify against the 4 camouflaged incumbent shells.
+SOLID3_CHALLENGERS = [
+    "pb-58",
+    "deme-r3-r0-s0013",
+    "sample-08",
+    "mjj-2020-gusto__0799a6",
+    "rental-cban-5",
+    "pb-96",
+    "pb-132__74c6b5",
+]
+
+# 4 Disclosed Camouflaged Incumbent Shells (from psro-v1/pools-p0.json + conclusion-candidate.json),
+# with exact conditional weights and stratified pair counts (min 2 pairs/variant for df>=1 everywhere).
+CAMO_INCUMBENTS: list[dict[str, Any]] = [
+    {
+        "name": "S07_70_30",
+        "ref_weight": 0.45456,
+        "members": [
+            {"id": "sample-07-beq-g2-c4", "weight": 0.70, "pairs": 4},
+            {"id": "sample-07", "weight": 0.30, "pairs": 2},
+        ],
+    },
+    {
+        "name": "APEX4",
+        "ref_weight": 0.27274,
+        "members": [
+            {"id": "apex-c04-bug-3atkstar-boomgen", "weight": 0.40, "pairs": 2},
+            {"id": "red-v10-s1105-r2-s0142", "weight": 0.30, "pairs": 2},
+            {"id": "apex-c08-surgical-142", "weight": 0.15, "pairs": 2},
+            {"id": "red-v10-s1105-r1-s0148", "weight": 0.15, "pairs": 2},
+        ],
+    },
+    {
+        "name": "D5",
+        "ref_weight": 0.0,
+        "members": [
+            {"id": "deme-r1-00-s0030", "weight": 0.20, "pairs": 2},
+            {"id": "deme-r1-00-s0030-beq-g2-c3-legal", "weight": 0.20, "pairs": 2},
+            {"id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal", "weight": 0.20, "pairs": 2},
+            {"id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal", "weight": 0.20, "pairs": 2},
+            {"id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal", "weight": 0.20, "pairs": 2},
+        ],
+    },
+    {
+        "name": "s0155",
+        "ref_weight": 0.27270,
+        "members": [
+            {"id": "red-v10-s1105-r2-s0155", "weight": 1.00, "pairs": 6},
+        ],
+    },
+]
+
+
 def u32_hash(tag: str) -> int:
     return int.from_bytes(hashlib.sha256(tag.encode("utf-8")).digest()[:4], "big")
 
@@ -635,8 +688,16 @@ def cmd_run(args: argparse.Namespace) -> None:
     chunks_dir.mkdir(parents=True, exist_ok=True)
 
     chunks: list[dict[str, Any]] = []
-    for ci, start in enumerate(range(0, len(sched_lines), chunk_size)):
-        c_rows = sched_lines[start : start + chunk_size]
+    chunk_breaks = meta.get("chunk_breaks")
+    if chunk_breaks and len(chunk_breaks) >= 2 and chunk_breaks[-1] == len(sched_lines):
+        spans = [(chunk_breaks[i], chunk_breaks[i + 1]) for i in range(len(chunk_breaks) - 1)]
+    else:
+        spans = [
+            (start, min(start + chunk_size, len(sched_lines)))
+            for start in range(0, len(sched_lines), chunk_size)
+        ]
+    for ci, (start, end) in enumerate(spans):
+        c_rows = sched_lines[start:end]
         c_sched = chunks_dir / f"chunk-{ci:03d}.jsonl"
         c_out = chunks_dir / f"chunk-{ci:03d}-out"
         c_done = chunks_dir / f"chunk-{ci:03d}.done.json"
@@ -1153,6 +1214,224 @@ def cmd_sanity_audit(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: prepare-camo-check & analyze-camo-check (vs Camouflaged Incumbents)
+# ---------------------------------------------------------------------------
+
+def cmd_prepare_camo_check(args: argparse.Namespace) -> None:
+    _, all_sets = load_full_catalog()
+    # Also load p0 teams (for D5 -legal sets if not in all_sets)
+    p0_doc = json.loads((ROOT / "target/nash-work/psro-v1/pools-p0.json").read_text())
+    for t in p0_doc.get("teams", []):
+        all_sets[t["id"]] = t["sets"]
+    base_teams, _ = LEDGER.load_catalog_and_mixtures(None)
+
+    challengers = [s.strip() for s in args.challengers.split(",") if s.strip()] if args.challengers else list(SOLID3_CHALLENGERS)
+    needed_ids = set(challengers)
+    mixtures: dict[str, list[dict[str, Any]]] = {f"s:{c}": [{"id": c, "weight": 1.0}] for c in challengers}
+    for inc in CAMO_INCUMBENTS:
+        mixtures[inc["name"]] = [{"id": m["id"], "weight": float(m["weight"])} for m in inc["members"]]
+        for m in inc["members"]:
+            needed_ids.add(m["id"])
+
+    extra_teams = [{"id": tid, "sets": all_sets[tid]} for tid in sorted(needed_ids) if tid not in base_teams]
+
+    out_dir: Path = args.out_dir or (args.work_dir / "prod-camo-check")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pools_path = out_dir / "pools.json"
+    pools_path.write_text(json.dumps({"teams": extra_teams, "mixtures": mixtures}, separators=(",", ":")) + "\n")
+
+    # Build chunk-aligned schedule: each challenger emits two natural groups
+    # (S07_70_30 [12g] + APEX4 [16g] = 28g) and (D5 [20g] + s0155 [12g] = 32g),
+    # or exact per-matchup chunks via `--chunk-sizes` / `chunk_breaks` metadata.
+    rows: list[dict[str, Any]] = []
+    chunk_breaks: list[int] = [0]
+    blk = 0
+    seed_prefix = args.seed_prefix
+    for cid in challengers:
+        for gi, group_names in enumerate((("S07_70_30", "APEX4"), ("D5", "s0155"))):
+            for inc in CAMO_INCUMBENTS:
+                if inc["name"] not in group_names:
+                    continue
+                iname = inc["name"]
+                shell_rep = 0
+                for m in inc["members"]:
+                    did = m["id"]
+                    n_p = int(m["pairs"])
+                    def_buckets = 2 if n_p >= 4 else 1
+                    for vrep in range(n_p):
+                        tag = f"{seed_prefix}/{cid}/vs/{iname}/{did}/r{vrep}"
+                        sc = u32_hash(f"{tag}/c")
+                        sd = u32_hash(f"{tag}/d")
+                        bs = u32_hash(f"{tag}/battle")
+                        # Challenger sees identical Turn-0 shell across all variants of `iname`:
+                        # use 2 independent preview seeds across all pairs of (cid, iname).
+                        cbkt = shell_rep % 2
+                        dbkt = vrep % def_buckets
+                        pc = u32_hash(f"{seed_prefix}/{cid}/vs/{iname}/prev-c-k{cbkt}")
+                        pd = u32_hash(f"{seed_prefix}/{cid}/vs/{iname}/{did}/prev-d-k{dbkt}")
+                        for row_seat in (0, 1):
+                            if row_seat == 0:
+                                ids, seeds, pseeds, mix = [cid, did], [sc, sd], [pc, pd], [f"s:{cid}", iname]
+                            else:
+                                ids, seeds, pseeds, mix = [did, cid], [sd, sc], [pd, pc], [iname, f"s:{cid}"]
+                            rows.append({
+                                "block": blk,
+                                "cell": {
+                                    "kind": "camo_check",
+                                    "candidate": cid,
+                                    "incumbent": iname,
+                                    "defender_id": did,
+                                    "rep": vrep,
+                                },
+                                "rowSeat": row_seat,
+                                "ids": ids,
+                                "seeds": seeds,
+                                "previewSeeds": pseeds,
+                                "battleSeed": bs,
+                                "mixtures": mix,
+                            })
+                        blk += 1
+                        shell_rep += 1
+            chunk_breaks.append(len(rows))
+
+    sched_path = out_dir / "schedule.jsonl"
+    sched_path.write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
+    meta = {
+        "kind": "camo-check",
+        "pools": str(pools_path),
+        "challengers": challengers,
+        "incumbents": CAMO_INCUMBENTS,
+        "chunk_breaks": chunk_breaks,
+        "total_pairs": blk,
+        "total_games": len(rows),
+        "preview_iters": args.preview_iters,
+        "battle_iters": args.battle_iters,
+        "battle_mode": args.battle_mode,
+    }
+    (out_dir / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "prepare-camo-check",
+        "dir": str(out_dir),
+        "challengers": len(challengers),
+        "chunks": len(chunk_breaks) - 1,
+        "pairs": blk,
+        "games": len(rows),
+    }))
+
+
+def cmd_analyze_camo_check(args: argparse.Namespace) -> None:
+    run_dir: Path = args.dir
+    meta = json.loads((run_dir / "meta.json").read_text())
+    challengers: list[str] = meta["challengers"]
+    incumbents: list[dict[str, Any]] = meta["incumbents"]
+
+    raw: dict[tuple[str, str, str, int], list[float]] = defaultdict(list)
+    for line in (run_dir / "results.jsonl").open():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        c = r["cell"]
+        raw[(c["candidate"], c["incumbent"], c["defender_id"], int(c["rep"]))].append(
+            seat_score(r["outcome"], int(r["rowSeat"]))
+        )
+
+    cell_pairs: dict[tuple[str, str, str], list[float]] = defaultdict(list)
+    for (cid, iname, did, _rep), scs in raw.items():
+        if len(scs) == 2:
+            cell_pairs[(cid, iname, did)].append(0.5 * (scs[0] + scs[1]))
+
+    # Cache stats
+    hits = misses = 0
+    for df in sorted((run_dir / "chunks").glob("chunk-*.done.json")):
+        d = json.loads(df.read_text())
+        inner = json.loads(d["remote_stdout_last"]) if "remote_stdout_last" in d else d
+        hits += int(inner.get("preview_cache_hits", 0))
+        misses += int(inner.get("preview_cache_misses", 0))
+
+    # Stratified conditional score vs each camouflaged incumbent + vs 7-type reference mix
+    # (45.46% S07_70_30 + 27.27% APEX4 + 27.27% s0155) + equal 4-incumbent mean
+    out_rows: list[dict[str, Any]] = []
+    for cid in challengers:
+        per_inc: dict[str, dict[str, Any]] = {}
+        ref_ev = 0.0
+        ref_var = 0.0
+        eq_ev = 0.0
+        eq_var = 0.0
+        for inc in incumbents:
+            iname = inc["name"]
+            ev = 0.0
+            var = 0.0
+            by_var: dict[str, dict[str, Any]] = {}
+            for m in inc["members"]:
+                did = m["id"]
+                w = float(m["weight"])
+                ps = cell_pairs[(cid, iname, did)]
+                mu, se = pair_cell_stats(ps)
+                ev += w * mu
+                var += (w ** 2) * (se ** 2)
+                by_var[did] = {"weight": w, "pairs": len(ps), "mean": round(mu, 4)}
+            se_inc = math.sqrt(var)
+            per_inc[iname] = {
+                "mean": round(ev, 4),
+                "se": round(se_inc, 4),
+                "l95": round(max(0.0, ev - 1.80 * se_inc), 4),
+                "u95": round(min(1.0, ev + 1.80 * se_inc), 4),
+                "by_variant": by_var,
+            }
+            rw = float(inc["ref_weight"])
+            if rw > 0.0:
+                ref_ev += rw * ev
+                ref_var += (rw ** 2) * var
+            eq_ev += 0.25 * ev
+            eq_var += (0.25 ** 2) * var
+
+        ref_se = math.sqrt(ref_var)
+        eq_se = math.sqrt(eq_var)
+        out_rows.append({
+            "rep_id": cid,
+            "vs_ref7_mean": round(ref_ev, 4),
+            "vs_ref7_se": round(ref_se, 4),
+            "vs_ref7_l95": round(max(0.0, ref_ev - 1.72 * ref_se), 4),
+            "vs_ref7_u95": round(min(1.0, ref_ev + 1.72 * ref_se), 4),
+            "vs_4inc_mean": round(eq_ev, 4),
+            "vs_4inc_se": round(eq_se, 4),
+            "vs_4inc_l95": round(max(0.0, eq_ev - 1.70 * eq_se), 4),
+            "vs_4inc_u95": round(min(1.0, eq_ev + 1.70 * eq_se), 4),
+            "per_incumbent": per_inc,
+        })
+
+    out_rows.sort(key=lambda x: (-x["vs_ref7_mean"], -x["vs_4inc_mean"]))
+    report = {
+        "dir": str(run_dir),
+        "games": sum(len(v) * 2 for v in cell_pairs.values()),
+        "preview_cache_hits": hits,
+        "preview_cache_misses": misses,
+        "preview_cache_hit_rate": round(hits / max(1, hits + misses), 4),
+        "rows": out_rows,
+    }
+    out_path = args.out or (run_dir / "camo-check-report.json")
+    out_path.write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "analyze-camo-check",
+        "out": str(out_path),
+        "games": report["games"],
+        "cache_hit_rate": report["preview_cache_hit_rate"],
+        "ranking": [
+            {
+                "id": r["rep_id"],
+                "vs_ref7": r["vs_ref7_mean"],
+                "vs_4inc": r["vs_4inc_mean"],
+                "S07": r["per_incumbent"]["S07_70_30"]["mean"],
+                "APEX4": r["per_incumbent"]["APEX4"]["mean"],
+                "D5": r["per_incumbent"]["D5"]["mean"],
+                "s0155": r["per_incumbent"]["s0155"]["mean"],
+            }
+            for r in out_rows
+        ],
+    }))
+
+
+# ---------------------------------------------------------------------------
 # Subcommand: self-test
 # ---------------------------------------------------------------------------
 
@@ -1255,6 +1534,21 @@ def main() -> None:
     p_sa.add_argument("--rescue-alt-fresh-vs-nash", type=float, default=0.55)
     p_sa.add_argument("--out", type=Path, default=None)
     p_sa.set_defaults(func=cmd_sanity_audit)
+
+    p_pcc = sub.add_parser("prepare-camo-check")
+    p_pcc.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_pcc.add_argument("--out-dir", type=Path, default=None)
+    p_pcc.add_argument("--challengers", type=str, default=None)
+    p_pcc.add_argument("--seed-prefix", type=str, default="nc2000/elim-v1/prod-camo")
+    p_pcc.add_argument("--preview-iters", type=int, default=729000)
+    p_pcc.add_argument("--battle-iters", type=int, default=243000)
+    p_pcc.add_argument("--battle-mode", choices=["fixed", "adaptive"], default="adaptive")
+    p_pcc.set_defaults(func=cmd_prepare_camo_check)
+
+    p_acc = sub.add_parser("analyze-camo-check")
+    p_acc.add_argument("--dir", type=Path, required=True)
+    p_acc.add_argument("--out", type=Path, default=None)
+    p_acc.set_defaults(func=cmd_analyze_camo_check)
 
     args = ap.parse_args()
     args.func(args)
