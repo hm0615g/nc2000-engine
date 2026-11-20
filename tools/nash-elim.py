@@ -2376,6 +2376,489 @@ def cmd_analyze_step_b(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: prepare-step-c & analyze-step-c (C1 Core Deepening + C2 S08_50_50 Camo)
+# ---------------------------------------------------------------------------
+
+STEP_C_CORE_NON_S07: list[str] = [
+    "APEX4",
+    "D5",
+    "sample-08",
+    "PB132_50_50",
+    "mjj-2014-thdrcomb__56b67d",
+    "rental-cban-8",
+    "pb-58",
+]
+
+# C1: 13 highest-impact uncertainty cells deepened by +24..32 games each (320 games)
+# C2: S08_50_50 (sample-08 + sample-08-sleep-eggy) vs all 7 other core shells & 3 S07 ratios (132 games)
+STEP_C_MATCHUPS: list[tuple[str, str, Any, str]] = [
+    # --- C1: Core precision deepening (320 games) ---
+    ("APEX4", "sample-08", 3, "c1"),                                      # 12p = 24g (-> 40g)
+    ("APEX4", "mjj-2014-thdrcomb__56b67d", 3, "c1"),                      # 12p = 24g (-> 40g)
+    ("APEX4", "pb-58", 3, "c1"),                                          # 12p = 24g (-> 40g)
+    ("APEX4", "PB132_50_50", 2, "c1"),                                    # 16p = 32g (-> 48g)
+    ("sample-08", "mjj-2014-thdrcomb__56b67d", 12, "c1"),                 # 12p = 24g (-> 36g)
+    ("sample-08", "pb-58", 12, "c1"),                                     # 12p = 24g (-> 36g)
+    ("sample-08", "PB132_50_50", 6, "c1"),                                # 12p = 24g (-> 36g)
+    ("sample-08", "rental-cban-8", 12, "c1"),                             # 12p = 24g (-> 36g)
+    ("S07_0_100", "sample-08", 12, "c1"),                                 # 12p = 24g (-> 36g)
+    ("S07_30_70", "sample-08", {("sample-07-beq-g2-c4", "sample-08"): 4, ("sample-07", "sample-08"): 8}, "c1"),  # 12p = 24g (-> 36g)
+    ("S07_50_50", "sample-08", 6, "c1"),                                  # 12p = 24g (-> 36g)
+    ("S07_50_50", "PB132_50_50", 3, "c1"),                                # 12p = 24g (-> 40g)
+    ("PB132_50_50", "mjj-2014-thdrcomb__56b67d", 6, "c1"),                # 12p = 24g (-> 36g)
+    # --- C2: S08_50_50 2-variant camouflage across full 8-shell core + 3 S07 ratios (132 games) ---
+    ("S08_50_50", "S07_0_100", 3, "c2"),                                  # 6p = 12g
+    ("S08_50_50", "S07_30_70", 2, "c2"),                                  # 8p = 16g
+    ("S08_50_50", "S07_50_50", 2, "c2"),                                  # 8p = 16g
+    ("S08_50_50", "APEX4", 1, "c2"),                                      # 8p = 16g
+    ("S08_50_50", "D5", 1, "c2"),                                         # 10p = 20g
+    ("S08_50_50", "PB132_50_50", 2, "c2"),                                # 8p = 16g
+    ("S08_50_50", "mjj-2014-thdrcomb__56b67d", 3, "c2"),                  # 6p = 12g
+    ("S08_50_50", "pb-58", 3, "c2"),                                      # 6p = 12g
+    ("S08_50_50", "rental-cban-8", 3, "c2"),                              # 6p = 12g
+]
+
+
+def build_step_c_profiles_and_sets(all_sets: dict[str, list[dict[str, Any]]]) -> tuple[dict[str, list[dict[str, Any]]], dict[str, list[dict[str, Any]]]]:
+    # Build slot-order-aligned `sample-08-sleep-eggy` from `rental-cban-6__4681ec`
+    s08_sets = all_sets["sample-08"]
+    c6_by_sp = {m["species"]: m for m in all_sets["rental-cban-6__4681ec"]}
+    aligned_sleep = [dict(c6_by_sp[m["species"]]) for m in s08_sets]
+    assert [(m["species"], m["level"], m.get("gender")) for m in aligned_sleep] == [
+        (m["species"], m["level"], m.get("gender")) for m in s08_sets
+    ], "Aligned sample-08-sleep-eggy preview signature mismatch"
+    sets_out = dict(all_sets)
+    sets_out["sample-08-sleep-eggy"] = aligned_sleep
+    profs = {
+        **STEP_B_PROFILES,
+        "S08_50_50": [
+            {"id": "sample-08", "weight": 0.50},
+            {"id": "sample-08-sleep-eggy", "weight": 0.50},
+        ],
+    }
+    return profs, sets_out
+
+
+def cmd_prepare_step_c(args: argparse.Namespace) -> None:
+    _, raw_sets = load_full_catalog()
+    p0_doc = json.loads((ROOT / "target/nash-work/psro-v1/pools-p0.json").read_text())
+    for t in p0_doc.get("teams", []):
+        raw_sets[t["id"]] = t["sets"]
+    base_teams, _ = LEDGER.load_catalog_and_mixtures(None)
+
+    profiles, all_sets = build_step_c_profiles_and_sets(raw_sets)
+
+    for pname, members in profiles.items():
+        if len(members) > 1:
+            sigs = {
+                tuple((m["species"], m["level"], m.get("gender")) for m in all_sets[mem["id"]])
+                for mem in members
+            }
+            assert len(sigs) == 1, f"Profile {pname} has mismatched preview signatures: {sigs}"
+
+    needed_ids: set[str] = set()
+    mixtures: dict[str, list[dict[str, Any]]] = {}
+    for pname, members in profiles.items():
+        mname = pname if len(members) > 1 else f"s:{members[0]['id']}"
+        mixtures[mname] = [{"id": m["id"], "weight": float(m["weight"])} for m in members]
+        for m in members:
+            needed_ids.add(m["id"])
+
+    extra_teams = [{"id": tid, "sets": all_sets[tid]} for tid in sorted(needed_ids) if tid not in base_teams]
+    out_dir: Path = args.out_dir or (args.work_dir / "prod-step-c")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pools_path = out_dir / "pools.json"
+    pools_path.write_text(json.dumps({"teams": extra_teams, "mixtures": mixtures}, separators=(",", ":")) + "\n")
+
+    rows: list[dict[str, Any]] = []
+    chunk_breaks: list[int] = [0]
+    blk = 0
+    seed_prefix = args.seed_prefix
+
+    for rname, cname, pair_spec, phase in STEP_C_MATCHUPS:
+        rmems = profiles[rname]
+        cmems = profiles[cname]
+        rmix = rname if len(rmems) > 1 else f"s:{rmems[0]['id']}"
+        cmix = cname if len(cmems) > 1 else f"s:{cmems[0]['id']}"
+        r_var_rep: dict[str, int] = defaultdict(int)
+        c_var_rep: dict[str, int] = defaultdict(int)
+        # Count total pairs each variant plays in this matchup to pick 2 vs 3 preview buckets
+        r_tot_p: dict[str, int] = defaultdict(int)
+        c_tot_p: dict[str, int] = defaultdict(int)
+        for rm in rmems:
+            for cm in cmems:
+                np_sub = int(pair_spec[(rm["id"], cm["id"])]) if isinstance(pair_spec, dict) else int(pair_spec)
+                r_tot_p[rm["id"]] += np_sub
+                c_tot_p[cm["id"]] += np_sub
+
+        for rm in rmems:
+            rid = rm["id"]
+            r_bkts = 3 if r_tot_p[rid] >= 10 else 2
+            for cm in cmems:
+                cid = cm["id"]
+                c_bkts = 3 if c_tot_p[cid] >= 10 else 2
+                n_p = int(pair_spec[(rid, cid)]) if isinstance(pair_spec, dict) else int(pair_spec)
+                for vrep in range(n_p):
+                    tag = f"{seed_prefix}/{phase}/{rname}/{rid}/vs/{cname}/{cid}/r{vrep}"
+                    sr = u32_hash(f"{tag}/r")
+                    sc = u32_hash(f"{tag}/c")
+                    bs = u32_hash(f"{tag}/battle")
+                    pr = u32_hash(f"{seed_prefix}/{phase}/{rname}/{rid}/vs/{cname}/prev-r-k{r_var_rep[rid] % r_bkts}")
+                    pc = u32_hash(f"{seed_prefix}/{phase}/{rname}/vs/{cname}/{cid}/prev-c-k{c_var_rep[cid] % c_bkts}")
+                    for row_seat in (0, 1):
+                        if row_seat == 0:
+                            ids, seeds, pseeds, mix = [rid, cid], [sr, sc], [pr, pc], [rmix, cmix]
+                        else:
+                            ids, seeds, pseeds, mix = [cid, rid], [sc, sr], [pc, pr], [cmix, rmix]
+                        rows.append({
+                            "block": blk,
+                            "cell": {
+                                "kind": f"step_{phase}",
+                                "row": rname,
+                                "col": cname,
+                                "row_id": rid,
+                                "col_id": cid,
+                                "rep": vrep,
+                            },
+                            "rowSeat": row_seat,
+                            "ids": ids,
+                            "seeds": seeds,
+                            "previewSeeds": pseeds,
+                            "battleSeed": bs,
+                            "mixtures": mix,
+                        })
+                    blk += 1
+                    r_var_rep[rid] += 1
+                    c_var_rep[cid] += 1
+        chunk_breaks.append(len(rows))
+
+    sched_path = out_dir / "schedule.jsonl"
+    sched_path.write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
+    meta = {
+        "kind": "step-c",
+        "pools": str(pools_path),
+        "profiles": profiles,
+        "matchups": [[r, c, ph] for r, c, _, ph in STEP_C_MATCHUPS],
+        "chunk_breaks": chunk_breaks,
+        "total_pairs": blk,
+        "total_games": len(rows),
+        "c1_games": sum(chunk_breaks[i + 1] - chunk_breaks[i] for i, m in enumerate(STEP_C_MATCHUPS) if m[3] == "c1"),
+        "c2_games": sum(chunk_breaks[i + 1] - chunk_breaks[i] for i, m in enumerate(STEP_C_MATCHUPS) if m[3] == "c2"),
+        "preview_iters": args.preview_iters,
+        "battle_iters": args.battle_iters,
+        "battle_mode": args.battle_mode,
+    }
+    (out_dir / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "prepare-step-c",
+        "dir": str(out_dir),
+        "chunks": len(chunk_breaks) - 1,
+        "c1_games": meta["c1_games"],
+        "c2_games": meta["c2_games"],
+        "games": len(rows),
+    }))
+
+
+def cmd_analyze_step_c(args: argparse.Namespace) -> None:
+    import random
+
+    work_dir: Path = args.work_dir
+    profiles: dict[str, list[dict[str, Any]]] = {
+        **STEP_B_PROFILES,
+        "S08_50_50": [
+            {"id": "sample-08", "weight": 0.50},
+            {"id": "sample-08-sleep-eggy", "weight": 0.50},
+        ],
+    }
+    alias: dict[str, str] = {
+        "sample-07:1.0": "S07_0_100",
+        "s:sample-07": "S07_0_100",
+        "S07_0_100": "S07_0_100",
+        "sample-07-beq-g2-c4:0.3+sample-07:0.7": "S07_30_70",
+        "S07_30_70": "S07_30_70",
+        "sample-07-beq-g2-c4:0.5+sample-07:0.5": "S07_50_50",
+        "S07_50_50": "S07_50_50",
+        "apex-c04-bug-3atkstar-boomgen:0.4+red-v10-s1105-r2-s0142:0.3+apex-c08-surgical-142:0.15+red-v10-s1105-r1-s0148:0.15": "APEX4",
+        "APEX4": "APEX4",
+        "deme-r1-00-s0030:0.2+deme-r1-00-s0030-beq-g2-c3-legal:0.2+deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal:0.2+deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal:0.2+deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal:0.2": "D5",
+        "D5": "D5",
+        "red-v10-s1105-r2-s0155:1.0": "s0155",
+        "s:red-v10-s1105-r2-s0155": "s0155",
+        "s0155": "s0155",
+        "sample-08:1.0": "sample-08",
+        "s:sample-08": "sample-08",
+        "S08_50_50": "S08_50_50",
+        "PB132_50_50": "PB132_50_50",
+        "pb-96:1.0": "pb-96",
+        "s:pb-96": "pb-96",
+        "mjj-2014-thdrcomb__56b67d:1.0": "mjj-2014-thdrcomb__56b67d",
+        "s:mjj-2014-thdrcomb__56b67d": "mjj-2014-thdrcomb__56b67d",
+        "rental-cban-8:1.0": "rental-cban-8",
+        "s:rental-cban-8": "rental-cban-8",
+        "sample-17-orig:1.0": "sample-17-orig",
+        "s:sample-17-orig": "sample-17-orig",
+        "pb-58:1.0": "pb-58",
+        "s:pb-58": "pb-58",
+    }
+
+    def p0_score(oc: Any) -> float:
+        s = str(oc).lower()
+        if s in ("p1", "0", "seat0", "win", "p0"):
+            return 1.0
+        if s in ("p2", "1", "seat1", "loss"):
+            return 0.0
+        return 0.5
+
+    pair_buckets: dict[tuple[str, str, str, str, str], list[float]] = defaultdict(list)
+    seen_games: set[tuple[Any, ...]] = set()
+    sources: list[tuple[Path, bool]] = [(ROOT / "target/nash-ledger.jsonl", True)]
+    for dname in ("prod-b9", "prod-p2a", "prod-p2b", "prod-camo-check", "prod-s07-qopt", "prod-step-a", "prod-step-b", "prod-step-c"):
+        p = work_dir / dname / "results.jsonl"
+        if p.exists():
+            sources.append((p, False))
+
+    for src_path, is_ledger in sources:
+        for line in src_path.open():
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            if is_ledger:
+                lbls = r.get("profile_labels") or ["", ""]
+                pa, pb = alias.get(lbls[0]), alias.get(lbls[1])
+            else:
+                mix = r.get("mixtures")
+                if mix:
+                    pa, pb = alias.get(mix[0]), alias.get(mix[1])
+                else:
+                    pa, pb = alias.get(f"s:{r['ids'][0]}"), alias.get(f"s:{r['ids'][1]}")
+            if not pa or not pb or pa == pb:
+                continue
+            ia, ib = r["ids"][0], r["ids"][1]
+            sc0 = p0_score(r["outcome"])
+            dedup_key = (pa, pb, ia, ib, r.get("battleSeed"), tuple(r.get("seeds", [])))
+            if dedup_key in seen_games:
+                continue
+            seen_games.add(dedup_key)
+            bs = r.get("battleSeed")
+            s_sorted = tuple(sorted(r.get("seeds", [])))
+            pkey = f"{src_path.parent.name}/{bs}/{s_sorted}"
+            if pa < pb:
+                pair_buckets[(pa, pb, ia, ib, pkey)].append(sc0)
+            else:
+                pair_buckets[(pb, pa, ib, ia, pkey)].append(1.0 - sc0)
+
+    sub_pairs: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+    sub_singles: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+    for (pa, pb, ia, ib, _pkey), scs in pair_buckets.items():
+        if len(scs) == 2:
+            sub_pairs[(pa, pb, ia, ib)].append(0.5 * (scs[0] + scs[1]))
+        else:
+            sub_singles[(pa, pb, ia, ib)].extend(scs)
+
+    def cell_mu_se_n(pa: str, pb: str) -> tuple[float, float, int]:
+        if pa == pb:
+            return 0.5, 0.0, 0
+        flip = pa > pb
+        lo, hi = (pb, pa) if flip else (pa, pb)
+        ev = 0.0
+        var = 0.0
+        ng = 0
+        for ma in profiles[lo]:
+            ia, wa = ma["id"], float(ma["weight"])
+            for mb in profiles[hi]:
+                ib, wb = mb["id"], float(mb["weight"])
+                ps = list(sub_pairs[(lo, hi, ia, ib)])
+                sg = list(sub_singles[(lo, hi, ia, ib)])
+                for k in range(0, len(sg) - 1, 2):
+                    ps.append(0.5 * (sg[k] + sg[k + 1]))
+                if len(sg) % 2 == 1:
+                    ps.append(sg[-1])
+                mu, se = pair_cell_stats(ps)
+                ev += (wa * wb) * mu
+                var += ((wa * wb) ** 2) * (se ** 2)
+                ng += len(sub_pairs[(lo, hi, ia, ib)]) * 2 + len(sg)
+        se_tot = math.sqrt(var)
+        return (1.0 - ev if flip else ev), se_tot, ng
+
+    # 1. Direct S08_50_50 vs sample-08 (bare) comparison across all 9 opponents (incl. 3 S07 ratios)
+    s08_opps = ["S07_0_100", "S07_30_70", "S07_50_50", "APEX4", "D5", "PB132_50_50", "mjj-2014-thdrcomb__56b67d", "pb-58", "rental-cban-8"]
+    s08_compare: dict[str, Any] = {}
+    for op in s08_opps:
+        m_bare, se_bare, ng_bare = cell_mu_se_n("sample-08", op)
+        m_camo, se_camo, ng_camo = cell_mu_se_n("S08_50_50", op)
+        # Per-variant breakdown inside S08_50_50
+        by_v: dict[str, float] = {}
+        for sv in ("sample-08", "sample-08-sleep-eggy"):
+            ev_v = 0.0
+            for om in profiles[op]:
+                oid, ow = om["id"], float(om["weight"])
+                lo, hi = ("S08_50_50", op) if "S08_50_50" < op else (op, "S08_50_50")
+                if "S08_50_50" < op:
+                    ps = sub_pairs[(lo, hi, sv, oid)]
+                    mu_v, _ = pair_cell_stats(ps)
+                else:
+                    ps = sub_pairs[(lo, hi, oid, sv)]
+                    mu_o, _ = pair_cell_stats(ps)
+                    mu_v = 1.0 - mu_o
+                ev_v += ow * mu_v
+            by_v[sv] = round(ev_v, 4)
+        s08_compare[op] = {
+            "bare_mean": round(m_bare, 4),
+            "bare_se": round(se_bare, 4),
+            "bare_games": ng_bare,
+            "camo_mean": round(m_camo, 4),
+            "camo_se": round(se_camo, 4),
+            "camo_games": ng_camo,
+            "delta_camo_minus_bare": round(m_camo - m_bare, 4),
+            "camo_by_variant": by_v,
+        }
+
+    # 2. Solve 8-shell core Nash for all 6 combinations: {S07_0_100, S07_30_70, S07_50_50} x {sample-08, S08_50_50}
+    s07_regimes = ["S07_0_100", "S07_30_70", "S07_50_50"]
+    s08_modes = ["sample-08", "S08_50_50"]
+    solves: dict[str, Any] = {}
+    n_boot = int(args.boot)
+
+    for s08_name in s08_modes:
+        non_s07 = [s08_name if x == "sample-08" else x for x in STEP_C_CORE_NON_S07]
+        for s07_name in s07_regimes:
+            key = f"{s07_name}__{s08_name}"
+            names = [s07_name] + non_s07
+            k = len(names)
+            mat = [[0.5] * k for _ in range(k)]
+            se_mat = [[0.0] * k for _ in range(k)]
+            ng_mat = [[0] * k for _ in range(k)]
+            for i in range(k):
+                for j in range(i + 1, k):
+                    mu, se, ng = cell_mu_se_n(names[i], names[j])
+                    assert ng >= 12, f"Missing cell {names[i]} vs {names[j]}: ng={ng}"
+                    mat[i][j] = mu
+                    mat[j][i] = 1.0 - mu
+                    se_mat[i][j] = se
+                    se_mat[j][i] = se
+                    ng_mat[i][j] = ng
+                    ng_mat[j][i] = ng
+
+            pt_w = STATS.solve_symmetric_nash(mat, iters=60_000)
+            rng = random.Random(20261121 + abs(hash(key)) % 100000)
+            boot_ws: list[list[float]] = []
+            for _ in range(n_boot):
+                mb = [[0.5] * k for _ in range(k)]
+                for i in range(k):
+                    for j in range(i + 1, k):
+                        x = max(0.0, min(1.0, mat[i][j] + rng.gauss(0.0, se_mat[i][j])))
+                        mb[i][j] = x
+                        mb[j][i] = 1.0 - x
+                boot_ws.append(STATS.solve_symmetric_nash(mb, iters=6_000))
+
+            summary: list[dict[str, Any]] = []
+            for i, nm in enumerate(names):
+                vs_nash = sum(pt_w[j] * mat[i][j] for j in range(k))
+                vs_nash_se = math.sqrt(sum((pt_w[j] * se_mat[i][j]) ** 2 for j in range(k) if j != i))
+                b_col = sorted(bw[i] for bw in boot_ws)
+                summary.append({
+                    "name": nm,
+                    "point_weight": round(pt_w[i], 4),
+                    "boot_mean": round(sum(b_col) / n_boot, 4),
+                    "boot_p_gt_5pct": round(sum(1 for x in b_col if x > 0.05) / n_boot, 3),
+                    "boot_iqr": [round(b_col[int(0.25 * n_boot)], 4), round(b_col[int(0.75 * n_boot)], 4)],
+                    "ev_vs_nash": round(vs_nash, 4),
+                    "ev_vs_nash_se": round(vs_nash_se, 4),
+                    "mean_vs_core": round(sum(mat[i][j] for j in range(k) if j != i) / (k - 1), 4),
+                    "min_vs_core": round(min(mat[i][j] for j in range(k) if j != i), 4),
+                })
+
+            # Cross-S07 deviation check against this point Nash
+            s07_dev: dict[str, dict[str, float]] = {}
+            for alt in s07_regimes:
+                ev_full = pt_w[0] * 0.5
+                var_full = 0.0
+                for j in range(1, k):
+                    if pt_w[j] <= 1e-9:
+                        continue
+                    mu, se, _ = cell_mu_se_n(alt, names[j])
+                    ev_full += pt_w[j] * mu
+                    var_full += (pt_w[j] * se) ** 2
+                s07_dev[alt] = {"ev_vs_nash": round(ev_full, 4), "se": round(math.sqrt(var_full), 4)}
+
+            # Cross-S08 deviation check (bare vs camo)
+            s08_idx = names.index(s08_name)
+            s08_dev: dict[str, dict[str, float]] = {}
+            for alt8 in s08_modes:
+                ev_full = pt_w[s08_idx] * 0.5
+                var_full = 0.0
+                for j in range(k):
+                    if j == s08_idx or pt_w[j] <= 1e-9:
+                        continue
+                    mu, se, _ = cell_mu_se_n(alt8, names[j])
+                    ev_full += pt_w[j] * mu
+                    var_full += (pt_w[j] * se) ** 2
+                s08_dev[alt8] = {"ev_vs_nash": round(ev_full, 4), "se": round(math.sqrt(var_full), 4)}
+
+            hot_cells = []
+            for i in range(k):
+                for j in range(i + 1, k):
+                    bm_i, bm_j = summary[i]["boot_mean"], summary[j]["boot_mean"]
+                    if bm_i >= 0.04 and bm_j >= 0.04:
+                        hot_cells.append({
+                            "pair": f"{names[i]} vs {names[j]}",
+                            "mean": round(mat[i][j], 4),
+                            "se": round(se_mat[i][j], 4),
+                            "games": ng_mat[i][j],
+                            "impact": round(bm_i * bm_j * se_mat[i][j], 5),
+                        })
+            hot_cells.sort(key=lambda x: -x["impact"])
+
+            solves[key] = {
+                "shells": names,
+                "summary": summary,
+                "s07_deviation_check": s07_dev,
+                "s08_deviation_check": s08_dev,
+                "matrix": [[round(x, 4) for x in row] for row in mat],
+                "se_matrix": [[round(x, 4) for x in row] for row in se_mat],
+                "games_matrix": ng_mat,
+                "top_uncertainty_cells": hot_cells[:10],
+            }
+
+    # Check step-c cache stats
+    hits = misses = 0
+    step_c_dir = work_dir / "prod-step-c"
+    for df in sorted((step_c_dir / "chunks").glob("chunk-*.done.json")):
+        d = json.loads(df.read_text())
+        inner = json.loads(d["remote_stdout_last"]) if "remote_stdout_last" in d else d
+        hits += int(inner.get("preview_cache_hits", 0))
+        misses += int(inner.get("preview_cache_misses", 0))
+
+    report = {
+        "dir": str(step_c_dir),
+        "step_c_cache_hit_rate": round(hits / max(1, hits + misses), 4),
+        "boot_draws": n_boot,
+        "s08_camo_vs_bare": s08_compare,
+        "core_solves": solves,
+    }
+    out_path = args.out or (step_c_dir / "step-c-core-report.json")
+    out_path.write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "analyze-step-c",
+        "out": str(out_path),
+        "cache_hit_rate": report["step_c_cache_hit_rate"],
+        "s08_mean_bare_vs_camo": [
+            round(sum(v["bare_mean"] for v in s08_compare.values()) / len(s08_compare), 4),
+            round(sum(v["camo_mean"] for v in s08_compare.values()) / len(s08_compare), 4),
+        ],
+        "solves": {
+            k: {
+                "point": {s["name"]: s["point_weight"] for s in v["summary"] if s["point_weight"] >= 0.01},
+                "boot": {s["name"]: s["boot_mean"] for s in sorted(v["summary"], key=lambda x: -x["boot_mean"])[:5]},
+                "s07_dev": {a: d["ev_vs_nash"] for a, d in v["s07_deviation_check"].items()},
+                "s08_dev": {a: d["ev_vs_nash"] for a, d in v["s08_deviation_check"].items()},
+            }
+            for k, v in solves.items()
+        },
+    }))
+
+
+# ---------------------------------------------------------------------------
 # Subcommand: self-test
 # ---------------------------------------------------------------------------
 
@@ -2536,6 +3019,21 @@ def main() -> None:
     p_asb.add_argument("--boot", type=int, default=400)
     p_asb.add_argument("--out", type=Path, default=None)
     p_asb.set_defaults(func=cmd_analyze_step_b)
+
+    p_psc = sub.add_parser("prepare-step-c")
+    p_psc.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_psc.add_argument("--out-dir", type=Path, default=None)
+    p_psc.add_argument("--seed-prefix", type=str, default="nc2000/elim-v1/step-c")
+    p_psc.add_argument("--preview-iters", type=int, default=729000)
+    p_psc.add_argument("--battle-iters", type=int, default=243000)
+    p_psc.add_argument("--battle-mode", choices=["fixed", "adaptive"], default="adaptive")
+    p_psc.set_defaults(func=cmd_prepare_step_c)
+
+    p_asc = sub.add_parser("analyze-step-c")
+    p_asc.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_asc.add_argument("--boot", type=int, default=500)
+    p_asc.add_argument("--out", type=Path, default=None)
+    p_asc.set_defaults(func=cmd_analyze_step_c)
 
     args = ap.parse_args()
     args.func(args)
