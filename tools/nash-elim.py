@@ -3896,6 +3896,298 @@ def cmd_analyze_camo_screen(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: prepare-camo-prod & analyze-camo-prod (Prod 243k/729k Showdown vs Incumbent Triangle)
+# ---------------------------------------------------------------------------
+
+CAMO_PROD_MATCHUPS: list[tuple[str, str, int, str]] = [
+    # --- Part 1: Incumbent triangle precision (72 games) ---
+    ("S07_50_50", "APEX4", 2, "tri"),          # 2p x 2 x 4 = 16p = 32g (-> 48g)
+    ("S07_50_50", "D5", 2, "tri"),             # 2p x 2 x 5 = 20p = 40g (-> 60g)
+    # --- Part 2: Top 3 camouflaged challengers vs Incumbent Triangle (288 games) ---
+    ("thdr:zap-talk", "D5", 2, "chal"),        # 2p x 2 x 5 = 20p = 40g
+    ("thdr:zap-talk", "APEX4", 2, "chal"),     # 2p x 2 x 4 = 16p = 32g
+    ("thdr:zap-talk", "S07_50_50", 3, "chal"), # 3p x 2 x 2 = 12p = 24g
+    ("thdr:lax-curse", "D5", 2, "chal"),       # 2p x 2 x 5 = 20p = 40g
+    ("thdr:lax-curse", "APEX4", 2, "chal"),    # 2p x 2 x 4 = 16p = 32g
+    ("thdr:lax-curse", "S07_50_50", 3, "chal"),# 3p x 2 x 2 = 12p = 24g
+    ("cban8:lax-drum", "D5", 2, "chal"),       # 2p x 2 x 5 = 20p = 40g
+    ("cban8:lax-drum", "APEX4", 2, "chal"),    # 2p x 2 x 4 = 16p = 32g
+    ("cban8:lax-drum", "S07_50_50", 3, "chal"),# 3p x 2 x 2 = 12p = 24g
+]
+
+
+def cmd_prepare_camo_prod(args: argparse.Namespace) -> None:
+    _, raw_sets = load_full_catalog()
+    p0_doc = json.loads((ROOT / "target/nash-work/psro-v1/pools-p0.json").read_text())
+    for t in p0_doc.get("teams", []):
+        raw_sets[t["id"]] = t["sets"]
+    base_teams, _ = LEDGER.load_catalog_and_mixtures(None)
+
+    new_teams, shell_groups = build_bare3_camo_variants(raw_sets)
+    all_sets = dict(raw_sets)
+    all_sets.update(new_teams)
+
+    profiles: dict[str, list[dict[str, Any]]] = {
+        "S07_50_50": STEP_B_PROFILES["S07_50_50"],
+        "APEX4": STEP_B_PROFILES["APEX4"],
+        "D5": STEP_B_PROFILES["D5"],
+        "thdr:zap-talk": shell_groups["mjj-2014-thdrcomb__56b67d"]["profiles"]["thdr:zap-talk"],
+        "thdr:lax-curse": shell_groups["mjj-2014-thdrcomb__56b67d"]["profiles"]["thdr:lax-curse"],
+        "cban8:lax-drum": shell_groups["rental-cban-8"]["profiles"]["cban8:lax-drum"],
+    }
+
+    needed_ids: set[str] = set()
+    mixtures: dict[str, list[dict[str, Any]]] = {}
+    for pname, mems in profiles.items():
+        mixtures[pname] = [{"id": m["id"], "weight": float(m["weight"])} for m in mems]
+        for m in mems:
+            needed_ids.add(m["id"])
+
+    extra_teams = [{"id": tid, "sets": all_sets[tid]} for tid in sorted(needed_ids) if tid not in base_teams]
+    out_dir: Path = args.out_dir or (args.work_dir / "prod-camo-showdown")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pools_path = out_dir / "pools.json"
+    pools_path.write_text(json.dumps({"teams": extra_teams, "mixtures": mixtures}, separators=(",", ":")) + "\n")
+
+    rows: list[dict[str, Any]] = []
+    chunk_breaks: list[int] = [0]
+    blk = 0
+    seed_prefix = args.seed_prefix
+
+    for rname, cname, n_p, kind in CAMO_PROD_MATCHUPS:
+        rmems = profiles[rname]
+        cmems = profiles[cname]
+        r_rep: dict[str, int] = defaultdict(int)
+        c_rep: dict[str, int] = defaultdict(int)
+        for rm in rmems:
+            rid = rm["id"]
+            for cm in cmems:
+                cid = cm["id"]
+                for vrep in range(n_p):
+                    tag = f"{seed_prefix}/{kind}/{rname}/{rid}/vs/{cname}/{cid}/r{vrep}"
+                    sr = u32_hash(f"{tag}/r")
+                    sc = u32_hash(f"{tag}/c")
+                    bs = u32_hash(f"{tag}/battle")
+                    pr = u32_hash(f"{seed_prefix}/{kind}/{rname}/{rid}/vs/{cname}/prev-r-k{r_rep[rid] % 2}")
+                    pc = u32_hash(f"{seed_prefix}/{kind}/{rname}/vs/{cname}/{cid}/prev-c-k{c_rep[cid] % 2}")
+                    for row_seat in (0, 1):
+                        if row_seat == 0:
+                            ids, seeds, pseeds, mix = [rid, cid], [sr, sc], [pr, pc], [rname, cname]
+                        else:
+                            ids, seeds, pseeds, mix = [cid, rid], [sc, sr], [pc, pr], [cname, rname]
+                        rows.append({
+                            "block": blk,
+                            "cell": {
+                                "kind": f"camo_prod_{kind}",
+                                "row": rname,
+                                "col": cname,
+                                "row_id": rid,
+                                "col_id": cid,
+                                "rep": vrep,
+                            },
+                            "rowSeat": row_seat,
+                            "ids": ids,
+                            "seeds": seeds,
+                            "previewSeeds": pseeds,
+                            "battleSeed": bs,
+                            "mixtures": mix,
+                        })
+                    blk += 1
+                    r_rep[rid] += 1
+                    c_rep[cid] += 1
+        chunk_breaks.append(len(rows))
+
+    (out_dir / "schedule.jsonl").write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
+    meta = {
+        "kind": "camo-prod",
+        "pools": str(pools_path),
+        "profiles": profiles,
+        "matchups": [[r, c, k] for r, c, _, k in CAMO_PROD_MATCHUPS],
+        "chunk_breaks": chunk_breaks,
+        "total_pairs": blk,
+        "total_games": len(rows),
+        "preview_iters": args.preview_iters,
+        "battle_iters": args.battle_iters,
+        "battle_mode": args.battle_mode,
+    }
+    (out_dir / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "prepare-camo-prod",
+        "dir": str(out_dir),
+        "chunks": len(chunk_breaks) - 1,
+        "pairs": blk,
+        "games": len(rows),
+    }))
+
+
+def cmd_analyze_camo_prod(args: argparse.Namespace) -> None:
+    import random
+
+    run_dir: Path = args.dir
+    work_dir: Path = args.work_dir
+    meta = json.loads((run_dir / "meta.json").read_text())
+    profiles: dict[str, list[dict[str, Any]]] = meta["profiles"]
+
+    # 1. Parse fresh prod-camo-showdown results
+    raw: dict[tuple[str, str, str, str, int], list[float]] = defaultdict(list)
+    for line in (run_dir / "results.jsonl").open():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        c = r["cell"]
+        raw[(c["row"], c["col"], c["row_id"], c["col_id"], int(c["rep"]))].append(
+            seat_score(r["outcome"], int(r["rowSeat"]))
+        )
+    cell_pairs: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+    for (rn, cn, rid, cid, _rep), scs in raw.items():
+        if len(scs) == 2:
+            cell_pairs[(rn, cn, rid, cid)].append(0.5 * (scs[0] + scs[1]))
+
+    def calc_fresh(rn: str, cn: str) -> dict[str, Any]:
+        ev = 0.0
+        var = 0.0
+        ng = 0
+        by_row_var: dict[str, float] = {}
+        for rm in profiles[rn]:
+            rid, rw = rm["id"], float(rm["weight"])
+            rev = 0.0
+            for cm in profiles[cn]:
+                cid, cw = cm["id"], float(cm["weight"])
+                ps = cell_pairs[(rn, cn, rid, cid)]
+                mu, se = pair_cell_stats(ps)
+                ev += (rw * cw) * mu
+                var += ((rw * cw) ** 2) * (se ** 2)
+                rev += cw * mu
+                ng += len(ps) * 2
+            by_row_var[rid] = round(rev, 4)
+        return {"mean": round(ev, 4), "se": round(math.sqrt(var), 4), "games": ng, "by_row_var": by_row_var}
+
+    # 2. Pool fresh triangle edges with prior Step C triangle (S07_50_50, APEX4, D5)
+    rep_c = json.loads((work_dir / "prod-step-c/step-c-core-report.json").read_text())
+    rd = rep_c["core_solves"]["S07_50_50__sample-08"]
+    sh_c = rd["shells"]
+
+    tri = ["S07_50_50", "APEX4", "D5"]
+    tmat = [[0.5] * 3 for _ in range(3)]
+    tsem = [[0.0] * 3 for _ in range(3)]
+    tgm = [[0] * 3 for _ in range(3)]
+    tri_edges: dict[str, Any] = {}
+    for i in range(3):
+        for j in range(i + 1, 3):
+            a, b = tri[i], tri[j]
+            ia, ib = sh_c.index(a), sh_c.index(b)
+            mp, sep, gp = rd["matrix"][ia][ib], rd["se_matrix"][ia][ib], rd["games_matrix"][ia][ib]
+            if (a, b) in (("S07_50_50", "APEX4"), ("S07_50_50", "D5")):
+                fr = calc_fresh(a, b)
+                mf, sef, gf = fr["mean"], fr["se"], fr["games"]
+                mu = (mp * gp + mf * gf) / (gp + gf)
+                se = math.sqrt((gp * sep) ** 2 + (gf * sef) ** 2) / (gp + gf)
+                ng = gp + gf
+                tri_edges[f"{a} vs {b}"] = {
+                    "prior": round(mp, 4), "prior_g": gp,
+                    "fresh": mf, "fresh_g": gf, "fresh_by_s07": fr["by_row_var"],
+                    "pooled": round(mu, 4), "se": round(se, 4), "games": ng,
+                }
+            else:
+                mu, se, ng = mp, sep, gp
+                tri_edges[f"{a} vs {b}"] = {"pooled": round(mu, 4), "se": round(se, 4), "games": ng}
+            tmat[i][j] = mu
+            tmat[j][i] = 1.0 - mu
+            tsem[i][j] = se
+            tsem[j][i] = se
+            tgm[i][j] = ng
+            tgm[j][i] = ng
+
+    tri_nash = STATS.solve_symmetric_nash(tmat, iters=60_000)
+    rng = random.Random(20261121)
+    tbw = []
+    for _ in range(500):
+        mb = [[0.5] * 3 for _ in range(3)]
+        for i in range(3):
+            for j in range(i + 1, 3):
+                x = max(0.0, min(1.0, tmat[i][j] + rng.gauss(0.0, tsem[i][j])))
+                mb[i][j] = x
+                mb[j][i] = 1.0 - x
+        tbw.append(STATS.solve_symmetric_nash(mb, iters=6_000))
+    tri_summary = {
+        tri[i]: {
+            "point": round(tri_nash[i], 4),
+            "boot_mean": round(sum(b[i] for b in tbw) / len(tbw), 4),
+            "boot_p_gt_5pct": round(sum(1 for b in tbw if b[i] > 0.05) / len(tbw), 3),
+        }
+        for i in range(3)
+    }
+
+    # 3. Evaluate all 3 camouflaged challengers vs Updated Incumbent Triangle Nash + 4-shell Nash solve
+    chals = ["thdr:zap-talk", "thdr:lax-curse", "cban8:lax-drum"]
+    chal_out: list[dict[str, Any]] = []
+    for ch in chals:
+        per_inc = {inc: calc_fresh(ch, inc) for inc in tri}
+        ev_tri = sum(tri_nash[i] * per_inc[tri[i]]["mean"] for i in range(3))
+        se_tri = math.sqrt(sum((tri_nash[i] * per_inc[tri[i]]["se"]) ** 2 for i in range(3)))
+        ev_eq = sum(per_inc[inc]["mean"] for inc in tri) / 3.0
+        se_eq = math.sqrt(sum(per_inc[inc]["se"] ** 2 for inc in tri)) / 3.0
+
+        # Solve 4-shell Nash: [S07_50_50, APEX4, D5, ch]
+        m4 = [[0.5] * 4 for _ in range(4)]
+        for i in range(3):
+            for j in range(3):
+                m4[i][j] = tmat[i][j]
+            m4[3][i] = per_inc[tri[i]]["mean"]
+            m4[i][3] = 1.0 - per_inc[tri[i]]["mean"]
+        w4 = STATS.solve_symmetric_nash(m4, iters=60_000)
+        chal_out.append({
+            "profile": ch,
+            "ev_vs_tri_nash": round(ev_tri, 4),
+            "se_vs_tri_nash": round(se_tri, 4),
+            "l95_vs_tri_nash": round(max(0.0, ev_tri - 1.68 * se_tri), 4),
+            "u95_vs_tri_nash": round(min(1.0, ev_tri + 1.68 * se_tri), 4),
+            "mean_vs_3inc": round(ev_eq, 4),
+            "se_vs_3inc": round(se_eq, 4),
+            "per_incumbent": per_inc,
+            "nash4_weights": {nm: round(w4[idx], 4) for idx, nm in enumerate(tri + [ch])},
+        })
+    chal_out.sort(key=lambda x: (-x["ev_vs_tri_nash"], -x["mean_vs_3inc"]))
+
+    hits = misses = 0
+    for df in sorted((run_dir / "chunks").glob("chunk-*.done.json")):
+        d = json.loads(df.read_text())
+        inner = json.loads(d["remote_stdout_last"]) if "remote_stdout_last" in d else d
+        hits += int(inner.get("preview_cache_hits", 0))
+        misses += int(inner.get("preview_cache_misses", 0))
+
+    report = {
+        "dir": str(run_dir),
+        "games": sum(len(v) * 2 for v in cell_pairs.values()),
+        "cache_hit_rate": round(hits / max(1, hits + misses), 4),
+        "incumbent_triangle_edges": tri_edges,
+        "incumbent_triangle_nash": tri_summary,
+        "challengers": chal_out,
+    }
+    out_path = args.out or (run_dir / "camo-prod-report.json")
+    out_path.write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "analyze-camo-prod",
+        "out": str(out_path),
+        "games": report["games"],
+        "cache_hit_rate": report["cache_hit_rate"],
+        "tri_nash": {k: v["point"] for k, v in tri_summary.items()},
+        "tri_boot": {k: v["boot_mean"] for k, v in tri_summary.items()},
+        "challengers": [
+            {
+                "profile": c["profile"],
+                "ev_tri": c["ev_vs_tri_nash"],
+                "se": c["se_vs_tri_nash"],
+                "mean3": c["mean_vs_3inc"],
+                "nash4_w": c["nash4_weights"][c["profile"]],
+                "per_inc": {k: v["mean"] for k, v in c["per_incumbent"].items()},
+            }
+            for c in chal_out
+        ],
+    }))
+
+
+# ---------------------------------------------------------------------------
 # Subcommand: self-test
 # ---------------------------------------------------------------------------
 
@@ -4122,6 +4414,21 @@ def main() -> None:
     p_acs.add_argument("--dir", type=Path, required=True)
     p_acs.add_argument("--out", type=Path, default=None)
     p_acs.set_defaults(func=cmd_analyze_camo_screen)
+
+    p_pcp = sub.add_parser("prepare-camo-prod")
+    p_pcp.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_pcp.add_argument("--out-dir", type=Path, default=None)
+    p_pcp.add_argument("--seed-prefix", type=str, default="nc2000/elim-v1/camo-prod")
+    p_pcp.add_argument("--preview-iters", type=int, default=729000)
+    p_pcp.add_argument("--battle-iters", type=int, default=243000)
+    p_pcp.add_argument("--battle-mode", choices=["fixed", "adaptive"], default="adaptive")
+    p_pcp.set_defaults(func=cmd_prepare_camo_prod)
+
+    p_acp = sub.add_parser("analyze-camo-prod")
+    p_acp.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_acp.add_argument("--dir", type=Path, required=True)
+    p_acp.add_argument("--out", type=Path, default=None)
+    p_acp.set_defaults(func=cmd_analyze_camo_prod)
 
     args = ap.parse_args()
     args.func(args)
