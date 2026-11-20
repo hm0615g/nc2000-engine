@@ -50,6 +50,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 STATS = SourceFileLoader("nash_stats", str(ROOT / "tools/nash-stats.py")).load_module()
 LEDGER = SourceFileLoader("nash_ledger", str(ROOT / "tools/nash-ledger.py")).load_module()
+MINI2 = SourceFileLoader("mini2_nash", str(ROOT / "tools/mini2_nash.py")).load_module()
 
 DEFAULT_BIN = ROOT / "target/native-pgo/release/examples/nash_refresh"
 NODE_WASM_PKG = ROOT / "crates/wasm/pkg-node/nc2000_wasm.js"
@@ -627,41 +628,32 @@ def cmd_run(args: argparse.Namespace) -> None:
 
     t0 = time.monotonic()
     n_chunks = (len(rows) + chunk_size - 1) // chunk_size
-    ran_chunks = 0
-    skipped_chunks = 0
+    chunk_specs: list[dict[str, Any]] = []
     chunk_result_dirs: list[Path] = []
-
     for ci in range(n_chunks):
         c_rows = rows[ci * chunk_size : (ci + 1) * chunk_size]
         c_sched = chunks_dir / f"chunk-{ci:03d}.jsonl"
         c_out = chunks_dir / f"chunk-{ci:03d}-out"
         c_done = chunks_dir / f"chunk-{ci:03d}.done.json"
+        if not c_sched.exists():
+            c_sched.write_text("\n".join(c_rows) + "\n")
+        chunk_specs.append({"ci": ci, "sched": c_sched, "out": c_out, "done": c_done, "n_rows": len(c_rows)})
         chunk_result_dirs.append(c_out)
 
-        if c_done.exists() and c_out.exists():
-            existing_json = [p for p in c_out.glob("*.json") if p.name != "manifest.json"]
-            if len(existing_json) == len(c_rows):
-                skipped_chunks += 1
-                continue
-
-        c_sched.write_text("\n".join(c_rows) + "\n")
-        if c_out.exists():
-            shutil.rmtree(c_out)
-        if c_done.exists():
-            c_done.unlink()
-        proc = subprocess.run(
-            [str(binary), str(c_sched), str(c_out), str(args.workers)],
-            env=env,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"chunk {ci:03d} failed (rc={proc.returncode}):\n{proc.stderr or proc.stdout}"
-            )
-        c_done.write_text(proc.stdout.strip() + "\n")
-        ran_chunks += 1
+    dispatch = MINI2.run_chunks_dual_node(
+        chunk_specs,
+        binary=binary,
+        pools_path=Path(meta["pools"]),
+        local_workers=args.workers,
+        mini2_workers=args.mini2_workers,
+        use_mini2=args.mini2,
+        preview_iters=args.preview_iters,
+        battle_iters=args.battle_iters,
+        battle_mode=args.battle_mode,
+        preview_cache=not args.no_preview_cache,
+    )
+    ran_chunks = dispatch["ran_local"] + dispatch["ran_mini2"]
+    skipped_chunks = dispatch["skipped"]
 
     # Write consolidated results.jsonl from all chunks
     total_written = 0
@@ -1034,6 +1026,8 @@ def main() -> None:
     p_run.add_argument("--dir", type=Path, required=True)
     p_run.add_argument("--binary", type=Path, default=DEFAULT_BIN)
     p_run.add_argument("--workers", type=int, default=10)
+    p_run.add_argument("--mini2", action="store_true", help="Enable work-stealing dual-node dispatch with mini2")
+    p_run.add_argument("--mini2-workers", type=int, default=11)
     p_run.add_argument("--chunk-games", type=int, default=40)
     p_run.add_argument("--merge-ledger", type=Path, default=None)
     p_run.add_argument("--preview-iters", type=int, default=None)
