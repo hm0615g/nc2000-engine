@@ -463,27 +463,38 @@ def cmd_prepare_basis(args: argparse.Namespace) -> None:
     b9_shells = {cat_by_id[tid]["shell_hash"] for tid in B9_IDS}
     assert len(b9_shells) == len(B9_IDS), "B9 must have pairwise-distinct shells"
 
-    out_dir: Path = args.work_dir / "b9-matrix"
+    out_dir: Path = args.out_dir or (args.work_dir / "b9-matrix")
     out_dir.mkdir(parents=True, exist_ok=True)
     pools_path = out_dir / "pools.json"
     write_bare_pools(pools_path, B9_IDS, all_sets)
 
+    seed_prefix = args.seed_prefix
+    pbuckets = int(args.preview_seed_buckets)
     rows: list[dict[str, Any]] = []
     blk = 0
     for i in range(len(B9_IDS)):
         for j in range(i + 1, len(B9_IDS)):
             a, b = B9_IDS[i], B9_IDS[j]
             for rep in range(args.pairs_per_cell):
-                tag = f"nc2000/elim-v1/b9/{a}/vs/{b}/r{rep}"
+                tag = f"{seed_prefix}/{a}/vs/{b}/r{rep}"
                 sa = u32_hash(f"{tag}/a")
                 sb = u32_hash(f"{tag}/b")
                 bs = u32_hash(f"{tag}/battle")
+                p_seeds: tuple[int, int] | None = None
+                if pbuckets > 0:
+                    bkt = rep % pbuckets
+                    p_seeds = (
+                        u32_hash(f"{seed_prefix}/{a}/vs/{b}/prev-a-k{bkt}"),
+                        u32_hash(f"{seed_prefix}/{a}/vs/{b}/prev-b-k{bkt}"),
+                    )
                 for row_seat in (0, 1):
                     if row_seat == 0:
                         ids, seeds, mix = [a, b], [sa, sb], [f"s:{a}", f"s:{b}"]
+                        ps_arr = [p_seeds[0], p_seeds[1]] if p_seeds else None
                     else:
                         ids, seeds, mix = [b, a], [sb, sa], [f"s:{b}", f"s:{a}"]
-                    rows.append({
+                        ps_arr = [p_seeds[1], p_seeds[0]] if p_seeds else None
+                    row_obj: dict[str, Any] = {
                         "block": blk,
                         "cell": {"kind": "b9", "a": a, "b": b, "rep": rep},
                         "rowSeat": row_seat,
@@ -491,7 +502,10 @@ def cmd_prepare_basis(args: argparse.Namespace) -> None:
                         "seeds": seeds,
                         "battleSeed": bs,
                         "mixtures": mix,
-                    })
+                    }
+                    if ps_arr is not None:
+                        row_obj["previewSeeds"] = ps_arr
+                    rows.append(row_obj)
                 blk += 1
 
     sched_path = out_dir / "schedule.jsonl"
@@ -501,6 +515,8 @@ def cmd_prepare_basis(args: argparse.Namespace) -> None:
         "pools": str(pools_path),
         "basis_ids": B9_IDS,
         "pairs_per_cell": args.pairs_per_cell,
+        "preview_seed_buckets": pbuckets,
+        "seed_prefix": seed_prefix,
         "total_pairs": blk,
         "total_games": len(rows),
         "preview_iters": args.preview_iters,
@@ -518,37 +534,49 @@ def cmd_prepare_basis(args: argparse.Namespace) -> None:
 def cmd_prepare_round(args: argparse.Namespace) -> None:
     cat_entries, all_sets = load_full_catalog()
     cat_by_id = {e["id"]: e for e in cat_entries}
-    b9_set = set(B9_IDS)
-    b9_shells = {cat_by_id[t]["shell_hash"] for t in B9_IDS}
+    basis_ids = [s.strip() for s in args.basis_ids.split(",") if s.strip()] if args.basis_ids else list(B9_IDS)
+    b_set = set(basis_ids)
+    b_shells = {cat_by_id[t]["shell_hash"] for t in basis_ids}
 
     src_doc = json.loads(args.shells_file.read_text())
     shell_list = src_doc["shells"] if "shells" in src_doc else src_doc["survivors"]
     candidates = [
         s["rep_id"]
         for s in shell_list
-        if s["rep_id"] not in b9_set and s["shell_hash"] not in b9_shells
+        if s["rep_id"] not in b_set and s["shell_hash"] not in b_shells
     ]
 
-    out_dir: Path = args.work_dir / f"round-{args.round}"
+    out_dir: Path = args.out_dir or (args.work_dir / f"round-{args.round}")
     out_dir.mkdir(parents=True, exist_ok=True)
     pools_path = out_dir / "pools.json"
-    write_bare_pools(pools_path, B9_IDS + candidates, all_sets)
+    write_bare_pools(pools_path, basis_ids + candidates, all_sets)
 
+    seed_prefix = args.seed_prefix
+    pbuckets = int(args.preview_seed_buckets)
     rows: list[dict[str, Any]] = []
     blk = 0
     for cid in candidates:
-        for bid in B9_IDS:
+        for bid in basis_ids:
             for rep in range(args.rep_start, args.rep_end):
-                tag = f"nc2000/elim-v1/race/{cid}/vs/{bid}/r{rep}"
+                tag = f"{seed_prefix}/{cid}/vs/{bid}/r{rep}"
                 sc = u32_hash(f"{tag}/c")
                 sb = u32_hash(f"{tag}/b")
                 bs = u32_hash(f"{tag}/battle")
+                p_seeds: tuple[int, int] | None = None
+                if pbuckets > 0:
+                    bkt = rep % pbuckets
+                    p_seeds = (
+                        u32_hash(f"{seed_prefix}/{cid}/vs/{bid}/prev-c-k{bkt}"),
+                        u32_hash(f"{seed_prefix}/{cid}/vs/{bid}/prev-b-k{bkt}"),
+                    )
                 for row_seat in (0, 1):
                     if row_seat == 0:
                         ids, seeds, mix = [cid, bid], [sc, sb], [f"s:{cid}", f"s:{bid}"]
+                        ps_arr = [p_seeds[0], p_seeds[1]] if p_seeds else None
                     else:
                         ids, seeds, mix = [bid, cid], [sb, sc], [f"s:{bid}", f"s:{cid}"]
-                    rows.append({
+                        ps_arr = [p_seeds[1], p_seeds[0]] if p_seeds else None
+                    row_obj: dict[str, Any] = {
                         "block": blk,
                         "cell": {"kind": "race", "round": args.round, "candidate": cid, "basis": bid, "rep": rep},
                         "rowSeat": row_seat,
@@ -556,7 +584,10 @@ def cmd_prepare_round(args: argparse.Namespace) -> None:
                         "seeds": seeds,
                         "battleSeed": bs,
                         "mixtures": mix,
-                    })
+                    }
+                    if ps_arr is not None:
+                        row_obj["previewSeeds"] = ps_arr
+                    rows.append(row_obj)
                 blk += 1
 
     sched_path = out_dir / "schedule.jsonl"
@@ -566,10 +597,12 @@ def cmd_prepare_round(args: argparse.Namespace) -> None:
         "round": args.round,
         "pools": str(pools_path),
         "shells_file": str(args.shells_file),
-        "basis_ids": B9_IDS,
+        "basis_ids": basis_ids,
         "candidates": candidates,
         "rep_start": args.rep_start,
         "rep_end": args.rep_end,
+        "preview_seed_buckets": pbuckets,
+        "seed_prefix": seed_prefix,
         "total_pairs": blk,
         "total_games": len(rows),
         "preview_iters": args.preview_iters,
@@ -669,7 +702,8 @@ def cmd_analyze(args: argparse.Namespace) -> None:
 
     # 1. Load B9 x B9 bare matrix
     b9_raw: dict[tuple[str, str, int], list[float]] = defaultdict(list)
-    b9_res = work_dir / "b9-matrix/results.jsonl"
+    b9_dir: Path = args.basis_dir or (work_dir / "b9-matrix")
+    b9_res = b9_dir / "results.jsonl"
     for line in b9_res.open():
         if not line.strip():
             continue
@@ -1157,6 +1191,9 @@ def main() -> None:
 
     p_pb = sub.add_parser("prepare-basis")
     p_pb.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_pb.add_argument("--out-dir", type=Path, default=None)
+    p_pb.add_argument("--seed-prefix", type=str, default="nc2000/elim-v1/b9")
+    p_pb.add_argument("--preview-seed-buckets", type=int, default=0)
     p_pb.add_argument("--pairs-per-cell", type=int, default=12)
     p_pb.add_argument("--preview-iters", type=int, default=81000)
     p_pb.add_argument("--battle-iters", type=int, default=9000)
@@ -1165,6 +1202,10 @@ def main() -> None:
 
     p_pr = sub.add_parser("prepare-round")
     p_pr.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_pr.add_argument("--out-dir", type=Path, default=None)
+    p_pr.add_argument("--seed-prefix", type=str, default="nc2000/elim-v1/race")
+    p_pr.add_argument("--basis-ids", type=str, default=None)
+    p_pr.add_argument("--preview-seed-buckets", type=int, default=0)
     p_pr.add_argument("--round", type=int, required=True)
     p_pr.add_argument("--shells-file", type=Path, required=True)
     p_pr.add_argument("--rep-start", type=int, required=True)
@@ -1185,6 +1226,7 @@ def main() -> None:
 
     p_an = sub.add_parser("analyze")
     p_an.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_an.add_argument("--basis-dir", type=Path, default=None)
     p_an.add_argument("--rounds", type=int, nargs="*", default=[1])
     p_an.add_argument("--mode", choices=["round1", "round2", "round3"], default="round1")
     p_an.add_argument("--cut-eb-gap", type=float, default=0.04)

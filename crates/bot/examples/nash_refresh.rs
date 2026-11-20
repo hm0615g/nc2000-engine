@@ -55,6 +55,8 @@ struct Task {
     row_seat: usize,
     ids: [String; 2],
     seeds: [u32; 2],
+    #[serde(default, rename = "previewSeeds", skip_serializing_if = "Option::is_none")]
+    preview_seeds: Option<[u32; 2]>,
     #[serde(rename = "battleSeed")]
     battle_seed: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -507,6 +509,8 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
             }
 
             if chosen.is_none() {
+                let separate_preview_seed = task.preview_seeds.map(|ps| ps[side]);
+                let preview_seed = separate_preview_seed.unwrap_or(task.seeds[side]);
                 let cached_policy = if first
                     && agent.belief().is_some_and(|b| !b.is_fallback())
                 {
@@ -518,7 +522,7 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
                             .unwrap_or("");
                         let key = preview_cache_key(
                             side,
-                            task.seeds[side],
+                            preview_seed,
                             shared.preview_iters,
                             shared.blind_c,
                             own_json,
@@ -531,15 +535,47 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
                         let dex = &shared.dex;
                         let preview_iters = shared.preview_iters;
                         let is_current = policies[side] == "current";
+                        let cfg_clone = cfg.clone();
+                        let prior_clone = priors[side].clone();
+                        let own_sets = sets[side].clone();
                         Some(cache.get_or_compute(key, || {
-                            if is_current {
-                                agent
-                                    .step_adaptive_battle(dex, preview_iters)
-                                    .expect("step_adaptive_battle");
+                            if let Some(pseed) = separate_preview_seed {
+                                // Isolated agent seeded with `previewSeeds[side]` guarantees
+                                // bit-exact determinism regardless of worker scheduling or cache hit/miss,
+                                // while keeping main battle `agent` RNG strictly independent per game.
+                                let mut p_agent = ProtocolAgent::new(
+                                    dex,
+                                    side,
+                                    prior_clone,
+                                    cfg_clone,
+                                    pseed as u64,
+                                );
+                                p_agent.set_own_team(own_sets);
+                                for line in &frame.lines {
+                                    p_agent.push_line(dex, line);
+                                }
+                                let owed = p_agent
+                                    .on_request(dex, &req_json)
+                                    .expect("preview ProtocolAgent::on_request");
+                                assert!(owed, "expected pending preview decision on side {side}");
+                                if is_current {
+                                    p_agent
+                                        .step_adaptive_battle(dex, preview_iters)
+                                        .expect("step_adaptive_battle");
+                                } else {
+                                    p_agent.step(dex, preview_iters).expect("step");
+                                }
+                                p_agent.decision_policy(dex, PolicyMode::Legacy)
                             } else {
-                                agent.step(dex, preview_iters).expect("step");
+                                if is_current {
+                                    agent
+                                        .step_adaptive_battle(dex, preview_iters)
+                                        .expect("step_adaptive_battle");
+                                } else {
+                                    agent.step(dex, preview_iters).expect("step");
+                                }
+                                agent.decision_policy(dex, PolicyMode::Legacy)
                             }
-                            agent.decision_policy(dex, PolicyMode::Legacy)
                         }))
                     } else {
                         None
@@ -552,28 +588,61 @@ fn run_game(shared: &SharedState, index: usize, task: &Task) -> Value {
                     Some(p) => p,
                     None => {
                         if first {
-                            if policies[side] == "current" {
-                                agent
-                                    .step_adaptive_battle(&shared.dex, shared.preview_iters)
-                                    .expect("step_adaptive_battle");
-                            } else {
-                                agent.step(&shared.dex, shared.preview_iters).expect("step");
-                            }
-                        } else if policies[side] == "current" {
-                            match shared.battle_mode {
-                                BattleMode::Adaptive => {
-                                    agent
-                                        .step_adaptive_battle(&shared.dex, shared.battle_iters)
+                            if let Some(pseed) = separate_preview_seed {
+                                let mut p_agent = ProtocolAgent::new(
+                                    &shared.dex,
+                                    side,
+                                    priors[side].clone(),
+                                    cfg.clone(),
+                                    pseed as u64,
+                                );
+                                p_agent.set_own_team(sets[side].clone());
+                                for line in &frame.lines {
+                                    p_agent.push_line(&shared.dex, line);
+                                }
+                                let owed = p_agent
+                                    .on_request(&shared.dex, &req_json)
+                                    .expect("preview ProtocolAgent::on_request");
+                                assert!(owed, "expected pending preview decision on side {side}");
+                                if policies[side] == "current" {
+                                    p_agent
+                                        .step_adaptive_battle(&shared.dex, shared.preview_iters)
                                         .expect("step_adaptive_battle");
+                                } else {
+                                    p_agent
+                                        .step(&shared.dex, shared.preview_iters)
+                                        .expect("step");
                                 }
-                                BattleMode::Fixed => {
-                                    agent.step(&shared.dex, shared.battle_iters).expect("step");
+                                p_agent.decision_policy(&shared.dex, PolicyMode::Legacy)
+                            } else {
+                                if policies[side] == "current" {
+                                    agent
+                                        .step_adaptive_battle(&shared.dex, shared.preview_iters)
+                                        .expect("step_adaptive_battle");
+                                } else {
+                                    agent.step(&shared.dex, shared.preview_iters).expect("step");
                                 }
+                                agent.decision_policy(&shared.dex, PolicyMode::Legacy)
                             }
                         } else {
-                            agent.step(&shared.dex, 81_000).expect("step");
+                            if policies[side] == "current" {
+                                match shared.battle_mode {
+                                    BattleMode::Adaptive => {
+                                        agent
+                                            .step_adaptive_battle(&shared.dex, shared.battle_iters)
+                                            .expect("step_adaptive_battle");
+                                    }
+                                    BattleMode::Fixed => {
+                                        agent
+                                            .step(&shared.dex, shared.battle_iters)
+                                            .expect("step");
+                                    }
+                                }
+                            } else {
+                                agent.step(&shared.dex, 81_000).expect("step");
+                            }
+                            agent.decision_policy(&shared.dex, PolicyMode::Legacy)
                         }
-                        agent.decision_policy(&shared.dex, PolicyMode::Legacy)
                     }
                 };
 
