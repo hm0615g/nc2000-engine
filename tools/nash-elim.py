@@ -2984,6 +2984,7 @@ def cmd_prepare_s08_upgrade(args: argparse.Namespace) -> None:
     blk = 0
     seed_prefix = args.seed_prefix
     cand_ids = list(cands_map.keys())
+    split_per_opp = bool(args.split_per_opp)
 
     for cid in cand_ids:
         cmix = f"s:{cid}"
@@ -2991,6 +2992,9 @@ def cmd_prepare_s08_upgrade(args: argparse.Namespace) -> None:
             omems = STEP_B_PROFILES[oname]
             omix = oname if len(omems) > 1 else f"s:{omems[0]['id']}"
             cand_rep = 0
+            tot_p_cand = n_p * len(omems)
+            c_bkts = int(args.preview_buckets) if tot_p_cand >= 10 else min(2, int(args.preview_buckets))
+            o_bkts = min(int(args.preview_buckets), max(1, n_p)) if n_p >= 6 else min(2, max(1, n_p))
             for om in omems:
                 oid = om["id"]
                 for vrep in range(n_p):
@@ -2999,8 +3003,8 @@ def cmd_prepare_s08_upgrade(args: argparse.Namespace) -> None:
                     sc = u32_hash(f"{tag}/c")
                     so = u32_hash(f"{tag}/o")
                     bs = u32_hash(f"{tag}/battle")
-                    pc = u32_hash(f"{seed_prefix}/crn/vs/{oname}/prev-c-k{cand_rep % 2}")
-                    po = u32_hash(f"{seed_prefix}/crn/vs/{oname}/{oid}/prev-o-k{vrep % 2}")
+                    pc = u32_hash(f"{seed_prefix}/crn/vs/{oname}/prev-c-k{cand_rep % c_bkts}")
+                    po = u32_hash(f"{seed_prefix}/crn/vs/{oname}/{oid}/prev-o-k{vrep % o_bkts}")
                     for row_seat in (0, 1):
                         if row_seat == 0:
                             ids, seeds, pseeds, mix = [cid, oid], [sc, so], [pc, po], [cmix, omix]
@@ -3024,7 +3028,10 @@ def cmd_prepare_s08_upgrade(args: argparse.Namespace) -> None:
                         })
                     blk += 1
                     cand_rep += 1
-        chunk_breaks.append(len(rows))
+            if split_per_opp:
+                chunk_breaks.append(len(rows))
+        if not split_per_opp:
+            chunk_breaks.append(len(rows))
 
     sched_path = out_dir / "schedule.jsonl"
     sched_path.write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
@@ -3057,8 +3064,9 @@ def cmd_analyze_s08_upgrade(args: argparse.Namespace) -> None:
     cand_ids: list[str] = meta["candidates"]
     opponents: list[str] = [op for op, _ in meta["opponents"]]
 
-    # Per (cand, opp, opp_id, rep) paired score + slot pick counts
+    # Per (cand, opp, opp_id, rep) paired score + per-game score + slot-3 picked flag
     raw: dict[tuple[str, str, str, int], list[float]] = defaultdict(list)
+    game_rec: dict[tuple[str, str, str, int, int], tuple[float, bool]] = {}
     slot_cnt: dict[str, Counter[int]] = defaultdict(Counter)
     g_cnt: Counter[str] = Counter()
 
@@ -3069,32 +3077,54 @@ def cmd_analyze_s08_upgrade(args: argparse.Namespace) -> None:
         c = r["cell"]
         cid = c["candidate"]
         rs = int(r["rowSeat"])
-        raw[(cid, c["opponent"], c["opp_id"], int(c["rep"]))].append(seat_score(r["outcome"], rs))
+        sc = seat_score(r["outcome"], rs)
+        raw[(cid, c["opponent"], c["opp_id"], int(c["rep"]))].append(sc)
+        picked_s3 = False
         pr = r.get("preview")
         if isinstance(pr, list) and len(pr) == 2 and isinstance(pr[rs], dict):
             inp = pr[rs].get("input", "")
             if inp.startswith("team "):
                 g_cnt[cid] += 1
-                for s in inp[5:].split(","):
-                    slot_cnt[cid][int(s.strip())] += 1
+                chosen = [int(s.strip()) for s in inp[5:].split(",")]
+                picked_s3 = 3 in chosen
+                for s in chosen:
+                    slot_cnt[cid][s] += 1
+        game_rec[(cid, c["opponent"], c["opp_id"], int(c["rep"]), rs)] = (sc, picked_s3)
 
     pair_sc: dict[tuple[str, str, str, int], float] = {
         k: 0.5 * (v[0] + v[1]) for k, v in raw.items() if len(v) == 2
     }
 
     # Compute per-opponent stratified mean + exact paired delta vs baseline sample-08
+    # + Slot-3 picked vs unpicked paired decomposition (at both game and pair level)
     out_rows: list[dict[str, Any]] = []
+    has_base = "sample-08" in cand_ids
     for cid in cand_ids:
         per_opp: dict[str, float] = {}
+        per_opp_decomp: dict[str, dict[str, Any]] = {}
         eq_ev = 0.0
         eq_var = 0.0
         delta_ev = 0.0
         delta_var = 0.0
+
+        # Game-level & pair-level Slot-3 picked vs unpicked decomposition vs sample-08
+        pk_cand_g: list[float] = []
+        pk_base_g: list[float] = []
+        un_cand_g: list[float] = []
+        un_base_g: list[float] = []
+        pk_pair_diffs: list[float] = []
+        un_pair_diffs: list[float] = []
+
         for oname in opponents:
             ev = 0.0
             var = 0.0
             dev = 0.0
             dvar = 0.0
+            o_pk_c: list[float] = []
+            o_pk_b: list[float] = []
+            o_un_c: list[float] = []
+            o_un_b: list[float] = []
+
             for om in STEP_B_PROFILES[oname]:
                 oid, ow = om["id"], float(om["weight"])
                 reps = sorted(k[3] for k in pair_sc if k[0] == cid and k[1] == oname and k[2] == oid)
@@ -3102,24 +3132,75 @@ def cmd_analyze_s08_upgrade(args: argparse.Namespace) -> None:
                 mu, se = pair_cell_stats(ps)
                 ev += ow * mu
                 var += (ow ** 2) * (se ** 2)
-                if "sample-08" in cand_ids:
-                    dps = [
-                        pair_sc[(cid, oname, oid, rp)] - pair_sc[("sample-08", oname, oid, rp)]
-                        for rp in reps
-                        if ("sample-08", oname, oid, rp) in pair_sc
-                    ]
+                if has_base:
+                    dps = []
+                    for rp in reps:
+                        if ("sample-08", oname, oid, rp) not in pair_sc:
+                            continue
+                        diff_p = pair_sc[(cid, oname, oid, rp)] - pair_sc[("sample-08", oname, oid, rp)]
+                        dps.append(diff_p)
+                        # Check per-seat Slot-3 pick
+                        p_any = False
+                        for rs in (0, 1):
+                            gc = game_rec.get((cid, oname, oid, rp, rs))
+                            gb = game_rec.get(("sample-08", oname, oid, rp, rs))
+                            if gc is not None and gb is not None:
+                                if gc[1]:
+                                    p_any = True
+                                    pk_cand_g.append(gc[0])
+                                    pk_base_g.append(gb[0])
+                                    o_pk_c.append(gc[0])
+                                    o_pk_b.append(gb[0])
+                                else:
+                                    un_cand_g.append(gc[0])
+                                    un_base_g.append(gb[0])
+                                    o_un_c.append(gc[0])
+                                    o_un_b.append(gb[0])
+                        if p_any:
+                            pk_pair_diffs.append(diff_p)
+                        else:
+                            un_pair_diffs.append(diff_p)
                     dmu, dse = pair_cell_stats(dps)
                     dev += ow * dmu
                     dvar += (ow ** 2) * (dse ** 2)
+
             per_opp[oname] = round(ev, 4)
+            per_opp_decomp[oname] = {
+                "picked_g": len(o_pk_c),
+                "picked_wr": round(sum(o_pk_c) / len(o_pk_c), 4) if o_pk_c else None,
+                "picked_base_wr": round(sum(o_pk_b) / len(o_pk_b), 4) if o_pk_b else None,
+                "picked_net": round(sum(o_pk_c) - sum(o_pk_b), 2) if o_pk_c else 0.0,
+                "unpicked_g": len(o_un_c),
+                "unpicked_wr": round(sum(o_un_c) / len(o_un_c), 4) if o_un_c else None,
+                "unpicked_base_wr": round(sum(o_un_b) / len(o_un_b), 4) if o_un_b else None,
+                "unpicked_net": round(sum(o_un_c) - sum(o_un_b), 2) if o_un_c else 0.0,
+            }
             eq_ev += ev / len(opponents)
             eq_var += var / (len(opponents) ** 2)
             delta_ev += dev / len(opponents)
             delta_var += dvar / (len(opponents) ** 2)
+
         n = max(1, g_cnt[cid])
         slots = [round(slot_cnt[cid][i] / n, 3) for i in range(1, 7)]
         se_tot = math.sqrt(eq_var)
         dse_tot = math.sqrt(delta_var)
+        pk_mu_p, pk_se_p = pair_cell_stats(pk_pair_diffs) if pk_pair_diffs else (0.0, 0.0)
+        un_mu_p, un_se_p = pair_cell_stats(un_pair_diffs) if un_pair_diffs else (0.0, 0.0)
+        decomp = {
+            "picked_games": len(pk_cand_g),
+            "picked_wr": round(sum(pk_cand_g) / len(pk_cand_g), 4) if pk_cand_g else None,
+            "picked_base_wr": round(sum(pk_base_g) / len(pk_base_g), 4) if pk_base_g else None,
+            "picked_net_wins": round(sum(pk_cand_g) - sum(pk_base_g), 2),
+            "picked_pair_delta": round(pk_mu_p, 4) if pk_pair_diffs else None,
+            "picked_pair_se": round(pk_se_p, 4) if pk_pair_diffs else None,
+            "picked_pair_z": round(pk_mu_p / pk_se_p, 2) if pk_pair_diffs and pk_se_p > 1e-9 else None,
+            "unpicked_games": len(un_cand_g),
+            "unpicked_wr": round(sum(un_cand_g) / len(un_cand_g), 4) if un_cand_g else None,
+            "unpicked_base_wr": round(sum(un_base_g) / len(un_base_g), 4) if un_base_g else None,
+            "unpicked_net_wins": round(sum(un_cand_g) - sum(un_base_g), 2),
+            "unpicked_pair_delta": round(un_mu_p, 4) if un_pair_diffs else None,
+            "unpicked_pair_se": round(un_se_p, 4) if un_pair_diffs else None,
+        }
         out_rows.append({
             "id": cid,
             "mean_vs_core7": round(eq_ev, 4),
@@ -3131,7 +3212,9 @@ def cmd_analyze_s08_upgrade(args: argparse.Namespace) -> None:
             "slot3_pick": slots[2],
             "min_slot_pick": min(slots),
             "slots": slots,
+            "slot3_decomp": decomp,
             "per_opponent": per_opp,
+            "per_opponent_decomp": per_opp_decomp,
         })
 
     out_rows.sort(key=lambda x: (-x["mean_vs_core7"], -x["min_opp"]))
@@ -3162,7 +3245,10 @@ def cmd_analyze_s08_upgrade(args: argparse.Namespace) -> None:
                 "delta": r["delta_vs_s08"],
                 "z": r["delta_z"],
                 "slot3": r["slot3_pick"],
-                "min_opp": r["min_opp"],
+                "pk_g": r["slot3_decomp"]["picked_games"],
+                "pk_net": r["slot3_decomp"]["picked_net_wins"],
+                "pk_z": r["slot3_decomp"]["picked_pair_z"],
+                "un_net": r["slot3_decomp"]["unpicked_net_wins"],
             }
             for r in out_rows
         ],
@@ -3351,6 +3437,8 @@ def main() -> None:
     p_psu.add_argument("--out-dir", type=Path, default=None)
     p_psu.add_argument("--candidates", type=str, default=None)
     p_psu.add_argument("--pair-scale", type=float, default=1.0)
+    p_psu.add_argument("--preview-buckets", type=int, default=2)
+    p_psu.add_argument("--split-per-opp", action="store_true", default=False)
     p_psu.add_argument("--seed-prefix", type=str, default="nc2000/elim-v1/s08-up")
     p_psu.add_argument("--preview-iters", type=int, default=81000)
     p_psu.add_argument("--battle-iters", type=int, default=9000)
