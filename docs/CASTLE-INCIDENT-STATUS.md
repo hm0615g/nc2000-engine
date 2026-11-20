@@ -171,7 +171,15 @@ The documentation follow-up commit and remote SHA are verified by the runner.
 <!-- no-backups-in-git-worktrees-v1 -->
 ## No backups in Git worktrees
 - Never create .bak, .orig, .save, temporary recovery copies, or other backup files anywhere inside a Git worktree, including ignored and untracked directories.
-- If a backup is essential, create it outside ALL Git worktrees (for example using mktemp -d under /tmp) and remove it after verification.
+- Do not create backups without explicit user permission. Agree on the destination before writing any backup.
 - Never copy credentials or configuration secrets to a backup without explicit permission.
 - Do not leave disposable files that appear as untracked entries in git status --short.
 - Incident 2026-11-21: pbs-bot.config.json.bak was created inside this worktree. User requested deletion and this permanent rule.
+
+<!-- castle-workspace-write-policy-v1 -->
+## Castle diagnostic file placement
+- Use only <repo>/pbs-work for temporary Castle audits, logs, replay artifacts, and diagnostic archives; verify Git ignores this directory.
+- Never write to /tmp or any path outside nc2000-engine without explicit user approval.
+- Do not create configuration backups or .bak/.orig files automatically, including in pbs-work.
+- Git-only local ignore rules may live in .git/info/exclude; do not assume .gitignore contains the necessary rule.
+- Do not change upstream-maintained bot core, WASM, engine, or Web as part of Castle diagnostics.
