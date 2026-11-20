@@ -171,6 +171,7 @@ function createObservationLedger({mySide, previewSides}) {
       'Source history prefix changed; retained public HP needs reconciliation');
     const nextKnown = new Map(state.knownHp.map(row => [row.slot, clone(row)]));
     const latestHp = new Map(), unlinkedHpIgnored = [], missingMaxHp = [];
+    const faintedWithoutMaxHp = [];
     const inputBoundaries = classifyBoundaries(source);
     for (const [sourceStep, step] of source.steps.entries()) {
       assert.ok(Array.isArray(step.hpChanges), 'Missing source HP changes');
@@ -224,6 +225,19 @@ function createObservationLedger({mySide, previewSides}) {
       if (slot === active && !topAbsent) continue;
       const known = nextKnown.get(slot);
       if (!known) {
+        // Source-linked HP=0 and a source-linked faint event
+        // prove fainting without proving maximum HP.
+        const final = finalHealth.get(slot);
+        const faintSource = source.effectiveProtocol.some(row => {
+          const match = row.line.match(/^\|faint\|(p[12])a:\s*(.+)$/);
+          return row.authority === 'CASTLE_SOURCE_INTERPRETATION' &&
+            match && match[1] === sideName && id(match[2]) === observed.species;
+        });
+        if (observed.hp === 0 && final?.hpAbs === 0 && faintSource) {
+          faintedWithoutMaxHp.push({slot, species: observed.species, hp: 0,
+            sourceStep: observed.sourceStep, reason: 'SOURCE_LINKED_FAINT_WITH_UNKNOWN_MAX_HP'});
+          continue;
+        }
         missingMaxHp.push({slot, species: observed.species, hp: observed.hp,
           sourceStep: observed.sourceStep, reason: 'NO_INDEPENDENT_PUBLIC_MAXIMUM_HP'});
         continue;
@@ -249,7 +263,7 @@ function createObservationLedger({mySide, previewSides}) {
       rewrittenSteps: source.rewrittenSteps, removedProtocolLines: source.removedLines,
       sourceProtocolSha256: hash(evidence.raw), inputSha256: evidence.inputSha256,
       historyPrefixVerified: true, exactOpponentObservations: observations.length,
-      missingMaxHp, unlinkedHpIgnored, inputBoundaries,
+      missingMaxHp, faintedWithoutMaxHp, unlinkedHpIgnored, inputBoundaries,
       warnings: clone(evidence.warnings ?? []), automaticRepairs: clone(evidence.automaticRepairs ?? []),
       completePositionCertified: false};
     const snapshot = {schema: 'pbs-castle-observation-ledger-v1', label, mySide,

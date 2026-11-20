@@ -133,7 +133,7 @@ function publicOpponent(spec, preview, foe, observations) {
     return {species: mon.species, speciesId: id(mon.species), level: mon.level,
       gender: mon.gender, itemFlag: preview[slot].item_flag,
       appeared: Boolean(mon.appeared), fainted: Boolean(mon.fainted),
-      hp: observed?.hp ?? null, maxHp: observed?.maxHp ?? null, status: mon.status,
+      hp: observed?.hp ?? (mon.fainted ? 0 : null), maxHp: observed?.maxHp ?? null, status: mon.status,
       itemOriginal: mon.item_original?.known ? mon.item_original.item : null,
       itemCurrent: mon.item_current?.known ? mon.item_current.item : null,
       itemGained: Boolean(mon.item_gained),
@@ -251,6 +251,12 @@ function createObservationSession(options = {}) {
       imported.pushLines(JSON.stringify(boundary.protocol));
       assert.equal(imported.onRequest(JSON.stringify(built.request)), true, 'CURRENT_REQUEST_REJECTED');
       const spec = JSON.parse(imported.positionSpec()), foe = 1 - side;
+      for (const row of staged.sourceReport.faintedWithoutMaxHp) {
+        const mon = spec.sides[foe].mons[row.slot];
+        assert.equal(id(mon?.species), row.species, 'SOURCE_ZERO_HP_SPECIES_NOT_IN_SPEC');
+        assert.equal(mon.fainted, true, 'SOURCE_ZERO_HP_FAINT_NOT_IN_SPEC');
+        assert.equal(mon.hp_num, 0, 'SOURCE_ZERO_HP_NOT_IN_SPEC');
+      }
       assert.equal(spec.side, side);
       assert.equal(spec.team_preview, false);
       assert.equal(spec.sides[side].active, built.activeRosterSlot);
@@ -296,6 +302,13 @@ function createObservationSession(options = {}) {
       assert.equal(exact.status, 'READY', 'PUBLIC_HP_POSITION_NOT_READY:' + exact.status + ':' + (exact.error ?? ''));
       const stateView = JSON.parse(exact.searcher.stateView());
       const positioned = JSON.parse(exact.searcher.positionSpec());
+      for (const row of staged.sourceReport.faintedWithoutMaxHp) {
+        const matches = stateView.sides[foe].party.filter(mon =>
+          id(mon.species) === row.species);
+        assert.equal(matches.length, 1, 'SOURCE_ZERO_HP_NATIVE_IDENTITY');
+        assert.equal(matches[0].fainted, true, 'SOURCE_ZERO_HP_NATIVE_FAINT');
+        assert.equal(matches[0].hp, 0, 'SOURCE_ZERO_HP_NATIVE_HP');
+      }
       assert.equal(positioned.sides[side].active, built.activeRosterSlot);
       assert.equal(positioned.force_switch, boundary.form.action !== 'INPUT');
       for (const guard of safeguardReconciliation.active) {

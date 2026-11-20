@@ -28,7 +28,7 @@
 | 14 | 相手候補・最大HP補完失敗 | 候補を拡大・制約緩和・代替探索を利用する |
 
 残る 1、2、3、7、10、12、15、16 はユーザーによる停止妥当性の判定がまだ済んでいない。
-上記8系統の具体的な復旧方法は未実装。無制限の再送、無限待機、証拠のない補完で置き換えない。
+No.11 immediate-faint fix is PARTIAL; all other approved categories and remaining No.11 cases are PENDING.無制限の再送、無限待機、証拠のない補完で置き換えない。
 
 ## 2. エラー調査の必須手順
 
@@ -64,9 +64,9 @@
 | 新規6試合の異常原因分析 | 完了。既知表示遅延5件・最大HP未観測停止1件 |
 | 停止条件16系統の一次分類 | 完了（個々の検査の網羅的な修正審査は未実施） |
 | 8系統の停止不可・継続優先方針 | ユーザー決定済み |
-| 最大HP未観測の即瀕死への修正 | 未実施 |
+| 最大HP未観測の即瀕死への修正 | PARTIAL FIX: source-linked HP0 + faint event; offline regression PASS; live match untested |
 | その他7系統の継続処理実装 | 未実施 |
-| 実トレースによる修正後回帰テスト | 未実施 |
+| 実トレースによる修正後回帰テスト | PASS: 3 synthetic cases + original 8 prior inputs and turn-9 scene, no Castle network |
 | 対戦コードの修正commit/push | 未実施 |
 | 本家取込後adaptive実戦の評価 | 未実施 |
 
@@ -97,3 +97,62 @@
 - Fetch the fork first, require fast-forward ancestry, and push to the explicit fork URL without --force.
 - Confirm the fork branch SHA after pushing; record the actual result in the incident status document.
 - Provide the full executable command inline, ASCII-only, runnable from any directory.
+
+<!-- castle-zero-hp-faint-progress-v1 -->
+## Castle continuation fix progress (2026-11-21)
+Only tested work is marked complete.
+One fixed subcase does not complete an entire category.
+| Stop category | Status |
+| --- | --- |
+| 4 | PENDING |
+| 5 | PENDING |
+| 6 | PENDING |
+| 8 | PENDING |
+| 9 | PENDING |
+| 11 | PARTIAL: immediate faint with source-linked HP0 verified; other HP issues PENDING |
+| 13 | PENDING |
+| 14 | PENDING |
+
+Changed files:
+- tools/pbs-castle-observation-ledger.js
+- tools/pbs-castle-observation.js
+- tools/pbs-castle-faint-no-maxhp.test.js
+
+Evidence: 2026-11-20T16-29-14-394Z-K-g1.
+Tests: synthetic cases and original stopped-game replay through turn 9.
+Castle network: not used. Live battle: not tested.
+Core/Web: unchanged. Git commit/push: PENDING.
+Update every category after each confirmed fix.
+
+<!-- castle-continuation-8-progress-v1 -->
+## Eight-category production continuation status
+The runtime continuation handler covers failures before an attempted POST.
+It uses the current Castle decision form, records every recovery, and
+retries reading when no actionable form is available.
+A submitted-but-unconfirmed POST remains a separate category 16 concern.
+These statuses supersede any earlier generic statement that all 8 are unimplemented.
+
+| Category | Status | Remaining work |
+| --- | --- | --- |
+| 4 | CONTINUATION_HANDLER_INSTALLED | Live unknown-page recovery not verified |
+| 5 | CONTINUATION_HANDLER_INSTALLED | Live changed-page recapture not verified |
+| 6 | CONTINUATION_HANDLER_INSTALLED | Invalid-form re-read not verified live |
+| 8 | CONTINUATION_HANDLER_INSTALLED | LLOG parser repair pending |
+| 9 | CONTINUATION_HANDLER_INSTALLED | Event-specific parser improvements pending |
+| 11 | CONTINUATION_HANDLER_INSTALLED | HP model repair pending; immediate-faint offline fix retained |
+| 13 | CONTINUATION_HANDLER_INSTALLED | PP and special-action semantic repair pending |
+| 14 | CONTINUATION_HANDLER_INSTALLED | Opponent model repair pending |
+
+Tests: node --check client/helper/test; helper continuation test; original
+stopped scene form replay; previously installed immediate-faint test when present.
+No Castle HTTP requests in these tests; no live match verification yet.
+Git commit/push: PENDING.
+Do not mark a category FULLY_FIXED until its regression and real-game criteria pass.
+
+### Change history
+2026-11-21: installed general continuation fallback for categories
+4,5,6,8,9,11,13,14. Source checks remain diagnostic; exceptions before
+POST are converted to Castle-form fallback or continued polling.
+No source-side errors are silently suppressed: trace events retain the reason.
+When the implementation is verified and deployed, change each row to FIXED
+individually and remove it from the pending-work inventory.

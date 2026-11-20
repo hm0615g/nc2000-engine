@@ -26,6 +26,7 @@ const path = require('path');
 const net = require('net');
 const { encodeTeamForPdinput, PDINPUT_ITEM_CODES } = require('./export-pdinput');
 const {readDecisionForm} = require('./pbs-v32-decision-boundary');
+const {classifyPageWithRecovery, chooseCurrentFormFallback, transmissionBoundary} = require('./pbs-castle-continue-on-error');
 const {captureStableBundle, createSubmissionGuard} = require('./pbs-castle-submission');
 
 const REPO = path.join(__dirname, '..');
@@ -4293,9 +4294,12 @@ async function playOneGame(gameIdx, dependencies = {}) {
     }
   };
 
+  const classifyRuntimePage = response =>
+    classifyPageWithRecovery(response, classifyPage, readDecisionForm);
   const submissionGuard = createSubmissionGuard({
-    matchId, classifyPage, readDecisionForm,
-    getBundle: () => captureStableBundle({http: client, roomUrl: ROOM_URL, classifyPage}),
+    matchId, classifyPage: classifyRuntimePage, readDecisionForm,
+    getBundle: () => captureStableBundle({http: client, roomUrl: ROOM_URL,
+      classifyPage: classifyRuntimePage}),
     getPage: () => client.get(ROOM_URL),
     getFinishedPage: async () => {
       const terminal = await client.get(`${ROOM_URL}?ACTION=LLOG`);
@@ -4453,8 +4457,11 @@ async function playOneGame(gameIdx, dependencies = {}) {
     let res = await client.get(ROOM_URL);
 
     while (true) {
-      const page = classifyPage(res);
+      const page = classifyRuntimePage(res);
       if (page.kind !== 'UNKNOWN') unknownPageStreak = 0;
+      if (page.recoveredFrom) appendTraceEvent({type: 'continuation_recovered_page',
+        recoveredFrom: page.recoveredFrom, originalKind: 'UNKNOWN',
+        rawTurnHtml: page.html});
 
       // Confirm entry only after PBS returns an entered-room state.
       if (enteredRoom && !entryStatusSent && [
@@ -4895,12 +4902,13 @@ async function playOneGame(gameIdx, dependencies = {}) {
       }
 
       if (page.kind === 'BATTLE_INPUT' || page.kind === 'BATTLE_CHANGE' || page.kind === 'BATTLE_BATONN') {
-        let bundle = null, prepared = null;
+        let bundle = null, prepared = null, countedDecision = false;
+        const submissionBefore = submissionGuard.snapshot();
         try {
           assert.ok((mySide === 0 || mySide === 1) && previewSides && pickedRosterSlots,
             'OBSERVATION_INITIAL_CONTEXT_REQUIRED');
           bundle = await captureStableBundle({http: client, roomUrl: ROOM_URL,
-            classifyPage, initialResponse: res});
+            classifyPage: classifyRuntimePage, initialResponse: res});
           ensureObservationRuntime();
           if (!observationSession) {
             const workDir = path.join(REPO, 'pbs-work', 'observations', matchId);
@@ -4945,6 +4953,7 @@ async function playOneGame(gameIdx, dependencies = {}) {
           // No union with the legacy parser's possibly corrected-away events.
           lastLlogFoeMons = null;
           decisions++;
+          countedDecision = true;
           const gameSeed = SEED * 1000 + gameIdx * 10 + mySide;
           log(`Turn ${spec.turn} (${actionType}, NOW="${battleTurn.nowVal}"): ` +
             `selected MOVE=${chosenMoveValue} [${mappingPath}: ${bestChoice}]`);
@@ -4977,17 +4986,72 @@ async function playOneGame(gameIdx, dependencies = {}) {
           const submitted = await submissionGuard.submit({bundle, fields: postFields});
           res = submitted.response;
         } catch (error) {
-          appendTraceEvent({
-            type: 'observation_stopped', stage: 'battle_observation_or_submission',
-            message: String(error?.message || error),
+          const message = String(error?.message || error);
+          const guardAfter = submissionGuard.snapshot();
+          appendTraceEvent({type: 'continuation_observation_error',
+            stage: 'battle_observation_or_submission', message,
             rawTurnHtml: bundle?.rawTurnHtml ?? page.html ?? null,
             rawPdatHtml: bundle?.rawPdatHtml ?? null,
             rawLlogHtml: bundle?.rawLlogHtml ?? null,
             observationReport: prepared?.report ?? null,
-            submission: error?.submission ?? submissionGuard.snapshot(),
-            automaticFallback: false, automaticInitialization: false,
-          });
-          throw error;
+            submission: error?.submission ?? guardAfter,
+            recoveryPolicy: 'PREFER_CURRENT_CASTLE_FORM'});
+          if (transmissionBoundary(error, submissionBefore, guardAfter)) {
+            appendTraceEvent({type: 'observation_stopped',
+              stage: 'submission_boundary', message,
+              submission: error?.submission ?? guardAfter});
+            throw error;
+          }
+          // No Castle POST was attempted. If the observation failed, use the
+          // CURRENT public form instead of stopping due to incomplete evidence.
+          const fallback = bundle?.rawTurnHtml
+            ? chooseCurrentFormFallback(bundle.rawTurnHtml, readDecisionForm)
+            : {status: 'WAIT_FOR_FORM', reason: 'NO_STABLE_OBSERVATION_BUNDLE'};
+          if (fallback.status === 'READY') {
+            try {
+              appendTraceEvent({type: 'continuation_fallback_attempt',
+                message, fields: fallback.fields,
+                mappingPath: fallback.mappingPath,
+                offeredOptions: fallback.offeredOptions});
+              const accepted = await submissionGuard.submit({bundle, fields: fallback.fields});
+              res = accepted.response;
+              if (!countedDecision) {
+                decisions++;
+                appendTraceEvent({type: 'decision', decision: decisions,
+                  phase: fallback.fields.ACTION, mySide, foeName, pickedRosterSlots,
+                  rawTurnHtml: bundle.rawTurnHtml, rawPdatHtml: bundle.rawPdatHtml,
+                  rawLlogHtml: bundle.rawLlogHtml, postFields: fallback.fields,
+                  chosenMoveValue: fallback.fields.MOVE,
+                  mappingPath: fallback.mappingPath, spec: null,
+                  observationReport: prepared?.report ?? null,
+                  errors: [{stage: 'continuation_fallback', message}],
+                  sentToCastle: true});
+              }
+              appendTraceEvent({type: 'continuation_fallback_confirmed',
+                decision: decisions, fields: fallback.fields,
+                confirmation: accepted.confirmation, recoveredError: message});
+              log('Castle continuation fallback selected ' + fallback.fields.MOVE +
+                ' after observation error: ' + message);
+              continue;
+            } catch (retryError) {
+              const nowGuard = submissionGuard.snapshot();
+              if (transmissionBoundary(retryError, guardAfter, nowGuard)) {
+                appendTraceEvent({type: 'observation_stopped',
+                  stage: 'submission_boundary', message: String(retryError?.message || retryError),
+                  submission: retryError?.submission ?? nowGuard});
+                throw retryError;
+              }
+              appendTraceEvent({type: 'continuation_fallback_deferred',
+                message: String(retryError?.message || retryError),
+                reason: 'RECAPTURE_CURRENT_FORM'});
+            }
+          } else {
+            appendTraceEvent({type: 'continuation_wait_for_form',
+              reason: fallback.reason, error: fallback.error || null});
+          }
+          await sleep(POLL_MS);
+          res = await client.get(ROOM_URL);
+          continue;
         } finally {
           if (prepared?.searcher) prepared.searcher.free();
         }
@@ -5012,10 +5076,10 @@ async function playOneGame(gameIdx, dependencies = {}) {
         });
       }
 
-      if (unknownPageStreak >= 12) {
-        throw new Error(
-          `Unknown PBS page state persisted for ${unknownPageStreak} polls; raw HTML preserved in trace`
-        );
+      if (unknownPageStreak >= 12 && unknownPageStreak % 12 === 0) {
+        appendTraceEvent({type: 'continuation_unknown_page',
+          streak: unknownPageStreak, rawUnknownHtml: page.html || '',
+          statusCode: res.statusCode});
       }
 
       log(
