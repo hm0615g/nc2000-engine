@@ -25,8 +25,9 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from typing import Any
@@ -917,6 +918,207 @@ def cmd_analyze(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: sanity-audit (Hitchhiker / Theme / Dup Pruning + Borderline Rescue)
+# ---------------------------------------------------------------------------
+
+STRICT_NFE_MEME_SPECIES = {
+    "Ivysaur", "Voltorb", "Koffing", "Abra", "Gastly", "Clefairy",
+    "Nidorino", "Nidorina", "Eevee", "Venonat", "Ledyba", "Spinarak",
+}
+
+
+def _parse_pick_indices(inp: str) -> list[int]:
+    return [int(x) - 1 for x in re.findall(r"\d+", inp or "")]
+
+
+def _genderless_signature(sets: list[dict[str, Any]]) -> tuple[tuple[str, int, str, tuple[str, ...]], ...]:
+    return tuple(sorted(
+        (
+            str(s["species"]),
+            int(s["level"]),
+            str(s.get("item") or ""),
+            tuple(sorted(str(m) for m in s.get("moves", []))),
+        )
+        for s in sets
+    ))
+
+
+def _collect_pick_rates(work_dir: Path) -> tuple[dict[str, list[int]], Counter[str]]:
+    picks: dict[str, list[int]] = defaultdict(lambda: [0] * 6)
+    games: Counter[str] = Counter()
+    sources = [
+        (work_dir / "b9-matrix/results.jsonl", False),
+        (work_dir / "round-1/results.jsonl", False),
+        (work_dir / "round-2/results.jsonl", False),
+        (work_dir / "round-3/results.jsonl", False),
+        (ROOT / "target/nash-work/phase1-cut/stage1a/results.jsonl", True),
+        (ROOT / "target/nash-work/phase1-cut/stage1b/results.jsonl", True),
+        (ROOT / "target/nash-work/phase1-cut/step2a/results.jsonl", True),
+        (ROOT / "target/nash-work/phase1-cut/step2b/results.jsonl", True),
+    ]
+    for fp, is_p1 in sources:
+        if not fp.exists():
+            continue
+        for line in fp.open():
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            sides = [int(r["rowSeat"])] if is_p1 else [0, 1]
+            prev = r.get("preview", [])
+            for side in sides:
+                tid = r["ids"][side]
+                games[tid] += 1
+                if side < len(prev) and prev[side]:
+                    for idx in _parse_pick_indices(prev[side].get("input", "")):
+                        if 0 <= idx < 6:
+                            picks[tid][idx] += 1
+    return picks, games
+
+
+def cmd_sanity_audit(args: argparse.Namespace) -> None:
+    t0 = time.monotonic()
+    work_dir: Path = args.work_dir
+    core_path: Path = args.core_report or (work_dir / "prod-core.json")
+    core_doc = json.loads(core_path.read_text())
+    _, all_sets = load_full_catalog()
+    picks, games = _collect_pick_rates(work_dir)
+
+    raw_surv_ids = {r["rep_id"] for r in core_doc["survivors"]}
+    all_r3 = [
+        r for r in (core_doc["survivors"] + core_doc["eliminated"])
+        if r["is_b9"] or r["n_pairs"] >= 72
+    ]
+
+    # 1. Exact gender-only duplicate collapse (same species/level/item/moves across all 6 mons)
+    by_gsig: dict[Any, list[dict[str, Any]]] = defaultdict(list)
+    for r in all_r3:
+        by_gsig[_genderless_signature(all_sets[r["rep_id"]])].append(r)
+    gender_dups: dict[str, str] = {}
+    for grp in by_gsig.values():
+        if len(grp) > 1:
+            ordered = sorted(grp, key=lambda x: (not x["is_b9"], "__" in x["rep_id"], -x["mean"]))
+            canon = ordered[0]["rep_id"]
+            for dup in ordered[1:]:
+                gender_dups[dup["rep_id"]] = canon
+
+    clean_survivors: list[dict[str, Any]] = []
+    dropped_sanity: list[dict[str, Any]] = []
+    rescued: list[dict[str, Any]] = []
+    watch_low_pick: list[dict[str, Any]] = []
+
+    for r in all_r3:
+        tid = r["rep_id"]
+        sets = all_sets[tid]
+        tot = games[tid]
+        rates = [round(picks[tid][i] / tot, 4) if tot > 0 else 0.0 for i in range(6)]
+        min_r = min(rates)
+        n_zero = sum(1 for x in rates if x < 0.01)
+
+        flags: list[str] = []
+        if tid in gender_dups:
+            flags.append(f"gender_only_duplicate_of:{gender_dups[tid]}")
+        if tid.startswith("mjj-type-"):
+            flags.append("theme_monotype_qa")
+        if tid.startswith("offprior-") and n_zero > 0:
+            flags.append("synth_offprior_dead_hitchhiker")
+        nfe_hits = [s["species"] for s in sets if s["species"] in STRICT_NFE_MEME_SPECIES]
+        if nfe_hits:
+            flags.append(f"nfe_hitchhiker:{','.join(nfe_hits)}")
+        if (not r["is_b9"]) and n_zero > 0 and r["mean"] < args.dead_slot_wr_floor:
+            flags.append("dead_slot_low_overall_wr")
+
+        slot_summary = [
+            {
+                "species": sets[i]["species"],
+                "level": int(sets[i]["level"]),
+                "pick_rate": rates[i],
+            }
+            for i in range(6)
+        ]
+        enriched = dict(r)
+        enriched["pick_games"] = tot
+        enriched["min_pick_rate"] = min_r
+        enriched["zero_pick_slots"] = n_zero
+        enriched["slot_picks"] = slot_summary
+        enriched["sanity_flags"] = flags
+
+        in_raw = tid in raw_surv_ids
+        is_clean = len(flags) == 0
+
+        qualifies_rescue = (
+            is_clean
+            and (min_r + 1e-9 >= args.rescue_min_pick)
+            and (
+                (r["mean"] + 1e-9 >= args.rescue_mean and r["fresh_mean"] + 1e-9 >= args.rescue_fresh_mean)
+                or (
+                    r["vs_b9_nash"] + 1e-9 >= args.rescue_vs_nash
+                    and r["fresh_vs_b9_nash"] + 1e-9 >= args.rescue_fresh_vs_nash
+                )
+                or (
+                    r["fresh_mean"] + 1e-9 >= args.rescue_alt_fresh_mean
+                    and r["fresh_vs_b9_nash"] + 1e-9 >= args.rescue_alt_fresh_vs_nash
+                )
+            )
+        )
+
+        if in_raw and not is_clean:
+            enriched["sanity_action"] = "dropped_from_core"
+            dropped_sanity.append(enriched)
+        elif in_raw and is_clean:
+            enriched["sanity_action"] = "kept_core"
+            clean_survivors.append(enriched)
+            if min_r < 0.05:
+                watch_low_pick.append({
+                    "rep_id": tid,
+                    "is_b9": r["is_b9"],
+                    "low_slots": [s for s in slot_summary if s["pick_rate"] < 0.05],
+                })
+        elif (not in_raw) and qualifies_rescue:
+            enriched["sanity_action"] = "rescued_borderline"
+            clean_survivors.append(enriched)
+            rescued.append(enriched)
+
+    clean_survivors.sort(key=lambda x: (not x["is_b9"], -max(x["mean"], x["vs_b9_nash"]), -x["fresh_mean"]))
+    out_path: Path = args.out or (work_dir / "prod-core-clean.json")
+    out_doc = {
+        "source_core": str(core_path),
+        "b9_ids": core_doc["b9_ids"],
+        "b9_nash": core_doc["b9_nash"],
+        "rules": {
+            "dead_slot_wr_floor": args.dead_slot_wr_floor,
+            "rescue_min_pick": args.rescue_min_pick,
+            "rescue_mean": args.rescue_mean,
+            "rescue_fresh_mean": args.rescue_fresh_mean,
+            "rescue_vs_nash": args.rescue_vs_nash,
+            "rescue_fresh_vs_nash": args.rescue_fresh_vs_nash,
+            "rescue_alt_fresh_mean": args.rescue_alt_fresh_mean,
+            "rescue_alt_fresh_vs_nash": args.rescue_alt_fresh_vs_nash,
+        },
+        "counts": {
+            "raw_core": len(raw_surv_ids),
+            "dropped_sanity": len(dropped_sanity),
+            "rescued_borderline": len(rescued),
+            "final_clean_core": len(clean_survivors),
+            "pairs": len(clean_survivors) * (len(clean_survivors) - 1) // 2,
+            "watch_low_pick_utility": len(watch_low_pick),
+        },
+        "survivors": clean_survivors,
+        "dropped_sanity": dropped_sanity,
+        "rescued": rescued,
+        "watch_low_pick": watch_low_pick,
+        "elapsed_s": round(time.monotonic() - t0, 2),
+    }
+    out_path.write_text(json.dumps(out_doc, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "sanity-audit",
+        "out": str(out_path),
+        **out_doc["counts"],
+        "dropped_ids": [x["rep_id"] for x in dropped_sanity],
+        "rescued_ids": [x["rep_id"] for x in rescued],
+    }))
+
+
+# ---------------------------------------------------------------------------
 # Subcommand: self-test
 # ---------------------------------------------------------------------------
 
@@ -997,6 +1199,20 @@ def main() -> None:
     p_an.add_argument("--fresh-vs-nash", type=float, default=None)
     p_an.add_argument("--out", type=Path, default=None)
     p_an.set_defaults(func=cmd_analyze)
+
+    p_sa = sub.add_parser("sanity-audit")
+    p_sa.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_sa.add_argument("--core-report", type=Path, default=None)
+    p_sa.add_argument("--dead-slot-wr-floor", type=float, default=0.45)
+    p_sa.add_argument("--rescue-min-pick", type=float, default=0.03)
+    p_sa.add_argument("--rescue-mean", type=float, default=0.535)
+    p_sa.add_argument("--rescue-fresh-mean", type=float, default=0.51)
+    p_sa.add_argument("--rescue-vs-nash", type=float, default=0.55)
+    p_sa.add_argument("--rescue-fresh-vs-nash", type=float, default=0.52)
+    p_sa.add_argument("--rescue-alt-fresh-mean", type=float, default=0.56)
+    p_sa.add_argument("--rescue-alt-fresh-vs-nash", type=float, default=0.55)
+    p_sa.add_argument("--out", type=Path, default=None)
+    p_sa.set_defaults(func=cmd_sanity_audit)
 
     args = ap.parse_args()
     args.func(args)
