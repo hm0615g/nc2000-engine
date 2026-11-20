@@ -390,13 +390,21 @@ def nash_uncertainty_audit(
         for i in range(n):
             samples[i].append(pb[i])
 
-    # Cell priority: (p_i * p_j + max_exploit_weight) * se_ij -> focus games on active high-SE pairs
+    # Cell priority: focus games on active support pairs AND any challenger whose
+    # 95% one-sided upper bound on EV vs equilibrium still exceeds 0.50.
     ev = [sum(matrix[i][j] * p[j] for j in range(n)) for i in range(n)]
+    ev_se = [
+        math.sqrt(sum((p[j] * se_matrix[i][j]) ** 2 for j in range(n) if j != i))
+        for i in range(n)
+    ]
+    ev_u95 = [ev[i] + 1.6448536269514722 * ev_se[i] for i in range(n)]
     cell_priorities = []
     for i in range(n):
         for j in range(i + 1, n):
-            # Active support pair or near-binding challenger against active support
-            relevance = p[i] * p[j] + 0.25 * (p[j] if ev[i] > 0.45 else 0.0) + 0.25 * (p[i] if ev[j] > 0.45 else 0.0)
+            # Active support pair or statistically plausible challenger against active support
+            rel_i = p[j] if (p[j] > 0.0 and ev_u95[i] > 0.50) else 0.0
+            rel_j = p[i] if (p[i] > 0.0 and ev_u95[j] > 0.50) else 0.0
+            relevance = p[i] * p[j] + 0.25 * (rel_i + rel_j)
             priority = relevance * se_matrix[i][j]
             cell_priorities.append({
                 "pair": [names[i], names[j]],
