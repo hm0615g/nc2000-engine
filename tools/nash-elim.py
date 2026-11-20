@@ -1981,6 +1981,401 @@ def cmd_analyze_step_a(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: prepare-step-b & analyze-step-b (Full 11x11 Prod RR + 3 S07 Regimes)
+# ---------------------------------------------------------------------------
+
+STEP_B_PROFILES: dict[str, list[dict[str, Any]]] = {
+    **STEP_A_PROFILES,
+    "sample-08": [{"id": "sample-08", "weight": 1.00}],
+    "pb-96": [{"id": "pb-96", "weight": 1.00}],
+    "pb-58": [{"id": "pb-58", "weight": 1.00}],
+}
+
+# Exact 11 missing cells across the full 11x11 RR under S07_0_100, S07_30_70, and S07_50_50
+STEP_B_MATCHUPS: list[tuple[str, str, int]] = [
+    ("PB132_50_50", "S07_0_100", 3),                  # 6p = 12g
+    ("PB132_50_50", "S07_50_50", 2),                  # 8p = 16g
+    ("PB132_50_50", "sample-08", 3),                  # 6p = 12g
+    ("PB132_50_50", "pb-96", 3),                      # 6p = 12g
+    ("PB132_50_50", "mjj-2014-thdrcomb__56b67d", 3),  # 6p = 12g
+    ("PB132_50_50", "rental-cban-8", 3),              # 6p = 12g
+    ("PB132_50_50", "sample-17-orig", 3),             # 6p = 12g
+    ("PB132_50_50", "pb-58", 3),                      # 6p = 12g
+    ("sample-08", "pb-96", 6),                        # 6p = 12g
+    ("sample-08", "pb-58", 6),                        # 6p = 12g
+    ("pb-96", "pb-58", 6),                            # 6p = 12g
+]
+
+STEP_B_NON_S07_SHELLS: list[str] = [
+    "APEX4",
+    "D5",
+    "s0155",
+    "sample-08",
+    "PB132_50_50",
+    "pb-96",
+    "mjj-2014-thdrcomb__56b67d",
+    "rental-cban-8",
+    "sample-17-orig",
+    "pb-58",
+]
+
+
+def cmd_prepare_step_b(args: argparse.Namespace) -> None:
+    _, all_sets = load_full_catalog()
+    p0_doc = json.loads((ROOT / "target/nash-work/psro-v1/pools-p0.json").read_text())
+    for t in p0_doc.get("teams", []):
+        all_sets[t["id"]] = t["sets"]
+    base_teams, _ = LEDGER.load_catalog_and_mixtures(None)
+
+    for pname, members in STEP_B_PROFILES.items():
+        if len(members) > 1:
+            sigs = {
+                tuple((m["species"], m["level"], m.get("gender")) for m in all_sets[mem["id"]])
+                for mem in members
+            }
+            assert len(sigs) == 1, f"Profile {pname} has mismatched preview signatures: {sigs}"
+
+    needed_ids: set[str] = set()
+    mixtures: dict[str, list[dict[str, Any]]] = {}
+    for pname, members in STEP_B_PROFILES.items():
+        mname = pname if len(members) > 1 else f"s:{members[0]['id']}"
+        mixtures[mname] = [{"id": m["id"], "weight": float(m["weight"])} for m in members]
+        for m in members:
+            needed_ids.add(m["id"])
+
+    extra_teams = [{"id": tid, "sets": all_sets[tid]} for tid in sorted(needed_ids) if tid not in base_teams]
+    out_dir: Path = args.out_dir or (args.work_dir / "prod-step-b")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pools_path = out_dir / "pools.json"
+    pools_path.write_text(json.dumps({"teams": extra_teams, "mixtures": mixtures}, separators=(",", ":")) + "\n")
+
+    rows: list[dict[str, Any]] = []
+    chunk_breaks: list[int] = [0]
+    blk = 0
+    seed_prefix = args.seed_prefix
+
+    for rname, cname, n_p in STEP_B_MATCHUPS:
+        rmems = STEP_B_PROFILES[rname]
+        cmems = STEP_B_PROFILES[cname]
+        rmix = rname if len(rmems) > 1 else f"s:{rmems[0]['id']}"
+        cmix = cname if len(cmems) > 1 else f"s:{cmems[0]['id']}"
+        r_var_rep: dict[str, int] = defaultdict(int)
+        c_var_rep: dict[str, int] = defaultdict(int)
+
+        for rm in rmems:
+            rid = rm["id"]
+            for cm in cmems:
+                cid = cm["id"]
+                for vrep in range(n_p):
+                    tag = f"{seed_prefix}/{rname}/{rid}/vs/{cname}/{cid}/r{vrep}"
+                    sr = u32_hash(f"{tag}/r")
+                    sc = u32_hash(f"{tag}/c")
+                    bs = u32_hash(f"{tag}/battle")
+                    pr = u32_hash(f"{seed_prefix}/{rname}/{rid}/vs/{cname}/prev-r-k{r_var_rep[rid] % 2}")
+                    pc = u32_hash(f"{seed_prefix}/{rname}/vs/{cname}/{cid}/prev-c-k{c_var_rep[cid] % 2}")
+                    for row_seat in (0, 1):
+                        if row_seat == 0:
+                            ids, seeds, pseeds, mix = [rid, cid], [sr, sc], [pr, pc], [rmix, cmix]
+                        else:
+                            ids, seeds, pseeds, mix = [cid, rid], [sc, sr], [pc, pr], [cmix, rmix]
+                        rows.append({
+                            "block": blk,
+                            "cell": {
+                                "kind": "step_b",
+                                "row": rname,
+                                "col": cname,
+                                "row_id": rid,
+                                "col_id": cid,
+                                "rep": vrep,
+                            },
+                            "rowSeat": row_seat,
+                            "ids": ids,
+                            "seeds": seeds,
+                            "previewSeeds": pseeds,
+                            "battleSeed": bs,
+                            "mixtures": mix,
+                        })
+                    blk += 1
+                    r_var_rep[rid] += 1
+                    c_var_rep[cid] += 1
+        chunk_breaks.append(len(rows))
+
+    sched_path = out_dir / "schedule.jsonl"
+    sched_path.write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
+    meta = {
+        "kind": "step-b",
+        "pools": str(pools_path),
+        "profiles": STEP_B_PROFILES,
+        "matchups": [[r, c] for r, c, _ in STEP_B_MATCHUPS],
+        "chunk_breaks": chunk_breaks,
+        "total_pairs": blk,
+        "total_games": len(rows),
+        "preview_iters": args.preview_iters,
+        "battle_iters": args.battle_iters,
+        "battle_mode": args.battle_mode,
+    }
+    (out_dir / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "prepare-step-b",
+        "dir": str(out_dir),
+        "matchups": len(STEP_B_MATCHUPS),
+        "chunks": len(chunk_breaks) - 1,
+        "pairs": blk,
+        "games": len(rows),
+    }))
+
+
+def cmd_analyze_step_b(args: argparse.Namespace) -> None:
+    import random
+
+    work_dir: Path = args.work_dir
+    alias: dict[str, str] = {
+        "sample-07:1.0": "S07_0_100",
+        "s:sample-07": "S07_0_100",
+        "S07_0_100": "S07_0_100",
+        "sample-07-beq-g2-c4:0.3+sample-07:0.7": "S07_30_70",
+        "S07_30_70": "S07_30_70",
+        "sample-07-beq-g2-c4:0.5+sample-07:0.5": "S07_50_50",
+        "S07_50_50": "S07_50_50",
+        "apex-c04-bug-3atkstar-boomgen:0.4+red-v10-s1105-r2-s0142:0.3+apex-c08-surgical-142:0.15+red-v10-s1105-r1-s0148:0.15": "APEX4",
+        "APEX4": "APEX4",
+        "deme-r1-00-s0030:0.2+deme-r1-00-s0030-beq-g2-c3-legal:0.2+deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal:0.2+deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal:0.2+deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal:0.2": "D5",
+        "D5": "D5",
+        "red-v10-s1105-r2-s0155:1.0": "s0155",
+        "s:red-v10-s1105-r2-s0155": "s0155",
+        "s0155": "s0155",
+        "sample-08:1.0": "sample-08",
+        "s:sample-08": "sample-08",
+        "PB132_50_50": "PB132_50_50",
+        "pb-96:1.0": "pb-96",
+        "s:pb-96": "pb-96",
+        "mjj-2014-thdrcomb__56b67d:1.0": "mjj-2014-thdrcomb__56b67d",
+        "s:mjj-2014-thdrcomb__56b67d": "mjj-2014-thdrcomb__56b67d",
+        "rental-cban-8:1.0": "rental-cban-8",
+        "s:rental-cban-8": "rental-cban-8",
+        "sample-17-orig:1.0": "sample-17-orig",
+        "s:sample-17-orig": "sample-17-orig",
+        "pb-58:1.0": "pb-58",
+        "s:pb-58": "pb-58",
+    }
+
+    def p0_score(oc: Any) -> float:
+        s = str(oc).lower()
+        if s in ("p1", "0", "seat0", "win", "p0"):
+            return 1.0
+        if s in ("p2", "1", "seat1", "loss"):
+            return 0.0
+        return 0.5
+
+    # Group seat-swapped pairs by canonical (p_lo, p_hi, id_lo, id_hi, pair_key)
+    pair_buckets: dict[tuple[str, str, str, str, str], list[float]] = defaultdict(list)
+    seen_games: set[tuple[Any, ...]] = set()
+    sources: list[tuple[Path, bool]] = [(ROOT / "target/nash-ledger.jsonl", True)]
+    for dname in ("prod-b9", "prod-p2a", "prod-p2b", "prod-camo-check", "prod-s07-qopt", "prod-step-a", "prod-step-b"):
+        p = work_dir / dname / "results.jsonl"
+        if p.exists():
+            sources.append((p, False))
+
+    for src_path, is_ledger in sources:
+        for line in src_path.open():
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            if is_ledger:
+                lbls = r.get("profile_labels") or ["", ""]
+                pa, pb = alias.get(lbls[0]), alias.get(lbls[1])
+            else:
+                mix = r.get("mixtures")
+                if mix:
+                    pa, pb = alias.get(mix[0]), alias.get(mix[1])
+                else:
+                    pa, pb = alias.get(f"s:{r['ids'][0]}"), alias.get(f"s:{r['ids'][1]}")
+            if not pa or not pb or pa == pb:
+                continue
+            ia, ib = r["ids"][0], r["ids"][1]
+            sc0 = p0_score(r["outcome"])
+            dedup_key = (pa, pb, ia, ib, r.get("battleSeed"), tuple(r.get("seeds", [])))
+            if dedup_key in seen_games:
+                continue
+            seen_games.add(dedup_key)
+            # Pair key groups seat-swapped twin games sharing identical battleSeed and sorted seeds
+            bs = r.get("battleSeed")
+            s_sorted = tuple(sorted(r.get("seeds", [])))
+            if pa < pb:
+                pkey = f"{src_path.parent.name}/{bs}/{s_sorted}"
+                pair_buckets[(pa, pb, ia, ib, pkey)].append(sc0)
+            else:
+                pkey = f"{src_path.parent.name}/{bs}/{s_sorted}"
+                pair_buckets[(pb, pa, ib, ia, pkey)].append(1.0 - sc0)
+
+    sub_pairs: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+    sub_singles: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+    for (pa, pb, ia, ib, _pkey), scs in pair_buckets.items():
+        if len(scs) == 2:
+            sub_pairs[(pa, pb, ia, ib)].append(0.5 * (scs[0] + scs[1]))
+        else:
+            sub_singles[(pa, pb, ia, ib)].extend(scs)
+
+    def cell_mu_se_n(pa: str, pb: str) -> tuple[float, float, int]:
+        if pa == pb:
+            return 0.5, 0.0, 0
+        flip = pa > pb
+        lo, hi = (pb, pa) if flip else (pa, pb)
+        ev = 0.0
+        var = 0.0
+        ng = 0
+        for ma in STEP_B_PROFILES[lo]:
+            ia, wa = ma["id"], float(ma["weight"])
+            for mb in STEP_B_PROFILES[hi]:
+                ib, wb = mb["id"], float(mb["weight"])
+                ps = list(sub_pairs[(lo, hi, ia, ib)])
+                sg = list(sub_singles[(lo, hi, ia, ib)])
+                # If unpaired singletons exist alongside pairs, fold pairs of them conservatively
+                for k in range(0, len(sg) - 1, 2):
+                    ps.append(0.5 * (sg[k] + sg[k + 1]))
+                if len(sg) % 2 == 1:
+                    ps.append(sg[-1])
+                mu, se = pair_cell_stats(ps)
+                ev += (wa * wb) * mu
+                var += ((wa * wb) ** 2) * (se ** 2)
+                ng += len(sub_pairs[(lo, hi, ia, ib)]) * 2 + len(sg)
+        se_tot = math.sqrt(var)
+        return (1.0 - ev if flip else ev), se_tot, ng
+
+    regimes_out: dict[str, Any] = {}
+    s07_regimes = ["S07_0_100", "S07_30_70", "S07_50_50"]
+
+    for s07_name in s07_regimes:
+        names = [s07_name] + STEP_B_NON_S07_SHELLS
+        k = len(names)
+        mat = [[0.5] * k for _ in range(k)]
+        se_mat = [[0.0] * k for _ in range(k)]
+        ng_mat = [[0] * k for _ in range(k)]
+        for i in range(k):
+            for j in range(i + 1, k):
+                mu, se, ng = cell_mu_se_n(names[i], names[j])
+                assert ng >= 12, f"Missing cell {names[i]} vs {names[j]}: ng={ng}"
+                mat[i][j] = mu
+                mat[j][i] = 1.0 - mu
+                se_mat[i][j] = se
+                se_mat[j][i] = se
+                ng_mat[i][j] = ng
+                ng_mat[j][i] = ng
+
+        pt_w = STATS.solve_symmetric_nash(mat, iters=60_000)
+
+        # Parametric Gaussian bootstrap (400 draws) respecting exact antisymmetry
+        rng = random.Random(20261121 + s07_regimes.index(s07_name))
+        n_boot = int(args.boot)
+        boot_ws: list[list[float]] = []
+        for _ in range(n_boot):
+            mb = [[0.5] * k for _ in range(k)]
+            for i in range(k):
+                for j in range(i + 1, k):
+                    x = max(0.0, min(1.0, mat[i][j] + rng.gauss(0.0, se_mat[i][j])))
+                    mb[i][j] = x
+                    mb[j][i] = 1.0 - x
+            boot_ws.append(STATS.solve_symmetric_nash(mb, iters=6_000))
+
+        # Check EV of each shell AND alternative S07 ratios against this regime's point Nash
+        shell_summary: list[dict[str, Any]] = []
+        for i, nm in enumerate(names):
+            vs_nash = sum(pt_w[j] * mat[i][j] for j in range(k))
+            vs_nash_se = math.sqrt(sum((pt_w[j] * se_mat[i][j]) ** 2 for j in range(k) if j != i))
+            b_col = sorted(bw[i] for bw in boot_ws)
+            shell_summary.append({
+                "name": nm,
+                "point_weight": round(pt_w[i], 4),
+                "boot_mean": round(sum(b_col) / n_boot, 4),
+                "boot_p_gt_1pct": round(sum(1 for x in b_col if x > 0.01) / n_boot, 3),
+                "boot_p_gt_5pct": round(sum(1 for x in b_col if x > 0.05) / n_boot, 3),
+                "boot_iqr": [round(b_col[int(0.25 * n_boot)], 4), round(b_col[int(0.75 * n_boot)], 4)],
+                "ev_vs_nash": round(vs_nash, 4),
+                "ev_vs_nash_se": round(vs_nash_se, 4),
+                "mean_vs_field": round(sum(mat[i][j] for j in range(k) if j != i) / (k - 1), 4),
+                "min_vs_field": round(min(mat[i][j] for j in range(k) if j != i), 4),
+            })
+
+        # Cross-S07 deviation check against this regime's point Nash (excluding S07 mirror, renormalized on non-S07)
+        s07_dev: dict[str, dict[str, float]] = {}
+        non_s07_mass = sum(pt_w[1:])
+        for alt in s07_regimes:
+            # Against non-S07 opponents weighted by pt_w[1:]
+            ev_non = 0.0
+            var_non = 0.0
+            for j in range(1, k):
+                if pt_w[j] <= 1e-9:
+                    continue
+                mu, se, _ = cell_mu_se_n(alt, names[j])
+                ev_non += pt_w[j] * mu
+                var_non += (pt_w[j] * se) ** 2
+            ev_full = ev_non + pt_w[0] * 0.5
+            se_full = math.sqrt(var_non)
+            s07_dev[alt] = {
+                "ev_vs_nash": round(ev_full, 4),
+                "se": round(se_full, 4),
+                "ev_vs_non_s07": round(ev_non / non_s07_mass, 4) if non_s07_mass > 1e-9 else 0.5,
+            }
+
+        # Highest-SE cells among pairs where both sides have boot_mean >= 0.03
+        hot_cells = []
+        for i in range(k):
+            for j in range(i + 1, k):
+                bm_i = shell_summary[i]["boot_mean"]
+                bm_j = shell_summary[j]["boot_mean"]
+                if bm_i >= 0.03 and bm_j >= 0.03:
+                    hot_cells.append({
+                        "pair": f"{names[i]} vs {names[j]}",
+                        "mean": round(mat[i][j], 4),
+                        "se": round(se_mat[i][j], 4),
+                        "games": ng_mat[i][j],
+                        "impact": round(bm_i * bm_j * se_mat[i][j], 5),
+                    })
+        hot_cells.sort(key=lambda x: -x["impact"])
+
+        regimes_out[s07_name] = {
+            "shells": names,
+            "summary": shell_summary,
+            "s07_deviation_check": s07_dev,
+            "matrix": [[round(x, 4) for x in row] for row in mat],
+            "se_matrix": [[round(x, 4) for x in row] for row in se_mat],
+            "games_matrix": ng_mat,
+            "top_uncertainty_cells": hot_cells[:12],
+        }
+
+    # Step-B cache hit stats
+    hits = misses = 0
+    step_b_dir = work_dir / "prod-step-b"
+    for df in sorted((step_b_dir / "chunks").glob("chunk-*.done.json")):
+        d = json.loads(df.read_text())
+        inner = json.loads(d["remote_stdout_last"]) if "remote_stdout_last" in d else d
+        hits += int(inner.get("preview_cache_hits", 0))
+        misses += int(inner.get("preview_cache_misses", 0))
+
+    report = {
+        "dir": str(step_b_dir),
+        "step_b_cache_hit_rate": round(hits / max(1, hits + misses), 4),
+        "boot_draws": int(args.boot),
+        "regimes": regimes_out,
+    }
+    out_path = args.out or (step_b_dir / "step-b-rr-report.json")
+    out_path.write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "analyze-step-b",
+        "out": str(out_path),
+        "cache_hit_rate": report["step_b_cache_hit_rate"],
+        "regimes": {
+            rname: {
+                "point_support": {s["name"]: s["point_weight"] for s in rdoc["summary"] if s["point_weight"] >= 0.01},
+                "boot_top": {s["name"]: s["boot_mean"] for s in sorted(rdoc["summary"], key=lambda x: -x["boot_mean"])[:6]},
+                "s07_dev": {k: v["ev_vs_nash"] for k, v in rdoc["s07_deviation_check"].items()},
+            }
+            for rname, rdoc in regimes_out.items()
+        },
+    }))
+
+
+# ---------------------------------------------------------------------------
 # Subcommand: self-test
 # ---------------------------------------------------------------------------
 
@@ -2126,6 +2521,21 @@ def main() -> None:
     p_asa.add_argument("--dir", type=Path, required=True)
     p_asa.add_argument("--out", type=Path, default=None)
     p_asa.set_defaults(func=cmd_analyze_step_a)
+
+    p_psb = sub.add_parser("prepare-step-b")
+    p_psb.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_psb.add_argument("--out-dir", type=Path, default=None)
+    p_psb.add_argument("--seed-prefix", type=str, default="nc2000/elim-v1/step-b")
+    p_psb.add_argument("--preview-iters", type=int, default=729000)
+    p_psb.add_argument("--battle-iters", type=int, default=243000)
+    p_psb.add_argument("--battle-mode", choices=["fixed", "adaptive"], default="adaptive")
+    p_psb.set_defaults(func=cmd_prepare_step_b)
+
+    p_asb = sub.add_parser("analyze-step-b")
+    p_asb.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_asb.add_argument("--boot", type=int, default=400)
+    p_asb.add_argument("--out", type=Path, default=None)
+    p_asb.set_defaults(func=cmd_analyze_step_b)
 
     args = ap.parse_args()
     args.func(args)
