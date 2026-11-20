@@ -21,3 +21,8 @@
 
 - Playing-strength architecture, measured-null dead ends, and open `81k` frontiers: see [`docs/BOT-STRENGTH-HANDOFF.md`](docs/BOT-STRENGTH-HANDOFF.md).
 - Do NOT consult gitignored local scratch/archive directories (`findings/`, `tmp/`, `.git/sota/`) for current architecture or open bottlenecks; verify claims directly against [`docs/BOT-STRENGTH-HANDOFF.md`](docs/BOT-STRENGTH-HANDOFF.md) and live code under `crates/`.
+
+## 4. Compute Policy
+
+- **Local-only compute**: Do NOT offload `nc2000-engine` builds, self-play, or search sweeps to Google Colab (nor retired `cx` Spot-VM / TPU paths). Colab CPU offloading is not cost-effective relative to local native execution (~16% of local Apple M6 CS-PGO throughput and prone to CLI/websocket hangs).
+- Run heavy sweeps locally with native CS-PGO binaries (`tools/build-native-pgo.sh`, `<= 10–11` threads) and resumable chunk checkpoints.
