@@ -145,8 +145,22 @@ def conservative_upper_95(pair_scores: list[float], n_games: int, rng: random.Ra
     return min(1.0, max(cp, t_upper, b_upper))
 
 
-def run_cmd(cmd: list[str], *, env: dict[str, str] | None = None, stdin_text: str | None = None) -> str:
-    res = subprocess.run(cmd, env=env, input=stdin_text, capture_output=True, text=True, check=True)
+def run_cmd(
+    cmd: list[str],
+    *,
+    env: dict[str, str] | None = None,
+    stdin_text: str | None = None,
+    timeout: float | None = None,
+) -> str:
+    res = subprocess.run(
+        cmd,
+        env=env,
+        input=stdin_text,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=timeout,
+    )
     return res.stdout.strip()
 
 
@@ -243,7 +257,7 @@ def run_colab_shard(
     r_tar = f"/tmp/p1-out-{tag}-{session}.tar.gz"
     l_tar = out_dir.parent / f"colab-{tag}-{session}.tar.gz"
 
-    run_cmd(["colab", "--auth", "adc", "upload", "-s", session, str(shard), r_sched])
+    run_cmd(["colab", "--auth", "adc", "upload", "-s", session, str(shard), r_sched], timeout=120)
     script = f"""
 import json, subprocess, time
 t0 = time.time()
@@ -263,8 +277,9 @@ print(json.dumps(meta))
     stdout = run_cmd(
         ["colab", "--auth", "adc", "exec", "-s", session, "--timeout", str(timeout_s)],
         stdin_text=script,
+        timeout=timeout_s + 120,
     )
-    run_cmd(["colab", "--auth", "adc", "download", "-s", session, r_tar, str(l_tar)])
+    run_cmd(["colab", "--auth", "adc", "download", "-s", session, r_tar, str(l_tar)], timeout=180)
     with tarfile.open(l_tar, "r:gz") as tf:
         tf.extractall(out_dir, filter="data")
     l_tar.unlink(missing_ok=True)
