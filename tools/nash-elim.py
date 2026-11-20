@@ -5163,6 +5163,424 @@ def cmd_analyze_thdr_qopt(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: prepare-core5-deepen & analyze-core5-deepen (5-shell core to >=48g/edge + 2 dev checks)
+# ---------------------------------------------------------------------------
+
+CORE5_DEEPEN_MATCHUPS: list[tuple[str, str, Any]] = [
+    # Ordered largest-first for balanced mini1 + mini2 scheduling (160g total, 80 pairs)
+    ("thdr:zap-talk-30-70", "APEX4", {"mjj-2014-thdrcomb__56b67d": 1, "thdr-v-zap-talk": 3}),                     # 16p = 32g -> 64g pooled
+    ("thdr:zap-talk-30-70", "S07_0_100", {"mjj-2014-thdrcomb__56b67d": 4, "thdr-v-zap-talk": 8}),                 # 12p = 24g -> 48g pooled
+    ("thdr:zap-talk-30-70", "PB132_50_50", {"mjj-2014-thdrcomb__56b67d": 2, "thdr-v-zap-talk": 4}),               # 12p = 24g -> 48g pooled
+    ("thdr:zap-talk-30-70", "mjj-2014-thdrcomb__56b67d", {"mjj-2014-thdrcomb__56b67d": 4, "thdr-v-zap-talk": 8}), # 12p = 24g measured mirror
+    ("thdr:zap-talk-30-70", "S07_50_50", {"mjj-2014-thdrcomb__56b67d": 2, "thdr-v-zap-talk": 4}),                 # 12p = 24g measured S07_50 dev
+    ("thdr:zap-talk-30-70", "D5", {"mjj-2014-thdrcomb__56b67d": 0, "thdr-v-zap-talk": 2}),                        # 10p = 20g -> 60g pooled (Neyman 2:4)
+    ("S07_0_100", "PB132_50_50", 3),                                                                               #  6p = 12g -> 48g pooled
+]
+
+
+def cmd_prepare_core5_deepen(args: argparse.Namespace) -> None:
+    _, raw_sets = load_full_catalog()
+    p0_doc = json.loads((ROOT / "target/nash-work/psro-v1/pools-p0.json").read_text())
+    for t in p0_doc.get("teams", []):
+        raw_sets[t["id"]] = t["sets"]
+    base_teams, _ = LEDGER.load_catalog_and_mixtures(None)
+
+    new_teams, _ = build_bare3_camo_variants(raw_sets)
+    all_sets = dict(raw_sets)
+    all_sets.update(new_teams)
+
+    profiles: dict[str, list[dict[str, Any]]] = {
+        "S07_0_100": STEP_B_PROFILES["S07_0_100"],
+        "S07_50_50": STEP_B_PROFILES["S07_50_50"],
+        "APEX4": STEP_B_PROFILES["APEX4"],
+        "D5": STEP_B_PROFILES["D5"],
+        "PB132_50_50": STEP_B_PROFILES["PB132_50_50"],
+        "mjj-2014-thdrcomb__56b67d": STEP_B_PROFILES["mjj-2014-thdrcomb__56b67d"],
+        "pb-58": STEP_B_PROFILES["pb-58"],
+        "thdr:zap-talk-30-70": [
+            {"id": "mjj-2014-thdrcomb__56b67d", "weight": 0.30},
+            {"id": "thdr-v-zap-talk", "weight": 0.70},
+        ],
+    }
+
+    for pname, members in profiles.items():
+        if len(members) > 1:
+            sigs = {
+                tuple((m["species"], m["level"], m.get("gender")) for m in all_sets[mem["id"]])
+                for mem in members
+            }
+            assert len(sigs) == 1, f"Profile {pname} has mismatched preview signatures: {sigs}"
+
+    needed_ids: set[str] = set()
+    mixtures: dict[str, list[dict[str, Any]]] = {}
+    for pname, mems in profiles.items():
+        mname = pname if len(mems) > 1 else f"s:{mems[0]['id']}"
+        mixtures[mname] = [{"id": m["id"], "weight": float(m["weight"])} for m in mems]
+        for m in mems:
+            needed_ids.add(m["id"])
+
+    extra_teams = [{"id": tid, "sets": all_sets[tid]} for tid in sorted(needed_ids) if tid not in base_teams]
+    out_dir: Path = args.out_dir or (args.work_dir / "prod-core5-deepen")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pools_path = out_dir / "pools.json"
+    pools_path.write_text(json.dumps({"teams": extra_teams, "mixtures": mixtures}, separators=(",", ":")) + "\n")
+
+    rows: list[dict[str, Any]] = []
+    chunk_breaks: list[int] = [0]
+    blk = 0
+    seed_prefix = args.seed_prefix
+
+    for rname, cname, pspec in CORE5_DEEPEN_MATCHUPS:
+        rmems = profiles[rname]
+        cmems = profiles[cname]
+        rmix = rname if len(rmems) > 1 else f"s:{rmems[0]['id']}"
+        cmix = cname if len(cmems) > 1 else f"s:{cmems[0]['id']}"
+        tot_c_pairs = sum(int(pspec[rm["id"]]) if isinstance(pspec, dict) else int(pspec) for rm in rmems)
+        c_bkts = 3 if tot_c_pairs >= 8 else 2
+        r_rep: dict[str, int] = defaultdict(int)
+        c_rep: dict[str, int] = defaultdict(int)
+        for rm in rmems:
+            rid = rm["id"]
+            n_p = int(pspec[rid]) if isinstance(pspec, dict) else int(pspec)
+            if n_p <= 0:
+                continue
+            r_bkts = 3 if (n_p * len(cmems)) >= 8 else 2
+            for cm in cmems:
+                cid = cm["id"]
+                for vrep in range(n_p):
+                    tag = f"{seed_prefix}/{rname}/{rid}/vs/{cname}/{cid}/r{vrep}"
+                    sr = u32_hash(f"{tag}/r")
+                    sc = u32_hash(f"{tag}/c")
+                    bs = u32_hash(f"{tag}/battle")
+                    pr = u32_hash(f"{seed_prefix}/{rname}/{rid}/vs/{cname}/prev-r-k{r_rep[rid] % r_bkts}")
+                    pc = u32_hash(f"{seed_prefix}/{rname}/vs/{cname}/{cid}/prev-c-k{c_rep[cid] % c_bkts}")
+                    for row_seat in (0, 1):
+                        if row_seat == 0:
+                            ids, seeds, pseeds, mix = [rid, cid], [sr, sc], [pr, pc], [rmix, cmix]
+                        else:
+                            ids, seeds, pseeds, mix = [cid, rid], [sc, sr], [pc, pr], [cmix, rmix]
+                        rows.append({
+                            "block": blk,
+                            "cell": {
+                                "kind": "core5_deepen",
+                                "row": rname,
+                                "col": cname,
+                                "row_id": rid,
+                                "col_id": cid,
+                                "rep": vrep,
+                            },
+                            "rowSeat": row_seat,
+                            "ids": ids,
+                            "seeds": seeds,
+                            "previewSeeds": pseeds,
+                            "battleSeed": bs,
+                            "mixtures": mix,
+                        })
+                    blk += 1
+                    r_rep[rid] += 1
+                    c_rep[cid] += 1
+        chunk_breaks.append(len(rows))
+
+    (out_dir / "schedule.jsonl").write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
+    meta = {
+        "kind": "core5-deepen",
+        "pools": str(pools_path),
+        "profiles": profiles,
+        "matchups": [[r, c] for r, c, _ in CORE5_DEEPEN_MATCHUPS],
+        "chunk_breaks": chunk_breaks,
+        "total_pairs": blk,
+        "total_games": len(rows),
+        "preview_iters": args.preview_iters,
+        "battle_iters": args.battle_iters,
+        "battle_mode": args.battle_mode,
+    }
+    (out_dir / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "prepare-core5-deepen",
+        "dir": str(out_dir),
+        "chunks": len(chunk_breaks) - 1,
+        "pairs": blk,
+        "games": len(rows),
+    }))
+
+
+def cmd_analyze_core5_deepen(args: argparse.Namespace) -> None:
+    import random
+
+    run_dir: Path = args.dir
+    work_dir: Path = args.work_dir
+    meta = json.loads((run_dir / "meta.json").read_text())
+    profiles: dict[str, list[dict[str, Any]]] = meta["profiles"]
+    profiles["thdr:zap-talk"] = [
+        {"id": "mjj-2014-thdrcomb__56b67d", "weight": 0.50},
+        {"id": "thdr-v-zap-talk", "weight": 0.50},
+    ]
+
+    def load_pairs(res_path: Path) -> dict[tuple[str, str, str, str], list[float]]:
+        raw: dict[tuple[str, str, str, str, int], list[float]] = defaultdict(list)
+        for line in res_path.open():
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            c = r["cell"]
+            raw[(c["row"], c["col"], c["row_id"], c["col_id"], int(c["rep"]))].append(
+                seat_score(r["outcome"], int(r["rowSeat"]))
+            )
+        out: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+        for (rn, cn, rid, cid, _rep), scs in raw.items():
+            if len(scs) == 2:
+                out[(rn, cn, rid, cid)].append(0.5 * (scs[0] + scs[1]))
+        return out
+
+    cp_qopt = load_pairs(work_dir / "prod-thdr-qopt/results.jsonl")
+    cp_deep = load_pairs(run_dir / "results.jsonl")
+    cp_pool: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+    for src in (cp_qopt, cp_deep):
+        for k, v in src.items():
+            cp_pool[k].extend(v)
+
+    def calc_strat(cp_map: dict[tuple[str, str, str, str], list[float]], rn: str, cn: str) -> dict[str, Any]:
+        ev = 0.0
+        var = 0.0
+        ng = 0
+        by_r: dict[str, dict[str, Any]] = {}
+        for rm in profiles[rn]:
+            rid, rw = rm["id"], float(rm["weight"])
+            rev = 0.0
+            rvar = 0.0
+            rng_g = 0
+            for cm in profiles[cn]:
+                cid, cw = cm["id"], float(cm["weight"])
+                ps = cp_map[(rn, cn, rid, cid)]
+                mu, se = pair_cell_stats(ps)
+                ev += (rw * cw) * mu
+                var += ((rw * cw) ** 2) * (se ** 2)
+                rev += cw * mu
+                rvar += (cw ** 2) * (se ** 2)
+                ng += len(ps) * 2
+                rng_g += len(ps) * 2
+            by_r[rid] = {"mean": round(rev, 4), "se": round(math.sqrt(rvar), 4), "games": rng_g}
+        return {"mean": round(ev, 4), "se": round(math.sqrt(var), 4), "games": ng, "by_row_var": by_r}
+
+    # Consolidate ALL prior edges identically to analyze-thdr-qopt
+    rep_c = json.loads((work_dir / "prod-step-c/step-c-core-report.json").read_text())
+    pbv = json.loads((work_dir / "prod-pb58-verify/pb58-verify-report.json").read_text())
+    cv2 = json.loads((work_dir / "prod-camo-v2/camo-prod-report.json").read_text())
+    szt = json.loads((work_dir / "prod-s07-zaptalk/s07-zaptalk-report.json").read_text())
+
+    edges: dict[tuple[str, str], tuple[float, float, int]] = {}
+
+    def put_e(a: str, b: str, mu: float, se: float, ng: int) -> None:
+        edges[(a, b)] = (mu, se, ng)
+        edges[(b, a)] = (1.0 - mu, se, ng)
+
+    def pool_two(m1: float, s1: float, g1: int, m2: float, s2: float, g2: int) -> tuple[float, float, int]:
+        mu = (m1 * g1 + m2 * g2) / (g1 + g2)
+        se = math.sqrt((g1 * s1) ** 2 + (g2 * s2) ** 2) / (g1 + g2)
+        return mu, se, g1 + g2
+
+    for rd in (rep_c["core_solves"]["S07_0_100__sample-08"], rep_c["core_solves"]["S07_50_50__sample-08"]):
+        shs = rd["shells"]
+        for i in range(len(shs)):
+            for j in range(i + 1, len(shs)):
+                put_e(shs[i], shs[j], rd["matrix"][i][j], rd["se_matrix"][i][j], rd["games_matrix"][i][j])
+
+    for op, v in pbv["per_opponent"].items():
+        put_e("pb-58", op, v["pooled"], v["se"], v["games"])
+    for ek, v in cv2["camo4_edges"].items():
+        a, b = ek.split(" vs ")
+        put_e(a, b, v["pooled"], v["se"], v["games"])
+
+    tb_v2 = cv2["thdr_summary"]["thdr:bare"]["per_opponent"]
+    for op in ("S07_50_50", "APEX4", "D5", "PB132_50_50"):
+        mp, sp, gp = edges[("mjj-2014-thdrcomb__56b67d", op)]
+        put_e("mjj-2014-thdrcomb__56b67d", op, *pool_two(mp, sp, gp, tb_v2[op]["mean"], tb_v2[op]["se"], tb_v2[op]["games"]))
+    tz_v2 = cv2["thdr_summary"]["thdr:zap-talk"]["per_opponent"]
+    for op in ("S07_50_50", "APEX4", "D5", "PB132_50_50"):
+        put_e("thdr:zap-talk", op, tz_v2[op]["mean"], tz_v2[op]["se"], tz_v2[op]["games"])
+    for op, v in szt["s07_0_100_precision"].items():
+        put_e("S07_0_100", op, v["pooled"], v["se"], v["games"])
+    for op, v in szt["thdr_zaptalk_bare_100"].items():
+        put_e("thdr-v-zap-talk", op, v["mean"], v["se"], v["games"])
+
+    # Overlay thdr:zap-talk (50/50) remaining 2 cells from prod-thdr-qopt
+    for op in ("S07_0_100", "pb-58"):
+        st = calc_strat(cp_qopt, "thdr:zap-talk", op)
+        put_e("thdr:zap-talk", op, st["mean"], st["se"], st["games"])
+
+    # Exact pair-level pooled thdr:zap-talk-30-70 vs all 7 opponents!
+    thdr30_cells: dict[str, Any] = {}
+    for op in ("S07_0_100", "APEX4", "D5", "PB132_50_50", "pb-58", "mjj-2014-thdrcomb__56b67d", "S07_50_50"):
+        pooled_st = calc_strat(cp_pool, "thdr:zap-talk-30-70", op)
+        put_e("thdr:zap-talk-30-70", op, pooled_st["mean"], pooled_st["se"], pooled_st["games"])
+        entry: dict[str, Any] = {"pooled": pooled_st}
+        if any(k[:2] == ("thdr:zap-talk-30-70", op) for k in cp_qopt):
+            entry["prior_qopt"] = calc_strat(cp_qopt, "thdr:zap-talk-30-70", op)
+        if any(k[:2] == ("thdr:zap-talk-30-70", op) for k in cp_deep):
+            entry["fresh_deepen"] = calc_strat(cp_deep, "thdr:zap-talk-30-70", op)
+        thdr30_cells[op] = entry
+
+    # Exact pooled S07_0_100 vs PB132_50_50: step-c (12g) + pair-pooled (qopt 24g + deepen 12g = 36g) -> 48g
+    mp_s07pb, sp_s07pb, gp_s07pb = edges[("S07_0_100", "PB132_50_50")]
+    fr_s07pb_36 = calc_strat(cp_pool, "S07_0_100", "PB132_50_50")
+    fr_s07pb_12 = calc_strat(cp_deep, "S07_0_100", "PB132_50_50")
+    mu_s07pb, se_s07pb, ng_s07pb = pool_two(mp_s07pb, sp_s07pb, gp_s07pb, fr_s07pb_36["mean"], fr_s07pb_36["se"], fr_s07pb_36["games"])
+    put_e("S07_0_100", "PB132_50_50", mu_s07pb, se_s07pb, ng_s07pb)
+    s07_pb_summary = {
+        "step_c_12g": {"mean": round(mp_s07pb, 4), "se": round(sp_s07pb, 4), "games": gp_s07pb},
+        "qopt_plus_deep_36g": fr_s07pb_36,
+        "fresh_deep_12g": fr_s07pb_12,
+        "pooled_48g": {"mean": round(mu_s07pb, 4), "se": round(se_s07pb, 4), "games": ng_s07pb},
+    }
+
+    rng = random.Random(20261121)
+    n_boot = int(args.boot)
+
+    def eval_pool_deviations(shs: list[str], weights: list[float]) -> dict[str, Any]:
+        # Disclosed challenger deviations against weighted pool
+        challengers = [
+            ("thdr_100_0_bare", "mjj-2014-thdrcomb__56b67d"),
+            ("thdr_50_50", "thdr:zap-talk"),
+            ("thdr_0_100_zt", "thdr-v-zap-talk"),
+            ("S07_50_50", "S07_50_50"),
+            ("pb-58", "pb-58"),
+        ]
+        disclosed: dict[str, Any] = {}
+        for label, cname in challengers:
+            ev = 0.0
+            var = 0.0
+            assumed_mirror = False
+            per_w: dict[str, float] = {}
+            for j, op in enumerate(shs):
+                w = weights[j]
+                if w <= 1e-9:
+                    continue
+                if (cname, op) in edges:
+                    mu, se, _ = edges[(cname, op)]
+                else:
+                    mu, se = 0.5, 0.0
+                    assumed_mirror = True
+                ev += w * mu
+                var += (w * se) ** 2
+                per_w[op] = round(mu, 4)
+            se_t = math.sqrt(var)
+            disclosed[label] = {
+                "ev": round(ev, 4),
+                "se": round(se_t, 4),
+                "ucb95": round(ev + 1.645 * se_t, 4),
+                "assumed_mirror": assumed_mirror,
+                "per_opp": per_w,
+            }
+
+        # Secret same-shell single-variant deviation inside thdr:zap-talk-30-70 (opponent assumes 30/70)
+        thdr_idx = shs.index("thdr:zap-talk-30-70")
+        non_t_mass = sum(weights[j] for j in range(len(shs)) if j != thdr_idx)
+        secret_thdr: dict[str, Any] = {}
+        for vid in ("mjj-2014-thdrcomb__56b67d", "thdr-v-zap-talk"):
+            ev_non = 0.0
+            var_non = 0.0
+            for j, op in enumerate(shs):
+                if j == thdr_idx or weights[j] <= 1e-9:
+                    continue
+                bv = thdr30_cells[op]["pooled"]["by_row_var"][vid]
+                ev_non += weights[j] * bv["mean"]
+                var_non += (weights[j] * bv["se"]) ** 2
+            ev_full = ev_non + weights[thdr_idx] * 0.5
+            se_full = math.sqrt(var_non)
+            secret_thdr[vid] = {
+                "ev_vs_non_thdr": round(ev_non / non_t_mass, 4) if non_t_mass > 1e-9 else 0.5,
+                "ev_full_05mirror": round(ev_full, 4),
+                "se": round(se_full, 4),
+                "ucb95": round(ev_full + 1.645 * se_full, 4),
+            }
+        return {"disclosed": disclosed, "secret_inside_thdr30_70": secret_thdr}
+
+    def solve_set(shs: list[str]) -> dict[str, Any]:
+        k = len(shs)
+        M = [[0.5] * k for _ in range(k)]
+        S = [[0.0] * k for _ in range(k)]
+        G = [[0] * k for _ in range(k)]
+        for i in range(k):
+            for j in range(i + 1, k):
+                mu, se, ng = edges[(shs[i], shs[j])]
+                M[i][j], M[j][i] = mu, 1.0 - mu
+                S[i][j] = S[j][i] = se
+                G[i][j] = G[j][i] = ng
+        pt = STATS.solve_symmetric_nash(M, iters=80_000)
+        bws = []
+        for _ in range(n_boot):
+            mb = [[0.5] * k for _ in range(k)]
+            for i in range(k):
+                for j in range(i + 1, k):
+                    x = max(0.0, min(1.0, M[i][j] + rng.gauss(0.0, S[i][j])))
+                    mb[i][j] = x
+                    mb[j][i] = 1.0 - x
+            bws.append(STATS.solve_symmetric_nash(mb, iters=8_000))
+        boot_means = [sum(b[i] for b in bws) / len(bws) for i in range(k)]
+        bm_sum = sum(boot_means)
+        boot_norm = [x / bm_sum for x in boot_means]
+        summary = []
+        for i in range(k):
+            col = sorted(b[i] for b in bws)
+            summary.append({
+                "name": shs[i],
+                "point": round(pt[i], 4),
+                "boot_mean": round(boot_norm[i], 4),
+                "boot_p_gt_5pct": round(sum(1 for x in col if x > 0.05) / len(col), 3),
+                "boot_iqr": [round(col[int(0.25 * len(col))], 4), round(col[int(0.75 * len(col))], 4)],
+                "ev_vs_point": round(sum(pt[j] * M[i][j] for j in range(k)), 4),
+                "ev_vs_boot": round(sum(boot_norm[j] * M[i][j] for j in range(k)), 4),
+                "mean_vs_core": round(sum(M[i][j] for j in range(k) if j != i) / (k - 1), 4),
+            })
+        return {
+            "shells": shs,
+            "games_min": min(G[i][j] for i in range(k) for j in range(i + 1, k)),
+            "summary": summary,
+            "deviations_vs_point": eval_pool_deviations(shs, pt),
+            "deviations_vs_boot": eval_pool_deviations(shs, boot_norm),
+            "matrix": [[round(x, 4) for x in row] for row in M],
+            "se_matrix": [[round(x, 4) for x in row] for row in S],
+            "games_matrix": G,
+        }
+
+    core5 = solve_set(["S07_0_100", "APEX4", "D5", "PB132_50_50", "thdr:zap-talk-30-70"])
+    core6 = solve_set(["S07_0_100", "APEX4", "D5", "PB132_50_50", "thdr:zap-talk-30-70", "pb-58"])
+
+    hits = misses = 0
+    for df in sorted((run_dir / "chunks").glob("chunk-*.done.json")):
+        d = json.loads(df.read_text())
+        inner = json.loads(d["remote_stdout_last"]) if "remote_stdout_last" in d else d
+        hits += int(inner.get("preview_cache_hits", 0))
+        misses += int(inner.get("preview_cache_misses", 0))
+
+    report = {
+        "dir": str(run_dir),
+        "fresh_games": sum(len(v) * 2 for v in cp_deep.values()),
+        "cache_hit_rate": round(hits / max(1, hits + misses), 4),
+        "boot_draws": n_boot,
+        "thdr30_cells": thdr30_cells,
+        "s07_0_100_vs_pb132": s07_pb_summary,
+        "core5": core5,
+        "core6_with_pb58": core6,
+    }
+    out_path = args.out or (run_dir / "core5-deepen-report.json")
+    out_path.write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "analyze-core5-deepen",
+        "out": str(out_path),
+        "fresh_games": report["fresh_games"],
+        "cache_hit_rate": report["cache_hit_rate"],
+        "core5_games_min": core5["games_min"],
+        "core5_pt": {s["name"]: s["point"] for s in core5["summary"]},
+        "core5_boot": {s["name"]: s["boot_mean"] for s in core5["summary"]},
+        "core5_dev_pt": {k: [v["ev"], v["ucb95"]] for k, v in core5["deviations_vs_point"]["disclosed"].items()},
+        "core5_dev_boot": {k: [v["ev"], v["ucb95"]] for k, v in core5["deviations_vs_boot"]["disclosed"].items()},
+        "thdr30_vs_bare_mirror": thdr30_cells["mjj-2014-thdrcomb__56b67d"]["pooled"]["mean"],
+        "thdr30_vs_s07_50": thdr30_cells["S07_50_50"]["pooled"]["mean"],
+    }))
+
+
+# ---------------------------------------------------------------------------
 # Subcommand: self-test
 # ---------------------------------------------------------------------------
 
@@ -5434,6 +5852,22 @@ def main() -> None:
     p_atq.add_argument("--dir", type=Path, required=True)
     p_atq.add_argument("--out", type=Path, default=None)
     p_atq.set_defaults(func=cmd_analyze_thdr_qopt)
+
+    p_pc5 = sub.add_parser("prepare-core5-deepen")
+    p_pc5.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_pc5.add_argument("--out-dir", type=Path, default=None)
+    p_pc5.add_argument("--seed-prefix", type=str, default="nc2000/elim-v1/core5-deep")
+    p_pc5.add_argument("--preview-iters", type=int, default=729000)
+    p_pc5.add_argument("--battle-iters", type=int, default=243000)
+    p_pc5.add_argument("--battle-mode", choices=["fixed", "adaptive"], default="adaptive")
+    p_pc5.set_defaults(func=cmd_prepare_core5_deepen)
+
+    p_ac5 = sub.add_parser("analyze-core5-deepen")
+    p_ac5.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_ac5.add_argument("--dir", type=Path, required=True)
+    p_ac5.add_argument("--boot", type=int, default=1000)
+    p_ac5.add_argument("--out", type=Path, default=None)
+    p_ac5.set_defaults(func=cmd_analyze_core5_deepen)
 
     args = ap.parse_args()
     args.func(args)
