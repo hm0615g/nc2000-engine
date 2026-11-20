@@ -67,7 +67,7 @@ No.11 immediate-faint fix is PARTIAL; all other approved categories and remainin
 | 最大HP未観測の即瀕死への修正 | PARTIAL FIX: source-linked HP0 + faint event; offline regression PASS; live match untested |
 | その他7系統の継続処理実装 | 未実施 |
 | 実トレースによる修正後回帰テスト | PASS: 3 synthetic cases + original 8 prior inputs and turn-9 scene, no Castle network |
-| Castle source commit/push | VERIFIED: 132d389332a296c3cef42028527224abf82cb199; live battle NOT TESTED |
+| Castle source commit/push | VERIFIED: 132d389332a296c3cef42028527224abf82cb199; normal-path live 2/2 FINISHED after deploy; fallback live untested |
 | 本家取込後adaptive実戦の評価 | 未実施 |
 
 ## 5. 作業履歴（追記すること）
@@ -183,3 +183,22 @@ The documentation follow-up commit and remote SHA are verified by the runner.
 - Do not create configuration backups or .bak/.orig files automatically, including in pbs-work.
 - Git-only local ignore rules may live in .git/info/exclude; do not assume .gitignore contains the necessary rule.
 - Do not change upstream-maintained bot core, WASM, engine, or Web as part of Castle diagnostics.
+
+<!-- castle-postdeploy-normal-play-v1 -->
+## Post-deployment Castle live verification (2026-11-20 UTC)
+
+- Deployed at: 2026-11-20T20:58:03.000Z.
+- Branch: hm0615g/nc2000-engine, review-local-changes; verified deploy HEAD: 2ec1d48e6a1be536b7e7646038f9a374112ced62.
+- Evidence: operator-provided read-only scan of data/pbs-traces and pbs-work (69,566 entries; no scan limit; 80 JSONL trace files; two new matches after deployment). Raw trace files were not independently re-read for this document update.
+
+| Match ID | Outcome | Decisions | Observation errors | Fallback attempts | Fallback confirmed | Stops | Invalid lines | Recovered unknown pages | Wait-for-form |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2026-11-20T21-05-20-206Z-K-g1 | FINISHED / WIN | 14 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 2026-11-20T21-13-05-615Z-K-g1 | FINISHED / LOSE | 17 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+- Normal-path live verification: PASS, 2/2 matches finished; 31 decisions, no observation errors and no stops.
+- Recovery behavior is NOT verified by these live matches: zero fallback attempts. Do NOT mark stop categories 4, 5, 6, 8, 9, 11, 13, or 14 fully fixed.
+- Previously recorded offline regression: continuation 10/10 PASS; immediate-faint 4/4 PASS. These tests were not re-run in this documentation update.
+- New-match audit boundary: after 2026-11-20T21-13-05-615Z-K-g1 (started 2026-11-20T21:13:05.616Z). Do not count either recorded match as new in subsequent audits.
+- Next: deterministic no-network pre-POST observation-failure integration test, then verify live recovery, current-form legal choice and exactly one guarded submission without suppressing evidence.
+- This documentation change makes no Castle requests and changes no bot source.
