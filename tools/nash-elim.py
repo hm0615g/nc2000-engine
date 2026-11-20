@@ -3542,11 +3542,44 @@ def build_bare3_camo_variants(all_sets: dict[str, list[dict[str, Any]]]) -> tupl
     set_mon(t, "Snorlax", item="Miracle Berry", moves=["Body Slam", "Earthquake", "Belly Drum", "Self-Destruct"])
     new_teams["cban8-v-ttar-left-drum"] = t
 
+    # --- 4. sample-07 Leftovers-preserving high-pick camouflage variants ---
+    # Base: Electrode50(Miracle), Tauros55(BerserkGene), Cloyster50(Gold), Marowak55(ThickClub), Snorlax50(Leftovers), Zapdos55(Mint)
+    t = clone_team("sample-07")
+    set_mon(t, "Zapdos", item="Leftovers", moves=["Thunder", "Hidden Power Ice", "Rest", "Sleep Talk"])
+    set_mon(t, "Snorlax", item="Mint Berry", moves=["Body Slam", "Earthquake", "Rest", "Self-Destruct"])
+    new_teams["s07-v-zap-talk-lax-rest"] = t
+
+    t = clone_team("sample-07")
+    set_mon(t, "Zapdos", item="Leftovers", moves=["Thunder", "Hidden Power Ice", "Swagger", "Whirlwind"])
+    set_mon(t, "Snorlax", item="Mint Berry", moves=["Body Slam", "Earthquake", "Rest", "Self-Destruct"])
+    new_teams["s07-v-zap-swag-lax-rest"] = t
+
+    t = clone_team("sample-07")
+    set_mon(t, "Zapdos", item="Leftovers", moves=["Thunder", "Hidden Power Ice", "Rest", "Sleep Talk"])
+    set_mon(t, "Snorlax", item="Pink Bow", moves=["Double-Edge", "Earthquake", "Curse", "Self-Destruct"])
+    new_teams["s07-v-zap-talk-lax-bow"] = t
+
+    t = clone_team("sample-07")
+    set_mon(t, "Snorlax", moves=["Body Slam", "Earthquake", "Belly Drum", "Self-Destruct"])
+    set_mon(t, "Cloyster", moves=["Surf", "Ice Beam", "Spikes", "Explosion"])
+    new_teams["s07-v-lax-drum-cloy-surf"] = t
+
+    t = clone_team("sample-07")
+    set_mon(t, "Snorlax", moves=["Double-Edge", "Fire Blast", "Curse", "Self-Destruct"])
+    set_mon(t, "Cloyster", moves=["Surf", "Ice Beam", "Spikes", "Explosion"])
+    new_teams["s07-v-lax-fblast-cloy-surf"] = t
+
+    t = clone_team("sample-07")
+    set_mon(t, "Tauros", item="Pink Bow", moves=["Double-Edge", "Earthquake", "Rest", "Sleep Talk"])
+    set_mon(t, "Cloyster", moves=["Surf", "Ice Beam", "Spikes", "Explosion"])
+    new_teams["s07-v-tauros-rest-cloy-surf"] = t
+
     # Validate 100% via WASM Validator AND assert exact visible preview signature match with parent shell
     parents = {
         "pb58-": "pb-58",
         "thdr-": "mjj-2014-thdrcomb__56b67d",
         "cban8-": "rental-cban-8",
+        "s07-": "sample-07",
     }
     for vid, sets in new_teams.items():
         pid = next(v for p, v in parents.items() if vid.startswith(p))
@@ -3614,6 +3647,19 @@ def build_bare3_camo_variants(all_sets: dict[str, list[dict[str, Any]]]) -> tupl
                 "cban8:ttar-left-drum": [{"id": "rental-cban-8", "weight": 0.5}, {"id": "cban8-v-ttar-left-drum", "weight": 0.5}],
             },
         },
+        "sample-07": {
+            "base_id": "sample-07",
+            "opponents": ["APEX4", "D5", "PB132_50_50", "mjj-2014-thdrcomb__56b67d", "thdr-v-zap-talk", "pb-58"],
+            "profiles": {
+                "s07:bare": [{"id": "sample-07", "weight": 1.0}],
+                "s07:zap-talk-lax-rest": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-v-zap-talk-lax-rest", "weight": 0.5}],
+                "s07:zap-swag-lax-rest": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-v-zap-swag-lax-rest", "weight": 0.5}],
+                "s07:zap-talk-lax-bow": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-v-zap-talk-lax-bow", "weight": 0.5}],
+                "s07:lax-drum-cloy-surf": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-v-lax-drum-cloy-surf", "weight": 0.5}],
+                "s07:lax-fblast-cloy-surf": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-v-lax-fblast-cloy-surf", "weight": 0.5}],
+                "s07:tauros-rest-cloy-surf": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-v-tauros-rest-cloy-surf", "weight": 0.5}],
+            },
+        },
     }
     return new_teams, shell_groups
 
@@ -3634,6 +3680,10 @@ def cmd_prepare_camo_screen(args: argparse.Namespace) -> None:
 
     needed_ids: set[str] = set()
     mixtures: dict[str, list[dict[str, Any]]] = {}
+    opp_profiles = {
+        **STEP_B_PROFILES,
+        "thdr-v-zap-talk": [{"id": "thdr-v-zap-talk", "weight": 1.0}],
+    }
     for sh in wanted_shells:
         sg = shell_groups[sh]
         for pname, mems in sg["profiles"].items():
@@ -3643,7 +3693,7 @@ def cmd_prepare_camo_screen(args: argparse.Namespace) -> None:
             for m in mems:
                 needed_ids.add(m["id"])
         for op in sg["opponents"]:
-            omems = STEP_B_PROFILES[op]
+            omems = opp_profiles[op]
             omname = op if len(omems) > 1 else f"s:{omems[0]['id']}"
             mixtures[omname] = [{"id": m["id"], "weight": float(m["weight"])} for m in omems]
             for m in omems:
@@ -3666,6 +3716,7 @@ def cmd_prepare_camo_screen(args: argparse.Namespace) -> None:
         "PB132_50_50": 4, # per opp variant -> 8p total (4p base + 4p mutant = 16g)
         "pb-58": 8,
         "mjj-2014-thdrcomb__56b67d": 8,
+        "thdr-v-zap-talk": 8,
         "rental-cban-8": 8,
     }
     scale = float(args.pair_scale)
@@ -3681,7 +3732,7 @@ def cmd_prepare_camo_screen(args: argparse.Namespace) -> None:
         active_groups[sh] = {"base_id": sg["base_id"], "opponents": sg["opponents"], "profiles": profs_run}
         for pname, cmems in profs_run.items():
             for op in sg["opponents"]:
-                omems = STEP_B_PROFILES[op]
+                omems = opp_profiles[op]
                 omix = op if len(omems) > 1 else f"s:{omems[0]['id']}"
                 n_tot = max(2, int(round(opp_total_pairs[op] * scale)))
                 # Ensure even when 2-variant so base and mutant each get n_tot // 2 pairs per opp variant
@@ -3781,6 +3832,10 @@ def cmd_analyze_camo_screen(args: argparse.Namespace) -> None:
 
     pair_sc = {k: 0.5 * (v[0] + v[1]) for k, v in raw.items() if len(v) == 2}
 
+    opp_profiles = {
+        **STEP_B_PROFILES,
+        "thdr-v-zap-talk": [{"id": "thdr-v-zap-talk", "weight": 1.0}],
+    }
     out_groups: dict[str, Any] = {}
     for sh, sg in groups.items():
         opponents: list[str] = sg["opponents"]
@@ -3801,7 +3856,7 @@ def cmd_analyze_camo_screen(args: argparse.Namespace) -> None:
                 var = 0.0
                 dev = 0.0
                 dvar = 0.0
-                for om in STEP_B_PROFILES[op]:
+                for om in opp_profiles[op]:
                     oid, ow = om["id"], float(om["weight"])
                     reps = sorted(k[4] for k in pair_sc if k[0] == sh and k[1] == pname and k[2] == op and k[3] == oid)
                     ps = [pair_sc[(sh, pname, op, oid, rp)] for rp in reps]
