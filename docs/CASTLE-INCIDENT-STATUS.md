@@ -67,7 +67,7 @@ No.11 immediate-faint fix is PARTIAL; all other approved categories and remainin
 | 最大HP未観測の即瀕死への修正 | PARTIAL FIX: source-linked HP0 + faint event; offline regression PASS; live match untested |
 | その他7系統の継続処理実装 | 未実施 |
 | 実トレースによる修正後回帰テスト | PASS: 3 synthetic cases + original 8 prior inputs and turn-9 scene, no Castle network |
-| 対戦コードの修正commit/push | 未実施 |
+| Castle source commit/push | VERIFIED: 132d389332a296c3cef42028527224abf82cb199; live battle NOT TESTED |
 | 本家取込後adaptive実戦の評価 | 未実施 |
 
 ## 5. 作業履歴（追記すること）
@@ -121,7 +121,7 @@ Changed files:
 Evidence: 2026-11-20T16-29-14-394Z-K-g1.
 Tests: synthetic cases and original stopped-game replay through turn 9.
 Castle network: not used. Live battle: not tested.
-Core/Web: unchanged. Git commit/push: PENDING.
+Core/Web: unchanged. Code commit/push: VERIFIED on fork (132d389332a296c3cef42028527224abf82cb199). Live battle: NOT TESTED.
 Update every category after each confirmed fix.
 
 <!-- castle-continuation-8-progress-v1 -->
@@ -146,7 +146,7 @@ These statuses supersede any earlier generic statement that all 8 are unimplemen
 Tests: node --check client/helper/test; helper continuation test; original
 stopped scene form replay; previously installed immediate-faint test when present.
 No Castle HTTP requests in these tests; no live match verification yet.
-Git commit/push: PENDING.
+Code commit/push: VERIFIED on fork (132d389332a296c3cef42028527224abf82cb199). Live battle: NOT TESTED.
 Do not mark a category FULLY_FIXED until its regression and real-game criteria pass.
 
 ### Change history
@@ -156,3 +156,14 @@ POST are converted to Castle-form fallback or continued polling.
 No source-side errors are silently suppressed: trace events retain the reason.
 When the implementation is verified and deployed, change each row to FIXED
 individually and remove it from the pending-work inventory.
+
+<!-- castle-continuation-push-verified-v1 -->
+## Verified fork deployment of continuation code
+Code commit: 132d389332a296c3cef42028527224abf82cb199
+Fork: hm0615g/nc2000-engine, branch review-local-changes.
+Code commit verified by comparing local HEAD with fork ls-remote.
+Tests: continuation 10/10 PASS; immediate-faint 4/4 PASS.
+Live Castle battle: NOT TESTED.
+Eight categories: continuation handler installed, NOT fully resolved.
+Pending: live coverage, event-specific semantic repairs, further regression.
+The documentation follow-up commit and remote SHA are verified by the runner.
