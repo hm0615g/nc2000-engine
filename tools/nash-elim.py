@@ -3574,6 +3574,35 @@ def build_bare3_camo_variants(all_sets: dict[str, list[dict[str, Any]]]) -> tupl
     set_mon(t, "Cloyster", moves=["Surf", "Ice Beam", "Spikes", "Explosion"])
     new_teams["s07-v-tauros-rest-cloy-surf"] = t
 
+    # --- 5. sample-07 micro 1-move-only surgical camouflage variants (ZERO item changes) ---
+    t = clone_team("sample-07")
+    set_mon(t, "Cloyster", moves=["Ice Beam", "Explosion", "Surf", "Spikes"])
+    new_teams["s07-m-cloy-surf"] = t
+
+    t = clone_team("sample-07")
+    set_mon(t, "Snorlax", moves=["Body Slam", "Fire Blast", "Self-Destruct", "Curse"])
+    new_teams["s07-m-lax-fblast"] = t
+
+    t = clone_team("sample-07")
+    set_mon(t, "Snorlax", moves=["Double-Edge", "Earthquake", "Self-Destruct", "Curse"])
+    new_teams["s07-m-lax-de"] = t
+
+    t = clone_team("sample-07")
+    set_mon(t, "Snorlax", moves=["Body Slam", "Earthquake", "Rest", "Curse"])
+    new_teams["s07-m-lax-rest"] = t
+
+    t = clone_team("sample-07")
+    set_mon(t, "Zapdos", moves=["Thunder", "Hidden Power Ice", "Whirlwind", "Rest"])
+    new_teams["s07-m-zap-thunder"] = t
+
+    t = clone_team("sample-07")
+    set_mon(t, "Zapdos", moves=["Thunderbolt", "Hidden Power Ice", "Thunder Wave", "Rest"])
+    new_teams["s07-m-zap-twave"] = t
+
+    t = clone_team("sample-07")
+    set_mon(t, "Snorlax", moves=["Body Slam", "Earthquake", "Self-Destruct", "Belly Drum"])
+    new_teams["s07-m-lax-drum"] = t
+
     # Validate 100% via WASM Validator AND assert exact visible preview signature match with parent shell
     parents = {
         "pb58-": "pb-58",
@@ -3658,6 +3687,20 @@ def build_bare3_camo_variants(all_sets: dict[str, list[dict[str, Any]]]) -> tupl
                 "s07:lax-drum-cloy-surf": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-v-lax-drum-cloy-surf", "weight": 0.5}],
                 "s07:lax-fblast-cloy-surf": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-v-lax-fblast-cloy-surf", "weight": 0.5}],
                 "s07:tauros-rest-cloy-surf": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-v-tauros-rest-cloy-surf", "weight": 0.5}],
+            },
+        },
+        "sample-07-micro": {
+            "base_id": "sample-07",
+            "opponents": ["APEX4", "D5", "PB132_50_50", "mjj-2014-thdrcomb__56b67d", "thdr-v-zap-talk", "pb-58"],
+            "profiles": {
+                "s07m:bare": [{"id": "sample-07", "weight": 1.0}],
+                "s07m:cloy-surf": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-m-cloy-surf", "weight": 0.5}],
+                "s07m:lax-fblast": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-m-lax-fblast", "weight": 0.5}],
+                "s07m:lax-de": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-m-lax-de", "weight": 0.5}],
+                "s07m:lax-rest": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-m-lax-rest", "weight": 0.5}],
+                "s07m:zap-thunder": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-m-zap-thunder", "weight": 0.5}],
+                "s07m:zap-twave": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-m-zap-twave", "weight": 0.5}],
+                "s07m:lax-drum": [{"id": "sample-07", "weight": 0.5}, {"id": "s07-m-lax-drum", "weight": 0.5}],
             },
         },
     }
