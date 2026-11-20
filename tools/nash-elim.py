@@ -3256,6 +3256,646 @@ def cmd_analyze_s08_upgrade(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: prepare-pb58-verify & analyze-pb58-verify (High-power prod audit of bare pb-58)
+# ---------------------------------------------------------------------------
+
+PB58_VERIFY_MATCHUPS: list[tuple[str, int]] = [
+    ("D5", 3),                         # 3p x 5 = 30g (-> 50g total)
+    ("S07_50_50", 6),                  # 6p x 2 = 24g (-> 36g total)
+    ("PB132_50_50", 6),                # 6p x 2 = 24g (-> 36g total)
+    ("mjj-2014-thdrcomb__56b67d", 12), # 12p x 1 = 24g (-> 36g total)
+    ("rental-cban-8", 12),             # 12p x 1 = 24g (-> 36g total)
+]
+
+
+def cmd_prepare_pb58_verify(args: argparse.Namespace) -> None:
+    _, all_sets = load_full_catalog()
+    p0_doc = json.loads((ROOT / "target/nash-work/psro-v1/pools-p0.json").read_text())
+    for t in p0_doc.get("teams", []):
+        all_sets[t["id"]] = t["sets"]
+    base_teams, _ = LEDGER.load_catalog_and_mixtures(None)
+
+    needed_ids: set[str] = {"pb-58"}
+    mixtures: dict[str, list[dict[str, Any]]] = {"s:pb-58": [{"id": "pb-58", "weight": 1.0}]}
+    for oname, _ in PB58_VERIFY_MATCHUPS:
+        mems = STEP_B_PROFILES[oname]
+        mname = oname if len(mems) > 1 else f"s:{mems[0]['id']}"
+        mixtures[mname] = [{"id": m["id"], "weight": float(m["weight"])} for m in mems]
+        for m in mems:
+            needed_ids.add(m["id"])
+
+    extra_teams = [{"id": tid, "sets": all_sets[tid]} for tid in sorted(needed_ids) if tid not in base_teams]
+    out_dir: Path = args.out_dir or (args.work_dir / "prod-pb58-verify")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pools_path = out_dir / "pools.json"
+    pools_path.write_text(json.dumps({"teams": extra_teams, "mixtures": mixtures}, separators=(",", ":")) + "\n")
+
+    rows: list[dict[str, Any]] = []
+    chunk_breaks: list[int] = [0]
+    blk = 0
+    seed_prefix = args.seed_prefix
+
+    for oname, n_p in PB58_VERIFY_MATCHUPS:
+        omems = STEP_B_PROFILES[oname]
+        omix = oname if len(omems) > 1 else f"s:{omems[0]['id']}"
+        o_bkts = 3 if n_p >= 6 else 2
+        c_rep = 0
+        for om in omems:
+            oid = om["id"]
+            for vrep in range(n_p):
+                tag = f"{seed_prefix}/pb-58/vs/{oname}/{oid}/r{vrep}"
+                sc = u32_hash(f"{tag}/c")
+                so = u32_hash(f"{tag}/o")
+                bs = u32_hash(f"{tag}/battle")
+                pc = u32_hash(f"{seed_prefix}/pb-58/vs/{oname}/prev-c-k{c_rep % 3}")
+                po = u32_hash(f"{seed_prefix}/pb-58/vs/{oname}/{oid}/prev-o-k{vrep % o_bkts}")
+                for row_seat in (0, 1):
+                    if row_seat == 0:
+                        ids, seeds, pseeds, mix = ["pb-58", oid], [sc, so], [pc, po], ["s:pb-58", omix]
+                    else:
+                        ids, seeds, pseeds, mix = [oid, "pb-58"], [so, sc], [po, pc], [omix, "s:pb-58"]
+                    rows.append({
+                        "block": blk,
+                        "cell": {"kind": "pb58_verify", "opponent": oname, "opp_id": oid, "rep": vrep},
+                        "rowSeat": row_seat,
+                        "ids": ids,
+                        "seeds": seeds,
+                        "previewSeeds": pseeds,
+                        "battleSeed": bs,
+                        "mixtures": mix,
+                    })
+                blk += 1
+                c_rep += 1
+        chunk_breaks.append(len(rows))
+
+    (out_dir / "schedule.jsonl").write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
+    meta = {
+        "kind": "pb58-verify",
+        "pools": str(pools_path),
+        "matchups": [[o, n] for o, n in PB58_VERIFY_MATCHUPS],
+        "chunk_breaks": chunk_breaks,
+        "total_pairs": blk,
+        "total_games": len(rows),
+        "preview_iters": args.preview_iters,
+        "battle_iters": args.battle_iters,
+        "battle_mode": args.battle_mode,
+    }
+    (out_dir / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    print(json.dumps({"cmd": "prepare-pb58-verify", "dir": str(out_dir), "chunks": len(chunk_breaks) - 1, "games": len(rows)}))
+
+
+def cmd_analyze_pb58_verify(args: argparse.Namespace) -> None:
+    run_dir: Path = args.dir
+    work_dir: Path = args.work_dir
+    raw: dict[tuple[str, str, int], list[float]] = defaultdict(list)
+    seat_stat = [0.0, 0, 0.0, 0]
+    slot_cnt: Counter[int] = Counter()
+    tot_g = 0
+    for line in (run_dir / "results.jsonl").open():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        c = r["cell"]
+        rs = int(r["rowSeat"])
+        sc = seat_score(r["outcome"], rs)
+        raw[(c["opponent"], c["opp_id"], int(c["rep"]))].append(sc)
+        tot_g += 1
+        if rs == 0:
+            seat_stat[0] += sc
+            seat_stat[1] += 1
+        else:
+            seat_stat[2] += sc
+            seat_stat[3] += 1
+        pr = r.get("preview")
+        if isinstance(pr, list) and len(pr) == 2 and isinstance(pr[rs], dict):
+            inp = pr[rs].get("input", "")
+            if inp.startswith("team "):
+                for s in inp[5:].split(","):
+                    slot_cnt[int(s.strip())] += 1
+
+    cell_p: dict[tuple[str, str], list[float]] = defaultdict(list)
+    for (op, oid, _rep), scs in raw.items():
+        if len(scs) == 2:
+            cell_p[(op, oid)].append(0.5 * (scs[0] + scs[1]))
+
+    fresh_opp: dict[str, dict[str, Any]] = {}
+    eq_ev = 0.0
+    eq_var = 0.0
+    for oname, _ in PB58_VERIFY_MATCHUPS:
+        ev = 0.0
+        var = 0.0
+        ng = 0
+        for om in STEP_B_PROFILES[oname]:
+            oid, ow = om["id"], float(om["weight"])
+            ps = cell_p[(oname, oid)]
+            mu, se = pair_cell_stats(ps)
+            ev += ow * mu
+            var += (ow ** 2) * (se ** 2)
+            ng += len(ps) * 2
+        fresh_opp[oname] = {"mean": round(ev, 4), "se": round(math.sqrt(var), 4), "games": ng}
+        eq_ev += ev / len(PB58_VERIFY_MATCHUPS)
+        eq_var += var / (len(PB58_VERIFY_MATCHUPS) ** 2)
+
+    # Compare against prior Step C pb-58 core-7 cells (pooling fresh + prior!)
+    rep_c = json.loads((work_dir / "prod-step-c/step-c-core-report.json").read_text())
+    rd = rep_c["core_solves"]["S07_50_50__sample-08"]
+    names = rd["shells"]
+    pbi = names.index("pb-58")
+    pooled_core6: dict[str, dict[str, Any]] = {}
+    for op in ("S07_50_50", "APEX4", "D5", "PB132_50_50", "mjj-2014-thdrcomb__56b67d", "rental-cban-8"):
+        oi = names.index(op)
+        mp, sep, gp = rd["matrix"][pbi][oi], rd["se_matrix"][pbi][oi], rd["games_matrix"][pbi][oi]
+        if op in fresh_opp:
+            mf, sef, gf = fresh_opp[op]["mean"], fresh_opp[op]["se"], fresh_opp[op]["games"]
+            mu = (mp * gp + mf * gf) / (gp + gf)
+            se = math.sqrt((gp * sep) ** 2 + (gf * sef) ** 2) / (gp + gf)
+            pooled_core6[op] = {"prior": round(mp, 4), "prior_g": gp, "fresh": mf, "fresh_g": gf, "pooled": round(mu, 4), "se": round(se, 4), "games": gp + gf}
+        else:
+            pooled_core6[op] = {"prior": round(mp, 4), "prior_g": gp, "fresh": None, "fresh_g": 0, "pooled": round(mp, 4), "se": round(sep, 4), "games": gp}
+
+    pooled_mean6 = sum(v["pooled"] for v in pooled_core6.values()) / len(pooled_core6)
+    pooled_se6 = math.sqrt(sum(v["se"] ** 2 for v in pooled_core6.values())) / len(pooled_core6)
+
+    report = {
+        "dir": str(run_dir),
+        "fresh_games": tot_g,
+        "fresh_seat": {
+            "p1": round(seat_stat[0] / max(1, seat_stat[1]), 4),
+            "p2": round(seat_stat[2] / max(1, seat_stat[3]), 4),
+        },
+        "fresh_slots": [round(slot_cnt[i] / max(1, tot_g), 3) for i in range(1, 7)],
+        "fresh_mean_5thin": round(eq_ev, 4),
+        "fresh_se_5thin": round(math.sqrt(eq_var), 4),
+        "pooled_core6_mean": round(pooled_mean6, 4),
+        "pooled_core6_se": round(pooled_se6, 4),
+        "per_opponent": pooled_core6,
+    }
+    out_path = args.out or (run_dir / "pb58-verify-report.json")
+    out_path.write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "analyze-pb58-verify",
+        "out": str(out_path),
+        "fresh_games": tot_g,
+        "fresh_mean_5thin": report["fresh_mean_5thin"],
+        "fresh_se_5thin": report["fresh_se_5thin"],
+        "pooled_core6_mean": report["pooled_core6_mean"],
+        "pooled_core6_se": report["pooled_core6_se"],
+        "fresh_seat": report["fresh_seat"],
+        "per_opp_pooled": {k: v["pooled"] for k, v in pooled_core6.items()},
+    }))
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: prepare-camo-screen & analyze-camo-screen (Camouflage bare core shells)
+# ---------------------------------------------------------------------------
+
+def build_bare3_camo_variants(all_sets: dict[str, list[dict[str, Any]]]) -> tuple[dict[str, list[dict[str, Any]]], dict[str, dict[str, Any]]]:
+    """Build validated same-shell high-pick-slot camouflage variants for pb-58, thdrcomb, rental-cban-8."""
+    import copy
+    import subprocess
+
+    def clone_team(tid: str) -> list[dict[str, Any]]:
+        return copy.deepcopy(all_sets[tid])
+
+    def set_mon(team: list[dict[str, Any]], sp: str, item: str | None = None, moves: list[str] | None = None) -> None:
+        for m in team:
+            if m["species"] == sp:
+                if item is not None:
+                    m["item"] = item
+                if moves is not None:
+                    m["moves"] = list(moves)
+                return
+        raise KeyError(sp)
+
+    new_teams: dict[str, list[dict[str, Any]]] = {}
+
+    # --- 1. pb-58 high-pick camouflage variants ---
+    # Base: Gengar55(Miracle), Golem50(Mint), Suicune50(BrightPowder), Snorlax50(Leftovers), Eggy50(Gold), Venu55(PRZ)
+    t = clone_team("pb-58")
+    set_mon(t, "Gengar", moves=["Thunderbolt", "Ice Punch", "Destiny Bond", "Explosion"])
+    new_teams["pb58-v-gar-dbond"] = t
+
+    t = clone_team("pb-58")
+    set_mon(t, "Gengar", moves=["Thunderbolt", "Ice Punch", "Hypnosis", "Explosion"])
+    new_teams["pb58-v-gar-hyp"] = t
+
+    t = clone_team("pb-58")
+    set_mon(t, "Snorlax", item="Mint Berry", moves=["Body Slam", "Earthquake", "Rest", "Self-Destruct"])
+    set_mon(t, "Suicune", item="Leftovers")
+    set_mon(t, "Golem", item="Bright Powder")
+    new_teams["pb58-v-lax-rest"] = t
+
+    t = clone_team("pb-58")
+    set_mon(t, "Snorlax", item="Pink Bow", moves=["Double-Edge", "Earthquake", "Curse", "Self-Destruct"])
+    set_mon(t, "Suicune", item="Leftovers", moves=["Surf", "Ice Beam", "Roar", "Rest"])
+    new_teams["pb58-v-lax-bow-roarcune"] = t
+
+    t = clone_team("pb-58")
+    set_mon(t, "Gengar", moves=["Thunderbolt", "Ice Punch", "Destiny Bond", "Explosion"])
+    set_mon(t, "Snorlax", item="Mint Berry", moves=["Body Slam", "Earthquake", "Rest", "Self-Destruct"])
+    set_mon(t, "Suicune", item="Leftovers")
+    set_mon(t, "Golem", item="Bright Powder")
+    new_teams["pb58-v-dual-gar-lax"] = t
+
+    # --- 2. mjj-2014-thdrcomb__56b67d high-pick camouflage variants ---
+    # Base: Zapdos55(Miracle), Ttar55(Leftovers), Venu50(PRZ), Steelix50(PolkadotBow), Cloy50(Gold), Snorlax50(Mint)
+    t = clone_team("mjj-2014-thdrcomb__56b67d")
+    set_mon(t, "Zapdos", item="Leftovers", moves=["Thunder", "Hidden Power Ice", "Swagger", "Whirlwind"])
+    set_mon(t, "Tyranitar", item="Miracle Berry", moves=["Rock Slide", "Crunch", "Dynamic Punch", "Fire Blast"])
+    new_teams["thdr-v-zap-swag"] = t
+
+    t = clone_team("mjj-2014-thdrcomb__56b67d")
+    set_mon(t, "Snorlax", item="Leftovers", moves=["Body Slam", "Earthquake", "Curse", "Self-Destruct"])
+    set_mon(t, "Tyranitar", item="Quick Claw")
+    new_teams["thdr-v-lax-curse"] = t
+
+    t = clone_team("mjj-2014-thdrcomb__56b67d")
+    set_mon(t, "Snorlax", item="Pink Bow", moves=["Double-Edge", "Earthquake", "Curse", "Self-Destruct"])
+    set_mon(t, "Steelix", item="Quick Claw", moves=["Earthquake", "Curse", "Roar", "Explosion"])
+    new_teams["thdr-v-lax-bow"] = t
+
+    t = clone_team("mjj-2014-thdrcomb__56b67d")
+    set_mon(t, "Zapdos", item="Leftovers", moves=["Thunder", "Hidden Power Ice", "Rest", "Sleep Talk"])
+    set_mon(t, "Tyranitar", item="Miracle Berry", moves=["Rock Slide", "Earthquake", "Fire Blast", "Crunch"])
+    set_mon(t, "Steelix", moves=["Earthquake", "Curse", "Roar", "Explosion"])
+    new_teams["thdr-v-zap-talk"] = t
+
+    # --- 3. rental-cban-8 high-pick camouflage variants ---
+    # Base: Ttar55(Miracle), Eggy50(Mint), Venu50(PRZ), Golem50(Gold), Snorlax50(Leftovers), Miltank55(PinkBow)
+    t = clone_team("rental-cban-8")
+    set_mon(t, "Snorlax", item="Mint Berry", moves=["Body Slam", "Earthquake", "Rest", "Self-Destruct"])
+    set_mon(t, "Exeggutor", item="Quick Claw")
+    set_mon(t, "Miltank", item="Leftovers", moves=["Body Slam", "Curse", "Dynamic Punch", "Milk Drink"])
+    new_teams["cban8-v-lax-rest"] = t
+
+    t = clone_team("rental-cban-8")
+    set_mon(t, "Snorlax", moves=["Body Slam", "Earthquake", "Belly Drum", "Self-Destruct"])
+    new_teams["cban8-v-lax-drum"] = t
+
+    t = clone_team("rental-cban-8")
+    set_mon(t, "Miltank", item="Leftovers", moves=["Return", "Curse", "Growl", "Milk Drink"])
+    set_mon(t, "Snorlax", item="Pink Bow", moves=["Double-Edge", "Earthquake", "Curse", "Self-Destruct"])
+    new_teams["cban8-v-tank-left-bow"] = t
+
+    t = clone_team("rental-cban-8")
+    set_mon(t, "Tyranitar", item="Leftovers", moves=["Rock Slide", "Earthquake", "Ice Beam", "Dynamic Punch"])
+    set_mon(t, "Snorlax", item="Miracle Berry", moves=["Body Slam", "Earthquake", "Belly Drum", "Self-Destruct"])
+    new_teams["cban8-v-ttar-left-drum"] = t
+
+    # Validate 100% via WASM Validator AND assert exact visible preview signature match with parent shell
+    parents = {
+        "pb58-": "pb-58",
+        "thdr-": "mjj-2014-thdrcomb__56b67d",
+        "cban8-": "rental-cban-8",
+    }
+    for vid, sets in new_teams.items():
+        pid = next(v for p, v in parents.items() if vid.startswith(p))
+        sig_v = [(m["species"], m["level"], m.get("gender")) for m in sets]
+        sig_p = [(m["species"], m["level"], m.get("gender")) for m in all_sets[pid]]
+        assert sig_v == sig_p, f"Preview signature mismatch for {vid} vs {pid}: {sig_v} != {sig_p}"
+
+    js_check = (
+        "const wasm = require('./crates/wasm/pkg-node/nc2000_wasm.js');"
+        "const fs = require('fs');"
+        "const data = JSON.parse(fs.readFileSync(0, 'utf8'));"
+        "const dex = new wasm.Dex();"
+        "const v = new wasm.Validator(dex);"
+        "const errs = {};"
+        "for (const [id, sets] of Object.entries(data)) {"
+        "  const r = JSON.parse(v.validateTeam(JSON.stringify(sets)));"
+        "  if (!r.ok) errs[id] = r.errors;"
+        "}"
+        "console.log(JSON.stringify({ ok: Object.keys(errs).length === 0, checked: Object.keys(data).length, errs }));"
+    )
+    proc = subprocess.run(
+        ["node", "-e", js_check],
+        input=json.dumps(new_teams),
+        text=True,
+        capture_output=True,
+        cwd=str(ROOT),
+        check=True,
+    )
+    verdict = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert verdict["ok"], f"Validator rejected camo variants: {verdict['errs']}"
+
+    # Build 50/50 camo mixes + bare baselines grouped by shell
+    shell_groups: dict[str, dict[str, Any]] = {
+        "pb-58": {
+            "base_id": "pb-58",
+            "opponents": ["S07_50_50", "APEX4", "D5", "PB132_50_50", "mjj-2014-thdrcomb__56b67d", "rental-cban-8"],
+            "profiles": {
+                "pb-58:bare": [{"id": "pb-58", "weight": 1.0}],
+                "pb-58:gar-dbond": [{"id": "pb-58", "weight": 0.5}, {"id": "pb58-v-gar-dbond", "weight": 0.5}],
+                "pb-58:gar-hyp": [{"id": "pb-58", "weight": 0.5}, {"id": "pb58-v-gar-hyp", "weight": 0.5}],
+                "pb-58:lax-rest": [{"id": "pb-58", "weight": 0.5}, {"id": "pb58-v-lax-rest", "weight": 0.5}],
+                "pb-58:lax-bow-roar": [{"id": "pb-58", "weight": 0.5}, {"id": "pb58-v-lax-bow-roarcune", "weight": 0.5}],
+                "pb-58:dual-gar-lax": [{"id": "pb-58", "weight": 0.5}, {"id": "pb58-v-dual-gar-lax", "weight": 0.5}],
+            },
+        },
+        "mjj-2014-thdrcomb__56b67d": {
+            "base_id": "mjj-2014-thdrcomb__56b67d",
+            "opponents": ["S07_50_50", "APEX4", "D5", "PB132_50_50", "pb-58", "rental-cban-8"],
+            "profiles": {
+                "thdr:bare": [{"id": "mjj-2014-thdrcomb__56b67d", "weight": 1.0}],
+                "thdr:zap-swag": [{"id": "mjj-2014-thdrcomb__56b67d", "weight": 0.5}, {"id": "thdr-v-zap-swag", "weight": 0.5}],
+                "thdr:lax-curse": [{"id": "mjj-2014-thdrcomb__56b67d", "weight": 0.5}, {"id": "thdr-v-lax-curse", "weight": 0.5}],
+                "thdr:lax-bow": [{"id": "mjj-2014-thdrcomb__56b67d", "weight": 0.5}, {"id": "thdr-v-lax-bow", "weight": 0.5}],
+                "thdr:zap-talk": [{"id": "mjj-2014-thdrcomb__56b67d", "weight": 0.5}, {"id": "thdr-v-zap-talk", "weight": 0.5}],
+            },
+        },
+        "rental-cban-8": {
+            "base_id": "rental-cban-8",
+            "opponents": ["S07_50_50", "APEX4", "D5", "PB132_50_50", "pb-58", "mjj-2014-thdrcomb__56b67d"],
+            "profiles": {
+                "cban8:bare": [{"id": "rental-cban-8", "weight": 1.0}],
+                "cban8:lax-rest": [{"id": "rental-cban-8", "weight": 0.5}, {"id": "cban8-v-lax-rest", "weight": 0.5}],
+                "cban8:lax-drum": [{"id": "rental-cban-8", "weight": 0.5}, {"id": "cban8-v-lax-drum", "weight": 0.5}],
+                "cban8:tank-left-bow": [{"id": "rental-cban-8", "weight": 0.5}, {"id": "cban8-v-tank-left-bow", "weight": 0.5}],
+                "cban8:ttar-left-drum": [{"id": "rental-cban-8", "weight": 0.5}, {"id": "cban8-v-ttar-left-drum", "weight": 0.5}],
+            },
+        },
+    }
+    return new_teams, shell_groups
+
+
+def cmd_prepare_camo_screen(args: argparse.Namespace) -> None:
+    _, raw_sets = load_full_catalog()
+    p0_doc = json.loads((ROOT / "target/nash-work/psro-v1/pools-p0.json").read_text())
+    for t in p0_doc.get("teams", []):
+        raw_sets[t["id"]] = t["sets"]
+    base_teams, _ = LEDGER.load_catalog_and_mixtures(None)
+
+    new_teams, shell_groups = build_bare3_camo_variants(raw_sets)
+    all_sets = dict(raw_sets)
+    all_sets.update(new_teams)
+
+    wanted_shells = [s.strip() for s in args.shells.split(",") if s.strip()] if args.shells else list(shell_groups.keys())
+    wanted_profs = set(s.strip() for s in args.profiles.split(",") if s.strip()) if args.profiles else None
+
+    needed_ids: set[str] = set()
+    mixtures: dict[str, list[dict[str, Any]]] = {}
+    for sh in wanted_shells:
+        sg = shell_groups[sh]
+        for pname, mems in sg["profiles"].items():
+            if wanted_profs and pname not in wanted_profs:
+                continue
+            mixtures[pname] = mems
+            for m in mems:
+                needed_ids.add(m["id"])
+        for op in sg["opponents"]:
+            omems = STEP_B_PROFILES[op]
+            omname = op if len(omems) > 1 else f"s:{omems[0]['id']}"
+            mixtures[omname] = [{"id": m["id"], "weight": float(m["weight"])} for m in omems]
+            for m in omems:
+                needed_ids.add(m["id"])
+
+    extra_teams = [{"id": tid, "sets": all_sets[tid]} for tid in sorted(needed_ids) if tid not in base_teams]
+    out_dir: Path = args.out_dir or (args.work_dir / "camo-screen-9k")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pools_path = out_dir / "pools.json"
+    pools_path.write_text(json.dumps({"teams": extra_teams, "mixtures": mixtures}, separators=(",", ":")) + "\n")
+
+    # Pairs per opponent (total 108 games per profile at pair_scale=1.0:
+    # S07 16g, APEX4 16g, D5 20g, PB132 16g, bare_opp1 20g, bare_opp2 20g -> 108g)
+    # Note: for 2-member camo profile, split pairs evenly across the 2 variants (base vs mutant)
+    # on shared CRN seeds (rep index aligned so base_in_camo shares exact CRN seeds with bare!)
+    opp_total_pairs = {
+        "S07_50_50": 4,   # per opp variant -> 8p total (4p base + 4p mutant = 16g)
+        "APEX4": 2,       # per opp variant -> 8p total (4p base + 4p mutant = 16g)
+        "D5": 2,          # per opp variant -> 10p total (5p base + 5p mutant = 20g)
+        "PB132_50_50": 4, # per opp variant -> 8p total (4p base + 4p mutant = 16g)
+        "pb-58": 8,
+        "mjj-2014-thdrcomb__56b67d": 8,
+        "rental-cban-8": 8,
+    }
+    scale = float(args.pair_scale)
+    rows: list[dict[str, Any]] = []
+    chunk_breaks: list[int] = [0]
+    blk = 0
+    seed_prefix = args.seed_prefix
+    active_groups: dict[str, Any] = {}
+
+    for sh in wanted_shells:
+        sg = shell_groups[sh]
+        profs_run = {k: v for k, v in sg["profiles"].items() if (not wanted_profs or k in wanted_profs)}
+        active_groups[sh] = {"base_id": sg["base_id"], "opponents": sg["opponents"], "profiles": profs_run}
+        for pname, cmems in profs_run.items():
+            for op in sg["opponents"]:
+                omems = STEP_B_PROFILES[op]
+                omix = op if len(omems) > 1 else f"s:{omems[0]['id']}"
+                n_tot = max(2, int(round(opp_total_pairs[op] * scale)))
+                # Ensure even when 2-variant so base and mutant each get n_tot // 2 pairs per opp variant
+                if n_tot % 2 == 1:
+                    n_tot += 1
+                c_rep: dict[str, int] = defaultdict(int)
+                o_rep: dict[str, int] = defaultdict(int)
+                for om in omems:
+                    oid = om["id"]
+                    for rep in range(n_tot):
+                        # Assign variant: for 2-member camo, even reps -> base (cmems[0]), odd reps -> mutant (cmems[1])
+                        # Bare plays ALL reps with cmems[0], so even reps give EXACT CRN (base_in_camo - bare)
+                        # and odd reps give EXACT CRN (mutant_in_camo - bare)!
+                        cid = cmems[0]["id"] if len(cmems) == 1 else cmems[rep % 2]["id"]
+                        tag = f"{seed_prefix}/{sh}/vs/{op}/{oid}/r{rep}"
+                        sc = u32_hash(f"{tag}/c")
+                        so = u32_hash(f"{tag}/o")
+                        bs = u32_hash(f"{tag}/battle")
+                        pc = u32_hash(f"{seed_prefix}/{sh}/vs/{op}/prev-c-k{c_rep[cid] % 2}")
+                        po = u32_hash(f"{seed_prefix}/{sh}/vs/{op}/{oid}/prev-o-k{o_rep[oid] % 2}")
+                        for row_seat in (0, 1):
+                            if row_seat == 0:
+                                ids, seeds, pseeds, mix = [cid, oid], [sc, so], [pc, po], [pname, omix]
+                            else:
+                                ids, seeds, pseeds, mix = [oid, cid], [so, sc], [po, pc], [omix, pname]
+                            rows.append({
+                                "block": blk,
+                                "cell": {
+                                    "kind": "camo_screen",
+                                    "shell": sh,
+                                    "profile": pname,
+                                    "cand_id": cid,
+                                    "is_mutant": int(cid != sg["base_id"]),
+                                    "opponent": op,
+                                    "opp_id": oid,
+                                    "rep": rep,
+                                },
+                                "rowSeat": row_seat,
+                                "ids": ids,
+                                "seeds": seeds,
+                                "previewSeeds": pseeds,
+                                "battleSeed": bs,
+                                "mixtures": mix,
+                            })
+                        blk += 1
+                        c_rep[cid] += 1
+                        o_rep[oid] += 1
+                if args.split_per_opp:
+                    chunk_breaks.append(len(rows))
+            if not args.split_per_opp:
+                chunk_breaks.append(len(rows))
+
+    (out_dir / "schedule.jsonl").write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
+    meta = {
+        "kind": "camo-screen",
+        "pools": str(pools_path),
+        "groups": active_groups,
+        "chunk_breaks": chunk_breaks,
+        "total_pairs": blk,
+        "total_games": len(rows),
+        "preview_iters": args.preview_iters,
+        "battle_iters": args.battle_iters,
+        "battle_mode": args.battle_mode,
+    }
+    (out_dir / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "prepare-camo-screen",
+        "dir": str(out_dir),
+        "shells": wanted_shells,
+        "profiles": sum(len(g["profiles"]) for g in active_groups.values()),
+        "chunks": len(chunk_breaks) - 1,
+        "games": len(rows),
+    }))
+
+
+def cmd_analyze_camo_screen(args: argparse.Namespace) -> None:
+    run_dir: Path = args.dir
+    meta = json.loads((run_dir / "meta.json").read_text())
+    groups: dict[str, Any] = meta["groups"]
+
+    raw: dict[tuple[str, str, str, str, int], list[float]] = defaultdict(list)
+    opp_pick_map: dict[tuple[str, str, str, str, int, int], str] = {}
+    is_mut_map: dict[tuple[str, str, str, str, int], int] = {}
+
+    for line in (run_dir / "results.jsonl").open():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        c = r["cell"]
+        rs = int(r["rowSeat"])
+        k = (c["shell"], c["profile"], c["opponent"], c["opp_id"], int(c["rep"]))
+        raw[k].append(seat_score(r["outcome"], rs))
+        is_mut_map[k] = int(c["is_mutant"])
+        pr = r.get("preview")
+        if isinstance(pr, list) and len(pr) == 2 and isinstance(pr[1 - rs], dict):
+            opp_pick_map[(*k, rs)] = pr[1 - rs].get("input", "")
+
+    pair_sc = {k: 0.5 * (v[0] + v[1]) for k, v in raw.items() if len(v) == 2}
+
+    out_groups: dict[str, Any] = {}
+    for sh, sg in groups.items():
+        opponents: list[str] = sg["opponents"]
+        bare_prof = next((p for p, m in sg["profiles"].items() if len(m) == 1), None)
+        rows_out: list[dict[str, Any]] = []
+        for pname, mems in sg["profiles"].items():
+            per_opp: dict[str, float] = {}
+            eq_ev = 0.0
+            eq_var = 0.0
+            d_ev = 0.0
+            d_var = 0.0
+            base_diffs: list[float] = []
+            mut_diffs: list[float] = []
+            opp_shifts = 0
+            opp_tot = 0
+            for op in opponents:
+                ev = 0.0
+                var = 0.0
+                dev = 0.0
+                dvar = 0.0
+                for om in STEP_B_PROFILES[op]:
+                    oid, ow = om["id"], float(om["weight"])
+                    reps = sorted(k[4] for k in pair_sc if k[0] == sh and k[1] == pname and k[2] == op and k[3] == oid)
+                    ps = [pair_sc[(sh, pname, op, oid, rp)] for rp in reps]
+                    mu, se = pair_cell_stats(ps)
+                    ev += ow * mu
+                    var += (ow ** 2) * (se ** 2)
+                    if bare_prof:
+                        dps = []
+                        for rp in reps:
+                            bk = (sh, bare_prof, op, oid, rp)
+                            ck = (sh, pname, op, oid, rp)
+                            if bk not in pair_sc:
+                                continue
+                            df = pair_sc[ck] - pair_sc[bk]
+                            dps.append(df)
+                            if is_mut_map[ck] == 0:
+                                base_diffs.append(df)
+                            else:
+                                mut_diffs.append(df)
+                            for rs in (0, 1):
+                                op_c = opp_pick_map.get((*ck, rs))
+                                op_b = opp_pick_map.get((*bk, rs))
+                                if op_c and op_b:
+                                    opp_tot += 1
+                                    if op_c != op_b:
+                                        opp_shifts += 1
+                        dmu, dse = pair_cell_stats(dps)
+                        dev += ow * dmu
+                        dvar += (ow ** 2) * (dse ** 2)
+                per_opp[op] = round(ev, 4)
+                eq_ev += ev / len(opponents)
+                eq_var += var / (len(opponents) ** 2)
+                d_ev += dev / len(opponents)
+                d_var += dvar / (len(opponents) ** 2)
+
+            se_tot = math.sqrt(eq_var)
+            dse_tot = math.sqrt(d_var)
+            b_mu, _ = pair_cell_stats(base_diffs) if base_diffs else (0.0, 0.0)
+            m_mu, _ = pair_cell_stats(mut_diffs) if mut_diffs else (0.0, 0.0)
+            rows_out.append({
+                "profile": pname,
+                "mean_vs_6opp": round(eq_ev, 4),
+                "se": round(se_tot, 4),
+                "delta_vs_bare": round(d_ev, 4),
+                "delta_se": round(dse_tot, 4),
+                "delta_z": round(d_ev / dse_tot, 2) if dse_tot > 1e-9 else 0.0,
+                "base_slice_delta": round(b_mu, 4),
+                "mutant_slice_delta": round(m_mu, 4) if mut_diffs else None,
+                "opp_preview_shift_rate": round(opp_shifts / max(1, opp_tot), 3),
+                "min_opp": round(min(per_opp.values()), 4),
+                "per_opponent": per_opp,
+            })
+        rows_out.sort(key=lambda x: (-x["mean_vs_6opp"], -x["min_opp"]))
+        out_groups[sh] = rows_out
+
+    hits = misses = 0
+    for df in sorted((run_dir / "chunks").glob("chunk-*.done.json")):
+        d = json.loads(df.read_text())
+        inner = json.loads(d["remote_stdout_last"]) if "remote_stdout_last" in d else d
+        hits += int(inner.get("preview_cache_hits", 0))
+        misses += int(inner.get("preview_cache_misses", 0))
+
+    report = {
+        "dir": str(run_dir),
+        "games": len(pair_sc) * 2,
+        "cache_hit_rate": round(hits / max(1, hits + misses), 4),
+        "groups": out_groups,
+    }
+    out_path = args.out or (run_dir / "camo-screen-report.json")
+    out_path.write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps({
+        "cmd": "analyze-camo-screen",
+        "out": str(out_path),
+        "games": report["games"],
+        "cache_hit_rate": report["cache_hit_rate"],
+        "summary": {
+            sh: [
+                {
+                    "profile": r["profile"],
+                    "mean": r["mean_vs_6opp"],
+                    "delta": r["delta_vs_bare"],
+                    "z": r["delta_z"],
+                    "base_d": r["base_slice_delta"],
+                    "mut_d": r["mutant_slice_delta"],
+                    "shift": r["opp_preview_shift_rate"],
+                }
+                for r in rs
+            ]
+            for sh, rs in out_groups.items()
+        },
+    }))
+
+
+# ---------------------------------------------------------------------------
 # Subcommand: self-test
 # ---------------------------------------------------------------------------
 
@@ -3449,6 +4089,39 @@ def main() -> None:
     p_asu.add_argument("--dir", type=Path, required=True)
     p_asu.add_argument("--out", type=Path, default=None)
     p_asu.set_defaults(func=cmd_analyze_s08_upgrade)
+
+    p_ppv = sub.add_parser("prepare-pb58-verify")
+    p_ppv.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_ppv.add_argument("--out-dir", type=Path, default=None)
+    p_ppv.add_argument("--seed-prefix", type=str, default="nc2000/elim-v1/pb58-ver")
+    p_ppv.add_argument("--preview-iters", type=int, default=729000)
+    p_ppv.add_argument("--battle-iters", type=int, default=243000)
+    p_ppv.add_argument("--battle-mode", choices=["fixed", "adaptive"], default="adaptive")
+    p_ppv.set_defaults(func=cmd_prepare_pb58_verify)
+
+    p_apv = sub.add_parser("analyze-pb58-verify")
+    p_apv.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_apv.add_argument("--dir", type=Path, required=True)
+    p_apv.add_argument("--out", type=Path, default=None)
+    p_apv.set_defaults(func=cmd_analyze_pb58_verify)
+
+    p_pcs = sub.add_parser("prepare-camo-screen")
+    p_pcs.add_argument("--work-dir", type=Path, default=DEFAULT_WORK)
+    p_pcs.add_argument("--out-dir", type=Path, default=None)
+    p_pcs.add_argument("--shells", type=str, default=None)
+    p_pcs.add_argument("--profiles", type=str, default=None)
+    p_pcs.add_argument("--pair-scale", type=float, default=1.0)
+    p_pcs.add_argument("--split-per-opp", action="store_true", default=False)
+    p_pcs.add_argument("--seed-prefix", type=str, default="nc2000/elim-v1/camo-scr")
+    p_pcs.add_argument("--preview-iters", type=int, default=81000)
+    p_pcs.add_argument("--battle-iters", type=int, default=9000)
+    p_pcs.add_argument("--battle-mode", choices=["fixed", "adaptive"], default="fixed")
+    p_pcs.set_defaults(func=cmd_prepare_camo_screen)
+
+    p_acs = sub.add_parser("analyze-camo-screen")
+    p_acs.add_argument("--dir", type=Path, required=True)
+    p_acs.add_argument("--out", type=Path, default=None)
+    p_acs.set_defaults(func=cmd_analyze_camo_screen)
 
     args = ap.parse_args()
     args.func(args)
