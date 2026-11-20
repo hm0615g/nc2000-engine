@@ -42,3 +42,11 @@ Before any Castle bot investigation or change, read docs/CASTLE-INCIDENT-STATUS.
 - Fetch the fork first, require fast-forward ancestry, and push to the explicit fork URL without --force.
 - Confirm the fork branch SHA after pushing; record the actual result in the incident status document.
 - Provide the full executable command inline, ASCII-only, runnable from any directory.
+
+<!-- no-backups-in-git-worktrees-v1 -->
+## No backups in Git worktrees
+- Never create .bak, .orig, .save, temporary recovery copies, or other backup files anywhere inside a Git worktree, including ignored and untracked directories.
+- If a backup is essential, create it outside ALL Git worktrees (for example using mktemp -d under /tmp) and remove it after verification.
+- Never copy credentials or configuration secrets to a backup without explicit permission.
+- Do not leave disposable files that appear as untracked entries in git status --short.
+- Incident 2026-11-21: pbs-bot.config.json.bak was created inside this worktree. User requested deletion and this permanent rule.

@@ -167,3 +167,11 @@ Live Castle battle: NOT TESTED.
 Eight categories: continuation handler installed, NOT fully resolved.
 Pending: live coverage, event-specific semantic repairs, further regression.
 The documentation follow-up commit and remote SHA are verified by the runner.
+
+<!-- no-backups-in-git-worktrees-v1 -->
+## No backups in Git worktrees
+- Never create .bak, .orig, .save, temporary recovery copies, or other backup files anywhere inside a Git worktree, including ignored and untracked directories.
+- If a backup is essential, create it outside ALL Git worktrees (for example using mktemp -d under /tmp) and remove it after verification.
+- Never copy credentials or configuration secrets to a backup without explicit permission.
+- Do not leave disposable files that appear as untracked entries in git status --short.
+- Incident 2026-11-21: pbs-bot.config.json.bak was created inside this worktree. User requested deletion and this permanent rule.
