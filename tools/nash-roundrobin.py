@@ -647,12 +647,13 @@ def cmd_run(args: argparse.Namespace) -> None:
         local_workers=args.workers,
         mini2_workers=args.mini2_workers,
         use_mini2=args.mini2,
+        colab_nodes=args.colab or None,
         preview_iters=args.preview_iters,
         battle_iters=args.battle_iters,
         battle_mode=args.battle_mode,
         preview_cache=not args.no_preview_cache,
     )
-    ran_chunks = dispatch["ran_local"] + dispatch["ran_mini2"]
+    ran_chunks = dispatch["ran_local"] + dispatch["ran_mini2"] + dispatch.get("ran_colab", 0)
     skipped_chunks = dispatch["skipped"]
 
     # Write consolidated results.jsonl from all chunks
@@ -1028,6 +1029,7 @@ def main() -> None:
     p_run.add_argument("--workers", type=int, default=10)
     p_run.add_argument("--mini2", action="store_true", help="Enable work-stealing dual-node dispatch with mini2")
     p_run.add_argument("--mini2-workers", type=int, default=11)
+    p_run.add_argument("--colab", type=str, default="", help="Colab node pool via colab-barn (e.g. G4, G4,G4, V5E1, auto)")
     p_run.add_argument("--chunk-games", type=int, default=40)
     p_run.add_argument("--merge-ledger", type=Path, default=None)
     p_run.add_argument("--preview-iters", type=int, default=None)

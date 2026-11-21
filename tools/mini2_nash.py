@@ -15,6 +15,7 @@ import os
 import secrets
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -22,6 +23,10 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_BIN = ROOT / "target/native-pgo/release/examples/nash_refresh"
+DEFAULT_COLAB_BINS = [
+    ROOT / "target/colab-x86_64/nash_refresh",
+    ROOT / "target/colab-x86_64-musl/x86_64-unknown-linux-musl/release/examples/nash_refresh",
+]
 
 # Exact data files read by `crates/bot/examples/nash_refresh.rs` when `mixtures` are present.
 NASH_REFRESH_DATA_FILES = [
@@ -226,6 +231,154 @@ def run_chunk_local(
     return {"host": "mini1", "wall_ms": wall_ms, "stdout_last": stdout_last}
 
 
+def find_fresh_colab_binary(mac_binary: Path, explicit: Path | None = None) -> Path | None:
+    """Return a Linux x86_64 binary if present and not older (>60s) than `mac_binary`."""
+    if explicit is not None:
+        p = explicit.expanduser().resolve()
+        if not p.is_file():
+            raise FileNotFoundError(f"colab x86_64 binary not found: {p}")
+        return p
+    env_bin = os.environ.get("NC2000_COLAB_BIN", "").strip()
+    if env_bin:
+        p = Path(env_bin).expanduser().resolve()
+        if not p.is_file():
+            raise FileNotFoundError(f"NC2000_COLAB_BIN not found: {p}")
+        return p
+    mac_mtime = mac_binary.stat().st_mtime if mac_binary.is_file() else 0.0
+    for cand in DEFAULT_COLAB_BINS:
+        if cand.is_file() and (mac_mtime - cand.stat().st_mtime <= 60.0):
+            return cand
+    return None
+
+
+def run_chunks_via_barn(
+    pending: list[dict[str, Any]],
+    *,
+    binary: Path,
+    colab_binary: Path | None,
+    pools_path: Path | None,
+    local_workers: int,
+    mini2_workers: int,
+    local_only: bool = False,
+    colab_threads: int | None = None,
+    preview_iters: int | None = None,
+    battle_iters: int | None = None,
+    battle_mode: str | None = None,
+    preview_cache: bool = True,
+    preview_dist_cache: Path | None = None,
+    preview_dist_k: int | None = None,
+    preview_dist_only: bool = False,
+    task_timeout: int = 900,
+    skipped: int = 0,
+) -> dict[str, Any]:
+    """Unified transparent work-stealing via `barn dispatch` (governed by ~/.config/barn/policy.json)."""
+    by_task = {str(ch["ci"]): ch for ch in pending}
+    has_dist_file = preview_dist_cache is not None and preview_dist_cache.exists()
+
+    with tempfile.TemporaryDirectory(dir="/tmp", prefix="nc2000-barn-") as td:
+        td_p = Path(td)
+        tasks_path = td_p / "tasks.jsonl"
+        ledger_path = td_p / "ledger.jsonl"
+        lines = [
+            json.dumps({
+                "task": str(ch["ci"]),
+                "sched": str(ch["sched"].resolve()),
+                "out": str(ch["out"].resolve()),
+                "weight": int(ch.get("n_rows", 1)),
+            }, separators=(",", ":"))
+            for ch in pending
+        ]
+        tasks_path.write_text("\n".join(lines) + "\n")
+
+        cmd: list[str] = [
+            "barn",
+            "dispatch",
+            "--bin", f"bin/nash_refresh={binary.resolve()}",
+            "--local-threads", str(max(1, local_workers)),
+            "--mini2-threads", str(max(1, mini2_workers)),
+            "--tasks-file", str(tasks_path),
+            "--resume", str(ledger_path),
+            "--task-timeout", str(task_timeout),
+        ]
+        if colab_binary is not None and not local_only:
+            cmd += ["--bin", f"linux-x86_64:bin/nash_refresh={colab_binary.resolve()}"]
+        if local_only:
+            cmd.append("--local-only")
+        if colab_threads is not None:
+            cmd += ["--colab-threads", str(colab_threads)]
+        for rel in NASH_REFRESH_DATA_FILES:
+            cmd += ["--file", f"{rel}={(ROOT / rel).resolve()}"]
+        if pools_path is not None:
+            cmd += ["--file", f"pools.json={pools_path.resolve()}"]
+        if has_dist_file:
+            cmd += ["--file", f"preview-dist.json={preview_dist_cache.resolve()}"]
+        cmd += [
+            "--input", "schedule.jsonl={sched}",
+            "--collect", "out={out}",
+            "--env", "NC2000_ROOT={run}",
+            "--env", f"NASH_PREVIEW_CACHE={'1' if preview_cache else '0'}",
+        ]
+        if pools_path is not None:
+            cmd += ["--env", "NASH_POOLS={run}/pools.json"]
+        if has_dist_file:
+            cmd += ["--env", "NASH_PREVIEW_DIST_CACHE={run}/preview-dist.json"]
+        if preview_dist_k is not None:
+            cmd += ["--env", f"NASH_PREVIEW_DIST_K={preview_dist_k}"]
+        if preview_dist_only:
+            cmd += ["--env", "NASH_PREVIEW_DIST_ONLY=1"]
+        if preview_iters is not None:
+            cmd += ["--env", f"NASH_PREVIEW_ITERS={preview_iters}"]
+        if battle_iters is not None:
+            cmd += ["--env", f"NASH_BATTLE_ITERS={battle_iters}"]
+        if battle_mode is not None:
+            cmd += ["--env", f"NASH_BATTLE_MODE={battle_mode}"]
+        cmd += [
+            "--",
+            "{run}/bin/nash_refresh",
+            "{run}/schedule.jsonl",
+            "{run}/out",
+            "{threads}",
+        ]
+
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if ledger_path.is_file():
+            for raw in ledger_path.read_text().splitlines():
+                if not raw.strip():
+                    continue
+                rec = json.loads(raw)
+                if not rec.get("ok"):
+                    continue
+                ch = by_task.get(str(rec["task"]))
+                if ch is None:
+                    continue
+                worker = str(rec.get("worker", "unknown"))
+                if worker == "mini1":
+                    ch["done"].write_text(str(rec.get("stdout_last", "")) + "\n")
+                else:
+                    ch["done"].write_text(json.dumps({
+                        "host": worker,
+                        "remote_stdout_last": rec.get("stdout_last", ""),
+                        "remote_wall_ms": rec.get("remote_wall_ms", rec.get("wall_ms")),
+                        "total_ms": rec.get("wall_ms"),
+                    }) + "\n")
+
+        if proc.returncode != 0:
+            raise RuntimeError(f"barn dispatch failed (rc={proc.returncode}):\n{proc.stderr or proc.stdout}")
+        tel = json.loads(proc.stdout.strip().splitlines()[-1])
+        by_w: dict[str, int] = tel.get("by_worker", {})
+        ran_local = int(by_w.get("mini1", 0))
+        ran_mini2 = int(by_w.get("mini2", 0))
+        ran_colab = sum(int(v) for k, v in by_w.items() if k.startswith("colab:"))
+        return {
+            "ran_local": ran_local,
+            "ran_mini2": ran_mini2,
+            "ran_colab": ran_colab,
+            "skipped": skipped,
+            "by_worker": by_w,
+            "barn_requeued": tel.get("requeued", 0),
+        }
+
+
 def run_chunks_dual_node(
     chunks: list[dict[str, Any]],
     *,
@@ -234,6 +387,11 @@ def run_chunks_dual_node(
     local_workers: int = 10,
     mini2_workers: int = 11,
     use_mini2: bool = True,
+    colab_nodes: str | None = None,
+    colab_binary: Path | None = None,
+    colab_slots: int | None = None,
+    colab_threads: int | None = None,
+    colab_cu_budget: float | None = None,
     preview_iters: int | None = None,
     battle_iters: int | None = None,
     battle_mode: str | None = None,
@@ -242,9 +400,12 @@ def run_chunks_dual_node(
     preview_dist_k: int | None = None,
     preview_dist_only: bool = False,
 ) -> dict[str, Any]:
-    """Dynamic work-stealing execution of chunk list across `mini1` (+ `mini2` when enabled).
+    """Dynamic work-stealing execution of chunk list across `mini1` + `mini2` + Colab via `barn`.
 
-    Each element of `chunks` has: `ci`, `sched` (Path), `out` (Path), `done` (Path), `n_rows` (int).
+    When `use_mini2=True` (and `barn` is installed), delegates transparently to `barn dispatch`
+    which reads `~/.config/barn/policy.json` to decide whether to autoscale Colab alongside
+    `mini1`+`mini2` (passing `linux-x86_64` binary automatically when fresh on disk).
+    Pass `colab_nodes='off'` or `NC2000_COLAB=off` to force `--local-only`.
     """
     pending: list[dict[str, Any]] = []
     skipped = 0
@@ -262,7 +423,34 @@ def run_chunks_dual_node(
         pending.append(ch)
 
     if not pending:
-        return {"ran_local": 0, "ran_mini2": 0, "skipped": skipped}
+        return {"ran_local": 0, "ran_mini2": 0, "ran_colab": 0, "skipped": skipped}
+
+    eff_colab = (colab_nodes if colab_nodes is not None else os.environ.get("NC2000_COLAB", "")).strip().lower()
+    local_only = eff_colab in ("0", "off", "false", "none", "local")
+    use_barn = shutil.which("barn") is not None and (use_mini2 or (eff_colab and not local_only))
+    if use_barn:
+        x86_bin = None if local_only else find_fresh_colab_binary(binary, colab_binary)
+        eff_threads = colab_threads
+        if eff_threads is None and os.environ.get("NC2000_COLAB_THREADS"):
+            eff_threads = int(os.environ["NC2000_COLAB_THREADS"])
+        return run_chunks_via_barn(
+            pending,
+            binary=binary,
+            colab_binary=x86_bin,
+            pools_path=pools_path,
+            local_workers=local_workers,
+            mini2_workers=mini2_workers,
+            local_only=local_only or (x86_bin is None),
+            colab_threads=eff_threads,
+            preview_iters=preview_iters,
+            battle_iters=battle_iters,
+            battle_mode=battle_mode,
+            preview_cache=preview_cache,
+            preview_dist_cache=preview_dist_cache,
+            preview_dist_k=preview_dist_k,
+            preview_dist_only=preview_dist_only,
+            skipped=skipped,
+        )
 
     lock = threading.Lock()
     cursor = [0]
@@ -270,11 +458,13 @@ def run_chunks_dual_node(
 
     def next_chunk() -> dict[str, Any] | None:
         with lock:
-            if cursor[0] >= len(pending):
-                return None
-            ch = pending[cursor[0]]
-            cursor[0] += 1
-            return ch
+            while cursor[0] < len(pending):
+                ch = pending[cursor[0]]
+                cursor[0] += 1
+                if ch["done"].exists() and ch["out"].exists():
+                    continue
+                return ch
+            return None
 
     def worker_loop(node: str) -> None:
         while True:

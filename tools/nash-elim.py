@@ -783,6 +783,10 @@ def cmd_run(args: argparse.Namespace) -> None:
         local_workers=args.local_workers,
         mini2_workers=args.mini2_workers,
         use_mini2=args.mini2,
+        colab_nodes=args.colab or None,
+        colab_binary=args.colab_binary,
+        colab_slots=args.colab_slots,
+        colab_threads=args.colab_threads,
         preview_iters=int(meta["preview_iters"]),
         battle_iters=int(meta["battle_iters"]),
         battle_mode=str(meta["battle_mode"]),
@@ -5662,6 +5666,10 @@ def main() -> None:
     p_rn.add_argument("--local-workers", type=int, default=10)
     p_rn.add_argument("--mini2-workers", type=int, default=12)
     p_rn.add_argument("--mini2", action="store_true", default=False)
+    p_rn.add_argument("--colab", type=str, default="", help="Colab node pool via colab-barn (e.g. G4, G4,G4, V5E1,V5E1, auto)")
+    p_rn.add_argument("--colab-slots", type=int, default=None)
+    p_rn.add_argument("--colab-threads", type=int, default=None)
+    p_rn.add_argument("--colab-binary", type=Path, default=None)
     p_rn.add_argument("--preview-dist-cache", type=Path, default=None)
     p_rn.add_argument("--preview-dist-k", type=int, default=None)
     p_rn.set_defaults(func=cmd_run)

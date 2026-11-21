@@ -1349,6 +1349,10 @@ def cmd_precompute_preview_dist(args: argparse.Namespace) -> None:
         local_workers=args.local_workers,
         mini2_workers=args.mini2_workers,
         use_mini2=args.mini2,
+        colab_nodes=args.colab or None,
+        colab_binary=args.colab_binary,
+        colab_slots=args.colab_slots,
+        colab_threads=args.colab_threads,
         preview_iters=args.preview_iters,
         battle_iters=243000,
         battle_mode="adaptive",
@@ -1453,6 +1457,10 @@ def main() -> None:
     p_pd.add_argument("--local-workers", type=int, default=10)
     p_pd.add_argument("--mini2-workers", type=int, default=12)
     p_pd.add_argument("--mini2", action="store_true", default=False)
+    p_pd.add_argument("--colab", type=str, default="", help="Colab node pool via colab-barn (e.g. G4, G4,G4, V5E1, auto)")
+    p_pd.add_argument("--colab-slots", type=int, default=None)
+    p_pd.add_argument("--colab-threads", type=int, default=None)
+    p_pd.add_argument("--colab-binary", type=Path, default=None)
     p_pd.set_defaults(func=cmd_precompute_preview_dist)
 
     p_ae = sub.add_parser("analyze-ext-screen")
