@@ -135,7 +135,25 @@ def build_all_sets_and_profiles() -> tuple[dict[str, list[dict[str, Any]]], dict
             {"id": "sample-07", "weight": 0.30},
         ],
         "APEX4": copy.deepcopy(ELIM.STEP_A_PROFILES["APEX4"]),
+        "APEX2": [
+            {"id": "apex-c04-bug-3atkstar-boomgen", "weight": 0.50},
+            {"id": "apex-c08-surgical-142", "weight": 0.50},
+        ],
+        "APEX3": [
+            {"id": "apex-c04-bug-3atkstar-boomgen", "weight": 0.40},
+            {"id": "apex-c08-surgical-142", "weight": 0.40},
+            {"id": "red-v10-s1105-r2-s0142", "weight": 0.20},
+        ],
         "D5": copy.deepcopy(ELIM.STEP_A_PROFILES["D5"]),
+        "D2": [
+            {"id": "deme-r1-00-s0030", "weight": 0.50},
+            {"id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal", "weight": 0.50},
+        ],
+        "D3": [
+            {"id": "deme-r1-00-s0030", "weight": 0.40},
+            {"id": "deme-r1-00-s0030-beq-g2-c3-legal", "weight": 0.30},
+            {"id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal", "weight": 0.30},
+        ],
         "PB132_50_50": copy.deepcopy(ELIM.STEP_A_PROFILES["PB132_50_50"]),
         "thdr:zap-talk": [
             {"id": "mjj-2014-thdrcomb__56b67d", "weight": 0.50},
