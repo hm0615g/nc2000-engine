@@ -48,6 +48,9 @@ def build_mini2_run_cmd(
     battle_iters: int | None = None,
     battle_mode: str | None = None,
     preview_cache: bool = True,
+    preview_dist_cache: Path | None = None,
+    preview_dist_k: int | None = None,
+    preview_dist_only: bool = False,
     timeout: int | None = None,
 ) -> list[str]:
     cmd: list[str] = [
@@ -62,6 +65,9 @@ def build_mini2_run_cmd(
         cmd.extend(["--file", f"{rel}={(ROOT / rel).resolve()}"])
     if pools_path is not None:
         cmd.extend(["--file", f"pools.json={pools_path.resolve()}"])
+    has_dist_file = preview_dist_cache is not None and preview_dist_cache.exists()
+    if has_dist_file:
+        cmd.extend(["--file", f"preview-dist.json={preview_dist_cache.resolve()}"])
     cmd.extend([
         "--input",
         f"schedule.jsonl={schedule_path.resolve()}",
@@ -72,6 +78,12 @@ def build_mini2_run_cmd(
     ])
     if pools_path is not None:
         cmd.extend(["--env", "NASH_POOLS={run}/pools.json"])
+    if has_dist_file:
+        cmd.extend(["--env", "NASH_PREVIEW_DIST_CACHE={run}/preview-dist.json"])
+    if preview_dist_k is not None:
+        cmd.extend(["--env", f"NASH_PREVIEW_DIST_K={preview_dist_k}"])
+    if preview_dist_only:
+        cmd.extend(["--env", "NASH_PREVIEW_DIST_ONLY=1"])
     if preview_iters is not None:
         cmd.extend(["--env", f"NASH_PREVIEW_ITERS={preview_iters}"])
     if battle_iters is not None:
@@ -105,6 +117,9 @@ def run_chunk_mini2(
     battle_iters: int | None = None,
     battle_mode: str | None = None,
     preview_cache: bool = True,
+    preview_dist_cache: Path | None = None,
+    preview_dist_k: int | None = None,
+    preview_dist_only: bool = False,
     timeout: int | None = None,
 ) -> dict[str, Any]:
     """Execute one chunk on `mini2` and atomically commit `final_out_dir` + `done_marker`."""
@@ -122,6 +137,9 @@ def run_chunk_mini2(
         battle_iters=battle_iters,
         battle_mode=battle_mode,
         preview_cache=preview_cache,
+        preview_dist_cache=preview_dist_cache,
+        preview_dist_k=preview_dist_k,
+        preview_dist_only=preview_dist_only,
         timeout=timeout,
     )
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
@@ -159,12 +177,27 @@ def run_chunk_local(
     battle_iters: int | None = None,
     battle_mode: str | None = None,
     preview_cache: bool = True,
+    preview_dist_cache: Path | None = None,
+    preview_dist_k: int | None = None,
+    preview_dist_only: bool = False,
 ) -> dict[str, Any]:
     """Execute one chunk locally on `mini1`."""
     env = os.environ.copy()
     if pools_path is not None:
         env["NASH_POOLS"] = str(pools_path.resolve())
     env["NASH_PREVIEW_CACHE"] = "1" if preview_cache else "0"
+    if preview_dist_cache is not None and preview_dist_cache.exists():
+        env["NASH_PREVIEW_DIST_CACHE"] = str(preview_dist_cache.resolve())
+    else:
+        env.pop("NASH_PREVIEW_DIST_CACHE", None)
+    if preview_dist_k is not None:
+        env["NASH_PREVIEW_DIST_K"] = str(preview_dist_k)
+    else:
+        env.pop("NASH_PREVIEW_DIST_K", None)
+    if preview_dist_only:
+        env["NASH_PREVIEW_DIST_ONLY"] = "1"
+    else:
+        env.pop("NASH_PREVIEW_DIST_ONLY", None)
     if preview_iters is not None:
         env["NASH_PREVIEW_ITERS"] = str(preview_iters)
     if battle_iters is not None:
@@ -205,6 +238,9 @@ def run_chunks_dual_node(
     battle_iters: int | None = None,
     battle_mode: str | None = None,
     preview_cache: bool = True,
+    preview_dist_cache: Path | None = None,
+    preview_dist_k: int | None = None,
+    preview_dist_only: bool = False,
 ) -> dict[str, Any]:
     """Dynamic work-stealing execution of chunk list across `mini1` (+ `mini2` when enabled).
 
@@ -214,10 +250,15 @@ def run_chunks_dual_node(
     skipped = 0
     for ch in chunks:
         if ch["done"].exists() and ch["out"].exists():
-            existing = [p for p in ch["out"].glob("*.json") if p.name != "manifest.json"]
-            if len(existing) == ch["n_rows"]:
-                skipped += 1
-                continue
+            if preview_dist_only:
+                if (ch["out"] / "preview-dist.json").exists():
+                    skipped += 1
+                    continue
+            else:
+                existing = [p for p in ch["out"].glob("*.json") if p.name not in ("manifest.json", "preview-dist-new.json")]
+                if len(existing) == ch["n_rows"]:
+                    skipped += 1
+                    continue
         pending.append(ch)
 
     if not pending:
@@ -253,6 +294,9 @@ def run_chunks_dual_node(
                     battle_iters=battle_iters,
                     battle_mode=battle_mode,
                     preview_cache=preview_cache,
+                    preview_dist_cache=preview_dist_cache,
+                    preview_dist_k=preview_dist_k,
+                    preview_dist_only=preview_dist_only,
                 )
             else:
                 run_chunk_local(
@@ -266,6 +310,9 @@ def run_chunks_dual_node(
                     battle_iters=battle_iters,
                     battle_mode=battle_mode,
                     preview_cache=preview_cache,
+                    preview_dist_cache=preview_dist_cache,
+                    preview_dist_k=preview_dist_k,
+                    preview_dist_only=preview_dist_only,
                 )
             with lock:
                 counts[node] += 1

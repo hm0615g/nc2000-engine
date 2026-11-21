@@ -740,7 +740,10 @@ def cmd_prepare_matchups(args: argparse.Namespace) -> None:
     chunk_breaks: list[int] = [0]
     blk = 0
     seed_prefix = args.seed_prefix
-    no_cache = bool(args.no_preview_cache)
+    dist_cache = str(args.preview_dist_cache.resolve()) if args.preview_dist_cache else None
+    dist_k = int(args.preview_dist_k) if args.preview_dist_k is not None else None
+    use_dist = bool(dist_cache or (dist_k is not None and dist_k >= 2))
+    no_cache = bool(args.no_preview_cache) or use_dist
 
     for rname, cname, pspec, subtag in spec:
         rmems = profiles[rname]
@@ -800,7 +803,9 @@ def cmd_prepare_matchups(args: argparse.Namespace) -> None:
     meta = {
         "kind": "goal-matchups",
         "pools": str(pools_path),
-        "no_preview_cache": no_cache,
+        "no_preview_cache": bool(args.no_preview_cache) and not use_dist,
+        "preview_dist_cache": dist_cache,
+        "preview_dist_k": dist_k,
         "chunk_breaks": chunk_breaks,
         "total_pairs": blk,
         "total_games": len(rows),
@@ -839,7 +844,10 @@ def cmd_prepare_ext_screen(args: argparse.Namespace) -> None:
     chunk_breaks: list[int] = [0]
     blk = 0
     seed_prefix = args.seed_prefix
-    no_cache = bool(args.no_preview_cache)
+    dist_cache = str(args.preview_dist_cache.resolve()) if args.preview_dist_cache else None
+    dist_k = int(args.preview_dist_k) if args.preview_dist_k is not None else None
+    use_dist = bool(dist_cache or (dist_k is not None and dist_k >= 2))
+    no_cache = bool(args.no_preview_cache) or use_dist
     per_chunk_cands = max(1, int(args.cands_per_chunk))
 
     for ci, ch in enumerate(challengers):
@@ -903,7 +911,9 @@ def cmd_prepare_ext_screen(args: argparse.Namespace) -> None:
         "pools": str(pools_path),
         "challengers": challengers,
         "opponents": opponents_spec,
-        "no_preview_cache": no_cache,
+        "no_preview_cache": bool(args.no_preview_cache) and not use_dist,
+        "preview_dist_cache": dist_cache,
+        "preview_dist_k": dist_k,
         "chunk_breaks": chunk_breaks,
         "total_pairs": blk,
         "total_games": len(rows),
@@ -1244,6 +1254,152 @@ def cmd_analyze_holdout(args: argparse.Namespace) -> None:
     }))
 
 
+# ---------------------------------------------------------------------------
+# Subcommand: precompute-preview-dist (Dual-node K-seed Legacy Preview Distribution Cache)
+# ---------------------------------------------------------------------------
+
+def cmd_precompute_preview_dist(args: argparse.Namespace) -> None:
+    import time
+    t0 = time.monotonic()
+    all_sets, profiles, base_teams = build_all_sets_and_profiles()
+
+    edge_pairs: list[tuple[str, str]] = []
+    if args.shells:
+        sh = [s.strip() for s in args.shells.split(",") if s.strip()]
+        for i in range(len(sh)):
+            for j in range(i + 1, len(sh)):
+                edge_pairs.append((sh[i], sh[j]))
+    if args.challengers_file and args.opponents:
+        chs = json.loads(args.challengers_file.read_text())
+        ops = [s.strip() for s in args.opponents.split(",") if s.strip()]
+        for ch in chs:
+            for op in ops:
+                if ch != op:
+                    edge_pairs.append((ch, op))
+    assert edge_pairs, "Provide --shells and/or (--challengers-file + --opponents)"
+
+    used_profiles: set[str] = set()
+    for a, b in edge_pairs:
+        used_profiles.add(a)
+        used_profiles.add(b)
+
+    work_dir: Path = args.work_dir
+    work_dir.mkdir(parents=True, exist_ok=True)
+    pools_path = _write_pools(work_dir, used_profiles, all_sets, profiles, base_teams)
+
+    # Deduplicate minimal representative tasks covering every (own_var, opp_mix, side) pair.
+    # For each ordered (A_profile, B_profile): every member of A only needs ONE representative
+    # member of B (all members of B share exact preview signature + identical disclosed mixture B).
+    seen_tasks: set[tuple[str, str, str, str]] = set()
+    rows: list[dict[str, Any]] = []
+    blk = 0
+    for a, b in edge_pairs:
+        amems = profiles[a]
+        bmems = profiles[b]
+        amix = a if len(amems) > 1 else f"s:{amems[0]['id']}"
+        bmix = b if len(bmems) > 1 else f"s:{bmems[0]['id']}"
+        b0 = bmems[0]["id"]
+        a0 = amems[0]["id"]
+        # Cover all members of A vs B (both seats) and all members of B vs A (both seats)
+        pairs_to_cover = [(am["id"], b0, amix, bmix) for am in amems] + [(a0, bm["id"], amix, bmix) for bm in bmems]
+        for aid, bid, mx_a, mx_b in pairs_to_cover:
+            tkey = (aid, bid, mx_a, mx_b)
+            if tkey in seen_tasks:
+                continue
+            seen_tasks.add(tkey)
+            for seat in (0, 1):
+                ids = [aid, bid] if seat == 0 else [bid, aid]
+                mix = [mx_a, mx_b] if seat == 0 else [mx_b, mx_a]
+                rows.append({
+                    "block": blk,
+                    "cell": {"kind": "precompute_dist", "a": a, "b": b, "aid": aid, "bid": bid},
+                    "rowSeat": seat,
+                    "ids": ids,
+                    "seeds": [1001 + blk * 2 + seat, 2001 + blk * 2 + seat],
+                    "battleSeed": 3001 + blk,
+                    "mixtures": mix,
+                })
+            blk += 1
+
+    (work_dir / "schedule.jsonl").write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n")
+    chunks_dir = work_dir / "chunks"
+    chunks_dir.mkdir(parents=True, exist_ok=True)
+    # Chunk by rows_per_chunk so mini1 + mini2 load-balance cleanly
+    step = max(2, int(args.rows_per_chunk) + (int(args.rows_per_chunk) % 2))
+    chunks: list[dict[str, Any]] = []
+    for ci, start in enumerate(range(0, len(rows), step)):
+        c_rows = rows[start : start + step]
+        c_sched = chunks_dir / f"chunk-{ci:03d}.jsonl"
+        c_out = chunks_dir / f"chunk-{ci:03d}-out"
+        c_done = chunks_dir / f"chunk-{ci:03d}.done.json"
+        c_sched.write_text("\n".join(json.dumps(r, separators=(",", ":")) for r in c_rows) + "\n")
+        chunks.append({
+            "ci": ci,
+            "sched": c_sched,
+            "out": c_out,
+            "done": c_done,
+            "n_rows": len(c_rows),
+        })
+
+    cache_path: Path = args.cache
+    dispatch = ELIM.MINI2.run_chunks_dual_node(
+        chunks,
+        binary=args.binary,
+        pools_path=pools_path,
+        local_workers=args.local_workers,
+        mini2_workers=args.mini2_workers,
+        use_mini2=args.mini2,
+        preview_iters=args.preview_iters,
+        battle_iters=243000,
+        battle_mode="adaptive",
+        preview_cache=True,
+        preview_dist_cache=cache_path if cache_path.exists() else None,
+        preview_dist_k=args.k,
+        preview_dist_only=True,
+    )
+
+    merged: dict[str, Any] = {}
+    if cache_path.exists():
+        prev = json.loads(cache_path.read_text())
+        merged.update(prev.get("entries", {}))
+    added = 0
+    updated = 0
+    for ch in chunks:
+        p = ch["out"] / "preview-dist.json"
+        doc = json.loads(p.read_text())
+        for khex, entry in doc.get("entries", {}).items():
+            old = merged.get(khex)
+            if old is None:
+                merged[khex] = entry
+                added += 1
+            elif int(entry["k"]) > int(old["k"]):
+                merged[khex] = entry
+                updated += 1
+
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = cache_path.with_suffix(".json.tmp")
+    tmp_path.write_text(json.dumps({"format": "nc2000-preview-dist-v1", "entries": merged}, separators=(",", ":")) + "\n")
+    tmp_path.replace(cache_path)
+
+    # Diagnostics: entropy & support size across all merged entries
+    supports = [len(e["counts"]) for e in merged.values()]
+    non_pure = sum(1 for s in supports if s > 1)
+    top1_shares = [max(e["counts"].values()) / max(1, e["k"]) for e in merged.values()]
+    print(json.dumps({
+        "cmd": "precompute-preview-dist",
+        "cache": str(cache_path),
+        "k": args.k,
+        "total_entries": len(merged),
+        "added": added,
+        "updated": updated,
+        "non_pure_entries": non_pure,
+        "mean_support": round(sum(supports) / max(1, len(supports)), 2),
+        "mean_top1_share": round(sum(top1_shares) / max(1, len(top1_shares)), 3),
+        "wall_s": round(time.monotonic() - t0, 2),
+        **dispatch,
+    }))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Multi-phase NC2000 Nash verification & certification driver")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1262,6 +1418,8 @@ def main() -> None:
     p_pm.add_argument("--out-dir", type=Path, required=True)
     p_pm.add_argument("--seed-prefix", type=str, required=True)
     p_pm.add_argument("--no-preview-cache", action="store_true", default=False)
+    p_pm.add_argument("--preview-dist-cache", type=Path, default=None)
+    p_pm.add_argument("--preview-dist-k", type=int, default=None)
     p_pm.add_argument("--preview-iters", type=int, default=729000)
     p_pm.add_argument("--battle-iters", type=int, default=243000)
     p_pm.add_argument("--battle-mode", choices=["fixed", "adaptive"], default="adaptive")
@@ -1275,10 +1433,27 @@ def main() -> None:
     p_pe.add_argument("--cands-per-chunk", type=int, default=4)
     p_pe.add_argument("--preview-buckets", type=int, default=2)
     p_pe.add_argument("--no-preview-cache", action="store_true", default=False)
+    p_pe.add_argument("--preview-dist-cache", type=Path, default=None)
+    p_pe.add_argument("--preview-dist-k", type=int, default=None)
     p_pe.add_argument("--preview-iters", type=int, default=81000)
     p_pe.add_argument("--battle-iters", type=int, default=9000)
     p_pe.add_argument("--battle-mode", choices=["fixed", "adaptive"], default="fixed")
     p_pe.set_defaults(func=cmd_prepare_ext_screen)
+
+    p_pd = sub.add_parser("precompute-preview-dist")
+    p_pd.add_argument("--shells", type=str, default="")
+    p_pd.add_argument("--challengers-file", type=Path, default=None)
+    p_pd.add_argument("--opponents", type=str, default="")
+    p_pd.add_argument("--cache", type=Path, required=True)
+    p_pd.add_argument("--work-dir", type=Path, required=True)
+    p_pd.add_argument("--k", type=int, default=16)
+    p_pd.add_argument("--preview-iters", type=int, default=729000)
+    p_pd.add_argument("--rows-per-chunk", type=int, default=12)
+    p_pd.add_argument("--binary", type=Path, default=DEFAULT_BIN)
+    p_pd.add_argument("--local-workers", type=int, default=10)
+    p_pd.add_argument("--mini2-workers", type=int, default=12)
+    p_pd.add_argument("--mini2", action="store_true", default=False)
+    p_pd.set_defaults(func=cmd_precompute_preview_dist)
 
     p_ae = sub.add_parser("analyze-ext-screen")
     p_ae.add_argument("--dir", type=Path, required=True)
