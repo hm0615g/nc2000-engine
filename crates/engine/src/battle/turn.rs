@@ -350,6 +350,11 @@ impl Battle {
             self.win(Some(0));
             return true;
         }
+        // Clear Stadium 2 Self-KO tracker once the current faint batch resolves
+        // without ending the battle so an early-game Explosion/Self-Destruct
+        // cannot mis-adjudicate a later 1v1 mutual faint (e.g. Sandstorm/Perish).
+        self.sides[0].last_move = None;
+        self.sides[1].last_move = None;
         if let Some(fd) = faint_data {
             self.run_event(
                 dex,
@@ -458,6 +463,7 @@ impl Battle {
             }
             self.sides[side_n].fainted_last_turn = self.sides[side_n].fainted_this_turn;
             self.sides[side_n].fainted_this_turn = None;
+            self.sides[side_n].last_move = None;
         }
 
         // maybeTriggerEndlessBattleClause: turn limits only matter past 100

@@ -138,3 +138,76 @@ fn q3_slower_attacker_hits_an_already_awake_sleeper() {
     assert!(cure < foe_move, "the faster sleeper wakes first: {tail:?}");
     assert_ne!(b.poke(sleeper).status, Status::Slp);
 }
+
+/// An early-game Explosion/Self-Destruct must NOT leave `sides[s].last_move`
+/// set into a later 1v1 mutual faint (e.g., Sandstorm double-KO), whereas a
+/// genuine 1v1 Explosion mutual KO still triggers the Self-KO Clause loss.
+#[test]
+fn early_explosion_clears_side_last_move_and_does_not_poison_later_1v1_mutual_ko() {
+    use nc2000_engine::battle::Outcome;
+    use nc2000_engine::compact::CompactBattle;
+
+    let d = common::dex();
+    let p1 = vec![
+        mk("Cloyster", 50, "", &["Explosion", "Surf"]),
+        mk("Zapdos", 55, "", &["Thunderbolt", "Splash"]),
+    ];
+    let p2 = vec![
+        mk("Snorlax", 50, "", &["Splash", "Rest"]),
+        mk("Umbreon", 50, "", &["Sandstorm", "Splash"]),
+    ];
+    let mut b = Battle::from_fixture(d, "1,2,3,4", &p1, &p2).unwrap();
+    b.choose(d, 0, "team 1,2").unwrap();
+    b.choose(d, 1, "team 1,2").unwrap();
+
+    // Turn 1 (2v2): P1 Cloyster explodes, KOing both Cloyster and Snorlax.
+    let s1 = act(&b, 1);
+    b.poke_mut(s1).hp = 1;
+    b.choose(d, 0, "move explosion").unwrap();
+    b.choose(d, 1, "move splash").unwrap();
+    assert_eq!(b.sides[0].last_move, None, "early Explosion must clear side.last_move after faint resolution");
+    assert_eq!(b.sides[1].last_move, None);
+
+    // Forced switches into 1v1: Zapdos (faster, P1) vs Umbreon (slower, P2).
+    b.choose(d, 0, "switch 2").unwrap();
+    b.choose(d, 1, "switch 2").unwrap();
+    assert_eq!(b.sides[0].pokemon_left, 1);
+    assert_eq!(b.sides[1].pokemon_left, 1);
+
+    // Turn 2 (1v1): Both at 1 HP; Umbreon sets Sandstorm -> mutual faint in Residual.
+    // Without the fix, stale `sides[0].last_move` wrongly handed P2 the win via Self-KO Clause.
+    // In PS gen2stadium2 `faintMessages`, `faintData` is the slower Umbreon -> `1 - side = P1Win`.
+    let z = act(&b, 0);
+    let u = act(&b, 1);
+    b.poke_mut(z).hp = 1;
+    b.poke_mut(u).hp = 1;
+    b.choose(d, 0, "move splash").unwrap();
+    b.choose(d, 1, "move sandstorm").unwrap();
+    assert_eq!(b.outcome(), Some(Outcome::P1Win));
+
+    // Genuine 1v1 Self-KO Clause still rules the Explosion user as the loser.
+    let p1_1v1 = vec![mk("Cloyster", 55, "", &["Explosion"])];
+    let p2_1v1 = vec![mk("Umbreon", 50, "", &["Splash"])];
+    let mut b1 = Battle::from_fixture(d, "1,2,3,4", &p1_1v1, &p2_1v1).unwrap();
+    b1.choose(d, 0, "team 1").unwrap();
+    b1.choose(d, 1, "team 1").unwrap();
+    let u1 = act(&b1, 1);
+    b1.poke_mut(u1).hp = 1;
+    let (tbl1, mut cb1) = CompactBattle::from_battle(&b1, d);
+    b1.choose(d, 0, "move explosion").unwrap();
+    b1.choose(d, 1, "move splash").unwrap();
+    assert_eq!(b1.outcome(), Some(Outcome::P2Win));
+    cb1.step_turn(&tbl1, [0, 0]);
+    assert_eq!(cb1.outcome, 2, "1v1 Explosion mutual KO must still be P2Win in CompactBattle");
+
+    // CompactBattle 2v2 early Explosion clears last_move_selfko cleanly.
+    let mut b2 = Battle::from_fixture(d, "1,2,3,4", &p1, &p2).unwrap();
+    b2.choose(d, 0, "team 1,2").unwrap();
+    b2.choose(d, 1, "team 1,2").unwrap();
+    let s1b = act(&b2, 1);
+    b2.poke_mut(s1b).hp = 1;
+    let (tbl2, mut cb2) = CompactBattle::from_battle(&b2, d);
+    cb2.step_turn(&tbl2, [0, 0]); // Cloyster Explosion KOs both, auto-switches Zapdos & Umbreon
+    assert_eq!(cb2.sides[0].last_move_selfko, u8::MAX);
+    assert_eq!(cb2.sides[1].last_move_selfko, u8::MAX);
+}

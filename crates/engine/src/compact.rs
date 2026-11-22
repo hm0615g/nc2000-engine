@@ -2454,6 +2454,8 @@ impl CompactBattle {
         }
         let mut rng = Prng::new(self.prng_seed);
         self.sides[0].side_flags &= !0x08;
+        self.sides[0].last_move_selfko = u8::MAX;
+        self.sides[1].last_move_selfko = u8::MAX;
         self.hurt_damage_this_turn = [0, 0];
         self.hurt_cat_this_turn = [0, 0];
 
@@ -3699,6 +3701,10 @@ impl CompactBattle {
         } else if a1 == 0 {
             self.outcome = 1; // P1Win
         } else {
+            // Clear Self-KO tracker once non-terminal faints resolve so an
+            // early-game Explosion/Self-Destruct cannot leak into a later 1v1 mutual faint.
+            self.sides[0].last_move_selfko = u8::MAX;
+            self.sides[1].last_move_selfko = u8::MAX;
             // Process single-bench auto-switches (and resulting Spikes faints) symmetrically
             // for both sides before resolving terminal `alive_mask == 0` outcomes.
             let mut any_auto_switch = false;

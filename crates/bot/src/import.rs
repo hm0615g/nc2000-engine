@@ -520,6 +520,7 @@ impl ProtocolTracker {
                 for s in self.sides.iter_mut() {
                     s.acted_this_turn = false;
                     s.pending_bp = false;
+                    s.side_last_move = None;
                     s.fainted_last_turn = s.fainted_this_turn.take();
                     if let Some(a) = s.active {
                         let m = &mut s.mons[a];
@@ -889,6 +890,8 @@ impl ProtocolTracker {
             }
         }
         self.sides[side].active = Some(slot);
+        self.sides[0].side_last_move = None;
+        self.sides[1].side_last_move = None;
         self.apply_hp_status(side, slot, parts.get(3).copied().unwrap_or(""));
         // brn/par onSwitchIn re-add their Stadium stat-drop volatiles
         {
@@ -3349,6 +3352,12 @@ mod m17a_tests {
         );
         assert_eq!(tracker.sides[0].side_last_move, None);
         assert_eq!(tracker.sides[1].side_last_move, Some(selfdestruct));
+
+        // Clearing across a replacement switch or turn boundary prevents stale
+        // early-game Explosion/Self-Destruct from poisoning later 1v1 mutual KOs.
+        tracker.push_line(&dex, "|turn|2");
+        assert_eq!(tracker.sides[0].side_last_move, None);
+        assert_eq!(tracker.sides[1].side_last_move, None);
     }
 
     #[test]
