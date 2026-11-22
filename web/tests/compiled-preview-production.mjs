@@ -20,7 +20,7 @@ try {
   const hash = p => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
   const expected = {
     prior: hash('../data/belief-pool-v3/belief-pool.json'),
-    catalog: hash('../data/team-pool-v2/team-pool.json'),
+    catalog: hash('../data/team-pool-v3/team-pool.json'),
   };
   const artifact = JSON.parse(fs.readFileSync('../data/compiled-preview-v1.json', 'utf8'));
   assert.equal(artifact.status, undefined, 'production previews must be active');
@@ -62,7 +62,7 @@ try {
     const digest = async text => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(n => n.toString(16).padStart(2, '0')).join('');
     const nonce = Date.now();
     const prior = await (await fetch(new URL(`data/belief-pool-v3/belief-pool.json?verify=${nonce}`, base))).text();
-    const catalogText = await (await fetch(new URL(`data/team-pool-v2/team-pool.json?verify=${nonce}`, base))).text();
+    const catalogText = await (await fetch(new URL(`data/team-pool-v3/team-pool.json?verify=${nonce}`, base))).text();
     if (await digest(prior) !== expected.prior || await digest(catalogText) !== expected.catalog)
       throw Error('served data differs from verified products');
     const catalog = JSON.parse(catalogText).teams;

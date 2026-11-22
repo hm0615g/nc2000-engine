@@ -7,9 +7,9 @@ Generated deterministically by [`tools/build-team-products-v3.js`](../../tools/b
 - **Catalog**: [`data/team-pool-v3/team-pool.json`](./team-pool.json) (`format: "nc2000-team-pool-v3"`)
 - **Flagship Mixture**: [`data/team-pool-v3/flagship-mixture.json`](./flagship-mixture.json) (`50% s0053-lefties-hpi` + `50% s0053-lefties-dp`)
 - **Selected teams**: `33` across **`32` pairwise-distinct public Turn-0 shells** (`1` flagship 2-variant camouflage cluster `vc-s0053-lefties` + `31` distinct single-shell Tier-1 archetypes)
-- **Distinct Level-55 Aces**: `23` (`Zapdos`, `Suicune`, `Marowak`, `Snorlax`, `Raikou`, `Porygon2`, `Charizard`, `Tauros`, `Tyranitar`, `Miltank`, `Machamp`, `Gengar`, `Victreebel`, `Nidoking`, `Crobat`, `Venusaur`, `Heracross`, `Alakazam`, `Kingdra`, `Dragonite`, `Entei`, `Poliwrath`, `Rhydon`)
+- **Distinct Level-55 Aces**: `24` (`Zapdos`, `Suicune`, `Marowak`, `Snorlax`, `Raikou`, `Porygon2`, `Charizard`, `Tauros`, `Tyranitar`, `Miltank`, `Machamp`, `Gengar`, `Victreebel`, `Nidoking`, `Crobat`, `Venusaur`, `Heracross`, `Electabuzz`, `Alakazam`, `Kingdra`, `Dragonite`, `Entei`, `Poliwrath`, `Rhydon`)
 - **Draw Weight Sum**: `1.000000` exact (`1/32 = 0.03125` per shell; flagship `s0053-lefties` split `0.015625 + 0.015625`)
-- **Legality & Training**: `33/33` WASM `Validator` PASS, strict Japanese Nintendo Cup 2000 cartridge legality (zero NYPC event moves, zero incompatible Gen 2 egg-move combos, zero duplicate items), normalized via `training-v3` (`changedTeams: 4`, `changedSets: 4`, `changedGenders: 3`)
+- **Legality & Training**: `33/33` WASM `Validator` PASS, strict Japanese Nintendo Cup 2000 cartridge legality (zero NYPC event moves, zero incompatible Gen 2 egg-move combos, zero duplicate items, zero genetic hitchhikers across all 198 sets), normalized via `training-v3` (`changedTeams: 4`, `changedSets: 4`, `changedGenders: 3`)
 
 ## Flagship Strongest Core (`vc-s0053-lefties`, Rank 1–2, `nash: true, evolved: true`)
 
@@ -33,5 +33,5 @@ Built from the `s0053` shell (`Electrode50 / Suicune55 / Cloyster50 / Marowak55 
 
 1. **Flagship Strongest Core (`1` shell / `2` variants, `nash: true, evolved: true`)**: `s0053-lefties-hpi`, `s0053-lefties-dp`
 2. **Strict-LIVE Verified Top Breakers & Meta Heavyweights (`12` shells, human)**: `pb-84`, `mjj-2014-offantom`, `pb-122`, `rental-cban-8`, `pb-6`, `pb-131`, `pb-87`, `mjj-type-QA-moudoku`, `sample-14`, `pb-63`, `pb-66`, `mjj-2014-thdrcomb`
-3. **Evolved Diverse Archetypes (`4` shells, `evolved: true`)**: `apex-c04-bug-3atkstar-boomgen` (Kodoku v14 Shell A representative), `deme-r1-00-s0030`, `red-v5-r1-s0097`, `red-v10-s1105-r2-s0155`
-4. **Classic & Diverse Human Tier-1 Archetypes (`15` shells, human)**: `sample-07`, `sample-08`, `sample-12`, `sample-17-orig`, `mjj-2015-ayagen`, `sample-11`, `sample-06`, `mjj-2020-rraikou`, `mjj-2010-garap-a`, `sample-02`, `sample-09`, `sample-22-orig`, `hc75-top8-tsuru`, `rental-cban-13`, `pb-89`
+3. **Evolved Diverse Archetypes (`2` shells, `evolved: true`)**: `apex-c04-bug-3atkstar-boomgen` (Kodoku v14 Shell A representative), `deme-r1-00-s0030`
+4. **Classic & Diverse Human Tier-1 Archetypes (`17` shells, human)**: `sample-07`, `sample-08`, `pb-96`, `pb-85`, `sample-12`, `sample-17-orig`, `mjj-2015-ayagen`, `sample-11`, `sample-06`, `mjj-2020-rraikou`, `mjj-2010-garap-a`, `sample-02`, `sample-09`, `sample-22-orig`, `hc75-top8-tsuru`, `rental-cban-13`, `pb-89`

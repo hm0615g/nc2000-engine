@@ -136,7 +136,7 @@ function verifyCompiledPreview(): Plugin {
         return;
       }
       const artifact = JSON.parse(fs.readFileSync(previewPath, "utf8"));
-      const catalog = JSON.parse(fs.readFileSync(path.join(dataDir, "team-pool-v2/team-pool.json"), "utf8"));
+      const catalog = JSON.parse(fs.readFileSync(path.join(dataDir, "team-pool-v3/team-pool.json"), "utf8"));
       const profiles = JSON.parse(fs.readFileSync(path.join(dataDir, "search-profiles.json"), "utf8"));
       if (artifact.status) {
         this.warn(`compiled-preview-v1.json status=${artifact.status}; browser previews will use live search.`);

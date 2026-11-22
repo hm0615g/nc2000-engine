@@ -48,7 +48,7 @@ interface CustomRecord {
 
 const artifact = JSON.parse(
   readFileSync(
-    new URL("../../data/kodoku-r3/conclusion-equilibrium-deme.json", import.meta.url),
+    new URL("../../data/team-pool-v3/flagship-mixture.json", import.meta.url),
     "utf8",
   ),
 ) as { teams: NashTeamJson[] };
@@ -144,7 +144,7 @@ async function seedStorage(
       if (sessionStorage.getItem("nc2000-e2e-seeded") === "1") return;
       sessionStorage.setItem("nc2000-e2e-seeded", "1");
       localStorage.setItem("nc2000-locale", "en");
-      localStorage.removeItem("nc2000-team-pool-v2");
+      localStorage.removeItem("nc2000-team-pool-v3");
       localStorage.removeItem("nc2000-bot-draw");
       if (record) {
         localStorage.setItem("nc2000-custom-teams", JSON.stringify([record]));
@@ -411,30 +411,27 @@ test("the play door's Nash draw choice draws a mixture arm and persists", async 
   await expect(page.locator("dialog.modal .team-tier")).toHaveCount(0);
   const pickerCards = page.locator("dialog.modal [data-team]");
   await expect(
-    pickerCards.filter({ hasText: "apex-c08-surgical-142" }).locator(".team-name"),
-  ).toHaveText("Rain Cloyster · HP-Bug Marowak 55 Snorlax");
+    pickerCards.filter({ hasText: "s0053-lefties-hpi" }).locator(".team-name"),
+  ).toHaveText("Lefties HP-Ice 55 Zapdos · Fire Blast 55 Marowak (s0053)");
   await expect(
-    pickerCards.filter({ hasText: "red-v10-s1105-r2-s0142" }).locator(".team-name"),
-  ).toHaveText("Rain Cloyster · EQ Heracross 55 Snorlax");
+    pickerCards.filter({ hasText: "s0053-lefties-dp" }).locator(".team-name"),
+  ).toHaveText("Lefties Drill Peck 55 Zapdos · HP-Bug 55 Marowak (s0053)");
   await expect(
     pickerCards.filter({ hasText: "apex-c04-bug-3atkstar-boomgen" }).locator(".team-name"),
   ).toHaveText("Explosion Cloyster · Boom Gengar 55 Snorlax");
   await expect(
-    pickerCards.filter({ hasText: "red-v10-s1105-r1-s0148" }).locator(".team-name"),
-  ).toHaveText("Explosion Cloyster · HP-Fight 55 Snorlax");
-  await expect(
     pickerCards.filter({ hasText: "sample-08" }).locator(".team-name"),
   ).toHaveText("Zapdos Tank (Boom Exeggutor / Sample 08)");
   await expect(
-    pickerCards.filter({ hasText: "red-v5-r1-s0097" }).locator(".team-name"),
-  ).toHaveText("55 Tyranitar Heracross");
+    pickerCards.filter({ hasText: "pb-96" }).locator(".team-name"),
+  ).toHaveText("55 Heracross Electabuzz WA");
 
   // Expand sets detail on a card to verify moves and items are visible.
-  const targetCard = pickerCards.filter({ hasText: "red-v10-s1105-r2-s0142" });
+  const targetCard = pickerCards.filter({ hasText: "s0053-lefties-hpi" });
   await targetCard.locator(".team-sets-summary").click();
   await expect(targetCard.locator(".team-sets-content")).toBeVisible();
   await expect(targetCard.locator(".team-set-row")).toHaveCount(6);
-  await expect(targetCard.locator(".team-sets-content")).toContainText("Rain Dance");
+  await expect(targetCard.locator(".team-sets-content")).toContainText("Leftovers");
   await page.locator("dialog.modal .modal-head button").click();
 
   expect(errors).toEqual([]);

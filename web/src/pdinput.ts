@@ -10,7 +10,7 @@
 //    `LimitRequestFieldSize` is 8190 bytes. Because each 6-Pokémon party is
 //    ~455 bytes (`PDn=1_x_...`), at most 17 parties (~7.7 KB) can reside in
 //    `Cookie:` simultaneously before Apache returns `400 Bad Request`.
-//    The 33-team `team-pool-v2` catalog therefore splits cleanly into 2 parts
+//    The 33-team `team-pool-v3` catalog therefore splits cleanly into 2 parts
 //    (Part 1: teams 1–17, Part 2: teams 18–33).
 // 3. 26-field Pokémon record (`_` delimiter):
 //    [0]      National Dex number (1..251)

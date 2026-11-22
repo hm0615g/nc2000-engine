@@ -9,7 +9,7 @@ const wasm = require('../crates/wasm/pkg-node/nc2000_wasm.js');
 const read = p => JSON.parse(fs.readFileSync(p));
 const digest = s => crypto.createHash('sha256').update(s).digest('hex');
 const baselinePath = 'data/belief-pool-v3/bake-prior.json';
-const baseline = read(baselinePath), catalog = read('data/team-pool-v2/team-pool.json');
+const baseline = read(baselinePath), catalog = read('data/team-pool-v3/team-pool.json');
 const dex = read('data/gen2stadium2.json'), engineDex = new wasm.Dex(), validator = new wasm.Validator(engineDex);
 const identity = sets => JSON.stringify(teamMaterial(sets, dex));
 const catalogTypes = new Set(catalog.teams.map(t => identity(t.sets)));
@@ -18,7 +18,7 @@ const removed = baseline.teams.filter(t => !retained.includes(t)).map(t => t.id)
 const teams = structuredClone(retained), types = new Set(teams.map(t => identity(t.sets))), ids = new Set(teams.map(t => t.id));
 const additions = [], aliases = [], excluded = [];
 const sources = [
- ['catalog', 'data/team-pool-v2/team-pool.json'],
+ ['catalog', 'data/team-pool-v3/team-pool.json'],
  ['inventory', 'data/team-inventory-v1/inventory.json'],
  ['partybox', 'data/partybox-v0/teams.json'],
  ['majinjima', 'data/kodoku-r3/majinjima-assassins.json'],

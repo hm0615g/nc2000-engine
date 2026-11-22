@@ -54,7 +54,7 @@ export async function fetchRecordPool(): Promise<PoolData> {
  * means — and because a draw that names the mixture cannot quietly become a
  * plainer one, this throws: the caller lets it reach the boot error box. */
 export async function fetchNashArtifact(): Promise<string> {
-  const res = await fetch(dataUrl("kodoku-r3/conclusion-equilibrium-deme.json"));
+  const res = await fetch(dataUrl("team-pool-v3/flagship-mixture.json"));
   if (!res.ok) throw new Error(`nash artifact fetch failed: ${res.status}`);
   return res.text();
 }
@@ -78,7 +78,7 @@ export async function fetchOldNashArtifact(): Promise<string> {
  * parties on the start screen and the bot's ordinary draw. A page that
  * cannot load it fails rather than quietly drawing from some other list. */
 export async function fetchCatalog(): Promise<string> {
-  const res = await fetch(dataUrl("team-pool-v2/team-pool.json"));
+  const res = await fetch(dataUrl("team-pool-v3/team-pool.json"));
   if (!res.ok) throw new Error(`team catalog fetch failed: ${res.status}`);
   return res.text();
 }

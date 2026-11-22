@@ -62,8 +62,8 @@ export type PoolParse =
 /** Records under the previous key were loaded when `/` still played the
  * bundled open-sheet lists; they are removed rather than restored, so no
  * file saved by an older build can stand in for the catalog unannounced. */
-const LS_KEY = "nc2000-team-pool-v2";
-const LS_RETIRED_KEYS = ["nc2000-team-pool"];
+const LS_KEY = "nc2000-team-pool-v3";
+const LS_RETIRED_KEYS = ["nc2000-team-pool", "nc2000-team-pool-v2"];
 
 /** Exactly six, always: the format picks 3 of 6 under a 155 total-level cap,
  * and both rules read the party as a fixed-size thing. */

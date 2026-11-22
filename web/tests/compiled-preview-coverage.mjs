@@ -15,7 +15,7 @@ try {
  const result=await page.evaluate(async(wasmPath)=>{
   const {default:init,Dex,Battle,BlindSearcher,embeddedDexJson}=await import('/@fs'+wasmPath);
   await init();const dex=new Dex();
-  const catalog=await(await fetch('/data/team-pool-v2/team-pool.json')).json();
+  const catalog=await(await fetch('/data/team-pool-v3/team-pool.json')).json();
   const poolJson=await(await fetch('/data/belief-pool-v3/belief-pool.json')).text();
   const artifact=await(await fetch('/data/compiled-preview-v1.json')).json();
   if(artifact.status)throw Error('catalog preview tables are retired');
@@ -52,7 +52,7 @@ try {
   }
   return {matchups,uniqueKeys:keys.size,validKeys:validKeys.size,invalidKeys:invalidKeys.size,slotsPerKey:64,slotChecks:matchups*64,allLegal:true,softCacheFallbackOk:true};
  },wasmPath);
- assert.equal(result.matchups,1089);assert.equal(result.uniqueKeys,990);
+ assert.equal(result.matchups,1089);assert.equal(result.uniqueKeys,1056);
  const out=process.env.NC2000_CHECK_OUT ?? '../target';
  fs.mkdirSync(out,{recursive:true});
  fs.writeFileSync(path.join(out,'compiled-coverage.json'),JSON.stringify(result,null,2)+'\n');console.log(result);

@@ -158,8 +158,8 @@ const ROSTER_SPEC = [
 	{ id: 'apex-c04-bug-3atkstar-boomgen', tier: '1', evolved: true },
 	{ id: 'sample-08', tier: '1' },
 	{ id: 'deme-r1-00-s0030', tier: '1', evolved: true },
-	{ id: 'red-v5-r1-s0097', tier: '1', evolved: true },
-	{ id: 'red-v10-s1105-r2-s0155', tier: '1', evolved: true },
+	{ id: 'pb-96', tier: '1' },
+	{ id: 'pb-85', tier: '1' },
 	{ id: 'sample-12', tier: '1' },
 	{ id: 'sample-17-orig', tier: '1' },
 	{ id: 'mjj-2015-ayagen', tier: '1' },
@@ -243,7 +243,7 @@ function main() {
 	const selected = ROSTER_SPEC.map(spec => {
 		const srcTeam = spec.sets ? null : (v2ById.get(spec.id) || bpById.get(spec.id));
 		if (!spec.sets && !srcTeam) throw new Error(`Team not found in committed sources: ${spec.id}`);
-		const sets = structuredClone(spec.sets || srcTeam.sets);
+		const rawSets = structuredClone(spec.sets || srcTeam.sets);
 		const provenance = resolveProvenance(spec.id, spec);
 		const score = typeof spec.score === 'number'
 			? spec.score
@@ -256,18 +256,26 @@ function main() {
 			evolved: Boolean(spec.evolved || provenance.origin === 'evolved'),
 			score,
 			provenance,
-			sets,
+			sets: rawSets,
 		};
 	});
 
-	// Apply training-v3 normalization (preserving public gender camouflage within multi-variant clusters)
-	const attract = attractGenderCensus(bakePrior);
-	const optimized = normalizeCatalog(selected, dex, attract.preferFemale);
-
-	// Validate every normalized team with WASM Validator + strict JP NC2000 rules
+	// Canonicalize every team through WASM Validator first so all required engine
+	// fields (`name`, `ability`, `nature`, `happiness`, etc.) are populated identically.
 	const engineDex = new wasm.Dex();
 	const validator = new wasm.Validator(engineDex);
+	let optimized;
 	try {
+		for (const t of selected) {
+			const canon = JSON.parse(validator.canonicalizeTeam(JSON.stringify(t.sets)));
+			if (!canon.ok) {
+				throw new Error(`WASM canonicalizeTeam rejected ${t.id}: ${JSON.stringify(canon.errors)}`);
+			}
+			t.sets = canon.team;
+		}
+		// Apply training-v3 normalization (preserving public gender camouflage within multi-variant clusters)
+		const attract = attractGenderCensus(bakePrior);
+		optimized = normalizeCatalog(selected, dex, attract.preferFemale);
 		for (const t of selected) {
 			const sets = optimized.get(t.id).sets;
 			checkJpNc2000Legality(t.id, sets);
@@ -275,11 +283,15 @@ function main() {
 			if (!res.ok) {
 				throw new Error(`WASM Validator rejected ${t.id}: ${JSON.stringify(res.findings || res.errors)}`);
 			}
+			// Smoke-test Battle deserialization directly via WASM engine
+			const b = new wasm.Battle(engineDex, JSON.stringify(sets), JSON.stringify(sets), '1,2,3,4');
+			b.free();
 		}
 	} finally {
 		validator.free();
 		engineDex.free();
 	}
+	const attract = attractGenderCensus(bakePrior);
 
 	// Verify cluster uniqueness (order-independent species+level across clusters,
 	// byte-identical Turn-0 public preview signature within multi-variant clusters)

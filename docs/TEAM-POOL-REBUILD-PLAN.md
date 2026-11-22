@@ -8,18 +8,19 @@ pipeline for blind play (`search-profiles.json`).
 Never substitute one artifact for another ([`web/src/data.ts`](../web/src/data.ts),
 [`web/src/app.tsx`](../web/src/app.tsx)):
 
-1. **Catalog (`data/team-pool-v2/team-pool.json`)**: Playable built-in party list
+1. **Catalog (`data/team-pool-v3/team-pool.json`; historical `data/team-pool-v2/team-pool.json`)**: Playable built-in party list
    for humans and ordinary bot draws (`drawWeight`). Built-in player options and
    the ordinary bot draw share exact canonical sets.
 2. **Opponent prior (`data/belief-pool-v3/belief-pool.json`)**: Broad known-party
    candidate pool used by `Belief` across all doors and tools. Own-pool
    pruning never strips legal/human-facing archetypes out of the opponent prior.
-3. **Solved mixtures (`data/kodoku-r3/conclusion-equilibrium-deme.json` primary;
-   `data/kodoku-r3/conclusion-equilibrium-r1.json` and
+3. **Primary mixture (`data/team-pool-v3/flagship-mixture.json` primary;
+   `data/kodoku-r3/conclusion-equilibrium-deme.json`,
+   `data/kodoku-r3/conclusion-equilibrium-r1.json`, and
    `data/meta-nash-v3/pool-artifact.json` historical)**: Weighted party draw
    tables when `?nash` / mixture selection is active. The
    [adaptive bot audit](../data/nash-refresh-v1/README.md) records the measured
-   responses to the primary draw and the five-strategy candidate.
+   responses to the historical draw and the five-strategy candidate.
 
 Information mode (`blind` vs historical `open` for fork/kifu replay), search
 coefficients (`data/search-profiles.json`), and production iteration budgets

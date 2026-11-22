@@ -112,7 +112,7 @@ async function poolFixture(
           teams: { id: string; sets: FixtureSet[] }[];
         };
       };
-      const catalog = await get("/data/team-pool-v2/team-pool.json");
+      const catalog = await get("/data/team-pool-v3/team-pool.json");
       const prior = await get("/data/belief-pool-v3/belief-pool.json");
       // Only id + sets: the minimum the contract accepts, and the shape the
       // Rust side actually reads (crates/bot/src/preview.rs). Deep copies —
@@ -178,7 +178,7 @@ async function seedStorage(page: Page) {
     if (sessionStorage.getItem("nc2000-e2e-seeded") === "1") return;
     sessionStorage.setItem("nc2000-e2e-seeded", "1");
     localStorage.setItem("nc2000-locale", "en");
-    localStorage.removeItem("nc2000-team-pool-v2");
+    localStorage.removeItem("nc2000-team-pool-v3");
     localStorage.removeItem("nc2000-start-picks");
     localStorage.removeItem("nc2000-custom-teams");
     localStorage.removeItem("nc2000-belief-prior");
@@ -333,7 +333,7 @@ test("a pool file replaces the lists, survives a reload, and gives way to the ca
     await closeModal(page);
     await expectPickerPool(page, fx);
     const stored = await page.evaluate(() =>
-      localStorage.getItem("nc2000-team-pool-v2"),
+      localStorage.getItem("nc2000-team-pool-v3"),
     );
     expect(stored, "an accepted pool is persisted").not.toBeNull();
     expect((JSON.parse(stored!) as { name: string }).name).toBe(FIXTURE_NAME);
@@ -358,7 +358,7 @@ test("a pool file replaces the lists, survives a reload, and gives way to the ca
     );
     await closeModal(page);
     expect(
-      await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v2")),
+      await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v3")),
     ).toBeNull();
   });
 
@@ -396,7 +396,7 @@ test("a file with an unplayable team changes nothing", async ({ page }) => {
   );
   await closeModal(page);
   expect(
-    await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v2")),
+    await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v3")),
   ).toBeNull();
   expect(errors).toEqual([]);
 });
@@ -477,7 +477,7 @@ test("a loaded pool never reaches ?nash, and survives for the play door", async 
   await closeModal(page);
   // Not played, not deleted: the record is the user's.
   expect(
-    await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v2")),
+    await page.evaluate(() => localStorage.getItem("nc2000-team-pool-v3")),
   ).not.toBeNull();
 
   await page.goto("/");

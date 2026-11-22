@@ -24,7 +24,7 @@ try {
     await wasm.default();
     const dex = new wasm.Dex();
     const poolJson = await (await fetch("/data/belief-pool-v3/belief-pool.json")).text();
-    const catalog = await (await fetch("/data/team-pool-v2/team-pool.json")).json();
+    const catalog = await (await fetch("/data/team-pool-v3/team-pool.json")).json();
     const { compiledPreviewMatches } = await import("/src/compiled-preview.ts");
     if (await compiledPreviewMatches(poolJson, wasm.embeddedDexJson()) !== !compiledDisabled)
       throw new Error("compiled-preview build setting was not enforced at runtime");
