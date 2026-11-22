@@ -1,0 +1,363 @@
+{
+ "name": "team-pool-v3-flagship-s0053-lefties",
+ "source_solution": "data/team-pool-v3/team-pool.json",
+ "active_shells": 1,
+ "support_size": 2,
+ "min_matrix_payoff": 0.3512,
+ "broad_field_payoff": 0.6445,
+ "top18_holdout_payoff": 0.5463,
+ "trainingPolicy": "training-v3",
+ "measurementStatus": "Verified on 2,280 strict NO-CACHE LIVE 243k/729k games (1,800g independent holdout + 480g prior LIVE); relaxed single-shell flagship release candidate (not a 50% zero-exploit Nash equilibrium).",
+ "teams": [
+  {
+   "id": "s0053-lefties-hpi",
+   "origin": "psro-live-v3",
+   "weight": 0.5,
+   "sets": [
+    {
+     "species": "Electrode",
+     "level": 50,
+     "gender": "N",
+     "item": "Miracle Berry",
+     "moves": [
+      "Thunderbolt",
+      "Explosion",
+      "Light Screen",
+      "Thunder Wave"
+     ],
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     }
+    },
+    {
+     "species": "Suicune",
+     "level": 55,
+     "gender": "N",
+     "item": "Mint Berry",
+     "moves": [
+      "Surf",
+      "Ice Beam",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     }
+    },
+    {
+     "species": "Cloyster",
+     "level": 50,
+     "gender": "M",
+     "item": "Gold Berry",
+     "moves": [
+      "Surf",
+      "Ice Beam",
+      "Spikes",
+      "Explosion"
+     ],
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     }
+    },
+    {
+     "species": "Marowak",
+     "level": 55,
+     "gender": "M",
+     "item": "Thick Club",
+     "moves": [
+      "Earthquake",
+      "Rock Slide",
+      "Fire Blast",
+      "Swords Dance"
+     ],
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     }
+    },
+    {
+     "species": "Snorlax",
+     "level": 50,
+     "gender": "M",
+     "item": "Pink Bow",
+     "moves": [
+      "Body Slam",
+      "Earthquake",
+      "Self-Destruct",
+      "Curse"
+     ],
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     }
+    },
+    {
+     "species": "Zapdos",
+     "level": 55,
+     "gender": "N",
+     "item": "Leftovers",
+     "moves": [
+      "Thunderbolt",
+      "Hidden Power Ice",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "ivs": {
+      "hp": 31,
+      "atk": 22,
+      "def": 26,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     }
+    }
+   ]
+  },
+  {
+   "id": "s0053-lefties-dp",
+   "origin": "psro-live-v3",
+   "weight": 0.5,
+   "sets": [
+    {
+     "species": "Electrode",
+     "level": 50,
+     "gender": "N",
+     "item": "Miracle Berry",
+     "moves": [
+      "Thunderbolt",
+      "Explosion",
+      "Light Screen",
+      "Thunder Wave"
+     ],
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     }
+    },
+    {
+     "species": "Suicune",
+     "level": 55,
+     "gender": "N",
+     "item": "Mint Berry",
+     "moves": [
+      "Surf",
+      "Ice Beam",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "ivs": {
+      "hp": 31,
+      "atk": 2,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "evs": {
+      "hp": 255,
+      "atk": 0,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     }
+    },
+    {
+     "species": "Cloyster",
+     "level": 50,
+     "gender": "M",
+     "item": "Gold Berry",
+     "moves": [
+      "Surf",
+      "Ice Beam",
+      "Spikes",
+      "Explosion"
+     ],
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     }
+    },
+    {
+     "species": "Marowak",
+     "level": 55,
+     "gender": "M",
+     "item": "Thick Club",
+     "moves": [
+      "Earthquake",
+      "Rock Slide",
+      "Hidden Power Bug",
+      "Swords Dance"
+     ],
+     "ivs": {
+      "hp": 31,
+      "atk": 26,
+      "def": 26,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     }
+    },
+    {
+     "species": "Snorlax",
+     "level": 50,
+     "gender": "M",
+     "item": "Pink Bow",
+     "moves": [
+      "Body Slam",
+      "Earthquake",
+      "Self-Destruct",
+      "Curse"
+     ],
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     }
+    },
+    {
+     "species": "Zapdos",
+     "level": 55,
+     "gender": "N",
+     "item": "Leftovers",
+     "moves": [
+      "Thunderbolt",
+      "Drill Peck",
+      "Rest",
+      "Sleep Talk"
+     ],
+     "ivs": {
+      "hp": 31,
+      "atk": 31,
+      "def": 31,
+      "spa": 31,
+      "spd": 31,
+      "spe": 31
+     },
+     "evs": {
+      "hp": 255,
+      "atk": 255,
+      "def": 255,
+      "spa": 255,
+      "spd": 255,
+      "spe": 255
+     }
+    }
+   ]
+  }
+ ]
+}

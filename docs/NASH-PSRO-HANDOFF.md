@@ -1,6 +1,6 @@
 # Disclosed-Pool Nash Equilibrium Search (PSRO Handoff)
 
-Last updated: 2026-11-22 (HEAD prior to this doc: `7c139bff`)
+Last updated: 2026-11-22 (`team-pool-v3` flagship `s0053-lefties` defined; `11,380` total strict NO-CACHE LIVE games recorded)
 
 This document records the authoritative state, verified production `243k/729k` & strictly NO-CACHE live holdout measurements, tooling/compute architecture, measured dead ends, standing regulation & statistical constraints, and exact resume point for the NC2000 disclosed-pool Nash equilibrium search.
 
@@ -201,3 +201,35 @@ The `barn` daemon is currently idle (`cu_rate_hr: 0.0`, `cu_balance: 2309.75`, `
    - Solve exact RM+ Nash weights $P^* = (p_{\text{thdr}}, p_{\text{pb84}}, p_{\text{v3}})$ and confirm every in-pool shell scores `~50%` and every external/bare challenger scores `<= 50%` (add a 4th pillar only if a genuine non-dominated breaker beats the 3-shell mixture at `K=16`).
 3. **Final Strictly NO-CACHE (`NASH_PREVIEW_CACHE=0`) Holdout Certification**:
    - Run `tools/nash-goal.py prepare-holdout` + `barn` dispatch + `analyze-holdout` with **`previewSeeds` omitted** (`preview_sources == {'live': 2*N}`, `cache_hits == 0`) at `100–140` games per challenger (`SE <= 3.5–4.0pp`), **explicitly including ALL 3 in-pool shells themselves + all same-shell bare deviations + top external challengers**, to certify **`all_pass_ucb95_t_le_55 == True`**.
+
+---
+
+## 7. Strictly NO-CACHE LIVE Audit, `s0053-lefties` Discovery & `team-pool-v3` Release Pool (`2026-11-22`)
+
+### 7.1 Methodological Audit Findings (Primary-Source Verification)
+
+- **Winner's Curse on Small-$n$ `K=16` Selection**: Across 31 overlapping `(defender, challenger)` edges between `K=16` (`n=20–24/edge`) and strict `LIVE` holdouts, challenger WR jumped **`+6.70pp`** on `LIVE` (`20/31` edges, Stouffer `Z = +3.50`, `p = 0.00023`). `dist-cache` itself is mechanically unbiased (`K16 ChWR >= 40%`: `+1.14pp`), while `K16 ChWR < 40%` regressed `+12.63pp` to the mean (`v2-H` also dropped `61.7% -> 46.5%` on `K=16` retest).
+- **`v2Cz:hpi-whpb` vs `v3:hpiroar-whpb` Lateral Trade-off**: Across 12 common LIVE challengers, unweighted defender WR was `52.09%` vs `53.01%` (`+0.92pp`, `p = 0.62`); `v3` worsened against all 4 top breakers (`pb-84`, `pb-6`, `pb-122`, `pb-131`) while `Roar Suicune` dropped to `0.4%` pick rate.
+- **`breakers-audit-9k` 3-Shell Cycle Unproven at `243k`**: `9k_ps` correlated only `r = 0.325` (`58.6%` sign agreement) with `243k LIVE`, `breakers-audit-9k` fixed `previewSeeds` (`6` unique on 15/28 edges), 500× bootstrap picked `('thdr', 'pb84', 'pb131')` (`30.2%`) over `('thdr', 'pb84', 'v3')` (`26.4%`), and 18/28 edges are unmeasured at `243k`.
+- **Policy Change**: All subsequent evaluations switched to **100% strictly NO-CACHE LIVE (`243k/729k`, `preview.source == 'live'`, `previewSeeds` omitted, `NASH_PREVIEW_CACHE=0`)**.
+
+### 7.2 Strictly NO-CACHE LIVE `v2Cz` Item & Structural Optimization (`7,008` New LIVE Games)
+
+1. **RestTalk Zapdos Item Verification** (`target/nash-work/elim-v1/prod-live-v2Cz-zap-items/results.jsonl`, **`2,520g` LIVE** across 5 items vs `Bright Powder` baseline on top-8 breakers + `96g` H2H):
+   - Omnibus 8-breaker mean across all 6 items showed tight clustering (`41.93%–45.57%`, $\chi^2(5) = 1.315$), with **`v2Cz-zi:lefties`** (`Zapdos @ Leftovers` + `Snorlax @ Pink Bow`) ranking **#1 on every metric**: 8-breaker mean `45.57%` vs `Powder` `43.96%`, H2H `51.0%` (`96g`), highest Zapdos pick rate (`69.8%`), and worst-breaker floor `39.6%` (`offantom` jumped `28.3% -> 45.8%`, `p = 0.0075` vs other 5 items).
+   - `PRZ Cure Berry` (`41.93%`, Zap pick `49.2%`) and `Miracle Berry` (`42.71%`) trailed; `HPI` vs `WHPB` complementarity confirmed across `2,910g` LIVE (`pb-87 +20.0pp` HPI, `pb-122 +13.1pp` WHPB).
+2. **`v4` Structural Variants & Factor Decomposition** (`target/nash-work/elim-v1/prod-live-v4-variants/results.jsonl`, **`2,688g` LIVE**, 7 variants × 384g on identical top-8 breakers):
+   - **Factor decomposition resolved**: `v4:powder-laxbow` (`Zap @ Powder`, `Lax @ Pink Bow`, `Suicune @ Leftovers`) collapsed to `18.8%` vs `offantom` (`41.15%` overall), proving **`Leftovers` Zapdos** — not `Pink Bow` alone — drove the `offantom` gain (pooled pure `Leftovers` Zapdos `36.7%` [`88/240`] vs non-`Leftovers` `25.8%` [`93/360`], `+10.8pp`, `z = +2.83`, `p = 0.0046`).
+   - **Rejected on LIVE**: `v4:lefties-ww-zap` (`Thunder/Whirlwind`, `36.72%`, `-7.24pp`, `p = 0.008`), `v4:synth-lm-tde` (`38.54%`, `0/8`), `v4:lefties-lax-camo` (`40.36%`, non-Self-Destruct Mint Lax half `37.0%`), `v4:item-camo-left-mag` (`41.15%`, `Magnet vs pb-84` did not replicate).
+   - **Top tie**: `v2Cz-zi:lefties` (`45.57%`, best floor) tied `v4:lefties-lax-de` (`45.57%`) ahead of `v4:lefties-thunder` (`44.53%`, only build beating `v2Cz-p-talkhpi` `52.1%`). All 13 `v2Cz`-line builds peaked at `45.6%` across the top-8 exploiters.
+3. **Final Independent Holdout Certification of `v2Cz-zi:lefties`** (`target/nash-work/elim-v1/holdout-v2Cz-lefties-report.json`, **`1,800g` LIVE** across 18 challengers; `2,280g` pooled with prior LIVE):
+   - **Broad-8 Top Shells**: **`64.45%`** unweighted defender WR (**`8/8` certified `UCB95_t <= 55%`**: `thdr 72.9%`, `hc75 67.7%`, `s13 66.7%`, `s0043 65.6%`, `pb-63 63.5%`, `APEX4 62.5%`, `cban-11 60.4%`, `moudoku 56.2%`).
+   - **Top-18 Overall**: **`54.63%`** unweighted defender WR (**`11/18` PASS `UCB95_t <= 55%`**), beating `v2Cz:hpi-whpb` on 14 common LIVE challengers (`53.04%` vs `51.12%`, `+1.92pp`), flipping `v2Cz-p-talkhpi` (`59.4%` holdout / `54.2%` pooled, PASS), zero Winner's Curse (top-8 breakers `45.57%` prior vs `45.31%` independent holdout), and zero dead slots (`s1:19.3% / s2:9.8% / s3:80.7% / s4:19.3% / s5:100.0% / s6:70.9%`).
+   - **Worst-Case Exploiters**: Only 2/19 LIVE opponents below 40% pooled defender WR — `pb-84` (`35.1% ± 3.7%`, `n=168`) and `mjj-2014-offantom` (`36.3% ± 4.1%`, `n=168`, `+8.0pp` over `Bright Powder`'s `28.3%`); all remaining `17/19` are `>= 42.3%`.
+
+### 7.3 `team-pool-v3` Release Pool Defined (Relaxed Release Milestone)
+
+- Prioritizing release over strict 50% zero-exploit Nash equilibrium, defined **`data/team-pool-v3/`** via [`tools/build-team-products-v3.js`](../tools/build-team-products-v3.js):
+  - [`data/team-pool-v3/team-pool.json`](../data/team-pool-v3/team-pool.json): **`33` teams across `32` pairwise-distinct shells** (`23` distinct Level-55 aces, `training-v3` normalized, `33/33` WASM `Validator` PASS, strict JP NC2000 cart legal, `drawWeight = 1/32` per shell summing to `1.000000`), with **`s0053-lefties`** (`s0053-lefties-hpi` + `s0053-lefties-dp`) as Rank 1–2 flagship strongest core (`nash: true, evolved: true`).
+  - [`data/team-pool-v3/flagship-mixture.json`](../data/team-pool-v3/flagship-mixture.json): 50/50 `s0053-lefties` flagship mixture artifact.
+  - Next release integration steps (pending confirmation): update `data/belief-pool-v3/belief-pool.json` (`tools/build-known-prior.mjs`), wire `web/` (`data.ts`, `vite.config.ts`, `pdinput*.ts`, `team-pool.ts`, `app.tsx`) to `team-pool-v3` + `flagship-mixture.json`, re-bake `data/compiled-preview-v1.json` (or verify live fallback), and run full web/WASM test suites.
