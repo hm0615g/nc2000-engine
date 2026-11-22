@@ -59,6 +59,7 @@ try {
               battle.applyChoice(0, wait0[0].input);
               worker.apply([[0, wait0[0].input]]);
             }
+            if (JSON.parse(battle.legalChoices(1)).length === 0) break;
             const frame = JSON.parse(channel.frame(battle));
             reference.pushLines(JSON.stringify(frame.lines)); reference.onRequest(JSON.stringify(frame.request)); reference.step(budget);
             const mapInput = input => battle.resolveChoice(1, input);

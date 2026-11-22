@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
   buildSinglePostSlotFields,
@@ -11,9 +10,12 @@ import {
 const base = process.env.NC2000_E2E_BASE ?? "/";
 
 test("encodeMonForPdinput sends PBS Gen 2 spelling くろいめがね for 6th-mon Black Glasses", () => {
-  const root = resolve(process.cwd(), "..");
-  const dex = JSON.parse(readFileSync(resolve(root, "data/gen2stadium2.json"), "utf8")) as PdinputDex;
-  const ja = JSON.parse(readFileSync(resolve(root, "data/i18n-ja.json"), "utf8")) as PdinputI18nJa;
+  const dex = JSON.parse(
+    readFileSync(new URL("../../data/gen2stadium2.json", import.meta.url), "utf8"),
+  ) as PdinputDex;
+  const ja = JSON.parse(
+    readFileSync(new URL("../../data/i18n-ja.json", import.meta.url), "utf8"),
+  ) as PdinputI18nJa;
   const mon = {
     species: "Umbreon",
     level: 50,
