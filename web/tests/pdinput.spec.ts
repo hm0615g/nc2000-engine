@@ -1,6 +1,29 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import {
+  buildSinglePostSlotFields,
+  encodeTeamForPdinput,
+  type PdinputDex,
+  type PdinputI18nJa,
+} from "../src/pdinput";
 
 const base = process.env.NC2000_E2E_BASE ?? "/";
+
+test("encodeMonForPdinput sends PBS Gen 2 spelling くろいめがね for 6th-mon Black Glasses", () => {
+  const root = resolve(process.cwd(), "..");
+  const dex = JSON.parse(readFileSync(resolve(root, "data/gen2stadium2.json"), "utf8")) as PdinputDex;
+  const ja = JSON.parse(readFileSync(resolve(root, "data/i18n-ja.json"), "utf8")) as PdinputI18nJa;
+  const mon = {
+    species: "Umbreon",
+    level: 50,
+    item: "Black Glasses",
+    moves: ["Pursuit", "Charm", "Moonlight", "Baton Pass"],
+  };
+  const team = encodeTeamForPdinput({ id: "t-bg", sets: [mon, mon, mon, mon, mon, mon] }, dex, ja);
+  expect(team.sixthMon.jpItem).toBe("くろいめがね");
+  expect(buildSinglePostSlotFields(team, 1).ITEM).toBe("くろいめがね");
+});
 
 test("?pdinput renders all 33 teams, splits into 2 safe batches under 8KB, and generates installer script", async ({
   page,

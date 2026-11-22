@@ -108,6 +108,12 @@ export const PDINPUT_ITEM_CODES: Record<string, number> = {
   goldberry: 175,
 };
 
+/** Gen 2 / PBS `PDINPUT.cgi` item spelling overrides where `data/i18n-ja.json`
+ * uses a Gen 3+ spelling (e.g. `くろいメガネ` vs PBS `くろいめがね`). */
+export const PDINPUT_ITEM_NAME_OVERRIDES: Record<string, string> = {
+  blackglasses: "くろいめがね",
+};
+
 export interface PdinputDexSpecies {
   num: number;
   name: string;
@@ -237,7 +243,9 @@ export function encodeMonForPdinput(
   if (itemCode === undefined) {
     throw new Error(`Unsupported item for PDINPUT.cgi: ${s.item ?? ""}`);
   }
-  const jpItem = itemId ? (ja.items[itemId] ?? "") : "";
+  const jpItem = itemId
+    ? (PDINPUT_ITEM_NAME_OVERRIDES[itemId] ?? ja.items[itemId] ?? "")
+    : "";
 
   const hex = (n: number) => n.toString(16).toUpperCase();
   const koHex = `${hex(atkDv)}${hex(defDv)}${hex(speDv)}${hex(spcDv)}`;
