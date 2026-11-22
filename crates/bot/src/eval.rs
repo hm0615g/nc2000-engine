@@ -947,7 +947,8 @@ pub fn compact_race_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
         let st_raw = att_mon.status_raw();
         if st_raw == Status::Slp as u8 {
             let att_spec = &table.mons[att_idx];
-            if !(att_mon.item != 0 && (att_spec.is_mintberry || att_spec.is_miracleberry)) {
+            let att_ispec = table.item_spec(att_mon.item);
+            if !(att_ispec.is_mintberry || att_ispec.is_miracleberry) {
                 let mut talks = false;
                 for m_i in 0..att_spec.num_moves as usize {
                     if att_mon.pp[m_i] > 0

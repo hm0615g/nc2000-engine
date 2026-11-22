@@ -364,7 +364,7 @@ impl DmgKernel1D {
 
         let mut p_hit =
             cb.hit_probability(table, att_side, att_slot, def_side, def_slot, m_slot) as f32;
-        if def_mon.item != 0 && def_spec.is_brightpowder && !mspec.always_hit {
+        if table.item_spec(def_mon.item).is_brightpowder && !mspec.always_hit {
             p_hit *= 235.0 / 256.0;
         }
         if p_hit <= 0.0 {
@@ -399,7 +399,7 @@ impl DmgKernel1D {
 
         let hits_mult = (mspec.multihit_mean_x2 as f32 * 0.5).max(1.0);
         const CRIT_DEN: [u32; 6] = [0, 16, 8, 4, 3, 2];
-        let scope_bonus = ((att_mon.item != 0) & att_spec.is_scope_lens) as usize;
+        let scope_bonus = table.item_spec(att_mon.item).is_scope_lens as usize;
         let c_stage = (mspec.crit_ratio as usize + scope_bonus).min(5);
         let p_crit = if mspec.special_kind
             != nc2000_engine::compact::SpecialMoveKind::FlailReversal
@@ -430,7 +430,7 @@ impl DmgKernel1D {
             if is_crit {
                 d *= 2;
             }
-            if att_mon.item != 0 && att_spec.item_boost_type == mspec.move_type {
+            if table.item_spec(att_mon.item).boost_type == mspec.move_type {
                 d = d * 110 / 100;
             }
             d = d.min(997) + 2;
@@ -581,8 +581,10 @@ fn survival_curve_k_slots_with_mean_hp(
     let att_spec = &table.mons[att_idx];
 
     // Attacker sleep, freeze, paralysis, confusion, recharge
-    let att_berry = att_mon.item != 0 && (att_spec.is_mintberry || att_spec.is_miracleberry);
-    let att_miracle = att_mon.item != 0 && att_spec.is_miracleberry;
+    let att_ispec = table.item_spec(att_mon.item);
+    let def_ispec = table.item_spec(def_mon.item);
+    let att_berry = att_ispec.is_mintberry || att_ispec.is_miracleberry;
+    let att_miracle = att_ispec.is_miracleberry;
     let mut att_slp = if att_mon.status_raw() == Status::Slp as u8 && !att_berry {
         att_mon.status_counter().saturating_sub(1)
     } else {
@@ -620,7 +622,7 @@ fn survival_curve_k_slots_with_mean_hp(
     let mut min_b = b0;
     let mut max_b = b0;
 
-    let lefties: i16 = if def_mon.item != 0 && def_spec.is_leftovers {
+    let lefties: i16 = if def_ispec.is_leftovers {
         (maxhp / 16).max(1)
     } else {
         0
@@ -660,7 +662,7 @@ fn survival_curve_k_slots_with_mean_hp(
     };
 
     // Defender confusion self-hit
-    let def_miracle = def_mon.item != 0 && def_spec.is_miracleberry;
+    let def_miracle = def_ispec.is_miracleberry;
     let mut def_conf = if (def_mon.vol_flags & vol_bit::CONFUSION) != 0 && !def_miracle {
         def_mon.timers[nc2000_engine::compact::timer_idx::CONFUSION].saturating_sub(1)
     } else {
@@ -1010,9 +1012,10 @@ impl Side1DOps {
 
         let has_half_heal = inst_heal_amt > 0;
         let perish_active = (mon.vol_flags & vol_bit::PERISH_SONG) != 0;
-        let has_berry = mon.item != 0 && (spec.is_mintberry || spec.is_miracleberry);
-        let is_frz =
-            mon.status_raw() == Status::Frz as u8 && !(mon.item != 0 && spec.is_miracleberry);
+        let ispec = table.item_spec(mon.item);
+        let foe_ispec = table.item_spec(foe_mon.item);
+        let has_berry = ispec.is_mintberry || ispec.is_miracleberry;
+        let is_frz = mon.status_raw() == Status::Frz as u8 && !ispec.is_miracleberry;
         let has_heal = !perish_active && !is_frz && (has_half_heal || has_rest);
         let heal_is_rest = !has_half_heal && has_rest;
 
@@ -1025,7 +1028,7 @@ impl Side1DOps {
             }
         }
 
-        let lefties = if mon.item != 0 && spec.is_leftovers {
+        let lefties = if ispec.is_leftovers {
             (maxhp / 16).max(1)
         } else {
             0
@@ -1078,7 +1081,7 @@ impl Side1DOps {
             }
         }
 
-        let foe_miracle = foe_mon.item != 0 && foe_spec.is_miracleberry;
+        let foe_miracle = foe_ispec.is_miracleberry;
         let foe_frz = foe_mon.status_raw() == Status::Frz as u8 && !foe_miracle;
         let foe_par = foe_mon.status_raw() == Status::Par as u8 && !foe_miracle;
         let foe_conf = (foe_mon.vol_flags & vol_bit::CONFUSION) != 0 && !foe_miracle;
@@ -1210,14 +1213,14 @@ impl Side1DOps {
         let idx1 = s1 * 3 + slot1;
         let m0 = &cb.mons[idx0];
         let m1 = &cb.mons[idx1];
-        let sp0 = &table.mons[idx0];
-        let sp1 = &table.mons[idx1];
-        let berry0 = m0.item != 0 && (sp0.is_mintberry || sp0.is_miracleberry);
-        let berry1 = m1.item != 0 && (sp1.is_mintberry || sp1.is_miracleberry);
+        let is0 = table.item_spec(m0.item);
+        let is1 = table.item_spec(m1.item);
+        let berry0 = is0.is_mintberry || is0.is_miracleberry;
+        let berry1 = is1.is_mintberry || is1.is_miracleberry;
         let perish0 = (m0.vol_flags & vol_bit::PERISH_SONG) != 0;
         let perish1 = (m1.vol_flags & vol_bit::PERISH_SONG) != 0;
-        let frz0 = m0.status_raw() == Status::Frz as u8 && !(m0.item != 0 && sp0.is_miracleberry);
-        let frz1 = m1.status_raw() == Status::Frz as u8 && !(m1.item != 0 && sp1.is_miracleberry);
+        let frz0 = m0.status_raw() == Status::Frz as u8 && !is0.is_miracleberry;
+        let frz1 = m1.status_raw() == Status::Frz as u8 && !is1.is_miracleberry;
         let max_s0 = if !perish0 && !frz0 && !hh0 && hr0 && !berry0 {
             2usize
         } else if m0.status_raw() == Status::Slp as u8 && !berry0 && m0.status_counter() >= 3 {
@@ -1358,8 +1361,9 @@ fn eval_exact_root_table(
         let hh = hh_amt > 0;
         inst_heal_amt[i] = hh_amt;
         let perish = (m.vol_flags & vol_bit::PERISH_SONG) != 0;
-        let miracle = m.item != 0 && sp.is_miracleberry;
-        let berry = m.item != 0 && (sp.is_mintberry || sp.is_miracleberry);
+        let ispec = table.item_spec(m.item);
+        let miracle = ispec.is_miracleberry;
+        let berry = ispec.is_mintberry || ispec.is_miracleberry;
         let st_raw = m.status_raw();
         let is_frz = st_raw == Status::Frz as u8 && !miracle;
         let is_par = st_raw == Status::Par as u8 && !miracle;
@@ -1381,7 +1385,7 @@ fn eval_exact_root_table(
                 * (if is_conf { 0.50f32 } else { 1.0f32 })
         };
 
-        let lefties = if m.item != 0 && sp.is_leftovers {
+        let lefties = if ispec.is_leftovers {
             (maxhp[i] / 16).max(1)
         } else {
             0
@@ -1971,14 +1975,15 @@ fn l1_state_key(
     };
 
     let item_flags = |m: &nc2000_engine::compact::CompactMon,
-                      sp: &nc2000_engine::compact::StaticMonSpec|
+                      _sp: &nc2000_engine::compact::StaticMonSpec|
      -> u8 {
         if m.item != 0 {
-            (sp.is_leftovers as u8)
-                | ((sp.is_brightpowder as u8) << 1)
-                | ((sp.is_mintberry as u8) << 2)
-                | ((sp.is_miracleberry as u8) << 3)
-                | ((sp.is_scope_lens as u8) << 4)
+            let ispec = table.item_spec(m.item);
+            (ispec.is_leftovers as u8)
+                | ((ispec.is_brightpowder as u8) << 1)
+                | ((ispec.is_mintberry as u8) << 2)
+                | ((ispec.is_miracleberry as u8) << 3)
+                | ((ispec.is_scope_lens as u8) << 4)
         } else {
             0
         }
@@ -2658,8 +2663,8 @@ fn with_solved_bellman<R>(
 fn side_sleep_rem(cb: &CompactBattle, table: &MatchTable, side: usize, slot: usize) -> usize {
     let idx = side * 3 + slot;
     let mon = &cb.mons[idx];
-    let spec = &table.mons[idx];
-    let berry = mon.item != 0 && (spec.is_mintberry || spec.is_miracleberry);
+    let ispec = table.item_spec(mon.item);
+    let berry = ispec.is_mintberry || ispec.is_miracleberry;
     if mon.status_raw() == Status::Slp as u8 && !berry {
         (mon.status_counter().saturating_sub(1) as usize).min(2)
     } else {
@@ -2770,9 +2775,9 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
     } else {
         0
     };
-    let p0_trapped = (cb.mons[idx0].vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0
+    let p0_trapped = cb.mons[idx0].is_trapped()
         || cb.sides[0].alive_mask.count_ones() <= 1;
-    let p1_trapped = (cb.mons[idx1].vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0
+    let p1_trapped = cb.mons[idx1].is_trapped()
         || cb.sides[1].alive_mask.count_ones() <= 1;
 
     if p0_perish == 0 && p1_perish == 0 && p0_trapped == p1_trapped {
@@ -3030,10 +3035,10 @@ pub fn compact_rollout_linear_pick(
     let maxhp = table.mons[att_idx].maxhp.max(1);
 
     // 1. Canonical sleeping Markov action when guaranteed asleep this turn (`status_counter >= 2`)
+    let me_ispec = table.item_spec(me.item);
     let is_asleep_this_turn = me.status_raw() == Status::Slp as u8
         && me.status_counter() >= 2
-        && !(me.item != 0
-            && (table.mons[att_idx].is_mintberry || table.mons[att_idx].is_miracleberry));
+        && !(me_ispec.is_mintberry || me_ispec.is_miracleberry);
     if is_asleep_this_turn {
         if (table.mons[att_idx].role_flags & role_bit::SLEEP_USABLE) == 0 {
             return None;
@@ -3069,9 +3074,9 @@ pub fn compact_rollout_linear_pick(
         && (table.mons[att_idx].role_flags & role_bit::PROTECT) != 0
         && me.stall_counter() == 0
     {
-        let me_trapped = (me.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0
+        let me_trapped = me.is_trapped()
             || cb.sides[side].alive_mask.count_ones() <= 1;
-        let foe_trapped = (foe.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0
+        let foe_trapped = foe.is_trapped()
             || cb.sides[def_side].alive_mask.count_ones() <= 1;
         if foe_trapped && !me_trapped {
             for &c in cs {
@@ -3092,7 +3097,7 @@ pub fn compact_rollout_linear_pick(
     {
         let b_me = Side1DOps::to_b16(me_hp, maxhp) as usize;
         let is_frz = me.status_raw() == Status::Frz as u8
-            && !(me.item != 0 && table.mons[att_idx].is_miracleberry);
+            && !me_ispec.is_miracleberry;
         if b_me < B16 && !is_frz {
             let mut heal_act: Option<u8> = None;
             for &c in cs {

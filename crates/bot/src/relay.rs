@@ -250,8 +250,9 @@ fn mon_guaranteed_incapacitated(
     let mon = &cb.mons[idx];
     let spec = &table.mons[idx];
     let st = mon.status_raw();
-    let has_berry = mon.item != 0 && (spec.is_mintberry || spec.is_miracleberry);
-    if st == Status::Frz as u8 && !(mon.item != 0 && spec.is_miracleberry) {
+    let ispec = table.item_spec(mon.item);
+    let has_berry = ispec.is_mintberry || ispec.is_miracleberry;
+    if st == Status::Frz as u8 && !ispec.is_miracleberry {
         return (true, 4, false);
     }
     if st == Status::Slp as u8 && !has_berry {
@@ -666,10 +667,13 @@ fn stat_with_boost(
         & ((mon.vol_flags & vol_bit::PAR_SPEED_DROP) != 0);
     let has_brn = (mon.status_raw() == Status::Brn as u8)
         & ((mon.vol_flags & vol_bit::BRN_ATK_DROP) != 0);
-    let item_kind = if mon.item != 0 {
-        spec.item_stat_kind
-    } else {
-        ItemStatKind::None
+    let item_kind = {
+        let held = table.item_spec(mon.item).stat_kind;
+        if held != ItemStatKind::None && held == spec.species_stat_kind {
+            held
+        } else {
+            ItemStatKind::None
+        }
     };
     get_stat_branchless(
         spec.stored_stats[stat_idx] as i32,
@@ -778,9 +782,8 @@ fn best_move_profile(
             let (ai, di) = if mspec.is_physical { (0, 1) } else { (2, 3) };
             let atk = stat_with_boost(cb, table, att_side, att_slot, ai, att_boosts[ai]);
             let def = stat_with_boost(cb, table, def_side, def_slot, di, def_boosts[di]);
-            let has_tb_item = att_mon.item != 0
-                && mspec.move_type != NO_TYPE_ID
-                && att_spec.item_boost_type == mspec.move_type;
+            let has_tb_item = mspec.move_type != NO_TYPE_ID
+                && table.item_spec(att_mon.item).boost_type == mspec.move_type;
             let base = get_damage_base_branchless(
                 att_spec.level as i32,
                 bp,
@@ -928,15 +931,16 @@ fn canonical_mon_key(cb: &CompactBattle, table: &MatchTable, side: usize, slot: 
         bh
     };
     let item_bits = if mon.item != 0 {
+        let ispec = table.item_spec(mon.item);
         1u64
-            | ((spec.is_leftovers as u64) << 1)
-            | ((spec.is_brightpowder as u64) << 2)
-            | ((spec.is_mintberry as u64) << 3)
-            | ((spec.is_miracleberry as u64) << 4)
+            | ((ispec.is_leftovers as u64) << 1)
+            | ((ispec.is_brightpowder as u64) << 2)
+            | ((ispec.is_mintberry as u64) << 3)
+            | ((ispec.is_miracleberry as u64) << 4)
     } else {
         0u64
     };
-    let vol_bits = (((mon.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0) as u64)
+    let vol_bits = (mon.is_trapped() as u64)
         | ((((mon.vol_flags & vol_bit::PAR_SPEED_DROP) != 0) as u64) << 1)
         | ((((mon.vol_flags & vol_bit::BRN_ATK_DROP) != 0) as u64) << 2);
     let packed = (usable_mask as u64)
@@ -1170,7 +1174,7 @@ fn select_best_counter(
     def_bench: &[CanonBench],
 ) -> Option<usize> {
     let def_idx = def_side * 3 + def_slot;
-    if (cb.mons[def_idx].vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0 || def_bench.is_empty() {
+    if cb.mons[def_idx].is_trapped() || def_bench.is_empty() {
         return None;
     }
     let zero_b = [0i8; 7];
@@ -1586,9 +1590,9 @@ fn simulate_lineup_sweep_ext(
     cached: Option<&[CachedFoeProfile; 3]>,
 ) -> f32 {
     let b_idx = side * 3 + b_slot;
-    let b_spec = &table.mons[b_idx];
-    let b_bp = cb.mons[b_idx].item != 0 && b_spec.is_brightpowder;
-    let b_lefties = cb.mons[b_idx].item != 0 && b_spec.is_leftovers;
+    let b_ispec = table.item_spec(cb.mons[b_idx].item);
+    let b_bp = b_ispec.is_brightpowder;
+    let b_lefties = b_ispec.is_leftovers;
     let spe_b = stat_with_boost(cb, table, side, b_slot, 4, boosts_b[4]);
     let scale = w.scale as f32;
     let unit_ko_logit = scale * ((w.alive + 0.85 * w.hp) as f32);
@@ -2464,7 +2468,7 @@ fn solve_relay_subgame_into(
     };
 
     let zero_b = [0i8; 7];
-    let r_bp_item = cb.mons[act_idx].item != 0 && table.mons[act_idx].is_brightpowder;
+    let r_bp_item = table.item_spec(cb.mons[act_idx].item).is_brightpowder;
 
     for pass_i in 0..n_outer_passes {
         let ell_start = if has_counter_pivot { 1usize } else { 0usize };
@@ -2808,7 +2812,7 @@ fn solve_relay_subgame_into(
                                                         ACT_R_PASS => {
                                                             let rc_slot = recv_arr[out.best_receiver_canon[recv_idx(ell, sigma, k1, k2, k1_len, k2_len)] as usize].party_slot as usize;
                                                             let rc_idx = side * 3 + rc_slot;
-                                                            let rc_bp = cb.mons[rc_idx].item != 0 && table.mons[rc_idx].is_brightpowder;
+                                                            let rc_bp = table.item_spec(cb.mons[rc_idx].item).is_brightpowder;
                                                             let p_phz = disrupt_hit_prob(d_disrupt, boosts_r[6], rc_bp) * d_awake_mult;
                                                             let v_rst = RELAY_GAMMA * v_reset_fn(h_r as i32, ell, 0.0, d_hp_cur);
                                                             let v_pass = RELAY_GAMMA * w_pass_no_atk[recv_idx(ell, sigma, k1, k2, k1_len, k2_len)];

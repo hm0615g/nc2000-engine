@@ -681,7 +681,7 @@ fn compact_perish_combo(
         return None;
     }
     let foe_bench = cb.sides[foe_side].alive_mask.count_ones() > 1;
-    let me_trapped = (me.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0;
+    let me_trapped = me.is_trapped();
     if let Some(phaze_act) = phaze {
         let counting = (me.vol_flags & vol_bit::PERISH_SONG) != 0 && me.perish_turns() >= 2;
         if me_trapped && counting && foe_bench {
@@ -698,7 +698,7 @@ fn compact_perish_combo(
     if cb.best_hit_fraction(table, side, me_slot, foe_side, foe_slot) >= 1.0 {
         return None;
     }
-    if (foe.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0 || !foe_bench {
+    if foe.is_trapped() || !foe_bench {
         return Some(song_act);
     }
     trap

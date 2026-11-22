@@ -53,6 +53,12 @@ try {
             poolJson, side: 1, seed, compiledPreview: false, actionPolicy: mode,
           });
           for (let turn = 0; turn < 3; turn++) {
+            while (JSON.parse(battle.legalChoices(1)).length === 0) {
+              const wait0 = JSON.parse(battle.legalChoices(0));
+              if (!wait0.length) break;
+              battle.applyChoice(0, wait0[0].input);
+              worker.apply([[0, wait0[0].input]]);
+            }
             const frame = JSON.parse(channel.frame(battle));
             reference.pushLines(JSON.stringify(frame.lines)); reference.onRequest(JSON.stringify(frame.request)); reference.step(budget);
             const mapInput = input => battle.resolveChoice(1, input);
@@ -75,7 +81,8 @@ try {
             if (mode === "visit-sample" && turn === 0 && result.playPolicy.actions.length < 2)
               throw new Error("visit sampling collapsed to one action");
             trajectory.push({ best: result.best, policy: result.playPolicy });
-            const picks = [[0, JSON.parse(battle.legalChoices(0))[0].input], [1, result.best]];
+            const legal0 = JSON.parse(battle.legalChoices(0));
+            const picks = legal0.length ? [[0, legal0[0].input], [1, result.best]] : [[1, result.best]];
             for (const [side, input] of picks) battle.applyChoice(side, input);
             worker.apply(picks);
           }
