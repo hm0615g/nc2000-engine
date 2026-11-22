@@ -44,8 +44,8 @@ def u32_hash(tag: str) -> int:
     return int.from_bytes(hashlib.blake2b(tag.encode("utf-8"), digest_size=4).digest(), "little")
 
 
-def load_v3_catalog() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, list[dict[str, Any]]]]:
-    doc = json.loads(TEAM_POOL_V3.read_text())
+def load_v3_catalog(catalog_path: Path | None = None) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    doc = json.loads((catalog_path or TEAM_POOL_V3).read_text())
     teams = doc["teams"]
     by_id = {t["id"]: t for t in teams}
     # Build shell mixtures using prefixed team IDs `v3:<id>` to avoid collisions with team-pool-v2.
@@ -233,7 +233,7 @@ def run_preview_dist_chunks(
 
 
 def cmd_census_run(args: argparse.Namespace) -> None:
-    teams, _, shells = load_v3_catalog()
+    teams, _, shells = load_v3_catalog(Path(args.catalog) if args.catalog else None)
     pools = {
         "teams": [{"id": f"v3:{t['id']}", "sets": t["sets"]} for t in teams],
         "mixtures": shells,
@@ -364,7 +364,7 @@ def summarize_preview_dist(dist_path: Path, teams_by_prefixed_id: dict[str, list
 
 
 def cmd_census_analyze(args: argparse.Namespace) -> None:
-    teams, _, _ = load_v3_catalog()
+    teams, _, _ = load_v3_catalog(Path(args.catalog) if args.catalog else None)
     by_pref = {f"v3:{t['id']}": t["sets"] for t in teams}
     dist_path = WORK / args.name / "preview-dist.json"
     rep = summarize_preview_dist(dist_path, by_pref)
@@ -386,7 +386,8 @@ def cmd_census_analyze(args: argparse.Namespace) -> None:
 def cmd_preview_screen(args: argparse.Namespace) -> None:
     """Screen candidate mutated teams against a strong-pool opponent panel at exact 729k preview."""
     spec = json.loads(Path(args.spec).read_text())
-    teams, _, shells = load_v3_catalog()
+    cat_path = Path(args.catalog) if args.catalog else (Path(spec["catalog"]) if spec.get("catalog") else None)
+    teams, _, shells = load_v3_catalog(cat_path)
     panel_shells: list[str] = spec["panel_shells"]
     raw_cands: dict[str, list[dict[str, Any]]] = spec["candidates"]
     validated = canonicalize_and_validate_teams(raw_cands)
@@ -446,7 +447,8 @@ def cmd_preview_screen(args: argparse.Namespace) -> None:
 def cmd_live_ab(args: argparse.Namespace) -> None:
     """Run paired CRN strictly NO-CACHE LIVE (243k/729k) A/B evaluation + optional H2H."""
     spec = json.loads(Path(args.spec).read_text())
-    teams, _, shells = load_v3_catalog()
+    cat_path = Path(args.catalog) if args.catalog else (Path(spec["catalog"]) if spec.get("catalog") else None)
+    teams, _, shells = load_v3_catalog(cat_path)
     panel_shells: list[str] = spec["panel_shells"]
     pairs_per_opp: int = int(spec.get("pairs_per_opp", 2))
     h2h_pairs: int = int(spec.get("h2h_pairs", 0))
@@ -803,6 +805,7 @@ def main() -> None:
 
     p = sub.add_parser("census-run")
     p.add_argument("--name", default="census-v3-k4")
+    p.add_argument("--catalog", default=None)
     p.add_argument("--k", type=int, default=4)
     p.add_argument("--rows-per-chunk", type=int, default=10)
     p.add_argument("--preview-iters", type=int, default=729000)
@@ -811,11 +814,13 @@ def main() -> None:
 
     p = sub.add_parser("census-analyze")
     p.add_argument("--name", default="census-v3-k4")
+    p.add_argument("--catalog", default=None)
     p.set_defaults(fn=cmd_census_analyze)
 
     p = sub.add_parser("preview-screen")
     p.add_argument("--name", required=True)
     p.add_argument("--spec", required=True)
+    p.add_argument("--catalog", default=None)
     p.add_argument("--k", type=int, default=4)
     p.add_argument("--rows-per-chunk", type=int, default=8)
     p.add_argument("--preview-iters", type=int, default=729000)
@@ -825,6 +830,7 @@ def main() -> None:
     p = sub.add_parser("live-ab")
     p.add_argument("--name", required=True)
     p.add_argument("--spec", required=True)
+    p.add_argument("--catalog", default=None)
     p.add_argument("--chunk-games", type=int, default=16)
     p.add_argument("--preview-iters", type=int, default=729000)
     p.add_argument("--battle-iters", type=int, default=243000)

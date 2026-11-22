@@ -90,3 +90,28 @@ Directly pitting our top 6 shells against each other revealed a clean **3-shell 
 | `s0053-shuck50-mix` | `43.8%` | — | `50.0%` | `31.2%` | `50.0%` | `25.0%` | `40.0%` | `0.0%` (`EV 38.3%`) |
 
 **Strategic Takeaway**: Even though exact Nash was deferred, okimono mutation organically produced (1) a new #1 broad-field champion **`rraikou-m-cune50` (`62.5%` across 192g LIVE)**, (2) a second `s0053`-beating all-rounder **`pb85-m-raikou55` (`57.0%`, `+12.5 pp`)**, (3) a clean flagship counter **`pb66-m-wak55` (`54.7%`, `62.5%` vs `s0053-lefties`)** forming a natural 3-shell cycle `{s0053-lefties, pb66-m-wak55, rraikou-m-cune50}`, and (4) a certified minor-gem counter **`pb84-cln-sking50` (`75.0%` vs `rraikou-m-cune50`)**.
+
+---
+
+## 5. Gen-1 Self-Referential Co-Evolution & Gen-2 Snapshot (Paused Pending Engine Bugfix)
+
+> [!WARNING]
+> Research paused cleanly on 2026-11-23 (`barn` stopped, `0` active Colab VMs / `0.0 CU/hr`) to prioritize an engine-side bug fix. All Gen-0/Gen-1/Gen-2 measurements in this report reflect pre-fix engine behavior and should be re-verified after the engine fix lands.
+
+Constructing an experimental **Gen-1 32-shell pool** (`target/nash-work/okimono-v1/gen1-pool.json`, replacing the 8 Gen-0 parents with the 8 certified Gen-1 upgrades) and running a full self-referential **`729k` 33×32 census** (`gen1-census-k4`, `4,356` previews) + **Gen-1 Elite-18 `gem_1v1` Stage 1 & 2** (`2,556` played-out cells) + **Gen-2 `729k` activation screen** (`gen2-preview`, 29 candidates) + **Gen-2 LIVE snapshot** (`gen2-live-ab`, `88/107` chunks = **`1,056` strict NO-CACHE LIVE games** against all 32 Gen-1 shells) confirmed self-referential three-body dynamics:
+
+1. **Gen-0 → Gen-1 Metagame & Okimono Shift (`gen1-census-k4`)**:
+   - `Suicune` (`+3.7 pp`) and `Raikou` (`+1.5 pp`) share rose across the pool, causing untouched Ground/Rock/physical slots to drop (`pb-122` `Marowak55 -9.4 pp`, `pb-6` `Machamp55 -7.8 pp`, `sample-06` `Skarmory50 -7.0 pp`, `cban-8` `Tyranitar55 -6.3 pp`) while Electric/Water/Grass surged (`pb-122` `Raikou55 +9.4 pp`, `apex-c04` `Starmie50 +8.6 pp`, `s0053` / `pb-6` / `sample-02` `Zapdos +7.8 pp`).
+   - **Newly exposed Gen-1 `< 10%` okimonos**: `mjj-type-QA-moudoku` `Crobat55` (`7.8% → 4.7%`), `pb-6` `Gengar50` (`14.8% → 8.6%`), `sample-08` `Cloyster50` (`10.2% → 8.6%`), and our own Gen-1 upgrade `pb84-cln-sking50` `Gligar50` (`9.4%`).
+2. **Gen-1 Gem Rediscovery & Pre-Pause `1,056g` Strict LIVE Snapshot (`gen2-live-ab`)**:
+   - **Three-body rank shift in Gen-1**: `rraikou-m-cune50` jumped to **`71.9% ± 5.5` (`30/32 >= 50%`)** in Gen-1 (and replacing `Marowak55` with `Zapdos55` collapsed `-34.4 pp`, `z = -3.78`); untouched `pb-6` surged to **`60.0%`**; meanwhile `s0053-lefties` (`50.0%`), `pb85-m-raikou55` (`50.0%`), and `pb66-m-wak55` (`46.9%`) compressed `-4 to -8 pp` against the tougher Gen-1 field.
+   - **Consistent Gen-2 meta winners — `Blissey L50` & `Raikou L50` (5/5 positive across all tested shells)**:
+     - `pb6-g2-bliss50` (`DE/Curse/Counter/Soft-Boiled` + `Cloyster Surf`): **`70.8% ± 6.7`** (`22/24`, `+8.7 pp` vs `pb-6` `60.0%`, `minPk 8.0% → 10.4%`)
+     - `mut:s0053-g2-raik50-mix` (`Electrode50 → Raikou50@Miracle`, 50/50 camo): **`62.5% ± 6.4`** (`27/32`, **`+12.5 pp`** vs `s0053-lefties` `50.0%`, `minPk 17.2% → 29.7%`)
+     - `s08-g2-raik50`: **`57.7% ± 7.2`** (`+3.8 pp` vs `sample-08`, `minPk 5.8% → 25.0%`)
+     - `pb84g2-bliss50` (`Gligar50 → Blissey50@PRZ`): **`51.7% ± 5.6`** (`25/30`, **`+8.3 pp`** vs `pb84-cln-sking50` `43.3%`, `minPk 8.3% → 18.3%`)
+     - `moudoku-g2-bliss50`: **`46.7% ± 6.3`** (`+8.3 pp` vs `moudoku` `38.3%`, `minPk 3.3% → 21.7%`)
+   - **1v1-to-6v6 minor-gem mismatches rejected on LIVE**: `Muk L55/L50 @ Leftovers` (despite #1 `65.3%` in played-out 1v1+SW) scored `0.0 pp`, `-3.3 pp`, and `-10.9 pp` across `moudoku`, `pb84`, and `pb-6`; `Espeon55` scored `-10.0 pp`.
+3. **Clean Resume Point After Engine Bugfix**:
+   - Rebuild native (`tools/build-native-pgo.sh`) and Colab x86_64 (`tools/build-colab-x86.sh`) `nash_refresh` binaries after fixing the engine bug, then re-verify the top Gen-1/Gen-2 discoveries (`rraikou-m-cune50`, `pb85-m-raikou55`, `pb66-m-wak55`, `pb84-cln-sking50`, `pb6-g2-bliss50`, `s0053-g2-raik50-mix`, `pb84g2-bliss50`) under the fixed engine.
+
