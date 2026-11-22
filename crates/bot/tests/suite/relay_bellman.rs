@@ -83,7 +83,7 @@ fn eval_root_pinned(
 }
 
 const SEEDS: [u64; 3] = [11, 23, 37];
-const A1_SEEDS: [u64; 5] = [11, 23, 37, 101, 102];
+const A1_SEEDS: [u64; 8] = [11, 23, 37, 101, 102, 103, 104, 105];
 
 fn eval_root_pinned_avg(
     dex: &Dex,

@@ -930,15 +930,22 @@ fn canonical_mon_key(cb: &CompactBattle, table: &MatchTable, side: usize, slot: 
         }
         bh
     };
-    let item_bits = if mon.item != 0 {
+    let (item_bits, dyn_item_extra) = if mon.item != 0 {
         let ispec = table.item_spec(mon.item);
-        1u64
-            | ((ispec.is_leftovers as u64) << 1)
-            | ((ispec.is_brightpowder as u64) << 2)
-            | ((ispec.is_mintberry as u64) << 3)
-            | ((ispec.is_miracleberry as u64) << 4)
+        let active_stat = (ispec.stat_kind != ItemStatKind::None
+            && ispec.stat_kind == spec.species_stat_kind) as u64;
+        // `boost_type` is `0..=17` for type boosters or `0xFF` (`& 0x1F == 31`) for none.
+        let boost_5b = (ispec.boost_type & 0x1F) as u64;
+        (
+            1u64
+                | ((ispec.is_leftovers as u64) << 1)
+                | ((ispec.is_brightpowder as u64) << 2)
+                | ((ispec.is_mintberry as u64) << 3)
+                | ((ispec.is_miracleberry as u64) << 4),
+            active_stat | (boost_5b << 1),
+        )
     } else {
-        0u64
+        (0u64, 31u64 << 1)
     };
     let vol_bits = (mon.is_trapped() as u64)
         | ((((mon.vol_flags & vol_bit::PAR_SPEED_DROP) != 0) as u64) << 1)
@@ -950,7 +957,8 @@ fn canonical_mon_key(cb: &CompactBattle, table: &MatchTable, side: usize, slot: 
         | (item_bits << 16)
         | ((spk_ok as u64) << 21)
         | (vol_bits << 22)
-        | (boost_hash << 25);
+        | (boost_hash << 25)
+        | (dyn_item_extra << 53);
     hash_mix(spec.static_fp, packed)
 }
 
@@ -4062,5 +4070,32 @@ mod tests {
             ),
             "Winning Jolteon vs 3 electric-weak foes must NOT waste turns setting up: got {dec_win:?}"
         );
+    }
+
+    #[test]
+    fn canonical_mon_key_tracks_dynamic_stolen_stat_and_type_items() {
+        let dex = conformance::load_dex();
+        let wak = make_set("Marowak", 50, "No Item", &["Earthquake", "Rock Slide", "Thief", "Splash"]);
+        let foe_tc = make_set("Cubone", 50, "Thick Club", &["Splash"]);
+        let foe_ch = make_set("Typhlosion", 50, "Charcoal", &["Fire Blast"]);
+        let foe_mw = make_set("Starmie", 50, "Mystic Water", &["Surf"]);
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &[wak], &[foe_tc, foe_ch, foe_mw]).unwrap();
+        b.choose(&dex, 0, "team 1").unwrap();
+        b.choose(&dex, 1, "team 1,2,3").unwrap();
+        let (table, mut cb) = CompactBattle::from_battle(&b, &dex);
+
+        let tc_item = cb.mons[3].item;
+        let ch_item = cb.mons[4].item;
+        let mw_item = cb.mons[5].item;
+        let k_none = canonical_mon_key(&cb, &table, 0, 0, true);
+        cb.mons[0].item = tc_item;
+        let k_tc = canonical_mon_key(&cb, &table, 0, 0, true);
+        cb.mons[0].item = ch_item;
+        let k_ch = canonical_mon_key(&cb, &table, 0, 0, true);
+        cb.mons[0].item = mw_item;
+        let k_mw = canonical_mon_key(&cb, &table, 0, 0, true);
+        assert_ne!(k_none, k_tc, "Relay key must distinguish stolen Thick Club");
+        assert_ne!(k_tc, k_ch, "Relay key must distinguish Thick Club from Charcoal");
+        assert_ne!(k_ch, k_mw, "Relay key must distinguish Charcoal from Mystic Water");
     }
 }

@@ -1733,7 +1733,9 @@ impl ProtocolTracker {
             b.sides[s].active = active.map(|a| a as u8);
             b.sides[s].fainted_this_turn = self.sides[s].fainted_this_turn.map(|x| x as u8);
             b.sides[s].fainted_last_turn = self.sides[s].fainted_last_turn.map(|x| x as u8);
-            b.sides[s].last_move = self.sides[s].side_last_move;
+            // Every synthesized battle represents a live `|request|` decision point, which in
+            // `Battle` occurs strictly after `faint_messages`/`end_turn` cleared `sides[s].last_move`.
+            b.sides[s].last_move = None;
             for (slot, tm) in self.sides[s].mons.iter().enumerate() {
                 let id = PokeId { side: s as u8, slot: slot as u8 };
                 let p = b.poke_mut(id);
@@ -2723,6 +2725,10 @@ impl ProtocolAgent {
     /// Feed the request JSON at a decision point. Returns false for `wait`
     /// requests (nothing owed).
     pub fn on_request(&mut self, dex: &Dex, request_json: &str) -> Result<bool, String> {
+        // Any `|request|` (including `wait`) proves any prior faint batch was non-terminal,
+        // so clear Self-KO `side_last_move` (mirrors `Battle::faint_messages` / `end_turn`).
+        self.tracker.sides[0].side_last_move = None;
+        self.tracker.sides[1].side_last_move = None;
         let req = Request::parse(dex, request_json)?;
         if req.wait {
             self.search = None;
@@ -3353,11 +3359,70 @@ mod m17a_tests {
         assert_eq!(tracker.sides[0].side_last_move, None);
         assert_eq!(tracker.sides[1].side_last_move, Some(selfdestruct));
 
-        // Clearing across a replacement switch or turn boundary prevents stale
-        // early-game Explosion/Self-Destruct from poisoning later 1v1 mutual KOs.
+        // Mid-batch `|faint|` does NOT clear `side_last_move` (preserving 1v1 mutual-faint Self-KO),
+        // whereas `|turn|` and any post-faint `on_request` / `synthesize` clear it for non-terminal forced switches.
+        tracker.push_line(&dex, "|faint|p2a: Misdreavus");
+        assert_eq!(tracker.sides[1].side_last_move, Some(selfdestruct));
+
+        // Clearing across a turn boundary also resets stale early-game Self-KO flags.
         tracker.push_line(&dex, "|turn|2");
         assert_eq!(tracker.sides[0].side_last_move, None);
         assert_eq!(tracker.sides[1].side_last_move, None);
+
+        // Non-terminal Explosion followed by forced-switch `on_request` must clear `side_last_move`
+        // so synthesized Battle starts clean without stale Self-KO state.
+        let pool = MetaPool { teams: Vec::new() };
+        let own = canonical_team(
+            &dex,
+            vec![
+                test_set("Gengar", 50, "Gold Berry", &["Explosion", "Thunderbolt", "Ice Punch", "Destiny Bond"]),
+                test_set("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+                test_set("Zapdos", 50, "Magnet", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+                test_set("Starmie", 50, "Miracle Berry", &["Surf", "Psychic", "Recover", "Rapid Spin"]),
+                test_set("Marowak", 50, "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance", "Rest"]),
+                test_set("Cloyster", 50, "Mint Berry", &["Surf", "Spikes", "Explosion", "Icy Wind"]),
+            ],
+        );
+        let foe = own.clone();
+        let mut agent = ProtocolAgent::new(&dex, 0, pool, RmConfig::default(), 7);
+        agent.set_own_team(own.clone());
+        agent.pin_opponent(&dex, foe.clone()).unwrap();
+        for line in poke_lines(&dex, "p1", &own)
+            .into_iter()
+            .chain(poke_lines(&dex, "p2", &foe))
+        {
+            agent.push_line(&dex, &line);
+        }
+        for line in [
+            "|switch|p1a: Gengar|Gengar, L50, M|100/100",
+            "|switch|p2a: Gengar|Gengar, L50, M|100/100",
+            "|turn|1",
+            "|move|p1a: Gengar|Explosion|p2a: Gengar",
+            "|faint|p1a: Gengar",
+        ] {
+            agent.push_line(&dex, line);
+        }
+        assert_eq!(agent.tracker.sides[0].side_last_move, Some(boom));
+        let req = serde_json::json!({
+            "forceSwitch": [true],
+            "side": {
+                "id": "p1",
+                "name": "p1",
+                "pokemon": [
+                    {"ident": "p1: Gengar", "details": "Gengar, L50, M", "condition": "0 fnt", "active": true, "item": "goldberry"},
+                    {"ident": "p1: Snorlax", "details": "Snorlax, L55, M", "condition": "282/282", "active": false, "item": "leftovers"},
+                    {"ident": "p1: Zapdos", "details": "Zapdos, L50", "condition": "196/196", "active": false, "item": "magnet"}
+                ]
+            },
+            "rqid": 2
+        })
+        .to_string();
+        assert!(agent.on_request(&dex, &req).unwrap());
+        assert_eq!(agent.tracker.sides[0].side_last_move, None);
+        assert_eq!(agent.tracker.sides[1].side_last_move, None);
+        let b = agent.battle().unwrap();
+        assert_eq!(b.sides[0].last_move, None);
+        assert_eq!(b.sides[1].last_move, None);
     }
 
     #[test]

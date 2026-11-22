@@ -832,21 +832,9 @@ pub struct StaticMonSpec {
     pub level: u8,
     pub num_moves: u8,
     pub role_flags: u8,
-    pub item_stat_kind: ItemStatKind,
     /// Species-eligible stat-boost item kind (Cubone/Marowak = ThickClub, Pikachu = LightBall, Ditto = MetalPowder),
     /// independent of initial held item so stolen items work dynamically.
     pub species_stat_kind: ItemStatKind,
-    /// Boosted type (`0..18`, or `0xFF` if held item is not a 1.1x type booster).
-    pub item_boost_type: u8,
-    pub is_quick_claw: bool,
-    pub is_leftovers: bool,
-    pub is_brightpowder: bool,
-    pub is_mintberry: bool,
-    pub is_miracleberry: bool,
-    pub is_goldberry: bool,
-    pub is_berry_juice: bool,
-    pub is_berry: bool,
-    pub is_scope_lens: bool,
 }
 
 /// Immutable per-move compiled metadata for branchless execution.
@@ -1694,18 +1682,7 @@ fn build_static_mon_spec(
         level: p.level,
         num_moves,
         role_flags,
-        item_stat_kind,
         species_stat_kind,
-        item_boost_type: item_spec.boost_type,
-        is_quick_claw: item_spec.is_quick_claw,
-        is_leftovers: item_spec.is_leftovers,
-        is_brightpowder: item_spec.is_brightpowder,
-        is_mintberry: item_spec.is_mintberry,
-        is_miracleberry: item_spec.is_miracleberry,
-        is_goldberry: item_spec.is_goldberry,
-        is_berry_juice: item_spec.is_berry_juice,
-        is_berry: item_spec.is_berry,
-        is_scope_lens: item_spec.is_scope_lens,
     };
     (spec, move_specs)
 }
@@ -1918,8 +1895,8 @@ impl CompactBattle {
 
                 let status_counter = match p.status {
                     Status::Slp => p.status_state.get_int(DK::Time).clamp(0, 31) as u8,
-                    Status::Tox | Status::Psn | Status::Brn => res_counter_packed,
-                    _ => 0,
+                    Status::Fnt => 0,
+                    _ => res_counter_packed,
                 };
 
                 c_mon.hp_pool[1] = sub_hp;
@@ -2513,6 +2490,24 @@ impl CompactBattle {
         best
     }
 
+    /// True when `side`'s active mon has no usable non-Struggle move at the start of the turn
+    /// (matching `legal_actions` Struggle fallback).
+    #[inline(always)]
+    fn is_forced_struggle(&self, table: &MatchTable, side: usize) -> bool {
+        let p_idx = side * 3 + (self.sides[side].active_idx as usize);
+        let mon = &self.mons[p_idx];
+        if mon.must_recharge() {
+            return false;
+        }
+        let num_moves = table.mons[p_idx].num_moves as usize;
+        if (mon.vol_flags & vol_bit::ENCORE) != 0 {
+            let enc_slot = mon.encore_slot() as usize;
+            !(enc_slot < num_moves && mon.pp[enc_slot] > 0 && !mon.is_slot_disabled(enc_slot))
+        } else {
+            !(0..num_moves).any(|m| mon.pp[m] > 0 && !mon.is_slot_disabled(m))
+        }
+    }
+
     /// Compute the branchless `ActionSortKey` for `side` (`0` or `1`) given a
     /// compact action (`0..4` = move slot, `4..7` = switch to party index `0..3`).
     #[inline(always)]
@@ -2534,7 +2529,7 @@ impl CompactBattle {
             ActionPhase::Move
         };
         let move_slot = (action_code & 3) as usize;
-        let prio = if is_switch || must_recharge {
+        let prio = if is_switch || must_recharge || self.is_forced_struggle(table, side) {
             0i8
         } else {
             table.move_specs[p_idx][move_slot].priority
@@ -2570,6 +2565,13 @@ impl CompactBattle {
             self.mons[idx].vol_flags &= !(vol_bit::PROTECT | vol_bit::ENDURE | vol_bit::FLINCH);
         }
 
+        // Snapshot start-of-turn Struggle state so mid-turn Disable aborts the queued move
+        // (matching Battle::DisableBeforeMove prio 7) instead of morphing it into Struggle.
+        let forced_struggle = [
+            self.is_forced_struggle(table, 0),
+            self.is_forced_struggle(table, 1),
+        ];
+
         // Stage 0: Branchless ActionSortKey comparison.
         let k0 = self.action_sort_key(table, 0, actions[0], 0);
         let k1 = self.action_sort_key(table, 1, actions[1], 1);
@@ -2597,16 +2599,23 @@ impl CompactBattle {
                 if step_i == 1 && (self.mons[p0].hp() <= 0 || self.mons[3 + p1].hp() <= 0) {
                     break;
                 }
-                self.exec_move(table, actor, (act & 3) as usize, step_i == 1, &mut rng);
+                self.exec_move(
+                    table,
+                    actor,
+                    (act & 3) as usize,
+                    step_i == 1,
+                    forced_struggle[actor],
+                    &mut rng,
+                );
             }
         }
-        self.check_faints(table);
+        self.check_faints(table, &mut rng);
 
         // Stage 3: End-of-turn Residual in speed order when no forced switch is pending.
         if self.outcome == 0 && self.sides[0].request == 1 && self.sides[1].request == 1 {
             self.sides[0].side_flags |= 0x08;
             self.exec_residuals(table, &mut rng);
-            self.check_faints(table);
+            self.check_faints(table, &mut rng);
             if self.outcome == 0 && self.sides[0].request == 1 && self.sides[1].request == 1 {
                 self.sides[0].side_flags &= !0x08;
                 self.turn = self.turn.saturating_add(1);
@@ -2639,15 +2648,16 @@ impl CompactBattle {
             | vol_bit::CONFUSION
             | vol_bit::LEECH_SEED
             | vol_bit::CURSE
+            | vol_bit::FORESIGHT
             | vol_bit::PERISH_SONG
             | vol_bit::TRAPPED_OR_LOCKED;
         let saved_vols = self.mons[old_idx].vol_flags & pass_mask;
+        let saved_pt = self.mons[old_idx].partially_trapped();
         let saved_conf_t = self.mons[old_idx].timers[timer_idx::CONFUSION];
         let saved_perish_t = self.mons[old_idx].perish_turns();
         let old_st = self.mons[old_idx].status_raw();
-        let saved_res = if (old_st == Status::Brn as u8
-            || old_st == Status::Psn as u8
-            || old_st == Status::Tox as u8)
+        let saved_res = if old_st != Status::Slp as u8
+            && old_st != Status::Fnt as u8
             && (self.mons[old_idx].status_counter() & 0x10) != 0
         {
             self.mons[old_idx].status_counter()
@@ -2667,10 +2677,7 @@ impl CompactBattle {
         } else {
             0
         });
-        if old_st == Status::Brn as u8
-            || old_st == Status::Psn as u8
-            || old_st == Status::Tox as u8
-        {
+        if old_st != Status::Slp as u8 && old_st != Status::Fnt as u8 {
             self.mons[old_idx].set_status(old_st, 0);
         }
         self.mons[old_idx].vol_flags = keep_status_drops;
@@ -2695,6 +2702,9 @@ impl CompactBattle {
             self.mons[new_idx].vol_flags |= saved_vols;
             self.mons[new_idx].timers[timer_idx::CONFUSION] = saved_conf_t;
             self.mons[new_idx].set_perish_turns(saved_perish_t);
+            if saved_pt {
+                self.mons[new_idx].set_partially_trapped(true);
+            }
         }
         if self.mons[new_idx].status_raw() == Status::Par as u8 {
             self.mons[new_idx].vol_flags |= vol_bit::PAR_SPEED_DROP;
@@ -2707,7 +2717,7 @@ impl CompactBattle {
         }
         if baton_pass && saved_res != 0 {
             let new_st = self.mons[new_idx].status_raw();
-            if new_st == Status::Brn as u8 || new_st == Status::Psn as u8 {
+            if new_st != Status::Slp as u8 && new_st != Status::Fnt as u8 {
                 self.mons[new_idx].set_status(new_st, saved_res);
             }
         }
@@ -2728,6 +2738,9 @@ impl CompactBattle {
         // Gen 2 `AfterSwitchInSelf` (`actions.rs:248-252`): manual switches and
         // Baton Pass (not faint replacements or Roar/Whirlwind drag-ins) incur
         // Burn/Poison slip damage immediately on switch-in.
+        // In Battle (`events.rs:503-514`), Status (subOrder 0) deals damage using
+        // the PRE-increment `residualdmg` counter `c` (`max(1, floor(maxhp/16) * c)`),
+        // then `residualdmg` (subOrder 2) increments `c` to `c + 1`.
         if matches!(kind, SwitchKind::Manual | SwitchKind::BatonPass)
             && self.mons[new_idx].hp() > 0
         {
@@ -2735,9 +2748,9 @@ impl CompactBattle {
             if st == Status::Brn as u8 || st == Status::Psn as u8 {
                 let cnt = self.mons[new_idx].status_counter();
                 let slip = if (cnt & 0x10) != 0 {
-                    let c = ((cnt & 0x0F) + 1).min(15);
-                    self.mons[new_idx].set_status(st, c | 0x10);
-                    table.mons[new_idx].quantum_1_16 * (c as i16)
+                    let c = cnt & 0x0F;
+                    self.mons[new_idx].set_status(st, (c + 1).min(15) | 0x10);
+                    ((table.mons[new_idx].maxhp / 16) * (c as i16)).max(1)
                 } else {
                     table.mons[new_idx].quantum_1_8
                 };
@@ -2753,6 +2766,7 @@ impl CompactBattle {
         side: usize,
         move_slot: usize,
         moved_second: bool,
+        is_struggle: bool,
         rng: &mut Prng,
     ) {
         let foe_side = side ^ 1;
@@ -2762,7 +2776,7 @@ impl CompactBattle {
             return;
         }
 
-        // Hyper Beam recharge turn wastes the turn.
+        // Hyper Beam recharge turn wastes the turn (`onBeforeMovePriority = 11`, Condition subOrder 2).
         if self.mons[att_idx].must_recharge() {
             self.mons[att_idx].set_must_recharge(false);
             self.mons[att_idx].vol_flags &= !vol_bit::DESTINY_BOND;
@@ -2771,32 +2785,11 @@ impl CompactBattle {
         }
 
         let num_moves = table.mons[att_idx].num_moves as usize;
-        let is_disabled = (self.mons[att_idx].vol_flags & vol_bit::DISABLE) != 0;
-        let dis_slot = self.mons[att_idx].disable_slot() as usize;
         let mut move_slot = move_slot;
-        let mut is_struggle = false;
-        if (self.mons[att_idx].vol_flags & vol_bit::ENCORE) != 0 {
+        if !is_struggle && (self.mons[att_idx].vol_flags & vol_bit::ENCORE) != 0 {
             let enc_slot = self.mons[att_idx].encore_slot() as usize;
-            if enc_slot < num_moves
-                && self.mons[att_idx].pp[enc_slot] > 0
-                && !(is_disabled && enc_slot == dis_slot)
-            {
+            if enc_slot < num_moves {
                 move_slot = enc_slot;
-            } else {
-                is_struggle = true;
-            }
-        } else if move_slot >= num_moves
-            || self.mons[att_idx].pp[move_slot] == 0
-            || (is_disabled && move_slot == dis_slot)
-        {
-            let has_usable = (0..num_moves)
-                .any(|m| self.mons[att_idx].pp[m] > 0 && !(is_disabled && m == dis_slot));
-            if !has_usable {
-                is_struggle = true;
-            } else {
-                self.mons[att_idx].vol_flags &= !vol_bit::DESTINY_BOND;
-                self.exec_after_move_self(table, side);
-                return;
             }
         }
         let mut mspec = if is_struggle {
@@ -2813,10 +2806,14 @@ impl CompactBattle {
                 boosts: [(NO_STAT_IDX, 0); 3],
                 ..CompactMoveSpec::default()
             }
-        } else {
+        } else if move_slot < num_moves {
             table.move_specs[att_idx][move_slot]
+        } else {
+            self.mons[att_idx].vol_flags &= !vol_bit::DESTINY_BOND;
+            self.exec_after_move_self(table, side);
+            return;
         };
-        // Mint Berry / Miracle Berry `onBeforeMove` (priority 11, before Freeze/Sleep/Flinch/Confusion/Par).
+        // Mint Berry / Miracle Berry `onBeforeMove` (priority 11, Item subOrder 8, before Freeze/Sleep/Flinch/Disable).
         self.check_status_berry_trigger(table, side);
         let st_raw = self.mons[att_idx].status_raw();
 
@@ -2844,11 +2841,23 @@ impl CompactBattle {
             }
         }
 
-        // Flinch check (`onBeforeMovePriority = 8`, after Freeze/Sleep and before Confusion/Par).
+        // Flinch check (`onBeforeMovePriority = 8`, after Freeze/Sleep and before Disable/Confusion/Par).
         if (self.mons[att_idx].vol_flags & vol_bit::FLINCH) != 0 {
             self.mons[att_idx].vol_flags &= !vol_bit::DESTINY_BOND;
             self.exec_after_move_self(table, side);
             return;
+        }
+
+        // Disable check (`onBeforeMovePriority = 7`, after Flinch and before Confusion/Par).
+        // A queued move disabled mid-turn is aborted rather than turned into Struggle.
+        if !is_struggle {
+            let is_disabled = (self.mons[att_idx].vol_flags & vol_bit::DISABLE) != 0;
+            let dis_slot = self.mons[att_idx].disable_slot() as usize;
+            if is_disabled && move_slot == dis_slot {
+                self.mons[att_idx].vol_flags &= !vol_bit::DESTINY_BOND;
+                self.exec_after_move_self(table, side);
+                return;
+            }
         }
 
         // Confusion check.
@@ -2884,7 +2893,6 @@ impl CompactBattle {
             self.mons[att_idx].clear_last_move_slot();
         } else {
             if self.mons[att_idx].pp[move_slot] == 0 {
-                self.exec_after_move_self(table, side);
                 return;
             }
             self.mons[att_idx].pp[move_slot] -= 1;
@@ -3031,7 +3039,9 @@ impl CompactBattle {
             let def_endure = (self.mons[def_idx].vol_flags & vol_bit::ENDURE) != 0 && !def_had_sub;
             let max_endure_dmg = (self.mons[def_idx].hp() - 1).max(0);
             let mut dealt = 0i16;
+            let mut main_dealt = 0i16;
             let mut hit_landed = false;
+            let mut hit_main_hp = false;
             if mspec.special_kind == SpecialMoveKind::Counter {
                 // Counter: double last physical damage taken this turn.
                 let (_, is_immune) = table.effectiveness_ext(mspec.move_type, &table.mons[def_idx], def_foresight);
@@ -3042,6 +3052,10 @@ impl CompactBattle {
                     }
                     dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
                     hit_landed = true;
+                    if !def_had_sub {
+                        hit_main_hp = true;
+                        main_dealt = dealt;
+                    }
                 }
             } else if mspec.special_kind == SpecialMoveKind::MirrorCoat {
                 // Mirror Coat: double last special damage taken this turn.
@@ -3053,6 +3067,10 @@ impl CompactBattle {
                     }
                     dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
                     hit_landed = true;
+                    if !def_had_sub {
+                        hit_main_hp = true;
+                        main_dealt = dealt;
+                    }
                 }
             } else if mspec.special_kind == SpecialMoveKind::LevelDamage || mspec.fixed_damage != 0 {
                 // Seismic Toss / Night Shade / Fixed Damage.
@@ -3068,6 +3086,10 @@ impl CompactBattle {
                     }
                     dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
                     hit_landed = true;
+                    if !def_had_sub {
+                        hit_main_hp = true;
+                        main_dealt = dealt;
+                    }
                 }
             } else if mspec.special_kind == SpecialMoveKind::SuperFang {
                 // Super Fang: halves target's current HP (min 1).
@@ -3079,6 +3101,10 @@ impl CompactBattle {
                     }
                     dealt = self.mons[def_idx].apply_damage_branchless(dmg, mspec.bypasses_sub);
                     hit_landed = true;
+                    if !def_had_sub {
+                        hit_main_hp = true;
+                        main_dealt = dealt;
+                    }
                 }
             } else {
                 const CRIT_DEN: [u32; 6] = [0, 16, 8, 4, 3, 2];
@@ -3149,16 +3175,50 @@ impl CompactBattle {
                 if base_dmg > 0 {
                     let no_var = mspec.special_kind == SpecialMoveKind::FlailReversal;
                     let roll = if no_var { 255 } else { 217 + rng.random(39) };
-                    let mut final_dmg = apply_roll_branchless(base_dmg, roll, no_var);
-                    if mspec.multihit_mean_x2 > 2 {
-                        final_dmg = (final_dmg * (mspec.multihit_mean_x2 as i32)) / 2;
+                    let single_dmg = apply_roll_branchless(base_dmg, roll, no_var);
+                    if mspec.multihit_mean_x2 > 2 && def_had_sub {
+                        // Cold path: multihit move into Substitute can break Sub on an earlier hit
+                        // and spill subsequent hits (and secondaries like Twineedle) onto main HP.
+                        let hits = (mspec.multihit_mean_x2 / 2).max(2) as usize;
+                        let per_hit = single_dmg.min(9999) as i16;
+                        let has_endure = (self.mons[def_idx].vol_flags & vol_bit::ENDURE) != 0;
+                        for _ in 0..hits {
+                            if self.mons[def_idx].hp() <= 0 {
+                                break;
+                            }
+                            if self.mons[def_idx].sub_hp() > 0 && !mspec.bypasses_sub {
+                                dealt = dealt.saturating_add(
+                                    self.mons[def_idx].apply_damage_branchless(per_hit, false),
+                                );
+                            } else {
+                                let d = if has_endure {
+                                    per_hit.min((self.mons[def_idx].hp() - 1).max(0))
+                                } else {
+                                    per_hit
+                                };
+                                let h = self.mons[def_idx].apply_damage_branchless(d, true);
+                                dealt = dealt.saturating_add(h);
+                                main_dealt = h;
+                                hit_main_hp = true;
+                            }
+                        }
+                        hit_landed = true;
+                    } else {
+                        let mut final_dmg = single_dmg;
+                        if mspec.multihit_mean_x2 > 2 {
+                            final_dmg = (final_dmg * (mspec.multihit_mean_x2 as i32)) / 2;
+                        }
+                        let mut hit_dmg = final_dmg.min(9999) as i16;
+                        if def_endure {
+                            hit_dmg = hit_dmg.min(max_endure_dmg);
+                        }
+                        dealt = self.mons[def_idx].apply_damage_branchless(hit_dmg, mspec.bypasses_sub);
+                        hit_landed = true;
+                        if !def_had_sub {
+                            hit_main_hp = true;
+                            main_dealt = dealt;
+                        }
                     }
-                    let mut hit_dmg = final_dmg.min(9999) as i16;
-                    if def_endure {
-                        hit_dmg = hit_dmg.min(max_endure_dmg);
-                    }
-                    dealt = self.mons[def_idx].apply_damage_branchless(hit_dmg, mspec.bypasses_sub);
-                    hit_landed = true;
 
                     if mspec.drain_half && dealt > 0 {
                         let drain = (dealt / 2).max(1);
@@ -3169,8 +3229,8 @@ impl CompactBattle {
             }
 
             // Record Counter / Mirror Coat turn damage only when hitting main HP (never Substitute).
-            if dealt > 0 && !def_had_sub {
-                self.hurt_damage_this_turn[foe_side] = dealt as u16;
+            if main_dealt > 0 && hit_main_hp {
+                self.hurt_damage_this_turn[foe_side] = main_dealt as u16;
                 self.hurt_cat_this_turn[foe_side] = if mspec.is_physical { 1 } else { 2 };
             }
 
@@ -3211,15 +3271,25 @@ impl CompactBattle {
                 && mspec.is_defrost
                 && self.mons[att_idx].status_raw() == Status::Frz as u8
             {
-                self.mons[att_idx].set_status(Status::None as u8, 0);
+                let prev_res = if (self.mons[att_idx].status_counter() & 0x10) != 0 {
+                    self.mons[att_idx].status_counter()
+                } else {
+                    0
+                };
+                self.mons[att_idx].set_status(Status::None as u8, prev_res);
             }
-            if dealt > 0
-                && !def_had_sub
+            if hit_landed
+                && hit_main_hp
                 && self.mons[def_idx].hp() > 0
                 && self.mons[def_idx].status_raw() == Status::Frz as u8
                 && mspec.sec_status == Status::Brn as u8
             {
-                self.mons[def_idx].set_status(Status::None as u8, 0);
+                let prev_res = if (self.mons[def_idx].status_counter() & 0x10) != 0 {
+                    self.mons[def_idx].status_counter()
+                } else {
+                    0
+                };
+                self.mons[def_idx].set_status(Status::None as u8, prev_res);
             }
 
             // Destiny Bond: if direct attack fainted a target with Destiny Bond active, attacker faints too.
@@ -3229,9 +3299,9 @@ impl CompactBattle {
                 self.mons[att_idx].vol_flags = 0;
             }
 
-            // Secondary effects on target (when target survived and hit main HP, never Substitute).
-            if dealt > 0
-                && !def_had_sub
+            // Secondary effects on target (when target survived and hit main HP — including Endure 0 dmg at 1 HP).
+            if hit_landed
+                && hit_main_hp
                 && self.mons[def_idx].hp() > 0
                 && mspec.sec_chance_256 > 0
                 && rng.random_chance(mspec.sec_chance_256 as u32, 256)
@@ -3364,6 +3434,11 @@ impl CompactBattle {
         if self.mons[idx].status_raw() != 0 || self.mons[idx].sub_hp() > 0 || self.sides[target_side].safeguard_turns > 0 {
             return;
         }
+        let prev_res = if (self.mons[idx].status_counter() & 0x10) != 0 {
+            self.mons[idx].status_counter()
+        } else {
+            0
+        };
         let target_tmask = table.mons[idx].type_mask;
         // Stadium Sleep Clause & Freeze Clause checks.
         if status_code == Status::Slp as u8 {
@@ -3397,15 +3472,15 @@ impl CompactBattle {
                     }
                 }
             }
-            self.mons[idx].set_status(Status::Frz as u8, 0);
+            self.mons[idx].set_status(Status::Frz as u8, prev_res);
         } else if status_code == Status::Par as u8 {
-            self.mons[idx].set_status(Status::Par as u8, 0);
+            self.mons[idx].set_status(Status::Par as u8, prev_res);
             self.mons[idx].vol_flags |= vol_bit::PAR_SPEED_DROP;
         } else if status_code == Status::Brn as u8 {
             if (target_tmask & (1u32 << (table.fire_type & 31))) != 0 {
                 return;
             }
-            self.mons[idx].set_status(Status::Brn as u8, 0);
+            self.mons[idx].set_status(Status::Brn as u8, prev_res);
             self.mons[idx].vol_flags |= vol_bit::BRN_ATK_DROP;
         } else if status_code == Status::Tox as u8 {
             if (target_tmask & table.poison_immune_mask) != 0 {
@@ -3416,7 +3491,7 @@ impl CompactBattle {
             if (target_tmask & table.poison_immune_mask) != 0 {
                 return;
             }
-            self.mons[idx].set_status(Status::Psn as u8, 0);
+            self.mons[idx].set_status(Status::Psn as u8, prev_res);
         }
     }
 
@@ -3435,7 +3510,12 @@ impl CompactBattle {
             mon.set_status(Status::None as u8, 0);
             mon.item = 0;
         } else if ispec.is_miracleberry && (st != 0 || (mon.vol_flags & vol_bit::CONFUSION) != 0) {
-            mon.set_status(Status::None as u8, 0);
+            let prev_res = if st != Status::Slp as u8 && (mon.status_counter() & 0x10) != 0 {
+                mon.status_counter()
+            } else {
+                0
+            };
+            mon.set_status(Status::None as u8, prev_res);
             mon.vol_flags &= !(vol_bit::CONFUSION | vol_bit::PAR_SPEED_DROP | vol_bit::BRN_ATK_DROP);
             mon.timers[timer_idx::CONFUSION] = 0;
             mon.item = 0;
@@ -3636,11 +3716,18 @@ impl CompactBattle {
                 }
             }
             SpecialMoveKind::HealBell => {
-                // Heal Bell cures party statuses.
+                // Heal Bell cures party statuses (preserving any BP-carried `residualdmg` counter).
                 for p_i in 0..3usize {
                     let m = &mut self.mons[side * 3 + p_i];
                     if m.hp() > 0 {
-                        m.set_status(Status::None as u8, 0);
+                        let prev_res = if m.status_raw() != Status::Slp as u8
+                            && (m.status_counter() & 0x10) != 0
+                        {
+                            m.status_counter()
+                        } else {
+                            0
+                        };
+                        m.set_status(Status::None as u8, prev_res);
                         m.vol_flags &= !(vol_bit::PAR_SPEED_DROP | vol_bit::BRN_ATK_DROP);
                     }
                 }
@@ -3673,11 +3760,12 @@ impl CompactBattle {
                 self.mons[def_idx].vol_flags &= !(vol_bit::PAR_SPEED_DROP | vol_bit::BRN_ATK_DROP);
             }
             SpecialMoveKind::Swagger => {
-                // Gen 2 Swagger: fails if target Atk is already +6 or unmodified Atk == 999;
+                // Gen 2 Swagger: fails if target Atk is already +6 or unmodified Atk == 999
+                // (exact equality per Battle::SwaggerTryHit — Thick Club > 999 still succeeds!);
                 // otherwise raises target Atk +2 even through Substitute, and confuses only if
                 // target has no Substitute, no Safeguard, and is not already confused.
                 if self.mons[def_idx].boosts[stat_idx::ATK] < 6
-                    && self.active_stat(table, foe_side, stat_idx::ATK, false, true) < 999
+                    && self.active_stat(table, foe_side, stat_idx::ATK, false, true) != 999
                 {
                     self.mons[def_idx].boosts[stat_idx::ATK] =
                         (self.mons[def_idx].boosts[stat_idx::ATK] + 2).clamp(-6, 6);
@@ -3743,11 +3831,11 @@ impl CompactBattle {
 
     /// Gen 2 end-of-turn `Residual` in exact PS/Stadium 2 order:
     /// Weather/Sandstorm (2) -> Perish Song (4) -> Leftovers & Mint/Miracle Berry (5) ->
-    /// Freeze thaw (7) -> Berry/Gold Berry/Berry Juice & Disable (10) -> Encore & Stall reset (13) -> Screens.
+    /// Freeze thaw (7) -> Berry/Gold Berry/Berry Juice (10) & Disable (no shared state with order 13) -> Encore & Stall reset (13) -> Screens.
     #[inline]
     fn exec_residuals(&mut self, table: &MatchTable, rng: &mut Prng) {
-        let s0 = self.active_stat(table, 0, stat_idx::SPE, false, false);
-        let s1 = self.active_stat(table, 1, stat_idx::SPE, false, false);
+        let s0 = self.mon_action_speed(table, 0, self.sides[0].active_idx as usize);
+        let s1 = self.mon_action_speed(table, 1, self.sides[1].active_idx as usize);
         let first = if s0 == s1 {
             (rng.random(2) == 1) as usize
         } else {
@@ -3855,7 +3943,12 @@ impl CompactBattle {
                 && self.mons[idx].status_raw() == Status::Frz as u8
                 && rng.random_chance(25, 256)
             {
-                self.mons[idx].set_status(Status::None as u8, 0);
+                let prev_res = if (self.mons[idx].status_counter() & 0x10) != 0 {
+                    self.mons[idx].status_counter()
+                } else {
+                    0
+                };
+                self.mons[idx].set_status(Status::None as u8, prev_res);
             }
         }
 
@@ -3926,11 +4019,27 @@ impl CompactBattle {
             self.sides[side].safeguard_turns = self.sides[side].safeguard_turns.saturating_sub(1);
         }
 
-        self.check_faints(table);
+        self.check_faints(table, rng);
+    }
+
+    /// Resolve a simultaneous dual replacement Spikes faint in action-speed order
+    /// matching `Battle` (`ActionKind::RunSwitch` sorted by `get_pokemon_action_speed`):
+    /// the faster incoming mon takes Spikes and faints first, awarding the win to the slower side.
+    #[inline]
+    fn resolve_dual_spikes_faint(&self, table: &MatchTable, rng: &mut Prng) -> u8 {
+        let spd0 = self.mon_action_speed(table, 0, self.sides[0].active_idx as usize);
+        let spd1 = self.mon_action_speed(table, 1, self.sides[1].active_idx as usize);
+        if spd0 == spd1 {
+            if rng.random(2) == 0 { 1 } else { 2 }
+        } else if spd0 > spd1 {
+            2 // P1 incoming mon faster -> faints first -> P2Win
+        } else {
+            1 // P2 incoming mon faster -> faints first -> P1Win
+        }
     }
 
     #[inline]
-    fn check_faints(&mut self, table: &MatchTable) {
+    fn check_faints(&mut self, table: &MatchTable, rng: &mut Prng) {
         if self.outcome != 0 {
             return;
         }
@@ -3939,6 +4048,9 @@ impl CompactBattle {
             let m_idx = side * 3 + p_idx;
             if self.mons[m_idx].hp() <= 0 {
                 self.sides[side].alive_mask &= !(1 << p_idx);
+                // Gen 2: any faint cancels remaining queued moves (`Battle::faint_messages` `queue_cancel_move`).
+                self.sides[0].side_flags &= !0x70;
+                self.sides[1].side_flags &= !0x70;
                 // Fainting releases Mean Look / Spider Web and partial trap on the opposing active Pokemon.
                 let foe_side = side ^ 1;
                 let foe_idx = foe_side * 3 + self.sides[foe_side].active_idx as usize;
@@ -3966,8 +4078,7 @@ impl CompactBattle {
             // early-game Explosion/Self-Destruct cannot leak into a later 1v1 mutual faint.
             self.sides[0].last_move_selfko = u8::MAX;
             self.sides[1].last_move_selfko = u8::MAX;
-            // Process single-bench auto-switches (and resulting Spikes faints) symmetrically
-            // for both sides before resolving terminal `alive_mask == 0` outcomes.
+            // Process single-bench auto-switches (and resulting Spikes faints).
             let mut any_auto_switch = false;
             for side in 0..2usize {
                 let p_idx = self.sides[side].active_idx as usize;
@@ -3986,13 +4097,7 @@ impl CompactBattle {
                 let a0 = self.sides[0].alive_mask;
                 let a1 = self.sides[1].alive_mask;
                 if a0 == 0 && a1 == 0 {
-                    if self.sides[0].last_move_selfko != u8::MAX {
-                        self.outcome = 2;
-                    } else if self.sides[1].last_move_selfko != u8::MAX {
-                        self.outcome = 1;
-                    } else {
-                        self.outcome = 3;
-                    }
+                    self.outcome = self.resolve_dual_spikes_faint(table, rng);
                     return;
                 } else if a0 == 0 {
                     self.outcome = 2;
@@ -4027,7 +4132,11 @@ impl CompactBattle {
     /// with 2 bench options remaining (`request == 2`).
     pub fn step_switch(&mut self, table: &MatchTable, switch_actions: [u8; 2]) {
         let mut rng = Prng::new(self.prng_seed);
+        // Any forced-switch prompt occurs strictly after a non-terminal faint batch.
+        self.sides[0].last_move_selfko = u8::MAX;
+        self.sides[1].last_move_selfko = u8::MAX;
         let bp_fix = (self.sides[0].side_flags & SIDE0_DISABLE_BP_FIX) == 0;
+        let both_forced = self.sides[0].request == 2 && self.sides[1].request == 2;
         for side in 0..2usize {
             if self.sides[side].request == 2 {
                 let act = switch_actions[side];
@@ -4053,7 +4162,20 @@ impl CompactBattle {
             }
             self.sides[side].request = 1;
         }
-        self.check_faints(table);
+        if both_forced {
+            let i0 = self.sides[0].active_idx as usize;
+            let i1 = self.sides[1].active_idx as usize;
+            if self.mons[i0].hp() <= 0 && self.mons[3 + i1].hp() <= 0 {
+                self.sides[0].alive_mask &= !(1 << i0);
+                self.sides[1].alive_mask &= !(1 << i1);
+                if self.sides[0].alive_mask == 0 && self.sides[1].alive_mask == 0 {
+                    self.outcome = self.resolve_dual_spikes_faint(table, &mut rng);
+                    self.prng_seed = rng.seed();
+                    return;
+                }
+            }
+        }
+        self.check_faints(table, &mut rng);
         // If this was a mid-turn self-switch (e.g. faster Baton Pass) and the other side
         // had a pending move queued for the second half of the turn, execute it now in CompactBattle.
         if bp_fix && self.outcome == 0 && self.sides[0].request == 1 && self.sides[1].request == 1 {
@@ -4062,8 +4184,9 @@ impl CompactBattle {
                 if (flags & 0x10) != 0 {
                     self.sides[s].side_flags &= !0x70;
                     let m_slot = ((flags >> 5) & 0x03) as usize;
-                    self.exec_move(table, s, m_slot, true, &mut rng);
-                    self.check_faints(table);
+                    let forced_str = self.is_forced_struggle(table, s);
+                    self.exec_move(table, s, m_slot, true, forced_str, &mut rng);
+                    self.check_faints(table, &mut rng);
                     break;
                 }
             }
@@ -4072,7 +4195,7 @@ impl CompactBattle {
             if (self.sides[0].side_flags & 0x08) == 0 {
                 self.sides[0].side_flags |= 0x08;
                 self.exec_residuals(table, &mut rng);
-                self.check_faints(table);
+                self.check_faints(table, &mut rng);
             }
             if self.outcome == 0 && self.sides[0].request == 1 && self.sides[1].request == 1 {
                 self.sides[0].side_flags &= !0x08;
@@ -4994,11 +5117,13 @@ mod tests {
             let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
             b.choose(&dex, 0, "team 1").unwrap();
             b.choose(&dex, 1, "team 1").unwrap();
-            // Turn 1: Alakazam Foresight (no-op) vs Snorlax Substitute -> Snorlax now has Sub & last_move = Substitute
-            b.choose(&dex, 0, "move 4").unwrap();
+            // Turn 1: Alakazam Disable (fails: Snorlax hasn't moved yet) vs Snorlax Substitute
+            // -> Snorlax now has Sub & last_move = Substitute, and FORESIGHT is NOT set yet.
+            b.choose(&dex, 0, "move 2").unwrap();
             b.choose(&dex, 1, "move 1").unwrap();
             let (t, base) = CompactBattle::from_battle(&b, &dex);
             assert!(base.mons[3].sub_hp() > 0);
+            assert_eq!(base.mons[3].vol_flags & vol_bit::FORESIGHT, 0);
 
             // Encore bypasses Sub (matches Battle)
             let mut b_enc = b.clone();
@@ -5089,9 +5214,53 @@ mod tests {
                     assert_eq!(cb_hi.mons[3].vol_flags & vol_bit::CONFUSION, 0, "failed Swagger at 999 Atk must not confuse");
                 }
             }
+            // Lv 55 Thick Club Marowak at +5 Atk has unmodified Atk = 1008 (!= 999) -> Swagger SUCCEEDS (+6 & confuses), matching Battle!
+            {
+                let p1_tc = vec![mk("Alakazam", 55, "", &["Swagger"])];
+                let p2_tc = vec![mk("Marowak", 55, "Thick Club", &["Splash"])];
+                let mut b_tc = Battle::from_fixture(&dex, "1,2,3,4", &p1_tc, &p2_tc).unwrap();
+                b_tc.choose(&dex, 0, "team 1").unwrap();
+                b_tc.choose(&dex, 1, "team 1").unwrap();
+                let wak_id = b_tc.active_id(1).unwrap();
+                b_tc.poke_mut(wak_id).boosts[stat_idx::ATK] = 5;
+                let (t_tc, base_tc) = CompactBattle::from_battle(&b_tc, &dex);
+                let mut b_tc_hit = false;
+                for seed in 1..=32u16 {
+                    let mut b_try = Battle::from_fixture(&dex, &format!("{seed},2,3,4"), &p1_tc, &p2_tc).unwrap();
+                    b_try.choose(&dex, 0, "team 1").unwrap();
+                    b_try.choose(&dex, 1, "team 1").unwrap();
+                    let wid = b_try.active_id(1).unwrap();
+                    b_try.poke_mut(wid).boosts[stat_idx::ATK] = 5;
+                    b_try.choose(&dex, 0, "move 1").unwrap();
+                    b_try.choose(&dex, 1, "move 1").unwrap();
+                    if b_try.poke(wid).boosts[stat_idx::ATK] == 6 {
+                        assert!(b_try.poke(wid).has_volatile(crate::cond_id!(&dex, "confusion").unwrap()));
+                        b_tc_hit = true;
+                        break;
+                    }
+                }
+                assert!(b_tc_hit, "Battle: Swagger must succeed on Lv 55 Thick Club Marowak at +5 Atk (1008 != 999)");
+                let mut cb_tc_hit = false;
+                for seed in 1..=64u64 {
+                    let mut cb_try = base_tc;
+                    cb_try.prng_seed = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                    cb_try.step_turn(&t_tc, [0, 0]);
+                    if cb_try.mons[3].boosts[stat_idx::ATK] == 6 {
+                        assert_ne!(cb_try.mons[3].vol_flags & vol_bit::CONFUSION, 0);
+                        cb_tc_hit = true;
+                        break;
+                    }
+                }
+                assert!(cb_tc_hit, "CompactBattle: Swagger must succeed on Lv 55 Thick Club Marowak at +5 Atk (1008 != 999)");
+            }
 
-            // Foresight bypasses Sub
+            // Foresight bypasses Sub (starting cleanly with FORESIGHT == 0, matching Battle)
+            let mut b_fs = b.clone();
+            b_fs.choose(&dex, 0, "move 4").unwrap();
+            b_fs.choose(&dex, 1, "move 2").unwrap();
+            assert!(b_fs.poke(b_fs.active_id(1).unwrap()).has_volatile(crate::cond_id!(&dex, "foresight").unwrap()));
             let mut cb_fs = base;
+            assert_eq!(cb_fs.mons[3].vol_flags & vol_bit::FORESIGHT, 0);
             cb_fs.step_turn(&t, [3, 1]);
             assert_ne!(cb_fs.mons[3].vol_flags & vol_bit::FORESIGHT, 0, "Foresight must bypass Sub");
         }
@@ -5149,11 +5318,53 @@ mod tests {
                 cb_sb.step_turn(&t, [1, 3]); // Snorlax Thief breaks Exeggutor's 1 HP Sub
                 assert_eq!(cb_sb.mons[0].sub_hp(), 0);
                 assert_eq!(cb_sb.mons[3].item, 0, "Thief breaking a Sub must NOT steal item");
+
+                let mut cb_bs = base;
+                cb_bs.mons[0].hp_pool[1] = 1;
+                cb_bs.prng_seed = seed.wrapping_mul(0xD1B5_4A32_D192_ED03);
+                cb_bs.step_turn(&t, [1, 1]); // Snorlax Body Slam breaks Exeggutor's 1 HP Sub
+                assert_eq!(cb_bs.mons[0].sub_hp(), 0);
+                assert_eq!(cb_bs.mons[0].status_raw(), Status::None as u8, "Body Slam breaking Sub must NOT paralyze");
+            }
+
+            // Multihit Sub-break: Twineedle breaks 1-HP Sub on hit 1 and deals main-HP damage + can poison on hit 2 (matching Battle).
+            {
+                let p1_mh = vec![mk("Beedrill", 55, "", &["Twineedle", "Splash"])];
+                let p2_mh = vec![mk("Snorlax", 55, "", &["Substitute", "Splash"])];
+                let mut b_mh = Battle::from_fixture(&dex, "1,2,3,4", &p1_mh, &p2_mh).unwrap();
+                b_mh.choose(&dex, 0, "team 1").unwrap();
+                b_mh.choose(&dex, 1, "team 1").unwrap();
+                b_mh.choose(&dex, 0, "move 2").unwrap();
+                b_mh.choose(&dex, 1, "move 1").unwrap(); // Snorlax creates Sub
+                let lax_id = b_mh.active_id(1).unwrap();
+                b_mh.poke_mut(lax_id).volatile_mut(sub_cid).unwrap().set_int(crate::state::DK::Hp, 1);
+                let hp_before = b_mh.poke(lax_id).hp as i16;
+                let (t_mh, base_mh) = CompactBattle::from_battle(&b_mh, &dex);
+                b_mh.choose(&dex, 0, "move 1").unwrap();
+                b_mh.choose(&dex, 1, "move 2").unwrap();
+                assert!((b_mh.poke(lax_id).hp as i16) < hp_before, "Battle: Twineedle hit 2 must hit main HP after hit 1 breaks Sub");
+
+                let mut hit_main = false;
+                let mut poisoned = false;
+                for seed in 1..=128u64 {
+                    let mut cb_mh = base_mh;
+                    cb_mh.prng_seed = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                    cb_mh.step_turn(&t_mh, [0, 1]);
+                    assert_eq!(cb_mh.mons[3].sub_hp(), 0);
+                    if cb_mh.mons[3].hp() < hp_before {
+                        hit_main = true;
+                    }
+                    if cb_mh.mons[3].status_raw() == Status::Psn as u8 {
+                        poisoned = true;
+                    }
+                }
+                assert!(hit_main, "CompactBattle: Twineedle hit 2 must hit main HP after hit 1 breaks Sub");
+                assert!(poisoned, "CompactBattle: Twineedle hit 2 onto main HP must be able to poison");
             }
         }
 
         // 4. Rapid Spin clears Spikes/Leech Seed/partiallytrapped, NEVER Mean Look;
-        //    Baton Pass passes Mean Look (NOT partiallytrapped).
+        //    Baton Pass passes Mean Look, partiallytrapped, AND Foresight (matching Battle!).
         {
             let p1 = vec![
                 mk("Starmie", 50, "", &["Rapid Spin", "Baton Pass", "Splash"]),
@@ -5184,18 +5395,27 @@ mod tests {
             let n = cb_rs.legal_actions(&t, 0, &mut acts);
             assert!(!acts[..n].contains(&5), "Starmie must remain trapped by Mean Look");
 
-            // Baton Pass passes Mean Look and drops partially_trapped.
-            let mut cb_bp = base;
-            cb_bp.mons[0].vol_flags |= vol_bit::TRAPPED_OR_LOCKED;
-            cb_bp.mons[0].set_partially_trapped(true);
-            cb_bp.step_turn(&t, [1, 2]); // Starmie Baton Passes to Snorlax
+            // Baton Pass passes Mean Look, partiallytrapped, AND Foresight (verified directly against Battle!).
+            let mut b_bp = b.clone();
+            let st_id = b_bp.active_id(0).unwrap();
+            let um_id = b_bp.active_id(1).unwrap();
+            b_bp.add_volatile(&dex, st_id, "trapped", Some(um_id), crate::battle::EffectHandle::None);
+            b_bp.add_volatile(&dex, st_id, "partiallytrapped", Some(um_id), crate::battle::EffectHandle::None);
+            b_bp.add_volatile(&dex, st_id, "foresight", Some(um_id), crate::battle::EffectHandle::None);
+            let (t_bp, mut cb_bp) = CompactBattle::from_battle(&b_bp, &dex);
+            b_bp.choose(&dex, 0, "move 2").unwrap();
+            b_bp.choose(&dex, 1, "move 3").unwrap();
+            b_bp.choose(&dex, 0, "switch 2").unwrap();
+            let lax_bp_id = b_bp.active_id(0).unwrap();
+            assert!(b_bp.poke(lax_bp_id).has_volatile(crate::cond_id!(&dex, "trapped").unwrap()));
+            assert!(b_bp.poke(lax_bp_id).has_volatile(crate::cond_id!(&dex, "partiallytrapped").unwrap()));
+            assert!(b_bp.poke(lax_bp_id).has_volatile(crate::cond_id!(&dex, "foresight").unwrap()));
+
+            cb_bp.step_turn(&t_bp, [1, 2]); // Starmie Baton Passes to Snorlax
             assert_eq!(cb_bp.sides[0].active_idx, 1);
-            assert_ne!(
-                cb_bp.mons[1].vol_flags & vol_bit::TRAPPED_OR_LOCKED,
-                0,
-                "Baton Pass must pass Mean Look"
-            );
-            assert!(!cb_bp.mons[1].partially_trapped(), "Baton Pass must NOT pass partiallytrapped");
+            assert_ne!(cb_bp.mons[1].vol_flags & vol_bit::TRAPPED_OR_LOCKED, 0, "Baton Pass must pass Mean Look");
+            assert!(cb_bp.mons[1].partially_trapped(), "Baton Pass must pass partiallytrapped matching Battle");
+            assert_ne!(cb_bp.mons[1].vol_flags & vol_bit::FORESIGHT, 0, "Baton Pass must pass Foresight matching Battle");
 
             // Import from Battle distinguishes meanlook vs partiallytrapped.
             let mut b_wrap = b.clone();
@@ -5206,7 +5426,8 @@ mod tests {
             assert!(cb_imp.mons[0].is_trapped());
         }
 
-        // 5. AfterSwitchInSelf: Burn/Poison damages on manual switch & Baton Pass, NOT faint replace / Roar.
+        // 5. AfterSwitchInSelf: Burn/Poison damages on manual switch & Baton Pass, NOT faint replace / Roar;
+        //    Baton Pass passes residualdmg with pre-increment damage (C=0 -> 1 HP) & healthy receiver retention.
         {
             let p1 = vec![
                 mk("Jolteon", 55, "", &["Baton Pass", "Explosion", "Splash"]),
@@ -5241,6 +5462,53 @@ mod tests {
             cb_bp.step_turn(&t, [0, 1]); // Baton Pass to poisoned Snorlax
             assert_eq!(cb_bp.mons[1].hp(), expected_hp_bp, "Baton Pass switch-in must take Gen 2 Psn slip");
 
+            // Baton Pass residualdmg pre-increment: passer has residualdmg counter=0, passes to poisoned Snorlax
+            // -> Battle deals ((maxhp/16)*0).max(1) == 1 HP (NOT 1/16) and increments counter to 1.
+            {
+                let mut b_res = b.clone();
+                let j_id = b_res.active_id(0).unwrap();
+                let res_cid = crate::cond_id!(&dex, "residualdmg").unwrap();
+                b_res.add_volatile(&dex, j_id, "residualdmg", None, crate::battle::EffectHandle::None);
+                b_res.poke_mut(j_id).volatile_mut(res_cid).unwrap().set_int(crate::state::DK::Counter, 0);
+                let (t_r, mut cb_res) = CompactBattle::from_battle(&b_res, &dex);
+                b_res.choose(&dex, 0, "move 1").unwrap();
+                b_res.choose(&dex, 1, "move 2").unwrap();
+                b_res.choose(&dex, 0, "switch 2").unwrap();
+                let lax_id = b_res.active_id(0).unwrap();
+                let b_hp = b_res.poke(lax_id).hp as i16;
+                let b_cnt = b_res.poke(lax_id).volatile(res_cid).unwrap().get_int(crate::state::DK::Counter);
+                assert_eq!(b_hp, t_r.mons[1].maxhp - 1, "Battle BP residualdmg C=0 must deal 1 HP");
+                assert_eq!(b_cnt, 1);
+
+                cb_res.step_turn(&t_r, [0, 1]);
+                assert_eq!(cb_res.mons[1].hp(), b_hp, "CompactBattle BP residualdmg C=0 must deal pre-increment 1 HP");
+                assert_eq!(cb_res.mons[1].status_counter(), 0x10 | 1);
+            }
+
+            // Baton Pass residualdmg onto a HEALTHY receiver retains counter WITHOUT incrementing
+            // (Battle::ResidualDmgAfterMoveSelf only increments when status is Brn|Psn|Tox).
+            {
+                let mut b_hlth = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+                b_hlth.choose(&dex, 0, "team 1,2").unwrap();
+                b_hlth.choose(&dex, 1, "team 1").unwrap();
+                let j_id = b_hlth.active_id(0).unwrap();
+                let res_cid = crate::cond_id!(&dex, "residualdmg").unwrap();
+                b_hlth.add_volatile(&dex, j_id, "residualdmg", None, crate::battle::EffectHandle::None);
+                b_hlth.poke_mut(j_id).volatile_mut(res_cid).unwrap().set_int(crate::state::DK::Counter, 2);
+                let (t_h, mut cb_hlth) = CompactBattle::from_battle(&b_hlth, &dex);
+                b_hlth.choose(&dex, 0, "move 1").unwrap();
+                b_hlth.choose(&dex, 1, "move 2").unwrap();
+                b_hlth.choose(&dex, 0, "switch 2").unwrap();
+                let lax_id = b_hlth.active_id(0).unwrap();
+                assert_eq!(b_hlth.poke(lax_id).hp as i16, t_h.mons[1].maxhp);
+                assert_eq!(b_hlth.poke(lax_id).volatile(res_cid).unwrap().get_int(crate::state::DK::Counter), 2);
+
+                cb_hlth.step_turn(&t_h, [0, 1]);
+                assert_eq!(cb_hlth.mons[1].hp(), t_h.mons[1].maxhp);
+                assert_eq!(cb_hlth.mons[1].status_raw(), Status::None as u8);
+                assert_eq!(cb_hlth.mons[1].status_counter(), 0x10 | 2, "healthy BP receiver must retain residualdmg counter unchanged");
+            }
+
             // Faint replacement (Jolteon Explosion -> Snorlax auto-switch) skips AfterSwitchInSelf
             let mut cb_fnt = base;
             cb_fnt.step_turn(&t, [1, 1]);
@@ -5255,13 +5523,19 @@ mod tests {
         }
 
         // 6. Healing berries (Berry Juice +20, Gold Berry +30, Berry +10) trigger ONLY at EOT Residual,
-        //    NOT mid-turn before AfterMoveSelf or second hit.
+        //    NOT mid-turn before AfterMoveSelf or second hit; Mint/Miracle Berry cure before move.
         {
-            let p1 = vec![mk("Shuckle", 50, "Berry Juice", &["Splash"])];
-            let p2 = vec![mk("Snorlax", 55, "Gold Berry", &["Seismic Toss", "Splash"])];
+            let p1 = vec![
+                mk("Shuckle", 50, "Berry Juice", &["Splash"]),
+                mk("Chansey", 50, "Berry", &["Splash"]),
+            ];
+            let p2 = vec![
+                mk("Snorlax", 55, "Gold Berry", &["Seismic Toss", "Splash"]),
+                mk("Tauros", 55, "Mint Berry", &["Splash"]),
+            ];
             let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
-            b.choose(&dex, 0, "team 1").unwrap();
-            b.choose(&dex, 1, "team 1").unwrap();
+            b.choose(&dex, 0, "team 1,2").unwrap();
+            b.choose(&dex, 1, "team 1,2").unwrap();
             let (t, base) = CompactBattle::from_battle(&b, &dex);
 
             // Shuckle at 60 HP (max 126): Snorlax Seismic Toss deals 55 -> 5 HP (<= 63) -> EOT Berry Juice heals +20 -> 25 HP!
@@ -5278,33 +5552,58 @@ mod tests {
             assert_eq!(cb_bj.mons[0].hp(), 25, "Berry Juice must heal +20 (not +10) at EOT");
             assert_eq!(cb_bj.mons[0].item, 0);
 
-            // Poisoned Shuckle at 60 HP: Snorlax Seismic Toss (55 dmg -> 5 HP), Shuckle moves AFTER Snorlax and dies to Poison
+            // Gold Berry heals +30 at EOT when <= 50% HP; Berry heals +10 at EOT when <= 50% HP.
+            let mut cb_gb = base;
+            cb_gb.mons[3].hp_pool[0] = 100;
+            cb_gb.step_turn(&t, [0, 1]);
+            assert_eq!(cb_gb.mons[3].hp(), 130, "Gold Berry must heal +30 at EOT");
+            assert_eq!(cb_gb.mons[3].item, 0);
+
+            let mut cb_br = base;
+            cb_br.exec_switch(&t, 0, 1, SwitchKind::Manual); // Chansey (Berry)
+            cb_br.mons[1].hp_pool[0] = 100;
+            cb_br.step_turn(&t, [0, 1]);
+            assert_eq!(cb_br.mons[1].hp(), 110, "Berry must heal +10 at EOT");
+            assert_eq!(cb_br.mons[1].item, 0);
+
+            // Mint Berry cures Sleep before moving so move executes on the same turn.
+            let mut cb_mb = base;
+            cb_mb.exec_switch(&t, 1, 1, SwitchKind::Manual); // Tauros (Mint Berry)
+            cb_mb.mons[4].set_status(Status::Slp as u8, 3);
+            let pp0 = cb_mb.mons[4].pp[0];
+            cb_mb.step_turn(&t, [0, 0]);
+            assert_eq!(cb_mb.mons[4].status_raw(), Status::None as u8);
+            assert_eq!(cb_mb.mons[4].item, 0);
+            assert_eq!(cb_mb.mons[4].pp[0], pp0 - 1, "Mint Berry must cure Sleep before executing move");
+
+            // Poisoned Shuckle at 60 HP (1v1): Snorlax Seismic Toss (55 dmg -> 5 HP), Shuckle moves AFTER Snorlax and dies to Poison
             // BEFORE EOT Residual -> Berry Juice must NOT save Shuckle mid-turn!
-            let mut b_mid = b.clone();
+            let p1_1v1 = vec![mk("Shuckle", 50, "Berry Juice", &["Splash"])];
+            let p2_1v1 = vec![mk("Snorlax", 55, "Gold Berry", &["Seismic Toss", "Splash"])];
+            let mut b_mid = Battle::from_fixture(&dex, "1,2,3,4", &p1_1v1, &p2_1v1).unwrap();
+            b_mid.choose(&dex, 0, "team 1").unwrap();
+            b_mid.choose(&dex, 1, "team 1").unwrap();
             let sh_id = b_mid.active_id(0).unwrap();
             b_mid.poke_mut(sh_id).hp = 60;
             b_mid.poke_mut(sh_id).status = Status::Psn;
             b_mid.refresh_poke_mask(&dex, sh_id);
+            let (t_mid, mut cb_mid) = CompactBattle::from_battle(&b_mid, &dex);
             b_mid.choose(&dex, 0, "move 1").unwrap();
             b_mid.choose(&dex, 1, "move 1").unwrap();
             assert_eq!(b_mid.outcome(), Some(crate::battle::Outcome::P2Win));
-
-            let mut cb_mid = base;
-            cb_mid.mons[0].hp_pool[0] = 60;
-            cb_mid.mons[0].set_status(Status::Psn as u8, 0);
-            cb_mid.step_turn(&t, [0, 0]);
+            cb_mid.step_turn(&t_mid, [0, 0]);
             assert_eq!(cb_mid.outcome, 2, "Berry Juice must NOT activate mid-turn before AfterMoveSelf Poison KO");
         }
 
-        // 7. Thief steals item dynamically (stolen Leftovers heals, stolen Thick Club works on Marowak only)
-        //    and does NOT steal on KO.
+        // 7. Thief steals item dynamically (stolen Leftovers heals, stolen Thick Club works on Marowak only),
+        //    does NOT steal on KO, AND DOES steal on 1-HP Endure (0 damage hit) matching Battle.
         {
             let p1 = vec![
                 mk("Gengar", 55, "", &["Thief", "Splash"]),
                 mk("Marowak", 50, "", &["Thief", "Splash"]),
             ];
             let p2 = vec![
-                mk("Snorlax", 55, "Leftovers", &["Splash"]),
+                mk("Snorlax", 55, "Leftovers", &["Splash", "Endure"]),
                 mk("Cubone", 50, "Thick Club", &["Splash"]),
             ];
             let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
@@ -5331,6 +5630,18 @@ mod tests {
             cb_ko.mons[3].hp_pool[0] = 1;
             cb_ko.step_turn(&t, [0, 0]);
             assert_eq!(cb_ko.mons[0].item, 0, "Thief KOing target must NOT steal its item");
+
+            // Thief on 1-HP Endure target deals 0 damage yet STILL steals item (matching Battle!).
+            let mut b_end = b.clone();
+            let lax_id = b_end.active_id(1).unwrap();
+            b_end.poke_mut(lax_id).hp = 1;
+            let (t_end, mut cb_end) = CompactBattle::from_battle(&b_end, &dex);
+            b_end.choose(&dex, 0, "move 1").unwrap();
+            b_end.choose(&dex, 1, "move 2").unwrap(); // Snorlax Endure at 1 HP
+            assert!(b_end.poke(b_end.active_id(0).unwrap()).item.is_some(), "Battle: Thief on 1-HP Endure must steal");
+            cb_end.step_turn(&t_end, [0, 1]);
+            assert_ne!(cb_end.mons[0].item, 0, "CompactBattle: Thief on 1-HP Endure (0 dmg) must still steal");
+            assert_eq!(cb_end.mons[3].item, 0);
 
             // Stolen Thick Club doubles Marowak's Atk, NOT Gengar's Atk.
             let mut cb_tc = base;
@@ -5359,35 +5670,51 @@ mod tests {
             cb_wf.mons[3].vol_flags |= vol_bit::FLINCH;
             let pp_before = cb_wf.mons[3].pp[0];
             let mut rng = Prng::new(1);
-            cb_wf.exec_move(&t, 1, 0, true, &mut rng);
+            cb_wf.exec_move(&t, 1, 0, true, false, &mut rng);
             assert_eq!(cb_wf.mons[3].status_raw(), Status::None as u8, "Sleep wake-up must precede Flinch");
             assert_eq!(cb_wf.mons[3].pp[0], pp_before, "Flinch must still block the move after waking up");
 
-            // Headbutt against sleeping target does not apply flinch secondary.
+            // Non-vacuous: Headbutt against sleeping (Slp 3) or frozen target must NEVER set FLINCH,
+            // and a waking target (Slp 1) hit by faster Headbutt must execute its move cleanly.
             for seed in 1..=64u64 {
-                let mut cb_nf = base;
-                cb_nf.mons[3].set_status(Status::Slp as u8, 3);
-                cb_nf.mons[3].hp_pool[0] = t.mons[3].maxhp;
-                cb_nf.prng_seed = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15);
-                // Execute only Tauros's move via step_turn where Snorlax sleeps -> verify FLINCH never leaked/triggered before sleep
-                cb_nf.step_turn(&t, [0, 0]);
-                assert_eq!(cb_nf.mons[3].status_counter(), 2, "Sleep counter must decrement cleanly");
+                let mut cb_slp = base;
+                cb_slp.mons[3].set_status(Status::Slp as u8, 3);
+                let mut r1 = Prng::new(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15));
+                cb_slp.exec_move(&t, 0, 0, false, false, &mut r1);
+                assert_eq!(cb_slp.mons[3].vol_flags & vol_bit::FLINCH, 0, "Headbutt must not set FLINCH on sleeping target");
+
+                let mut cb_frz = base;
+                cb_frz.mons[3].set_status(Status::Frz as u8, 0);
+                let mut r2 = Prng::new(seed.wrapping_mul(0xD1B5_4A32_D192_ED03));
+                cb_frz.exec_move(&t, 0, 0, false, false, &mut r2);
+                assert_eq!(cb_frz.mons[3].vol_flags & vol_bit::FLINCH, 0, "Headbutt must not set FLINCH on frozen target");
+
+                let mut cb_wake = base;
+                cb_wake.mons[3].set_status(Status::Slp as u8, 1);
+                cb_wake.prng_seed = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                let pp0 = cb_wake.mons[3].pp[0];
+                cb_wake.step_turn(&t, [0, 0]);
+                assert_eq!(cb_wake.mons[3].status_raw(), Status::None as u8);
+                assert_eq!(cb_wake.mons[3].pp[0], pp0 - 1, "Waking target hit by Headbutt must not be flinched");
             }
         }
 
-        // 9. 1v1 Sandstorm AND 1v1 Perish Song mutual KO winner matches Battle identically (faster wins!).
+        // 9. 1v1 Sandstorm AND 1v1 Perish Song mutual KO winner matches Battle identically (including Quick Claw!).
         {
             let p1 = vec![mk("Zapdos", 55, "", &["Splash"])];
-            let p2 = vec![mk("Snorlax", 50, "", &["Splash"])];
+            let p2 = vec![mk("Snorlax", 50, "Quick Claw", &["Splash"])];
             let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
             b.choose(&dex, 0, "team 1").unwrap();
             b.choose(&dex, 1, "team 1").unwrap();
 
-            // 1v1 Sandstorm mutual KO
+            // 1v1 Sandstorm mutual KO (normal speed: Zapdos faster -> P1Win)
             let mut b_sand = b.clone();
             b_sand.set_weather(&dex, "sandstorm", None, crate::battle::EffectHandle::None);
             b_sand.poke_mut(b_sand.active_id(0).unwrap()).hp = 1;
             b_sand.poke_mut(b_sand.active_id(1).unwrap()).hp = 1;
+            b_sand.quick_claw_roll = false;
+            let mut b_qc = b_sand.clone();
+            b_qc.quick_claw_roll = true;
             let (t_s, mut cb_sand) = CompactBattle::from_battle(&b_sand, &dex);
             b_sand.choose(&dex, 0, "move 1").unwrap();
             b_sand.choose(&dex, 1, "move 1").unwrap();
@@ -5400,8 +5727,17 @@ mod tests {
             assert_eq!(expected_s, 1, "Battle 1v1 Sandstorm mutual KO: faster Zapdos wins");
             assert_eq!(cb_sand.outcome, expected_s, "CompactBattle 1v1 Sandstorm must match Battle");
 
+            // 1v1 Sandstorm mutual KO WITH Quick Claw active: slower Snorlax gets +2000 action speed -> P2Win in BOTH Battle and CompactBattle!
+            let (t_qc, mut cb_qc) = CompactBattle::from_battle(&b_qc, &dex);
+            b_qc.choose(&dex, 0, "move 1").unwrap();
+            b_qc.choose(&dex, 1, "move 1").unwrap();
+            assert_eq!(b_qc.outcome(), Some(crate::battle::Outcome::P2Win), "Battle Quick Claw active: Snorlax wins 1v1 Sandstorm");
+            cb_qc.step_turn(&t_qc, [0, 0]);
+            assert_eq!(cb_qc.outcome, 2, "CompactBattle Quick Claw active: Snorlax wins 1v1 Sandstorm");
+
             // 1v1 Perish Song mutual KO
             let mut b_per = b.clone();
+            b_per.quick_claw_roll = false;
             let p_cid = crate::cond_id!(&dex, "perishsong").unwrap();
             for s in 0..2usize {
                 let id = b_per.active_id(s).unwrap();
@@ -5417,7 +5753,163 @@ mod tests {
                 Some(crate::battle::Outcome::P2Win) => 2,
                 _ => 3,
             };
+            assert_eq!(expected_p, 1, "Battle 1v1 Perish Song mutual KO: faster Zapdos wins");
             assert_eq!(cb_per.outcome, expected_p, "CompactBattle 1v1 Perish Song must match Battle");
+        }
+
+        // 10. Dual 1-HP replacement Spikes faints (faster incoming mon faints first -> slower wins),
+        //     step_switch clearing stale last_move_selfko, and BP receiver Spikes faint canceling foe queued move.
+        {
+            let p1 = vec![
+                mk("Gengar", 55, "", &["Explosion", "Splash"]),
+                mk("Jolteon", 55, "", &["Splash"]),
+            ];
+            let p2 = vec![
+                mk("Snorlax", 55, "", &["Splash"]),
+                mk("Shuckle", 50, "", &["Splash"]),
+            ];
+            let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+            b.choose(&dex, 0, "team 1,2").unwrap();
+            b.choose(&dex, 1, "team 1,2").unwrap();
+            let p0_act = b.active_id(0);
+            let p1_act = b.active_id(1);
+            b.add_side_condition(&dex, 0, "spikes", p1_act, crate::battle::EffectHandle::None);
+            b.add_side_condition(&dex, 1, "spikes", p0_act, crate::battle::EffectHandle::None);
+            b.sides[0].roster[1].hp = 1; // Faster Jolteon (sole grounded bench) at 1 HP
+            b.sides[1].roster[1].hp = 1; // Slower Shuckle (sole grounded bench) at 1 HP
+            b.sides[1].roster[0].hp = 1; // Snorlax dies to Explosion
+            let (t_sp, mut cb_sp) = CompactBattle::from_battle(&b, &dex);
+            b.choose(&dex, 0, "move 1").unwrap();
+            b.choose(&dex, 1, "move 1").unwrap();
+            b.choose(&dex, 0, "switch 2").unwrap();
+            b.choose(&dex, 1, "switch 2").unwrap();
+            let expected_sp = match b.outcome() {
+                Some(crate::battle::Outcome::P1Win) => 1,
+                Some(crate::battle::Outcome::P2Win) => 2,
+                _ => 3,
+            };
+            assert_eq!(expected_sp, 2, "Battle dual Spikes faint: faster Jolteon faints first -> P2Win");
+            cb_sp.step_turn(&t_sp, [0, 0]);
+            assert_eq!(cb_sp.outcome, expected_sp, "CompactBattle dual auto-switch Spikes faint must match Battle");
+
+            // Dual forced `step_switch` into 1-HP last mons on Spikes -> faster incoming mon faints first (not Tie),
+            // and stale `last_move_selfko` is cleared at `step_switch` entry.
+            let mut cb_ss = cb_sp;
+            cb_ss.outcome = 0;
+            cb_ss.sides[0].alive_mask = 0b010;
+            cb_ss.sides[1].alive_mask = 0b010;
+            cb_ss.sides[0].active_idx = 0;
+            cb_ss.sides[1].active_idx = 0;
+            cb_ss.sides[0].request = 2;
+            cb_ss.sides[1].request = 2;
+            cb_ss.sides[0].last_move_selfko = 1;
+            cb_ss.sides[1].last_move_selfko = 1;
+            cb_ss.mons[1].hp_pool[0] = 1; // Faster Jolteon
+            cb_ss.mons[4].hp_pool[0] = 1; // Slower Shuckle
+            cb_ss.step_switch(&t_sp, [5, 5]);
+            assert_eq!(cb_ss.sides[0].last_move_selfko, u8::MAX);
+            assert_eq!(cb_ss.sides[1].last_move_selfko, u8::MAX);
+            assert_eq!(cb_ss.outcome, 2, "step_switch dual Spikes faint: faster Jolteon faints first -> P2Win");
+
+            // Faster Baton Pass receiver fainting to Spikes in `step_switch` (2 bench options)
+            // cancels slower opponent's pending queued move, matching Battle!
+            let p1_bp = vec![
+                mk("Jolteon", 55, "", &["Baton Pass", "Splash"]),
+                mk("Gengar", 50, "", &["Splash"]),
+                mk("Snorlax", 50, "", &["Splash"]),
+            ];
+            let p2_bp = vec![mk("Skarmory", 50, "", &["Tackle", "Splash"])];
+            let mut b_bp = Battle::from_fixture(&dex, "1,2,3,4", &p1_bp, &p2_bp).unwrap();
+            b_bp.choose(&dex, 0, "team 1,2,3").unwrap();
+            b_bp.choose(&dex, 1, "team 1").unwrap();
+            let foe_act = b_bp.active_id(1);
+            b_bp.add_side_condition(&dex, 0, "spikes", foe_act, crate::battle::EffectHandle::None);
+            b_bp.sides[0].roster[1].hp = 1; // Gengar 1 HP -> dies to Spikes on Baton Pass
+            let skarm_pp_before = b_bp.poke(b_bp.active_id(1).unwrap()).move_slots[0].pp;
+            b_bp.choose(&dex, 0, "move 1").unwrap();
+            b_bp.choose(&dex, 1, "move 1").unwrap(); // Skarmory queues Tackle; Battle pauses for BP receiver choice
+            let (t_bp, mut cb_bp) = CompactBattle::from_battle(&b_bp, &dex);
+            assert_eq!(cb_bp.sides[0].request, 2);
+            assert_ne!(cb_bp.sides[1].side_flags & 0x10, 0);
+
+            b_bp.choose(&dex, 0, "switch 2").unwrap(); // Baton Pass to 1-HP Gengar -> dies to Spikes
+            // After Gengar faints, Jolteon & Snorlax remain -> forced switch; Skarmory's Tackle must be canceled!
+            b_bp.choose(&dex, 0, "switch 3").unwrap();
+            let b_lax_hp = b_bp.poke(b_bp.active_id(0).unwrap()).hp as i16;
+            let b_skarm_pp = b_bp.poke(b_bp.active_id(1).unwrap()).move_slots[0].pp;
+            assert_eq!(b_skarm_pp, skarm_pp_before, "Battle: Skarmory Tackle must be canceled when BP receiver dies to Spikes");
+
+            cb_bp.step_switch(&t_bp, [5, 0]); // BP into 1-HP Gengar -> dies to Spikes
+            assert_eq!(cb_bp.sides[1].side_flags & 0x70, 0, "BP receiver faint must clear foe pending move");
+            assert_eq!(cb_bp.sides[0].request, 2);
+            cb_bp.step_switch(&t_bp, [6, 0]); // Switch to Snorlax
+            assert_eq!(cb_bp.mons[3].pp[0], skarm_pp_before as u8, "CompactBattle: Skarmory Tackle must NOT execute after BP receiver faint");
+            assert_eq!(cb_bp.mons[2].hp(), b_lax_hp);
+        }
+
+        // 11. Mid-turn Disable aborts target's queued move (NOT morphing into Struggle) and runs at prio 7
+        //     after Mint Berry (prio 11) and Sleep (prio 10), matching Battle.
+        {
+            let p1 = vec![mk("Alakazam", 55, "", &["Disable", "Splash"])];
+            let p2 = vec![mk("Snorlax", 50, "Mint Berry", &["Tackle", "Splash"])];
+            let mut b = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+            b.choose(&dex, 0, "team 1").unwrap();
+            b.choose(&dex, 1, "team 1").unwrap();
+            // Turn 1: Alakazam Splash, Snorlax Tackle (sets Snorlax last_move = Tackle)
+            b.choose(&dex, 0, "move 2").unwrap();
+            b.choose(&dex, 1, "move 1").unwrap();
+            // Drain Snorlax's Splash PP to 0 so Tackle is its SOLE remaining move
+            let lax_id = b.active_id(1).unwrap();
+            b.poke_mut(lax_id).move_slots[1].pp = 0;
+            let (t_d, base_d) = CompactBattle::from_battle(&b, &dex);
+
+            // Find a seed where Alakazam's Disable hits Snorlax's Tackle mid-turn:
+            // Snorlax must abort Tackle (no Struggle damage to Alakazam, no Struggle recoil, Tackle PP unchanged).
+            let mut verified = false;
+            for seed in 1..=64u64 {
+                let mut cb_d = base_d;
+                cb_d.prng_seed = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                let zam_hp0 = cb_d.mons[0].hp();
+                let lax_hp0 = cb_d.mons[3].hp();
+                let lax_pp0 = cb_d.mons[3].pp[0];
+                cb_d.step_turn(&t_d, [0, 0]);
+                if (cb_d.mons[3].vol_flags & vol_bit::DISABLE) != 0 {
+                    assert_eq!(cb_d.mons[0].hp(), zam_hp0, "Mid-turn Disabled move must abort (no Struggle damage)");
+                    assert_eq!(cb_d.mons[3].hp(), lax_hp0, "Mid-turn Disabled move must abort (no Struggle recoil)");
+                    assert_eq!(cb_d.mons[3].pp[0], lax_pp0, "Mid-turn Disabled move must not deduct PP");
+                    verified = true;
+                    break;
+                }
+            }
+            assert!(verified, "Disable must hit and abort target's sole remaining move");
+
+            // Direct `exec_move` (no EOT residuals masking it!):
+            // (a) Mint Berry (prio 11) cures Sleep BEFORE Disable (prio 7) aborts the queued move;
+            // (b) Sleep (prio 10) decrements BEFORE Disable (prio 7) aborts the queued move.
+            {
+                let mut cb_mb = base_d;
+                cb_mb.mons[3].set_status(Status::Slp as u8, 3);
+                cb_mb.mons[3].vol_flags |= vol_bit::DISABLE;
+                cb_mb.mons[3].set_disable_slot(0);
+                cb_mb.mons[3].timers[timer_idx::DISABLE] = 3;
+                let lax_pp0 = cb_mb.mons[3].pp[0];
+                let mut r_mb = Prng::new(1);
+                cb_mb.exec_move(&t_d, 1, 0, true, false, &mut r_mb);
+                assert_eq!(cb_mb.mons[3].status_raw(), Status::None as u8, "Mint Berry (prio 11) must cure Sleep before Disable (prio 7)");
+                assert_eq!(cb_mb.mons[3].item, 0, "Mint Berry must be consumed inside exec_move before Disable aborts");
+                assert_eq!(cb_mb.mons[3].pp[0], lax_pp0, "Disable (prio 7) must still abort move after Mint Berry cure");
+
+                let mut cb_slp_dis = base_d;
+                cb_slp_dis.mons[3].item = 0;
+                cb_slp_dis.mons[3].set_status(Status::Slp as u8, 3);
+                cb_slp_dis.mons[3].vol_flags |= vol_bit::DISABLE;
+                cb_slp_dis.mons[3].set_disable_slot(0);
+                cb_slp_dis.mons[3].timers[timer_idx::DISABLE] = 3;
+                let mut r_sd = Prng::new(1);
+                cb_slp_dis.exec_move(&t_d, 1, 0, true, false, &mut r_sd);
+                assert_eq!(cb_slp_dis.mons[3].status_counter(), 2, "Sleep (prio 10) must decrement before Disable (prio 7)");
+                assert_eq!(cb_slp_dis.mons[3].pp[0], lax_pp0, "Disabled sleeping move must not deduct PP");
+            }
         }
     }
 }

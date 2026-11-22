@@ -430,7 +430,9 @@ impl DmgKernel1D {
             if is_crit {
                 d *= 2;
             }
-            if table.item_spec(att_mon.item).boost_type == mspec.move_type {
+            if mspec.move_type != nc2000_engine::compact::NO_TYPE_ID
+                && table.item_spec(att_mon.item).boost_type == mspec.move_type
+            {
                 d = d * 110 / 100;
             }
             d = d.min(997) + 2;
@@ -438,10 +440,7 @@ impl DmgKernel1D {
                 if cb.weather_kind == CompactWeather::Rain {
                     if mspec.is_water {
                         d = d * 3 / 2;
-                    } else if mspec.is_fire
-                        || mspec.special_kind
-                            == nc2000_engine::compact::SpecialMoveKind::RainDance
-                    {
+                    } else if mspec.is_fire || mspec.is_solarbeam {
                         d /= 2;
                     }
                 } else if cb.weather_kind == CompactWeather::Sun {
@@ -1959,7 +1958,7 @@ fn l1_state_key(
                 mask |= 1u8 << m_i;
             }
         }
-        mask | (((m.item != 0) as u8) << 4)
+        mask
     };
     let av0 = avail_mask(m0, sp0.num_moves);
     let av1 = avail_mask(m1, sp1.num_moves);
@@ -1974,21 +1973,8 @@ fn l1_state_key(
         2u8
     };
 
-    let item_flags = |m: &nc2000_engine::compact::CompactMon,
-                      _sp: &nc2000_engine::compact::StaticMonSpec|
-     -> u8 {
-        if m.item != 0 {
-            let ispec = table.item_spec(m.item);
-            (ispec.is_leftovers as u8)
-                | ((ispec.is_brightpowder as u8) << 1)
-                | ((ispec.is_mintberry as u8) << 2)
-                | ((ispec.is_miracleberry as u8) << 3)
-                | ((ispec.is_scope_lens as u8) << 4)
-        } else {
-            0
-        }
-    };
-
+    // Hash raw `mon.item` directly so dynamic Thief steals (including type boosters and
+    // species-stat items) never collide in L1 cache, with zero `table.item_spec` overhead.
     let w_b0 = u64::from_le_bytes([
         m0.boosts[0] as u8,
         m0.boosts[1] as u8,
@@ -1996,8 +1982,8 @@ fn l1_state_key(
         m0.boosts[3] as u8,
         m0.boosts[5] as u8,
         m0.boosts[6] as u8,
-        av0,
-        spd_ord | (item_flags(m0, sp0) << 2),
+        av0 | (spd_ord << 4),
+        m0.item,
     ]);
     let w_b1 = u64::from_le_bytes([
         m1.boosts[0] as u8,
@@ -2007,7 +1993,7 @@ fn l1_state_key(
         m1.boosts[5] as u8,
         m1.boosts[6] as u8,
         av1,
-        item_flags(m1, sp1),
+        m1.item,
     ]);
     h.write_u64(w_b0);
     h.write_u64(w_b1);
@@ -2792,6 +2778,7 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
     if p1_perish > 0 && p1_trapped && !p0_trapped {
         let hits = p1_perish.saturating_sub(1).min(3) as usize;
         let p0_prot = cb.mons[idx0].stall_counter() == 0
+            && (cb.mons[idx0].sub_hp() == 0 || hits >= 2)
             && (0..table.mons[idx0].num_moves as usize)
                 .any(|m| cb.mons[idx0].pp[m] > 0 && table.move_specs[idx0][m].is_protect);
         let p1_phaze = (0..table.mons[idx1].num_moves as usize).any(|m| {
@@ -2813,6 +2800,7 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
     if p0_perish > 0 && p0_trapped && !p1_trapped {
         let hits = p0_perish.saturating_sub(1).min(3) as usize;
         let p1_prot = cb.mons[idx1].stall_counter() == 0
+            && (cb.mons[idx1].sub_hp() == 0 || hits >= 2)
             && (0..table.mons[idx1].num_moves as usize)
                 .any(|m| cb.mons[idx1].pp[m] > 0 && table.move_specs[idx1][m].is_protect);
         let p0_phaze = (0..table.mons[idx0].num_moves as usize).any(|m| {
@@ -3073,6 +3061,7 @@ pub fn compact_rollout_linear_pick(
     if foe_perish >= 2
         && (table.mons[att_idx].role_flags & role_bit::PROTECT) != 0
         && me.stall_counter() == 0
+        && me.sub_hp() == 0
     {
         let me_trapped = me.is_trapped()
             || cb.sides[side].alive_mask.count_ones() <= 1;
@@ -3453,5 +3442,58 @@ mod tests {
         cb.weather_turns = 0;
         cb.mons[0].hp_pool[0] = table.mons[0].maxhp / 4;
         assert_eq!(compact_rollout_linear_pick(&cb, &table, 0, &[0, 1]), Some(1));
+    }
+
+    #[test]
+    fn l1_cache_keys_track_dynamic_thief_items_and_protect_fails_behind_sub() {
+        let dex = conformance::load_dex();
+        let wak = make_set("Marowak", 50, "No Item", &["Earthquake", "Rock Slide", "Thief", "Protect"]);
+        let bench = make_set("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake"]);
+        let foe_tc = make_set("Cubone", 50, "Thick Club", &["Body Slam", "Protect"]);
+        let foe_ch = make_set("Typhlosion", 50, "Charcoal", &["Fire Blast", "Protect"]);
+        let mut b = Battle::from_fixture(&dex, "1,2,3,4", &[wak, bench], &[foe_tc, foe_ch]).unwrap();
+        b.choose(&dex, 0, "team 1,2").unwrap();
+        b.choose(&dex, 1, "team 1,2").unwrap();
+        let (table, mut cb) = CompactBattle::from_battle(&b, &dex);
+
+        let k_none = l1_state_key(&cb, &table, 0, 0, 1, 0);
+        let tc_item = cb.mons[3].item;
+        let ch_item = cb.mons[4].item;
+        assert_ne!(tc_item, 0);
+        assert_ne!(ch_item, 0);
+
+        cb.mons[0].item = tc_item;
+        let k_tc = l1_state_key(&cb, &table, 0, 0, 1, 0);
+        cb.mons[0].item = ch_item;
+        let k_ch = l1_state_key(&cb, &table, 0, 0, 1, 0);
+        assert_ne!(k_none, k_tc, "L1 key must distinguish stolen Thick Club from itemless");
+        assert_ne!(k_tc, k_ch, "L1 key must distinguish stolen Thick Club from stolen Charcoal");
+
+        // Positive control: untrapped side 0 vs trapped Perish(2) foe WITHOUT Sub MUST pick Protect (slot 3).
+        cb.mons[0].item = 0;
+        cb.mons[0].vol_flags |= vol_bit::PERISH_SONG;
+        cb.mons[0].set_perish_turns(2);
+        cb.mons[3].vol_flags |= vol_bit::PERISH_SONG | vol_bit::TRAPPED_OR_LOCKED;
+        cb.mons[3].set_perish_turns(2);
+        assert_eq!(
+            compact_rollout_linear_pick(&cb, &table, 0, &[0, 1, 2, 3]),
+            Some(3),
+            "Positive control: rollout must pick Protect against trapped Perish foe when not behind Sub"
+        );
+        let margin_no_sub = compact_perish_margin(&cb, &table);
+
+        // Negative control: adding own Substitute makes Protect fail in Gen 2 -> must NOT pick Protect!
+        cb.mons[0].vol_flags |= vol_bit::SUBSTITUTE;
+        cb.mons[0].hp_pool[1] = 30;
+        assert_ne!(
+            compact_rollout_linear_pick(&cb, &table, 0, &[0, 1, 2, 3]),
+            Some(3),
+            "Rollout must not pick Protect when behind own Substitute"
+        );
+        let margin_with_sub = compact_perish_margin(&cb, &table);
+        assert!(
+            margin_with_sub <= margin_no_sub,
+            "Perish margin must not credit impossible Protect behind own Substitute"
+        );
     }
 }
