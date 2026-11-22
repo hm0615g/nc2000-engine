@@ -12,8 +12,6 @@ const sha = p => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('
 const write = (p, d) => fs.writeFileSync(p, JSON.stringify(d, null,
 	p === 'data/compiled-preview-v1.json' ? undefined :
 	(p.includes('preview-nash-matrix') || p.includes('conclusion-equilibrium-r1') ? 2 : 1)) + '\n');
-cp.execFileSync('python3', ['tools/belief-pool-v3.py', 'build'], { stdio: 'inherit' });
-cp.execFileSync(process.execPath, ['tools/build-team-products-v2.js'], { stdio: 'inherit' });
 const dex = read('data/gen2stadium2.json');
 fs.mkdirSync('data/training-v3', { recursive: true });
 for (const [source, output] of [
@@ -35,6 +33,9 @@ for (const [source, output] of [
 	write(output, { source, trainingPolicy: 'training-v3',
 		teams: full.map(t => ({ ...t, sets: normalizeTraining(t.sets, dex) })) });
 }
+cp.execFileSync(process.execPath, ['tools/build-team-products-v3.js'], { stdio: 'inherit' });
+cp.execFileSync('python3', ['tools/belief-pool-v3.py', 'build'], { stdio: 'inherit' });
+cp.execFileSync(process.execPath, ['tools/build-team-products-v2.js'], { stdio: 'inherit' });
 const catalog = read('data/team-pool-v2/team-pool.json');
 const byId = new Map(catalog.teams.map(t => [t.id, t]));
 for (const p of ['data/kodoku-r3/conclusion-equilibrium-deme.json', 'data/kodoku-r3/conclusion-equilibrium-r1.json']) {
