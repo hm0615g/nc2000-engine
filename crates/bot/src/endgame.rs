@@ -153,6 +153,24 @@ impl EndgameSession {
             })
     }
 
+    #[inline]
+    pub fn can_probe(&self) -> bool {
+        self.cfg.solver_fraction > 0.0
+            && self.stats.solver_ms < self.budget_ms * self.cfg.solver_fraction
+    }
+
+    #[inline]
+    pub fn eligible_compact(
+        &self,
+        cb: &nc2000_engine::compact::CompactBattle,
+        table: &nc2000_engine::compact::MatchTable,
+    ) -> bool {
+        cb.turn > 0
+            && crate::eval::compact_turn_limit_outcome(cb, table).is_none()
+            && (1..=self.cfg.max_alive).contains(&(cb.sides[0].alive_mask.count_ones() as usize))
+            && (1..=self.cfg.max_alive).contains(&(cb.sides[1].alive_mask.count_ones() as usize))
+    }
+
     fn bound_config(&self, work_budget: usize) -> BoundConfig {
         BoundConfig {
             work_budget,
