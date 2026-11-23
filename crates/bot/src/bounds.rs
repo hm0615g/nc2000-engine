@@ -25,9 +25,10 @@ pub use loss_threshold::{PolicyLossThresholdReport, PolicyLossThresholdStop};
 use std::time::{Duration, Instant};
 
 use nc2000_engine::battle::enumerate::{enumerate_step, enumerate_step_partial, enumerate_step_partial_with_leaf_scripts, enumerate_step_probability_first, run_scripted};
-use nc2000_engine::battle::{Outcome, SearchChoice};
+use nc2000_engine::battle::SearchChoice;
 use nc2000_engine::dex::{Dex, MoveId};
 use nc2000_engine::fxhash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::Battle;
 
 use crate::exact::{solve_matrix_full, solve_matrix_into};
@@ -478,6 +479,7 @@ struct Node {
 
 pub struct BoundSolver<'d> {
     dex: &'d Dex,
+    ruleset: Option<Ruleset>,
     counter_id: Option<MoveId>,
     mirrorcoat_id: Option<MoveId>,
     pub cfg: BoundConfig,
@@ -508,6 +510,7 @@ pub struct FixedPolicySolver<'d> {
 
 pub struct ValueCertificates {
     dex_fingerprint: [u8; 16],
+    ruleset: Option<Ruleset>,
     entries: HashMap<NodeKey, Bounds>,
 }
 
@@ -540,6 +543,7 @@ impl<'d> FixedPolicySolver<'d> {
         let mut probe = root.clone();
         assert!(side < 2 && probe.legal_choices(dex, side).contains(&action));
         let mut fixed = Self::new(dex, cfg, side, priority);
+        fixed.solver.ruleset = Some(root.ruleset);
         fixed.solver.fixed_first_action = Some((fixed.solver.node_key(root), action));
         fixed
     }
@@ -677,13 +681,18 @@ impl<'d> FixedPolicySolver<'d> {
                 else { Bounds { lo: 0.0, hi: value.hi } };
             (value.lo > 0.0 || value.hi < 1.0).then_some((key, value))
         }).collect();
-        ValueCertificates { dex_fingerprint: self.solver.dex.replay_fingerprint, entries }
+        ValueCertificates {
+            dex_fingerprint: self.solver.dex.replay_fingerprint,
+            ruleset: self.solver.ruleset,
+            entries,
+        }
     }
 }
 
 #[derive(Default)]
 pub struct BoundCache {
     dex_fingerprint: Option<[u8; 16]>,
+    ruleset: Option<Ruleset>,
     nodes: HashMap<NodeKey, Node>,
     closed: HashMap<NodeKey, Bounds>,
     closed_strategies: HashMap<NodeKey, [StrategyCertificate; 2]>,
@@ -708,6 +717,7 @@ impl<'d> BoundSolver<'d> {
     pub fn new(dex: &'d Dex, cfg: BoundConfig) -> Self {
         BoundSolver {
             dex,
+            ruleset: None,
             counter_id: dex.moves.id("counter"),
             mirrorcoat_id: dex.moves.id("mirrorcoat"),
             cfg,
@@ -738,6 +748,7 @@ impl<'d> BoundSolver<'d> {
         }
         Self {
             dex,
+            ruleset: cache.ruleset,
             counter_id: dex.moves.id("counter"),
             mirrorcoat_id: dex.moves.id("mirrorcoat"),
             cfg,
@@ -766,6 +777,7 @@ impl<'d> BoundSolver<'d> {
         assert!(self.fixed_policy.is_none(), "restricted values cannot enter an unrestricted cache");
         BoundCache {
             dex_fingerprint: Some(self.dex.replay_fingerprint),
+            ruleset: self.ruleset,
             nodes: self.nodes,
             closed: self.closed,
             closed_strategies: self.closed_strategies,
@@ -775,12 +787,31 @@ impl<'d> BoundSolver<'d> {
         }
     }
 
+    fn ensure_ruleset(&mut self, ruleset: Ruleset) {
+        if self.ruleset.is_some_and(|r| r != ruleset) {
+            self.nodes.clear();
+            self.closed.clear();
+            self.closed_strategies.clear();
+            self.roots.clear();
+            self.value_certificates.clear();
+            self.active_stall = None;
+            self.active_two_sided = None;
+        }
+        self.ruleset = Some(ruleset);
+    }
+
     /// Imports bounds on unrestricted values, before constructing a search graph.
     /// Fixed-policy values must first be projected onto their valid one-sided bounds.
     pub fn import_value_certificates(&mut self, certificates: ValueCertificates) -> usize {
         assert!(self.fixed_policy.is_none());
         assert!(self.nodes.is_empty() && self.closed.is_empty());
         assert_eq!(certificates.dex_fingerprint, self.dex.replay_fingerprint);
+        if let (Some(ours), Some(theirs)) = (self.ruleset, certificates.ruleset) {
+            assert_eq!(ours, theirs, "cannot import value certificates from a different ruleset");
+        }
+        if self.ruleset.is_none() {
+            self.ruleset = certificates.ruleset;
+        }
         for (key, value) in certificates.entries {
             let entry = self.value_certificates.entry(key).or_insert(Bounds { lo: 0.0, hi: 1.0 });
             entry.lo = entry.lo.max(value.lo);
@@ -797,7 +828,11 @@ impl<'d> BoundSolver<'d> {
             .chain(self.closed)
             .filter(|(_, value)| value.lo > 0.0 || value.hi < 1.0)
             .collect();
-        ValueCertificates { dex_fingerprint: self.dex.replay_fingerprint, entries }
+        ValueCertificates {
+            dex_fingerprint: self.dex.replay_fingerprint,
+            ruleset: self.ruleset,
+            entries,
+        }
     }
 
     pub fn node_count(&self) -> usize {
@@ -896,6 +931,7 @@ impl<'d> BoundSolver<'d> {
         tau: Option<(f64, f64)>,
         strategy_target: Option<(usize, f64)>,
     ) -> SolveReport {
+        self.ensure_ruleset(b.ruleset);
         let started = self.cfg.time_budget.map(|_| Instant::now());
         self.active_stall = self
             .cfg
@@ -1002,6 +1038,9 @@ impl<'d> BoundSolver<'d> {
 
     /// Current certified interval of a state, if it is in the graph.
     pub fn peek(&self, b: &Battle) -> Option<Bounds> {
+        if self.ruleset.is_some_and(|r| r != b.ruleset) {
+            return None;
+        }
         let key = self.node_key(b);
         self.nodes
             .get(&key)
@@ -1010,6 +1049,7 @@ impl<'d> BoundSolver<'d> {
     }
 
     pub fn retain_root(&mut self, b: &Battle) {
+        self.ensure_ruleset(b.ruleset);
         let root = self.node_key(b);
         let mut keep = HashSet::default();
         let mut pending = vec![root];
@@ -1069,7 +1109,7 @@ impl<'d> BoundSolver<'d> {
         &mut self, b: &Battle, targets: &[(usize, Vec<f64>)], tolerance: f64,
     ) -> SolveReport {
         assert!(!targets.is_empty() && tolerance.is_finite() && tolerance > 0.0);
-        assert!(b.outcome().is_none() && !self.closed.contains_key(&self.node_key(b)));
+        assert!(outcome_value(b).is_none() && !self.closed.contains_key(&self.node_key(b)));
         let started = Instant::now();
         let budget = self.cfg.work_budget;
         self.cfg.work_budget = 0;
@@ -1258,13 +1298,8 @@ impl<'d> BoundSolver<'d> {
         chance_class |= u32::from(needs[0]) << 16 | u32::from(needs[1]) << 17;
         let remaining_hp = [0,1].map(|side|b.sides[side].party.iter()
             .map(|&slot|b.sides[side].roster[slot as usize].hp.max(0)).sum());
-        let node = match b.outcome() {
-            Some(o) => {
-                let v = match o {
-                    Outcome::P1Win => 1.0,
-                    Outcome::Tie => 0.5,
-                    Outcome::P2Win => 0.0,
-                };
+        let node = match outcome_value(&b) {
+            Some(v) => {
                 Node {
                     chance_class,
                     remaining_hp,
@@ -2567,12 +2602,8 @@ fn prune_dominated_actions(
     (removed_rows, removed_cols, checks)
 }
 
-fn outcome_value(b: &Battle) -> Option<f64> {
-    b.outcome().map(|o| match o {
-        Outcome::P1Win => 1.0,
-        Outcome::Tie => 0.5,
-        Outcome::P2Win => 0.0,
-    })
+pub(super) fn outcome_value(b: &Battle) -> Option<f64> {
+    crate::eval::turn_limit_outcome_value(b)
 }
 
 #[cfg(test)]

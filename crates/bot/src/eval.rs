@@ -13,8 +13,456 @@
 //! return/...) score their static value — same caveat as MaxDamage; hidden
 //! power uses the mon's real DV-derived type and power.
 
+use nc2000_engine::battle::Outcome;
 use nc2000_engine::dex::{Dex, MoveId, TypeId};
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::{Battle, PokeId, Status};
+
+/// Castle PBS `L_TURN` judge value from side 0's perspective (`1.0` = P1Win, `0.5` = Tie, `0.0` = P2Win):
+/// compares living Pokemon count first, then sum of living `hp / maxhp` ratios (f64, seat-unbiased).
+/// Verified by live `PS.cgi` probes `12a1`, `12a2`, `12a3`.
+pub fn castle_judge_value_battle(b: &Battle) -> f64 {
+    let mut alive = [0u32; 2];
+    let mut hp_sum = [0.0f64; 2];
+    for side in 0..2 {
+        for &slot in &b.sides[side].party {
+            let p = &b.sides[side].roster[slot as usize];
+            if !p.fainted && p.hp > 0 {
+                alive[side] += 1;
+                hp_sum[side] += (p.hp as f64) / (p.maxhp.max(1) as f64);
+            }
+        }
+    }
+    if alive[0] != alive[1] {
+        return if alive[0] > alive[1] { 1.0 } else { 0.0 };
+    }
+    if (hp_sum[0] - hp_sum[1]).abs() <= 1e-12 {
+        0.5
+    } else if hp_sum[0] > hp_sum[1] {
+        1.0
+    } else {
+        0.0
+    }
+}
+
+/// Terminal outcome value from side 0's perspective on `Battle`, honoring both `Battle::outcome()`
+/// and `b.ruleset.turn_limit()` (`1000`-turn tie on PS; `L_TURN` alive-count -> HP-ratio judge on Castle).
+#[inline]
+pub fn turn_limit_outcome_value(b: &Battle) -> Option<f64> {
+    if let Some(o) = b.outcome() {
+        return Some(match o {
+            Outcome::P1Win => 1.0,
+            Outcome::Tie => 0.5,
+            Outcome::P2Win => 0.0,
+        });
+    }
+    if let Some(lim) = b.ruleset.turn_limit() {
+        if b.turn > lim {
+            return Some(if b.ruleset.is_castle() {
+                castle_judge_value_battle(b)
+            } else {
+                0.5
+            });
+        }
+    }
+    None
+}
+
+/// Castle PBS `L_TURN` judge value from side 0's perspective on `CompactBattle`.
+#[inline]
+pub fn compact_castle_judge_value(cb: &CompactBattle, table: &MatchTable) -> f64 {
+    let mut alive = [0u32; 2];
+    let mut hp_sum = [0.0f64; 2];
+    for side in 0..2 {
+        let mask = cb.sides[side].alive_mask;
+        for slot in 0..3usize {
+            if (mask & (1 << slot)) == 0 {
+                continue;
+            }
+            let idx = side * 3 + slot;
+            let hp = cb.mons[idx].hp();
+            if hp > 0 {
+                alive[side] += 1;
+                hp_sum[side] += (hp as f64) / (table.mons[idx].maxhp.max(1) as f64);
+            }
+        }
+    }
+    if alive[0] != alive[1] {
+        return if alive[0] > alive[1] { 1.0 } else { 0.0 };
+    }
+    if (hp_sum[0] - hp_sum[1]).abs() <= 1e-12 {
+        0.5
+    } else if hp_sum[0] > hp_sum[1] {
+        1.0
+    } else {
+        0.0
+    }
+}
+
+/// Terminal outcome value from side 0's perspective on `CompactBattle`, honoring `cb.outcome`
+/// and `table.ruleset.turn_limit()`.
+#[inline]
+pub fn compact_turn_limit_outcome(cb: &CompactBattle, table: &MatchTable) -> Option<f64> {
+    match cb.outcome {
+        1 => return Some(1.0),
+        2 => return Some(0.0),
+        3 => return Some(0.5),
+        _ => {}
+    }
+    if let Some(lim) = table.ruleset.turn_limit() {
+        if cb.turn > lim {
+            return Some(if table.ruleset.is_castle() {
+                compact_castle_judge_value(cb, table)
+            } else {
+                0.5
+            });
+        }
+    }
+    None
+}
+
+/// Ruleset-aware Flail/Reversal base power (`20 <-> 40` boundary is `< 77.5%` on Castle vs `floor(48*hp/maxhp) < 33` on PS).
+#[inline]
+pub(crate) fn ruleset_flail_bp(ruleset: Ruleset, hp: i32, maxhp: i32) -> i32 {
+    let mx = maxhp.max(1);
+    let ratio = ((hp as f64 * 48.0 / mx as f64).floor() as i32).max(1);
+    if ratio < 2 {
+        200
+    } else if ratio < 5 {
+        150
+    } else if ratio < 10 {
+        100
+    } else if ratio < 17 {
+        80
+    } else if ruleset.is_castle() {
+        if (hp as i64) * 40 < (mx as i64) * 31 {
+            40
+        } else {
+            20
+        }
+    } else if ratio < 33 {
+        40
+    } else {
+        20
+    }
+}
+
+/// Ruleset-aware Gen 2 accuracy threshold out of 256 (exact `-20/256` BrightPowder subtraction;
+/// PS GB integer tables vs Castle exact `3/9..9/3` fractions).
+#[inline]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn ruleset_accuracy_threshold(
+    ruleset: Ruleset,
+    base_pct: u8,
+    acc_boost: i8,
+    eva_boost: i8,
+    ignore_accuracy: bool,
+    ignore_evasion: bool,
+    ignore_positive_evasion: bool,
+    brightpowder: bool,
+) -> u8 {
+    if ruleset.is_ps() {
+        return nc2000_engine::compact::lookup_accuracy_threshold(
+            base_pct,
+            acc_boost,
+            eva_boost,
+            ignore_accuracy,
+            ignore_evasion,
+            ignore_positive_evasion,
+            brightpowder,
+        );
+    }
+    let mut acc = ((base_pct.min(100) as f64) * 255.0 / 100.0).floor();
+    let a = if ignore_accuracy {
+        0
+    } else {
+        acc_boost.clamp(-6, 6)
+    };
+    let e_raw = eva_boost.clamp(-6, 6);
+    let e = if ignore_evasion || (ignore_positive_evasion && e_raw > 0) {
+        0
+    } else {
+        e_raw
+    };
+    if a > 0 {
+        acc = acc * ((3 + a) as f64) / 3.0;
+    } else if a < 0 {
+        acc = acc * 3.0 / ((3 - a) as f64);
+    }
+    if e > 0 {
+        acc = acc * 3.0 / ((3 + e) as f64);
+    } else if e < 0 {
+        acc = acc * ((3 - e) as f64) / 3.0;
+    }
+    let raw = acc.floor().clamp(1.0, 255.0) as u8;
+    if brightpowder {
+        raw.saturating_sub(20)
+    } else {
+        raw
+    }
+}
+
+/// Ruleset-aware hit probability in `[0.0, 1.0]` with exact `-20/256` BrightPowder subtraction.
+#[inline]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn ruleset_hit_probability(
+    ruleset: Ruleset,
+    base_pct: u8,
+    always_hit: bool,
+    acc_boost: i8,
+    eva_boost: i8,
+    ignore_accuracy: bool,
+    ignore_evasion: bool,
+    ignore_positive_evasion: bool,
+    brightpowder: bool,
+) -> f64 {
+    if always_hit {
+        return 1.0;
+    }
+    let thr = ruleset_accuracy_threshold(
+        ruleset,
+        base_pct,
+        acc_boost,
+        eva_boost,
+        ignore_accuracy,
+        ignore_evasion,
+        ignore_positive_evasion,
+        brightpowder,
+    );
+    if thr == 255 {
+        1.0
+    } else {
+        (thr as f64) / 256.0
+    }
+}
+
+/// Ruleset-aware effective stat calculation on `CompactBattle`:
+/// - PS: exact `get_stat_branchless` / `cb.mon_stat` parity.
+/// - Castle: exact integer fractions `int(stat * 2 / (2 - stage))` for negative stages,
+///   Burn/Par never cleared by stat stage changes or Haze, optional `ovfl` `% 1024`.
+#[inline]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn ruleset_mon_stat(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    side: usize,
+    slot: usize,
+    stat_i: usize,
+    boost_override: Option<i8>,
+    unboosted: bool,
+    unmodified: bool,
+) -> i32 {
+    let p_idx = side * 3 + slot;
+    let mon = &cb.mons[p_idx];
+    let spec = &table.mons[p_idx];
+    let side_st = &cb.sides[side];
+    let boost = boost_override.unwrap_or(mon.boosts[stat_i]);
+    if table.ruleset.is_ps() {
+        if boost_override.is_none() {
+            return cb.mon_stat(table, side, slot, stat_i, unboosted, unmodified);
+        }
+        let has_par = (mon.status_raw() == Status::Par as u8)
+            & ((mon.vol_flags & vol_bit::PAR_SPEED_DROP) != 0);
+        let has_brn = (mon.status_raw() == Status::Brn as u8)
+            & ((mon.vol_flags & vol_bit::BRN_ATK_DROP) != 0);
+        let ispec = table.item_spec(mon.item);
+        let item_kind = if ispec.stat_kind != nc2000_engine::compact::ItemStatKind::None
+            && ispec.stat_kind == spec.species_stat_kind
+        {
+            ispec.stat_kind
+        } else {
+            nc2000_engine::compact::ItemStatKind::None
+        };
+        return nc2000_engine::compact::get_stat_branchless(
+            spec.stored_stats[stat_i] as i32,
+            boost,
+            stat_i,
+            unboosted,
+            unmodified,
+            false,
+            has_par,
+            has_brn,
+            side_st.reflect_turns > 0,
+            side_st.lightscreen_turns > 0,
+            item_kind,
+        );
+    }
+    let eff_boost = if unboosted { 0 } else { boost.clamp(-6, 6) };
+    let stored = spec.stored_stats[stat_i] as i32;
+    let mut val = if eff_boost >= 0 {
+        (stored * (2 + eff_boost as i32)) / 2
+    } else {
+        (stored * 2) / (2 - eff_boost as i32)
+    };
+    if stat_i == 4 && mon.status_raw() == Status::Par as u8 {
+        val /= 4;
+    }
+    if stat_i == 0 && !unmodified && mon.status_raw() == Status::Brn as u8 {
+        val /= 2;
+    }
+    if table.ruleset.overflow_mode() {
+        if val >= 1024 {
+            val %= 1024;
+        }
+        val = val.max(1);
+    } else {
+        val = val.clamp(1, 999);
+    }
+    if !unboosted
+        && ((stat_i == 1 && side_st.reflect_turns > 0)
+            || (stat_i == 3 && side_st.lightscreen_turns > 0))
+    {
+        val *= 2;
+    }
+    let ispec = table.item_spec(mon.item);
+    let item_kind = if ispec.stat_kind != nc2000_engine::compact::ItemStatKind::None
+        && ispec.stat_kind == spec.species_stat_kind
+    {
+        ispec.stat_kind
+    } else {
+        nc2000_engine::compact::ItemStatKind::None
+    };
+    match item_kind {
+        nc2000_engine::compact::ItemStatKind::ThickClub if stat_i == 0 => val *= 2,
+        nc2000_engine::compact::ItemStatKind::LightBall if stat_i == 2 => val *= 2,
+        nc2000_engine::compact::ItemStatKind::MetalPowder if stat_i == 1 || stat_i == 3 => {
+            val += val / 2;
+        }
+        _ => {}
+    }
+    if table.ruleset.overflow_mode() && val >= 1024 {
+        val = (val % 1024).max(1);
+    }
+    val.max(1)
+}
+
+#[inline]
+pub(crate) fn castle_speed_rational(stored_spe: i32, boost: i8, is_par: bool) -> (u128, u128) {
+    let b = boost.clamp(-6, 6);
+    let (s_num, s_den) = if b >= 0 {
+        ((2 + b) as u128, 2u128)
+    } else {
+        (2u128, (2 - b) as u128)
+    };
+    let num = (stored_spe.max(1) as u128) * s_num;
+    let den = s_den * if is_par { 4 } else { 1 };
+    (num, den)
+}
+
+/// Exact ruleset-aware action speed comparison (`Ordering` of side `s0` vs side `s1`).
+/// On Castle PBS, compares non-truncated Perl `f64` speeds (`Probe 12H`) via exact rational
+/// cross-multiplication while honoring 2-side `quick_claw_for`.
+#[inline]
+pub(crate) fn compare_action_speed(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    s0: usize,
+    slot0: usize,
+    s1: usize,
+    slot1: usize,
+) -> std::cmp::Ordering {
+    if table.ruleset.is_ps() {
+        return cb
+            .mon_action_speed(table, s0, slot0)
+            .cmp(&cb.mon_action_speed(table, s1, slot1));
+    }
+    let idx0 = s0 * 3 + slot0;
+    let idx1 = s1 * 3 + slot1;
+    let m0 = &cb.mons[idx0];
+    let m1 = &cb.mons[idx1];
+    let qc0 = cb.quick_claw_for(s0) && table.item_spec(m0.item).is_quick_claw;
+    let qc1 = cb.quick_claw_for(s1) && table.item_spec(m1.item).is_quick_claw;
+    match (qc0, qc1) {
+        (true, false) => return std::cmp::Ordering::Greater,
+        (false, true) => return std::cmp::Ordering::Less,
+        (true, true) => return std::cmp::Ordering::Equal,
+        (false, false) => {}
+    }
+    let (n0, d0) = castle_speed_rational(
+        table.mons[idx0].stored_stats[4] as i32,
+        m0.boosts[4],
+        m0.status_raw() == Status::Par as u8,
+    );
+    let (n1, d1) = castle_speed_rational(
+        table.mons[idx1].stored_stats[4] as i32,
+        m1.boosts[4],
+        m1.status_raw() == Status::Par as u8,
+    );
+    (n0 * d1).cmp(&(n1 * d0))
+}
+
+/// Exact ruleset-aware speed comparison with explicit speed-stage overrides (used by `relay.rs`).
+#[inline]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn compare_speed_with_boost(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    s0: usize,
+    slot0: usize,
+    boost0: i8,
+    s1: usize,
+    slot1: usize,
+    boost1: i8,
+) -> std::cmp::Ordering {
+    if table.ruleset.is_ps() {
+        let sp0 = ruleset_mon_stat(cb, table, s0, slot0, 4, Some(boost0), false, false);
+        let sp1 = ruleset_mon_stat(cb, table, s1, slot1, 4, Some(boost1), false, false);
+        return sp0.cmp(&sp1);
+    }
+    let idx0 = s0 * 3 + slot0;
+    let idx1 = s1 * 3 + slot1;
+    let (n0, d0) = castle_speed_rational(
+        table.mons[idx0].stored_stats[4] as i32,
+        boost0,
+        cb.mons[idx0].status_raw() == Status::Par as u8,
+    );
+    let (n1, d1) = castle_speed_rational(
+        table.mons[idx1].stored_stats[4] as i32,
+        boost1,
+        cb.mons[idx1].status_raw() == Status::Par as u8,
+    );
+    (n0 * d1).cmp(&(n1 * d0))
+}
+
+/// Smooth Castle `L_TURN` proximity differential favoring alive count first, then sum of alive HP ratios.
+#[inline]
+fn castle_turn_limit_proximity_diff(cb: &CompactBattle, table: &MatchTable) -> f64 {
+    if !table.ruleset.is_castle() {
+        return 0.0;
+    }
+    let Some(lim) = table.ruleset.turn_limit() else {
+        return 0.0;
+    };
+    let rem = lim.saturating_sub(cb.turn);
+    if rem > 16 {
+        return 0.0;
+    }
+    let mut alive = [0i32; 2];
+    let mut hp_sum = [0.0f64; 2];
+    for side in 0..2 {
+        let mask = cb.sides[side].alive_mask;
+        for slot in 0..3usize {
+            if (mask & (1 << slot)) == 0 {
+                continue;
+            }
+            let idx = side * 3 + slot;
+            let hp = cb.mons[idx].hp();
+            if hp > 0 {
+                alive[side] += 1;
+                hp_sum[side] += (hp as f64) / (table.mons[idx].maxhp.max(1) as f64);
+            }
+        }
+    }
+    let urgency = ((17 - rem) as f64 / 17.0).powi(2);
+    let alive_diff = (alive[0] - alive[1]) as f64;
+    let hp_diff = hp_sum[0] - hp_sum[1];
+    let judge_margin = if alive[0] != alive[1] {
+        alive_diff * 4.0 + hp_diff * 0.5
+    } else {
+        hp_diff * 4.0
+    };
+    urgency * 2.5 * judge_margin
+}
 
 /// Tunable weights. All features are from the owning side's perspective
 /// (penalties are stored positive and subtracted).
@@ -210,7 +658,11 @@ pub fn best_hit_fraction(b: &Battle, dex: &Dex, att: PokeId, def: PokeId) -> f64
                 TypeId(mspec.move_type),
                 mspec.is_physical,
                 mspec.is_status,
-                (255 - a.happiness as i32) * 10 / 25,
+                if b.is_castle() {
+                    102
+                } else {
+                    (255 - a.happiness as i32) * 10 / 25
+                },
             ),
             nc2000_engine::compact::VarBpKind::HiddenPower => {
                 let hpt = a.hp_type;
@@ -218,20 +670,7 @@ pub fn best_hit_fraction(b: &Battle, dex: &Dex, att: PokeId, def: PokeId) -> f64
                 (hpt, is_phys, false, a.hp_power)
             }
             nc2000_engine::compact::VarBpKind::FlailReversal => {
-                let ratio = ((a.hp as f64 * 48.0 / a.maxhp as f64).floor() as i32).max(1);
-                let bp = if ratio < 2 {
-                    200
-                } else if ratio < 5 {
-                    150
-                } else if ratio < 10 {
-                    100
-                } else if ratio < 17 {
-                    80
-                } else if ratio < 33 {
-                    40
-                } else {
-                    20
-                };
+                let bp = ruleset_flail_bp(b.ruleset, a.hp, a.maxhp);
                 (TypeId(mspec.move_type), mspec.is_physical, mspec.is_status, bp)
             }
             _ => (
@@ -271,7 +710,8 @@ pub fn best_hit_fraction(b: &Battle, dex: &Dex, att: PokeId, def: PokeId) -> f64
             }
         }
 
-        let acc = nc2000_engine::compact::hit_probability_branchless(
+        let acc = ruleset_hit_probability(
+            b.ruleset,
             mspec.base_acc_pct,
             mspec.always_hit,
             a.boosts[5],
@@ -279,6 +719,7 @@ pub fn best_hit_fraction(b: &Battle, dex: &Dex, att: PokeId, def: PokeId) -> f64
             mspec.ignore_accuracy,
             mspec.ignore_evasion,
             mspec.ignore_positive_evasion,
+            false,
         );
 
         let raw = if mspec.special_kind == nc2000_engine::compact::SpecialMoveKind::SuperFang {
@@ -391,7 +832,11 @@ pub fn expected_hit_fraction(
             TypeId(mspec.move_type),
             mspec.is_physical,
             mspec.is_status,
-            (255 - a.happiness as i32) * 10 / 25,
+            if b.is_castle() {
+                102
+            } else {
+                (255 - a.happiness as i32) * 10 / 25
+            },
         ),
         nc2000_engine::compact::VarBpKind::HiddenPower => {
             let hpt = a.hp_type;
@@ -399,20 +844,7 @@ pub fn expected_hit_fraction(
             (hpt, is_phys, false, a.hp_power)
         }
         nc2000_engine::compact::VarBpKind::FlailReversal => {
-            let ratio = ((a.hp as f64 * 48.0 / a.maxhp as f64).floor() as i32).max(1);
-            let bp = if ratio < 2 {
-                200
-            } else if ratio < 5 {
-                150
-            } else if ratio < 10 {
-                100
-            } else if ratio < 17 {
-                80
-            } else if ratio < 33 {
-                40
-            } else {
-                20
-            };
+            let bp = ruleset_flail_bp(b.ruleset, a.hp, a.maxhp);
             (TypeId(mspec.move_type), mspec.is_physical, mspec.is_status, bp)
         }
         _ => (
@@ -443,7 +875,8 @@ pub fn expected_hit_fraction(
         }
     }
 
-    let acc = nc2000_engine::compact::hit_probability_branchless(
+    let acc = ruleset_hit_probability(
+        b.ruleset,
         mspec.base_acc_pct,
         mspec.always_hit,
         a.boosts[5],
@@ -451,6 +884,7 @@ pub fn expected_hit_fraction(
         mspec.ignore_accuracy,
         mspec.ignore_evasion,
         mspec.ignore_positive_evasion,
+        false,
     );
 
     let raw = if mspec.special_kind == nc2000_engine::compact::SpecialMoveKind::SuperFang {
@@ -549,6 +983,9 @@ pub fn compact_eval01_blindspot_norelay(
     table: &MatchTable,
     w: &EvalWeights,
 ) -> f64 {
+    if let Some(v) = compact_turn_limit_outcome(cb, table) {
+        return v;
+    }
     let s0 = compact_side_score(cb, table, w, 0);
     let s1 = compact_side_score(cb, table, w, 1);
     let mut diff = s0 - s1;
@@ -557,6 +994,7 @@ pub fn compact_eval01_blindspot_norelay(
     if n0 > 1 || n1 > 1 {
         diff += compact_false_boost_refund_diff(cb, table, w);
     }
+    diff += castle_turn_limit_proximity_diff(cb, table);
     let mut old_rm = 0.0;
     if w.race != 0.0 {
         old_rm = compact_race_margin(cb, table);
@@ -731,12 +1169,16 @@ fn compact_side_false_boost_refund(
             let f_idx = foe_s * 3 + foe_slot;
             let f_mon = &cb.mons[f_idx];
             let f_st = f_mon.status_raw();
-            let my_spd = cb.mon_action_speed(table, s, act_slot);
-            let f_spd = cb.mon_action_speed(table, foe_s, foe_slot);
             let f_hit = cb.best_hit_fraction(table, foe_s, foe_slot, s, act_slot);
             let f_cp = (f_mon.vol_flags & vol_bit::CONFUSION) != 0 || f_st == Status::Par as u8;
             let f_slp = f_st == Status::Slp as u8 && f_mon.status_counter() >= 2;
-            (my_spd > f_spd, f_hit, f_cp, f_slp)
+            (
+                compare_action_speed(cb, table, s, act_slot, foe_s, foe_slot)
+                    == std::cmp::Ordering::Greater,
+                f_hit,
+                f_cp,
+                f_slp,
+            )
         } else {
             (true, 0.0, false, false)
         };
@@ -793,9 +1235,13 @@ fn compact_side_false_boost_refund(
 /// Win-probability-shaped eval in `(0, 1)` from side 0's perspective on `CompactBattle`.
 #[inline]
 pub fn compact_eval01(cb: &CompactBattle, table: &MatchTable, w: &EvalWeights) -> f64 {
+    if let Some(v) = compact_turn_limit_outcome(cb, table) {
+        return v;
+    }
     let s0 = compact_side_score(cb, table, w, 0);
     let s1 = compact_side_score(cb, table, w, 1);
     let mut diff = s0 - s1;
+    diff += castle_turn_limit_proximity_diff(cb, table);
     let mut old_rm = 0.0;
     if w.race != 0.0 {
         old_rm = compact_race_margin(cb, table);
@@ -840,8 +1286,13 @@ fn compact_side_score(
         } else if st_raw == Status::Par as u8 {
             w.par
         } else if st_raw == Status::Slp as u8 {
-            let t = mon.status_counter().clamp(0, 4);
-            w.slp * (t as f64) / 3.0
+            if table.ruleset.is_castle() {
+                let t = mon.status_counter().clamp(0, 5);
+                w.slp * (t as f64) / 4.0
+            } else {
+                let t = mon.status_counter().clamp(0, 4);
+                w.slp * (t as f64) / 3.0
+            }
         } else if st_raw == Status::Frz as u8 {
             w.frz
         } else if st_raw == Status::Psn as u8 {
@@ -906,8 +1357,7 @@ pub fn compact_race_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
         return 0.0;
     }
 
-    let spd0 = cb.mon_action_speed(table, 0, slot0);
-    let spd1 = cb.mon_action_speed(table, 1, slot1);
+    let spd_ord = compare_action_speed(cb, table, 0, slot0, 1, slot1);
 
     let turns = |att_s: usize, att_slot: usize, def_s: usize, def_slot: usize, att_faster: bool| -> f64 {
         let e = cb.best_hit_fraction(table, att_s, att_slot, def_s, def_slot);
@@ -960,7 +1410,8 @@ pub fn compact_race_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
                     }
                 }
                 if !talks {
-                    t += att_mon.status_counter().clamp(1, 4) as f64;
+                    let max_slp = if table.ruleset.is_castle() { 5 } else { 4 };
+                    t += att_mon.status_counter().clamp(1, max_slp) as f64;
                 }
             }
         } else if st_raw == Status::Frz as u8 {
@@ -983,8 +1434,8 @@ pub fn compact_race_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
     };
 
     let (k0, k1) = (
-        turns(0, slot0, 1, slot1, spd0 > spd1),
-        turns(1, slot1, 0, slot0, spd1 > spd0),
+        turns(0, slot0, 1, slot1, spd_ord == std::cmp::Ordering::Greater),
+        turns(1, slot1, 0, slot0, spd_ord == std::cmp::Ordering::Less),
     );
     let (v0, v1) = (surv(0, slot0), surv(1, slot1));
     let k0 = if k0 <= v0 { k0 } else { f64::INFINITY };
@@ -998,7 +1449,7 @@ pub fn compact_race_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
         (true, false) => 2.0,
         (false, true) => -2.0,
         _ => {
-            let edge = match spd0.cmp(&spd1) {
+            let edge = match spd_ord {
                 std::cmp::Ordering::Greater => 0.5,
                 std::cmp::Ordering::Less => -0.5,
                 std::cmp::Ordering::Equal => 0.0,

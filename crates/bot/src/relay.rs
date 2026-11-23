@@ -6,12 +6,13 @@
 //! cached in a zero-allocation thread-local 2-way set-associative table.
 
 use std::cell::RefCell;
+use std::cmp::Ordering;
 
 use nc2000_engine::compact::{
-    get_damage_base_branchless, get_stat_branchless, hit_probability_branchless,
-    lookup_accuracy_threshold, vol_bit, CompactBattle, CompactWeather, ItemStatKind, MatchTable,
-    SpecialMoveKind, VarBpKind, NO_MOVE_SLOT, NO_TYPE_ID,
+    get_damage_base_branchless, get_stat_branchless, vol_bit, CompactBattle, CompactMoveSpec,
+    CompactWeather, ItemStatKind, MatchTable, SpecialMoveKind, VarBpKind, NO_MOVE_SLOT, NO_TYPE_ID,
 };
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::Status;
 
 use crate::eval::EvalWeights;
@@ -237,6 +238,62 @@ fn spikes_entry_dmg(cb: &CompactBattle, table: &MatchTable, side: usize, slot: u
         2 => (maxhp / 6).max(1),
         _ => (maxhp / 4).max(1),
     }
+}
+
+/// Total Gen 2 switch-in HP loss: `Spikes` + `AfterSwitchInSelf` burn/poison slip
+/// (including Baton-Passed `residualdmg` counter when `passer_slot` is `Some`;
+/// in Castle PBS, passed `residualdmg` applies to `Psn` only, not `Brn`).
+#[inline]
+fn switch_entry_dmg(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    side: usize,
+    slot: usize,
+    passer_slot: Option<usize>,
+) -> i16 {
+    let mut dmg = spikes_entry_dmg(cb, table, side, slot);
+    let idx = side * 3 + slot;
+    let mon = &cb.mons[idx];
+    let st = mon.status_raw();
+    if st != Status::Brn as u8 && st != Status::Psn as u8 && st != Status::Tox as u8 {
+        return dmg;
+    }
+    let maxhp = table.mons[idx].maxhp.max(1);
+    let slip = if let Some(p_slot) = passer_slot {
+        let passer = &cb.mons[side * 3 + p_slot];
+        let p_cnt = passer.status_counter();
+        let passer_has_res = passer.status_raw() == Status::Tox as u8 || (p_cnt & 0x10) != 0;
+        let res_applies = passer_has_res
+            && (st == Status::Tox as u8
+                || st == Status::Psn as u8
+                || (!table.ruleset.is_castle() && st == Status::Brn as u8));
+        if res_applies {
+            // Gen 2 `AfterSwitchInSelf` deals pre-increment `max(1, floor(maxhp/16) * c)`.
+            let c = (p_cnt & 0x0F) as i16;
+            ((maxhp / 16) * c).max(1)
+        } else {
+            (maxhp / 8).max(1)
+        }
+    } else {
+        (maxhp / 8).max(1)
+    };
+    dmg = dmg.saturating_add(slip);
+    dmg
+}
+
+/// Uniquely identifies Gen 2 `Pursuit` (Dark, Special, 40 BP, 100% acc, 0 prio, no secondary/drain).
+#[inline]
+fn is_pursuit_move(mspec: &CompactMoveSpec) -> bool {
+    !mspec.is_status
+        && !mspec.is_physical
+        && !mspec.always_hit
+        && !mspec.is_water
+        && !mspec.drain_half
+        && mspec.base_power == 40
+        && mspec.fixed_damage == 0
+        && mspec.sec_chance_256 == 0
+        && mspec.special_kind == SpecialMoveKind::None
+        && mspec.priority == 0
 }
 
 #[inline]
@@ -593,15 +650,15 @@ pub fn is_relay_eligible(cb: &CompactBattle, table: &MatchTable, side: usize) ->
         }
     }
 
-    // Must have >= 1 bench mon surviving entry Spikes
+    // Must have >= 1 bench mon surviving entry Spikes + Gen 2 AfterSwitchInSelf burn/poison slip
     let mut has_surviving_bench = false;
     for slot in 0..3usize {
         if slot == act_slot || (side_st.alive_mask & (1 << slot)) == 0 {
             continue;
         }
         let b_idx = side * 3 + slot;
-        let d_spk = spikes_entry_dmg(cb, table, side, slot);
-        if cb.mons[b_idx].hp() > d_spk {
+        let d_entry = switch_entry_dmg(cb, table, side, slot, Some(act_slot));
+        if cb.mons[b_idx].hp() > d_entry {
             has_surviving_bench = true;
             break;
         }
@@ -663,10 +720,6 @@ fn stat_with_boost(
     let mon = &cb.mons[p_idx];
     let spec = &table.mons[p_idx];
     let side_st = &cb.sides[side];
-    let has_par = (mon.status_raw() == Status::Par as u8)
-        & ((mon.vol_flags & vol_bit::PAR_SPEED_DROP) != 0);
-    let has_brn = (mon.status_raw() == Status::Brn as u8)
-        & ((mon.vol_flags & vol_bit::BRN_ATK_DROP) != 0);
     let item_kind = {
         let held = table.item_spec(mon.item).stat_kind;
         if held != ItemStatKind::None && held == spec.species_stat_kind {
@@ -675,6 +728,41 @@ fn stat_with_boost(
             ItemStatKind::None
         }
     };
+    if table.ruleset.is_castle() {
+        let mut val = spec.stored_stats[stat_idx] as i32;
+        let b = boost.clamp(-6, 6) as i32;
+        if b > 0 {
+            val = val * (2 + b) / 2;
+        } else if b < 0 {
+            val = val * 2 / (2 - b);
+        }
+        val = val.clamp(1, 999);
+        if stat_idx == 4 && mon.status_raw() == Status::Par as u8 {
+            val = (val / 4).max(1);
+        }
+        if stat_idx == 0 && mon.status_raw() == Status::Brn as u8 {
+            val = (val / 2).max(1);
+        }
+        if (stat_idx == 1 && side_st.reflect_turns > 0)
+            || (stat_idx == 3 && side_st.lightscreen_turns > 0)
+        {
+            val *= 2;
+        }
+        match item_kind {
+            ItemStatKind::ThickClub if stat_idx == 0 => val *= 2,
+            ItemStatKind::LightBall if stat_idx == 2 => val *= 2,
+            ItemStatKind::MetalPowder if stat_idx == 1 || stat_idx == 3 => val = val * 3 / 2,
+            _ => {}
+        }
+        if table.ruleset.overflow_mode() && val >= 1024 {
+            val = (val % 1024).max(1);
+        }
+        return val.clamp(1, 999);
+    }
+    let has_par = (mon.status_raw() == Status::Par as u8)
+        & ((mon.vol_flags & vol_bit::PAR_SPEED_DROP) != 0);
+    let has_brn = (mon.status_raw() == Status::Brn as u8)
+        & ((mon.vol_flags & vol_bit::BRN_ATK_DROP) != 0);
     get_stat_branchless(
         spec.stored_stats[stat_idx] as i32,
         boost,
@@ -693,6 +781,7 @@ fn stat_with_boost(
 /// Conditional damage fraction of `def`'s `maxhp` IF the move hits, paired with hit probability
 /// and move priority, evaluated under explicit stat boosts `att_boosts` and `def_boosts`.
 #[inline]
+#[allow(clippy::too_many_arguments)]
 fn best_move_profile(
     cb: &CompactBattle,
     table: &MatchTable,
@@ -705,13 +794,18 @@ fn best_move_profile(
     def_hp_frac: f32,
     def_boosts: &[i8; 7],
     allow_selfdestruct: bool,
+    def_has_sub: bool,
+    pursuit_2x: bool,
 ) -> (u8, f32, f32, i8) {
     let att_idx = att_side * 3 + att_slot;
     let def_idx = def_side * 3 + def_slot;
     let att_mon = &cb.mons[att_idx];
+    let def_mon = &cb.mons[def_idx];
     let att_spec = &table.mons[att_idx];
     let def_spec = &table.mons[def_idx];
     let def_maxhp = def_spec.maxhp.max(1) as f32;
+    let def_bp = table.item_spec(def_mon.item).is_brightpowder;
+    let is_castle = table.ruleset.is_castle();
     let weather = if cb.weather_turns > 0 {
         cb.weather_kind
     } else {
@@ -732,21 +826,18 @@ fn best_move_profile(
         if mspec.is_selfdestruct && !allow_selfdestruct {
             continue;
         }
+        // Gen 2: HP-draining moves (Giga Drain, Mega Drain, Absorb, Leech Life, Dream Eater)
+        // fail completely against an active Substitute.
+        if def_has_sub && mspec.drain_half && !mspec.bypasses_sub {
+            continue;
+        }
         let bp = if mspec.var_bp_kind == VarBpKind::FlailReversal {
-            let ratio = ((att_hp_frac * 48.0).floor() as i32).max(1);
-            if ratio < 2 {
-                200
-            } else if ratio < 5 {
-                150
-            } else if ratio < 10 {
-                100
-            } else if ratio < 17 {
-                80
-            } else if ratio < 33 {
-                40
-            } else {
-                20
-            }
+            let att_hp = (att_hp_frac * (att_spec.maxhp.max(1) as f32)).round() as i32;
+            crate::eval::ruleset_flail_bp(table.ruleset, att_hp, att_spec.maxhp as i32)
+        } else if is_castle && mspec.var_bp_kind == VarBpKind::Frustration {
+            102
+        } else if pursuit_2x && is_pursuit_move(mspec) {
+            80
         } else {
             mspec.base_power as i32
         };
@@ -760,7 +851,8 @@ fn best_move_profile(
         if is_immune {
             continue;
         }
-        let acc = hit_probability_branchless(
+        let acc = crate::eval::ruleset_hit_probability(
+            table.ruleset,
             mspec.base_acc_pct,
             mspec.always_hit,
             att_boosts[5],
@@ -768,6 +860,7 @@ fn best_move_profile(
             mspec.ignore_accuracy,
             mspec.ignore_evasion,
             mspec.ignore_positive_evasion,
+            def_bp,
         ) as f32;
 
         let raw = if mspec.special_kind == SpecialMoveKind::SuperFang {
@@ -780,28 +873,71 @@ fn best_move_profile(
             }
         } else {
             let (ai, di) = if mspec.is_physical { (0, 1) } else { (2, 3) };
-            let atk = stat_with_boost(cb, table, att_side, att_slot, ai, att_boosts[ai]);
-            let def = stat_with_boost(cb, table, def_side, def_slot, di, def_boosts[di]);
+            let mut atk = stat_with_boost(cb, table, att_side, att_slot, ai, att_boosts[ai]);
+            let mut def = stat_with_boost(cb, table, def_side, def_slot, di, def_boosts[di]);
             let has_tb_item = mspec.move_type != NO_TYPE_ID
                 && table.item_spec(att_mon.item).boost_type == mspec.move_type;
-            let base = get_damage_base_branchless(
-                att_spec.level as i32,
-                bp,
-                atk,
-                def,
-                mspec.is_physical,
-                mspec.is_selfdestruct,
-                false,
-                has_tb_item,
-                weather,
-                mspec.is_water,
-                mspec.is_fire,
-                mspec.is_solarbeam,
-                mspec.move_type,
-                att_spec.type_mask,
-                type_mod,
-                false,
-            );
+            let base = if is_castle {
+                // Castle PBS: Explosion Def/2 before >= 256 / 4; allow 0 minimum damage.
+                if mspec.is_selfdestruct && mspec.is_physical {
+                    def = (def / 2).max(1);
+                }
+                if (atk | def) >= 256 {
+                    atk = (atk >> 2).max(1);
+                    def = (def >> 2).max(1);
+                }
+                let mut d =
+                    ((att_spec.level as i32 * 2 / 5 + 2) * bp * atk / def.max(1)) / 50;
+                if has_tb_item {
+                    d = d * 110 / 100;
+                }
+                d = d.min(997) + 2;
+                match weather {
+                    CompactWeather::Rain => {
+                        if mspec.is_water {
+                            d = d * 3 / 2;
+                        } else if mspec.is_fire || mspec.is_solarbeam {
+                            d /= 2;
+                        }
+                    }
+                    CompactWeather::Sun => {
+                        if mspec.is_fire {
+                            d = d * 3 / 2;
+                        } else if mspec.is_water {
+                            d /= 2;
+                        }
+                    }
+                    _ => {}
+                }
+                if (att_spec.type_mask & (1u32 << (mspec.move_type & 31))) != 0 {
+                    d += d / 2;
+                }
+                if type_mod > 0 {
+                    d <<= type_mod as u32;
+                } else if type_mod < 0 {
+                    d >>= (-type_mod) as u32;
+                }
+                d.max(0)
+            } else {
+                get_damage_base_branchless(
+                    att_spec.level as i32,
+                    bp,
+                    atk,
+                    def,
+                    mspec.is_physical,
+                    mspec.is_selfdestruct,
+                    false,
+                    has_tb_item,
+                    weather,
+                    mspec.is_water,
+                    mspec.is_fire,
+                    mspec.is_solarbeam,
+                    mspec.move_type,
+                    att_spec.type_mask,
+                    type_mod,
+                    false,
+                )
+            };
             let hits = (mspec.multihit_mean_x2 as f32) * 0.5;
             (base as f32) * (236.0 / 255.0) * hits
         };
@@ -866,12 +1002,26 @@ fn primary_disrupt_of(
 }
 
 #[inline]
-fn disrupt_hit_prob(kind: DisruptKind, target_eva: i8, brightpowder: bool) -> f32 {
+fn disrupt_hit_prob(
+    ruleset: Ruleset,
+    kind: DisruptKind,
+    target_eva: i8,
+    brightpowder: bool,
+) -> f32 {
     match kind {
         DisruptKind::None => 0.0,
         DisruptKind::Haze | DisruptKind::PerishSong => 1.0,
         DisruptKind::Phaze { acc_pct } | DisruptKind::Encore { acc_pct } => {
-            let thr = lookup_accuracy_threshold(acc_pct, 0, target_eva, false, false, false, brightpowder);
+            let thr = crate::eval::ruleset_accuracy_threshold(
+                ruleset,
+                acc_pct,
+                0,
+                target_eva,
+                false,
+                false,
+                false,
+                brightpowder,
+            );
             if thr == 255 {
                 1.0
             } else {
@@ -887,7 +1037,14 @@ fn hash_mix(h: u64, x: u64) -> u64 {
 }
 
 #[inline]
-fn canonical_mon_key(cb: &CompactBattle, table: &MatchTable, side: usize, slot: usize, include_b8: bool) -> u64 {
+fn canonical_mon_key(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    side: usize,
+    slot: usize,
+    include_b8: bool,
+    passer_slot: Option<usize>,
+) -> u64 {
     let idx = side * 3 + slot;
     let mon = &cb.mons[idx];
     let spec = &table.mons[idx];
@@ -905,7 +1062,7 @@ fn canonical_mon_key(cb: &CompactBattle, table: &MatchTable, side: usize, slot: 
     }
     let b4 = if include_b8 { hp_to_b4(mon.hp(), spec.maxhp) } else { 0 };
     let (_, slp_rem, _) = mon_guaranteed_incapacitated(cb, table, side, slot);
-    let spk_ok = (mon.hp() > spikes_entry_dmg(cb, table, side, slot)) as u8;
+    let spk_ok = (mon.hp() > switch_entry_dmg(cb, table, side, slot, passer_slot)) as u8;
     let boost_hash = if include_b8 {
         let mut bh = 0u64;
         for (i, &b) in mon.boosts.iter().enumerate() {
@@ -959,7 +1116,11 @@ fn canonical_mon_key(cb: &CompactBattle, table: &MatchTable, side: usize, slot: 
         | (vol_bits << 22)
         | (boost_hash << 25)
         | (dyn_item_extra << 53);
-    hash_mix(spec.static_fp, packed)
+    let mut h = hash_mix(spec.static_fp, packed);
+    if !include_b8 && (mon.status_raw() == Status::Tox as u8 || (mon.status_counter() & 0x10) != 0) {
+        h = hash_mix(h, (mon.status_counter() & 0x1F) as u64);
+    }
+    h
 }
 
 #[derive(Clone, Copy)]
@@ -1012,11 +1173,11 @@ fn probe_fast_relay(
         recv_arr[n_recv] = CanonBench {
             party_slot: s_i as u8,
             b8_hp: hp_to_b4(b_mon.hp(), table.mons[b_idx].maxhp) * 2,
-            survives_spikes: b_mon.hp() > spikes_entry_dmg(cb, table, side, s_i),
+            survives_spikes: b_mon.hp() > switch_entry_dmg(cb, table, side, s_i, Some(act_slot)),
             status_raw: b_mon.status_raw(),
             slp_rem,
             has_sleeptalk: has_st,
-            static_fp: canonical_mon_key(cb, table, side, s_i, true),
+            static_fp: canonical_mon_key(cb, table, side, s_i, true, Some(act_slot)),
         };
         n_recv += 1;
     }
@@ -1042,11 +1203,11 @@ fn probe_fast_relay(
         def_arr[n_def_bench] = CanonBench {
             party_slot: s_i as u8,
             b8_hp: hp_to_b4(d_mon.hp(), table.mons[d_idx].maxhp) * 2,
-            survives_spikes: d_mon.hp() > spikes_entry_dmg(cb, table, def_side, s_i),
+            survives_spikes: d_mon.hp() > switch_entry_dmg(cb, table, def_side, s_i, None),
             status_raw: d_mon.status_raw(),
             slp_rem,
             has_sleeptalk: has_st,
-            static_fp: canonical_mon_key(cb, table, def_side, s_i, true),
+            static_fp: canonical_mon_key(cb, table, def_side, s_i, true, None),
         };
         n_def_bench += 1;
     }
@@ -1056,8 +1217,8 @@ fn probe_fast_relay(
 
     let mut h_lo = 0x517c_c1b7_2722_0a95u64;
     let mut h_hi = 0x9e37_79b9_7f4a_7c15u64;
-    let r_key = canonical_mon_key(cb, table, side, act_slot, false);
-    let d_key = canonical_mon_key(cb, table, def_side, def_slot, true);
+    let r_key = canonical_mon_key(cb, table, side, act_slot, false, None);
+    let d_key = canonical_mon_key(cb, table, def_side, def_slot, true, None);
     h_lo = hash_mix(h_lo, r_key);
     h_hi = hash_mix(h_hi, d_key);
     let field_bits = ((cb.sides[side].side_flags & 0x03) as u64)
@@ -1070,6 +1231,18 @@ fn probe_fast_relay(
         | ((n_recv as u64) << 12)
         | ((n_def_bench as u64) << 14);
     h_lo = hash_mix(h_lo, field_bits);
+    let ruleset_tag = table.ruleset.fingerprint_tag();
+    if ruleset_tag != 0 {
+        h_lo = hash_mix(h_lo, ruleset_tag);
+        h_hi = hash_mix(h_hi, ruleset_tag.rotate_left(19));
+        if !table.ruleset.is_seat_antisymmetric() {
+            h_lo = hash_mix(h_lo, (side as u64) + 1);
+        }
+        if let Some(lim) = table.ruleset.turn_limit() {
+            let rem = lim.saturating_add(1).saturating_sub(cb.turn).min(13);
+            h_hi = hash_mix(h_hi, rem as u64);
+        }
+    }
     for r in &recv_arr[..n_recv] {
         h_lo = hash_mix(h_lo, r.static_fp);
         h_hi = hash_mix(h_hi, r.static_fp.rotate_left(17));
@@ -1133,8 +1306,10 @@ fn build_cold_lookup(
     let (axis1, axis2) = bind_boost_axes(cb, table, side, act_slot);
     let zero_b = [0i8; 7];
     let d_boosts = &cb.mons[def_side * 3 + def_slot].boosts;
-    let (atk_move_slot, dmg_r_d0, acc_r_d0, _) =
-        best_move_profile(cb, table, side, act_slot, 1.0, &zero_b, def_side, def_slot, 1.0, d_boosts, false);
+    let (atk_move_slot, dmg_r_d0, acc_r_d0, _) = best_move_profile(
+        cb, table, side, act_slot, 1.0, &zero_b, def_side, def_slot, 1.0, d_boosts, false, false,
+        false,
+    );
     let d0_atk_frac_u8 = ((dmg_r_d0 * acc_r_d0 * 100.0).round().clamp(0.0, 250.0)) as u8;
 
     let h_r0 = probe.h_r0 as usize;
@@ -1146,8 +1321,10 @@ fn build_cold_lookup(
     let x0 = state_idx(0, h_r0, sigma0, k1_0, k2_0, k1_len, k2_len);
     let r0 = recv_idx(0, sigma0, k1_0, k2_0, k1_len, k2_len);
 
-    let (d0_brk, _, _, _) =
-        best_move_profile(cb, table, def_side, def_slot, 1.0, d_boosts, side, act_slot, 1.0, &zero_b, false);
+    let (d0_brk, _, _, _) = best_move_profile(
+        cb, table, def_side, def_slot, 1.0, d_boosts, side, act_slot, 1.0, &zero_b, false, false,
+        false,
+    );
     let (_, d0_dis) = primary_disrupt_of(cb, table, def_side, def_slot);
 
     Some((
@@ -1186,22 +1363,36 @@ fn select_best_counter(
         return None;
     }
     let zero_b = [0i8; 7];
-    let spe_r = stat_with_boost(cb, table, side, act_slot, 4, 0);
 
     let counter_score = |d_slot: usize, awake_factor: f32| -> (f32, f32, f32, bool) {
         let d_boosts = &cb.mons[def_side * 3 + d_slot].boosts;
         let (dk, _) = primary_disrupt_of(cb, table, def_side, d_slot);
         let has_disrupt = if dk != DisruptKind::None { awake_factor } else { 0.0 };
         let (_, dmg_d_to_r, acc_d_to_r, _) = best_move_profile(
-            cb, table, def_side, d_slot, 1.0, d_boosts, side, act_slot, 1.0, &zero_b, false,
+            cb, table, def_side, d_slot, 1.0, d_boosts, side, act_slot, 1.0, &zero_b, false, false,
+            false,
         );
         let (_, dmg_r_to_d, acc_r_to_d, _) = best_move_profile(
-            cb, table, side, act_slot, 1.0, &zero_b, def_side, d_slot, 1.0, d_boosts, false,
+            cb, table, side, act_slot, 1.0, &zero_b, def_side, d_slot, 1.0, d_boosts, false, false,
+            false,
         );
         let eff_d_to_r = dmg_d_to_r * acc_d_to_r * awake_factor;
         let eff_r_to_d = dmg_r_to_d * acc_r_to_d;
-        let spe_d = stat_with_boost(cb, table, def_side, d_slot, 4, d_boosts[4]);
-        let faster = if spe_d > spe_r { 1.0 } else { 0.0 };
+        let faster = if crate::eval::compare_speed_with_boost(
+            cb,
+            table,
+            def_side,
+            d_slot,
+            d_boosts[4],
+            side,
+            act_slot,
+            0,
+        ) == Ordering::Greater
+        {
+            1.0
+        } else {
+            0.0
+        };
         let s = 1.6 * has_disrupt + 1.2 * (4.0 * eff_d_to_r).min(1.0) + 0.25 * faster - 1.5 * eff_r_to_d;
         (s, eff_r_to_d, eff_d_to_r, dk != DisruptKind::None)
     };
@@ -1231,7 +1422,7 @@ fn select_best_counter(
         let d_slot = cand.party_slot as usize;
         let d_idx = def_side * 3 + d_slot;
         let maxhp = table.mons[d_idx].maxhp.max(1) as f32;
-        let spk_frac = (spikes_entry_dmg(cb, table, def_side, d_slot) as f32) / maxhp;
+        let spk_frac = (switch_entry_dmg(cb, table, def_side, d_slot, None) as f32) / maxhp;
         let hp_frac = (cand.b8_hp as f32) / 8.0;
         let awake_c = if cand.status_raw == Status::Frz as u8 {
             0.0
@@ -1255,13 +1446,14 @@ fn select_best_counter(
 }
 
 #[inline]
-fn mon_status_pen(w: &EvalWeights, status_raw: u8, slp_rem: u8) -> f32 {
+fn mon_status_pen(w: &EvalWeights, ruleset: Ruleset, status_raw: u8, slp_rem: u8) -> f32 {
     let p = if status_raw == Status::Brn as u8 {
         w.brn
     } else if status_raw == Status::Par as u8 {
         w.par
     } else if status_raw == Status::Slp as u8 {
-        w.slp * ((slp_rem as f64 + 1.0).min(3.0)) / 3.0
+        let max_slp = if ruleset.is_castle() { 4.0 } else { 3.0 };
+        w.slp * ((slp_rem as f64 + 1.0).min(max_slp)) / max_slp
     } else if status_raw == Status::Frz as u8 {
         w.frz
     } else if status_raw == Status::Psn as u8 {
@@ -1351,6 +1543,7 @@ fn evaluate_single_receiver_sweep_ext(
     // Handle in-turn hit from lead defender when Pass moved BEFORE Break
     if incoming_atk_from_lead && !foe_slots.is_empty() {
         let d0_slot = foe_slots[0] as usize;
+        let d0_idx = def_side * 3 + d0_slot;
         let (incap_d, slp_d, st_d) = mon_guaranteed_incapacitated(cb, table, def_side, d0_slot);
         let d_act_mult = if incap_d {
             0.0
@@ -1360,10 +1553,37 @@ fn evaluate_single_receiver_sweep_ext(
             1.0
         };
         if d_act_mult > 0.0 {
-            let (dmg_d, acc_d) = if let Some(cp) = cached {
-                (cp[0].dmg_m_if_hit, cp[0].acc_m)
+            // Castle PBS (`Probe 12C`): slower Pursuit retains 2x BP (80) against a faster Baton Pass receiver!
+            let castle_pursuit = table.ruleset.is_castle()
+                && (0..table.mons[d0_idx].num_moves as usize).any(|mi| {
+                    cb.mons[d0_idx].pp[mi] > 0
+                        && !cb.mons[d0_idx].is_slot_disabled(mi)
+                        && is_pursuit_move(&table.move_specs[d0_idx][mi])
+                });
+            let (dmg_d, acc_d) = if !castle_pursuit {
+                if let Some(cp) = cached {
+                    (cp[0].dmg_m_if_hit, cp[0].acc_m)
+                } else {
+                    let d0_boosts = &cb.mons[d0_idx].boosts;
+                    let (_, dd, ad, _) = best_move_profile(
+                        cb,
+                        table,
+                        def_side,
+                        d0_slot,
+                        foe_hp_fracs[0],
+                        d0_boosts,
+                        side,
+                        b_slot,
+                        hp_eff,
+                        passed_boosts,
+                        false,
+                        cur_sub > 0.0,
+                        false,
+                    );
+                    (dd, ad)
+                }
             } else {
-                let d0_boosts = &cb.mons[def_side * 3 + d0_slot].boosts;
+                let d0_boosts = &cb.mons[d0_idx].boosts;
                 let (_, dd, ad, _) = best_move_profile(
                     cb,
                     table,
@@ -1376,6 +1596,8 @@ fn evaluate_single_receiver_sweep_ext(
                     hp_eff,
                     passed_boosts,
                     false,
+                    cur_sub > 0.0,
+                    true,
                 );
                 (dd, ad)
             };
@@ -1424,8 +1646,16 @@ fn evaluate_single_receiver_sweep_ext(
             let b_mon = &cb.mons[b_idx];
             let b_spec = &table.mons[b_idx];
             let d0_boosts = &cb.mons[def_side * 3 + d0_slot].boosts;
-            let spe_b = stat_with_boost(cb, table, side, b_slot, 4, passed_boosts[4]);
-            let spe_d0 = stat_with_boost(cb, table, def_side, d0_slot, 4, d0_boosts[4]);
+            let b_at_least_as_fast = crate::eval::compare_speed_with_boost(
+                cb,
+                table,
+                side,
+                b_slot,
+                passed_boosts[4],
+                def_side,
+                d0_slot,
+                d0_boosts[4],
+            ) != Ordering::Less;
             for m_i in 0..b_spec.num_moves as usize {
                 if b_mon.pp[m_i] == 0 || b_mon.is_slot_disabled(m_i) {
                     continue;
@@ -1444,10 +1674,12 @@ fn evaluate_single_receiver_sweep_ext(
                             hp_eff,
                             passed_boosts,
                             false,
+                            cur_sub > 0.0,
+                            false,
                         );
                         // Spending a turn to self-boost consumes the Substitute shield (either d0 breaks it
                         // or opponent pivots to their fast check on the boost turn).
-                        if spe_b >= spe_d0 || dmg_d0 * acc_d0 < 0.45 * hp_eff {
+                        if b_at_least_as_fast || dmg_d0 * acc_d0 < 0.45 * hp_eff {
                             let mut boosted = *passed_boosts;
                             let add = ax.stages[1];
                             if (ax.flags & AXIS_FLAG_ATK) != 0 {
@@ -1525,17 +1757,22 @@ fn build_cached_foe_profiles(
         let m_slot = m_slot_u8 as usize;
         let m_idx = def_side * 3 + m_slot;
         for mi in 0..table.mons[m_idx].num_moves as usize {
-            if table.move_specs[m_idx][mi].special_kind == SpecialMoveKind::SuperFang {
+            let ms = &table.move_specs[m_idx][mi];
+            if ms.special_kind == SpecialMoveKind::SuperFang
+                || (ms.drain_half && !ms.bypasses_sub)
+            {
                 return None;
             }
         }
         let m_boosts = &cb.mons[m_idx].boosts;
         let hp_m = foe_hp_fracs[i].max(0.05);
         let (_, dmg_b_if_hit, acc_b, prio_b) = best_move_profile(
-            cb, table, side, b_slot, 1.0, boosts_b, def_side, m_slot, hp_m, m_boosts, false,
+            cb, table, side, b_slot, 1.0, boosts_b, def_side, m_slot, hp_m, m_boosts, false, false,
+            false,
         );
         let (_, dmg_m_if_hit, acc_m, prio_m) = best_move_profile(
-            cb, table, def_side, m_slot, hp_m, m_boosts, side, b_slot, 1.0, boosts_b, false,
+            cb, table, def_side, m_slot, hp_m, m_boosts, side, b_slot, 1.0, boosts_b, false, false,
+            false,
         );
         out[i] = CachedFoeProfile {
             dmg_b_if_hit,
@@ -1601,7 +1838,6 @@ fn simulate_lineup_sweep_ext(
     let b_ispec = table.item_spec(cb.mons[b_idx].item);
     let b_bp = b_ispec.is_brightpowder;
     let b_lefties = b_ispec.is_leftovers;
-    let spe_b = stat_with_boost(cb, table, side, b_slot, 4, boosts_b[4]);
     let scale = w.scale as f32;
     let unit_ko_logit = scale * ((w.alive + 0.85 * w.hp) as f32);
 
@@ -1621,14 +1857,42 @@ fn simulate_lineup_sweep_ext(
             let (db, ab, dm, am) = if let Some(cp) = cached {
                 (cp[k].dmg_b_if_hit, cp[k].acc_b, cp[k].dmg_m_if_hit, cp[k].acc_m)
             } else {
-                let (_, db, ab, _) =
-                    best_move_profile(cb, table, side, b_slot, cur_hp, boosts_b, def_side, ms, hm, mb, false);
-                let (_, dm, am, _) =
-                    best_move_profile(cb, table, def_side, ms, hm, mb, side, b_slot, cur_hp, boosts_b, false);
+                let (_, db, ab, _) = best_move_profile(
+                    cb, table, side, b_slot, cur_hp, boosts_b, def_side, ms, hm, mb, false, false,
+                    false,
+                );
+                let (_, dm, am, _) = best_move_profile(
+                    cb,
+                    table,
+                    def_side,
+                    ms,
+                    hm,
+                    mb,
+                    side,
+                    b_slot,
+                    cur_hp,
+                    boosts_b,
+                    false,
+                    cur_sub > 0.0,
+                    false,
+                );
                 (db, ab, dm, am)
             };
-            let sm = stat_with_boost(cb, table, def_side, ms, 4, mb[4]);
-            let faster = if sm > spe_b { 1.0 } else { 0.0 };
+            let faster = if crate::eval::compare_speed_with_boost(
+                cb,
+                table,
+                def_side,
+                ms,
+                mb[4],
+                side,
+                b_slot,
+                boosts_b[4],
+            ) == Ordering::Greater
+            {
+                1.0
+            } else {
+                0.0
+            };
             let walls = if db * ab < 0.25 { 1.0 } else { 0.0 };
             1.5 * faster * (dm * am) + 0.8 * (dm * am) + 1.2 * walls - 0.3 * (db * ab).min(1.5)
         };
@@ -1654,6 +1918,7 @@ fn simulate_lineup_sweep_ext(
         } else {
             let (_, db, ab, pb) = best_move_profile(
                 cb, table, side, b_slot, cur_hp, boosts_b, def_side, m_slot, hp_m, m_boosts, false,
+                false, false,
             );
             (db, ab, pb, None)
         };
@@ -1665,7 +1930,18 @@ fn simulate_lineup_sweep_ext(
             && (0..table.mons[m_idx].num_moves as usize)
                 .any(|mi| cb.mons[m_idx].pp[mi] > 0 && table.move_specs[m_idx][mi].is_rest);
         let eff_dpt = dmg_b_if_hit * acc_b;
-        let walled_by_heal = (m_has_half_heal && eff_dpt < 0.48 && dmg_b_if_hit < hp_m)
+        let half_heal_frac = {
+            let mx = table.mons[m_idx].maxhp.max(1);
+            let amt = if table.ruleset.is_castle() {
+                mx / 2
+            } else {
+                (mx + 1) / 2
+            };
+            (amt as f32) / (mx as f32)
+        };
+        let walled_by_heal = (m_has_half_heal
+            && eff_dpt < (half_heal_frac - 0.02)
+            && dmg_b_if_hit < hp_m)
             || (m_has_rest && eff_dpt < 0.34 && dmg_b_if_hit < hp_m);
         if dmg_b_if_hit <= 1e-4 || acc_b <= 1e-4 || walled_by_heal {
             // Walled by m: penalize only when walled on the very first foe (`kos_done == 0`),
@@ -1694,21 +1970,41 @@ fn simulate_lineup_sweep_ext(
             pm
         } else {
             let (_, dm, am, pm) = best_move_profile(
-                cb, table, def_side, m_slot, hp_m, m_boosts, side, b_slot, cur_hp, boosts_b, false,
+                cb,
+                table,
+                def_side,
+                m_slot,
+                hp_m,
+                m_boosts,
+                side,
+                b_slot,
+                cur_hp,
+                boosts_b,
+                false,
+                cur_sub > 0.0,
+                false,
             );
             (dm, am, pm)
         };
-        let spe_m = stat_with_boost(cb, table, def_side, m_slot, 4, m_boosts[4]);
         let faster_adv = if prio_b > prio_m {
             1.0
         } else if prio_b < prio_m {
             0.0
-        } else if spe_b > spe_m {
-            1.0
-        } else if spe_b == spe_m {
-            0.5
         } else {
-            0.0
+            match crate::eval::compare_speed_with_boost(
+                cb,
+                table,
+                side,
+                b_slot,
+                boosts_b[4],
+                def_side,
+                m_slot,
+                m_boosts[4],
+            ) {
+                Ordering::Greater => 1.0,
+                Ordering::Equal => 0.5,
+                Ordering::Less => 0.0,
+            }
         };
 
         let mut t_exposed = (t_attempts - faster_adv).max(0.0);
@@ -1729,7 +2025,7 @@ fn simulate_lineup_sweep_ext(
                 DisruptKind::None => 0.0,
             };
             if t_phaze_exp > 0.01 && m_disrupt != DisruptKind::None {
-                let p_dhit = disrupt_hit_prob(m_disrupt, boosts_b[6], b_bp);
+                let p_dhit = disrupt_hit_prob(table.ruleset, m_disrupt, boosts_b[6], b_bp);
                 let p_stop = (1.0 - (1.0 - p_dhit).max(0.0).powf(t_phaze_exp)).clamp(0.0, 1.0);
                 if p_stop > 0.0 {
                     let chip_frac = (1.0 / eff_hits).clamp(0.0, 0.75);
@@ -2206,7 +2502,8 @@ fn solve_relay_subgame_into(
     let w_alive = w.alive as f32;
     let r_act_st = cb.mons[act_idx].status_raw();
     let (_, r_act_slp, _) = mon_guaranteed_incapacitated(cb, table, side, act_slot);
-    let mut score_r_ref4 = w_alive + w_hp - mon_status_pen(w, r_act_st, r_act_slp);
+    let mut score_r_ref4 =
+        w_alive + w_hp - mon_status_pen(w, table.ruleset, r_act_st, r_act_slp);
     let flying_mask = 1u32 << (table.flying_type & 31);
     let mut r_grounded_bench = 0u32;
     for r in &recv_arr[..n_recv] {
@@ -2214,8 +2511,9 @@ fn solve_relay_subgame_into(
         if (table.mons[r_idx].type_mask & flying_mask) == 0 {
             r_grounded_bench += 1;
         }
-        score_r_ref4 +=
-            w_alive + w_hp * ((r.b8_hp as f32) / 8.0) - mon_status_pen(w, r.status_raw, r.slp_rem);
+        score_r_ref4 += w_alive
+            + w_hp * ((r.b8_hp as f32) / 8.0)
+            - mon_status_pen(w, table.ruleset, r.status_raw, r.slp_rem);
     }
     let r_spk_layers = (cb.sides[side].side_flags & 0x03) as usize;
     if r_spk_layers > 0 && r_grounded_bench > 0 {
@@ -2228,15 +2526,16 @@ fn solve_relay_subgame_into(
     let (_, d_act_slp, _) = mon_guaranteed_incapacitated(cb, table, def_side, def_slot);
     let mut score_d_base = w_alive
         + w_hp * ((d_act_b8 as f32) / 8.0)
-        - mon_status_pen(w, cb.mons[d_act_idx].status_raw(), d_act_slp);
+        - mon_status_pen(w, table.ruleset, cb.mons[d_act_idx].status_raw(), d_act_slp);
     let mut d_grounded_bench = 0u32;
     for d in &def_arr[..n_def_bench] {
         let d_idx = def_side * 3 + d.party_slot as usize;
         if (table.mons[d_idx].type_mask & flying_mask) == 0 {
             d_grounded_bench += 1;
         }
-        score_d_base +=
-            w_alive + w_hp * ((d.b8_hp as f32) / 8.0) - mon_status_pen(w, d.status_raw, d.slp_rem);
+        score_d_base += w_alive
+            + w_hp * ((d.b8_hp as f32) / 8.0)
+            - mon_status_pen(w, table.ruleset, d.status_raw, d.slp_rem);
     }
     let d_spk_layers = (cb.sides[def_side].side_flags & 0x03) as usize;
     if d_spk_layers > 0 && d_grounded_bench > 0 {
@@ -2267,7 +2566,7 @@ fn solve_relay_subgame_into(
         } else {
             let c = &def_arr[counter_canon_idx as usize];
             let c_idx = def_side * 3 + c.party_slot as usize;
-            let spk = (spikes_entry_dmg(cb, table, def_side, c.party_slot as usize) as f32)
+            let spk = (switch_entry_dmg(cb, table, def_side, c.party_slot as usize, None) as f32)
                 / (table.mons[c_idx].maxhp.max(1) as f32);
             ((c.b8_hp as f32) / 8.0 - spk).max(0.05)
         };
@@ -2291,7 +2590,7 @@ fn solve_relay_subgame_into(
         let pivot_spk_bonus = if ell == 1 {
             let c = &def_arr[counter_canon_idx as usize];
             let c_idx = def_side * 3 + c.party_slot as usize;
-            let spk = (spikes_entry_dmg(cb, table, def_side, c.party_slot as usize) as f32)
+            let spk = (switch_entry_dmg(cb, table, def_side, c.party_slot as usize, None) as f32)
                 / (table.mons[c_idx].maxhp.max(1) as f32);
             scale * w_hp * spk
         } else {
@@ -2354,10 +2653,11 @@ fn solve_relay_subgame_into(
                         }
                         let b_slot = r_cand.party_slot as usize;
                         let b_idx = side * 3 + b_slot;
-                        let spk_r = (spikes_entry_dmg(cb, table, side, b_slot) as f32)
+                        let entry_r = (switch_entry_dmg(cb, table, side, b_slot, Some(act_slot))
+                            as f32)
                             / (table.mons[b_idx].maxhp.max(1) as f32);
-                        let hp_entry = ((r_cand.b8_hp as f32) / 8.0 - spk_r).max(0.0);
-                        let anchor_here = base_logit_ref4 + pivot_spk_bonus - scale * w_hp * spk_r;
+                        let hp_entry = ((r_cand.b8_hp as f32) / 8.0 - entry_r).max(0.0);
+                        let anchor_here = base_logit_ref4 + pivot_spk_bonus - scale * w_hp * entry_r;
                         let rc_prof = recv_profiles[rc_i].as_ref();
 
                         let v_no = evaluate_single_receiver_sweep_ext(
@@ -2440,7 +2740,7 @@ fn solve_relay_subgame_into(
         let c_spk = if ell == 1 {
             let c = &def_arr[counter_canon_idx as usize];
             let c_idx = def_side * 3 + c.party_slot as usize;
-            (spikes_entry_dmg(cb, table, def_side, c.party_slot as usize) as f32)
+            (switch_entry_dmg(cb, table, def_side, c.party_slot as usize, None) as f32)
                 / (table.mons[c_idx].maxhp.max(1) as f32)
         } else {
             0.0
@@ -2492,7 +2792,8 @@ fn solve_relay_subgame_into(
             } else {
                 let c = &def_arr[counter_canon_idx as usize];
                 let c_idx = def_side * 3 + c.party_slot as usize;
-                let spk = (spikes_entry_dmg(cb, table, def_side, c.party_slot as usize) as f32)
+                let spk = (switch_entry_dmg(cb, table, def_side, c.party_slot as usize, None)
+                    as f32)
                     / (table.mons[c_idx].maxhp.max(1) as f32);
                 ((c.b8_hp as f32) / 8.0 - spk).max(0.05)
             };
@@ -2520,7 +2821,12 @@ fn solve_relay_subgame_into(
                 0.0f32
             };
             let d_boosts = &cb.mons[def_side * 3 + d_slot].boosts;
-            let spe_d = stat_with_boost(cb, table, def_side, d_slot, 4, d_boosts[4]);
+            let d_has_drain = (0..table.mons[d_idx_cur].num_moves as usize).any(|mi| {
+                cb.mons[d_idx_cur].pp[mi] > 0
+                    && !cb.mons[d_idx_cur].is_slot_disabled(mi)
+                    && table.move_specs[d_idx_cur][mi].drain_half
+                    && !table.move_specs[d_idx_cur][mi].bypasses_sub
+            });
 
             let r_has_var_bp = (0..table.mons[act_idx].num_moves as usize).any(|mi| {
                 table.move_specs[act_idx][mi].var_bp_kind == VarBpKind::FlailReversal
@@ -2532,7 +2838,7 @@ fn solve_relay_subgame_into(
                 let c_cand = &def_arr[counter_canon_idx as usize];
                 let c_slot = c_cand.party_slot as usize;
                 let c_idx = def_side * 3 + c_slot;
-                let c_spk = (spikes_entry_dmg(cb, table, def_side, c_slot) as f32)
+                let c_spk = (switch_entry_dmg(cb, table, def_side, c_slot, None) as f32)
                     / (table.mons[c_idx].maxhp.max(1) as f32);
                 (c_slot, ((c_cand.b8_hp as f32) / 8.0 - c_spk).max(0.05))
             } else {
@@ -2545,53 +2851,93 @@ fn solve_relay_subgame_into(
                     let k2 = k2_len - 1 - k2_rev;
 
                     let boosts_r = compose_boosts(ax1, k1, ax2, k2);
-                    let spe_r = stat_with_boost(cb, table, side, act_slot, 4, boosts_r[4]);
-                    let p_first_neutral = if spe_r > spe_d {
-                        1.0f32
-                    } else if spe_r < spe_d {
-                        0.0f32
-                    } else {
-                        0.5f32
+                    let p_first_neutral = match crate::eval::compare_speed_with_boost(
+                        cb,
+                        table,
+                        side,
+                        act_slot,
+                        boosts_r[4],
+                        def_side,
+                        d_slot,
+                        d_boosts[4],
+                    ) {
+                        Ordering::Greater => 1.0f32,
+                        Ordering::Less => 0.0f32,
+                        Ordering::Equal => 0.5f32,
                     };
 
                     let (_, dmg_d_if_hit_base, acc_d_raw_base, prio_d_brk_base) = if !r_has_var_bp {
                         best_move_profile(
-                            cb, table, def_side, d_slot, d_hp_cur, d_boosts, side, act_slot, 1.0, &boosts_r, false,
+                            cb, table, def_side, d_slot, d_hp_cur, d_boosts, side, act_slot, 1.0,
+                            &boosts_r, false, false, false,
                         )
                     } else {
                         (NO_MOVE_SLOT, 0.0, 1.0, 0)
                     };
+                    let (dmg_d_sub_base, acc_d_sub_base) = if d_has_drain && !r_has_var_bp {
+                        let (_, dm, ac, _) = best_move_profile(
+                            cb, table, def_side, d_slot, d_hp_cur, d_boosts, side, act_slot, 1.0,
+                            &boosts_r, false, true, false,
+                        );
+                        (dm, ac)
+                    } else {
+                        (dmg_d_if_hit_base, acc_d_raw_base)
+                    };
 
                     // Hoist post-boost D-vs-R Break profiles once per (ell, k1, k2)
-                    let (dmg_d_post1, acc_d_post1, b_post1_eva) = if ax1.move_slot < 4 && k1 + 1 < k1_len {
-                        let bp1 = compose_boosts(ax1, k1 + 1, ax2, k2);
-                        let (_, dm, ac, _) = best_move_profile(
-                            cb, table, def_side, d_slot, d_hp_cur, d_boosts, side, act_slot, 1.0, &bp1, false,
-                        );
-                        (dm, ac * d_awake_mult, bp1[6])
-                    } else {
-                        (0.0f32, 0.0f32, boosts_r[6])
-                    };
-                    let (dmg_d_post2, acc_d_post2, b_post2_eva) = if ax2.move_slot < 4 && k2 + 1 < k2_len {
-                        let bp2 = compose_boosts(ax1, k1, ax2, k2 + 1);
-                        let (_, dm, ac, _) = best_move_profile(
-                            cb, table, def_side, d_slot, d_hp_cur, d_boosts, side, act_slot, 1.0, &bp2, false,
-                        );
-                        (dm, ac * d_awake_mult, bp2[6])
-                    } else {
-                        (0.0f32, 0.0f32, boosts_r[6])
-                    };
+                    let (dmg_d_post1, acc_d_post1, dmg_d_post1_sub, acc_d_post1_sub, b_post1_eva) =
+                        if ax1.move_slot < 4 && k1 + 1 < k1_len {
+                            let bp1 = compose_boosts(ax1, k1 + 1, ax2, k2);
+                            let (_, dm, ac, _) = best_move_profile(
+                                cb, table, def_side, d_slot, d_hp_cur, d_boosts, side, act_slot,
+                                1.0, &bp1, false, false, false,
+                            );
+                            let (dms, acs) = if d_has_drain {
+                                let (_, d2, a2, _) = best_move_profile(
+                                    cb, table, def_side, d_slot, d_hp_cur, d_boosts, side,
+                                    act_slot, 1.0, &bp1, false, true, false,
+                                );
+                                (d2, a2 * d_awake_mult)
+                            } else {
+                                (dm, ac * d_awake_mult)
+                            };
+                            (dm, ac * d_awake_mult, dms, acs, bp1[6])
+                        } else {
+                            (0.0f32, 0.0f32, 0.0f32, 0.0f32, boosts_r[6])
+                        };
+                    let (dmg_d_post2, acc_d_post2, dmg_d_post2_sub, acc_d_post2_sub, b_post2_eva) =
+                        if ax2.move_slot < 4 && k2 + 1 < k2_len {
+                            let bp2 = compose_boosts(ax1, k1, ax2, k2 + 1);
+                            let (_, dm, ac, _) = best_move_profile(
+                                cb, table, def_side, d_slot, d_hp_cur, d_boosts, side, act_slot,
+                                1.0, &bp2, false, false, false,
+                            );
+                            let (dms, acs) = if d_has_drain {
+                                let (_, d2, a2, _) = best_move_profile(
+                                    cb, table, def_side, d_slot, d_hp_cur, d_boosts, side,
+                                    act_slot, 1.0, &bp2, false, true, false,
+                                );
+                                (d2, a2 * d_awake_mult)
+                            } else {
+                                (dm, ac * d_awake_mult)
+                            };
+                            (dm, ac * d_awake_mult, dms, acs, bp2[6])
+                        } else {
+                            (0.0f32, 0.0f32, 0.0f32, 0.0f32, boosts_r[6])
+                        };
 
                     let (_, dmg_r_d_base, acc_r_d_base, prio_r_base) = if !r_has_var_bp {
                         best_move_profile(
-                            cb, table, side, act_slot, 1.0, &boosts_r, def_side, d_slot, d_hp_cur, d_boosts, false,
+                            cb, table, side, act_slot, 1.0, &boosts_r, def_side, d_slot, d_hp_cur,
+                            d_boosts, false, false, false,
                         )
                     } else {
                         (NO_MOVE_SLOT, 0.0, 1.0, 0)
                     };
                     let chip_c_base = if ell == 0 && has_counter_pivot && !r_has_var_bp {
                         let (_, dm_c, ac_c, _) = best_move_profile(
-                            cb, table, side, act_slot, 1.0, &boosts_r, def_side, piv_c_slot, piv_c_hp, &zero_b, false,
+                            cb, table, side, act_slot, 1.0, &boosts_r, def_side, piv_c_slot,
+                            piv_c_hp, &zero_b, false, false, false,
                         );
                         dm_c * ac_c
                     } else {
@@ -2602,13 +2948,26 @@ fn solve_relay_subgame_into(
                         let r_hp_frac = (h_r as f32) * 0.25;
                         let (dmg_d_if_hit, acc_d_raw, prio_d_brk) = if r_has_var_bp {
                             let (_, dm, ac, pr) = best_move_profile(
-                                cb, table, def_side, d_slot, d_hp_cur, d_boosts, side, act_slot, r_hp_frac, &boosts_r, false,
+                                cb, table, def_side, d_slot, d_hp_cur, d_boosts, side, act_slot,
+                                r_hp_frac, &boosts_r, false, false, false,
                             );
                             (dm, ac, pr)
                         } else {
                             (dmg_d_if_hit_base, acc_d_raw_base, prio_d_brk_base)
                         };
+                        let (dmg_d_sub_if_hit, acc_d_sub_raw) = if d_has_drain && r_has_var_bp {
+                            let (_, dm, ac, _) = best_move_profile(
+                                cb, table, def_side, d_slot, d_hp_cur, d_boosts, side, act_slot,
+                                r_hp_frac, &boosts_r, false, true, false,
+                            );
+                            (dm, ac)
+                        } else if d_has_drain {
+                            (dmg_d_sub_base, acc_d_sub_base)
+                        } else {
+                            (dmg_d_if_hit, acc_d_raw)
+                        };
                         let acc_d = acc_d_raw * d_awake_mult;
+                        let acc_d_sub = acc_d_sub_raw * d_awake_mult;
                         let p_status_first_vs_brk = if 0 > prio_d_brk {
                             1.0f32
                         } else if 0 < prio_d_brk {
@@ -2618,7 +2977,8 @@ fn solve_relay_subgame_into(
                         };
                         let (dmg_r_to_d, acc_r_to_d, prio_r_atk) = if r_has_var_bp {
                             let (_, dm, ac, pr) = best_move_profile(
-                                cb, table, side, act_slot, r_hp_frac, &boosts_r, def_side, d_slot, d_hp_cur, d_boosts, false,
+                                cb, table, side, act_slot, r_hp_frac, &boosts_r, def_side, d_slot,
+                                d_hp_cur, d_boosts, false, false, false,
                             );
                             (dm, ac, pr)
                         } else {
@@ -2635,7 +2995,8 @@ fn solve_relay_subgame_into(
                         let chip_c_here = if ell == 0 && has_counter_pivot {
                             if r_has_var_bp {
                                 let (_, dm_c, ac_c, _) = best_move_profile(
-                                    cb, table, side, act_slot, r_hp_frac, &boosts_r, def_side, piv_c_slot, piv_c_hp, &zero_b, false,
+                                    cb, table, side, act_slot, r_hp_frac, &boosts_r, def_side,
+                                    piv_c_slot, piv_c_hp, &zero_b, false, false, false,
                                 );
                                 dm_c * ac_c
                             } else {
@@ -2732,16 +3093,21 @@ fn solve_relay_subgame_into(
                                             return lookup_v(tbl, l_n, 0, 0, k1_n, k2_n, foe_chip);
                                         }
                                         let v_miss = lookup_v(tbl, l_n, h_cur, s_cur, k1_n, k2_n, foe_chip);
-                                        if acc_d <= 0.0 || dmg_d_if_hit <= 0.0 {
+                                        let (dmg_here, acc_here) = if s_cur == 1 {
+                                            (dmg_d_sub_if_hit, acc_d_sub)
+                                        } else {
+                                            (dmg_d_if_hit, acc_d)
+                                        };
+                                        if acc_here <= 0.0 || dmg_here <= 0.0 {
                                             return v_miss;
                                         }
                                         let v_hit = if s_cur == 1 {
-                                            let p_b = (4.0 * dmg_d_if_hit).min(1.0);
+                                            let p_b = (4.0 * dmg_here).min(1.0);
                                             let v0 = lookup_v(tbl, l_n, h_cur, 0, k1_n, k2_n, foe_chip);
                                             let v1 = lookup_v(tbl, l_n, h_cur, 1, k1_n, k2_n, foe_chip);
                                             p_b * v0 + (1.0 - p_b) * v1
                                         } else {
-                                            let z = 4.0 * dmg_d_if_hit;
+                                            let z = 4.0 * dmg_here;
                                             let dh_lo = (z.floor() as i32).min(4);
                                             let dh_hi = (dh_lo + 1).min(4);
                                             let p_hi = (z - (dh_lo as f32)).clamp(0.0, 1.0);
@@ -2749,7 +3115,7 @@ fn solve_relay_subgame_into(
                                             let vhi = lookup_v(tbl, l_n, h_cur - dh_hi, 0, k1_n, k2_n, foe_chip);
                                             (1.0 - p_hi) * vlo + p_hi * vhi
                                         };
-                                        (1.0 - acc_d) * v_miss + acc_d * v_hit
+                                        (1.0 - acc_here) * v_miss + acc_here * v_hit
                                     };
 
                                 let mut mat = [[0.5f32; MAX_D_ACTIONS]; MAX_R_ACTIONS];
@@ -2796,12 +3162,12 @@ fn solve_relay_subgame_into(
                                                 DisruptKind::Phaze { .. } => {
                                                     match a_r {
                                                         ACT_R_ATTACK => {
-                                                            let p_phz = disrupt_hit_prob(d_disrupt, boosts_r[6], r_bp_item) * d_awake_mult;
+                                                            let p_phz = disrupt_hit_prob(table.ruleset, d_disrupt, boosts_r[6], r_bp_item) * d_awake_mult;
                                                             let v_rst = RELAY_GAMMA * v_reset_fn(h_r as i32, ell, ev_r_to_d, d_hp_cur);
                                                             p_r_ko_d * v_dir_here + (1.0 - p_r_ko_d) * (p_phz * v_rst + (1.0 - p_phz) * v_dir_here)
                                                         }
                                                         ACT_R_SUB => {
-                                                            let p_phz = disrupt_hit_prob(d_disrupt, boosts_r[6], r_bp_item) * d_awake_mult;
+                                                            let p_phz = disrupt_hit_prob(table.ruleset, d_disrupt, boosts_r[6], r_bp_item) * d_awake_mult;
                                                             let v_rst = RELAY_GAMMA * v_reset_fn(h_r as i32 - 1, ell, 0.0, d_hp_cur);
                                                             let v_keep = lookup_v(&out.v_star, ell, h_r as i32 - 1, 1, k1, k2, 0.0);
                                                             p_phz * v_rst + (1.0 - p_phz) * v_keep
@@ -2812,7 +3178,7 @@ fn solve_relay_subgame_into(
                                                             } else {
                                                                 (k1, k2 + 1, ax2.hp_cost as i32, b_post2_eva)
                                                             };
-                                                            let p_phz = disrupt_hit_prob(d_disrupt, post_eva, r_bp_item) * d_awake_mult;
+                                                            let p_phz = disrupt_hit_prob(table.ruleset, d_disrupt, post_eva, r_bp_item) * d_awake_mult;
                                                             let v_rst = RELAY_GAMMA * v_reset_fn(h_r as i32 - hc, ell, 0.0, d_hp_cur);
                                                             let v_keep = lookup_v(&out.v_star, ell, h_r as i32 - hc, sigma, k1_n, k2_n, 0.0);
                                                             p_phz * v_rst + (1.0 - p_phz) * v_keep
@@ -2821,7 +3187,7 @@ fn solve_relay_subgame_into(
                                                             let rc_slot = recv_arr[out.best_receiver_canon[recv_idx(ell, sigma, k1, k2, k1_len, k2_len)] as usize].party_slot as usize;
                                                             let rc_idx = side * 3 + rc_slot;
                                                             let rc_bp = table.item_spec(cb.mons[rc_idx].item).is_brightpowder;
-                                                            let p_phz = disrupt_hit_prob(d_disrupt, boosts_r[6], rc_bp) * d_awake_mult;
+                                                            let p_phz = disrupt_hit_prob(table.ruleset, d_disrupt, boosts_r[6], rc_bp) * d_awake_mult;
                                                             let v_rst = RELAY_GAMMA * v_reset_fn(h_r as i32, ell, 0.0, d_hp_cur);
                                                             let v_pass = RELAY_GAMMA * w_pass_no_atk[recv_idx(ell, sigma, k1, k2, k1_len, k2_len)];
                                                             p_phz * v_rst + (1.0 - p_phz) * v_pass
@@ -2830,7 +3196,7 @@ fn solve_relay_subgame_into(
                                                     }
                                                 }
                                                 DisruptKind::Encore { .. } => {
-                                                    let p_enc = disrupt_hit_prob(d_disrupt, boosts_r[6], r_bp_item) * d_awake_mult;
+                                                    let p_enc = disrupt_hit_prob(table.ruleset, d_disrupt, boosts_r[6], r_bp_item) * d_awake_mult;
                                                     let v_rst_cur = RELAY_GAMMA * v_reset_fn(h_r as i32, ell, 0.0, d_hp_cur);
                                                     let v_r_first = match a_r {
                                                         ACT_R_PASS => {
@@ -2847,7 +3213,7 @@ fn solve_relay_subgame_into(
                                                             } else {
                                                                 (k1, k2 + 1, ax2.hp_cost as i32, b_post2_eva)
                                                             };
-                                                            let p_enc_post = disrupt_hit_prob(d_disrupt, post_eva, r_bp_item) * d_awake_mult;
+                                                            let p_enc_post = disrupt_hit_prob(table.ruleset, d_disrupt, post_eva, r_bp_item) * d_awake_mult;
                                                             let v_rst = RELAY_GAMMA * v_reset_fn(h_r as i32 - hc, ell, 0.0, d_hp_cur);
                                                             let v_keep = lookup_v(&out.v_star, ell, h_r as i32 - hc, sigma, k1_n, k2_n, 0.0);
                                                             p_enc_post * v_rst + (1.0 - p_enc_post) * v_keep
@@ -2938,21 +3304,25 @@ fn solve_relay_subgame_into(
                                                         p_status_first_vs_brk * v_r_first + (1.0 - p_status_first_vs_brk) * v_d_first
                                                     }
                                                     ACT_R_BOOST1 | ACT_R_BOOST2 => {
-                                                        let (k1_n, k2_n, hc, dmg_d_post, acc_d_post) = if a_r == ACT_R_BOOST1 {
-                                                            (k1 + 1, k2, ax1.hp_cost as i32, dmg_d_post1, acc_d_post1)
+                                                        let (k1_n, k2_n, hc, dmg_d_post, acc_d_post, dmg_d_post_s, acc_d_post_s) = if a_r == ACT_R_BOOST1 {
+                                                            (k1 + 1, k2, ax1.hp_cost as i32, dmg_d_post1, acc_d_post1, dmg_d_post1_sub, acc_d_post1_sub)
                                                         } else {
-                                                            (k1, k2 + 1, ax2.hp_cost as i32, dmg_d_post2, acc_d_post2)
+                                                            (k1, k2 + 1, ax2.hp_cost as i32, dmg_d_post2, acc_d_post2, dmg_d_post2_sub, acc_d_post2_sub)
                                                         };
                                                         let v_r_first = {
                                                             let h_cur = h_r as i32 - hc;
                                                             let v_miss = lookup_v(&out.v_star, ell, h_cur, sigma, k1_n, k2_n, 0.0);
-                                                            if acc_d_post <= 0.0 || dmg_d_post <= 0.0 {
+                                                            if sigma == 1 {
+                                                                if acc_d_post_s <= 0.0 || dmg_d_post_s <= 0.0 {
+                                                                    v_miss
+                                                                } else {
+                                                                    let p_b = (4.0 * dmg_d_post_s).min(1.0);
+                                                                    let v0 = lookup_v(&out.v_star, ell, h_cur, 0, k1_n, k2_n, 0.0);
+                                                                    let v1 = lookup_v(&out.v_star, ell, h_cur, 1, k1_n, k2_n, 0.0);
+                                                                    (1.0 - acc_d_post_s) * v_miss + acc_d_post_s * (p_b * v0 + (1.0 - p_b) * v1)
+                                                                }
+                                                            } else if acc_d_post <= 0.0 || dmg_d_post <= 0.0 {
                                                                 v_miss
-                                                            } else if sigma == 1 {
-                                                                let p_b = (4.0 * dmg_d_post).min(1.0);
-                                                                let v0 = lookup_v(&out.v_star, ell, h_cur, 0, k1_n, k2_n, 0.0);
-                                                                let v1 = lookup_v(&out.v_star, ell, h_cur, 1, k1_n, k2_n, 0.0);
-                                                                (1.0 - acc_d_post) * v_miss + acc_d_post * (p_b * v0 + (1.0 - p_b) * v1)
                                                             } else {
                                                                 let z = 4.0 * dmg_d_post;
                                                                 let dh_lo = (z.floor() as i32).min(4);
@@ -2965,13 +3335,17 @@ fn solve_relay_subgame_into(
                                                         };
                                                         let v_d_first = {
                                                             let v_miss = lookup_v(&out.v_star, ell, h_r as i32 - hc, sigma, k1_n, k2_n, 0.0);
-                                                            if acc_d <= 0.0 || dmg_d_if_hit <= 0.0 {
+                                                            if sigma == 1 {
+                                                                if acc_d_sub <= 0.0 || dmg_d_sub_if_hit <= 0.0 {
+                                                                    v_miss
+                                                                } else {
+                                                                    let p_b = (4.0 * dmg_d_sub_if_hit).min(1.0);
+                                                                    let v0 = lookup_v(&out.v_star, ell, h_r as i32 - hc, 0, k1_n, k2_n, 0.0);
+                                                                    let v1 = lookup_v(&out.v_star, ell, h_r as i32 - hc, 1, k1_n, k2_n, 0.0);
+                                                                    (1.0 - acc_d_sub) * v_miss + acc_d_sub * (p_b * v0 + (1.0 - p_b) * v1)
+                                                                }
+                                                            } else if acc_d <= 0.0 || dmg_d_if_hit <= 0.0 {
                                                                 v_miss
-                                                            } else if sigma == 1 {
-                                                                let p_b = (4.0 * dmg_d_if_hit).min(1.0);
-                                                                let v0 = lookup_v(&out.v_star, ell, h_r as i32 - hc, 0, k1_n, k2_n, 0.0);
-                                                                let v1 = lookup_v(&out.v_star, ell, h_r as i32 - hc, 1, k1_n, k2_n, 0.0);
-                                                                (1.0 - acc_d) * v_miss + acc_d * (p_b * v0 + (1.0 - p_b) * v1)
                                                             } else {
                                                                 let z = 4.0 * dmg_d_if_hit;
                                                                 let dh_lo = (z.floor() as i32).min(4);
@@ -2996,12 +3370,16 @@ fn solve_relay_subgame_into(
                                                     ACT_R_PASS => {
                                                         let v_r_first = RELAY_GAMMA * w_pass_in_atk[recv_idx(ell, sigma, k1, k2, k1_len, k2_len)];
                                                         let v_clean = RELAY_GAMMA * w_pass_no_atk[recv_idx(ell, sigma, k1, k2, k1_len, k2_len)];
-                                                        let v_d_first = if acc_d <= 0.0 || dmg_d_if_hit <= 0.0 {
+                                                        let v_d_first = if sigma == 1 {
+                                                            if acc_d_sub <= 0.0 || dmg_d_sub_if_hit <= 0.0 {
+                                                                v_clean
+                                                            } else {
+                                                                let p_b = (4.0 * dmg_d_sub_if_hit).min(1.0);
+                                                                let v_sub0 = RELAY_GAMMA * w_pass_no_atk[recv_idx(ell, 0, k1, k2, k1_len, k2_len)];
+                                                                (1.0 - acc_d_sub) * v_clean + acc_d_sub * (p_b * v_sub0 + (1.0 - p_b) * v_clean)
+                                                            }
+                                                        } else if acc_d <= 0.0 || dmg_d_if_hit <= 0.0 {
                                                             v_clean
-                                                        } else if sigma == 1 {
-                                                            let p_b = (4.0 * dmg_d_if_hit).min(1.0);
-                                                            let v_sub0 = RELAY_GAMMA * w_pass_no_atk[recv_idx(ell, 0, k1, k2, k1_len, k2_len)];
-                                                            (1.0 - acc_d) * v_clean + acc_d * (p_b * v_sub0 + (1.0 - p_b) * v_clean)
                                                         } else {
                                                             let z = 4.0 * dmg_d_if_hit;
                                                             let dh_lo = (z.floor() as i32).min(4);
@@ -3253,7 +3631,9 @@ fn landed_receiver_surplus(
             }
             let b8 = hp_to_b8(cb.mons[idx].hp(), table.mons[idx].maxhp);
             let (_, slp_r, _) = mon_guaranteed_incapacitated(cb, table, s, sl);
-            sc += w_alive + w_hp * ((b8 as f32) / 8.0) - mon_status_pen(w, cb.mons[idx].status_raw(), slp_r);
+            sc += w_alive
+                + w_hp * ((b8 as f32) / 8.0)
+                - mon_status_pen(w, table.ruleset, cb.mons[idx].status_raw(), slp_r);
         }
         let layers = (st.side_flags & 0x03) as usize;
         if layers > 0 && gr_bench > 0 {
@@ -3361,8 +3741,21 @@ pub fn apply_relay_leaf_lift(
         return v_base_p0;
     }
 
-    let delta_0 = relay_surplus_for_side(cb, table, w, 0, v_base_p0);
-    let delta_1 = relay_surplus_for_side(cb, table, w, 1, 1.0 - v_base_p0);
+    let mut turn_scale = 1.0f64;
+    if table.ruleset.is_castle() {
+        if let Some(lim) = table.ruleset.turn_limit() {
+            let rem = lim.saturating_add(1).saturating_sub(cb.turn);
+            if rem <= 1 {
+                return v_base_p0;
+            }
+            if rem <= 5 {
+                turn_scale = ((rem - 1) as f64) / 4.0;
+            }
+        }
+    }
+
+    let delta_0 = relay_surplus_for_side(cb, table, w, 0, v_base_p0) * turn_scale;
+    let delta_1 = relay_surplus_for_side(cb, table, w, 1, 1.0 - v_base_p0) * turn_scale;
 
     if delta_0 == 0.0 && delta_1 == 0.0 {
         return v_base_p0;
@@ -3468,8 +3861,9 @@ pub fn best_midturn_bp_switch(
             let b_slot = (c - 4) as usize;
             let b_idx = side * 3 + b_slot;
             let maxhp = table.mons[b_idx].maxhp.max(1) as f32;
-            let spk = (spikes_entry_dmg(cb, table, side, b_slot) as f32) / maxhp;
-            let hp_entry = ((cb.mons[b_idx].hp() as f32) / maxhp - spk).max(0.0);
+            let entry =
+                (switch_entry_dmg(cb, table, side, b_slot, Some(att_slot)) as f32) / maxhp;
+            let hp_entry = ((cb.mons[b_idx].hp() as f32) / maxhp - entry).max(0.0);
             let (_, slp_rem, _) = mon_guaranteed_incapacitated(cb, table, side, b_slot);
             let val = evaluate_single_receiver_sweep(
                 cb,
@@ -3535,8 +3929,9 @@ pub fn rollout_relay_pick(
     }
 
     let immediate_ko_pick = || -> Option<u8> {
-        let me_spd = cb.mon_action_speed(table, side, att_slot);
-        let foe_spd = cb.mon_action_speed(table, def_side, def_slot);
+        let faster_by_speed = crate::eval::compare_action_speed(
+            cb, table, side, att_slot, def_side, def_slot,
+        ) == Ordering::Greater;
         let foe_last = cb.sides[def_side].alive_mask.count_ones() <= 1;
         for &c in cs {
             if c < 4 {
@@ -3552,7 +3947,7 @@ pub fn rollout_relay_pick(
                     def_slot,
                     c as usize,
                 );
-                let faster = ms.priority > 0 || (ms.priority == 0 && me_spd > foe_spd);
+                let faster = ms.priority > 0 || (ms.priority == 0 && faster_by_speed);
                 if acc >= 0.995 && hit_frac >= 1.05 && (faster || foe_last) {
                     return Some(c);
                 }
@@ -4087,13 +4482,13 @@ mod tests {
         let tc_item = cb.mons[3].item;
         let ch_item = cb.mons[4].item;
         let mw_item = cb.mons[5].item;
-        let k_none = canonical_mon_key(&cb, &table, 0, 0, true);
+        let k_none = canonical_mon_key(&cb, &table, 0, 0, true, None);
         cb.mons[0].item = tc_item;
-        let k_tc = canonical_mon_key(&cb, &table, 0, 0, true);
+        let k_tc = canonical_mon_key(&cb, &table, 0, 0, true, None);
         cb.mons[0].item = ch_item;
-        let k_ch = canonical_mon_key(&cb, &table, 0, 0, true);
+        let k_ch = canonical_mon_key(&cb, &table, 0, 0, true, None);
         cb.mons[0].item = mw_item;
-        let k_mw = canonical_mon_key(&cb, &table, 0, 0, true);
+        let k_mw = canonical_mon_key(&cb, &table, 0, 0, true, None);
         assert_ne!(k_none, k_tc, "Relay key must distinguish stolen Thick Club");
         assert_ne!(k_tc, k_ch, "Relay key must distinguish Thick Club from Charcoal");
         assert_ne!(k_ch, k_mw, "Relay key must distinguish Charcoal from Mystic Water");

@@ -24,15 +24,24 @@
 //!    $S_{\text{trapper}}(c - 1 - \mathbf{1}_{\text{protect}}) \cdot (1 - \mathbf{1}_{\text{phaze}} S_{\text{victim}}(1))$.
 
 use std::cell::RefCell;
+use std::cmp::Ordering;
 
 use nc2000_engine::compact::{
-    role_bit, vol_bit, CompactBattle, CompactMoveSpec, CompactWeather, MatchTable,
+    role_bit, vol_bit, CompactBattle, CompactItemSpec, CompactMoveSpec, CompactWeather, MatchTable,
+    VarBpKind,
 };
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::Status;
 
 /// Canonical Gen 2 HP grid resolution ($1/16 = 6.25\%$, matching Leftovers $1/16$,
 /// Burn/Poison/Leech Seed $2/16$, Substitute $4/16$, and Recover/Soft-Boiled $8/16$).
 pub const B16: usize = 16;
+
+/// Sleep-state table dimension: `[0..=3]` covers awake (`0`), PS 2–4T (`0..=2`), and Castle
+/// uniform 1–4T non-Rest sleep (`status_counter == 5` -> `slp == 4` -> next state `3`).
+const MAX_SLP_STATES: usize = 4;
+
+type BellmanVTable = [[[[f32; B16 + 1]; B16 + 1]; MAX_SLP_STATES]; MAX_SLP_STATES];
 
 /// Fine 1D grid resolution for pure stopping-time convolutions without recovery.
 const B32: usize = 32;
@@ -41,9 +50,20 @@ const B32: usize = 32;
 const GAMMA: f32 = 0.985;
 
 #[inline]
-fn instant_heal_amount(cb: &CompactBattle, ms: &CompactMoveSpec, maxhp: i16) -> Option<i16> {
+fn instant_heal_amount(
+    cb: &CompactBattle,
+    ruleset: Ruleset,
+    ms: &CompactMoveSpec,
+    maxhp: i16,
+) -> Option<i16> {
     if ms.is_half_heal {
-        Some(maxhp / 2)
+        // PS `moveexec.rs:2311` rounds odd maxhp up (`round(maxhp / 2.0)`);
+        // Castle PBS (`Probe 9A`, 113/113 logs) strictly floors (`floor(maxhp / 2)`).
+        if ruleset.is_castle() {
+            Some(maxhp / 2)
+        } else {
+            Some((maxhp + 1) / 2)
+        }
     } else if ms.special_kind == nc2000_engine::compact::SpecialMoveKind::WeatherHeal {
         let weather = if cb.weather_turns > 0 {
             cb.weather_kind
@@ -56,6 +76,106 @@ fn instant_heal_amount(cb: &CompactBattle, ms: &CompactMoveSpec, maxhp: i16) -> 
     }
 }
 
+#[inline]
+fn heal_berry_amount(ispec: &CompactItemSpec) -> i16 {
+    if ispec.is_goldberry {
+        30
+    } else if ispec.is_berry_juice {
+        20
+    } else if ispec.is_berry {
+        10
+    } else {
+        0
+    }
+}
+
+#[inline]
+fn heal_berry_triggers(ruleset: Ruleset, hp: i16, maxhp: i16) -> bool {
+    if hp <= 0 {
+        return false;
+    }
+    if ruleset.is_castle() {
+        // Castle PBS (`E_20261028`, 275/275 logs): strictly `hp < floor(maxhp / 2)`.
+        hp < maxhp / 2
+    } else {
+        hp <= maxhp / 2
+    }
+}
+
+#[inline]
+fn is_toxic_residual(ruleset: Ruleset, status_raw: u8, cnt_packed: u8) -> bool {
+    (cnt_packed & 0x10) != 0
+        && (status_raw == Status::Tox as u8
+            || status_raw == Status::Psn as u8
+            || (!ruleset.is_castle() && status_raw == Status::Brn as u8))
+}
+
+/// Remaining turns including the current turn when Castle has a nearby finite `L_TURN` judge.
+#[inline]
+fn finite_turn_horizon(cb: &CompactBattle, table: &MatchTable) -> Option<u16> {
+    if !table.ruleset.is_castle() {
+        return None;
+    }
+    let lim = table.ruleset.turn_limit()?;
+    let rem = lim.saturating_add(1).saturating_sub(cb.turn);
+    (rem <= 12).then_some(rem)
+}
+
+#[inline]
+fn speed_ord_u8(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    s0: usize,
+    slot0: usize,
+    s1: usize,
+    slot1: usize,
+) -> u8 {
+    match crate::eval::compare_action_speed(cb, table, s0, slot0, s1, slot1) {
+        Ordering::Less => 0,
+        Ordering::Equal => 1,
+        Ordering::Greater => 2,
+    }
+}
+
+/// Side-`s0` payoff on a 1v1 mutual residual/EOT KO:
+/// - `PsStadium2`: faster side wins (`turn.rs:341`), `0.5` on speed tie.
+/// - `CastlePbs`: Sandstorm mutual KO is `0.5` (Draw, `Probe 2B`); non-Sandstorm
+///   `AfterMoveSelf` mutual KO causes the first mover to faint before the second takes slip
+///   (`0.0` if `s0` faster, `1.0` if `s1` faster, `0.5` on tie).
+#[inline]
+fn mutual_eot_payoff(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    s0: usize,
+    slot0: usize,
+    s1: usize,
+    slot1: usize,
+    spd_ord: u8,
+) -> f32 {
+    if table.ruleset.is_ps() {
+        return match spd_ord {
+            2 => 1.0,
+            0 => 0.0,
+            _ => 0.5,
+        };
+    }
+    let idx0 = s0 * 3 + slot0;
+    let idx1 = s1 * 3 + slot1;
+    let sand_active = cb.weather_turns > 0 && cb.weather_kind == CompactWeather::Sandstorm;
+    let both_sand = sand_active
+        && (table.mons[idx0].type_mask & table.sandstorm_immune_mask) == 0
+        && (table.mons[idx1].type_mask & table.sandstorm_immune_mask) == 0;
+    if both_sand {
+        0.5
+    } else {
+        match spd_ord {
+            2 => 0.0,
+            0 => 1.0,
+            _ => 0.5,
+        }
+    }
+}
+
 /// Stack-allocated 1D damage distribution kernel (up to 16 `(dmg, prob)` support points).
 #[derive(Clone, Copy, Debug)]
 pub struct DmgKernel1D {
@@ -63,6 +183,7 @@ pub struct DmgKernel1D {
     pub len: usize,
     pub max_dmg: i16,
     pub mean_dmg: f32,
+    pub recoil_quarter: bool,
 }
 
 impl DmgKernel1D {
@@ -73,6 +194,7 @@ impl DmgKernel1D {
             len: 1,
             max_dmg: 0,
             mean_dmg: 0.0,
+            recoil_quarter: false,
         }
     }
 
@@ -173,12 +295,15 @@ impl DmgKernel1D {
         let att_idx = att_side * 3 + att_slot;
         let def_idx = def_side * 3 + def_slot;
         let att_mon = &cb.mons[att_idx];
+        let def_mon = &cb.mons[def_idx];
         let def_maxhp = table.mons[def_idx].maxhp.max(1);
         let num_moves = table.mons[att_idx].num_moves as usize;
         let last_mon = cb.sides[att_side].alive_mask.count_ones() <= 1;
+        let def_has_sub = (def_mon.vol_flags & vol_bit::SUBSTITUTE) != 0 && def_mon.sub_hp() > 0;
 
         let mut best_kern = Self::zero();
         let mut best_score = 0.0f32;
+        let mut has_sub_breaker = !def_has_sub;
         for m_i in 0..num_moves {
             if att_mon.pp[m_i] == 0 || att_mon.is_slot_disabled(m_i) {
                 continue;
@@ -193,11 +318,17 @@ impl DmgKernel1D {
             if kern.max_dmg <= 0 {
                 continue;
             }
+            if !mspec.drain_half || mspec.bypasses_sub {
+                has_sub_breaker = true;
+            }
             let score = kern.mean_dmg / (def_maxhp as f32);
             if score > best_score {
                 best_score = score;
                 best_kern = kern;
             }
+        }
+        if !has_sub_breaker {
+            return Self::zero();
         }
         best_kern
     }
@@ -265,6 +396,7 @@ impl DmgKernel1D {
             len: 0,
             max_dmg: 0,
             mean_dmg: 0.0,
+            recoil_quarter: false,
         };
         for m_i in 0..num_moves {
             if m_i == st_i {
@@ -325,27 +457,26 @@ impl DmgKernel1D {
         let att_spec = &table.mons[att_idx];
         let def_spec = &table.mons[def_idx];
 
-        let base_power = if mspec.var_bp_kind == nc2000_engine::compact::VarBpKind::FlailReversal {
+        // Gen 2: HP-draining moves (Giga Drain, Mega Drain, Absorb, Leech Life, Dream Eater)
+        // fail completely against an active Substitute.
+        if !grid_mode
+            && mspec.drain_half
+            && !mspec.bypasses_sub
+            && (def_mon.vol_flags & vol_bit::SUBSTITUTE) != 0
+            && def_mon.sub_hp() > 0
+        {
+            return Self::zero();
+        }
+
+        let base_power = if mspec.var_bp_kind == VarBpKind::FlailReversal {
             let att_hp = if grid_mode {
                 att_spec.maxhp / 2
             } else {
                 att_mon.hp()
             };
-            let ratio =
-                ((att_hp as f64 * 48.0 / att_spec.maxhp.max(1) as f64).floor() as i32).max(1);
-            if ratio < 2 {
-                200
-            } else if ratio < 5 {
-                150
-            } else if ratio < 10 {
-                100
-            } else if ratio < 17 {
-                80
-            } else if ratio < 33 {
-                40
-            } else {
-                20
-            }
+            crate::eval::ruleset_flail_bp(table.ruleset, att_hp as i32, att_spec.maxhp as i32)
+        } else if table.ruleset.is_castle() && mspec.var_bp_kind == VarBpKind::Frustration {
+            102
         } else {
             mspec.base_power as i32
         };
@@ -362,11 +493,17 @@ impl DmgKernel1D {
             return Self::zero();
         }
 
-        let mut p_hit =
-            cb.hit_probability(table, att_side, att_slot, def_side, def_slot, m_slot) as f32;
-        if table.item_spec(def_mon.item).is_brightpowder && !mspec.always_hit {
-            p_hit *= 235.0 / 256.0;
-        }
+        let p_hit = crate::eval::ruleset_hit_probability(
+            table.ruleset,
+            mspec.base_acc_pct,
+            mspec.always_hit,
+            att_mon.boosts[5],
+            def_mon.boosts[6],
+            mspec.ignore_accuracy,
+            mspec.ignore_evasion,
+            mspec.ignore_positive_evasion,
+            table.item_spec(def_mon.item).is_brightpowder,
+        ) as f32;
         if p_hit <= 0.0 {
             return Self::zero();
         }
@@ -389,6 +526,7 @@ impl DmgKernel1D {
                 len: 0,
                 max_dmg: 0,
                 mean_dmg: 0.0,
+                recoil_quarter: mspec.recoil_quarter,
             };
             if p_hit < 1.0 {
                 k.push_mass(0, 1.0 - p_hit);
@@ -405,25 +543,57 @@ impl DmgKernel1D {
             != nc2000_engine::compact::SpecialMoveKind::FlailReversal
             && c_stage > 0
         {
-            1.0 / (CRIT_DEN[c_stage] as f32)
+            if table.ruleset.is_castle() && c_stage == 1 {
+                17.0 / 256.0
+            } else {
+                1.0 / (CRIT_DEN[c_stage] as f32)
+            }
         } else {
             0.0
         };
 
+        let is_castle = table.ruleset.is_castle();
         let compute_base = |is_crit: bool| -> i32 {
             let atk_stat = if mspec.is_physical { 0 } else { 2 };
             let def_stat = if mspec.is_physical { 1 } else { 3 };
             let ignore_boosts = is_crit & (att_mon.boosts[atk_stat] <= def_mon.boosts[def_stat]);
-            let mut atk =
-                cb.mon_stat(table, att_side, att_slot, atk_stat, ignore_boosts, ignore_boosts) as i32;
-            let mut def =
-                cb.mon_stat(table, def_side, def_slot, def_stat, ignore_boosts, false) as i32;
-            if (atk | def) >= 256 {
-                atk = (atk >> 2).max(1);
-                def = (def >> 2).max(1);
-            }
-            if mspec.is_selfdestruct && def_stat == 1 {
-                def = (def / 2).max(1);
+            let mut atk = crate::eval::ruleset_mon_stat(
+                cb,
+                table,
+                att_side,
+                att_slot,
+                atk_stat,
+                None,
+                ignore_boosts,
+                ignore_boosts,
+            );
+            let mut def = crate::eval::ruleset_mon_stat(
+                cb,
+                table,
+                def_side,
+                def_slot,
+                def_stat,
+                None,
+                ignore_boosts,
+                false,
+            );
+            if is_castle {
+                // Castle PBS (`Probe 12E2`, #19): Self-Destruct / Explosion halves Defense BEFORE `>= 256 / 4`.
+                if mspec.is_selfdestruct && def_stat == 1 {
+                    def = (def / 2).max(1);
+                }
+                if (atk | def) >= 256 {
+                    atk = (atk >> 2).max(1);
+                    def = (def >> 2).max(1);
+                }
+            } else {
+                if (atk | def) >= 256 {
+                    atk = (atk >> 2).max(1);
+                    def = (def >> 2).max(1);
+                }
+                if mspec.is_selfdestruct && def_stat == 1 {
+                    def = (def / 2).max(1);
+                }
             }
             let level = att_spec.level as i32;
             let mut d = ((level * 2 / 5 + 2) * base_power * atk / def.max(1)) / 50;
@@ -459,7 +629,11 @@ impl DmgKernel1D {
             } else if type_mod < 0 {
                 d >>= (-type_mod) as u32;
             }
-            d.max(1)
+            if is_castle {
+                d.max(0)
+            } else {
+                d.max(1)
+            }
         };
 
         let base_norm = compute_base(false);
@@ -474,19 +648,22 @@ impl DmgKernel1D {
             len: 0,
             max_dmg: 0,
             mean_dmg: 0.0,
+            recoil_quarter: mspec.recoil_quarter,
         };
         if p_hit < 1.0 {
             k.push_mass(0, 1.0 - p_hit);
         }
+        let min_roll_dmg = if is_castle { 0 } else { 1 };
         let p_norm_roll = p_hit * (1.0 - p_crit) * 0.25;
         for &r in &ROLL_NUMS {
-            let dmg = (((base_norm * r / 255).max(1) as f32) * hits_mult).round() as i16;
+            let dmg = (((base_norm * r / 255).max(min_roll_dmg) as f32) * hits_mult).round() as i16;
             k.push_mass(dmg, p_norm_roll);
         }
         if p_crit > 0.0 {
             let p_crit_roll = p_hit * p_crit * 0.25;
             for &r in &ROLL_NUMS {
-                let dmg = (((base_crit * r / 255).max(1) as f32) * hits_mult).round() as i16;
+                let dmg =
+                    (((base_crit * r / 255).max(min_roll_dmg) as f32) * hits_mult).round() as i16;
                 k.push_mass(dmg, p_crit_roll);
             }
         }
@@ -507,22 +684,6 @@ pub fn survival_curve_4(
 ) -> [f64; 4] {
     let (s, _) = survival_curve_k_with_mean_hp(cb, table, att_side, def_side, start_hp, 3, false);
     [s[0], s[1], s[2], s[3]]
-}
-
-/// Compute `([S(0)..=S(6)], mean_hp_frac_at_6)` via exact 1D Toeplitz convolution $T^k \mathbf{e}_{h_0}$.
-#[inline]
-fn survival_curve_6_with_mean_hp(
-    cb: &CompactBattle,
-    table: &MatchTable,
-    att_side: usize,
-    att_slot: usize,
-    def_side: usize,
-    def_slot: usize,
-    start_hp: i16,
-) -> ([f64; 7], f64) {
-    survival_curve_k_slots_with_mean_hp(
-        cb, table, att_side, att_slot, def_side, def_slot, start_hp, 6, true,
-    )
 }
 
 #[inline]
@@ -550,9 +711,18 @@ fn survival_curve_k_with_mean_hp(
     )
 }
 
+struct SurvivalCurveDetail {
+    surv: [f64; 7],
+    eot_ko: [f64; 7],
+    mean_hp_frac: f64,
+    dist: [f32; B32 + 1],
+}
+
+/// Compute `([S(0)..=S(k)], mean_hp_frac_at_k)` plus per-step EOT KO mass and final bin distribution
+/// via exact 1D Toeplitz convolution $T^k \mathbf{e}_{h_0}$.
 #[allow(clippy::too_many_arguments)]
 #[inline]
-fn survival_curve_k_slots_with_mean_hp(
+fn survival_curve_detail(
     cb: &CompactBattle,
     table: &MatchTable,
     att_side: usize,
@@ -562,13 +732,24 @@ fn survival_curve_k_slots_with_mean_hp(
     start_hp: i16,
     max_steps: usize,
     need_mean_hp: bool,
-) -> ([f64; 7], f64) {
+) -> SurvivalCurveDetail {
+    let empty_dist = [0.0f32; B32 + 1];
     if start_hp <= 0 {
-        return ([0.0; 7], 0.0);
+        return SurvivalCurveDetail {
+            surv: [0.0; 7],
+            eot_ko: [0.0; 7],
+            mean_hp_frac: 0.0,
+            dist: empty_dist,
+        };
     }
     let max_steps = max_steps.min(6);
     if max_steps == 0 && !need_mean_hp {
-        return ([1.0; 7], 0.0);
+        return SurvivalCurveDetail {
+            surv: [1.0; 7],
+            eot_ko: [0.0; 7],
+            mean_hp_frac: 0.0,
+            dist: empty_dist,
+        };
     }
     let att_idx = att_side * 3 + att_slot;
     let def_idx = def_side * 3 + def_slot;
@@ -621,6 +802,9 @@ fn survival_curve_k_slots_with_mean_hp(
     let mut min_b = b0;
     let mut max_b = b0;
 
+    let def_heal_berry = heal_berry_amount(def_ispec);
+    let is_castle = table.ruleset.is_castle();
+
     let lefties: i16 = if def_ispec.is_leftovers {
         (maxhp / 16).max(1)
     } else {
@@ -638,14 +822,15 @@ fn survival_curve_k_slots_with_mean_hp(
     };
     let def_st = def_mon.status_raw();
     let cnt_packed = def_mon.status_counter();
-    let is_tox = def_st == Status::Tox as u8
-        || ((cnt_packed & 0x10) != 0 && (def_st == Status::Psn as u8 || def_st == Status::Brn as u8));
+    let is_tox = is_toxic_residual(table.ruleset, def_st, cnt_packed);
     let mut tox_counter = (cnt_packed & 0x0F) as i16;
-    let psn_brn_dmg: i16 = if def_st == Status::Brn as u8 || def_st == Status::Psn as u8 {
-        (maxhp / 8).max(1)
-    } else {
-        0
-    };
+    let psn_brn_dmg: i16 =
+        if def_st == Status::Brn as u8 || def_st == Status::Psn as u8 || def_st == Status::Tox as u8
+        {
+            (maxhp / 8).max(1)
+        } else {
+            0
+        };
     let curse_dmg: i16 = if (def_mon.vol_flags & vol_bit::CURSE) != 0 {
         (maxhp / 4).max(1)
     } else {
@@ -668,8 +853,10 @@ fn survival_curve_k_slots_with_mean_hp(
         0
     };
     let def_conf_dmg = if def_conf > 0 {
-        let def_atk = cb.mon_stat(table, def_side, def_slot, 0, false, false) as i32;
-        let def_def = cb.mon_stat(table, def_side, def_slot, 1, false, false) as i32;
+        let def_atk =
+            crate::eval::ruleset_mon_stat(cb, table, def_side, def_slot, 0, None, false, false);
+        let def_def =
+            crate::eval::ruleset_mon_stat(cb, table, def_side, def_slot, 1, None, false, false);
         (((def_spec.level as i32 * 2 / 5 + 2) * 40 * def_atk / def_def.max(1)) / 50 + 2).max(1)
             as i16
     } else {
@@ -699,7 +886,29 @@ fn survival_curve_k_slots_with_mean_hp(
         0.0f32
     };
 
+    let apply_eot_and_berry = |hp_post: i16, res: i16, step: usize| -> i16 {
+        if hp_post <= 0 {
+            return 0;
+        }
+        let mut h = hp_post;
+        let mut berry_used = false;
+        if step == 1 && !is_castle && def_heal_berry > 0 && heal_berry_triggers(table.ruleset, h, maxhp) {
+            h = (h + def_heal_berry).min(maxhp);
+            berry_used = true;
+        }
+        h = (h + res).clamp(0, maxhp);
+        if step == 1
+            && !berry_used
+            && def_heal_berry > 0
+            && heal_berry_triggers(table.ruleset, h, maxhp)
+        {
+            h = (h + def_heal_berry).min(maxhp);
+        }
+        h
+    };
+
     let mut out = [1.0f64; 7];
+    let mut eot_ko = [0.0f64; 7];
     for step in 1..=max_steps {
         if min_b > max_b {
             for st in step..=max_steps {
@@ -711,10 +920,11 @@ fn survival_curve_k_slots_with_mean_hp(
         next[0] = dist[0];
         let mut next_min = B32 + 1;
         let mut next_max = 0usize;
+        let mut step_eot_ko = 0.0f32;
 
         let status_dot = if is_tox {
             tox_counter = (tox_counter + 1).min(15);
-            (maxhp / 16).max(1) * tox_counter
+            ((maxhp / 16) * tox_counter).max(1)
         } else {
             psn_brn_dmg
         };
@@ -801,10 +1011,12 @@ fn survival_curve_k_slots_with_mean_hp(
                 }
                 if p_att < 1.0 {
                     let p_no_act = pm * (1.0 - p_att);
-                    let final_hp = (hp_after_self + res_this_turn).clamp(0, maxhp);
+                    let final_hp = apply_eot_and_berry(hp_after_self, res_this_turn, step);
                     let tb = to_b(final_hp);
                     next[tb] += p_no_act;
-                    if tb > 0 && p_no_act > 0.0 {
+                    if tb == 0 {
+                        step_eot_ko += p_no_act;
+                    } else if p_no_act > 0.0 {
                         if tb < next_min {
                             next_min = tb;
                         }
@@ -818,11 +1030,14 @@ fn survival_curve_k_slots_with_mean_hp(
                     for i in 0..kern.len {
                         let (dmg, prob) = kern.pts[i];
                         if dmg > 0 && p_sub_now > 0.0 {
-                            let final_sub_hp = (hp_after_self + res_this_turn).clamp(0, maxhp);
+                            let final_sub_hp =
+                                apply_eot_and_berry(hp_after_self, res_this_turn, step);
                             let tb_sub = to_b(final_sub_hp);
                             let add_sub = pa * prob * p_sub_now;
                             next[tb_sub] += add_sub;
-                            if tb_sub > 0 && add_sub > 0.0 {
+                            if tb_sub == 0 {
+                                step_eot_ko += add_sub;
+                            } else if add_sub > 0.0 {
                                 if tb_sub < next_min {
                                     next_min = tb_sub;
                                 }
@@ -833,15 +1048,13 @@ fn survival_curve_k_slots_with_mean_hp(
                             let p_unsub = 1.0 - p_sub_now;
                             if p_unsub > 1e-6 {
                                 let post_hit = (hp_after_self - dmg).max(0);
-                                let final_hp = if post_hit <= 0 {
-                                    0
-                                } else {
-                                    (post_hit + res_this_turn).clamp(0, maxhp)
-                                };
+                                let final_hp = apply_eot_and_berry(post_hit, res_this_turn, step);
                                 let tb = to_b(final_hp);
                                 let add = pa * prob * p_unsub;
                                 next[tb] += add;
-                                if tb > 0 && add > 0.0 {
+                                if tb == 0 && post_hit > 0 {
+                                    step_eot_ko += add;
+                                } else if tb > 0 && add > 0.0 {
                                     if tb < next_min {
                                         next_min = tb;
                                     }
@@ -852,15 +1065,13 @@ fn survival_curve_k_slots_with_mean_hp(
                             }
                         } else {
                             let post_hit = (hp_after_self - dmg).max(0);
-                            let final_hp = if post_hit <= 0 {
-                                0
-                            } else {
-                                (post_hit + res_this_turn).clamp(0, maxhp)
-                            };
+                            let final_hp = apply_eot_and_berry(post_hit, res_this_turn, step);
                             let tb = to_b(final_hp);
                             let add = pa * prob;
                             next[tb] += add;
-                            if tb > 0 && add > 0.0 {
+                            if tb == 0 && post_hit > 0 {
+                                step_eot_ko += add;
+                            } else if tb > 0 && add > 0.0 {
                                 if tb < next_min {
                                     next_min = tb;
                                 }
@@ -883,23 +1094,57 @@ fn survival_curve_k_slots_with_mean_hp(
             }
         }
         out[step] = (surv as f64).clamp(0.0, 1.0);
+        eot_ko[step] = (step_eot_ko as f64).clamp(0.0, 1.0);
     }
 
-    if !need_mean_hp || min_b > max_b {
-        return (out, 0.0);
-    }
-    let mut alive_mass = 0.0f32;
-    let mut weighted_b = 0.0f32;
-    for b in min_b..=max_b {
-        alive_mass += dist[b];
-        weighted_b += dist[b] * (b as f32 / B32 as f32);
-    }
-    let mean_hp_frac = if alive_mass > 1e-6 {
-        (weighted_b / alive_mass) as f64
-    } else {
+    let mean_hp_frac = if !need_mean_hp || min_b > max_b {
         0.0
+    } else {
+        let mut alive_mass = 0.0f32;
+        let mut weighted_b = 0.0f32;
+        for b in min_b..=max_b {
+            alive_mass += dist[b];
+            weighted_b += dist[b] * (b as f32 / B32 as f32);
+        }
+        if alive_mass > 1e-6 {
+            (weighted_b / alive_mass) as f64
+        } else {
+            0.0
+        }
     };
-    (out, mean_hp_frac)
+    SurvivalCurveDetail {
+        surv: out,
+        eot_ko,
+        mean_hp_frac,
+        dist,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline]
+fn survival_curve_k_slots_with_mean_hp(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    att_side: usize,
+    att_slot: usize,
+    def_side: usize,
+    def_slot: usize,
+    start_hp: i16,
+    max_steps: usize,
+    need_mean_hp: bool,
+) -> ([f64; 7], f64) {
+    let d = survival_curve_detail(
+        cb,
+        table,
+        att_side,
+        att_slot,
+        def_side,
+        def_slot,
+        start_hp,
+        max_steps,
+        need_mean_hp,
+    );
+    (d.surv, d.mean_hp_frac)
 }
 
 // =========================================================================
@@ -1044,12 +1289,14 @@ impl Side1DOps {
         };
         let st = mon.status_raw();
         let cnt_packed = mon.status_counter();
-        let is_tox = st == Status::Tox as u8
-            || ((cnt_packed & 0x10) != 0 && (st == Status::Psn as u8 || st == Status::Brn as u8));
-        let tox_c = ((cnt_packed & 0x0F) as i16).max(2);
+        let is_tox = is_toxic_residual(table.ruleset, st, cnt_packed);
+        // Stationary future-turn Bellman DoT: exact next-turn rate `(c + 1)` for `c >= 1`,
+        // floored at `2/16` when `c == 0` (exact Turn-2 rate / 3-turn average `(1+2+3)/3`)
+        // so infinite-horizon `v_table` never treats Toxic + Leftovers as 0 net DoT forever.
+        let tox_c = ((cnt_packed & 0x0F) as i16 + 1).clamp(2, 15);
         let status_dot = if is_tox {
-            (maxhp / 16).max(1) * tox_c
-        } else if st == Status::Brn as u8 || st == Status::Psn as u8 {
+            ((maxhp / 16) * tox_c).max(1)
+        } else if st == Status::Brn as u8 || st == Status::Psn as u8 || st == Status::Tox as u8 {
             (maxhp / 8).max(1)
         } else {
             0
@@ -1188,7 +1435,7 @@ impl Side1DOps {
             for m_i in 0..spec.num_moves as usize {
                 if mon.pp[m_i] > 0 && !(dis && m_i == dis_slot) {
                     let ms = &table.move_specs[idx][m_i];
-                    if let Some(amt) = instant_heal_amount(cb, ms, maxhp) {
+                    if let Some(amt) = instant_heal_amount(cb, table.ruleset, ms, maxhp) {
                         if amt > hh_amt {
                             hh_amt = amt;
                         }
@@ -1220,20 +1467,31 @@ impl Side1DOps {
         let perish1 = (m1.vol_flags & vol_bit::PERISH_SONG) != 0;
         let frz0 = m0.status_raw() == Status::Frz as u8 && !is0.is_miracleberry;
         let frz1 = m1.status_raw() == Status::Frz as u8 && !is1.is_miracleberry;
-        let max_s0 = if !perish0 && !frz0 && !hh0 && hr0 && !berry0 {
+        let max_slp_cap = if table.ruleset.is_castle() {
+            MAX_SLP_STATES
+        } else {
+            2
+        };
+        let init_ns = |m: &nc2000_engine::compact::CompactMon, berry: bool| -> usize {
+            if m.status_raw() == Status::Slp as u8 && !berry {
+                let slp = (m.status_counter().saturating_sub(1) as usize).min(max_slp_cap);
+                slp.saturating_sub(1)
+            } else {
+                0
+            }
+        };
+        let rest_s0 = if !perish0 && !frz0 && !hh0 && hr0 && !berry0 {
             2usize
-        } else if m0.status_raw() == Status::Slp as u8 && !berry0 && m0.status_counter() >= 3 {
-            1usize
         } else {
             0usize
         };
-        let max_s1 = if !perish1 && !frz1 && !hh1 && hr1 && !berry1 {
+        let rest_s1 = if !perish1 && !frz1 && !hh1 && hr1 && !berry1 {
             2usize
-        } else if m1.status_raw() == Status::Slp as u8 && !berry1 && m1.status_counter() >= 3 {
-            1usize
         } else {
             0usize
         };
+        let max_s0 = rest_s0.max(init_ns(m0, berry0)).min(MAX_SLP_STATES - 1);
+        let max_s1 = rest_s1.max(init_ns(m1, berry1)).min(MAX_SLP_STATES - 1);
 
         let k01_att = DmgKernel1D::best_attack_grid(cb, table, s0, slot0, s1, slot1);
         let k10_att = DmgKernel1D::best_attack_grid(cb, table, s1, slot1, s0, slot0);
@@ -1277,29 +1535,23 @@ impl Side1DOps {
             k01_st.as_ref(),
         );
 
-        let spd0 = cb.mon_action_speed(table, s0, slot0);
-        let spd1 = cb.mon_action_speed(table, s1, slot1);
-        let spd_ord = if spd0 < spd1 {
-            0u8
-        } else if spd0 == spd1 {
-            1u8
-        } else {
-            2u8
-        };
+        let spd_ord = speed_ord_u8(cb, table, s0, slot0, s1, slot1);
 
         ([ops0, ops1], max_s0, max_s1, spd_ord)
     }
 }
 
 #[inline]
+#[allow(clippy::too_many_arguments)]
 fn eval_exact_root_table(
-    v_table: &[[[[f32; B16 + 1]; B16 + 1]; 3]; 3],
+    v_table: &BellmanVTable,
     cb: &CompactBattle,
     table: &MatchTable,
     s0: usize,
     slot0: usize,
     s1: usize,
     slot1: usize,
+    horizon: Option<u16>,
 ) -> f64 {
     let idx = [s0 * 3 + slot0, s1 * 3 + slot1];
     let hp = [cb.mons[idx[0]].hp(), cb.mons[idx[1]].hp()];
@@ -1316,6 +1568,16 @@ fn eval_exact_root_table(
         table.mons[idx[0]].maxhp.max(1),
         table.mons[idx[1]].maxhp.max(1),
     ];
+    let is_castle = table.ruleset.is_castle();
+    let recoil_att_wins = table
+        .ruleset
+        .castle_overlay()
+        .map_or(true, |cfg| cfg.recoil_1v1_attacker_wins);
+    let gamma = if horizon.is_some() { 1.0f32 } else { GAMMA };
+    let is_final_turn = horizon == Some(1);
+    let spd_ord = speed_ord_u8(cb, table, s0, slot0, s1, slot1);
+    let mutual_eot_val = mutual_eot_payoff(cb, table, s0, slot0, s1, slot1, spd_ord);
+
     let slp = [
         side_sleep_rem(cb, table, s0, slot0),
         side_sleep_rem(cb, table, s1, slot1),
@@ -1327,6 +1589,7 @@ fn eval_exact_root_table(
     let mut has_rest = [false; 2];
     let mut has_st = [false; 2];
     let mut has_berry = [false; 2];
+    let mut heal_berry = [0i16; 2];
     let mut p_act = [1.0f32; 2];
     let mut eot_net = [[0i16; 2]; 2];
     let mut sub_hp_init = [0i16; 2];
@@ -1345,7 +1608,7 @@ fn eval_exact_root_table(
         for m_i in 0..sp.num_moves as usize {
             if m.pp[m_i] > 0 && !m.is_slot_disabled(m_i) {
                 let ms = &table.move_specs[idx[i]][m_i];
-                if let Some(amt) = instant_heal_amount(cb, ms, maxhp[i]) {
+                if let Some(amt) = instant_heal_amount(cb, table.ruleset, ms, maxhp[i]) {
                     if amt > hh_amt {
                         hh_amt = amt;
                     }
@@ -1363,6 +1626,7 @@ fn eval_exact_root_table(
         let ispec = table.item_spec(m.item);
         let miracle = ispec.is_miracleberry;
         let berry = ispec.is_mintberry || ispec.is_miracleberry;
+        heal_berry[i] = heal_berry_amount(ispec);
         let st_raw = m.status_raw();
         let is_frz = st_raw == Status::Frz as u8 && !miracle;
         let is_par = st_raw == Status::Par as u8 && !miracle;
@@ -1400,13 +1664,14 @@ fn eval_exact_root_table(
             0
         };
         let cnt_packed = m.status_counter();
-        let is_tox = st_raw == Status::Tox as u8
-            || ((cnt_packed & 0x10) != 0
-                && (st_raw == Status::Psn as u8 || st_raw == Status::Brn as u8));
-        let tox_c = ((cnt_packed & 0x0F) as i16 + 1).max(2);
+        let is_tox = is_toxic_residual(table.ruleset, st_raw, cnt_packed);
+        let tox_c = ((cnt_packed & 0x0F) as i16 + 1).min(15);
         let status_dot = if is_tox {
-            (maxhp[i] / 16).max(1) * tox_c
-        } else if st_raw == Status::Brn as u8 || st_raw == Status::Psn as u8 {
+            ((maxhp[i] / 16) * tox_c).max(1)
+        } else if st_raw == Status::Brn as u8
+            || st_raw == Status::Psn as u8
+            || st_raw == Status::Tox as u8
+        {
             (maxhp[i] / 8).max(1)
         } else {
             0
@@ -1470,6 +1735,20 @@ fn eval_exact_root_table(
         (lo, hi, w)
     };
 
+    let apply_end_berry = |side_i: usize, hp_post: i16, eot_val: i16, used_early: bool| -> i16 {
+        if hp_post <= 0 {
+            return 0;
+        }
+        let mut h = (hp_post + eot_val).clamp(0, maxhp[side_i]);
+        if !used_early
+            && heal_berry[side_i] > 0
+            && heal_berry_triggers(table.ruleset, h, maxhp[side_i])
+        {
+            h = (h + heal_berry[side_i]).min(maxhp[side_i]);
+        }
+        h
+    };
+
     let eval_order = |first: usize, a0: u8, a1: u8| -> f32 {
         let second = 1 - first;
         let act = [a0, a1];
@@ -1478,7 +1757,7 @@ fn eval_exact_root_table(
         let sub_fir = sub_hp_init[first];
         let sub_sec = sub_hp_init[second];
 
-        let (hp_fir_mid, ns_fir, cured_fir, k_fir_opt) = if slp[first] > 0 {
+        let (mut hp_fir_mid, ns_fir, cured_fir, k_fir_opt) = if slp[first] > 0 {
             (
                 hp[first],
                 slp[first] - 1,
@@ -1511,89 +1790,125 @@ fn eval_exact_root_table(
             (hp[first], 0, false, Some(&k_att[first]))
         };
 
-        let mut sec_pts = [(0i16, 0i16, 0.0f32); 17];
+        let mut sec_pts = [(0i16, 0i16, false, 0.0f32); 17];
         let mut sec_len = 0usize;
-        let mut ko_sec_prob = 0.0f32;
-        let push_pt = |pts: &mut [(i16, i16, f32); 17],
+        let mut ko_sec_val = 0.0f32;
+        let push_pt = |pts: &mut [(i16, i16, bool, f32); 17],
                        len: &mut usize,
-                       ko: &mut f32,
                        h: i16,
                        sub_h: i16,
+                       used_b: bool,
                        p: f32| {
-            if p <= 0.0 {
-                return;
-            }
-            if h <= 0 {
-                *ko += p;
+            if p <= 0.0 || h <= 0 {
                 return;
             }
             for idx_p in 0..*len {
-                if pts[idx_p].0 == h && pts[idx_p].1 == sub_h {
-                    pts[idx_p].2 += p;
+                if pts[idx_p].0 == h && pts[idx_p].1 == sub_h && pts[idx_p].2 == used_b {
+                    pts[idx_p].3 += p;
                     return;
                 }
             }
             if *len < 17 {
-                pts[*len] = (h, sub_h, p);
+                pts[*len] = (h, sub_h, used_b, p);
                 *len += 1;
             } else {
-                pts[*len - 1].2 += p;
+                pts[*len - 1].3 += p;
             }
         };
 
         let pa_fir = p_act[first];
+        let mut fir_surv_recoil_sum = 0.0f32;
+        let mut fir_surv_prob_sum = 0.0f32;
         if let Some(kern) = k_fir_opt {
             if kern.max_dmg <= 0 || pa_fir <= 0.0 {
-                push_pt(
-                    &mut sec_pts,
-                    &mut sec_len,
-                    &mut ko_sec_prob,
-                    hp[second],
-                    sub_sec,
-                    1.0,
-                );
+                push_pt(&mut sec_pts, &mut sec_len, hp[second], sub_sec, false, 1.0);
             } else {
                 if pa_fir < 1.0 {
                     push_pt(
                         &mut sec_pts,
                         &mut sec_len,
-                        &mut ko_sec_prob,
                         hp[second],
                         sub_sec,
+                        false,
                         1.0 - pa_fir,
                     );
                 }
                 for i in 0..kern.len {
                     let (dmg, prob) = kern.pts[i];
-                    let (h_after, sub_after) = if sub_sec > 0 && dmg > 0 {
-                        (hp[second], (sub_sec - dmg).max(0))
+                    let p_branch = pa_fir * prob;
+                    if sub_sec > 0 && dmg > 0 {
+                        if kern.recoil_quarter {
+                            // PS: 1 HP recoil vs Sub; Castle: 0 HP recoil vs Sub (`Probe 2B`).
+                            let rec = if is_castle { 0.0 } else { 1.0 };
+                            fir_surv_recoil_sum += p_branch * rec;
+                            fir_surv_prob_sum += p_branch;
+                        }
+                        push_pt(
+                            &mut sec_pts,
+                            &mut sec_len,
+                            hp[second],
+                            (sub_sec - dmg).max(0),
+                            false,
+                            p_branch,
+                        );
                     } else {
-                        ((hp[second] - dmg).max(0), sub_sec)
-                    };
-                    push_pt(
-                        &mut sec_pts,
-                        &mut sec_len,
-                        &mut ko_sec_prob,
-                        h_after,
-                        sub_after,
-                        pa_fir * prob,
-                    );
+                        let mut h_after = (hp[second] - dmg).max(0);
+                        if h_after <= 0 {
+                            let ko_payoff = if kern.recoil_quarter && is_castle {
+                                let rec = (hp[second] / 4).max(1);
+                                if hp_fir_mid <= rec && !recoil_att_wins {
+                                    0.5f32
+                                } else {
+                                    win_first
+                                }
+                            } else {
+                                win_first
+                            };
+                            ko_sec_val += p_branch * ko_payoff;
+                        } else {
+                            let mut used_b = false;
+                            if !is_castle
+                                && heal_berry[second] > 0
+                                && heal_berry_triggers(table.ruleset, h_after, maxhp[second])
+                            {
+                                h_after = (h_after + heal_berry[second]).min(maxhp[second]);
+                                used_b = true;
+                            }
+                            if kern.recoil_quarter && dmg > 0 {
+                                let rec = (dmg / 4).max(1) as f32;
+                                fir_surv_recoil_sum += p_branch * rec;
+                                fir_surv_prob_sum += p_branch;
+                            }
+                            push_pt(&mut sec_pts, &mut sec_len, h_after, sub_sec, used_b, p_branch);
+                        }
+                    }
                 }
             }
         } else {
-            push_pt(
-                &mut sec_pts,
-                &mut sec_len,
-                &mut ko_sec_prob,
-                hp[second],
-                sub_sec,
-                1.0,
-            );
+            push_pt(&mut sec_pts, &mut sec_len, hp[second], sub_sec, false, 1.0);
         }
 
-        let mut total_val = ko_sec_prob * win_first;
+        let mut total_val = ko_sec_val;
         if sec_len == 0 {
             return total_val.clamp(0.0, 1.0);
+        }
+
+        let mut fir_used_berry_early = false;
+        if fir_surv_prob_sum > 0.0 && fir_surv_recoil_sum > 0.0 {
+            let rec_avg = (fir_surv_recoil_sum / fir_surv_prob_sum).round() as i16;
+            hp_fir_mid = (hp_fir_mid - rec_avg).max(0);
+            if hp_fir_mid <= 0 {
+                let surv_mass: f32 = sec_pts[..sec_len].iter().map(|pt| pt.3).sum();
+                total_val += surv_mass * win_second;
+                return total_val.clamp(0.0, 1.0);
+            }
+            if !is_castle
+                && heal_berry[first] > 0
+                && heal_berry_triggers(table.ruleset, hp_fir_mid, maxhp[first])
+            {
+                hp_fir_mid = (hp_fir_mid + heal_berry[first]).min(maxhp[first]);
+                fir_used_berry_early = true;
+            }
         }
 
         let (sec_mode, ns_sec, cured_sec, k_sec_opt) = if slp[second] > 0 {
@@ -1619,18 +1934,21 @@ fn eval_exact_root_table(
             (0u8, 0, false, Some(&k_att[second]))
         };
 
-        let mut fir_pts = [(0i16, 0i16, 0.0f32); 17];
+        let mut fir_pts = [(0i16, 0i16, false, 0.0f32); 17];
         let mut fir_len = 0usize;
         let mut ko_fir_prob = 0.0f32;
+        let mut sec_ko_recoil_sum = 0.0f32;
+        let mut sec_surv_recoil_sum = 0.0f32;
+        let mut sec_surv_prob_sum = 0.0f32;
         let pa_sec = p_act[second];
         if let Some(kern) = k_sec_opt {
             if kern.max_dmg <= 0 || pa_sec <= 0.0 {
                 push_pt(
                     &mut fir_pts,
                     &mut fir_len,
-                    &mut ko_fir_prob,
                     hp_fir_mid,
                     sub_fir,
+                    fir_used_berry_early,
                     1.0,
                 );
             } else {
@@ -1638,44 +1956,83 @@ fn eval_exact_root_table(
                     push_pt(
                         &mut fir_pts,
                         &mut fir_len,
-                        &mut ko_fir_prob,
                         hp_fir_mid,
                         sub_fir,
+                        fir_used_berry_early,
                         1.0 - pa_sec,
                     );
                 }
                 for i in 0..kern.len {
                     let (dmg, prob) = kern.pts[i];
-                    let (h_after, sub_after) = if sub_fir > 0 && dmg > 0 {
-                        (hp_fir_mid, (sub_fir - dmg).max(0))
+                    let p_branch = pa_sec * prob;
+                    if sub_fir > 0 && dmg > 0 {
+                        if kern.recoil_quarter {
+                            let rec = if is_castle { 0.0 } else { 1.0 };
+                            sec_surv_recoil_sum += p_branch * rec;
+                            sec_surv_prob_sum += p_branch;
+                        }
+                        push_pt(
+                            &mut fir_pts,
+                            &mut fir_len,
+                            hp_fir_mid,
+                            (sub_fir - dmg).max(0),
+                            fir_used_berry_early,
+                            p_branch,
+                        );
                     } else {
-                        ((hp_fir_mid - dmg).max(0), sub_fir)
-                    };
-                    push_pt(
-                        &mut fir_pts,
-                        &mut fir_len,
-                        &mut ko_fir_prob,
-                        h_after,
-                        sub_after,
-                        pa_sec * prob,
-                    );
+                        let mut h_after = (hp_fir_mid - dmg).max(0);
+                        if h_after <= 0 {
+                            ko_fir_prob += p_branch;
+                            if kern.recoil_quarter && is_castle {
+                                sec_ko_recoil_sum += p_branch * ((hp_fir_mid / 4).max(1) as f32);
+                            }
+                        } else {
+                            let mut used_b = fir_used_berry_early;
+                            if !is_castle
+                                && !used_b
+                                && heal_berry[first] > 0
+                                && heal_berry_triggers(table.ruleset, h_after, maxhp[first])
+                            {
+                                h_after = (h_after + heal_berry[first]).min(maxhp[first]);
+                                used_b = true;
+                            }
+                            if kern.recoil_quarter && dmg > 0 {
+                                sec_surv_recoil_sum += p_branch * ((dmg / 4).max(1) as f32);
+                                sec_surv_prob_sum += p_branch;
+                            }
+                            push_pt(&mut fir_pts, &mut fir_len, h_after, sub_fir, used_b, p_branch);
+                        }
+                    }
                 }
             }
         } else {
             push_pt(
                 &mut fir_pts,
                 &mut fir_len,
-                &mut ko_fir_prob,
                 hp_fir_mid,
                 sub_fir,
+                fir_used_berry_early,
                 1.0,
             );
         }
 
+        let sec_surv_rec = if sec_surv_prob_sum > 0.0 {
+            (sec_surv_recoil_sum / sec_surv_prob_sum).round() as i16
+        } else {
+            0
+        };
+        let sec_ko_rec = if ko_fir_prob > 0.0 && sec_ko_recoil_sum > 0.0 {
+            (sec_ko_recoil_sum / ko_fir_prob).round() as i16
+        } else {
+            0
+        };
+
         let mut fir_end = [(0i16, 0usize, 0usize, 0.0f32, 0.0f32); 17];
         let eot_fir_val = eot_net[first][cured_fir as usize];
-        for (idx_f, &(hp_fir_post, sub_fir_after, p_fir)) in fir_pts[..fir_len].iter().enumerate() {
-            let h_end = (hp_fir_post + eot_fir_val).clamp(0, maxhp[first]);
+        for (idx_f, &(hp_fir_post, sub_fir_after, used_b, p_fir)) in
+            fir_pts[..fir_len].iter().enumerate()
+        {
+            let h_end = apply_end_berry(first, hp_fir_post, eot_fir_val, used_b);
             let (lo, hi, w) = if h_end > 0 {
                 let h_eff = if sub_fir_after > 0 {
                     let buf = sub_fir_after.max(opp_hit_buffer[first]);
@@ -1691,17 +2048,26 @@ fn eval_exact_root_table(
         }
 
         let (ns0, ns1) = if first == 0 {
-            (ns_fir.min(2), ns_sec.min(2))
+            (ns_fir.min(MAX_SLP_STATES - 1), ns_sec.min(MAX_SLP_STATES - 1))
         } else {
-            (ns_sec.min(2), ns_fir.min(2))
+            (ns_sec.min(MAX_SLP_STATES - 1), ns_fir.min(MAX_SLP_STATES - 1))
         };
         let tbl = &v_table[ns0][ns1];
 
-        let eval_branch = |hp_sec_end: i16, sub_sec_after: i16| -> f32 {
-            let mut branch_val = ko_fir_prob * win_second;
+        let eval_branch = |hp_sec_mid: i16, hp_sec_end: i16, sub_sec_after: i16| -> f32 {
+            let ko_fir_payoff = if sec_ko_rec > 0 && hp_sec_mid <= sec_ko_rec && !recoil_att_wins {
+                0.5f32
+            } else {
+                win_second
+            };
+            let mut branch_val = ko_fir_prob * ko_fir_payoff;
             if hp_sec_end <= 0 {
                 for &(hp_fir_end, _, _, _, p_fir) in &fir_end[..fir_len] {
-                    let cont = if hp_fir_end <= 0 { 0.5f32 } else { win_first };
+                    let cont = if hp_fir_end <= 0 {
+                        mutual_eot_val
+                    } else {
+                        win_first
+                    };
                     branch_val += p_fir * cont;
                 }
             } else {
@@ -1715,6 +2081,25 @@ fn eval_exact_root_table(
                 for &(hp_fir_end, f_lo, f_hi, f_w, p_fir) in &fir_end[..fir_len] {
                     let cont = if hp_fir_end <= 0 {
                         win_second
+                    } else if is_final_turn {
+                        let (r0, r1) = if first == 0 {
+                            (
+                                hp_fir_end as f64 / maxhp[0] as f64,
+                                hp_sec_end as f64 / maxhp[1] as f64,
+                            )
+                        } else {
+                            (
+                                hp_sec_end as f64 / maxhp[0] as f64,
+                                hp_fir_end as f64 / maxhp[1] as f64,
+                            )
+                        };
+                        if (r0 - r1).abs() <= 1e-12 {
+                            0.5f32
+                        } else if r0 > r1 {
+                            1.0f32
+                        } else {
+                            0.0f32
+                        }
                     } else {
                         let (b0_lo, b0_hi, w0, b1_lo, b1_hi, w1) = if first == 0 {
                             (f_lo, f_hi, f_w, s_lo, s_hi, s_w)
@@ -1728,7 +2113,7 @@ fn eval_exact_root_table(
                         let v0 = v00 + w1 * (v01 - v00);
                         let v1 = v10 + w1 * (v11 - v10);
                         let v_cont = (v0 + w0 * (v1 - v0)).clamp(0.0, 1.0);
-                        GAMMA * v_cont + (1.0 - GAMMA) * 0.5
+                        gamma * v_cont + (1.0 - gamma) * 0.5
                     };
                     branch_val += p_fir * cont;
                 }
@@ -1738,26 +2123,24 @@ fn eval_exact_root_table(
 
         let eot_sec_val = eot_net[second][cured_sec as usize];
         if sec_mode == 1 {
-            let hp_sec_end = (maxhp[second] + eot_sec_val).clamp(0, maxhp[second]);
-            for &(_, sub_sec_after, p_sec) in &sec_pts[..sec_len] {
-                total_val += p_sec * eval_branch(hp_sec_end, sub_sec_after);
+            for &(hp_sec_mid, sub_sec_after, used_b, p_sec) in &sec_pts[..sec_len] {
+                let hp_sec_end = apply_end_berry(second, maxhp[second], eot_sec_val, used_b);
+                total_val += p_sec * eval_branch(hp_sec_mid, hp_sec_end, sub_sec_after);
             }
         } else {
-            for &(hp_sec_mid, sub_sec_after, p_sec) in &sec_pts[..sec_len] {
+            for &(hp_sec_mid, sub_sec_after, used_b, p_sec) in &sec_pts[..sec_len] {
                 let hp_sec_post = if sec_mode == 2 {
                     (hp_sec_mid + inst_heal_amt[second]).min(maxhp[second])
                 } else {
-                    hp_sec_mid
+                    (hp_sec_mid - sec_surv_rec).max(0)
                 };
-                let hp_sec_end = (hp_sec_post + eot_sec_val).clamp(0, maxhp[second]);
-                total_val += p_sec * eval_branch(hp_sec_end, sub_sec_after);
+                let hp_sec_end = apply_end_berry(second, hp_sec_post, eot_sec_val, used_b);
+                total_val += p_sec * eval_branch(hp_sec_mid, hp_sec_end, sub_sec_after);
             }
         }
         total_val.clamp(0.0, 1.0)
     };
 
-    let spd0 = cb.mon_action_speed(table, s0, slot0);
-    let spd1 = cb.mon_action_speed(table, s1, slot1);
     let n0 = if slp[0] == 0 && has_heal[0] && hp[0] < maxhp[0] {
         2
     } else {
@@ -1769,9 +2152,9 @@ fn eval_exact_root_table(
         1
     };
     let eval_pair = |a0: u8, a1: u8| -> f32 {
-        if spd0 > spd1 {
+        if spd_ord == 2 {
             eval_order(0, a0, a1)
-        } else if spd1 > spd0 {
+        } else if spd_ord == 0 {
             eval_order(1, a0, a1)
         } else {
             0.5 * (eval_order(0, a0, a1) + eval_order(1, a0, a1))
@@ -1841,7 +2224,7 @@ impl Hasher128 {
 #[derive(Clone, Copy)]
 struct CachedBellman {
     op_key: Key128,
-    v_table: [[[[f32; B16 + 1]; B16 + 1]; 3]; 3],
+    v_table: BellmanVTable,
     heal_mask0: [u32; B16 + 1],
     heal_mask1: [u32; B16 + 1],
 }
@@ -1850,7 +2233,7 @@ impl CachedBellman {
     const fn empty() -> Self {
         Self {
             op_key: Key128(0, 0),
-            v_table: [[[[0.5; B16 + 1]; B16 + 1]; 3]; 3],
+            v_table: [[[[0.5; B16 + 1]; B16 + 1]; MAX_SLP_STATES]; MAX_SLP_STATES],
             heal_mask0: [0; B16 + 1],
             heal_mask1: [0; B16 + 1],
         }
@@ -1963,15 +2346,7 @@ fn l1_state_key(
     let av0 = avail_mask(m0, sp0.num_moves);
     let av1 = avail_mask(m1, sp1.num_moves);
 
-    let spd0 = cb.mon_action_speed(table, s0, slot0);
-    let spd1 = cb.mon_action_speed(table, s1, slot1);
-    let spd_ord = if spd0 < spd1 {
-        0u8
-    } else if spd0 == spd1 {
-        1u8
-    } else {
-        2u8
-    };
+    let spd_ord = speed_ord_u8(cb, table, s0, slot0, s1, slot1);
 
     // Hash raw `mon.item` directly so dynamic Thief steals (including type boosters and
     // species-stat items) never collide in L1 cache, with zero `table.item_spec` overhead.
@@ -2011,12 +2386,11 @@ fn l1_state_key(
     let canon_st = |m: &nc2000_engine::compact::CompactMon| -> u8 {
         let raw = m.status_raw();
         let cnt = m.status_counter();
-        if raw == Status::Tox as u8
-            || ((cnt & 0x10) != 0 && (raw == Status::Psn as u8 || raw == Status::Brn as u8))
-        {
-            raw | 0x80 | (((cnt & 0x0F).max(2)) << 3)
+        if is_toxic_residual(table.ruleset, raw, cnt) {
+            raw | 0x80 | ((cnt & 0x0F) << 3)
         } else if raw == Status::Slp as u8 {
-            raw | (((cnt >= 3) as u8) << 3)
+            let slp_bucket = cnt.saturating_sub(2).min(3);
+            raw | (slp_bucket << 3)
         } else {
             raw
         }
@@ -2058,11 +2432,28 @@ fn l1_state_key(
         | (w_field << 48);
     h.write_u64(w_dyn);
 
+    let ruleset_tag = table.ruleset.fingerprint_tag();
+    if ruleset_tag != 0 {
+        h.write_u64(ruleset_tag);
+        let seat_bit = u64::from(!table.ruleset.is_seat_antisymmetric() && s0 == 0);
+        let hor = finite_turn_horizon(cb, table).unwrap_or(0xFF) as u64;
+        h.write_u64(seat_bit | (hor << 8));
+    }
+
     h.finish()
 }
 
 #[inline]
-fn l2_operator_key(max_s0: usize, max_s1: usize, spd_ord: u8, ops: &[Side1DOps; 2]) -> Key128 {
+#[allow(clippy::too_many_arguments)]
+fn l2_operator_key(
+    ruleset_tag: u64,
+    mutual_eot_val: f32,
+    horizon: Option<u16>,
+    max_s0: usize,
+    max_s1: usize,
+    spd_ord: u8,
+    ops: &[Side1DOps; 2],
+) -> Key128 {
     let mut h = Hasher128::new();
     let max_s = [max_s0, max_s1];
     let side_hdr = |i: usize| -> u64 {
@@ -2080,6 +2471,13 @@ fn l2_operator_key(max_s0: usize, max_s1: usize, spd_ord: u8, ops: &[Side1DOps; 
         | (side_hdr(0) << 8)
         | (side_hdr(1) << 16);
     h.write_u64(hdr);
+    if ruleset_tag != 0 {
+        h.write_u64(ruleset_tag);
+        h.write_u64(
+            (mutual_eot_val.to_bits() as u64)
+                | ((horizon.unwrap_or(0xFF) as u64) << 32),
+        );
+    }
 
     let pack_16 = |arr: &[u8; B16 + 1]| -> (u64, u64) {
         let lo = u64::from_le_bytes([
@@ -2135,7 +2533,9 @@ fn fill_ordered_q_plane(
     slp0: usize,
     slp1: usize,
     ops: &[Side1DOps; 2],
-    v_table: &[[[[f32; B16 + 1]; B16 + 1]; 3]; 3],
+    v_table: &BellmanVTable,
+    mutual_eot_val: f32,
+    gamma: f32,
     second_pass_avg: bool,
     q_plane: &mut [[[[f32; 2]; 2]; B16 + 1]; B16 + 1],
 ) {
@@ -2254,7 +2654,11 @@ fn fill_ordered_q_plane(
                         if k_sec == 0 {
                             let b_fir_end = row_key;
                             if min_end == 0 {
-                                bv_end[0] = if b_fir_end == 0 { 0.5f32 } else { win_first };
+                                bv_end[0] = if b_fir_end == 0 {
+                                    mutual_eot_val
+                                } else {
+                                    win_first
+                                };
                             }
                             let e_lo = min_end.max(1);
                             if e_lo <= max_end {
@@ -2265,12 +2669,12 @@ fn fill_ordered_q_plane(
                                 } else if first == 0 {
                                     let v_row = &v_plane[b_fir_end];
                                     for end in e_lo..=max_end {
-                                        bv_end[end] = GAMMA * v_row[end] + (1.0 - GAMMA) * 0.5;
+                                        bv_end[end] = gamma * v_row[end] + (1.0 - gamma) * 0.5;
                                     }
                                 } else {
                                     for end in e_lo..=max_end {
                                         bv_end[end] =
-                                            GAMMA * v_plane[end][b_fir_end] + (1.0 - GAMMA) * 0.5;
+                                            gamma * v_plane[end][b_fir_end] + (1.0 - gamma) * 0.5;
                                     }
                                 }
                             }
@@ -2285,7 +2689,11 @@ fn fill_ordered_q_plane(
                                 let (b_fir_post_u8, p_fir) = dist_fir.bins[i_fir];
                                 let b_fir_end = eot_fir[b_fir_post_u8 as usize] as usize;
                                 if min_end == 0 {
-                                    let cont0 = if b_fir_end == 0 { 0.5f32 } else { win_first };
+                                    let cont0 = if b_fir_end == 0 {
+                                        mutual_eot_val
+                                    } else {
+                                        win_first
+                                    };
                                     bv_end[0] += p_fir * cont0;
                                 }
                                 if e_lo <= max_end {
@@ -2297,13 +2705,13 @@ fn fill_ordered_q_plane(
                                     } else if first == 0 {
                                         let v_row = &v_plane[b_fir_end];
                                         for end in e_lo..=max_end {
-                                            let cont = GAMMA * v_row[end] + (1.0 - GAMMA) * 0.5;
+                                            let cont = gamma * v_row[end] + (1.0 - gamma) * 0.5;
                                             bv_end[end] += p_fir * cont;
                                         }
                                     } else {
                                         for end in e_lo..=max_end {
-                                            let cont = GAMMA * v_plane[end][b_fir_end]
-                                                + (1.0 - GAMMA) * 0.5;
+                                            let cont = gamma * v_plane[end][b_fir_end]
+                                                + (1.0 - gamma) * 0.5;
                                             bv_end[end] += p_fir * cont;
                                         }
                                     }
@@ -2385,11 +2793,13 @@ fn solve_bellman_into(
     max_s0: usize,
     max_s1: usize,
     spd_ord: u8,
+    mutual_eot_val: f32,
+    horizon: Option<u16>,
     ops: &[Side1DOps; 2],
     out: &mut CachedBellman,
 ) {
     let max_s_sum = max_s0 + max_s1;
-    out.v_table = [[[[0.5f32; B16 + 1]; B16 + 1]; 3]; 3];
+    out.v_table = [[[[0.5f32; B16 + 1]; B16 + 1]; MAX_SLP_STATES]; MAX_SLP_STATES];
     for slp0 in 0..=max_s0 {
         for slp1 in 0..=max_s1 {
             for b in 1..=B16 {
@@ -2402,24 +2812,101 @@ fn solve_bellman_into(
     let mut q_plane = [[[[0.5f32; 2]; 2]; B16 + 1]; B16 + 1];
     let eval_plane_q = |slp0: usize,
                         slp1: usize,
-                        vt: &[[[[f32; B16 + 1]; B16 + 1]; 3]; 3],
+                        vt: &BellmanVTable,
+                        gamma: f32,
                         qp: &mut [[[[f32; 2]; 2]; B16 + 1]; B16 + 1]| {
         if slp1 > 0 && !ops[1].has_st {
-            fill_ordered_q_plane(0, slp0, slp1, ops, vt, false, qp);
+            fill_ordered_q_plane(0, slp0, slp1, ops, vt, mutual_eot_val, gamma, false, qp);
         } else if slp0 > 0 && !ops[0].has_st {
-            fill_ordered_q_plane(1, slp0, slp1, ops, vt, false, qp);
+            fill_ordered_q_plane(1, slp0, slp1, ops, vt, mutual_eot_val, gamma, false, qp);
         } else if spd_ord == 2 {
-            fill_ordered_q_plane(0, slp0, slp1, ops, vt, false, qp);
+            fill_ordered_q_plane(0, slp0, slp1, ops, vt, mutual_eot_val, gamma, false, qp);
         } else if spd_ord == 0 {
-            fill_ordered_q_plane(1, slp0, slp1, ops, vt, false, qp);
+            fill_ordered_q_plane(1, slp0, slp1, ops, vt, mutual_eot_val, gamma, false, qp);
         } else {
-            fill_ordered_q_plane(0, slp0, slp1, ops, vt, false, qp);
-            fill_ordered_q_plane(1, slp0, slp1, ops, vt, true, qp);
+            fill_ordered_q_plane(0, slp0, slp1, ops, vt, mutual_eot_val, gamma, false, qp);
+            fill_ordered_q_plane(1, slp0, slp1, ops, vt, mutual_eot_val, gamma, true, qp);
         }
     };
 
     let mut heal_mask0 = [0u32; B16 + 1];
     let mut heal_mask1 = [0u32; B16 + 1];
+
+    if let Some(rem) = horizon {
+        // Finite-horizon Castle `L_TURN` backward induction from the 1v1 HP-ratio judge.
+        for slp0 in 0..=max_s0 {
+            for slp1 in 0..=max_s1 {
+                for b0 in 1..=B16 {
+                    for b1 in 1..=B16 {
+                        out.v_table[slp0][slp1][b0][b1] = if b0 > b1 {
+                            1.0
+                        } else if b0 < b1 {
+                            0.0
+                        } else {
+                            0.5
+                        };
+                    }
+                }
+            }
+        }
+        let steps = rem.saturating_sub(1) as usize;
+        for _step in 0..steps {
+            let prev_vt = out.v_table;
+            let mut next_vt = prev_vt;
+            let mut hm0 = [0u32; B16 + 1];
+            let mut hm1 = [0u32; B16 + 1];
+            for slp0 in 0..=max_s0 {
+                for slp1 in 0..=max_s1 {
+                    if slp0 > 0 && slp1 > 0 && !ops[0].has_st && !ops[1].has_st {
+                        let eot0 = &ops[0].eot_bin[ops[0].has_rest as usize];
+                        let eot1 = &ops[1].eot_bin[ops[1].has_rest as usize];
+                        let prev = &prev_vt[slp0 - 1][slp1 - 1];
+                        let dst = &mut next_vt[slp0][slp1];
+                        for b0 in 1..=B16 {
+                            let e0 = eot0[b0] as usize;
+                            if e0 == 0 {
+                                for b1 in 1..=B16 {
+                                    let e1 = eot1[b1] as usize;
+                                    dst[b0][b1] = if e1 == 0 { mutual_eot_val } else { 0.0 };
+                                }
+                            } else {
+                                for b1 in 1..=B16 {
+                                    let e1 = eot1[b1] as usize;
+                                    dst[b0][b1] = if e1 == 0 { 1.0 } else { prev[e0][e1] };
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                    eval_plane_q(slp0, slp1, &prev_vt, 1.0, &mut q_plane);
+                    let c0 = slp0 == 0 && ops[0].has_heal;
+                    let c1 = slp1 == 0 && ops[1].has_heal;
+                    for b0 in 1..=B16 {
+                        let n0 = if c0 && b0 < B16 { 2 } else { 1 };
+                        for b1 in 1..=B16 {
+                            let n1 = if c1 && b1 < B16 { 2 } else { 1 };
+                            let (val, h0, h1) = solve_stage_game_2x2(&q_plane[b0][b1], n0, n1);
+                            next_vt[slp0][slp1][b0][b1] = val;
+                            if slp0 == 0 && slp1 == 0 {
+                                if h0 {
+                                    hm0[b0] |= 1u32 << b1;
+                                }
+                                if h1 {
+                                    hm1[b1] |= 1u32 << b0;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            out.v_table = next_vt;
+            heal_mask0 = hm0;
+            heal_mask1 = hm1;
+        }
+        out.heal_mask0 = heal_mask0;
+        out.heal_mask1 = heal_mask1;
+        return;
+    }
 
     for _iter in 0..18 {
         // 1. Bottom-up Schur-complement elimination over the sleeping DAG `s_sum = 1..=max_s_sum`.
@@ -2439,7 +2926,7 @@ fn solve_bellman_into(
                             if e0 == 0 {
                                 for b1 in 1..=B16 {
                                     let e1 = eot1[b1] as usize;
-                                    dst[b0][b1] = if e1 == 0 { 0.5 } else { 0.0 };
+                                    dst[b0][b1] = if e1 == 0 { mutual_eot_val } else { 0.0 };
                                 }
                             } else {
                                 for b1 in 1..=B16 {
@@ -2454,7 +2941,7 @@ fn solve_bellman_into(
                         }
                         continue;
                     }
-                    eval_plane_q(slp0, slp1, &out.v_table, &mut q_plane);
+                    eval_plane_q(slp0, slp1, &out.v_table, GAMMA, &mut q_plane);
                     let c0 = slp0 == 0 && ops[0].has_heal;
                     let c1 = slp1 == 0 && ops[1].has_heal;
                     if !c0 && !c1 {
@@ -2478,7 +2965,7 @@ fn solve_bellman_into(
         }
 
         // 2. Awake stage game `(slp0, slp1) = (0, 0)` using the Schur-eliminated sleeping values
-        eval_plane_q(0, 0, &out.v_table, &mut q_plane);
+        eval_plane_q(0, 0, &out.v_table, GAMMA, &mut q_plane);
         let mut next_awake = out.v_table[0][0];
         let mut max_diff = 0.0f32;
         let mut hm0 = [0u32; B16 + 1];
@@ -2587,7 +3074,18 @@ fn with_solved_bellman<R>(
     }
 
     let (ops, max_s0, max_s1, spd_ord) = Side1DOps::build_pair(cb, table, s0, slot0, s1, slot1);
-    let op_key = l2_operator_key(max_s0, max_s1, spd_ord, &ops);
+    let ruleset_tag = table.ruleset.fingerprint_tag();
+    let mutual_eot_val = mutual_eot_payoff(cb, table, s0, slot0, s1, slot1, spd_ord);
+    let horizon = finite_turn_horizon(cb, table);
+    let op_key = l2_operator_key(
+        ruleset_tag,
+        mutual_eot_val,
+        horizon,
+        max_s0,
+        max_s1,
+        spd_ord,
+        &ops,
+    );
     let l2_idx = (op_key.0 as usize) & (L2_SETS - 1);
 
     if let Some(res) = BELLMAN_CACHE.with(|c| {
@@ -2639,7 +3137,15 @@ fn with_solved_bellman<R>(
         }
 
         cache.pool[slot_idx].op_key = op_key;
-        solve_bellman_into(max_s0, max_s1, spd_ord, &ops, &mut cache.pool[slot_idx]);
+        solve_bellman_into(
+            max_s0,
+            max_s1,
+            spd_ord,
+            mutual_eot_val,
+            horizon,
+            &ops,
+            &mut cache.pool[slot_idx],
+        );
         cache.record_l1(l1_key, slot_idx as u16, gen);
         f(&cache.pool[slot_idx])
     })
@@ -2652,7 +3158,12 @@ fn side_sleep_rem(cb: &CompactBattle, table: &MatchTable, side: usize, slot: usi
     let ispec = table.item_spec(mon.item);
     let berry = ispec.is_mintberry || ispec.is_miracleberry;
     if mon.status_raw() == Status::Slp as u8 && !berry {
-        (mon.status_counter().saturating_sub(1) as usize).min(2)
+        let max_slp = if table.ruleset.is_castle() {
+            MAX_SLP_STATES
+        } else {
+            2
+        };
+        (mon.status_counter().saturating_sub(1) as usize).min(max_slp)
     } else {
         0
     }
@@ -2702,34 +3213,76 @@ pub fn toeplitz_coupled_race(
         return 0.0;
     }
 
+    let horizon = finite_turn_horizon(cb, table);
+    if horizon == Some(0) {
+        let r0 = (hp0 as f64) / (table.mons[idx0].maxhp.max(1) as f64);
+        let r1 = (hp1 as f64) / (table.mons[idx1].maxhp.max(1) as f64);
+        return if (r0 - r1).abs() <= 1e-12 {
+            0.0
+        } else if r0 > r1 {
+            1.0
+        } else {
+            -1.0
+        };
+    }
+
     if side_has_usable_heal(cb, table, s0, slot0) || side_has_usable_heal(cb, table, s1, slot1) {
         let v = with_solved_bellman(cb, table, s0, slot0, s1, slot1, |cached| {
-            eval_exact_root_table(&cached.v_table, cb, table, s0, slot0, s1, slot1)
+            eval_exact_root_table(&cached.v_table, cb, table, s0, slot0, s1, slot1, horizon)
         });
         return (2.0 * v - 1.0).clamp(-1.0, 1.0);
     }
 
     // Pure stopping-time race from the 1D Toeplitz survival curves S_0(k), S_1(k)
-    let (s_curve_0, rem0) = survival_curve_6_with_mean_hp(cb, table, s1, slot1, s0, slot0, hp0);
-    let (s_curve_1, rem1) = survival_curve_6_with_mean_hp(cb, table, s0, slot0, s1, slot1, hp1);
+    let steps = horizon.map_or(6usize, |rem| (rem as usize).min(6));
+    let is_turn_limit_horizon = horizon.is_some_and(|rem| (rem as usize) <= steps);
+    let d0 = survival_curve_detail(cb, table, s1, slot1, s0, slot0, hp0, steps, true);
+    let d1 = survival_curve_detail(cb, table, s0, slot0, s1, slot1, hp1, steps, true);
 
-    let spd0 = cb.mon_action_speed(table, s0, slot0);
-    let spd1 = cb.mon_action_speed(table, s1, slot1);
-    let spd_sign = if spd0 > spd1 {
-        1.0
-    } else if spd1 > spd0 {
-        -1.0
-    } else {
-        0.0
+    let spd_ord = speed_ord_u8(cb, table, s0, slot0, s1, slot1);
+    let spd_sign = match spd_ord {
+        2 => 1.0,
+        0 => -1.0,
+        _ => 0.0,
     };
+    let eot_sign = (2.0 * (mutual_eot_payoff(cb, table, s0, slot0, s1, slot1, spd_ord) as f64)
+        - 1.0)
+        .clamp(-1.0, 1.0);
 
     let mut margin = 0.0f64;
-    for k in 1..=6usize {
-        let f0 = (s_curve_0[k - 1] - s_curve_0[k]).max(0.0);
-        let f1 = (s_curve_1[k - 1] - s_curve_1[k]).max(0.0);
-        margin += f1 * s_curve_0[k] - f0 * s_curve_1[k] + f0 * f1 * spd_sign;
+    for k in 1..=steps {
+        let f0 = (d0.surv[k - 1] - d0.surv[k]).max(0.0);
+        let f1 = (d1.surv[k - 1] - d1.surv[k]).max(0.0);
+        let sim_ko = f0 * f1;
+        let sim_eot = (d0.eot_ko[k].min(f0) * d1.eot_ko[k].min(f1)).min(sim_ko);
+        let sim_atk = (sim_ko - sim_eot).max(0.0);
+        margin += f1 * d0.surv[k] - f0 * d1.surv[k] + sim_atk * spd_sign + sim_eot * eot_sign;
     }
-    margin += s_curve_0[6] * s_curve_1[6] * (rem0 - rem1);
+    if is_turn_limit_horizon {
+        // Castle `L_TURN` judge on surviving mass: exact P(hp_frac0 > hp_frac1) - P(hp_frac1 > hp_frac0).
+        let mut p_win = 0.0f64;
+        let mut p_loss = 0.0f64;
+        for b0 in 1..=B32 {
+            let p0 = d0.dist[b0] as f64;
+            if p0 <= 0.0 {
+                continue;
+            }
+            for b1 in 1..=B32 {
+                let p1 = d1.dist[b1] as f64;
+                if p1 <= 0.0 {
+                    continue;
+                }
+                if b0 > b1 {
+                    p_win += p0 * p1;
+                } else if b0 < b1 {
+                    p_loss += p0 * p1;
+                }
+            }
+        }
+        margin += p_win - p_loss;
+    } else {
+        margin += d0.surv[steps] * d1.surv[steps] * (d0.mean_hp_frac - d1.mean_hp_frac);
+    }
     margin.clamp(-1.0, 1.0)
 }
 
@@ -2852,6 +3405,15 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
         }
     }
 
+    let mut both_trapped_equal_perish: Option<usize> = None;
+    if p0_perish > 0 && p0_perish == p1_perish && p0_trapped && p1_trapped {
+        let hits = p0_perish.saturating_sub(1).min(3) as usize;
+        need_s0 = need_s0.max(hits);
+        need_s1 = need_s1.max(hits);
+        both_trapped_equal_perish = Some(hits);
+        any_term = true;
+    }
+
     if !any_term {
         return 0.0;
     }
@@ -2874,6 +3436,25 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
     }
     if let Some(hits) = b4_hits {
         margin -= s1[hits];
+    }
+    if let Some(hits) = both_trapped_equal_perish {
+        let both_surv = s0[hits] * s1[hits];
+        if table.ruleset.is_castle() {
+            // Castle PBS (`Probe 12I`): simultaneous Perish faint order is fixed `1P -> 2P`,
+            // so seat 0 (`1P`) faints first (seat-asymmetric).
+            let n0 = cb.sides[0].alive_mask.count_ones();
+            let n1 = cb.sides[1].alive_mask.count_ones();
+            let sign = if n0 == 1 && n1 == 1 { -1.0 } else { -0.25 };
+            margin += both_surv * sign;
+        } else {
+            // PS Stadium 2 (`turn.rs:341`): faster side faints first in queue and wins 1v1 tie-break.
+            let spd_sign = match crate::eval::compare_action_speed(cb, table, 0, slot0, 1, slot1) {
+                Ordering::Greater => 1.0,
+                Ordering::Less => -1.0,
+                Ordering::Equal => 0.0,
+            };
+            margin += both_surv * spd_sign;
+        }
     }
 
     margin.clamp(-1.0, 1.0)
@@ -2910,11 +3491,11 @@ pub fn compact_linear_diff(
         let tr = toeplitz_coupled_race(cb, table, 0, s0, 1, s1);
         let m0 = &cb.mons[s0];
         let m1 = &cb.mons[3 + s1];
-        let spd0 = cb.mon_action_speed(table, 0, s0);
-        let spd1 = cb.mon_action_speed(table, 1, s1);
+        let spd_eq =
+            crate::eval::compare_action_speed(cb, table, 0, s0, 1, s1) == Ordering::Equal;
         let is_frz = m0.status_raw() == Status::Frz as u8 || m1.status_raw() == Status::Frz as u8;
         let is_rech = m0.must_recharge() || m1.must_recharge();
-        let exact_mechanics_override = spd0 == spd1
+        let exact_mechanics_override = spd_eq
             || m0.status_raw() == Status::Slp as u8
             || m1.status_raw() == Status::Slp as u8
             || is_frz
@@ -3113,8 +3694,9 @@ pub fn compact_rollout_linear_pick(
                                 == nc2000_engine::compact::SpecialMoveKind::PerishSong
                     });
                 if !foe_has_perish {
-                    let me_faster = cb.mon_action_speed(table, side, att_slot)
-                        > cb.mon_action_speed(table, def_side, def_slot);
+                    let me_faster = crate::eval::compare_action_speed(
+                        cb, table, side, att_slot, def_side, def_slot,
+                    ) == Ordering::Greater;
                     if me_faster
                         && cb.best_hit_fraction(table, side, att_slot, def_side, def_slot)
                             >= 1.0
@@ -3308,8 +3890,9 @@ mod tests {
 
         // Verify bit-exact 0.0-ULP equivalence against a fresh uncached solve
         let (ops, ms0, ms1, spd_ord) = Side1DOps::build_pair(&cba, &ta, 0, 0, 1, 0);
+        let mutual_eot_val = mutual_eot_payoff(&cba, &ta, 0, 0, 1, 0, spd_ord);
         let mut fresh = CachedBellman::empty();
-        solve_bellman_into(ms0, ms1, spd_ord, &ops, &mut fresh);
+        solve_bellman_into(ms0, ms1, spd_ord, mutual_eot_val, None, &ops, &mut fresh);
         for s0 in 0..3 {
             for s1 in 0..3 {
                 for b0 in 0..=B16 {

@@ -9,13 +9,46 @@ use nc2000_engine::state::{stat_idx, Battle, PokeId};
 use crate::eval::type_immune_to;
 
 pub(crate) const SUB_BLOCKED_VOLATILE_MOVES: [&str; 6] = [
+    "curse",
     "leechseed",
     "lockon",
     "mindreader",
     "nightmare",
     "painsplit",
-    "sketch",
 ];
+
+#[inline]
+fn belly_drum_hp_too_low(b: &Battle, hp: i32, maxhp: i32) -> bool {
+    if b.is_castle() {
+        // Castle PBS: Belly Drum deducts floor(maxhp / 2) and leaves 1 HP on exact tie
+        // (succeeds whenever hp >= floor(maxhp / 2), fails only when hp < floor(maxhp / 2)).
+        hp < maxhp / 2
+    } else {
+        (hp as f64) <= (maxhp as f64) / 2.0
+    }
+}
+
+#[inline]
+fn castle_rapid_spin_has_utility(
+    b: &Battle,
+    dex: &Dex,
+    side: usize,
+    att: PokeId,
+    id: MoveId,
+) -> bool {
+    if !b.is_castle() || dex.moves.key(id) != "rapidspin" {
+        return false;
+    }
+    let me = b.poke(att);
+    dex.conds_id("spikes")
+        .is_some_and(|cid| b.sides[side].has_side_condition(cid))
+        || dex
+            .conds_id("leechseed")
+            .is_some_and(|vid| me.has_volatile(vid))
+        || dex
+            .conds_id("partiallytrapped")
+            .is_some_and(|vid| me.has_volatile(vid))
+}
 
 pub(crate) fn effective_move_type(
     b: &Battle,
@@ -25,11 +58,7 @@ pub(crate) fn effective_move_type(
     ms: &nc2000_engine::dex::MoveStatic,
 ) -> nc2000_engine::dex::TypeId {
     if Some(id) == dex.known_moves.hiddenpower {
-        if b.poke(att).transformed {
-            dex.known_types.unknown
-        } else {
-            b.poke(att).hp_type
-        }
+        b.poke(att).hp_type
     } else {
         ms.move_type
     }
@@ -85,9 +114,13 @@ pub(crate) fn foe_blocks_status_or_volatile(
         if sub_up
             || foe.status != Status::None
             || foe.types.iter().any(|t| dex.status_key_immune(check, t))
+            || (b.is_castle() && st == "slp" && b.has_sleeping_pokemon(1 - side))
         {
             return true;
         }
+    }
+    if sub_up && !b.is_castle() && key == "sketch" {
+        return true;
     }
     if let Some(v) = ms.volatile_status.as_deref() {
         let pure_volatile =
@@ -124,7 +157,18 @@ pub(crate) fn foe_blocks_status_or_volatile(
 pub(crate) fn certain_self_loss(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> bool {
     match c {
         SearchChoice::Move(id) => {
-            b.sides[side].pokemon_left == 1 && dex.move_static(id).selfdestruct
+            if b.sides[side].pokemon_left != 1 {
+                return false;
+            }
+            if dex.move_static(id).selfdestruct {
+                return true;
+            }
+            let km = &dex.known_moves;
+            let sid = Some(id);
+            (sid == km.perishsong || sid == km.destinybond)
+                && b.ruleset
+                    .castle_overlay()
+                    .is_some_and(|cfg| cfg.perish_dbond_lastmon_forfeit)
         }
         _ => false,
     }
@@ -212,25 +256,34 @@ pub(crate) fn dominated_reason(
     c: SearchChoice,
 ) -> Option<&'static str> {
     if certain_self_loss(b, dex, side, c) {
+        if let SearchChoice::Move(id) = c {
+            let km = &dex.known_moves;
+            let sid = Some(id);
+            if sid == km.perishsong || sid == km.destinybond {
+                return Some("Perish Song and Destiny Bond forfeit from the last mon");
+            }
+        }
         return Some("self-KO with the last mon");
     }
     if let Some(why) = public_sleep_forfeit_reason(b, dex, side, c) {
         return Some(why);
     }
-    if let SearchChoice::Move(id) = c {
-        let ms = dex.move_static(id);
-        if ms.status.as_deref() == Some("slp")
-            && matches!(ms.target, "normal" | "allAdjacentFoes" | "allAdjacent")
-            && faster_than_foe(b, dex, side)
-            && b.has_sleeping_pokemon(1 - side)
-        {
-            let opp = &b.sides[1 - side];
-            let bench_asleep = opp.party.iter().skip(1).any(|&slot| {
-                let p = &opp.roster[slot as usize];
-                !p.fainted && p.status == nc2000_engine::state::Status::Slp
-            });
-            if bench_asleep || foe_can_switch(b, side) {
-                return Some("inflicting sleep would forfeit under Sleep Clause");
+    if b.ruleset.is_ps() {
+        if let SearchChoice::Move(id) = c {
+            let ms = dex.move_static(id);
+            if ms.status.as_deref() == Some("slp")
+                && matches!(ms.target, "normal" | "allAdjacentFoes" | "allAdjacent")
+                && faster_than_foe(b, dex, side)
+                && b.has_sleeping_pokemon(1 - side)
+            {
+                let opp = &b.sides[1 - side];
+                let bench_asleep = opp.party.iter().skip(1).any(|&slot| {
+                    let p = &opp.roster[slot as usize];
+                    !p.fainted && p.status == nc2000_engine::state::Status::Slp
+                });
+                if bench_asleep || foe_can_switch(b, side) {
+                    return Some("inflicting sleep would forfeit under Sleep Clause");
+                }
             }
         }
     }
@@ -254,7 +307,7 @@ fn foe_has_residual_damage(b: &Battle, dex: &Dex, side: usize) -> bool {
         || ["curse", "leechseed", "partiallytrapped"]
             .iter()
             .any(|key| dex.conds_id(key).is_some_and(|cond| foe.has_volatile(cond)))
-        || (foe.status == Status::Slp
+        || ((foe.status == Status::Slp || b.is_castle())
             && dex
                 .conds_id("nightmare")
                 .is_some_and(|cond| foe.has_volatile(cond)))
@@ -312,6 +365,26 @@ fn faster_than_foe(b: &Battle, dex: &Dex, side: usize) -> bool {
         && b.poke(foe).item == dex.known_items.quickclaw
     {
         return false;
+    }
+    if b.is_castle() {
+        let qc_me = b.quick_claw_for(side);
+        let qc_foe = b.quick_claw_for(1 - side);
+        if qc_me != qc_foe {
+            return qc_me;
+        }
+        let mp = b.poke(me);
+        let fp = b.poke(foe);
+        let (n0, d0) = crate::eval::castle_speed_rational(
+            mp.stored_stats[stat_idx::SPE],
+            mp.boosts[stat_idx::SPE],
+            mp.status == nc2000_engine::state::Status::Par,
+        );
+        let (n1, d1) = crate::eval::castle_speed_rational(
+            fp.stored_stats[stat_idx::SPE],
+            fp.boosts[stat_idx::SPE],
+            fp.status == nc2000_engine::state::Status::Par,
+        );
+        return n0 * d1 > n1 * d0;
     }
     b.get_pokemon_action_speed(dex, me) > b.get_pokemon_action_speed(dex, foe)
 }
@@ -513,9 +586,10 @@ fn foe_may_uncap_boosts(b: &Battle, dex: &Dex, side: usize, pos_stat_mask: u8) -
 
 fn own_other_party_asleep_under_clause(b: &Battle, dex: &Dex, side: usize, att: PokeId) -> bool {
     use nc2000_engine::state::Status;
-    let clause = dex
-        .conds_id("stadiumsleepclause")
-        .is_some_and(|cid| b.field.pseudo_weather.iter().any(|&(c, _)| c == cid));
+    let clause = b.is_castle()
+        || dex
+            .conds_id("stadiumsleepclause")
+            .is_some_and(|cid| b.field.pseudo_weather.iter().any(|&(c, _)| c == cid));
     clause
         && b.sides[side].party.iter().any(|&slot| {
             let p = &b.sides[side].roster[slot as usize];
@@ -604,6 +678,15 @@ fn can_safely_mask_public_self_noop(
         if oms.status.as_deref() == Some("slp") {
             return false;
         }
+        if certain_self_loss(b, dex, side, other) {
+            return false;
+        }
+        if b.is_castle()
+            && osid == km.rest
+            && own_other_party_asleep_under_clause(b, dex, side, att)
+        {
+            return false;
+        }
         if oms.selfdestruct {
             return living_own >= 2;
         }
@@ -615,7 +698,7 @@ fn can_safely_mask_public_self_noop(
             return false;
         }
         if osid == km.bellydrum
-            && ((me.hp as f64) <= (me.maxhp as f64) / 2.0 || me.boosts[stat_idx::ATK] >= 6)
+            && (belly_drum_hp_too_low(b, me.hp, me.maxhp) || me.boosts[stat_idx::ATK] >= 6)
         {
             return false;
         }
@@ -684,9 +767,19 @@ fn has_harmless_status_wait_move(b: &Battle, dex: &Dex, side: usize) -> bool {
         let SearchChoice::Move(id) = choice else {
             return false;
         };
+        if certain_self_loss(b, dex, side, choice) {
+            return false;
+        }
         let ms = dex.move_static(id);
         let km = &dex.known_moves;
         let sid = Some(id);
+        if b.is_castle()
+            && sid == km.rest
+            && b.active_id(side)
+                .is_some_and(|att| own_other_party_asleep_under_clause(b, dex, side, att))
+        {
+            return false;
+        }
         ms.category == Category::Status
             && ms.status.as_deref() != Some("slp")
             && ms.self_switch.is_none()
@@ -697,6 +790,23 @@ fn has_harmless_status_wait_move(b: &Battle, dex: &Dex, side: usize) -> bool {
             && sid != km.mirrormove
             && sid != km.sleeptalk
             && !matches!(dex.moves.key(id), "painsplit" | "metronome" | "sketch")
+    })
+}
+
+fn foe_has_no_healbell(b: &Battle, dex: &Dex, side: usize) -> bool {
+    use nc2000_engine::state::Status;
+    let foe_here = b.active_id(1 - side).filter(|&d| {
+        let p = b.poke(d);
+        !p.fainted && p.hp > 0
+    });
+    foe_here.is_some_and(|f| {
+        b.poke(f).status == Status::Frz
+            || !foe_learnset_any(
+                b,
+                dex,
+                f,
+                &["healbell", "metronome", "mirrormove", "sketch", "transform"],
+            )
     })
 }
 
@@ -724,13 +834,22 @@ fn public_self_ko_reason(
                 return false;
             };
             let oms = dex.move_static(oid);
-            oid != id && !oms.selfdestruct && !oms.sleep_usable && oms.priority == my_prio
+            oid != id
+                && !certain_self_loss(b, dex, side, other)
+                && !oms.sleep_usable
+                && oms.priority == my_prio
         });
         if !has_same_prio_alt && !has_harmless_status_wait_move(b, dex, side) {
             return None;
         }
     }
-    Some("self-KO with the last mon")
+    let km = &dex.known_moves;
+    let sid = Some(id);
+    if sid == km.perishsong || sid == km.destinybond {
+        Some("Perish Song and Destiny Bond forfeit from the last mon")
+    } else {
+        Some("self-KO with the last mon")
+    }
 }
 
 fn public_sleep_forfeit_reason(
@@ -739,7 +858,9 @@ fn public_sleep_forfeit_reason(
     side: usize,
     c: SearchChoice,
 ) -> Option<&'static str> {
-    use nc2000_engine::state::Status;
+    if !b.ruleset.is_ps() {
+        return None;
+    }
     let SearchChoice::Move(id) = c else {
         return None;
     };
@@ -760,20 +881,7 @@ fn public_sleep_forfeit_reason(
     {
         return None;
     }
-    let foe_here = b.active_id(1 - side).filter(|&d| {
-        let p = b.poke(d);
-        !p.fainted && p.hp > 0
-    });
-    let foe_no_healbell = foe_here.is_some_and(|f| {
-        b.poke(f).status == Status::Frz
-            || !foe_learnset_any(
-                b,
-                dex,
-                f,
-                &["healbell", "metronome", "mirrormove", "sketch", "transform"],
-            )
-    });
-    if !foe_no_healbell {
+    if !foe_has_no_healbell(b, dex, side) {
         return None;
     }
     if wait_exempt(b, dex, side) && !has_harmless_status_wait_move(b, dex, side) {
@@ -811,8 +919,12 @@ fn raw_public_noop_reason(
     if ms.force_switch && !b.can_switch((1 - side) as u8) {
         return Some("there is nobody left to phaze in");
     }
-    // Perish Song / Destiny Bond fail (`onPrepareHit`) from the last own mon.
-    if (sid == km.perishsong || sid == km.destinybond) && b.sides[side].pokemon_left == 1 {
+    // Perish Song / Destiny Bond fail (`onPrepareHit`) from the last own mon in PS
+    // (and in true 1v1 under Castle raw CGI; tournament Castle treats them as forfeit above).
+    if (sid == km.perishsong || sid == km.destinybond)
+        && b.sides[side].pokemon_left == 1
+        && (b.ruleset.is_ps() || b.sides[1 - side].pokemon_left == 1)
+    {
         return Some("Perish Song and Destiny Bond fail from the last mon");
     }
     // Baton Pass fails when our own bench has no non-fainted switch target.
@@ -838,16 +950,32 @@ fn raw_public_noop_reason(
             return Some("Safeguard blocks confusion");
         }
     }
+    // Castle Sleep Clause blocks sleep moves rather than forfeiting.
+    if b.is_castle()
+        && ms.status.as_deref() == Some("slp")
+        && foe_targeted
+        && appeared_living_foe_bench_asleep(b, side)
+        && foe_has_no_healbell(b, dex, side)
+    {
+        return Some("Sleep Clause blocks putting a second foe Pokemon to sleep");
+    }
     // Refuse when active foe cannot change type and is immune AND every public
     // switch-in candidate is immune, so the turn is dead whatever they do.
     let foe_here = b.active_id(1 - side).filter(|&d| {
         let p = b.poke(d);
         !p.fainted && p.hp > 0
     });
-    let move_type = effective_move_type(b, dex, att, id, ms);
+    // Public-only certainty guard: a transformed user's copied DVs (Hidden Power type)
+    // are not publicly certain in blind play.
+    let move_type = if sid == km.hiddenpower && b.poke(att).transformed {
+        dex.known_types.unknown
+    } else {
+        effective_move_type(b, dex, att, id, ms)
+    };
     if foe_targeted
         && !ms.ignore_immunity
         && !ms.selfdestruct
+        && !castle_rapid_spin_has_utility(b, dex, side, att, id)
         && move_type != dex.known_types.unknown
         && foe_here.is_some_and(|def| {
             !foe_may_change_type(b, dex, def) && type_immune_to(b, dex, move_type, def)
@@ -863,6 +991,12 @@ fn raw_public_noop_reason(
     if can_safely_mask_public_self_noop(b, dex, side, c) {
         use nc2000_engine::state::Status;
         let me = b.poke(att);
+        if b.is_castle()
+            && sid == km.rest
+            && own_other_party_asleep_under_clause(b, dex, side, att)
+        {
+            return Some("Sleep Clause blocks Rest while another ally is asleep");
+        }
         if ms.sleep_usable && public_rest_timer(b, att) == Some(1) {
             return Some("Rest sleep ends before this move executes");
         }
@@ -912,7 +1046,7 @@ fn raw_public_noop_reason(
         }
         // 3. Weak or capped Belly Drum when public/own-certain facts prevent HP gain or Attack un-capping.
         if sid == km.bellydrum {
-            let hp_too_low = (me.hp as f64) <= (me.maxhp as f64) / 2.0
+            let hp_too_low = belly_drum_hp_too_low(b, me.hp, me.maxhp)
                 && !has_heal_berry(dex, me)
                 && !foe_may_raise_hp(b, dex, side);
             let atk_capped = me.boosts[stat_idx::ATK] >= 6
@@ -1035,6 +1169,12 @@ fn noop_reason(
         let me = b.poke(att);
         me.hp >= me.maxhp
     };
+    if b.is_castle()
+        && sid == km.rest
+        && own_other_party_asleep_under_clause(b, dex, side, att)
+    {
+        yes!("Sleep Clause blocks Rest while another ally is asleep");
+    }
     if ms.heal.is_some()
         || sid == km.rest
         || sid == km.moonlight
@@ -1068,11 +1208,11 @@ fn noop_reason(
         } else {
             0
         };
-        let hp_too_low_strict = (me.hp as f64) <= (me.maxhp as f64) / 2.0
+        let hp_too_low_strict = belly_drum_hp_too_low(b, me.hp, me.maxhp)
             && (faster_than_foe(b, dex, side)
                 || (!has_heal_berry(dex, me)
                     && !foe_may_raise_hp()
-                    && ((me.hp + max_leftovers_gain) as f64) <= (me.maxhp as f64) / 2.0));
+                    && belly_drum_hp_too_low(b, me.hp + max_leftovers_gain, me.maxhp)));
         let atk_capped_strict = me.boosts[stat_idx::ATK] >= 6 && faster_than_foe(b, dex, side);
         if hp_too_low_strict || atk_capped_strict {
             yes!("Belly Drum needs over half HP and uncapped Attack");
@@ -1154,6 +1294,7 @@ fn noop_reason(
     if foe_targeted
         && !ms.ignore_immunity
         && !ms.selfdestruct
+        && !castle_rapid_spin_has_utility(b, dex, side, att, id)
         && move_type != dex.known_types.unknown
     {
         // The shipped proof: the foe is stuck with the mon in front, and
@@ -1187,7 +1328,24 @@ fn noop_reason(
             .is_some_and(|sid| b.poke(d).has_volatile(sid))
     });
 
+    // Sketch is blocked by Substitute in PS (`SUB_BLOCKED`), but bypasses Substitute in Castle (`Probe 12D1`).
+    if sub_up && foe_targeted && foe.is_some() && !b.is_castle() && dex.moves.key(id) == "sketch" {
+        yes!("a Substitute rejects this move outright");
+    }
+
     if ms.status.is_some() && foe_targeted {
+        if b.is_castle() && ms.status.as_deref() == Some("slp") && b.has_sleeping_pokemon(1 - side)
+        {
+            let opp = &b.sides[1 - side];
+            let bench_asleep = opp.party.iter().skip(1).any(|&slot| {
+                let p = &opp.roster[slot as usize];
+                !p.fainted && p.hp > 0 && p.status == Status::Slp
+            });
+            if faster_than_foe(b, dex, side) || (bench_asleep && foe_has_no_healbell(b, dex, side))
+            {
+                yes!("Sleep Clause blocks putting a second foe Pokemon to sleep");
+            }
+        }
         if let Some(def) = foe {
             let d = b.poke(def);
             // One major status at a time (`pokemon.rs::set_status`) — but a

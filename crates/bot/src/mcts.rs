@@ -178,8 +178,8 @@ impl MctsAgent {
 
         // ---- selection / expansion
         let reward0 = loop {
-            if let Some(o) = sim.outcome() {
-                break outcome_reward(o);
+            if let Some(v) = eval::turn_limit_outcome_value(sim) {
+                break v;
             }
             if sim.turn > turn_cap {
                 break self.leaf_eval(sim, dex);
@@ -279,6 +279,28 @@ pub fn playout_value(
     playout_value_cached(sim, dex, playout, turn_cap, rng, rules, None)
 }
 
+#[inline]
+fn value_to_outcome(v: f64) -> Outcome {
+    if v >= 0.999_999 {
+        Outcome::P1Win
+    } else if v <= 0.000_001 {
+        Outcome::P2Win
+    } else {
+        Outcome::Tie
+    }
+}
+
+#[inline]
+fn value_to_outcome_code(v: f64) -> u8 {
+    if v >= 0.999_999 {
+        1
+    } else if v <= 0.000_001 {
+        2
+    } else {
+        3
+    }
+}
+
 pub fn playout_value_cached(
     sim: &mut Battle,
     dex: &Dex,
@@ -288,18 +310,20 @@ pub fn playout_value_cached(
     rules: RolloutRules,
     roster_cache: Option<&nc2000_engine::compact::RosterCompactCache>,
 ) -> f64 {
-    if let Some(o) = sim.outcome() {
+    if let Some(v) = eval::turn_limit_outcome_value(sim) {
+        let o = sim.outcome().unwrap_or_else(|| value_to_outcome(v));
         set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
-        return outcome_reward(o);
+        return v;
     }
     // If either side is still in TeamPreview, advance that single step on `Battle`
     // before converting the 3v3 party state into the 256-byte `CompactBattle` kernel.
     while sim.sides[0].request_state() == Some(nc2000_engine::state::RequestKind::TeamPreview)
         || sim.sides[1].request_state() == Some(nc2000_engine::state::RequestKind::TeamPreview)
     {
-        if let Some(o) = sim.outcome() {
+        if let Some(v) = eval::turn_limit_outcome_value(sim) {
+            let o = sim.outcome().unwrap_or_else(|| value_to_outcome(v));
             set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
-            return outcome_reward(o);
+            return v;
         }
         if sim.turn > turn_cap {
             set_last_sim_end(SimEndInfo::from_battle(sim, None));
@@ -327,9 +351,10 @@ pub fn playout_value_cached(
             .expect("legal_choices produced an illegal choice");
     }
 
-    if let Some(o) = sim.outcome() {
+    if let Some(v) = eval::turn_limit_outcome_value(sim) {
+        let o = sim.outcome().unwrap_or_else(|| value_to_outcome(v));
         set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
-        return outcome_reward(o);
+        return v;
     }
     if sim.turn > turn_cap || matches!(playout, Playout::Heavy { turns: 0, .. }) {
         set_last_sim_end(SimEndInfo::from_battle(sim, None));
@@ -347,10 +372,14 @@ pub fn playout_value_cached(
         };
     }
 
+    let effective_cap = sim
+        .ruleset
+        .turn_limit()
+        .map_or(turn_cap, |lim| turn_cap.min(lim));
     let cutoff = match playout {
-        Playout::Uniform => turn_cap,
+        Playout::Uniform => effective_cap,
         Playout::Heavy { turns, .. } => {
-            turn_cap.min(sim.turn.saturating_add(turns.saturating_sub(1)))
+            effective_cap.min(sim.turn.saturating_add(turns.saturating_sub(1)))
         }
     };
 
@@ -374,23 +403,20 @@ pub fn compact_playout_value(
 ) -> f64 {
     let start_turn = cb.turn;
     let mut pivot_token = [1u8; 2];
+    let effective_cutoff = table
+        .ruleset
+        .turn_limit()
+        .map_or(cutoff, |lim| cutoff.min(lim));
     loop {
-        match cb.outcome {
-            1 => {
-                set_last_sim_end(SimEndInfo::from_compact(cb));
-                return 1.0;
+        if let Some(v) = eval::compact_turn_limit_outcome(cb, table) {
+            let mut info = SimEndInfo::from_compact(cb);
+            if info.outcome == 0 {
+                info.outcome = value_to_outcome_code(v);
             }
-            2 => {
-                set_last_sim_end(SimEndInfo::from_compact(cb));
-                return 0.0;
-            }
-            3 => {
-                set_last_sim_end(SimEndInfo::from_compact(cb));
-                return 0.5;
-            }
-            _ => {}
+            set_last_sim_end(info);
+            return v;
         }
-        if cb.turn > cutoff {
+        if cb.turn > effective_cutoff {
             set_last_sim_end(SimEndInfo::from_compact(cb));
             return match playout {
                 Playout::Uniform => compact_hp_eval(cb, table),
@@ -832,8 +858,8 @@ fn compact_greedy_pick(
                     let can_pass = has_sub
                         || foe_asleep
                         || *me_faster_opt.get_or_insert_with(|| {
-                            cb.mon_action_speed(table, side, att_slot)
-                                > cb.mon_action_speed(table, def_side, def_slot)
+                            eval::compare_action_speed(cb, table, side, att_slot, def_side, def_slot)
+                                == std::cmp::Ordering::Greater
                         });
                     if can_pass {
                         if let Some(&bp_c) = cs.iter().find(|&&c| {
@@ -876,8 +902,8 @@ fn compact_greedy_pick(
                     && foe.timers[timer_idx::CONFUSION] >= 2
                     && me.hp() * 2 > table.mons[att_idx].maxhp.max(1)
                     && *me_faster_opt.get_or_insert_with(|| {
-                        cb.mon_action_speed(table, side, att_slot)
-                            > cb.mon_action_speed(table, def_side, def_slot)
+                        eval::compare_action_speed(cb, table, side, att_slot, def_side, def_slot)
+                            == std::cmp::Ordering::Greater
                     })
                 {
                     if let Some(&sub_c) = cs
@@ -1089,7 +1115,11 @@ impl Agent for MctsAgent {
         }
         let mut root = battle.clone();
         root.set_log_enabled(false);
-        let turn_cap = root.turn.saturating_add(self.cfg.horizon);
+        let raw_cap = root.turn.saturating_add(self.cfg.horizon);
+        let turn_cap = root
+            .ruleset
+            .turn_limit()
+            .map_or(raw_cap, |lim| raw_cap.min(lim));
 
         let mut nodes = vec![Node::new()];
         for _ in 0..self.cfg.iterations {
