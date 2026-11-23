@@ -14,9 +14,9 @@
  *
  * Usage:
  *   node tools/diagnose-position.js --self-check
- *   node tools/diagnose-position.js --spec <spec.json> [--expect-action <act>]
- *     [--actual-foe-spec <foe.json>] [--iters 81000,324000] [--seeds 1,2,3,4,5]
- *     [--emit-repro <repro.json>]
+ *   node tools/diagnose-position.js --spec <spec.json> [--ruleset <id>]
+ *     [--expect-action <act>] [--actual-foe-spec <foe.json>]
+ *     [--iters 81000,324000] [--seeds 1,2,3,4,5] [--emit-repro <repro.json>]
  */
 'use strict';
 
@@ -112,6 +112,7 @@ function parseArgs() {
   const opts = {
     selfCheck: false,
     specPath: null,
+    ruleset: null,
     expectAction: null,
     actualFoePath: null,
     baseIters: 81000,
@@ -126,6 +127,8 @@ function parseArgs() {
       opts.selfCheck = true;
     } else if (a === '--spec' && args[i + 1]) {
       opts.specPath = path.resolve(process.cwd(), args[++i]);
+    } else if (a === '--ruleset' && args[i + 1]) {
+      opts.ruleset = args[++i].trim();
     } else if (a === '--expect-action' && args[i + 1]) {
       opts.expectAction = args[++i];
     } else if ((a === '--actual-foe-spec' || a === '--actual-foe') && args[i + 1]) {
@@ -142,6 +145,12 @@ function parseArgs() {
     }
   }
   return opts;
+}
+
+function createSearcher(wasm, dex, side, pool, seed, ruleset) {
+  return ruleset
+    ? wasm.ProtocolSearcher.withRuleset(dex, side, pool, seed, 0.4, undefined, ruleset)
+    : new wasm.ProtocolSearcher(dex, side, pool, seed, 0.4);
 }
 
 function runSelfCheck() {
@@ -205,16 +214,28 @@ function runDiagnosis() {
   const { wasm, dex } = getWasm();
   const pool = getBeliefPool();
   const side = Number(specJson.side || 0);
+  const specRuleset =
+    typeof specJson.ruleset === 'string' && specJson.ruleset.trim()
+      ? specJson.ruleset.trim()
+      : null;
+  const requestedRuleset = opts.ruleset || specRuleset;
+  const effectiveSpecJson = opts.ruleset ? { ...specJson, ruleset: opts.ruleset } : specJson;
+  const effectiveSpecRaw = opts.ruleset ? JSON.stringify(effectiveSpecJson) : specRaw;
 
   // Validate position with ProtocolSearcher.setPosition
   let testSearcher = null;
+  let activeRuleset = requestedRuleset || 'gen2stadium2';
   try {
-    testSearcher = new wasm.ProtocolSearcher(dex, side, pool, 1, 0.4);
-    testSearcher.setPosition(specRaw);
+    testSearcher = createSearcher(wasm, dex, side, pool, 1, requestedRuleset);
+    testSearcher.setPosition(effectiveSpecRaw);
+    if (typeof testSearcher.ruleset === 'function') {
+      activeRuleset = testSearcher.ruleset();
+    }
   } catch (err) {
     console.log(JSON.stringify({
       schema: 'nc2000-triage-report-v1',
       spec_valid: false,
+      ruleset: activeRuleset,
       verdict: 'CATEGORY_B1_RULE_INVALID_SPEC',
       error: `setPosition rejected spec: ${err.message || err}`,
     }));
@@ -229,9 +250,9 @@ function runDiagnosis() {
   const seedActionVotes = {};
 
   for (const s of opts.seeds) {
-    const searcher = new wasm.ProtocolSearcher(dex, side, pool, s, 0.4);
+    const searcher = createSearcher(wasm, dex, side, pool, s, requestedRuleset);
     try {
-      searcher.setPosition(specRaw);
+      searcher.setPosition(effectiveSpecRaw);
       searcher.step(opts.baseIters);
       const bestChoice = searcher.best();
       const rootPolicy = JSON.parse(searcher.rootPolicy());
@@ -293,9 +314,9 @@ function runDiagnosis() {
   let deepAgreement = true;
   let qDeepBot = null;
   if (opts.deepIters > opts.baseIters) {
-    const deepSearcher = new wasm.ProtocolSearcher(dex, side, pool, opts.seeds[0], 0.4);
+    const deepSearcher = createSearcher(wasm, dex, side, pool, opts.seeds[0], requestedRuleset);
     try {
-      deepSearcher.setPosition(specRaw);
+      deepSearcher.setPosition(effectiveSpecRaw);
       deepSearcher.step(opts.deepIters);
       const deepBest = normalizeAction(deepSearcher.best());
       const deepPolicy = JSON.parse(deepSearcher.rootPolicy());
@@ -328,11 +349,11 @@ function runDiagnosis() {
   let oracleHindsightQBot = null;
   let oracleHindsightQExpected = null;
   if (opts.actualFoePath && fs.existsSync(opts.actualFoePath)) {
-    const oracleSearcher = new wasm.ProtocolSearcher(dex, side, pool, opts.seeds[0], 0.4);
+    const oracleSearcher = createSearcher(wasm, dex, side, pool, opts.seeds[0], requestedRuleset);
     try {
       const foeSetsJson = fs.readFileSync(opts.actualFoePath, 'utf8');
       oracleSearcher.pinOpponent(foeSetsJson);
-      oracleSearcher.setPosition(specRaw);
+      oracleSearcher.setPosition(effectiveSpecRaw);
       oracleSearcher.step(opts.baseIters);
       const oraclePolicy = JSON.parse(oracleSearcher.rootPolicy());
       const oracleActions = oraclePolicy.actions || [];
@@ -372,11 +393,12 @@ function runDiagnosis() {
 
   const manifest = resolveManifest();
 
-  const positionHash = crypto.createHash('sha256').update(specRaw).digest('hex').slice(0, 16);
+  const positionHash = crypto.createHash('sha256').update(effectiveSpecRaw).digest('hex').slice(0, 16);
 
   const report = {
     schema: 'nc2000-triage-report-v1',
     engine_sha: resolveGitSha(manifest),
+    ruleset: activeRuleset,
     position_hash: positionHash,
     spec_valid: true,
     verdict,
@@ -400,7 +422,7 @@ function runDiagnosis() {
   if (opts.emitRepro) {
     const reproBundle = {
       manifest,
-      spec: specJson,
+      spec: effectiveSpecJson,
       triage_report: report,
       primary_actions: primaryActions,
     };
