@@ -230,6 +230,13 @@ fn assemble_3v3_compact(
         hurt_damage_this_turn: [0, 0],
         hurt_cat_this_turn: [0, 0],
         match_fp_lo: fp as u16,
+        future_sight_dmg: [0, 0],
+        future_sight_turns: [0, 0],
+        future_sight_src: [0, 0],
+        bp_switch_flags: 0,
+        triple_kick_mult: 0,
+        turn_extra_flags: 0,
+        reserved_castle: [0; 5],
         prng_seed,
     };
     (table, cb)
