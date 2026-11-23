@@ -47,6 +47,7 @@ Rust battle engine, imperfect-information search bot, and WebAssembly/Preact cli
 - Playing-strength architecture, measured-null ledger & open frontiers: [`docs/BOT-STRENGTH-HANDOFF.md`](docs/BOT-STRENGTH-HANDOFF.md)
 - Team catalog, belief prior & Nash rebuild protocol: [`docs/TEAM-POOL-REBUILD-PLAN.md`](docs/TEAM-POOL-REBUILD-PLAN.md)
 - Opt-in ladder priors (`BeliefPrior` & `PickPrior`): [`docs/community-belief-prior-design.md`](docs/community-belief-prior-design.md)
+- Gym Leader's Castle (`PS.cgi`) bot design decisions: [`docs/castle-bot-design.md`](docs/castle-bot-design.md)
 - Server-side preview cache & prior compatibility: [`docs/PREVIEW-CACHE.md`](docs/PREVIEW-CACHE.md) (rendered by [`tools/render-preview-cache-doc.py`](tools/render-preview-cache-doc.py)), [`docs/PREVIEW-PRIOR-COMPATIBILITY.md`](docs/PREVIEW-PRIOR-COMPATIBILITY.md)
 - Compact replay (`NC2-…`) specification: [`docs/replay.md`](docs/replay.md)
 - Engine anomaly report & triage protocol: [`.github/ISSUE_TEMPLATE/engine_anomaly_report.yml`](.github/ISSUE_TEMPLATE/engine_anomaly_report.yml)
