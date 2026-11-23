@@ -2407,6 +2407,12 @@ impl CompactBattle {
         let mut future_sight_turns = [0u8; 2];
         let mut future_sight_src = [0u8; 2];
         let mut bp_switch_flags = 0u8;
+        let mut turn_extra_flags = 0u8;
+        for s in 0..2usize {
+            if battle.bp_switched_this_turn[s] {
+                bp_switch_flags |= 1u8 << (2 + s);
+            }
+        }
 
         for side_n in 0..2usize {
             let side = &battle.sides[side_n];
@@ -2580,6 +2586,9 @@ impl CompactBattle {
                         } else if scid == dt.perish_cond {
                             c_mon.vol_flags |= vol_bit::PERISH_SONG;
                             perish_turns = vst.duration.unwrap_or(0).clamp(0, 7) as u8;
+                            if let Some(src) = vst.source {
+                                turn_extra_flags |= 1u8 << (2 + (src.side & 1));
+                            }
                         } else if scid == dt.res_cond {
                             res_counter_packed =
                                 (vst.get_int(DK::Counter).clamp(0, 15) as u8) | 0x10;
@@ -2861,8 +2870,8 @@ impl CompactBattle {
             future_sight_turns,
             future_sight_src,
             bp_switch_flags,
-            triple_kick_mult: 0,
-            turn_extra_flags: 0,
+            triple_kick_mult: battle.triple_kick_mult,
+            turn_extra_flags,
             reserved_castle: [0; 5],
             prng_seed: battle.prng.lcg.seed(),
         };
@@ -3674,8 +3683,9 @@ impl CompactBattle {
                 if (self.bp_switch_flags & (1u8 << actor)) != 0 {
                     paused_for_bp = true;
                     if step_i == 0 && !consumed[second] && actions[second] < 4 {
-                        self.sides[second].side_flags |=
-                            0x10 | (((actions[second] & 3) as u8) << 5);
+                        self.sides[second].side_flags = (self.sides[second].side_flags & !0x70)
+                            | 0x10
+                            | (((actions[second] & 3) as u8) << 5);
                         if forced_struggle[second] {
                             self.bp_switch_flags |= 1u8 << (4 + second);
                         }

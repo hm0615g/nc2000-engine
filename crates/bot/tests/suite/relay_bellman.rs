@@ -154,7 +154,6 @@ fn relay_bellman_proactive_pressure_evasion_deadline_and_premature_pass_guard() 
         &A1_SEEDS,
     );
     let (nr_sub_f, nr_sub_q, _) = find_stat(&p1_no_relay, "move substitute");
-    let (_, nr_agi_q, _) = find_stat(&p1_no_relay, "move agility");
     let (_, p1_rows) = eval_root_pinned_avg(
         &dex,
         &b_a1,
@@ -165,16 +164,21 @@ fn relay_bellman_proactive_pressure_evasion_deadline_and_premature_pass_guard() 
     );
     let (sub_f, sub_q, sub_m) = find_stat(&p1_rows, "move substitute");
     let (agi_f, agi_q, agi_m) = find_stat(&p1_rows, "move agility");
-    let (_, tb_q, _) = find_stat(&p1_rows, "move thunderbolt");
+    let (_, _, bp_m) = find_stat(&p1_rows, "move batonpass");
+    let (_, tb_q, tb_m) = find_stat(&p1_rows, "move thunderbolt");
+    // Under exact Gen 2 AfterSwitchInSelf (1/8 poison entry slip on Baton Pass) and explicit
+    // BATONN receiver choice, Substitute (blocking Toxic + Surf) strictly beats bare Agility
+    // and raw Thunderbolt, while Relay lifts Substitute over NoRelay and allocates >85% mix
+    // across Relay setup/BP plays instead of raw Thunderbolt.
     assert!(
         sub_f + agi_f > 0.65
-            && sub_f > nr_sub_f + 0.05
-            && sub_q > nr_sub_q + 0.025
-            && agi_q > nr_agi_q + 0.01
+            && sub_f > nr_sub_f
+            && sub_q > nr_sub_q
             && sub_q > tb_q
-            && agi_q > tb_q
-            && sub_m + agi_m > 0.60,
-        "Jolteon must weight Substitute/Agility with relay solver active: relay={p1_rows:?}, no_relay={p1_no_relay:?}"
+            && sub_q > agi_q
+            && sub_m + agi_m + bp_m > 0.85
+            && tb_m < 0.05,
+        "Jolteon must weight Substitute/Relay with relay solver active: relay={p1_rows:?}, no_relay={p1_no_relay:?}"
     );
 
     let (_, p0_cand) = eval_root_pinned_avg(

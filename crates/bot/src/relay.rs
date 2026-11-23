@@ -281,19 +281,10 @@ fn switch_entry_dmg(
     dmg
 }
 
-/// Uniquely identifies Gen 2 `Pursuit` (Dark, Special, 40 BP, 100% acc, 0 prio, no secondary/drain).
+/// Identifies Gen 2 `Pursuit` via `SpecialMoveKind::Pursuit`.
 #[inline]
 fn is_pursuit_move(mspec: &CompactMoveSpec) -> bool {
-    !mspec.is_status
-        && !mspec.is_physical
-        && !mspec.always_hit
-        && !mspec.is_water
-        && !mspec.drain_half
-        && mspec.base_power == 40
-        && mspec.fixed_damage == 0
-        && mspec.sec_chance_256 == 0
-        && mspec.special_kind == SpecialMoveKind::None
-        && mspec.priority == 0
+    mspec.special_kind == SpecialMoveKind::Pursuit
 }
 
 #[inline]

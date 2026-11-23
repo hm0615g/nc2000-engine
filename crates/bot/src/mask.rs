@@ -681,12 +681,6 @@ fn can_safely_mask_public_self_noop(
         if certain_self_loss(b, dex, side, other) {
             return false;
         }
-        if b.is_castle()
-            && osid == km.rest
-            && own_other_party_asleep_under_clause(b, dex, side, att)
-        {
-            return false;
-        }
         if oms.selfdestruct {
             return living_own >= 2;
         }
@@ -773,13 +767,6 @@ fn has_harmless_status_wait_move(b: &Battle, dex: &Dex, side: usize) -> bool {
         let ms = dex.move_static(id);
         let km = &dex.known_moves;
         let sid = Some(id);
-        if b.is_castle()
-            && sid == km.rest
-            && b.active_id(side)
-                .is_some_and(|att| own_other_party_asleep_under_clause(b, dex, side, att))
-        {
-            return false;
-        }
         ms.category == Category::Status
             && ms.status.as_deref() != Some("slp")
             && ms.self_switch.is_none()
@@ -991,12 +978,6 @@ fn raw_public_noop_reason(
     if can_safely_mask_public_self_noop(b, dex, side, c) {
         use nc2000_engine::state::Status;
         let me = b.poke(att);
-        if b.is_castle()
-            && sid == km.rest
-            && own_other_party_asleep_under_clause(b, dex, side, att)
-        {
-            return Some("Sleep Clause blocks Rest while another ally is asleep");
-        }
         if ms.sleep_usable && public_rest_timer(b, att) == Some(1) {
             return Some("Rest sleep ends before this move executes");
         }
@@ -1169,12 +1150,6 @@ fn noop_reason(
         let me = b.poke(att);
         me.hp >= me.maxhp
     };
-    if b.is_castle()
-        && sid == km.rest
-        && own_other_party_asleep_under_clause(b, dex, side, att)
-    {
-        yes!("Sleep Clause blocks Rest while another ally is asleep");
-    }
     if ms.heal.is_some()
         || sid == km.rest
         || sid == km.moonlight

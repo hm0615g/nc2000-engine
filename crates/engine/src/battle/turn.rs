@@ -287,15 +287,17 @@ impl Battle {
         let db_cond = crate::cond_id!(dex, "destinybond");
         let ps_cond = crate::cond_id!(dex, "perishsong");
         let mut dbond_caster: Option<u8> = None;
-        let mut perish_caster: Option<u8> = None;
+        let mut perish_caster_mask: u8 = 0;
         while !self.faint_queue.is_empty() {
             let entry = self.faint_queue.remove(0);
             let pokemon = entry.target;
             if let Some(EffectHandle::Cond(c)) = entry.effect {
                 if Some(c) == db_cond {
                     dbond_caster = entry.source.map(|s| s.side);
-                } else if Some(c) == ps_cond && perish_caster.is_none() {
-                    perish_caster = entry.source.map(|s| s.side);
+                } else if Some(c) == ps_cond {
+                    if let Some(src) = entry.source {
+                        perish_caster_mask |= 1u8 << (src.side & 1);
+                    }
                 }
             }
             faint_data = Some(entry.clone());
@@ -381,6 +383,11 @@ impl Battle {
                     return true;
                 }
                 // Layer 2: 1v1 Perish Song / Destiny Bond mutual KO
+                let perish_caster = match perish_caster_mask {
+                    0b01 => Some(0u8),
+                    0b10 => Some(1u8),
+                    _ => None,
+                };
                 if let Some(caster_side) = dbond_caster.or(perish_caster) {
                     if overlay.perish_dbond_lastmon_forfeit {
                         self.win(Some(1 - caster_side as usize));
@@ -526,31 +533,34 @@ impl Battle {
         }
 
         // #8 Castle PBS turn limit (`L_TURN`): judge by alive count -> sum of alive hp/maxhp ratios -> tie.
-        if let Some(limit) = self.ruleset.turn_limit() {
-            if self.turn > limit {
-                self.judge_castle_turn_limit();
+        if self.is_castle() {
+            if let Some(limit) = self.ruleset.turn_limit() {
+                if self.turn > limit {
+                    self.judge_castle_turn_limit();
+                    return;
+                }
+            }
+        } else {
+            // maybeTriggerEndlessBattleClause: turn limits only matter past 100
+            if self.turn > 1000 {
+                self.add(&["message", "It is turn 1000. You have hit the turn limit!"]);
+                self.win(None);
                 return;
             }
-        }
-
-        // maybeTriggerEndlessBattleClause: turn limits only matter past 100
-        if self.turn > 1000 {
-            self.add(&["message", "It is turn 1000. You have hit the turn limit!"]);
-            self.win(None);
-            return;
-        }
-        if self.turn > 100 {
-            if (self.turn >= 500 && self.turn % 100 == 0)
-                || (self.turn >= 900 && self.turn % 10 == 0)
-                || self.turn >= 990
-            {
-                let left = 1000 - self.turn;
-                let text = if left == 1 { "1 turn".to_string() } else { format!("{left} turns") };
-                let msg =
-                    format!("You will auto-tie if the battle doesn't end in {text} (on turn 1000).");
-                self.add(&["bigerror", &msg]);
+            if self.turn > 100 {
+                if (self.turn >= 500 && self.turn % 100 == 0)
+                    || (self.turn >= 900 && self.turn % 10 == 0)
+                    || self.turn >= 990
+                {
+                    let left = 1000 - self.turn;
+                    let text = if left == 1 { "1 turn".to_string() } else { format!("{left} turns") };
+                    let msg = format!(
+                        "You will auto-tie if the battle doesn't end in {text} (on turn 1000)."
+                    );
+                    self.add(&["bigerror", &msg]);
+                }
+                // full staleness tracking not ported (unreachable in fixtures)
             }
-            // full staleness tracking not ported (unreachable in fixtures)
         }
 
         if self.log_enabled {

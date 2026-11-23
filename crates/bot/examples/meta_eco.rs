@@ -10233,7 +10233,14 @@ fn assemble_3v3_compact(
         turn: 1,
         weather_kind: nc2000_engine::compact::CompactWeather::None,
         weather_turns: 0,
-        quick_claw_roll: if ((prng_seed >> 32) & 0xFF) < 60 { 0b11 } else { 0 },
+        quick_claw_roll: if table.ruleset.independent_quick_claw() {
+            ((((prng_seed >> 32) & 0xFF) < 60) as u8)
+                | (((((prng_seed >> 40) & 0xFF) < 60) as u8) << 1)
+        } else if ((prng_seed >> 32) & 0xFF) < 60 {
+            0b11
+        } else {
+            0
+        },
         outcome: 0,
         speed_order: 0,
         clause_flags: 5,
@@ -10382,6 +10389,10 @@ fn eval_incremental_adaptive_preview_matrix_compact(
     (mean_mat, tot_n)
 }
 
+/// Transpose a **seat-symmetrized** `(ka x kb)` preview payoff matrix (`0.5 * (V_1P(A,B) + (1 - V_1P(B,A)))`).
+/// INVARIANT: Valid for both PS Stadium 2 and Castle PBS (`1P -> 2P` fixed EOT order) ONLY because
+/// `eval_crn_cell_pair_compact` averages both seat orientations `(A as P1, B as P2)` and `(B as P1, A as P2)`.
+/// Never pass a single-seat (`P1`-only) Castle payoff matrix into this function.
 fn transpose_preview_matrix(mat: &[f64], ka: usize, kb: usize) -> Vec<f64> {
     let mut out = vec![0.5f64; kb * ka];
     for ia in 0..ka {

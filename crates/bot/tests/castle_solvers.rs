@@ -702,7 +702,7 @@ fn mask_transformed_ditto_hp_and_all_castle_mask_rules() {
             .any(|&(c, why)| c == sp_choice && !why.contains("forfeit")),
         "Castle Sleep Clause must mask Sleep Powder as no-op when not wait-exempt: {cs_dom:?}"
     );
-    // Own bench ally asleep -> Castle masks Rest as no-op!
+    // Own bench ally asleep -> Castle still permits self-inflicted Rest (matches Battle/CompactBattle)!
     let own_bench = b_slp_cs.sides[0].party[1] as usize;
     b_slp_cs.sides[0].roster[own_bench].status = Status::Slp;
     let my_act = b_slp_cs.active_id(0).unwrap();
@@ -710,10 +710,8 @@ fn mask_transformed_ditto_hp_and_all_castle_mask_rules() {
     let rest_choice = mv(&dex, "rest");
     let cs_rest_dom = dominated_actions(&b_slp_cs, &dex, 0);
     assert!(
-        cs_rest_dom
-            .iter()
-            .any(|&(c, why)| c == rest_choice && why.contains("Sleep Clause")),
-        "Castle Sleep Clause must mask Rest while an ally is asleep: {cs_rest_dom:?}"
+        !cs_rest_dom.iter().any(|&(c, _)| c == rest_choice),
+        "Castle Sleep Clause only blocks foe sleep, NOT own Rest while an ally is asleep: {cs_rest_dom:?}"
     );
 
     // 3. Castle Rapid Spin vs Ghost (Probe 12D2): NOT masked with Spikes/Leech Seed; masked with Mean Look only.
