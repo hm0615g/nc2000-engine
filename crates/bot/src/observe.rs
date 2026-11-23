@@ -262,7 +262,17 @@ impl Observer {
         dex: &Dex,
         spec: &crate::position::PositionSpec,
     ) -> Result<Observer, String> {
+        let ruleset = spec.resolved_ruleset()?;
+        Self::from_position_with_ruleset(dex, spec, ruleset)
+    }
+
+    pub fn from_position_with_ruleset(
+        dex: &Dex,
+        spec: &crate::position::PositionSpec,
+        ruleset: Ruleset,
+    ) -> Result<Observer, String> {
         let foe = spec.foe();
+        let is_castle = ruleset.is_castle();
         let item = |k: &crate::position::ItemKnowledge| -> Result<Option<Option<ItemId>>, String> {
             match k.to_obs() {
                 None => Ok(None),
@@ -312,8 +322,9 @@ impl Observer {
             }
             let observed_maxhp = if !m.fainted
                 && m.hp_den > 0
-                && m.hp_den != crate::import::HP_DEN_PERCENT
-                && m.hp_den != crate::import::HP_DEN_PIXELS
+                && ((is_castle && m.appeared)
+                    || (m.hp_den != crate::import::HP_DEN_PERCENT
+                        && m.hp_den != crate::import::HP_DEN_PIXELS))
             {
                 Some(m.hp_den)
             } else {
@@ -337,7 +348,7 @@ impl Observer {
                 observed_maxhp,
             });
         }
-        let mut obs = Observer::from_mons(spec.side, mons);
+        let mut obs = Observer::from_mons_with_ruleset(spec.side, mons, ruleset);
         if let Some(a) = spec.sides[spec.side].active {
             if let Some(ms) = spec.sides[spec.side].mons.get(a) {
                 obs.own_active_species = dex.species.id(&toid(&ms.species));
@@ -377,6 +388,7 @@ impl Observer {
     /// are learned from switch lines by the caller (`set_name`) — subject
     /// resolution needs them before the mon's first `|move|` line, and
     /// switch lines always precede them.
+    #[allow(dead_code)]
     pub(crate) fn from_mons(side: usize, mons: Vec<MonObs>) -> Observer {
         Self::from_mons_with_ruleset(side, mons, Ruleset::PsStadium2)
     }

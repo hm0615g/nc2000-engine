@@ -1,18 +1,22 @@
 use std::collections::BTreeSet;
 
 use conformance::load_dex;
+use nc2000_bot::belief::supplemental_prior_count;
 use nc2000_bot::blind::resample_hidden_timers;
 use nc2000_bot::duel::DuelSpec;
+use nc2000_bot::fork::ForkSpec;
 use nc2000_bot::import::{announce_hp_mode, impute_hp_mode, ProtocolAgent, ProtocolTracker};
 use nc2000_bot::player_state::{HiddenTimerKind, HiddenTimerSpec};
+use nc2000_bot::position::{max_pp_for_ruleset, PositionSpec};
 use nc2000_bot::preview::{BakeCfg, MetaPool, MetaTeam};
 use nc2000_bot::runner::{effective_turn_cap, judge_castle_turn_limit};
 use nc2000_bot::teamgen::TeamGen;
 use nc2000_bot::{Belief, Observer, RmConfig, SplitMix64};
 use nc2000_engine::battle::{Outcome, PokemonSet};
 use nc2000_engine::dex::{toid, Dex};
+use nc2000_engine::replay::Recorder;
 use nc2000_engine::rules::Ruleset;
-use nc2000_engine::state::{ActionKind, Battle, Status, DK};
+use nc2000_engine::state::{ActionKind, Battle, Scalar, Status, DK};
 
 fn make_set(species: &str, level: u8, item: &str, moves: &[&str]) -> PokemonSet {
     serde_json::from_value(serde_json::json!({
@@ -128,7 +132,18 @@ fn observer_castle_iceberry_dual_cure_and_bitterberry_inert() {
 fn observer_castle_observed_maxhp_and_belief_exact_hp_filtering() {
     let dex = load_dex();
     let lax_full = make_set_evs("Snorlax", 50, "Leftovers", &["Body Slam", "Rest", "Curse", "Earthquake"], 255, 30);
-    let lax_low = make_set_evs("Snorlax", 50, "Leftovers", &["Body Slam", "Rest", "Curse", "Earthquake"], 0, 0);
+    // Castle-legal low-HP Snorlax (0 EVs across all stats, even DVs -> derived HP DV = 0).
+    let lax_low: PokemonSet = serde_json::from_value(serde_json::json!({
+        "name": "Snorlax",
+        "species": "Snorlax",
+        "level": 50,
+        "item": "Leftovers",
+        "gender": "M",
+        "moves": ["Body Slam", "Rest", "Curse", "Earthquake"],
+        "ivs": { "hp": 0, "atk": 28, "def": 28, "spa": 28, "spd": 28, "spe": 28 },
+        "evs": { "hp": 0, "atk": 0, "def": 0, "spa": 0, "spd": 0, "spe": 0 }
+    }))
+    .unwrap();
 
     let b_full = Battle::from_fixture_with_ruleset(
         &dex,
@@ -448,8 +463,12 @@ fn import_castle_den_100_exact_hp_and_ruleset_preservation() {
         .synthesize(&dex, &three_own, &base_ref.sides[1].roster, &obs, &fswitch_req, &mut rng)
         .unwrap();
     assert!(
-        !tc_b.queue.iter().any(|a| matches!(a.choice, ActionKind::Residual)),
-        "Castle switch-in Turn-Cut faint synthesis must not queue EOT Residual"
+        tc_b.queue.iter().any(|a| matches!(a.choice, ActionKind::Residual)),
+        "Castle switch-in Turn-Cut faint synthesis must preserve ActionKind::Residual to match Battle::faint_messages (turn.rs:344-354)"
+    );
+    assert!(
+        !tc_b.queue.iter().any(|a| matches!(a.choice, ActionKind::Move { .. })),
+        "Castle switch-in Turn-Cut faint synthesis must not queue moves"
     );
 }
 
@@ -597,4 +616,462 @@ fn runner_duel_preview_castle_turn_limit_and_probe_12a_judge() {
     b.sides[1].roster[1].hp = 0;
     b.sides[1].roster[1].fainted = true;
     assert_eq!(judge_castle_turn_limit(&b), Outcome::P1Win);
+}
+
+#[test]
+fn import_castle_stall_counter_and_mimic_pp_and_base40_maxpp() {
+    let dex = load_dex();
+    let own = vec![
+        make_set("Clefable", 55, "Leftovers", &["Protect", "Mimic", "Splash", "Rest"]),
+        make_set("Snorlax", 50, "Mint Berry", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+        make_set("Zapdos", 50, "Miracle Berry", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+    ];
+    let foe = vec![
+        make_set("Smeargle", 50, "Gold Berry", &["Splash", "Sketch", "Body Slam", "Rest"]),
+        make_set("Snorlax", 50, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+        make_set("Zapdos", 50, "Magnet", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+    ];
+
+    let req = nc2000_bot::import::Request::parse(
+        &dex,
+        &serde_json::json!({
+            "active": [{
+                "moves": [
+                    { "move": "Protect", "id": "protect", "pp": 13, "maxpp": 16, "disabled": false },
+                    { "move": "Splash", "id": "splash", "pp": 8, "maxpp": 64, "disabled": false },
+                    { "move": "Splash", "id": "splash", "pp": 64, "maxpp": 64, "disabled": false },
+                    { "move": "Rest", "id": "rest", "pp": 16, "maxpp": 16, "disabled": false }
+                ]
+            }],
+            "side": {
+                "name": "P1",
+                "id": "p1",
+                "pokemon": [
+                    { "ident": "p1: Clefable", "details": "Clefable, L55, M", "condition": "222/222", "active": true, "item": "leftovers" },
+                    { "ident": "p1: Snorlax", "details": "Snorlax, L50, M", "condition": "266/266", "active": false, "item": "mintberry" },
+                    { "ident": "p1: Zapdos", "details": "Zapdos, L50, M", "condition": "197/197", "active": false, "item": "miracleberry" }
+                ]
+            }
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    // Feed 3 consecutive Protects on both sides + Mimic copying Splash on p2a (foe)
+    // and verify Castle stall counter == Scalar::Int(3) vs PS float 0.25,
+    // plus Castle Mimic PP == 8 (5 + 3 PP Ups) and base-40 maxpp == 64 (vs PS 5 and 61).
+    let run_synth = |ruleset: Ruleset, mimic_move: &str| {
+        let mut tracker = ProtocolTracker::new_with_ruleset(0, ruleset);
+        for l in [
+            "|poke|p1|Clefable, L55, M|item",
+            "|poke|p1|Snorlax, L50, M|item",
+            "|poke|p1|Zapdos, L50, M|item",
+            "|poke|p2|Smeargle, L50, M|item",
+            "|poke|p2|Snorlax, L50, M|item",
+            "|poke|p2|Zapdos, L50, M|item",
+            "|start",
+            "|switch|p1a: Clefable|Clefable, L55, M|222/222",
+            "|switch|p2a: Smeargle|Smeargle, L50, M|161/161",
+            "|turn|1",
+            "|move|p1a: Clefable|Protect|p1a: Clefable",
+            "|-singleturn|p1a: Clefable|Protect",
+            "|move|p2a: Smeargle|Mimic|p1a: Clefable",
+            &format!("|-activate|p2a: Smeargle|move: Mimic|{mimic_move}"),
+            "|turn|2",
+            "|move|p1a: Clefable|Protect|p1a: Clefable",
+            "|-singleturn|p1a: Clefable|Protect",
+            "|turn|3",
+            "|move|p1a: Clefable|Protect|p1a: Clefable",
+            "|-singleturn|p1a: Clefable|Protect",
+            "|turn|4",
+        ] {
+            tracker.push_line(&dex, l);
+        }
+        let foe_mimic = vec![
+            make_set("Smeargle", 50, "Gold Berry", &["Mimic", "Sketch", "Body Slam", "Rest"]),
+            foe[1].clone(),
+            foe[2].clone(),
+        ];
+        let base_ref =
+            Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", &own, &foe_mimic, ruleset).unwrap();
+        let obs = Observer::new(&base_ref, 0);
+        let mut rng = SplitMix64::new(5);
+        tracker
+            .synthesize(&dex, &own, &base_ref.sides[1].roster, &obs, &req, &mut rng)
+            .unwrap()
+    };
+
+    let b_castle = run_synth(Ruleset::castle_tournament(), "Splash");
+    let stall_id = dex.conds_id("stall").unwrap();
+    let c_stall = b_castle.sides[0].roster[0].volatile(stall_id).expect("Castle stall volatile");
+    assert_eq!(
+        c_stall.get(DK::Counter),
+        Some(Scalar::Int(3)),
+        "Castle stall counter must be integer streak 1..=8"
+    );
+    let c_mimic_slot = &b_castle.sides[1].roster[0].move_slots[0];
+    assert_eq!(c_mimic_slot.id, dex.moves.id("splash").unwrap());
+    assert_eq!(c_mimic_slot.maxpp, 64, "Castle base-40 move maxpp must be 64");
+    assert_eq!(c_mimic_slot.pp, 8, "Castle Mimic PP must be 5 + 3 PP Ups = 8");
+
+    // Sketch has no_pp_boosts: Castle Mimic PP must clamp to maxpp = 1 (not 8)
+    let b_castle_sketch = run_synth(Ruleset::castle_tournament(), "Sketch");
+    let c_sketch_slot = &b_castle_sketch.sides[1].roster[0].move_slots[0];
+    assert_eq!(c_sketch_slot.id, dex.moves.id("sketch").unwrap());
+    assert_eq!(c_sketch_slot.maxpp, 1);
+    assert_eq!(c_sketch_slot.pp, 1);
+
+    // PS mode preserves halving float counter (127.0 -> 63.5 -> 31.75) and Mimic PP = 5 / maxpp = 61
+    let b_ps = run_synth(Ruleset::PsStadium2, "Splash");
+    let ps_stall = b_ps.sides[0].roster[0].volatile(stall_id).expect("PS stall volatile");
+    assert_eq!(ps_stall.get(DK::Counter), Some(Scalar::Float(31.75)));
+    let ps_mimic_slot = &b_ps.sides[1].roster[0].move_slots[0];
+    assert_eq!(ps_mimic_slot.maxpp, 61);
+    assert_eq!(ps_mimic_slot.pp, 5);
+}
+
+#[test]
+fn belief_castle_legality_filtering_and_warning_tolerance() {
+    let dex = load_dex();
+    let pool: MetaPool =
+        serde_json::from_str(include_str!("../../../data/belief-pool-v3/belief-pool.json"))
+            .unwrap();
+    assert_eq!(pool.teams.len(), 520);
+
+    let team = sample_six(&dex);
+    let b_ps = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", &team, &team, Ruleset::PsStadium2)
+        .unwrap();
+    let obs_ps = Observer::new(&b_ps, 0);
+    let belief_ps = Belief::new(&dex, &pool, &obs_ps);
+    assert_eq!(
+        belief_ps.pool_candidate_count(),
+        520,
+        "PS belief pool must stay 100% unchanged (520 teams)"
+    );
+
+    let b_castle = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        &team,
+        &team,
+        Ruleset::castle_tournament(),
+    )
+    .unwrap();
+    let obs_castle = Observer::new(&b_castle, 0);
+    let belief_castle = Belief::new(&dex, &pool, &obs_castle);
+    assert_eq!(
+        belief_castle.pool_candidate_count(),
+        520 - 19,
+        "Castle belief pool must filter exact 19/520 illegal teams (501 kept)"
+    );
+
+    // Embedded supplemental.json: PS keeps all 43, Castle rejects exact 17/43 (26 kept)
+    assert_eq!(supplemental_prior_count(&dex, Ruleset::PsStadium2), 43);
+    assert_eq!(supplemental_prior_count(&dex, Ruleset::castle_tournament()), 43 - 17);
+
+    // Warning-only Castle team (inert Bitter Berry + Dragon Fang, no errors) must NOT be rejected
+    // by Belief::new or Belief::pinned_checked!
+    let mk_g = |species: &str, level: u8, item: &str, gender: &str, moves: &[&str]| -> PokemonSet {
+        serde_json::from_value(serde_json::json!({
+            "name": species,
+            "species": species,
+            "level": level,
+            "item": item,
+            "gender": gender,
+            "moves": moves,
+            "ivs": { "hp": 30, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30 },
+            "evs": { "hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255 }
+        }))
+        .unwrap()
+    };
+    let warn_team = vec![
+        mk_g("Snorlax", 50, "Bitter Berry", "M", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+        mk_g("Dragonite", 55, "Dragon Fang", "M", &["Dragon Breath", "Thunderbolt", "Ice Beam", "Rest"]),
+        mk_g("Zapdos", 50, "Mint Berry", "N", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+        mk_g("Starmie", 50, "Miracle Berry", "N", &["Surf", "Psychic", "Recover", "Rapid Spin"]),
+        mk_g("Raikou", 50, "Magnet", "N", &["Thunderbolt", "Roar", "Rest", "Sleep Talk"]),
+        mk_g("Exeggutor", 50, "Leftovers", "M", &["Psychic", "Giga Drain", "Stun Spore", "Explosion"]),
+    ];
+    let b_warn = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        &team,
+        &warn_team,
+        Ruleset::castle_tournament(),
+    )
+    .unwrap();
+    let obs_warn = Observer::new(&b_warn, 0);
+    let warn_pool = MetaPool {
+        teams: vec![MetaTeam { id: "warn-only".into(), sets: warn_team.clone(), weight: None }],
+    };
+    let belief_warn = Belief::new(&dex, &warn_pool, &obs_warn);
+    assert_eq!(
+        belief_warn.pool_candidate_count(),
+        1,
+        "Castle belief pool must NOT reject warning-only teams"
+    );
+    assert!(
+        Belief::pinned_checked(&dex, "warn-only", &warn_team, &obs_warn).is_ok(),
+        "Belief::pinned_checked must accept warning-only Castle teams"
+    );
+
+    // NYPC Snorlax Lovely Kiss MUST be rejected by Belief::pinned_checked on Castle
+    let mut nypc_team = sample_six(&dex);
+    nypc_team[0] =
+        make_set("Snorlax", 55, "Leftovers", &["Lovely Kiss", "Body Slam", "Earthquake", "Rest"]);
+    let b_nypc = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        &team,
+        &nypc_team,
+        Ruleset::castle_tournament(),
+    )
+    .unwrap();
+    let obs_nypc = Observer::new(&b_nypc, 0);
+    assert!(
+        Belief::pinned_checked(&dex, "nypc", &nypc_team, &obs_nypc).is_err(),
+        "Belief::pinned_checked must reject NYPC Snorlax Lovely Kiss on Castle"
+    );
+}
+
+#[test]
+fn teamgen_castle_canonize_learnsets_and_jp_events() {
+    let dex = load_dex();
+    let ls_text = include_str!("../../../data/learnsets-gen2.json");
+    let pool_text = include_str!("../../../data/meta-pool-v0/meta-pool.json");
+    let gen_castle = TeamGen::new(&dex, ls_text, pool_text)
+        .unwrap()
+        .with_ruleset(Ruleset::castle_tournament());
+    let gen_ps = TeamGen::new(&dex, ls_text, pool_text).unwrap();
+
+    // Castle non_dominated_moves excludes NYPC Snorlax Lovely Kiss and allows JP-event Donphan Encore
+    let castle_lax_moves: BTreeSet<String> = gen_castle
+        .non_dominated_moves(&dex, "snorlax", 55, &[])
+        .into_iter()
+        .map(|m| toid(&m))
+        .collect();
+    assert!(!castle_lax_moves.contains("lovelykiss"), "Castle teamgen must exclude NYPC Lovely Kiss");
+
+    let castle_donphan_moves: BTreeSet<String> = gen_castle
+        .non_dominated_moves(&dex, "donphan", 50, &[])
+        .into_iter()
+        .map(|m| toid(&m))
+        .collect();
+    assert!(
+        castle_donphan_moves.contains("encore"),
+        "Castle teamgen must explore Castle-legal JP-event Donphan Encore"
+    );
+    let ps_donphan_moves: BTreeSet<String> = gen_ps
+        .non_dominated_moves(&dex, "donphan", 50, &[])
+        .into_iter()
+        .map(|m| toid(&m))
+        .collect();
+    assert!(!ps_donphan_moves.contains("encore"), "PS teamgen must NOT emit Donphan Encore");
+
+    // TeamGen::canonize accepts warning-only Castle team (inert Bitter Berry) + JP-event Donphan Encore
+    let raw_castle_legal = vec![
+        serde_json::json!({"species": "Donphan", "level": 50, "item": "Bitter Berry", "moves": ["Encore", "Earthquake", "Rest", "Sleep Talk"]}),
+        serde_json::json!({"species": "Snorlax", "level": 55, "item": "Leftovers", "moves": ["Body Slam", "Earthquake", "Curse", "Rest"]}),
+        serde_json::json!({"species": "Zapdos", "level": 50, "item": "Mint Berry", "moves": ["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]}),
+        serde_json::json!({"species": "Starmie", "level": 50, "item": "Miracle Berry", "moves": ["Surf", "Psychic", "Recover", "Rapid Spin"]}),
+        serde_json::json!({"species": "Raikou", "level": 50, "item": "Magnet", "moves": ["Thunderbolt", "Roar", "Rest", "Sleep Talk"]}),
+        serde_json::json!({"species": "Exeggutor", "level": 50, "item": "Gold Berry", "moves": ["Psychic", "Giga Drain", "Stun Spore", "Explosion"]}),
+    ];
+    assert!(
+        gen_castle.canonize(&dex, &raw_castle_legal).is_some(),
+        "Castle TeamGen::canonize must accept warning-only + JP-event teams"
+    );
+    assert!(
+        gen_ps.canonize(&dex, &raw_castle_legal).is_none(),
+        "PS TeamGen::canonize must reject JP-event Donphan Encore"
+    );
+}
+
+#[test]
+fn position_spec_and_replay_origin_preserve_castle_ruleset() {
+    let dex = load_dex();
+
+    // Base-40 PP move (Splash): 64 on Castle vs 61 on PS
+    let splash_id = dex.moves.id("splash").unwrap();
+    assert_eq!(max_pp_for_ruleset(&dex, splash_id, Ruleset::castle_tournament()), 64);
+    assert_eq!(max_pp_for_ruleset(&dex, splash_id, Ruleset::PsStadium2), 61);
+
+    // PositionSpec with ruleset: Some("castle-tournament") and Lv50 100-HP Diglett opponent
+    let own = sample_six(&dex);
+    // Diglett Lv50 with even DVs (derived HP DV = 0) and effort 60 (EV 240) across all stats -> exact maxhp = 100!
+    let diglett: PokemonSet = serde_json::from_value(serde_json::json!({
+        "name": "Diglett",
+        "species": "Diglett",
+        "level": 50,
+        "item": "Focus Band",
+        "gender": "M",
+        "moves": ["Earthquake", "Rock Slide", "Slash", "Substitute"],
+        "ivs": { "hp": 0, "atk": 28, "def": 28, "spa": 28, "spd": 28, "spe": 28 },
+        "evs": { "hp": 240, "atk": 240, "def": 240, "spa": 240, "spd": 240, "spe": 240 }
+    }))
+    .unwrap();
+    let mut foe = sample_six(&dex);
+    foe[0] = diglett;
+
+    let spec_json = serde_json::json!({
+        "schema": "nc2000-position-v1",
+        "ruleset": "castle-tournament",
+        "side": 0,
+        "turn": 3,
+        "own_sets": own,
+        "sides": [
+            {
+                "active": 0,
+                "party": [0, 1, 2],
+                "mons": [
+                    { "species": "Snorlax", "level": 55, "gender": "M", "name": "Snorlax", "item_flag": true, "appeared": true, "appear_count": 1, "active": true, "hp_num": 292, "hp_den": 292, "hp_exact": 292 },
+                    { "species": "Zapdos", "level": 50, "gender": "", "name": "Zapdos", "item_flag": true, "appeared": false, "hp_num": 197, "hp_den": 197, "hp_exact": 197 },
+                    { "species": "Starmie", "level": 50, "gender": "", "name": "Starmie", "item_flag": true, "appeared": false, "hp_num": 167, "hp_den": 167, "hp_exact": 167 },
+                    { "species": "Gengar", "level": 50, "gender": "M", "item_flag": true },
+                    { "species": "Raikou", "level": 50, "gender": "", "item_flag": true },
+                    { "species": "Exeggutor", "level": 50, "gender": "M", "item_flag": true }
+                ]
+            },
+            {
+                "active": 0,
+                "party": [0],
+                "mons": [
+                    { "species": "Diglett", "level": 50, "gender": "M", "name": "Diglett", "item_flag": true, "appeared": true, "appear_count": 1, "active": true, "hp_num": 37, "hp_den": 100 },
+                    { "species": "Zapdos", "level": 50, "gender": "", "item_flag": true, "appeared": false, "hp_num": 100, "hp_den": 100 },
+                    { "species": "Starmie", "level": 50, "gender": "", "item_flag": true, "appeared": false, "hp_num": 100, "hp_den": 100 },
+                    { "species": "Gengar", "level": 50, "gender": "M", "item_flag": true, "appeared": false, "hp_num": 100, "hp_den": 100 },
+                    { "species": "Raikou", "level": 50, "gender": "", "item_flag": true, "appeared": false, "hp_num": 100, "hp_den": 100 },
+                    { "species": "Exeggutor", "level": 50, "gender": "M", "item_flag": true, "appeared": false, "hp_num": 100, "hp_den": 100 }
+                ]
+            }
+        ]
+    })
+    .to_string();
+    let spec = PositionSpec::parse(&spec_json).unwrap();
+    assert_eq!(spec.resolved_ruleset().unwrap(), Ruleset::castle_tournament());
+
+    let obs = Observer::from_position(&dex, &spec).unwrap();
+    assert_eq!(obs.ruleset(), Ruleset::castle_tournament());
+    // Appeared Diglett at hp_den==100 gets exact observed_maxhp=Some(100); unappeared bench stays None!
+    assert_eq!(obs.mons()[0].observed_maxhp, Some(100));
+    assert_eq!(obs.mons()[1].observed_maxhp, None);
+
+    let pool = MetaPool { teams: vec![MetaTeam { id: "foe".into(), sets: foe.clone(), weight: None }] };
+    let mut agent = ProtocolAgent::new(&dex, 0, pool.clone(), RmConfig::default(), 7);
+    agent.set_position(&dex, &spec).unwrap();
+    assert_eq!(agent.ruleset(), Ruleset::castle_tournament());
+    assert_eq!(agent.battle().unwrap().ruleset, Ruleset::castle_tournament());
+    assert_eq!(agent.battle().unwrap().sides[1].roster[0].hp, 37);
+    let roundtrip = agent.to_position_spec(&dex).unwrap();
+    assert_eq!(roundtrip.ruleset.as_deref(), Some("castle-tournament"));
+
+    // ReplayOrigin::agent & ForkSpec on a Castle NC2- replay must preserve Castle ruleset!
+    let mut b_castle = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        &own,
+        &foe,
+        Ruleset::castle_tournament(),
+    )
+    .unwrap();
+    let mut rec = Recorder::new(&dex, &b_castle, [own.clone(), foe.clone()], "1,2,3,4");
+    rec.replay.open = false;
+    rec.replay.bot_side = 0;
+    let mut alt_input = String::new();
+    let mut fork_round = 0usize;
+    for r in 0..4 {
+        if b_castle.outcome().is_some() {
+            break;
+        }
+        let needs = b_castle.needs_choice();
+        let mut step_picks = Vec::new();
+        for side in 0..2 {
+            if needs[side] {
+                let legal = b_castle.legal_choices(&dex, side);
+                if side == 0 && b_castle.turn > 0 && alt_input.is_empty() {
+                    fork_round = r;
+                    alt_input = legal.last().unwrap().to_input(&dex);
+                }
+                step_picks.push((side, legal[0].to_input(&dex)));
+            }
+        }
+        for (side, c) in &step_picks {
+            rec.choose(&dex, &mut b_castle, *side, c).unwrap();
+        }
+    }
+    let code = rec.replay.encode(&dex).unwrap();
+    let fork = ForkSpec::from_replay(&dex, &code, fork_round, &alt_input, &pool).unwrap();
+    assert_eq!(fork.position.resolved_ruleset().unwrap(), Ruleset::castle_tournament());
+    let fork_agent = fork.bot_agent(&dex, pool, RmConfig::default(), 11).unwrap();
+    assert_eq!(fork_agent.ruleset(), Ruleset::castle_tournament());
+    assert_eq!(fork_agent.battle().unwrap().ruleset, Ruleset::castle_tournament());
+    let fork_battle = fork.battle(&dex, 99).unwrap();
+    assert_eq!(fork_battle.ruleset, Ruleset::castle_tournament());
+}
+
+#[test]
+fn belief_determinize_respects_observed_maxhp_and_hp_evidence() {
+    let dex = load_dex();
+    let own = vec![make_set("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"])];
+    // Zapdos Lv55 with HP Ice (215 HP) vs HP Fire (201 HP)
+    let zap_ice = serde_json::from_value::<PokemonSet>(serde_json::json!({
+        "name": "Zapdos", "species": "Zapdos", "level": 55, "item": "Leftovers", "gender": "N",
+        "moves": ["Thunderbolt", "Hidden Power Ice", "Rest", "Sleep Talk"],
+        "ivs": { "hp": 30, "atk": 30, "def": 26, "spa": 30, "spd": 30, "spe": 30 },
+        "evs": { "hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255 }
+    }))
+    .unwrap();
+    let zap_fire = serde_json::from_value::<PokemonSet>(serde_json::json!({
+        "name": "Zapdos", "species": "Zapdos", "level": 55, "item": "Leftovers", "gender": "N",
+        "moves": ["Thunderbolt", "Hidden Power Fire", "Rest", "Sleep Talk"],
+        "ivs": { "hp": 6, "atk": 28, "def": 24, "spa": 30, "spd": 30, "spe": 30 },
+        "evs": { "hp": 255, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255 }
+    }))
+    .unwrap();
+    let zap_ice_205 = serde_json::from_value::<PokemonSet>(serde_json::json!({
+        "name": "Zapdos", "species": "Zapdos", "level": 55, "item": "Leftovers", "gender": "N",
+        "moves": ["Thunderbolt", "Hidden Power Ice", "Rest", "Sleep Talk"],
+        "ivs": { "hp": 30, "atk": 30, "def": 26, "spa": 30, "spd": 30, "spe": 30 },
+        "evs": { "hp": 180, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255 }
+    }))
+    .unwrap();
+
+    // True opponent is Zapdos Lv55 at 205 HP with HP Ice (lower HP EV -> §1 Astra C3!).
+    // Pool only contains HP Fire Zapdos (201 HP), forcing fallback + hp_evidence::project.
+    let mut true_b = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        &own,
+        std::slice::from_ref(&zap_ice_205),
+        Ruleset::castle_tournament(),
+    )
+    .unwrap();
+    assert_eq!(true_b.sides[1].roster[0].base_maxhp, 205);
+    true_b.sides[1].roster[0].is_active = true;
+    true_b.sides[1].roster[0].previously_switched_in = 1;
+    true_b.sides[1].roster[0].base_move_slots[1].used = true;
+
+    let pool = MetaPool {
+        teams: vec![
+            MetaTeam { id: "fire".into(), sets: vec![zap_fire], weight: None },
+            MetaTeam { id: "ice215".into(), sets: vec![zap_ice], weight: None },
+        ],
+    };
+    let mut obs = Observer::new(&true_b, 0);
+    obs.observe(&true_b, &dex);
+    assert_eq!(obs.mons()[0].observed_maxhp, Some(205));
+
+    let mut belief = Belief::new(&dex, &pool, &obs);
+    belief.sync(&dex, &obs);
+    let mut rng = SplitMix64::new(99);
+    let det = belief.determinize(&dex, &true_b, &obs, &mut rng);
+    assert_eq!(
+        det.sides[1].roster[0].base_maxhp, 205,
+        "Castle fallback determinization must honor observed_maxhp == 205"
+    );
+    let hp_type_name = dex.type_name(det.sides[1].roster[0].base_hp_type);
+    assert_ne!(
+        hp_type_name, "Fire",
+        "HP Fire (max 201 HP) must never be determinized at observed_maxhp == 205"
+    );
 }

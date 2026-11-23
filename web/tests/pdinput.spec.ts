@@ -138,6 +138,34 @@ test("encodeMonForPdinput supports variable ppUp, clamping, base-40 PP=64, and S
   expect(flatZero.record.split("_").slice(15, 17).map(Number)).toEqual([10, 10]);
 });
 
+test("encodeMonForPdinput compacts empty-string move gaps while preserving ppUps alignment", () => {
+  const { dex, ja } = loadDexAndJa();
+
+  const enc = encodeMonForPdinput(
+    {
+      species: "Snorlax",
+      level: 55,
+      moves: ["Body Slam", "", "  ", "Rest"],
+      ppUps: [2, 3, 3, 1],
+    },
+    dex,
+    ja,
+  );
+  const fields = enc.record.split("_");
+  // Move IDs compacted to slots 0 & 1, trailing 0s in slots 2 & 3 (no 0 gap before Rest)
+  expect(fields.slice(11, 15).map(Number)).toEqual([
+    dex.moves.bodyslam.num + 1,
+    dex.moves.rest.num + 1,
+    0,
+    0,
+  ]);
+  // ppUps stay aligned to original indices: Body Slam=2 (15+6=21), Rest=1 (10+2=12)
+  expect(enc.ppUps).toEqual([2, 1, 0, 0]);
+  expect(fields.slice(15, 19).map(Number)).toEqual([21, 12, 0, 0]);
+  expect(fields.slice(19, 23).map(Number)).toEqual([2, 1, 0, 0]);
+  expect(enc.jpMoves).toEqual([ja.moves.bodyslam, ja.moves.rest, "", ""]);
+});
+
 test("auditCastleTeamForPdinput warns on inert Bitter Berry / Dragon Fang without mutating or colliding", () => {
   const sets = [
     { species: "Snorlax", level: 55, item: "Bitter Berry", moves: ["Body Slam"] },

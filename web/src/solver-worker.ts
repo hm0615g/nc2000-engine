@@ -27,6 +27,9 @@ export type SolverRequest =
       spec: string;
       /** Belief candidate pool (the same file the blind bot uses). */
       poolJson: string;
+      /** Optional ruleset ID (e.g. `"castle-tournament"`); defaults to PS Stadium 2
+       * or the ruleset declared inside `spec`. */
+      ruleset?: string;
       /** Optional community belief prior (M18), governing the fallback
        * imputation when no pool team fits. */
       priorJson?: string;
@@ -100,7 +103,11 @@ async function handle(m: SolverRequest): Promise<void> {
       searcher = null;
       seed = m.seed >>> 0;
       plies = m.plies;
-      const s = new ProtocolSearcher(dex, JSON.parse(m.spec).side ?? 0, m.poolJson, seed, searchProfile("blind").c);
+      const parsedSpec = JSON.parse(m.spec) as { side?: number; ruleset?: string };
+      const ruleset = m.ruleset ?? parsedSpec.ruleset;
+      const s = ruleset
+        ? ProtocolSearcher.withRuleset(dex, parsedSpec.side ?? 0, m.poolJson, seed, searchProfile("blind").c, undefined, ruleset)
+        : new ProtocolSearcher(dex, parsedSpec.side ?? 0, m.poolJson, seed, searchProfile("blind").c);
       if (m.priorJson) s.setBeliefPrior(m.priorJson);
       if (m.pickPriorJson) s.setPickPrior(m.pickPriorJson);
       try {

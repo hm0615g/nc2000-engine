@@ -374,19 +374,27 @@ export function encodeMonForPdinput(
   const ppUps: [number, number, number, number] = [0, 0, 0, 0];
   const jpMoves: [string, string, string, string] = ["", "", "", ""];
 
-  for (let i = 0; i < 4; i++) {
+  const compactMoves: Array<{ rawMove: string; origIdx: number }> = [];
+  for (let i = 0; i < rawMoves.length && compactMoves.length < 4; i++) {
     const rawMove = rawMoves[i];
-    if (rawMove) {
-      let mId = toId(rawMove);
+    if (typeof rawMove === "string" && rawMove.trim().length > 0) {
+      compactMoves.push({ rawMove, origIdx: i });
+    }
+  }
+
+  for (let i = 0; i < 4; i++) {
+    const entry = compactMoves[i];
+    if (entry) {
+      let mId = toId(entry.rawMove);
       if (mId.startsWith("hiddenpower")) mId = "hiddenpower";
       const mv = dex.moves[mId];
-      if (!mv) throw new Error(`Unknown move: ${rawMove}`);
+      if (!mv) throw new Error(`Unknown move: ${entry.rawMove}`);
       const jpMv = ja.moves[mId];
       if (!jpMv) throw new Error(`Missing JP move name for ${mId}`);
       const noBoosts = mv.noPPBoosts === true || mId === "sketch" || mId === "struggle";
       const requestedPpUp =
-        Array.isArray(s.ppUps) && typeof s.ppUps[i] === "number"
-          ? s.ppUps[i]
+        Array.isArray(s.ppUps) && typeof s.ppUps[entry.origIdx] === "number"
+          ? s.ppUps[entry.origIdx]
           : typeof s.ppUp === "number"
             ? s.ppUp
             : 3;

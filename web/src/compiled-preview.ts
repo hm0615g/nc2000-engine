@@ -61,7 +61,9 @@ export function compiledPreviewPick(build: string, key: string | undefined, seed
   if (artifact.status === "retired-training-v3") return undefined;
   if (build !== artifact.build || c !== artifact.c || key === undefined || !cacheInfo) return undefined;
   if (compatibleKeys && !compatibleKeys.has(key)) return undefined;
-  const [, foe] = JSON.parse(key);
+  const parsed = JSON.parse(key);
+  if (!Array.isArray(parsed) || parsed.length !== 2) return undefined;
+  const [, foe] = parsed;
   const observed = JSON.parse(cacheInfo).opponentPublic as unknown[][];
   if (publicRosters.get(JSON.stringify(foe)) !== JSON.stringify(observed.map(p => p.slice(0, 4)))) return undefined;
   const choices = artifact.policies[key];

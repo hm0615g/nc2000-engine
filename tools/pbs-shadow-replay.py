@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
 """
-Gate B: 711-Unique-Trajectory Gym Leader's Castle (PBS / PS.cgi) Shadow Replay Harness.
+Gate B: 711-Unique-Trajectory Gym Leader's Castle (PBS / PS.cgi) HTML/EOT
+Structural, Exact-Formula & Outcome Consistency Replay Checker.
 
-Verifies 3 separated layers across all 711 unique trajectories extracted from
-data/pbs-castle-logs/logs/*.html (737 raw HTML files minus 26 prefix duplicates):
+This harness parses and replays the HTML battle logs in
+data/pbs-castle-logs/logs/*.html (737 raw HTML files minus 26 prefix duplicates
+= 711 unique trajectories) to check observation/formula/EOT/outcome consistency
+without synthesizing hidden RNG rolls or unknown DVs (full deterministic engine
+replay is covered separately by the Rust conformance/engine test suites).
+
+Verifies 3 separated layers across all 711 unique trajectories:
   Layer 1: Observation prefix consistency across all 711 unique logs
            (exact HP continuity, Gen 2 legal max-HP bounds, Castle exact integer
            formulas for Leftovers/Poison/Toxic/Burn/Recover/Berries/Spikes/
-           Sandstorm/Leech/Sub/Curse/BellyDrum/Recoil/Present, EOT phase & fixed
-           1P->2P seat order, Turn-Cut, Sleep/Rest/Confusion duration bounds,
-           Sleep Clause, item-presence & Thief consistency, and all 7 §0-C traps).
+           Sandstorm/Leech/Sub/Curse/BellyDrum/PainSplit/Recoil/HJK/Bind/Present,
+           EOT phase & fixed 1P->2P seat order, Turn-Cut, Sleep/Rest/Confusion
+           duration bounds, Sleep Clause, item-presence & Thief consistency,
+           Metronome/Mirror Move 2-turn & locked tracking, and all 7 §0-C traps).
   Layer 2: Raw PS.cgi outcome consistency across all 701 decided logs (700 WIN + 1 DRAW),
-           truncating the 6 post-WIN double-POST logs at the first GoldenRod WIN.
+           truncating the 6 post-WIN double-POST logs at the first GoldenRod WIN,
+           including final-turn Boom double-KO detection and T80 alive-count +
+           sum(hp/max_hp) ratio judge verification.
   Layer 3: Tournament overlay classification explicitly separating T81+ (9 games),
            direct OHKO games, 1v1 recoil DRAW override (H_20260407), and non-standard
            pick counts (1v1 probes).
@@ -41,6 +50,15 @@ CALLER_MOVES_JA = {"ゆびをふる", "オウム返し", "ねごと"}
 BIND_MOVES_JA = {"まきつく", "しめつける", "ほのおのうず", "うずしお", "からではさむ"}
 TWO_TURN_CHARGE_MOVES_JA = {"そらをとぶ", "あなをほる", "ソーラービーム", "ゴッドバード", "かまいたち", "ロケットずつき"}
 LOCKED_MOVES_JA = {"あばれる", "げきりん", "はなびらのまい", "ころがる", "がまん"}
+# Charge-turn lines emitted directly after ゆびをふる / オウム返し without a move header.
+TWO_TURN_CHARGE_PATTERNS: Tuple[Tuple[Tuple[str, ...], str], ...] = (
+    (("のまわりを空気がうずまく",), "razorwind"),
+    (("ひかりを吸収",), "solarbeam"),
+    (("空高く飛び上がった", "そらたかく"), "fly"),
+    (("穴を掘った", "あなをほった", "地中に潜った"), "dig"),
+    (("首をひっこめた", "くびをひっこめた"), "skullbash"),
+    (("激しい光に包まれた", "ひかりにつつまれた"), "skyattack"),
+)
 
 # Exact Castle EOT phase rank (smaller runs earlier).
 # Screens (1) -> Weather/Sandstorm (2) -> Perish (3) -> [1P Items(4) -> 1P Thaw(5) -> 2P Items(6) -> 2P Thaw(7)] -> Encore(8)
@@ -292,6 +310,8 @@ class MonState:
         "has_sub",
         "transformed",
         "mimic_move",
+        "metronome_charging",
+        "metronome_locked",
         "orig_item",
         "gained_item",
         "lost_item",
@@ -324,6 +344,8 @@ class MonState:
         self.has_sub: bool = False
         self.transformed: bool = False
         self.mimic_move: Optional[str] = None
+        self.metronome_charging: Optional[str] = None
+        self.metronome_locked: Optional[str] = None
         self.orig_item: Optional[str] = None
         self.gained_item: bool = False
         self.lost_item: bool = False
@@ -339,6 +361,8 @@ class MonState:
         self.has_sub = False
         self.transformed = False
         self.mimic_move = None
+        self.metronome_charging = None
+        self.metronome_locked = None
         if self.status == "tox":
             self.status = "psn"
             self.tox_counter = 0
@@ -554,11 +578,25 @@ def parse_and_replay_log(
         last_turn_was_recoil_ko = False
         last_turn_was_selfko = False
 
+        def target_has_later_activity(cur_bi: int, cur_li: int, tgt_side: int) -> bool:
+            for rem_ln in blocks[cur_bi]["lines"][cur_li + 1 :]:
+                rem_t = rem_ln["text"]
+                if "は倒れた。。" not in rem_t and rem_t:
+                    return True
+            for rem_blk in blocks[cur_bi + 1 :]:
+                rem_eff = rem_blk["alt_side"] if rem_blk["alt_side"] is not None else rem_blk["align"]
+                for rem_ln in rem_blk["lines"]:
+                    rem_t = rem_ln["text"]
+                    if rem_eff == tgt_side and not re.match(r"^.+?は倒れた。。$", rem_t):
+                        return True
+            return False
+
         # Detect if this turn ends in a switch-in Turn-Cut (no move before faint)
         for bi, blk in enumerate(blocks):
             align = blk["align"]
             alt_side = blk["alt_side"]
             eff_side = alt_side if alt_side is not None else align
+            pain_split_first: Optional[Tuple[MonState, int, int]] = None
 
             # Trap 4: Weather lines have ALIGN="center" and no ALT
             if align is None and alt_side is None:
@@ -642,16 +680,17 @@ def parse_and_replay_log(
                         last_hit_was_sub = False
 
                         mv_id = vocab["mv_ja_to_id"][mv_ja]
-                        if mv_ja == "ゆびをふる":
-                            in_metronome_call = True
-                            if not mon.transformed and mon.mimic_move != mv_id:
-                                mon.moves_own.add(mv_id)
-                        elif mv_ja == "ねごと":
-                            in_sleeptalk_call = True
-                            if not mon.transformed and mon.mimic_move != mv_id:
-                                mon.moves_own.add(mv_id)
-                        elif mv_ja == "オウム返し":
-                            in_mirrormove_call = True
+                        if mv_ja in BIND_MOVES_JA:
+                            checks["bind_moves_seen"] += 1
+                        if mv_ja in CALLER_MOVES_JA:
+                            mon.metronome_charging = None
+                            mon.metronome_locked = None
+                            if mv_ja == "ゆびをふる":
+                                in_metronome_call = True
+                            elif mv_ja == "ねごと":
+                                in_sleeptalk_call = True
+                            elif mv_ja == "オウム返し":
+                                in_mirrormove_call = True
                             if not mon.transformed and mon.mimic_move != mv_id:
                                 mon.moves_own.add(mv_id)
                         else:
@@ -659,6 +698,10 @@ def parse_and_replay_log(
                                 if in_metronome_call or in_mirrormove_call:
                                     metronome_calls_excluded += 1
                                     mon.moves_excluded_foreign.add(mv_id)
+                                    if mv_ja in TWO_TURN_CHARGE_MOVES_JA:
+                                        mon.metronome_charging = mv_id
+                                    if mv_ja in LOCKED_MOVES_JA:
+                                        mon.metronome_locked = mv_id
                                 elif in_sleeptalk_call:
                                     # In Gen 2 Sleep Talk only calls user's own moves (unless transformed/mimic)
                                     if not mon.transformed and mon.mimic_move != mv_id and mv_ja != "わるあがき":
@@ -674,15 +717,25 @@ def parse_and_replay_log(
                                 in_metronome_call = False
                                 in_sleeptalk_call = False
                                 in_mirrormove_call = False
-                                if mv_ja == "わるあがき":
-                                    pass
-                                elif mon.transformed or mon.mimic_move == mv_id:
+                                if mon.metronome_charging == mv_id:
+                                    metronome_calls_excluded += 1
                                     mon.moves_excluded_foreign.add(mv_id)
-                                elif mv_ja in OHKO_MOVES_JA:
-                                    mon.moves_excluded_ohko.add(mv_id)
-                                    direct_ohko_uses.append((t_idx, eff_side, mv_id))
+                                    mon.metronome_charging = None
+                                elif mon.metronome_locked == mv_id:
+                                    metronome_calls_excluded += 1
+                                    mon.moves_excluded_foreign.add(mv_id)
                                 else:
-                                    mon.moves_own.add(mv_id)
+                                    mon.metronome_charging = None
+                                    mon.metronome_locked = None
+                                    if mv_ja == "わるあがき":
+                                        pass
+                                    elif mon.transformed or mon.mimic_move == mv_id:
+                                        mon.moves_excluded_foreign.add(mv_id)
+                                    elif mv_ja in OHKO_MOVES_JA:
+                                        mon.moves_excluded_ohko.add(mv_id)
+                                        direct_ohko_uses.append((t_idx, eff_side, mv_id))
+                                    else:
+                                        mon.moves_own.add(mv_id)
 
                         if mv_ja in SELFKO_MOVES_JA:
                             last_selfko_side = eff_side
@@ -690,6 +743,34 @@ def parse_and_replay_log(
                         if mv_ja == "へんしん":
                             mon.transformed = True
                         continue
+
+                # 4b. Metronome / Mirror Move 2-turn charge lines (emitted without a move header)
+                if (
+                    (in_metronome_call or in_mirrormove_call)
+                    and cur_actor in (0, 1)
+                    and eff_side == cur_actor
+                    and active[eff_side] is not None
+                ):
+                    matched_charge = None
+                    for pats, charge_id in TWO_TURN_CHARGE_PATTERNS:
+                        if any(p in text for p in pats):
+                            matched_charge = charge_id
+                            break
+                    if matched_charge is not None:
+                        active[eff_side].metronome_charging = matched_charge
+                        in_metronome_call = False
+                        in_mirrormove_call = False
+                        checks["metronome_two_turn_detected"] += 1
+                        continue
+
+                # 4c. Blocked turn cancels any pending Metronome 2-turn charge or multi-turn lock
+                if (
+                    eff_side in (0, 1)
+                    and active[eff_side] is not None
+                    and any(w in text for w in ("動けない", "ひるんで", "自分を攻撃", "凍って"))
+                ):
+                    active[eff_side].metronome_charging = None
+                    active[eff_side].metronome_locked = None
 
                 # 5. Mimic / Sketch copy tracking
                 m_mim = re.search(r"は(.+?)をコピーした！|は(.+?)を覚えた！|は(.+?)をスケッチした！", text)
@@ -1030,7 +1111,22 @@ def parse_and_replay_log(
                         continue
 
                     # Determine whether a 0 result actually has a 倒れた。。 in this turn (Trap 1!)
+                    # Distinguish genuine Focus Band / False Swipe survival from final-turn
+                    # Self-Destruct / Explosion double-KO where PS.cgi prints target HP X->0,
+                    # then exploder は倒れた。。, then WIN! (omitting target's は倒れた。。).
                     will_faint = faint_markers[(hp_side, hp_sp)] > 0
+                    is_final_boom_ko = (
+                        new_hp == 0
+                        and not will_faint
+                        and t_idx == n_turns
+                        and outcome_kind == "win"
+                        and cur_move_ja in SELFKO_MOVES_JA
+                        and cur_actor == 1 - hp_side
+                        and not target_has_later_activity(bi, li, hp_side)
+                    )
+                    if is_final_boom_ko:
+                        will_faint = True
+                        traps_seen["trap1_final_boom_omitted_faint"] += 1
 
                     # Exact Castle integer formula checks!
                     reason = "attack"
@@ -1038,6 +1134,51 @@ def parse_and_replay_log(
                         reason = "pain_split"
                     elif is_leech_block and hp_idx_in_block == 1:
                         reason = "leech_heal"
+                    elif "たいりょくを削ってこうげきを最大まであげた" in prev_text:
+                        reason = "belly_drum"
+                        max_hp_ref = mon.max_hp if mon.max_hp is not None else old_hp
+                        exp = old_hp - (max_hp_ref // 2)
+                        if new_hp != exp:
+                            add_contradiction(
+                                t_idx,
+                                "belly_drum_formula",
+                                f"{mon.species_id} {old_hp}->{new_hp} != {exp} (M={max_hp_ref})",
+                            )
+                        checks["belly_drum_checks"] += 1
+                    elif "のろいをかけた" in prev_text and cur_actor == hp_side and new_hp < old_hp:
+                        reason = "ghost_curse_cost"
+                        max_hp_ref = mon.max_hp if mon.max_hp is not None else old_hp
+                        exp = max(0, old_hp - (max_hp_ref // 2))
+                        if new_hp != exp:
+                            add_contradiction(
+                                t_idx,
+                                "ghost_curse_cost_formula",
+                                f"{mon.species_id} {old_hp}->{new_hp} != {exp} (M={max_hp_ref})",
+                            )
+                        checks["ghost_curse_cost_checks"] += 1
+                    elif "いきおいあまって" in prev_text and (cur_move_ja in HJK_MOVES_JA or cur_actor == hp_side):
+                        reason = "hjk_crash"
+                        if new_hp >= old_hp:
+                            add_contradiction(
+                                t_idx,
+                                "hjk_crash_formula",
+                                f"{mon.species_id} {old_hp}->{new_hp} expected HJK crash recoil",
+                            )
+                        checks["hjk_crash_checks"] += 1
+                    elif any(
+                        w in prev_text
+                        for w in ("しめつけられ", "まきつかれ", "ほのおのうずに", "うずしおに", "からではさまれ", "とじこめられ")
+                    ):
+                        reason = "bind"
+                        if mon.max_hp is not None:
+                            exp = max(0, old_hp - max(1, mon.max_hp // 16))
+                            if new_hp != exp:
+                                add_contradiction(
+                                    t_idx,
+                                    "bind_formula",
+                                    f"{mon.species_id} {old_hp}->{new_hp} != {exp} (M={mon.max_hp})",
+                                )
+                            checks["bind_formula_checks"] += 1
                     elif "たべのこし" in prev_text:
                         reason = "leftovers"
                         if mon.max_hp is not None:
@@ -1138,6 +1279,28 @@ def parse_and_replay_log(
                         checks["rest_heal_checks"] += 1
 
                     dealt = apply_hp_change(mon, old_hp, new_hp, t_idx, reason, expect_faint_in_turn=will_faint)
+                    if is_final_boom_ko:
+                        mon.fainted = True
+                        mon.cur_hp = 0
+                        mon.on_switch_out()
+                        fainted_this_turn.add((hp_side, hp_sp))
+                    if is_pain_split:
+                        if hp_idx_in_block == 0:
+                            pain_split_first = (mon, old_hp, new_hp)
+                        elif hp_idx_in_block == 1 and pain_split_first is not None:
+                            mon_a, old_a, new_a = pain_split_first
+                            avg = max(1, (old_a + old_hp) // 2)
+                            for m_ps, o_ps, n_ps in ((mon_a, old_a, new_a), (mon, old_hp, new_hp)):
+                                if m_ps.max_hp is not None:
+                                    exp_ps = min(m_ps.max_hp, avg)
+                                    if n_ps != exp_ps:
+                                        add_contradiction(
+                                            t_idx,
+                                            "pain_split_formula",
+                                            f"{m_ps.species_id} {o_ps}->{n_ps} != {exp_ps} (avg={avg}, M={m_ps.max_hp})",
+                                        )
+                            checks["pain_split_checks"] += 1
+                            pain_split_first = None
                     if reason == "attack" and dealt > 0 and cur_actor == 1 - hp_side:
                         last_hit_dealt = dealt
                         # Check for Focus Band silent survival at 1 HP? (valid hidden item)
@@ -1196,10 +1359,26 @@ def parse_and_replay_log(
             elif fainted_counts[loser_side] == picked_counts[loser_side] and picked_counts[loser_side] > 0:
                 outcome_reason = "ko_custom_pick_size"
             else:
-                # L_TURN judge check
-                alive_w = 3 - fainted_counts[winner_side]
-                alive_l = 3 - fainted_counts[loser_side]
-                if alive_w >= alive_l:
+                # L_TURN judge check (Probe 12A): alive count -> sum(hp / max_hp) ratio tie-break
+                team_size_w = max(3, picked_counts[winner_side])
+                team_size_l = max(3, picked_counts[loser_side])
+                alive_w = team_size_w - fainted_counts[winner_side]
+                alive_l = team_size_l - fainted_counts[loser_side]
+
+                def side_hp_ratio_sum(s_idx: int, team_size: int) -> float:
+                    total = float(max(0, team_size - picked_counts[s_idx]))
+                    for m in sides[s_idx]:
+                        if m.picked and not m.fainted:
+                            if m.cur_hp is not None and m.max_hp is not None and m.max_hp > 0:
+                                total += m.cur_hp / m.max_hp
+                            else:
+                                total += 1.0
+                    return total
+
+                ratio_w = side_hp_ratio_sum(winner_side, team_size_w)
+                ratio_l = side_hp_ratio_sum(loser_side, team_size_l)
+                checks["turn_limit_judge_checks"] += 1
+                if alive_w > alive_l or (alive_w == alive_l and ratio_w >= ratio_l - 1e-9):
                     outcome_reason = "turn_limit_judge"
                 else:
                     outcome_contradictions.append(
@@ -1208,6 +1387,8 @@ def parse_and_replay_log(
                             "winner_side": winner_side,
                             "fainted": fainted_counts,
                             "picked": picked_counts,
+                            "alive": [alive_w, alive_l],
+                            "hp_ratio_sum": [round(ratio_w, 6), round(ratio_l, 6)],
                         }
                     )
     elif outcome_kind == "draw":

@@ -6,15 +6,22 @@ Gym Leader's Castle trajectories in data/pbs-castle-logs/logs/*.html.
 Fixes all documented corruptions in the legacy DB (pbs-vs-ps-spec.md §7-B.5):
   1. Populates `maxHps` accurately across ALL pool (`shells`) and per-player
      (`players[name].shells`) mon records from observed exact HP denominators.
-  2. Strictly excludes Metronome-called moves (e.g. H_20260423 T8 Lv55 Snorlax
-     `ゆびをふる -> ふくろだたき`), Mirror Move / Transform / Mimic foreign moves,
+  2. Strictly excludes Metronome-called moves (including 2-turn & locked moves
+     such as D_20260213 Snorlax `かまいたち`/`ソーラービーム` and H_20260423
+     Snorlax `ふくろだたき`), Mirror Move / Transform / Mimic foreign moves,
      and Struggle from a mon's `moves` map.
-  3. Excludes direct OHKO moves (`つのドリル`, `じわれ`, `ハサミギロチン`) from
-     no-OHKO pool move priors while recording per-game audit counts in stdout telemetry.
+  3. Excludes direct OHKO moves (`つのドリル`, `じわれ`, `ハサミギロチン`) and
+     any `data/castle-validation.json`-illegal species/level moves (e.g.
+     raw-CGI illegal `venusaur/sludgebomb`, `raticate/zapcannon`,
+     `poliwhirl/dynamicpunch`) from pool move priors while recording audit counts.
   4. Remaps Castle ID 81 confusion-cure display disguise (`にがいきのみ`) -> `iceberry`,
      handles Thief item transfers cleanly, and populates `noLeftoversCount`.
   5. Deduplicates the 26 prefix-duplicate log pairs (737 -> 711 unique trajectories)
      and truncates the 6 post-WIN double-POST logs at the first GoldenRod WIN.
+  6. Records unambiguous `playerWins` / `playerLosses` / `draws` AND properly
+     oriented opponent-perspective `winsAgainst` (= `playerLosses`, games won
+     against this player) and `lossesAgainst` (= `playerWins`, games lost
+     against this player) for backwards-compatible schema consumers.
 
 M2M Output Principle: emits ONE compact JSON summary line to stdout.
 """
@@ -81,7 +88,42 @@ def ensure_shell(container: Dict[str, Any], s_key: str, mons, iso_ts: str) -> Di
     return entry
 
 
-def accumulate_mon(dst: Dict[str, Any], m) -> None:
+def load_castle_validation(path: Path) -> Dict[str, Any]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    species_map: Dict[str, Dict[str, Any]] = {}
+    for sid, entry in raw["species"].items():
+        species_map[sid] = {
+            "minLevel": int(entry.get("minLevel", 1)),
+            "moves": set(entry.get("moves", [])),
+            "moveMinLevel": {k: int(v) for k, v in entry.get("moveMinLevel", {}).items()},
+        }
+    return {
+        "ohkoMoves": set(raw.get("ohkoMoves", [])),
+        "species": species_map,
+    }
+
+
+def is_castle_move_legal(
+    validation: Dict[str, Any], species_id: str, level: int, mv_id: str
+) -> bool:
+    base_mv = "hiddenpower" if mv_id.startswith("hiddenpower") else mv_id
+    if base_mv in validation["ohkoMoves"]:
+        return False
+    sp = validation["species"].get(species_id)
+    if sp is None:
+        return False
+    if base_mv not in sp["moves"]:
+        return False
+    if level < sp["moveMinLevel"].get(base_mv, 1):
+        return False
+    return True
+
+
+def accumulate_mon(
+    dst: Dict[str, Any],
+    m,
+    validation: Dict[str, Any],
+) -> int:
     if m.picked:
         dst["pickedCount"] += 1
     if m.max_hp is not None and m.max_hp > 0:
@@ -91,9 +133,15 @@ def accumulate_mon(dst: Dict[str, Any], m) -> None:
         dst["items"][m.orig_item] = dst["items"].get(m.orig_item, 0) + 1
     if m.no_leftovers:
         dst["noLeftoversCount"] += 1
-    # Only record own legitimate non-OHKO moves (Metronome / Mimic / Transform / Mirror Move / OHKO excluded!)
+    # Only record own Castle-legal non-OHKO moves (Metronome/2-turn/locked/Mimic/
+    # Transform/Mirror Move/OHKO/castle-validation-illegal moves excluded!).
+    illegal_excluded = 0
     for mv_id in sorted(m.moves_own):
+        if not is_castle_move_legal(validation, m.species_id, m.level, mv_id):
+            illegal_excluded += 1
+            continue
         dst["moves"][mv_id] = dst["moves"].get(mv_id, 0) + 1
+    return illegal_excluded
 
 
 def main() -> int:
@@ -106,10 +154,12 @@ def main() -> int:
     parser.add_argument("--logs-dir", type=Path, default=data_root / "pbs-castle-logs" / "logs")
     parser.add_argument("--i18n", type=Path, default=repo_root / "data" / "i18n-ja.json")
     parser.add_argument("--dex", type=Path, default=repo_root / "data" / "gen2stadium2.json")
+    parser.add_argument("--validation", type=Path, default=repo_root / "data" / "castle-validation.json")
     parser.add_argument("--out", type=Path, default=data_root / "pbs-opponent-db.json")
     args = parser.parse_args()
 
     vocab = replay.load_vocab(args.i18n, args.dex)
+    validation = load_castle_validation(args.validation)
     all_files = sorted(args.logs_dir.glob("*.html"))
     unique_files, dropped = replay.deduplicate_logs(all_files)
 
@@ -117,6 +167,8 @@ def main() -> int:
     shells_db: Dict[str, Any] = {}
     metronome_excluded_total = 0
     ohko_moves_excluded_total = 0
+    illegal_moves_excluded_total = 0
+    over_4_moves_in_game = 0
     ohko_games = 0
     latest_ts = "1970-01-01T00:00:00.000Z"
 
@@ -133,14 +185,22 @@ def main() -> int:
             mons = res["sides"][s_idx]
             for m in mons:
                 ohko_moves_excluded_total += len(m.moves_excluded_ohko)
+                if len(m.moves_own) > 4:
+                    over_4_moves_in_game += 1
             s_key = shell_key_for_side(mons)
 
-            # Player record
+            # Player record:
+            # - playerWins / playerLosses / draws: this player's own record.
+            # - winsAgainst / lossesAgainst: opponent-perspective counts
+            #   (winsAgainst == playerLosses; lossesAgainst == playerWins).
             p_rec = players_db.get(p_name)
             if p_rec is None:
                 p_rec = {
                     "name": p_name,
                     "games": 0,
+                    "playerWins": 0,
+                    "playerLosses": 0,
+                    "draws": 0,
                     "winsAgainst": 0,
                     "lossesAgainst": 0,
                     "shells": {},
@@ -149,16 +209,20 @@ def main() -> int:
             p_rec["games"] += 1
             if res["winner_side"] is not None:
                 if res["winner_side"] == s_idx:
-                    p_rec["winsAgainst"] += 1
-                else:
+                    p_rec["playerWins"] += 1
                     p_rec["lossesAgainst"] += 1
+                else:
+                    p_rec["playerLosses"] += 1
+                    p_rec["winsAgainst"] += 1
+            elif res["outcome_kind"] == "draw":
+                p_rec["draws"] += 1
 
             p_shell = ensure_shell(p_rec["shells"], s_key, mons, iso_ts)
             g_shell = ensure_shell(shells_db, s_key, mons, iso_ts)
             for m in mons:
                 mk = f"{m.species_id}:{m.level}"
-                accumulate_mon(p_shell["mons"][mk], m)
-                accumulate_mon(g_shell["mons"][mk], m)
+                accumulate_mon(p_shell["mons"][mk], m, validation)
+                illegal_moves_excluded_total += accumulate_mon(g_shell["mons"][mk], m, validation)
 
     # Sort keys deterministically for clean diffs / reproducible builds
     sorted_players = {k: players_db[k] for k in sorted(players_db)}
@@ -184,6 +248,7 @@ def main() -> int:
     p_mons_nonempty_maxhp = 0
     snorlax_beatup_count = 0
     ohko_leak_count = 0
+    illegal_move_leaks = 0
     ohko_ids = {"fissure", "horndrill", "guillotine"}
 
     for sv in sorted_shells.values():
@@ -197,6 +262,9 @@ def main() -> int:
                 snorlax_beatup_count += 1
             if any(k in mv["moves"] for k in ohko_ids):
                 ohko_leak_count += 1
+            for mv_id in mv["moves"]:
+                if not is_castle_move_legal(validation, mv["speciesId"], mv["level"], mv_id):
+                    illegal_move_leaks += 1
 
     for pv in sorted_players.values():
         for sv in pv["shells"].values():
@@ -206,6 +274,9 @@ def main() -> int:
                     p_mons_picked += 1
                 if mv["maxHps"]:
                     p_mons_nonempty_maxhp += 1
+                for mv_id in mv["moves"]:
+                    if not is_castle_move_legal(validation, mv["speciesId"], mv["level"], mv_id):
+                        illegal_move_leaks += 1
 
     summary = {
         "schema": "pbs-opponent-db-v1",
@@ -223,11 +294,20 @@ def main() -> int:
         "metronome_calls_excluded": metronome_excluded_total,
         "ohko_games_filtered": ohko_games,
         "ohko_moves_excluded": ohko_moves_excluded_total,
+        "illegal_moves_excluded": illegal_moves_excluded_total,
+        "over_4_moves_in_game": over_4_moves_in_game,
         "snorlax_beatup_leaks": snorlax_beatup_count,
         "ohko_move_leaks": ohko_leak_count,
+        "illegal_move_leaks": illegal_move_leaks,
     }
     print(json.dumps(summary, ensure_ascii=False))
-    return 0 if (snorlax_beatup_count == 0 and ohko_leak_count == 0 and s_mons_nonempty_maxhp > 0) else 1
+    return 0 if (
+        snorlax_beatup_count == 0
+        and ohko_leak_count == 0
+        and illegal_move_leaks == 0
+        and over_4_moves_in_game == 0
+        and s_mons_nonempty_maxhp > 0
+    ) else 1
 
 
 if __name__ == "__main__":

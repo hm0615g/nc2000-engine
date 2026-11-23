@@ -3,7 +3,7 @@
 // and Validator.canonicalizeTeamWithRuleset.
 "use strict";
 
-const { wasm, loadFixture, check, checkEq, finish } = require("./common");
+const { wasm, REPO, loadFixture, readData, check, checkEq, finish } = require("./common");
 
 const dex = new wasm.Dex();
 const validator = new wasm.Validator(dex);
@@ -166,6 +166,92 @@ function padTeam(sets) {
     false,
     "Castle rejects impossible Def effort 10",
   );
+}
+
+// 5. ProtocolSearcher.withRuleset / setRuleset / ruleset / compiledPreviewBuild & PreviewTables Castle soft-miss
+{
+  const fs = require("fs");
+  const path = require("path");
+  const poolJson = readData("meta-pool-v0/meta-pool.json");
+  const pool = JSON.parse(poolJson);
+  const pairJson = fs.readFileSync(
+    path.join(REPO, "fixtures", "preview-tables-test", "pair-00-01.json"),
+    "utf8",
+  );
+  const pairObj = JSON.parse(pairJson);
+  const teamA = pool.teams.find((t) => t.id === pairObj.team_a);
+  const teamB = pool.teams.find((t) => t.id === pairObj.team_b);
+  check(Boolean(teamA && teamB), "found pool teams matching pair table");
+
+  const psSearcher = new wasm.ProtocolSearcher(dex, 0, poolJson, 1, 1.4);
+  checkEq(psSearcher.ruleset(), "gen2stadium2", "default ProtocolSearcher uses gen2stadium2");
+  checkEq(psSearcher.compiledPreviewBuild(), "policy-v1", "PS compiledPreviewBuild is policy-v1");
+  psSearcher.setRuleset("castle");
+  checkEq(psSearcher.ruleset(), "castle-tournament", "setRuleset switches to castle-tournament");
+  checkEq(
+    psSearcher.compiledPreviewBuild(),
+    "castle-policy-v1",
+    "Castle compiledPreviewBuild is castle-policy-v1",
+  );
+  psSearcher.free();
+
+  const castleSearcher = wasm.ProtocolSearcher.withRuleset(
+    dex,
+    0,
+    poolJson,
+    1,
+    1.4,
+    undefined,
+    "castle",
+  );
+  checkEq(castleSearcher.ruleset(), "castle-tournament", "ProtocolSearcher.withRuleset sets Castle");
+  checkEq(
+    castleSearcher.compiledPreviewBuild(),
+    "castle-policy-v1",
+    "ProtocolSearcher.withRuleset reports castle-policy-v1",
+  );
+  castleSearcher.free();
+
+  // PreviewTables resolves PS pair match, but soft-misses on Castle battle with identical teams
+  const tables = new wasm.PreviewTables(dex, poolJson);
+  tables.addPair(pairJson);
+
+  const bPs = new wasm.Battle(
+    dex,
+    JSON.stringify(teamA.sets),
+    JSON.stringify(teamB.sets),
+    "1,2,3,4",
+  );
+  const bCastle = wasm.Battle.withRuleset(
+    dex,
+    JSON.stringify(teamA.sets),
+    JSON.stringify(teamB.sets),
+    "1,2,3,4",
+    "castle",
+  );
+  checkEq(JSON.parse(tables.resolve(bPs, 0)).found, true, "PreviewTables hits on PS battle");
+  check(tables.argmax(bPs, 0) !== undefined, "PreviewTables.argmax returns pick on PS battle");
+  check(tables.sample(bPs, 0, 7) !== undefined, "PreviewTables.sample returns pick on PS battle");
+
+  checkEq(
+    JSON.parse(tables.resolve(bCastle, 0)).found,
+    false,
+    "PreviewTables soft-misses on Castle battle",
+  );
+  checkEq(
+    tables.argmax(bCastle, 0),
+    undefined,
+    "PreviewTables.argmax returns undefined on Castle battle",
+  );
+  checkEq(
+    tables.sample(bCastle, 0, 7),
+    undefined,
+    "PreviewTables.sample returns undefined on Castle battle",
+  );
+
+  bPs.free();
+  bCastle.free();
+  tables.free();
 }
 
 validator.free();

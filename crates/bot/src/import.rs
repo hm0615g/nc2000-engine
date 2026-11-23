@@ -277,10 +277,6 @@ pub struct ProtocolTracker {
     /// Transient current move `((side, slot), move_id, crit)` while resolving
     /// a `|move|` block (used to estimate Substitute `[damage]`).
     cur_move: Option<((usize, usize), MoveId, bool)>,
-    /// True if a mon fainted during switch-in (Spikes / switch-in poison or burn)
-    /// before any move resolved this turn — Castle PBS cuts both remaining actions
-    /// and EOT residuals on such a Turn-Cut.
-    switch_faint_this_turn: bool,
 }
 
 /// Locking (thrash-class) move keys: `lockedmove` continuation turns emit
@@ -307,7 +303,6 @@ impl ProtocolTracker {
             turn: 0,
             upkeep_this_turn: false,
             cur_move: None,
-            switch_faint_this_turn: false,
         }
     }
 
@@ -550,7 +545,6 @@ impl ProtocolTracker {
                 self.turn = arg(1).parse().unwrap_or(self.turn + 1);
                 self.upkeep_this_turn = false;
                 self.cur_move = None;
-                self.switch_faint_this_turn = false;
                 for s in self.sides.iter_mut() {
                     s.acted_this_turn = false;
                     s.pending_bp = false;
@@ -590,9 +584,6 @@ impl ProtocolTracker {
                 self.on_switch(dex, &parts, cmd == "drag");
             }
             "faint" => {
-                if self.cur_move.is_none() && !self.upkeep_this_turn {
-                    self.switch_faint_this_turn = true;
-                }
                 if let Some((s, m)) = self.subject(arg(1)) {
                     let side = &mut self.sides[s];
                     side.fainted_this_turn = Some(m);
@@ -1877,12 +1868,25 @@ impl ProtocolTracker {
                             let ms = dex.move_static(overlay);
                             let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
                             let mut maxpp = ms.pp * (5 + pp_ups) / 5;
-                            if ms.pp == 40 {
+                            if ms.pp == 40 && !self.ruleset.is_castle() {
                                 maxpp -= pp_ups;
                             }
+                            let pp = if self.ruleset.is_castle() {
+                                let mimic_base_pp = dex.move_static(mimic).pp;
+                                let mimic_maxpp = p.move_slots[i].maxpp;
+                                let mimic_pp_ups = if mimic_base_pp > 0 {
+                                    ((mimic_maxpp * 5) / mimic_base_pp - 5).clamp(0, 3)
+                                } else {
+                                    0
+                                };
+                                let eff_pp_ups = if ms.no_pp_boosts { 0 } else { mimic_pp_ups };
+                                (5 + eff_pp_ups).min(maxpp)
+                            } else {
+                                ms.pp.min(5)
+                            };
                             p.move_slots[i] = MoveSlot {
                                 id: overlay,
-                                pp: ms.pp.min(5),
+                                pp,
                                 maxpp,
                                 disabled: false,
                                 used: false,
@@ -2185,10 +2189,10 @@ impl ProtocolTracker {
                     }
                 }
             }
-            // In Castle PBS, a switch-in faint (Spikes / switch-in poison or burn before moves)
-            // triggers a full Turn-Cut skipping EOT Residual; normal move KOs still run EOT after CHANGE.
-            let castle_turn_cut = self.ruleset.is_castle() && self.switch_faint_this_turn;
-            if !self.upkeep_this_turn && !castle_turn_cut {
+            // Both PS and Castle PBS preserve `ActionKind::Residual` across mid-turn
+            // faints (matching `turn.rs:344-354`, which cancels remaining moves and
+            // voluntary switches on Castle Turn-Cut while keeping EOT Residual).
+            if !self.upkeep_this_turn {
                 b.queue.push(Action {
                     choice: ActionKind::Residual,
                     order: 300,
@@ -2400,14 +2404,21 @@ impl ProtocolTracker {
             b.add_volatile(dex, id, "stall", None, EffectHandle::None);
             if let Some(c) = dex.conds_id("stall") {
                 if let Some(vs) = b.poke_mut(id).volatile_mut(c) {
-                    let mut counter = 127.0f64;
-                    for _ in 1..tm.stall_streak {
-                        counter /= 2.0;
-                    }
-                    if counter.fract() == 0.0 {
-                        vs.set(DK::Counter, nc2000_engine::state::Scalar::Int(counter as i64));
+                    if self.ruleset.is_castle() {
+                        vs.set(
+                            DK::Counter,
+                            nc2000_engine::state::Scalar::Int(tm.stall_streak.clamp(1, 8) as i64),
+                        );
                     } else {
-                        vs.set(DK::Counter, nc2000_engine::state::Scalar::Float(counter));
+                        let mut counter = 127.0f64;
+                        for _ in 1..tm.stall_streak {
+                            counter /= 2.0;
+                        }
+                        if counter.fract() == 0.0 {
+                            vs.set(DK::Counter, nc2000_engine::state::Scalar::Int(counter as i64));
+                        } else {
+                            vs.set(DK::Counter, nc2000_engine::state::Scalar::Float(counter));
+                        }
                     }
                     vs.duration = Some(if tm.protected_this_turn { 2 } else { 1 });
                 }
@@ -2935,9 +2946,10 @@ impl ProtocolAgent {
             if allowed.iter().any(|&a| a) {
                 search.mask_actions(&allowed);
             }
-            // baked pair tables, restricted to the legal picks (skipped when
-            // an active PickPrior conditions the opponent's Team Preview)
-            if !belief.has_active_pick_draws(obs) {
+            // baked pair tables, restricted to the legal picks (skipped on Castle
+            // where PS baked tables do not apply, and when an active PickPrior
+            // conditions the opponent's Team Preview)
+            if !battle.is_castle() && !belief.has_active_pick_draws(obs) {
                 let pick = if self.pinned_sets.is_some() {
                     filtered_open_preview(&self.tables, &battle, self.side, &levels, &mut self.rng)
                 } else {
@@ -4792,6 +4804,7 @@ impl ProtocolTracker {
             trapped: req.trapped,
             maybe_trapped: req.maybe_trapped,
             preview_level_caps: req.preview_level_caps,
+            ruleset: self.ruleset.is_castle().then(|| self.ruleset.canonical_id()),
         }
     }
 
@@ -4799,7 +4812,7 @@ impl ProtocolTracker {
     /// over every tracked field. `crates/bot/tests/import.rs` proves the
     /// round trip at every decision point of the conformance corpus.
     pub fn from_spec(dex: &Dex, spec: &PositionSpec) -> Result<ProtocolTracker, String> {
-        let mut tr = ProtocolTracker::new(spec.side);
+        let mut tr = ProtocolTracker::new_with_ruleset(spec.side, spec.resolved_ruleset()?);
         tr.turn = spec.turn;
         tr.upkeep_this_turn = spec.upkeep_this_turn;
         tr.weather = spec.weather.as_ref().map(|w| (w.key.clone(), w.upkeeps));
@@ -4869,15 +4882,22 @@ impl ProtocolAgent {
                 spec.side, self.side
             ));
         }
-        let request_json = spec.request_json(dex)?;
+        let ruleset = if spec.ruleset.is_some() {
+            spec.resolved_ruleset()?
+        } else {
+            self.tracker.ruleset()
+        };
+        let mut resolved_spec = spec.clone();
+        if resolved_spec.ruleset.is_none() && ruleset.is_castle() {
+            resolved_spec.ruleset = Some(ruleset.canonical_id());
+        }
+        let request_json = resolved_spec.request_json(dex)?;
         let req = Request::parse(dex, &request_json)?;
-        let ruleset = self.tracker.ruleset();
-        self.own_sets = spec.own_sets.clone();
-        self.tracker = ProtocolTracker::from_spec(dex, spec)?;
+        self.own_sets = resolved_spec.own_sets.clone();
+        self.tracker = ProtocolTracker::from_spec(dex, &resolved_spec)?;
         self.tracker.set_ruleset(ruleset);
         self.history.clear();
-        let mut obs = Observer::from_position(dex, spec)?;
-        obs.set_ruleset(ruleset);
+        let obs = Observer::from_position_with_ruleset(dex, &resolved_spec, ruleset)?;
         let mut belief = match &self.pinned_sets {
             Some(sets) => Belief::pinned_checked(dex, "opponent", sets, &obs)?,
             None => Belief::with_fallback_policy(dex, &self.pool, &obs, self.fallback_policy),

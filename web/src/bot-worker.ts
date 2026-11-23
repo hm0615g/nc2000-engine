@@ -26,6 +26,7 @@ export type WorkerRequest =
         poolJson: string;
         side: number;
         seed: number;
+        ruleset?: string;
         priorJson?: string;
         pickPriorJson?: string;
         compiledPreview?: boolean;
@@ -145,7 +146,9 @@ async function handle(m: WorkerRequest): Promise<void> {
       dropForked();
       battle?.free();
       battle = null;
-      const ps = new ProtocolSearcher(dex, m.searcher.side, m.searcher.poolJson, m.searcher.seed >>> 0, searchProfile("blind").c);
+      const ps = m.searcher.ruleset
+        ? ProtocolSearcher.withRuleset(dex, m.searcher.side, m.searcher.poolJson, m.searcher.seed >>> 0, searchProfile("blind").c, undefined, m.searcher.ruleset)
+        : new ProtocolSearcher(dex, m.searcher.side, m.searcher.poolJson, m.searcher.seed >>> 0, searchProfile("blind").c);
       ps.setOwnTeam(m.ownTeam);
       if (m.searcher.priorJson) post({ t: "prior", report: ps.setBeliefPrior(m.searcher.priorJson) });
       if (m.searcher.pickPriorJson) post({ t: "pickPrior", report: ps.setPickPrior(m.searcher.pickPriorJson) });
