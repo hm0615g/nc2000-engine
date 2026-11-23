@@ -4,8 +4,10 @@
 
 use nc2000_engine::battle::PokemonSet;
 use nc2000_engine::compact::{
-    ext_timer_idx, ext_vol_bit, is_supported_move_castle, timer_idx, vol_bit, CompactBattle,
-    CompactMon, CompactSide, MatchTable, COMPACT_CASTLE_UNSUPPORTED_MOVES,
+    ext_timer_idx, ext_vol_bit, get_damage_base_branchless, get_damage_base_castle,
+    get_stat_castle, is_supported_move_castle, lookup_accuracy_threshold_castle, timer_idx,
+    vol_bit, CompactBattle, CompactMon, CompactSide, CompactWeather, ItemStatKind, MatchTable,
+    COMPACT_CASTLE_UNSUPPORTED_MOVES,
 };
 use nc2000_engine::dex::Dex;
 use nc2000_engine::rules::{CastleOverlayConfig, Ruleset};
@@ -1494,4 +1496,1402 @@ fn ps_stadium2_differential_parity_preserved_after_256b_castle_expansion() {
     assert_eq!(cb.mons[4].boosts, b_p2_act2.boosts);
     assert_eq!(cb.mons[2].hp() as i32, b_p1_act2.hp);
     assert_eq!(cb.turn, b.turn as u16);
+}
+
+#[test]
+fn fuzzer_parity_critical_fixes_residuals_explosion_clamp_stall() {
+    assert_eq!(std::mem::size_of::<CompactMon>(), 32);
+    assert_eq!(std::mem::size_of::<CompactBattle>(), 256);
+    assert_eq!(std::mem::align_of::<CompactBattle>(), 64);
+
+    let dex = load_dex();
+
+    // 1. [CRITICAL] `from_battle` sets `RESIDUALS_DONE` (0x08) on post-EOT forced switch
+    //    so `step_switch` never double-executes Sandstorm/Leftovers (tested in both PS & Castle).
+    for ruleset in [Ruleset::PsStadium2, Ruleset::castle_tournament()] {
+        let p1 = vec![
+            mk_set("Cloyster", 50, "", &["Spikes", "Splash"], "M"),
+            mk_set("Zapdos", 50, "Leftovers", &["Thunderbolt"], ""),
+            mk_set("Snorlax", 55, "Leftovers", &["Body Slam"], "M"),
+        ];
+        let p2 = vec![
+            mk_set("Tyranitar", 55, "", &["Sandstorm", "Splash"], "M"),
+            mk_set("Skarmory", 50, "Leftovers", &["Drill Peck"], "M"),
+            mk_set("Gengar", 50, "Leftovers", &["Thunderbolt"], "M"),
+        ];
+        let mut b = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", &p1, &p2, ruleset).unwrap();
+        b.choose(&dex, 0, "team 1,2,3").unwrap();
+        b.choose(&dex, 1, "team 1,2,3").unwrap();
+        let clo_id = b.active_id(0).unwrap();
+        b.poke_mut(clo_id).hp = 1;
+        b.choose(&dex, 0, "move 2").unwrap(); // Splash
+        b.choose(&dex, 1, "move 1").unwrap(); // Sandstorm -> KOs 1 HP Cloyster in EOT Residual!
+        assert_eq!(
+            b.sides[0].request_state(),
+            Some(nc2000_engine::state::RequestKind::Switch)
+        );
+        let (table, mut cb) = CompactBattle::from_battle(&b, &dex);
+        assert_ne!(
+            cb.sides[0].side_flags & 0x08,
+            0,
+            "from_battle post-EOT forced switch must set RESIDUALS_DONE (ruleset={ruleset:?})"
+        );
+
+        // Advance both Battle and CompactBattle with replacement switch to Zapdos (slot 1 -> action 5).
+        b.choose(&dex, 0, "switch 2").unwrap();
+        cb.step_switch(&table, [5, 7]);
+        let zap_b_hp = b.poke(b.active_id(0).unwrap()).hp as i16;
+        assert_eq!(
+            cb.mons[1].hp(),
+            zap_b_hp,
+            "step_switch must NOT double-run Sandstorm on Zapdos (ruleset={ruleset:?})"
+        );
+        assert_eq!(cb.turn, b.turn as u16);
+        assert_eq!(cb.sides[0].side_flags & 0x08, 0);
+    }
+
+    // 2. [CRITICAL] Burned Explosion / Self-Destruct halves Atk in BOTH PS and Castle,
+    //    and `mark_fainted()` zeroes boosts/volatiles/timers/slot_refs/ext_flags.
+    for ruleset in [Ruleset::PsStadium2, Ruleset::castle_tournament()] {
+        let p1 = vec![
+            mk_set("Snorlax", 55, "", &["Self-Destruct", "Splash"], "M"),
+            mk_set("Zapdos", 50, "", &["Splash"], ""),
+        ];
+        let p2 = vec![
+            mk_set("Steelix", 55, "", &["Splash"], "M"),
+            mk_set("Blissey", 55, "", &["Splash"], "F"),
+        ];
+        let (table, base) = start_compact(&dex, ruleset, &p1, &p2);
+
+        let mut cb_clean = base;
+        cb_clean.prng_seed = 0x1234_5678_9ABC_DEF0;
+        let hp0 = cb_clean.mons[3].hp();
+        cb_clean.step_turn(&table, [0, 0]);
+        let dmg_clean = hp0 - cb_clean.mons[3].hp();
+
+        let mut cb_brn = base;
+        cb_brn.prng_seed = 0x1234_5678_9ABC_DEF0;
+        cb_brn.mons[0].set_status(Status::Brn as u8, 0);
+        cb_brn.mons[0].vol_flags |= vol_bit::BRN_ATK_DROP | vol_bit::CONFUSION;
+        cb_brn.mons[0].timers[timer_idx::CONFUSION] = 3;
+        cb_brn.mons[0].boosts[stat_idx::ATK] = 1;
+        cb_brn.mons[0].ext_flags |= ext_vol_bit::MIST;
+        // Pick a seed where Confusion does NOT self-hit and Explosion does NOT crit
+        let mut verified = false;
+        for seed in 1..=64u64 {
+            let mut c_clean = base;
+            let mut c_brn = base;
+            let s = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            c_clean.prng_seed = s;
+            c_brn.prng_seed = s;
+            c_brn.mons[0].set_status(Status::Brn as u8, 0);
+            c_brn.mons[0].vol_flags |= vol_bit::BRN_ATK_DROP;
+            c_brn.mons[0].ext_flags |= ext_vol_bit::MIST;
+            c_brn.mons[0].boosts[stat_idx::DEF] = 2;
+            c_clean.step_turn(&table, [0, 0]);
+            c_brn.step_turn(&table, [0, 0]);
+            let dc = hp0 - c_clean.mons[3].hp();
+            let db = hp0 - c_brn.mons[3].hp();
+            if dc > 40 && db < (dc * 3) / 4 {
+                // Verify mark_fainted canonicalized the fainted Self-Destruct user.
+                assert_eq!(c_brn.mons[0].status_raw(), Status::Fnt as u8);
+                assert_eq!(c_brn.mons[0].hp_pool, [0, 0]);
+                assert_eq!(c_brn.mons[0].vol_flags, 0);
+                assert_eq!(c_brn.mons[0].timers, [0; 4]);
+                assert_eq!(c_brn.mons[0].boosts, [0; 7]);
+                assert_eq!(c_brn.mons[0].slot_refs, 0);
+                assert_eq!(c_brn.mons[0].ext_flags, 0);
+                assert_eq!(c_brn.mons[0].ext_timers, [0; 4]);
+                assert_eq!(c_brn.mons[0].rollout_rage, 0);
+                verified = true;
+                break;
+            }
+        }
+        assert!(
+            verified && dmg_clean > 0,
+            "Burned Self-Destruct must halve Atk in {ruleset:?}"
+        );
+    }
+
+    // 3. [CRITICAL] PS `get_damage_base_branchless` clamps atk/def to [1, 999] BEFORE `>> 2`.
+    //    e.g. Thick Club +6 Marowak (`atk = 1500`) must clamp to 999 before `>> 2` (999 >> 2 = 249),
+    //    NOT `1500 >> 2 = 375`!
+    let d_999 = get_damage_base_branchless(
+        50,
+        100,
+        999,
+        200,
+        true,
+        false,
+        false,
+        false,
+        CompactWeather::None,
+        false,
+        false,
+        false,
+        0,
+        0,
+        0,
+        false,
+    );
+    let d_1500 = get_damage_base_branchless(
+        50,
+        100,
+        1500,
+        200,
+        true,
+        false,
+        false,
+        false,
+        CompactWeather::None,
+        false,
+        false,
+        false,
+        0,
+        0,
+        0,
+        false,
+    );
+    assert_eq!(
+        d_1500, d_999,
+        "PS get_damage_base_branchless must clamp atk to 999 before >> 2"
+    );
+    // Defense > 999 also clamps to 999 before >> 2.
+    let d_def999 = get_damage_base_branchless(
+        50,
+        100,
+        200,
+        999,
+        true,
+        false,
+        false,
+        false,
+        CompactWeather::None,
+        false,
+        false,
+        false,
+        0,
+        0,
+        0,
+        false,
+    );
+    let d_def1400 = get_damage_base_branchless(
+        50,
+        100,
+        200,
+        1400,
+        true,
+        false,
+        false,
+        false,
+        CompactWeather::None,
+        false,
+        false,
+        false,
+        0,
+        0,
+        0,
+        false,
+    );
+    assert_eq!(
+        d_def1400, d_def999,
+        "PS get_damage_base_branchless must clamp def to 999 before >> 2"
+    );
+
+    // 4. [CRITICAL] `from_battle` Castle `stall` counter decode (1..=8 direct vs PS halving ladder).
+    {
+        let p1 = vec![mk_set("Jolteon", 55, "", &["Protect", "Splash"], "M")];
+        let p2 = vec![mk_set("Snorlax", 55, "", &["Splash"], "M")];
+        let mut bc = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p1,
+            &p2,
+            Ruleset::castle_tournament(),
+        )
+        .unwrap();
+        bc.choose(&dex, 0, "team 1").unwrap();
+        bc.choose(&dex, 1, "team 1").unwrap();
+        bc.choose(&dex, 0, "move 1").unwrap(); // Protect succeeds -> Castle DK::Counter = 1
+        bc.choose(&dex, 1, "move 1").unwrap();
+        let (_, cb_c) = CompactBattle::from_battle(&bc, &dex);
+        assert_eq!(
+            cb_c.mons[0].stall_counter_ext(),
+            1,
+            "Castle stall DK::Counter=1 must decode directly as 1 (NOT 7)"
+        );
+
+        let mut bp = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p1,
+            &p2,
+            Ruleset::PsStadium2,
+        )
+        .unwrap();
+        bp.choose(&dex, 0, "team 1").unwrap();
+        bp.choose(&dex, 1, "team 1").unwrap();
+        bp.choose(&dex, 0, "move 1").unwrap(); // Protect succeeds -> PS DK::Counter = 127
+        bp.choose(&dex, 1, "move 1").unwrap();
+        let (_, cb_p) = CompactBattle::from_battle(&bp, &dex);
+        assert_eq!(
+            cb_p.mons[0].stall_counter(),
+            1,
+            "PS stall DK::Counter=127 must decode via halving ladder as 1"
+        );
+    }
+}
+
+#[test]
+fn fuzzer_parity_high_fixes_encore_digfly_partialtrap_batonn_twineedle() {
+    let dex = load_dex();
+
+    // 5. [HIGH] Phantom `DISABLE` from `Encore` in `from_battle` eliminated; real `Disable` imports exact slot.
+    {
+        let p1 = vec![mk_set(
+            "Snorlax",
+            55,
+            "",
+            &["Tackle", "Rest", "Curse", "Splash"],
+            "M",
+        )];
+        let p2 = vec![mk_set(
+            "Alakazam",
+            55,
+            "",
+            &["Encore", "Disable", "Splash"],
+            "M",
+        )];
+        let mut b = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p1,
+            &p2,
+            Ruleset::castle_tournament(),
+        )
+        .unwrap();
+        b.choose(&dex, 0, "team 1").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        b.choose(&dex, 0, "move 3").unwrap(); // Snorlax Curse (slot 2)
+        b.choose(&dex, 1, "move 3").unwrap(); // Alakazam Splash
+        b.choose(&dex, 0, "move 3").unwrap();
+        b.choose(&dex, 1, "move 1").unwrap(); // Alakazam Encore -> sets slot.disabled on slots 0,1,3!
+        let (_, cb_enc) = CompactBattle::from_battle(&b, &dex);
+        assert_ne!(cb_enc.mons[0].vol_flags & vol_bit::ENCORE, 0);
+        assert_eq!(cb_enc.mons[0].encore_slot(), 2);
+        assert_eq!(
+            cb_enc.mons[0].vol_flags & vol_bit::DISABLE,
+            0,
+            "Encore must NEVER create a phantom vol_bit::DISABLE in from_battle"
+        );
+        assert_eq!(cb_enc.mons[0].disable_slot(), 0);
+
+        // Now add a real Disable volatile on slot 2 (Curse) and verify exact import!
+        let sn_id = b.active_id(0).unwrap();
+        let curse_mid = dex.moves.id("curse").unwrap();
+        let dis_cid = dex.conds_id("disable").unwrap();
+        b.add_volatile(
+            &dex,
+            sn_id,
+            "disable",
+            b.active_id(1),
+            nc2000_engine::battle::EffectHandle::None,
+        );
+        if let Some(vs) = b.poke_mut(sn_id).volatile_mut(dis_cid) {
+            vs.duration = Some(4);
+            vs.set(
+                nc2000_engine::state::DK::Move,
+                nc2000_engine::state::Scalar::MoveK(curse_mid),
+            );
+        }
+        let (_, cb_both) = CompactBattle::from_battle(&b, &dex);
+        assert_ne!(cb_both.mons[0].vol_flags & vol_bit::DISABLE, 0);
+        assert_eq!(cb_both.mons[0].disable_slot(), 2);
+        assert_eq!(cb_both.mons[0].timers[timer_idx::DISABLE], 4);
+    }
+
+    // 6. [HIGH] Castle `fly`/`dig` semi-invuln vs `twoturnmove` lock separation + from_battle + switch/BP clear.
+    {
+        let p1 = vec![
+            mk_set("Dragonite", 55, "", &["Fly", "Tackle", "Baton Pass"], "M"),
+            mk_set("Snorlax", 55, "", &["Splash"], "M"),
+        ];
+        let p2 = vec![mk_set("Snorlax", 50, "", &["Tackle", "Splash"], "M")];
+        let mut b = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p1,
+            &p2,
+            Ruleset::castle_tournament(),
+        )
+        .unwrap();
+        b.choose(&dex, 0, "team 1,2").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        // Turn 1: Dragonite Fly (charge) vs Snorlax Splash -> locked to Fly + FLYING!
+        b.choose(&dex, 0, "move 1").unwrap();
+        b.choose(&dex, 1, "move 2").unwrap();
+        let (table, cb_t1) = CompactBattle::from_battle(&b, &dex);
+        assert_ne!(cb_t1.mons[0].ext_flags & ext_vol_bit::FLYING, 0);
+        assert!(cb_t1.mons[0].two_turn_locked(), "Turn 1 Fly must set two_turn_locked");
+        assert!(cb_t1.mons[0].is_multi_turn_locked());
+        let mut acts = [0u8; 7];
+        let n = cb_t1.legal_actions(&table, 0, &mut acts);
+        assert_eq!(&acts[..n], &[0], "Turn 1 Fly must lock legal_actions to Fly slot 0");
+
+        // Turn 2: paralyze Dragonite and find a seed where Dragonite is fully paralyzed on Turn 2!
+        let mut aborted_cb = None;
+        for seed in 1..=64u64 {
+            let mut c = cb_t1;
+            c.mons[0].set_status(Status::Par as u8, 0);
+            c.prng_seed = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            let sn_hp0 = c.mons[3].hp();
+            c.step_turn(&table, [0, 0]); // Fly Turn 2 (fully para'd) vs Snorlax Tackle (misses Flying!)
+            if c.mons[3].hp() == sn_hp0 {
+                assert_ne!(
+                    c.mons[0].ext_flags & ext_vol_bit::FLYING,
+                    0,
+                    "Castle Turn-2 aborted Fly must retain FLYING semi-invulnerability"
+                );
+                assert!(
+                    !c.mons[0].two_turn_locked(),
+                    "Castle Turn-2 aborted Fly must clear two_turn_locked"
+                );
+                assert!(
+                    !c.mons[0].is_multi_turn_locked(),
+                    "Castle Turn-2 aborted Fly must NOT lock user to Fly"
+                );
+                assert_eq!(c.mons[0].locked_move_slot(), 0);
+                let mut acts2 = [0u8; 7];
+                let n2 = c.legal_actions(&table, 0, &mut acts2);
+                assert_eq!(
+                    &acts2[..n2],
+                    &[0, 1, 2, 5],
+                    "Persisted FLYING mon must be free to use other moves or switch"
+                );
+                aborted_cb = Some(c);
+                break;
+            }
+        }
+        let mut c_inv = aborted_cb.expect("must hit full-para on Turn 2 Fly");
+        // Cure Par and verify Baton Pass clears FLYING (does NOT pass FLYING to receiver!).
+        c_inv.mons[0].set_status(Status::None as u8, 0);
+        c_inv.step_turn(&table, [2, 1]); // Dragonite Baton Pass to Snorlax
+        assert_eq!(c_inv.sides[0].active_idx, 1);
+        assert_eq!(c_inv.mons[0].ext_flags & ext_vol_bit::FLYING, 0);
+        assert_eq!(
+            c_inv.mons[1].ext_flags & ext_vol_bit::FLYING,
+            0,
+            "Baton Pass must NOT pass FLYING semi-invuln"
+        );
+
+        // Also verify `from_battle` imports Castle persisted `fly` (without `twoturnmove`) unlocked!
+        let dn_id = b.active_id(0).unwrap();
+        let ttm_cid = dex.conds_id("twoturnmove").unwrap();
+        b.remove_volatile_id(&dex, dn_id, ttm_cid);
+        // Re-add `fly` volatile alone (simulating Castle TwoTurnMoveAborted).
+        b.add_volatile(
+            &dex,
+            dn_id,
+            "fly",
+            None,
+            nc2000_engine::battle::EffectHandle::None,
+        );
+        let (_, cb_imp_persisted) = CompactBattle::from_battle(&b, &dex);
+        assert_ne!(cb_imp_persisted.mons[0].ext_flags & ext_vol_bit::FLYING, 0);
+        assert!(!cb_imp_persisted.mons[0].two_turn_locked());
+        assert!(!cb_imp_persisted.mons[0].is_multi_turn_locked());
+    }
+
+    // 7. [HIGH] Stale `partiallytrapped` after trapper KO (both `from_battle` & PS Order 10 stepping).
+    {
+        let p1 = vec![
+            mk_set("Snorlax", 55, "", &["Body Slam", "Splash"], "M"),
+            mk_set("Zapdos", 50, "", &["Splash"], ""),
+        ];
+        let p2 = vec![
+            mk_set("Dragonite", 50, "", &["Wrap", "Splash"], "M"),
+            mk_set("Blissey", 50, "", &["Splash"], "F"),
+        ];
+        let mut b = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p1,
+            &p2,
+            Ruleset::PsStadium2,
+        )
+        .unwrap();
+        b.choose(&dex, 0, "team 1,2").unwrap();
+        b.choose(&dex, 1, "team 1,2").unwrap();
+        let sn_id = b.active_id(0).unwrap();
+        let dn_id = b.active_id(1).unwrap();
+        b.add_volatile(
+            &dex,
+            sn_id,
+            "partiallytrapped",
+            Some(dn_id),
+            nc2000_engine::battle::EffectHandle::None,
+        );
+        // Simulate stale `partiallytrapped` after trapper Dragonite fainted!
+        b.poke_mut(dn_id).hp = 0;
+        b.poke_mut(dn_id).fainted = true;
+        b.poke_mut(sn_id).trapped = true; // even if stale `p.trapped` lingered!
+        let (table, cb_stale) = CompactBattle::from_battle(&b, &dex);
+        assert!(
+            !cb_stale.mons[0].partially_trapped(),
+            "from_battle must NOT import partially_trapped when trapper is fainted"
+        );
+        assert_eq!(
+            cb_stale.mons[0].vol_flags & vol_bit::TRAPPED_OR_LOCKED,
+            0,
+            "stale partial trap must NOT fall back to Mean Look TRAPPED_OR_LOCKED"
+        );
+
+        // During PS stepping: if Dragonite traps Snorlax on Turn 1 and Snorlax KOs Dragonite on Turn 1,
+        // Snorlax must NOT remain partially trapped or take Order 10 Wrap damage!
+        let (_, mut cb_live) = start_compact(&dex, Ruleset::PsStadium2, &p1, &p2);
+        cb_live.mons[3].hp_pool[0] = 1; // Dragonite at 1 HP
+        cb_live.prng_seed = 7;
+        cb_live.step_turn(&table, [0, 0]); // Dragonite Wrap -> Snorlax Body Slam KOs Dragonite
+        assert!(!cb_live.mons[0].partially_trapped());
+        assert!(!cb_live.mons[0].is_trapped());
+    }
+
+    // 8. [HIGH] Mid-turn `BATONN` `from_battle` queued `Struggle`/`Recharge` + `FORESIGHT_CASTER` + `LOCKED_FIRST_HIT_RECV`.
+    {
+        let p1 = vec![
+            mk_set("Jolteon", 55, "", &["Baton Pass", "Foresight", "Rollout"], "M"),
+            mk_set("Snorlax", 50, "", &["Splash"], "M"),
+            mk_set("Zapdos", 50, "", &["Splash"], ""),
+        ];
+        let p2 = vec![
+            mk_set("Snorlax", 50, "", &["Hyper Beam", "Splash"], "M"),
+            mk_set("Gengar", 50, "", &["Splash"], "M"),
+        ];
+
+        // (a) Mid-turn BATONN with opponent naturally out of PP (queued Struggle):
+        let p2_str = vec![
+            mk_set("Chansey", 50, "", &["Splash"], "F"),
+            mk_set("Gengar", 50, "", &["Splash"], "M"),
+        ];
+        let mut b_str = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p1,
+            &p2_str,
+            Ruleset::castle_tournament(),
+        )
+        .unwrap();
+        b_str.choose(&dex, 0, "team 1,2,3").unwrap();
+        b_str.choose(&dex, 1, "team 1,2").unwrap();
+        let ch_id = b_str.active_id(1).unwrap();
+        b_str.poke_mut(ch_id).move_slots[0].pp = 1;
+        b_str.choose(&dex, 0, "move 2").unwrap(); // Turn 1: Foresight
+        b_str.choose(&dex, 1, "move 1").unwrap(); // Turn 1: Chansey spends its last Splash PP -> 0 PP!
+        b_str.choose(&dex, 0, "move 1").unwrap(); // Turn 2: Jolteon Baton Pass -> pauses for 2 bench options!
+        b_str.choose(&dex, 1, "move struggle").unwrap(); // Turn 2: Chansey queues Struggle!
+        let (t_str, mut cb_str) = CompactBattle::from_battle(&b_str, &dex);
+        assert_eq!(cb_str.sides[0].request, 2);
+        assert_ne!(cb_str.sides[1].side_flags & 0x10, 0, "Queued Struggle must set pending flag");
+        assert_ne!(
+            cb_str.bp_switch_flags & (1u8 << 5),
+            0,
+            "Queued Struggle must set bp_switch_flags bit 5"
+        );
+        cb_str.step_switch(&t_str, [5, 7]); // BP to Snorlax -> foe executes Struggle & takes recoil!
+        assert!(
+            cb_str.mons[1].hp() < t_str.mons[1].maxhp,
+            "Queued Struggle must deal damage after BP switch"
+        );
+        assert!(
+            cb_str.mons[3].hp() < t_str.mons[3].maxhp,
+            "Queued Struggle must take recoil after BP switch"
+        );
+
+        // (b) Mid-turn BATONN with opponent naturally recharging from Hyper Beam (queued Recharge):
+        let p2_rec = vec![
+            mk_set("Chansey", 50, "", &["Hyper Beam", "Splash"], "F"),
+            mk_set("Gengar", 50, "", &["Splash"], "M"),
+        ];
+        let mut b_rec = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p1,
+            &p2_rec,
+            Ruleset::castle_tournament(),
+        )
+        .unwrap();
+        b_rec.choose(&dex, 0, "team 1,2,3").unwrap();
+        b_rec.choose(&dex, 1, "team 1,2").unwrap();
+        b_rec.choose(&dex, 0, "move 2").unwrap(); // Turn 1: Jolteon Foresight
+        b_rec.choose(&dex, 1, "move 1").unwrap(); // Turn 1: Chansey hits with Hyper Beam -> mustrecharge!
+        b_rec.choose(&dex, 0, "move 1").unwrap(); // Turn 2: Jolteon Baton Pass -> pauses!
+        b_rec.choose(&dex, 1, "move recharge").unwrap(); // Turn 2: Chansey queues Recharge!
+        let (t_rec, mut cb_rec) = CompactBattle::from_battle(&b_rec, &dex);
+        assert_ne!(
+            cb_rec.sides[1].side_flags & 0x10,
+            0,
+            "Queued Recharge must set pending flag"
+        );
+        assert!(cb_rec.mons[3].must_recharge());
+        cb_rec.step_switch(&t_rec, [5, 7]);
+        assert!(
+            !cb_rec.mons[3].must_recharge(),
+            "Queued Recharge must clear must_recharge on step_switch"
+        );
+        assert_eq!(
+            cb_rec.mons[1].hp(),
+            t_rec.mons[1].maxhp,
+            "Recharge turn deals no damage"
+        );
+
+        // (c) `FORESIGHT_CASTER` and `LOCKED_FIRST_HIT_RECV` round-trip in `from_battle`:
+        let mut b_meta = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p1,
+            &p2,
+            Ruleset::castle_tournament(),
+        )
+        .unwrap();
+        b_meta.choose(&dex, 0, "team 1,2,3").unwrap();
+        b_meta.choose(&dex, 1, "team 1,2").unwrap();
+        let j_id = b_meta.active_id(0).unwrap();
+        let s_id = b_meta.active_id(1).unwrap();
+        b_meta.add_volatile(
+            &dex,
+            s_id,
+            "foresight",
+            Some(j_id),
+            nc2000_engine::battle::EffectHandle::None,
+        );
+        let roll_cid = dex.conds_id("rollout").unwrap();
+        b_meta.add_volatile(
+            &dex,
+            j_id,
+            "rollout",
+            Some(j_id),
+            nc2000_engine::battle::EffectHandle::None,
+        );
+        if let Some(vs) = b_meta.poke_mut(j_id).volatile_mut(roll_cid) {
+            vs.set_int(nc2000_engine::state::DK::HitCount, 1);
+            vs.set(
+                nc2000_engine::state::DK::TargetSlot,
+                nc2000_engine::state::Scalar::Slot(s_id.side, s_id.slot),
+            );
+        }
+        let (_, cb_meta) = CompactBattle::from_battle(&b_meta, &dex);
+        assert_ne!(
+            cb_meta.mons[0].ext_flags & ext_vol_bit::FORESIGHT_CASTER,
+            0,
+            "from_battle must set FORESIGHT_CASTER on foresight source"
+        );
+        assert_ne!(
+            cb_meta.mons[3].ext_flags & ext_vol_bit::LOCKED_FIRST_HIT_RECV,
+            0,
+            "from_battle must set LOCKED_FIRST_HIT_RECV on rollout/lockedmove TargetSlot receiver"
+        );
+    }
+
+    // 9. [HIGH] PS Twineedle NEVER poisons Poison-types (Gengar/Muk), still poisons Steel-types.
+    {
+        let p1 = vec![mk_set("Beedrill", 55, "", &["Twineedle"], "M")];
+        let p2 = vec![mk_set("Muk", 55, "", &["Splash"], "M")];
+        let (table, base) = start_compact(&dex, Ruleset::PsStadium2, &p1, &p2);
+        for s in 1..=256u64 {
+            let mut c = base;
+            c.prng_seed = s.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            c.step_turn(&table, [0, 0]);
+            assert_eq!(
+                c.mons[3].status_raw(),
+                Status::None as u8,
+                "PS Twineedle must NEVER poison Poison-type Muk (seed={s})"
+            );
+        }
+    }
+}
+
+#[test]
+fn fuzzer_parity_high_fixes_invuln_ohko_glare_triplekick_present_hash() {
+    let dex = load_dex();
+
+    // 10. [HIGH] Dig/Fly semi-invulnerability: non-Ghost Curse, Fissure vs Horn Drill,
+    //     Whirlwind vs Roar, Castle Lock-On Fly vs Dig, PS Lock-On blocked moves & Fly vs EQ.
+    {
+        // (a) Non-Ghost Curse works vs Dig and Fly!
+        let p1 = vec![mk_set("Snorlax", 55, "", &["Curse"], "M")];
+        let p2 = vec![mk_set("Dragonite", 55, "", &["Fly", "Dig"], "M")];
+        let (t, base) = start_compact(&dex, Ruleset::castle_tournament(), &p1, &p2);
+        for flag in [ext_vol_bit::FLYING, ext_vol_bit::DIGGING] {
+            let mut c = base;
+            c.mons[3].ext_flags |= flag;
+            c.step_turn(&t, [0, 0]); // Faster Dragonite still acts or if Snorlax moves first via Quick Claw/speed:
+            let mut c2 = base;
+            c2.mons[0].boosts[stat_idx::SPE] = 6; // Snorlax moves while Dragonite is semi-invuln!
+            c2.mons[3].ext_flags |= flag;
+            c2.step_turn(&t, [0, 0]);
+            assert_eq!(
+                c2.mons[0].boosts[stat_idx::ATK], 1,
+                "Non-Ghost Curse must succeed against semi-invulnerable target (flag={flag})"
+            );
+        }
+
+        // (b) Fissure hits Dig while Horn Drill misses Dig!
+        let p_oh1 = vec![mk_set("Rhydon", 100, "", &["Fissure", "Horn Drill"], "M")];
+        let p_oh2 = vec![mk_set("Snorlax", 10, "", &["Dig", "Splash"], "M")];
+        let (t_oh, base_oh) = start_compact(&dex, Ruleset::PsStadium2, &p_oh1, &p_oh2);
+        // Lv 100 vs Lv 10 -> 76 + 180 = 256 -> guaranteed 255/256 hit!
+        let mut c_fis = base_oh;
+        c_fis.mons[3].ext_flags |= ext_vol_bit::DIGGING;
+        c_fis.step_turn(&t_oh, [0, 1]); // Faster Rhydon Fissure hits Digging Snorlax!
+        assert_eq!(c_fis.mons[3].hp(), 0, "Fissure must hit Digging target");
+
+        let mut c_hd = base_oh;
+        c_hd.mons[3].ext_flags |= ext_vol_bit::DIGGING;
+        c_hd.step_turn(&t_oh, [1, 1]); // Faster Rhydon Horn Drill misses Digging Snorlax!
+        assert_eq!(
+            c_hd.mons[3].hp(),
+            t_oh.mons[3].maxhp,
+            "Horn Drill must MISS Digging target"
+        );
+
+        // (c) Whirlwind hits Fly while Roar misses Fly!
+        let p_ph1 = vec![
+            mk_set("Dragonite", 55, "", &["Fly", "Splash"], "M"),
+            mk_set("Snorlax", 55, "", &["Splash"], "M"),
+        ];
+        let p_ph2 = vec![mk_set("Skarmory", 50, "", &["Whirlwind", "Roar"], "M")];
+        let (t_ph, base_ph) = start_compact(&dex, Ruleset::PsStadium2, &p_ph1, &p_ph2);
+        let mut c_ww = base_ph;
+        c_ww.step_turn(&t_ph, [0, 0]); // Faster Dragonite Fly Turn 1 -> slower Skarmory Whirlwind hits & drags Snorlax!
+        assert_eq!(c_ww.sides[0].active_idx, 1, "Whirlwind must hit Flying target");
+
+        let mut c_roar = base_ph;
+        c_roar.step_turn(&t_ph, [0, 1]); // Faster Dragonite Fly Turn 1 -> slower Skarmory Roar MISSES!
+        assert_eq!(c_roar.sides[0].active_idx, 0, "Roar must MISS Flying target");
+
+        // (d) Castle Lock-On hits Fly (Ice Beam) and does NOT hit Dig (and consumes Lock-On)!
+        //     PS Lock-On blocked for Attract/Ghost Curse/Foresight/Mean Look/Nightmare, and Fly blocks EQ even with Lock-On!
+        let p_lo1 = vec![mk_set(
+            "Gengar",
+            55,
+            "",
+            &["Ice Beam", "Earthquake", "Mean Look", "Curse"],
+            "M",
+        )];
+        let p_lo2 = vec![mk_set("Dragonite", 50, "", &["Fly", "Dig", "Splash"], "F")];
+        let (t_loc, base_loc) = start_compact(&dex, Ruleset::castle_tournament(), &p_lo1, &p_lo2);
+        let (t_lop, base_lop) = start_compact(&dex, Ruleset::PsStadium2, &p_lo1, &p_lo2);
+
+        // Castle Lock-On + Ice Beam vs Fly -> HITS!
+        let mut c_lf = base_loc;
+        c_lf.mons[0].ext_flags |= ext_vol_bit::LOCK_ON;
+        c_lf.mons[0].set_lock_on_turns(1);
+        c_lf.mons[3].ext_flags |= ext_vol_bit::FLYING;
+        c_lf.step_turn(&t_loc, [0, 2]);
+        assert!(
+            c_lf.mons[3].hp() < t_loc.mons[3].maxhp,
+            "Castle Lock-On + Ice Beam must HIT Flying target"
+        );
+        assert_eq!(c_lf.mons[0].ext_flags & ext_vol_bit::LOCK_ON, 0);
+
+        // Castle Lock-On + Ice Beam vs Dig -> MISSES AND consumes Lock-On!
+        let mut c_ld = base_loc;
+        c_ld.mons[0].ext_flags |= ext_vol_bit::LOCK_ON;
+        c_ld.mons[0].set_lock_on_turns(1);
+        c_ld.mons[3].ext_flags |= ext_vol_bit::DIGGING;
+        c_ld.step_turn(&t_loc, [0, 2]);
+        assert_eq!(c_ld.mons[3].hp(), t_loc.mons[3].maxhp);
+        assert_eq!(
+            c_ld.mons[0].ext_flags & ext_vol_bit::LOCK_ON,
+            0,
+            "Castle Lock-On must be consumed when missing Digging target"
+        );
+
+        // PS Lock-On + Earthquake vs Fly -> MISSES (Fly blocks EQ even with Lock-On)!
+        let mut c_peq = base_lop;
+        c_peq.mons[0].ext_flags |= ext_vol_bit::LOCK_ON;
+        c_peq.mons[0].set_lock_on_turns(2);
+        c_peq.mons[3].ext_flags |= ext_vol_bit::FLYING;
+        c_peq.step_turn(&t_lop, [1, 2]);
+        assert_eq!(
+            c_peq.mons[3].hp(),
+            t_lop.mons[3].maxhp,
+            "PS Fly must block Earthquake even with Lock-On"
+        );
+
+        // PS Lock-On + Mean Look / Ghost Curse vs Dig -> MISSES!
+        let mut c_pml = base_lop;
+        c_pml.mons[0].ext_flags |= ext_vol_bit::LOCK_ON;
+        c_pml.mons[0].set_lock_on_turns(2);
+        c_pml.mons[3].ext_flags |= ext_vol_bit::DIGGING;
+        c_pml.step_turn(&t_lop, [2, 2]);
+        assert_eq!(
+            c_pml.mons[3].vol_flags & vol_bit::TRAPPED_OR_LOCKED,
+            0,
+            "PS Lock-On must NOT allow Mean Look to hit Digging target"
+        );
+
+        let mut c_pcur = base_lop;
+        c_pcur.mons[0].ext_flags |= ext_vol_bit::LOCK_ON;
+        c_pcur.mons[0].set_lock_on_turns(2);
+        c_pcur.mons[3].ext_flags |= ext_vol_bit::DIGGING;
+        c_pcur.step_turn(&t_lop, [3, 2]);
+        assert_eq!(
+            c_pcur.mons[3].vol_flags & vol_bit::CURSE,
+            0,
+            "PS Lock-On must NOT allow Ghost Curse to hit Digging target"
+        );
+    }
+
+    // 11. [HIGH] OHKO accuracy (`76 + 2*(att-def)`), Lock-On (PS auto-hit vs Castle no-auto-hit + consume),
+    //     and acc/eva/BrightPowder boosts in BOTH Castle `ovfl=0` and `ovfl=1`!
+    {
+        let p1 = vec![mk_set("Rhydon", 50, "", &["Horn Drill", "Splash"], "M")];
+        let p2 = vec![mk_set("Snorlax", 50, "", &["Splash"], "M")];
+        let (t_p, base_p) = start_compact(&dex, Ruleset::PsStadium2, &p1, &p2);
+        let (t_c0, base_c0) = start_compact(&dex, Ruleset::castle_tournament(), &p1, &p2);
+        let (t_c1, base_c1) = start_compact(
+            &dex,
+            Ruleset::castle_raw_cgi(true),
+            &p1,
+            &p2,
+        );
+
+        // PS Lock-On makes OHKO auto-hit 100%.
+        for s in 1..=32u64 {
+            let mut c = base_p;
+            c.prng_seed = s.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            c.mons[0].ext_flags |= ext_vol_bit::LOCK_ON;
+            c.mons[0].set_lock_on_turns(2);
+            c.step_turn(&t_p, [0, 0]);
+            assert_eq!(c.mons[3].hp(), 0, "PS Lock-On must auto-hit OHKO");
+        }
+
+        // Castle Lock-On does NOT auto-hit OHKO AND IS consumed on attempt!
+        let mut castle_lo_missed = false;
+        for s in 1..=32u64 {
+            let mut c = base_c0;
+            c.prng_seed = s.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            c.mons[0].ext_flags |= ext_vol_bit::LOCK_ON;
+            c.mons[0].set_lock_on_turns(1);
+            c.step_turn(&t_c0, [0, 0]);
+            assert_eq!(
+                c.mons[0].ext_flags & ext_vol_bit::LOCK_ON,
+                0,
+                "Castle OHKO must consume Lock-On"
+            );
+            if c.mons[3].hp() > 0 {
+                castle_lo_missed = true;
+            }
+        }
+        assert!(castle_lo_missed, "Castle Lock-On must NOT make OHKO auto-hit");
+
+        // 2025/05/27 PBS spec: +6 Acc boosts Lv50 vs Lv50 OHKO (`76 * 3 = 228/256` ~89%) in BOTH ovfl=0 and ovfl=1!
+        for (label, table, base) in [("ovfl=0", &t_c0, base_c0), ("ovfl=1", &t_c1, base_c1)] {
+            let mut hits_no_boost = 0u32;
+            let mut hits_acc6 = 0u32;
+            for s in 1..=512u64 {
+                let seed = s.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                let mut c0 = base;
+                c0.prng_seed = seed;
+                c0.step_turn(table, [0, 0]);
+                if c0.mons[3].hp() == 0 {
+                    hits_no_boost += 1;
+                }
+                let mut c6 = base;
+                c6.prng_seed = seed;
+                c6.mons[0].boosts[stat_idx::ACC] = 6;
+                c6.step_turn(table, [0, 0]);
+                if c6.mons[3].hp() == 0 {
+                    hits_acc6 += 1;
+                }
+            }
+            assert!(
+                hits_acc6 > hits_no_boost + 200,
+                "Castle {label} +6 Acc must strongly boost OHKO hit rate: base={hits_no_boost}/512, acc+6={hits_acc6}/512"
+            );
+        }
+
+        // att_lvl < def_lvl fails BEFORE Castle Lock-On consume and ovfl=1 Counter arming.
+        let p_lo_a = vec![mk_set("Rhydon", 49, "", &["Horn Drill"], "M")];
+        let p_lo_b = vec![mk_set("Snorlax", 50, "", &["Counter"], "M")];
+        let (t_lo, mut cb_lo) = start_compact(
+            &dex,
+            Ruleset::castle_raw_cgi(true),
+            &p_lo_a,
+            &p_lo_b,
+        );
+        cb_lo.mons[0].ext_flags |= ext_vol_bit::LOCK_ON;
+        cb_lo.mons[0].set_lock_on_turns(1);
+        cb_lo.step_turn(&t_lo, [0, 0]);
+        assert_eq!(cb_lo.mons[3].hp(), t_lo.mons[3].maxhp);
+        assert_ne!(
+            cb_lo.mons[0].ext_flags & ext_vol_bit::LOCK_ON,
+            0,
+            "Underleveled OHKO fails before Lock-On consumption"
+        );
+        assert_eq!(
+            cb_lo.mons[0].hp(),
+            t_lo.mons[0].maxhp,
+            "Underleveled OHKO fails before arming ovfl=1 Counter"
+        );
+    }
+
+    // 12. [HIGH] `Glare` Ghost-type immunity (blocked unless Foresight), while `Lovely Kiss` hits Ghost!
+    {
+        let p1 = vec![mk_set("Dunsparce", 55, "", &["Glare", "Foresight"], "M")];
+        let p2 = vec![mk_set("Gengar", 55, "", &["Splash"], "M")];
+        let (t_g, base_g) = start_compact(&dex, Ruleset::castle_tournament(), &p1, &p2);
+        for s in 1..=64u64 {
+            let mut c = base_g;
+            c.prng_seed = s.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            c.step_turn(&t_g, [0, 0]);
+            assert_eq!(
+                c.mons[3].status_raw(),
+                Status::None as u8,
+                "Glare must NOT paralyze Ghost without Foresight"
+            );
+        }
+        let mut glare_with_fs = false;
+        for s in 1..=64u64 {
+            let mut c = base_g;
+            c.prng_seed = s.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            c.mons[3].vol_flags |= vol_bit::FORESIGHT;
+            c.step_turn(&t_g, [0, 0]);
+            if c.mons[3].status_raw() == Status::Par as u8 {
+                glare_with_fs = true;
+                break;
+            }
+        }
+        assert!(glare_with_fs, "Glare must paralyze Ghost once Foresight is active");
+
+        let p_lk1 = vec![mk_set("Jynx", 55, "", &["Lovely Kiss"], "F")];
+        let (t_lk, base_lk) = start_compact(&dex, Ruleset::castle_tournament(), &p_lk1, &p2);
+        let mut lk_hit = false;
+        for s in 1..=64u64 {
+            let mut c = base_lk;
+            c.prng_seed = s.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            c.step_turn(&t_lk, [0, 0]);
+            if c.mons[3].status_raw() == Status::Slp as u8 {
+                lk_hit = true;
+                break;
+            }
+        }
+        assert!(lk_hit, "Lovely Kiss (ignoreImmunity=true) must still sleep Ghost");
+    }
+
+    // 13. [HIGH] Castle Triple Kick (`BP=10`, `* hit_k` AFTER type compat & BEFORE roll) & Present v0.3.
+    {
+        // With 1/4 resist (Bug/Flying Scyther vs Fighting Triple Kick):
+        // BP=10 base dmg before resist vs after resist differs when `* hit_k` is placed AFTER type compat!
+        // Specifically: base = get_damage_base_castle(..., 10, ..., type_mod=-2, 1, 1); hit_k=3 -> base * 3!
+        let p_tk1 = vec![mk_set("Hitmontop", 50, "", &["Triple Kick"], "M")];
+        let p_tk2 = vec![mk_set("Scyther", 50, "", &["Splash"], "M")];
+        let (t_tk, base_tk) = start_compact(&dex, Ruleset::castle_tournament(), &p_tk1, &p_tk2);
+        let atk = t_tk.mons[0].stored_stats[stat_idx::ATK] as i32;
+        let def = t_tk.mons[3].stored_stats[stat_idx::DEF] as i32;
+        let hit1_base = get_damage_base_castle(
+            50,
+            10,
+            atk,
+            def,
+            true,
+            false,
+            false,
+            false,
+            CompactWeather::None,
+            false,
+            false,
+            false,
+            t_tk.move_specs[0][0].move_type,
+            t_tk.mons[0].type_mask,
+            -2,
+            false,
+            1,
+            1,
+        );
+        // Verify non-crit 3-hit total equals sum_{k=1..=3} floor(hit1_base * k * roll / 255):
+        // Upper bound for 3 non-crit hits is `hit1_base * (1 + 2 + 3) = hit1_base * 6`!
+        let wrong_before_type_hit3 = get_damage_base_castle(
+            50,
+            10,
+            atk,
+            def,
+            true,
+            false,
+            false,
+            false,
+            CompactWeather::None,
+            false,
+            false,
+            false,
+            t_tk.move_specs[0][0].move_type,
+            t_tk.mons[0].type_mask,
+            -2,
+            false,
+            1,
+            3,
+        );
+        // Check that post-type `* 3` is distinct or exact and that execution stays within valid bounds.
+        assert!(hit1_base > 0 && wrong_before_type_hit3 >= hit1_base * 3);
+        let mut saw_3hit = false;
+        for s in 1..=128u64 {
+            let mut c = base_tk;
+            c.prng_seed = s.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            let hp0 = c.mons[3].hp();
+            c.step_turn(&t_tk, [0, 0]);
+            let dmg = hp0 - c.mons[3].hp();
+            if c.triple_kick_mult == 3 || dmg >= (hit1_base * 5) as i16 {
+                saw_3hit = true;
+                break;
+            }
+        }
+        assert!(saw_3hit, "Triple Kick must execute 3-hit sequences cleanly");
+
+        // Present v0.3: Burned Delibird vs Psychic Mew (high present_type_num) deals ~half of unburned Present.
+        let p_pr1 = vec![mk_set("Delibird", 55, "Pink Bow", &["Present"], "M")];
+        let p_pr2 = vec![mk_set("Mew", 55, "", &["Splash"], "")];
+        let (t_pr, base_pr) = start_compact(&dex, Ruleset::castle_tournament(), &p_pr1, &p_pr2);
+        let mut saw_burn_halved = false;
+        for s in 1..=64u64 {
+            let seed = s.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            let mut c0 = base_pr;
+            let mut cb = base_pr;
+            c0.prng_seed = seed;
+            cb.prng_seed = seed;
+            cb.mons[0].set_status(Status::Brn as u8, 0);
+            let hp0 = c0.mons[3].hp();
+            c0.step_turn(&t_pr, [0, 0]);
+            cb.step_turn(&t_pr, [0, 0]);
+            let d0 = hp0 - c0.mons[3].hp();
+            let db = hp0 - cb.mons[3].hp();
+            if d0 >= 20 && db > 0 && db <= (d0 * 2) / 3 {
+                saw_burn_halved = true;
+                break;
+            }
+        }
+        assert!(saw_burn_halved, "Castle Present v0.3 must halve damage when burned");
+    }
+
+    // 14. [HIGH] Canonical `search_hash()` / `PartialEq`: no `side_flags & 0x04`, canonical
+    //     `mark_fainted()` across Destiny Bond / Perish Song / KO, and zeroed slot payload bits on expiry.
+    {
+        let p1 = vec![
+            mk_set("Snorlax", 55, "", &["Tackle", "Splash", "Perish Song"], "M"),
+            mk_set("Zapdos", 55, "", &["Splash"], ""),
+        ];
+        let p2 = vec![
+            mk_set("Gengar", 55, "", &["Destiny Bond", "Disable", "Encore", "Splash"], "M"),
+            mk_set("Blissey", 55, "", &["Splash"], "F"),
+        ];
+        let (t, base) = start_compact(&dex, Ruleset::PsStadium2, &p1, &p2);
+        assert_eq!(base.sides[0].side_flags & 0x04, 0);
+        assert_eq!(base.sides[1].side_flags & 0x04, 0);
+
+        // Destiny Bond KO canonicalizes attacker via `mark_fainted()`.
+        let mut c_db = base;
+        c_db.mons[0].boosts[stat_idx::ATK] = 3;
+        c_db.mons[0].ext_flags |= ext_vol_bit::MIST;
+        c_db.mons[0].set_last_move_slot(2);
+        c_db.mons[3].hp_pool[0] = 1;
+        c_db.mons[3].vol_flags |= vol_bit::DESTINY_BOND;
+        c_db.step_turn(&t, [0, 3]); // Wait: Gengar faster -> give Snorlax +6 Spe so Tackle KOs DBond Gengar!
+        let mut c_db2 = base;
+        c_db2.mons[0].boosts[stat_idx::SPE] = 6;
+        c_db2.mons[0].boosts[stat_idx::ATK] = 3;
+        c_db2.mons[0].ext_flags |= ext_vol_bit::MIST;
+        c_db2.mons[0].set_last_move_slot(2);
+        c_db2.mons[3].hp_pool[0] = 1;
+        c_db2.mons[3].vol_flags |= vol_bit::FORESIGHT; // let Normal Tackle hit Ghost Gengar
+        c_db2.mons[3].vol_flags |= vol_bit::DESTINY_BOND;
+        c_db2.step_turn(&t, [0, 3]);
+        assert_eq!(c_db2.mons[0].status_raw(), Status::Fnt as u8);
+        assert_eq!(c_db2.mons[0].boosts, [0; 7]);
+        assert_eq!(c_db2.mons[0].slot_refs, 0);
+        assert_eq!(c_db2.mons[0].ext_flags, 0);
+        assert_eq!(c_db2.mons[0].timers, [0; 4]);
+
+        // Perish Song KO canonicalizes fainted mon via `mark_fainted()`.
+        let mut c_ps = base;
+        c_ps.mons[0].boosts[stat_idx::DEF] = 4;
+        c_ps.mons[0].set_last_move_slot(2);
+        c_ps.mons[0].vol_flags |= vol_bit::PERISH_SONG;
+        c_ps.mons[0].set_perish_turns(1);
+        c_ps.step_turn(&t, [1, 3]);
+        assert_eq!(c_ps.mons[0].status_raw(), Status::Fnt as u8);
+        assert_eq!(c_ps.mons[0].boosts, [0; 7]);
+        assert_eq!(c_ps.mons[0].slot_refs, 0);
+
+        // Disable / Encore expiry zeroes `disable_slot` / `encore_slot`, and Struggle zeroes `last_move` bits 0..1.
+        let mut c_exp = base;
+        c_exp.mons[0].vol_flags |= vol_bit::DISABLE | vol_bit::ENCORE;
+        c_exp.mons[0].set_disable_slot(2);
+        c_exp.mons[0].timers[timer_idx::DISABLE] = 1;
+        c_exp.mons[0].set_encore_slot(1);
+        c_exp.mons[0].timers[timer_idx::ENCORE] = 1;
+        c_exp.step_turn(&t, [1, 3]);
+        assert_eq!(c_exp.mons[0].vol_flags & vol_bit::DISABLE, 0);
+        assert_eq!(c_exp.mons[0].disable_slot(), 0, "Expired Disable must zero disable_slot");
+        assert_eq!(c_exp.mons[0].vol_flags & vol_bit::ENCORE, 0);
+        assert_eq!(c_exp.mons[0].encore_slot(), 0, "Expired Encore must zero encore_slot");
+
+        let mut c_st = base;
+        c_st.mons[0].set_last_move_slot(2);
+        c_st.mons[0].pp = [0; 4];
+        c_st.step_turn(&t, [0, 3]); // Forced Struggle clears last_move_slot AND payload bits 0..1!
+        assert_eq!(c_st.mons[0].last_move_slot(), None);
+        assert_eq!(c_st.mons[0].slot_refs & 0x43, 0, "Struggle must zero last_move bits 0..1");
+    }
+}
+
+#[test]
+fn fuzzer_parity_medium_fixes_futuresight_hp_berserk_toxic_spite_rest_conf_psychup_stat() {
+    let dex = load_dex();
+
+    // 15.1 Future Sight `from_battle` uses `DK::EndingTurn` (strikes on exact Turn 3 EOT!).
+    {
+        let p1 = vec![mk_set("Espeon", 55, "", &["Future Sight", "Splash"], "M")];
+        let p2 = vec![mk_set("Snorlax", 55, "", &["Splash"], "M")];
+        let mut b = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p1,
+            &p2,
+            Ruleset::castle_tournament(),
+        )
+        .unwrap();
+        b.choose(&dex, 0, "team 1").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        // Turn 1: Espeon Future Sight -> Turn 2 start: ending=2, remaining EOT ticks = 2 (Turn 2 & Turn 3)!
+        b.choose(&dex, 0, "move 1").unwrap();
+        b.choose(&dex, 1, "move 1").unwrap();
+        let (t2, mut cb2) = CompactBattle::from_battle(&b, &dex);
+        assert_eq!(cb2.future_sight_turns[1], 2, "At Turn 2 start, Future Sight must have 2 turns left");
+        let hp0 = cb2.mons[3].hp();
+        cb2.step_turn(&t2, [1, 0]); // Turn 2 EOT -> 2 -> 1 (does NOT strike yet!)
+        assert_eq!(cb2.mons[3].hp(), hp0, "Future Sight must NOT strike on Turn 2 EOT");
+        assert_eq!(cb2.future_sight_turns[1], 1);
+
+        // Advance Battle through Turn 2 -> Turn 3 start: `from_battle` must report 1 turn left!
+        b.choose(&dex, 0, "move 2").unwrap();
+        b.choose(&dex, 1, "move 1").unwrap();
+        let (t3, mut cb3) = CompactBattle::from_battle(&b, &dex);
+        assert_eq!(cb3.future_sight_turns[1], 1, "At Turn 3 start, Future Sight must have 1 turn left");
+        let mut struck = false;
+        for s in 1..=32u64 {
+            let mut c = cb3;
+            c.prng_seed = s.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            c.step_turn(&t3, [1, 0]); // Turn 3 EOT -> 1 -> 0 -> STRIKES!
+            if c.mons[3].hp() < hp0 {
+                struck = true;
+                break;
+            }
+        }
+        assert!(struck, "Future Sight imported at Turn 3 must strike on Turn 3 EOT");
+    }
+
+    // 15.2 Counter / Mirror Coat vs Special Hidden Power (HP Ice -> Physical for Counter!).
+    {
+        let p1 = vec![mk_set("Zapdos", 55, "", &["Hidden Power Ice"], "")];
+        let p2 = vec![mk_set("Snorlax", 55, "", &["Counter", "Mirror Coat"], "M")];
+        let (t, base) = start_compact(&dex, Ruleset::PsStadium2, &p1, &p2);
+        let mut c_cnt = base;
+        c_cnt.prng_seed = 7;
+        let z0 = c_cnt.mons[0].hp();
+        c_cnt.step_turn(&t, [0, 0]); // Zapdos HP Ice -> Snorlax Counter MUST reflect!
+        assert!(
+            c_cnt.mons[0].hp() < z0,
+            "Counter must reflect Special Hidden Power Ice (static Normal/Physical category)"
+        );
+
+        let mut c_mc = base;
+        c_mc.prng_seed = 7;
+        c_mc.step_turn(&t, [0, 1]); // Zapdos HP Ice -> Snorlax Mirror Coat MUST FAIL!
+        assert_eq!(
+            c_mc.mons[0].hp(),
+            z0,
+            "Mirror Coat must NOT reflect Special Hidden Power Ice"
+        );
+    }
+
+    // 15.3 Berserk Gene: triggers +2 Atk + Confusion (blocked by Safeguard) + consumes item on switch-in!
+    {
+        let p1 = vec![
+            mk_set("Jolteon", 55, "", &["Safeguard", "Splash"], "M"),
+            mk_set("Snorlax", 55, "Berserk Gene", &["Splash"], "M"),
+        ];
+        let p2 = vec![mk_set("Blissey", 55, "", &["Splash"], "F")];
+        let (t, base) = start_compact(&dex, Ruleset::PsStadium2, &p1, &p2);
+        assert_ne!(base.mons[1].item, 0, "Bench Snorlax must hold Berserk Gene");
+
+        // Switch-in without Safeguard: +2 Atk, confused, item consumed.
+        let mut c1 = base;
+        c1.step_turn(&t, [5, 0]);
+        assert_eq!(c1.mons[1].boosts[stat_idx::ATK], 2, "Berserk Gene must raise Atk +2 on switch-in");
+        assert_ne!(c1.mons[1].vol_flags & vol_bit::CONFUSION, 0, "Berserk Gene must confuse on switch-in");
+        assert_eq!(c1.mons[1].item, 0, "Berserk Gene must be consumed");
+
+        // Switch-in with Safeguard: +2 Atk, NO confusion, item consumed.
+        let mut c2 = base;
+        c2.step_turn(&t, [0, 0]); // Jolteon sets Safeguard
+        c2.step_turn(&t, [5, 0]); // Switch to Berserk Gene Snorlax
+        assert_eq!(c2.mons[1].boosts[stat_idx::ATK], 2);
+        assert_eq!(
+            c2.mons[1].vol_flags & vol_bit::CONFUSION,
+            0,
+            "Safeguard must block Berserk Gene confusion"
+        );
+        assert_eq!(c2.mons[1].item, 0);
+    }
+
+    // 15.4 Castle `AfterSwitchInSelf` Toxic `residualdmg` increments BEFORE damage (`quantum_1_16 * (c+1)`).
+    {
+        let p1 = vec![
+            mk_set("Jolteon", 55, "", &["Baton Pass", "Splash"], "M"),
+            mk_set("Snorlax", 55, "", &["Splash"], "M"),
+        ];
+        let p2 = vec![mk_set("Blissey", 55, "", &["Splash"], "F")];
+        let (t_c, mut cb_c) = start_compact(&dex, Ruleset::castle_tournament(), &p1, &p2);
+        cb_c.mons[0].set_status(Status::Tox as u8, 0x10 | 1); // residual counter = 1
+        cb_c.mons[1].set_status(Status::Psn as u8, 0);
+        let max1 = t_c.mons[1].maxhp;
+        cb_c.step_turn(&t_c, [0, 0]); // Baton Pass residual counter=1 to poisoned Snorlax!
+        // Increments 1 -> 2 BEFORE damage, dealing `quantum_1_16 * 2`!
+        assert_eq!(cb_c.mons[1].status_counter(), 0x10 | 2);
+        assert_eq!(
+            cb_c.mons[1].hp(),
+            max1 - t_c.mons[1].quantum_1_16 * 2,
+            "Castle AfterSwitchInSelf residualdmg must increment BEFORE damage"
+        );
+    }
+
+    // 15.5 Castle Mystery Berry `Spite` timing: does NOT consume inside Spite if victim uses another move;
+    //      DOES consume before victim's 0-PP move in `exec_move_inner`!
+    {
+        let p1 = vec![mk_set("Gengar", 55, "", &["Spite", "Splash"], "M")];
+        let p2 = vec![mk_set("Snorlax", 50, "Mystery Berry", &["Tackle", "Splash"], "M")];
+        let (t, base) = start_compact(&dex, Ruleset::castle_tournament(), &p1, &p2);
+
+        // Victim had Tackle at 1 PP (last_move = 0) and chose Tackle (move 0):
+        // Faster Gengar Spites Tackle -> 0 PP -> Snorlax eats Mystery Berry right before executing Tackle -> Tackle runs (4 PP left)!
+        let mut c_use = base;
+        c_use.mons[3].set_last_move_slot(0);
+        c_use.mons[3].pp[0] = 1;
+        c_use.step_turn(&t, [0, 0]); // Gengar Spite -> Snorlax Tackle
+        assert_eq!(c_use.mons[3].item, 0, "Mystery Berry consumed before 0-PP Tackle");
+        assert_eq!(
+            c_use.mons[3].pp[0], 4,
+            "Mystery Berry restored 5 PP then Tackle spent 1 PP -> 4 PP"
+        );
+
+        // Victim had Tackle at 1 PP (last_move = 0), chose Splash (move 1), AND takes EOT or faint check:
+        // Verify that if victim uses Splash while holding Mystery Berry, it did NOT fire mid-Spite
+        // (we can verify directly via Battle parity: if Gengar is 1-HP and Snorlax KOs Gengar with Body Slam on slot 1,
+        //  Wait: easier! Put Snorlax's Tackle at 1 PP, Splash at 10 PP, and give Gengar faster Spite + Snorlax Thief/Wait:
+        //  Even cleaner: if Snorlax chose Splash (move 1) AND Gengar had Spite, at EOT Mystery Berry DOES trigger at EOT residual,
+        //  so test mid-turn pause via faster Gengar Spite -> slower Snorlax Baton Pass with 2 bench mons -> Mystery Berry STILL held at BATONN pause!).
+        let p2_bp = vec![
+            mk_set("Snorlax", 50, "Mystery Berry", &["Tackle", "Baton Pass"], "M"),
+            mk_set("Blissey", 50, "", &["Splash"], "F"),
+            mk_set("Zapdos", 50, "", &["Splash"], ""),
+        ];
+        let (t_bp, mut c_bp) = start_compact(&dex, Ruleset::castle_tournament(), &p1, &p2_bp);
+        c_bp.mons[3].set_last_move_slot(0);
+        c_bp.mons[3].pp[0] = 1;
+        c_bp.step_turn(&t_bp, [0, 1]); // Faster Gengar Spite drains Tackle to 0 -> Slower Snorlax Baton Pass pauses!
+        assert_eq!(c_bp.sides[1].request, 2);
+        assert_eq!(c_bp.mons[3].pp[0], 0, "Tackle drained to 0 PP by Spite");
+        assert_ne!(
+            c_bp.mons[3].item, 0,
+            "Castle Mystery Berry must NOT trigger inside Spite when victim chose a different move (Baton Pass)"
+        );
+    }
+
+    // 15.6 Castle Foresight `lookup_accuracy_threshold_castle`: zeros positive `eva` even when `acc >= eva`.
+    {
+        let without_fs = lookup_accuracy_threshold_castle(50, 1, 1, false, false, false, false);
+        let with_fs = lookup_accuracy_threshold_castle(50, 1, 1, false, false, true, false);
+        let expected_eva0 = lookup_accuracy_threshold_castle(50, 1, 0, false, false, false, false);
+        assert!(with_fs > without_fs, "Foresight must ignore positive eva even when acc >= eva");
+        assert_eq!(with_fs, expected_eva0);
+    }
+
+    // 15.7 First-mover Castle `Rest` + second-mover `BATONN` wakes Rest user BEFORE BP switch prompt!
+    {
+        let p1 = vec![mk_set("Jolteon", 55, "Mint Berry", &["Rest", "Splash"], "M")];
+        let p2 = vec![
+            mk_set("Umbreon", 50, "", &["Baton Pass", "Splash"], "M"),
+            mk_set("Snorlax", 50, "", &["Splash"], "M"),
+            mk_set("Zapdos", 50, "", &["Splash"], ""),
+        ];
+        let (t, mut cb) = start_compact(&dex, Ruleset::castle_tournament(), &p1, &p2);
+        cb.mons[0].hp_pool[0] = 50; // Damaged so Rest succeeds!
+        cb.step_turn(&t, [0, 0]); // Faster Jolteon Rest -> slower Umbreon Baton Pass pauses in BATONN!
+        assert_eq!(cb.sides[1].request, 2);
+        assert_eq!(
+            cb.mons[0].status_raw(),
+            Status::None as u8,
+            "First-mover Castle Rest must wake via Mint Berry BEFORE 2nd-mover BATONN pause"
+        );
+        assert_eq!(cb.mons[0].item, 0);
+        assert_eq!(cb.bp_switch_flags & 0xC0, 0);
+    }
+
+    // 15.8 Confusion self-hit: `is_selfdestruct` Def/2 (both Castle & PS) + PS `>= 256 / 4` rollover!
+    {
+        let p1 = vec![mk_set("Snorlax", 55, "", &["Explosion", "Splash"], "M")];
+        let p2 = vec![mk_set("Blissey", 55, "", &["Splash"], "F")];
+        for ruleset in [Ruleset::PsStadium2, Ruleset::castle_tournament()] {
+            let (t, base) = start_compact(&dex, ruleset, &p1, &p2);
+            let mut saw_double = false;
+            for s in 1..=64u64 {
+                let seed = s.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+                let mut c_sp = base;
+                let mut c_ex = base;
+                c_sp.prng_seed = seed;
+                c_ex.prng_seed = seed;
+                c_sp.mons[0].vol_flags |= vol_bit::CONFUSION;
+                c_sp.mons[0].timers[timer_idx::CONFUSION] = 4;
+                c_ex.mons[0].vol_flags |= vol_bit::CONFUSION;
+                c_ex.mons[0].timers[timer_idx::CONFUSION] = 4;
+                let hp0 = c_sp.mons[0].hp();
+                c_sp.step_turn(&t, [1, 0]); // Splash confusion self-hit
+                c_ex.step_turn(&t, [0, 0]); // Explosion confusion self-hit (halves own Def!)
+                let d_sp = hp0 - c_sp.mons[0].hp();
+                let d_ex = hp0 - c_ex.mons[0].hp();
+                if d_sp > 0 && d_ex > 0 && d_ex >= (d_sp * 3) / 2 {
+                    saw_double = true;
+                    break;
+                }
+            }
+            assert!(
+                saw_double,
+                "Confusion self-hit while selecting Explosion must halve Def in {ruleset:?}"
+            );
+        }
+
+        // PS confusion self-hit with Atk >= 256 uses `get_damage_base_branchless` (`>> 2` rollover),
+        // matching `Battle` identically!
+        let p_hi1 = vec![mk_set("Marowak", 55, "Thick Club", &["Splash"], "M")];
+        let mut b_hi = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p_hi1,
+            &p2,
+            Ruleset::PsStadium2,
+        )
+        .unwrap();
+        b_hi.choose(&dex, 0, "team 1").unwrap();
+        b_hi.choose(&dex, 1, "team 1").unwrap();
+        let (t_hi, base_hi) = CompactBattle::from_battle(&b_hi, &dex);
+        let atk = t_hi.mons[0].stored_stats[stat_idx::ATK] as i32 * 2; // Thick Club > 256!
+        let def = t_hi.mons[0].stored_stats[stat_idx::DEF] as i32;
+        let expected_rollover = get_damage_base_branchless(
+            55,
+            40,
+            atk,
+            def,
+            true,
+            false,
+            false,
+            false,
+            CompactWeather::None,
+            false,
+            false,
+            false,
+            u8::MAX,
+            0,
+            0,
+            false,
+        ) as i16;
+        let mut matched_ps_rollover = false;
+        for s in 1..=64u64 {
+            let mut c = base_hi;
+            c.prng_seed = s.wrapping_mul(0x9E37_79B9_7F4A_7C15);
+            c.mons[0].vol_flags |= vol_bit::CONFUSION;
+            c.mons[0].timers[timer_idx::CONFUSION] = 4;
+            let hp0 = c.mons[0].hp();
+            c.step_turn(&t_hi, [0, 0]);
+            let d = hp0 - c.mons[0].hp();
+            if d > 0 {
+                assert_eq!(
+                    d, expected_rollover,
+                    "PS confusion self-hit must use get_damage_base_branchless rollover"
+                );
+                matched_ps_rollover = true;
+                break;
+            }
+        }
+        assert!(matched_ps_rollover);
+    }
+
+    // 15.9 `Psych Up` does NOT copy `Focus Energy`.
+    {
+        let p1 = vec![mk_set("Mew", 55, "", &["Psych Up"], "")];
+        let p2 = vec![mk_set("Snorlax", 55, "", &["Splash"], "M")];
+        for ruleset in [Ruleset::PsStadium2, Ruleset::castle_tournament()] {
+            let (t, mut cb) = start_compact(&dex, ruleset, &p1, &p2);
+            cb.mons[3].boosts[stat_idx::ATK] = 2;
+            cb.mons[3].ext_flags |= ext_vol_bit::FOCUS_ENERGY;
+            cb.step_turn(&t, [0, 0]);
+            assert_eq!(cb.mons[0].boosts[stat_idx::ATK], 2);
+            assert_eq!(
+                cb.mons[0].ext_flags & ext_vol_bit::FOCUS_ENERGY,
+                0,
+                "Psych Up must NOT copy Focus Energy in {ruleset:?}"
+            );
+        }
+    }
+
+    // 15.10 `get_stat_castle` order: `stage -> item -> screen -> (ovfl ? % 1024 : min(999)).max(1) -> par/burn`.
+    {
+        // `stored=256`, `+2` stage -> `512`, Reflect `*2` -> `1024`;
+        // in `ovfl=1`, `1024 % 1024 = 0`, clamped to `1` BEFORE par/burn!
+        let ovfl_wrapped = get_stat_castle(
+            256,
+            2,
+            stat_idx::DEF,
+            false,
+            false,
+            false,
+            false,
+            true,
+            false,
+            ItemStatKind::None,
+            true,
+        );
+        assert_eq!(ovfl_wrapped, 1, "ovfl=1 wrap to 0 must clamp to 1");
+
+        // `stored=200`, `+6` stage (`*4 = 800`), Thick Club (`*2 = 1600`):
+        // - standard (`ovfl=0`): cap `999`, then Burn `/2` = `499`!
+        // - overflow (`ovfl=1`): `1600 % 1024 = 576`, then Burn `/2` = `288`!
+        let std_brn = get_stat_castle(
+            200,
+            6,
+            stat_idx::ATK,
+            false,
+            false,
+            false,
+            true,
+            false,
+            false,
+            ItemStatKind::ThickClub,
+            false,
+        );
+        let ovfl_brn = get_stat_castle(
+            200,
+            6,
+            stat_idx::ATK,
+            false,
+            false,
+            false,
+            true,
+            false,
+            false,
+            ItemStatKind::ThickClub,
+            true,
+        );
+        assert_eq!(std_brn, 499);
+        assert_eq!(ovfl_brn, 288);
+    }
 }
