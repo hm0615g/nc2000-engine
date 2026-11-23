@@ -69,7 +69,7 @@ pub fn dispatch_item(
             if let Some(ty) = dex.items.get(item).type_boost {
                 let move_type = b.active_move.as_ref().map(|m| m.move_type);
                 if move_type == Some(ty) {
-                    return RV::Num(relay.as_num() * 1.1);
+                    return RV::Num((relay.as_num() * 1.1).floor());
                 }
             }
             RV::Undef

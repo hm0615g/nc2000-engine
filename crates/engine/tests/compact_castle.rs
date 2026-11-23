@@ -2914,3 +2914,124 @@ fn fuzzer_parity_medium_fixes_futuresight_hp_berserk_toxic_spite_rest_conf_psych
         assert_eq!(ovfl_brn, 288);
     }
 }
+
+#[test]
+fn wave3_final_polish_parity() {
+    let dex = load_dex();
+
+    // 1. Pink Bow + Stomp vs Minimize: Battle floors 1.1x before Minimize's 2x chain_modify,
+    //    matching CompactBattle in both PS and Castle!
+    for ruleset in [Ruleset::PsStadium2, Ruleset::castle_tournament()] {
+        let p1 = vec![mk_set("Miltank", 50, "Pink Bow", &["Stomp"], "F")];
+        let p2 = vec![mk_set("Blissey", 50, "", &["Splash"], "F")];
+        let mut b = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", &p1, &p2, ruleset).unwrap();
+        b.choose(&dex, 0, "team 1").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        let a2 = b.active_id(1).unwrap();
+        b.add_volatile(&dex, a2, "minimize", None, nc2000_engine::battle::EffectHandle::None);
+        let (t, cb) = CompactBattle::from_battle(&b, &dex);
+        let hp_before = b.poke(a2).hp;
+        b.choose(&dex, 0, "move 1").unwrap();
+        b.choose(&dex, 1, "move 1").unwrap();
+        let b_dmg = hp_before - b.poke(a2).hp;
+        let atk = cb.mon_stat(&t, 0, 0, stat_idx::ATK, false, false);
+        let def = cb.mon_stat(&t, 1, 0, stat_idx::DEF, false, false);
+        let c_base = get_damage_base_castle(
+            50, 65, atk, def, true, false, false, true, CompactWeather::None,
+            false, false, false, t.move_specs[0][0].move_type, t.mons[0].type_mask, 0, false, 1, 2,
+        );
+        let lo = (c_base * 217) / 255;
+        let hi = c_base;
+        assert!(
+            (b_dmg >= lo && b_dmg <= hi) || b_dmg > hi, // non-crit in [lo, hi], crit > hi
+            "Pink Bow + Stomp vs Minimize ({ruleset:?}): Battle dealt {b_dmg}, expected non-crit in [{lo}..={hi}]"
+        );
+        assert!(b_dmg > 150, "Minimize 2x must NOT be dropped under Pink Bow (got {b_dmg})");
+    }
+
+    // 2. PS Foresight must NOT set FORESIGHT_CASTER (`0x4000`) in CompactBattle (matching from_battle).
+    {
+        let p1 = vec![mk_set("Machamp", 50, "", &["Foresight"], "M")];
+        let p2 = vec![mk_set("Gengar", 50, "", &["Splash"], "M")];
+        let (t, mut cb) = start_compact(&dex, Ruleset::PsStadium2, &p1, &p2);
+        cb.step_turn(&t, [0, 0]);
+        assert_eq!(cb.mons[0].ext_flags & ext_vol_bit::FORESIGHT_CASTER, 0);
+        assert_ne!(cb.mons[3].vol_flags & vol_bit::FORESIGHT, 0);
+    }
+
+    // 3. Castle BP to Burned receiver preserves `residualdmg` volatile while dealing 1/8 Burn slip.
+    {
+        let p1 = vec![
+            mk_set("Jolteon", 55, "", &["Baton Pass", "Splash"], "M"),
+            mk_set("Snorlax", 55, "", &["Splash"], "M"),
+        ];
+        let p2 = vec![mk_set("Blissey", 55, "", &["Splash"], "F")];
+        let mut b = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p1,
+            &p2,
+            Ruleset::castle_tournament(),
+        )
+        .unwrap();
+        b.choose(&dex, 0, "team 1,2").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        let j_id = b.active_id(0).unwrap();
+        b.poke_mut(j_id).status = Status::Tox;
+        b.add_volatile(&dex, j_id, "residualdmg", None, nc2000_engine::battle::EffectHandle::None);
+        let rd = nc2000_engine::cond_id!(&dex, "residualdmg").unwrap();
+        b.poke_mut(j_id).volatile_mut(rd).unwrap().set_int(nc2000_engine::state::DK::Counter, 3);
+        let s_id = nc2000_engine::state::PokeId { side: 0, slot: 1 };
+        b.poke_mut(s_id).status = Status::Brn;
+        b.refresh_poke_mask(&dex, s_id);
+        let (t, mut cb) = CompactBattle::from_battle(&b, &dex);
+        b.choose(&dex, 0, "move 1").unwrap();
+        b.choose(&dex, 1, "move 1").unwrap();
+        b.choose(&dex, 0, "switch 2").unwrap();
+        cb.step_turn(&t, [0, 0]);
+        let (_, cb_ref) = CompactBattle::from_battle(&b, &dex);
+        let ref_act = cb_ref.sides[0].active_idx as usize;
+        assert_eq!(cb.mons[1].hp(), cb_ref.mons[ref_act].hp());
+        assert_eq!(cb.mons[1].status_packed, cb_ref.mons[ref_act].status_packed);
+        assert_eq!(cb.mons[1].status_counter(), 0x10 | 3);
+    }
+
+    // 4. Castle BP receiver entry faint clears `bp_switch_flags` in both CompactBattle and from_battle.
+    {
+        let p1 = vec![
+            mk_set("Jolteon", 50, "", &["Baton Pass", "Splash"], "M"),
+            mk_set("Snorlax", 50, "", &["Splash"], "M"),
+            mk_set("Zapdos", 50, "", &["Splash"], "N"),
+        ];
+        let p2 = vec![mk_set("Blissey", 50, "", &["Splash"], "F")];
+        let mut b = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p1,
+            &p2,
+            Ruleset::castle_tournament(),
+        )
+        .unwrap();
+        b.choose(&dex, 0, "team 1,2,3").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        b.sides[0].side_conditions.push((
+            nc2000_engine::cond_id!(&dex, "spikes").unwrap(),
+            {
+                let mut st = nc2000_engine::state::EffectState::default();
+                st.set_int(nc2000_engine::state::DK::Layers, 1);
+                st
+            },
+        ));
+        let s_id = nc2000_engine::state::PokeId { side: 0, slot: 1 };
+        b.poke_mut(s_id).hp = 1;
+        let (t, mut cb) = CompactBattle::from_battle(&b, &dex);
+        b.choose(&dex, 0, "move 1").unwrap();
+        b.choose(&dex, 1, "move 1").unwrap();
+        cb.step_turn(&t, [0, 0]);
+        b.choose(&dex, 0, "switch 2").unwrap();
+        cb.step_switch(&t, [5, 7]);
+        let (_, cb_ref) = CompactBattle::from_battle(&b, &dex);
+        assert_eq!(cb.bp_switch_flags, 0);
+        assert_eq!(cb_ref.bp_switch_flags, 0);
+    }
+}

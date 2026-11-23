@@ -2525,11 +2525,6 @@ impl CompactBattle {
         let mut locked_hit1_receivers: [Option<(u8, u8)>; 2] = [None; 2];
         let mut bp_switch_flags = 0u8;
         let mut turn_extra_flags = 0u8;
-        for s in 0..2usize {
-            if battle.bp_switched_this_turn[s] {
-                bp_switch_flags |= 1u8 << (2 + s);
-            }
-        }
 
         for side_n in 0..2usize {
             let side = &battle.sides[side_n];
@@ -2627,7 +2622,6 @@ impl CompactBattle {
 
                 let mut has_trapped = false;
                 let mut has_partial_trap = false;
-                let mut saw_partial_trap_vol = false;
                 let mut partial_trap_dur = 0u8;
                 let mut ttm_move: Option<MoveId> = None;
                 if !p.volatiles.is_empty() {
@@ -2730,7 +2724,6 @@ impl CompactBattle {
                         } else if scid == dt.trapped_cond {
                             has_trapped = true;
                         } else if scid == dt.partiallytrapped_cond {
-                            saw_partial_trap_vol = true;
                             let trapper_active = match vst.source {
                                 Some(src) => {
                                     battle.active_id(side_n ^ 1) == Some(src)
@@ -2957,16 +2950,25 @@ impl CompactBattle {
         if residuals_done {
             compact_sides[0].side_flags |= 0x08;
         }
+        let outcome = match battle.outcome() {
+            None => 0,
+            Some(crate::battle::Outcome::P1Win) => 1,
+            Some(crate::battle::Outcome::P2Win) => 2,
+            Some(crate::battle::Outcome::Tie) => 3,
+        };
         // Compute Future Sight countdown from `DK::EndingTurn` (rather than un-decremented `vst.duration`),
-        // accounting for whether this turn's EOT residuals have already executed (including terminal KOs!).
-        let fs_eff_turn = battle.turn as i64 + (residuals_already_ran as i64);
-        for side_n in 0..2usize {
-            if let Some((ending_opt, dur_opt)) = future_sight_raw[side_n] {
-                future_sight_turns[side_n] = if let Some(ending) = ending_opt {
-                    (ending - (fs_eff_turn - 1) + 1).clamp(1, 3) as u8
-                } else {
-                    dur_opt.unwrap_or(1).clamp(1, 3) as u8
-                };
+        // accounting for whether this turn's EOT residuals have already executed. Clear on terminal states
+        // (matching `finish_outcome`) so Order-2 Sandstorm KOs before Order-3 Future Sight agree identically.
+        if outcome == 0 {
+            let fs_eff_turn = battle.turn as i64 + (residuals_already_ran as i64);
+            for side_n in 0..2usize {
+                if let Some((ending_opt, dur_opt)) = future_sight_raw[side_n] {
+                    future_sight_turns[side_n] = if let Some(ending) = ending_opt {
+                        (ending - (fs_eff_turn - 1) + 1).clamp(1, 3) as u8
+                    } else {
+                        dur_opt.unwrap_or(1).clamp(1, 3) as u8
+                    };
+                }
             }
         }
         // Apply `FORESIGHT_CASTER` (Castle #54③ only) and `LOCKED_FIRST_HIT_RECV` cross-side volatile references.
@@ -3006,10 +3008,11 @@ impl CompactBattle {
                 }
             }
         }
-        // If side `s` is paused mid-turn in a Baton Pass switch and foe has a queued move,
+        // If side `s` Baton Passed mid-turn and foe still has a queued move (NOT cancelled by an entry faint),
         // mark side `s` as first-mover BP so Castle Pursuit gets 2x BP 80 after Spikes.
         for s in 0..2usize {
-            if (bp_switch_flags & (1u8 << s)) != 0 && (compact_sides[s ^ 1].side_flags & 0x10) != 0
+            if ((bp_switch_flags & (1u8 << s)) != 0 || battle.bp_switched_this_turn[s])
+                && (compact_sides[s ^ 1].side_flags & 0x10) != 0
             {
                 bp_switch_flags |= 1u8 << (2 + s);
             }
@@ -3027,12 +3030,6 @@ impl CompactBattle {
             .duration
             .unwrap_or(0)
             .clamp(0, 15) as u8;
-        let outcome = match battle.outcome() {
-            None => 0,
-            Some(crate::battle::Outcome::P1Win) => 1,
-            Some(crate::battle::Outcome::P2Win) => 2,
-            Some(crate::battle::Outcome::Tie) => 3,
-        };
         let mut clause_flags = 0u8;
         if !battle.field.pseudo_weather.is_empty() {
             for &(cid, _) in &battle.field.pseudo_weather {
@@ -4042,6 +4039,7 @@ impl CompactBattle {
         self.sides[0].request = 0;
         self.sides[1].request = 0;
         self.sides[0].side_flags &= !0x08;
+        self.future_sight_turns = [0, 0];
         self.clear_stale_perish_bits();
     }
 
@@ -4210,15 +4208,10 @@ impl CompactBattle {
         }
         if baton_pass && saved_res != 0 {
             let new_st = self.mons[new_idx].status_raw();
-            // Castle #14: Baton Pass passes Toxic counter to Psn receiver, NOT to Brn receiver!
-            let can_inherit_res = if is_castle {
-                new_st != Status::Slp as u8
-                    && new_st != Status::Fnt as u8
-                    && new_st != Status::Brn as u8
-            } else {
-                new_st != Status::Slp as u8 && new_st != Status::Fnt as u8
-            };
-            if can_inherit_res {
+            // Preserve `residualdmg` volatile across Baton Pass (matching `Battle::copy_volatile_from`
+            // for onward BP propagation); Castle #14 skips applying/incrementing it on Burned mons
+            // in `exec_switch` and `exec_after_move_self`.
+            if new_st != Status::Slp as u8 && new_st != Status::Fnt as u8 {
                 self.mons[new_idx].set_status(new_st, saved_res);
             }
         }
@@ -7103,7 +7096,7 @@ impl CompactBattle {
                     || (self.mons[def_idx].vol_flags & vol_bit::CONFUSION) != 0);
             if !seed_immune && !night_fail && !conf_fail {
                 self.mons[def_idx].vol_flags |= mspec.primary_vol;
-                if (mspec.primary_vol & vol_bit::FORESIGHT) != 0 {
+                if is_castle && (mspec.primary_vol & vol_bit::FORESIGHT) != 0 {
                     self.mons[att_idx].ext_flags |= ext_vol_bit::FORESIGHT_CASTER;
                 }
                 if (mspec.primary_vol & vol_bit::CONFUSION) != 0 {
