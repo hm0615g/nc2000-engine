@@ -8,6 +8,7 @@ use crate::{
     choice::Choice,
     dex::{toid, Dex},
     prng::Prng,
+    rules::{CastleOverlayConfig, LearnsetPolicy, Ruleset},
     state::Battle,
 };
 
@@ -24,6 +25,9 @@ pub const PREFIX: &str = "NC2-";
 const HEADER: usize = 48;
 const MAX_BYTES: usize = 4096;
 const MAX_ROUNDS: usize = 3010;
+const FLAG_HAS_RULESET: u8 = 1 << 2;
+const RULESET_TRAILER_LEN: usize = 4;
+const RULESET_KIND_CASTLE_PBS: u8 = 1;
 const STATS: [&str; 6] = ["hp", "atk", "def", "spa", "spd", "spe"];
 const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
@@ -41,6 +45,7 @@ pub struct Replay {
     pub caps: [Option<u32>; 2],
     pub open: bool,
     pub bot_side: usize,
+    pub ruleset: Ruleset,
     pub rounds: Vec<[Option<SearchChoice>; 2]>,
 }
 
@@ -98,6 +103,7 @@ impl Recorder {
                 caps: battle.preview_level_caps,
                 open: true,
                 bot_side: 1,
+                ruleset: battle.ruleset,
                 rounds: Vec::new(),
             },
             pending: [None; 2],
@@ -180,8 +186,14 @@ fn resolve(
 
 impl Replay {
     pub fn initial(&self, dex: &Dex) -> Result<Battle, String> {
-        let mut b = Battle::from_fixture(dex, &self.seed, &self.teams[0], &self.teams[1])
-            .map_err(|e| format!("{e:?}"))?;
+        let mut b = Battle::from_fixture_with_ruleset(
+            dex,
+            &self.seed,
+            &self.teams[0],
+            &self.teams[1],
+            self.ruleset,
+        )
+        .map_err(|e| format!("{e:?}"))?;
         b.preview_level_caps = self.caps;
         Ok(b)
     }
@@ -322,9 +334,15 @@ impl Replay {
             let n = u16::try_from(n).map_err(|_| "replay too large")?;
             raw[offset..offset + 2].copy_from_slice(&n.to_be_bytes());
         }
-        raw[43] = self.open as u8 | (self.bot_side as u8) << 1;
+        let has_ruleset = !self.ruleset.is_ps();
+        raw[43] = self.open as u8
+            | ((self.bot_side as u8) << 1)
+            | if has_ruleset { FLAG_HAS_RULESET } else { 0 };
         raw.extend(teams.bytes);
         raw.extend(actions.bytes);
+        if let Ruleset::CastlePbs(cfg) = self.ruleset {
+            raw.extend(encode_castle_trailer(cfg));
+        }
         let checksum = checksum(&raw);
         raw[44..48].copy_from_slice(&checksum);
         if raw.len() > MAX_BYTES {
@@ -361,9 +379,10 @@ impl Replay {
         if raw[1..17] != dex.replay_fingerprint {
             return Err("incompatible replay version".into());
         }
-        if raw[43] > 3 {
+        if raw[43] > 7 {
             return Err("invalid replay settings".into());
         }
+        let has_ruleset = (raw[43] & FLAG_HAS_RULESET) != 0;
         let read16 = |i| u16::from_be_bytes(raw[i..i + 2].try_into().unwrap()) as usize;
         let count = read16(37);
         if count > MAX_ROUNDS {
@@ -372,9 +391,16 @@ impl Replay {
         let team_bits = read16(39);
         let action_bits = read16(41);
         let split = HEADER + team_bits.div_ceil(8);
-        if split + action_bits.div_ceil(8) != raw.len() {
+        let action_end = split + action_bits.div_ceil(8);
+        let expected_len = action_end + if has_ruleset { RULESET_TRAILER_LEN } else { 0 };
+        if expected_len != raw.len() {
             return Err("damaged replay length".into());
         }
+        let ruleset = if has_ruleset {
+            decode_castle_trailer(&raw[action_end..expected_len])?
+        } else {
+            Ruleset::PsStadium2
+        };
         let mut input = Reader::new(&raw[HEADER..split], team_bits);
         let mut teams: [Vec<PokemonSet>; 2] = [Vec::new(), Vec::new()];
         for side in 0..2 {
@@ -473,11 +499,12 @@ impl Replay {
             seed,
             caps,
             open: raw[43] & 1 != 0,
-            bot_side: (raw[43] >> 1) as usize,
+            bot_side: ((raw[43] >> 1) & 1) as usize,
+            ruleset,
             rounds: Vec::new(),
         };
         let mut battle = replay.initial(dex)?;
-        let mut input = Reader::new(&raw[split..], action_bits);
+        let mut input = Reader::new(&raw[split..action_end], action_bits);
         for _ in 0..count {
             let needs = battle.needs_choice();
             if !needs.iter().any(|n| *n) {
@@ -499,6 +526,53 @@ impl Replay {
         input.finish()?;
         Ok(replay)
     }
+}
+
+fn encode_castle_trailer(cfg: CastleOverlayConfig) -> [u8; RULESET_TRAILER_LEN] {
+    let mut flags = 0u8;
+    if cfg.recoil_1v1_attacker_wins {
+        flags |= 1 << 0;
+    }
+    if cfg.perish_dbond_lastmon_forfeit {
+        flags |= 1 << 1;
+    }
+    if cfg.overflow_mode {
+        flags |= 1 << 2;
+    }
+    if matches!(cfg.learnset_policy, LearnsetPolicy::CastleJpEvents) {
+        flags |= 1 << 3;
+    }
+    if cfg.turn_limit.is_some() {
+        flags |= 1 << 4;
+    }
+    let [lim_hi, lim_lo] = cfg.turn_limit.unwrap_or(0).to_be_bytes();
+    [RULESET_KIND_CASTLE_PBS, flags, lim_hi, lim_lo]
+}
+
+fn decode_castle_trailer(bytes: &[u8]) -> Result<Ruleset, String> {
+    if bytes.len() != RULESET_TRAILER_LEN || bytes[0] != RULESET_KIND_CASTLE_PBS {
+        return Err("unsupported replay ruleset".into());
+    }
+    let flags = bytes[1];
+    if flags & !0x1F != 0 {
+        return Err("invalid replay ruleset flags".into());
+    }
+    let raw_limit = u16::from_be_bytes([bytes[2], bytes[3]]);
+    let has_limit = (flags & (1 << 4)) != 0;
+    if !has_limit && raw_limit != 0 {
+        return Err("invalid replay turn limit".into());
+    }
+    Ok(Ruleset::CastlePbs(CastleOverlayConfig {
+        recoil_1v1_attacker_wins: (flags & (1 << 0)) != 0,
+        perish_dbond_lastmon_forfeit: (flags & (1 << 1)) != 0,
+        overflow_mode: (flags & (1 << 2)) != 0,
+        learnset_policy: if (flags & (1 << 3)) != 0 {
+            LearnsetPolicy::CastleJpEvents
+        } else {
+            LearnsetPolicy::PsGen2Stadium2
+        },
+        turn_limit: has_limit.then_some(raw_limit),
+    }))
 }
 
 fn checksum(raw: &[u8]) -> [u8; 4] {

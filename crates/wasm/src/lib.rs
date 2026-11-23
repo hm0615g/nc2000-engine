@@ -48,8 +48,12 @@ use nc2000_bot::{
 };
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::{Category, Dex};
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::{Battle, Pokemon, RequestKind, Status, BOOST_NAMES};
-use nc2000_engine::validate::{canonicalize_team, validate_team, Learnsets};
+use nc2000_engine::validate::{
+    canonicalize_team, canonicalize_team_with_ruleset, validate_team, validate_team_with_ruleset,
+    Learnsets,
+};
 use nc2000_engine::replay::{Recorder, Replay};
 
 /// data/gen2stadium2.json baked into the binary (~416 KB, ~150 KB gzipped
@@ -152,6 +156,31 @@ impl WasmValidator {
     pub fn canonicalize_team(&self, team_json: &str) -> String {
         canonicalize_team(&self.dex, &self.learnsets, team_json).to_string()
     }
+
+    /// Validate a team under an explicit ruleset id (e.g. `"gen2stadium2"`,
+    /// `"castle"`, `"castle-tournament"`, `"castle-raw"`, `"castle-free"`).
+    #[wasm_bindgen(js_name = validateTeamWithRuleset)]
+    pub fn validate_team_with_ruleset(
+        &self,
+        team_json: &str,
+        ruleset_id: &str,
+    ) -> Result<String, JsError> {
+        let ruleset = Ruleset::parse_id(ruleset_id)
+            .ok_or_else(|| JsError::new(&format!("unknown ruleset: {ruleset_id}")))?;
+        Ok(validate_team_with_ruleset(&self.dex, &self.learnsets, team_json, ruleset).to_string())
+    }
+
+    /// Canonicalize a team under an explicit ruleset id (see `validateTeamWithRuleset`).
+    #[wasm_bindgen(js_name = canonicalizeTeamWithRuleset)]
+    pub fn canonicalize_team_with_ruleset(
+        &self,
+        team_json: &str,
+        ruleset_id: &str,
+    ) -> Result<String, JsError> {
+        let ruleset = Ruleset::parse_id(ruleset_id)
+            .ok_or_else(|| JsError::new(&format!("unknown ruleset: {ruleset_id}")))?;
+        Ok(canonicalize_team_with_ruleset(&self.dex, &self.learnsets, team_json, ruleset).to_string())
+    }
 }
 
 // ----------------------------------------------------------------- Battle
@@ -182,6 +211,33 @@ impl WasmBattle {
         let battle = Battle::from_fixture(&dex.dex, seed, &p1, &p2).map_err(js_err)?;
         let recorder = Some(Recorder::new(&dex.dex, &battle, [p1, p2], seed));
         Ok(WasmBattle { dex: dex.dex.clone(), battle, log_cursor: 0, recorder })
+    }
+
+    /// Construct a battle under an explicit ruleset id (e.g. `"gen2stadium2"`,
+    /// `"castle"`, `"castle-tournament"`, `"castle-raw"`, `"castle-raw-ovfl"`,
+    /// `"castle-free"`). Parameter order matches `new Battle(dex, p1Team, p2Team, seed)`.
+    #[wasm_bindgen(js_name = withRuleset)]
+    pub fn new_with_ruleset(
+        dex: &WasmDex,
+        p1_team: &str,
+        p2_team: &str,
+        seed: &str,
+        ruleset_id: &str,
+    ) -> Result<WasmBattle, JsError> {
+        let ruleset = Ruleset::parse_id(ruleset_id)
+            .ok_or_else(|| JsError::new(&format!("unknown ruleset: {ruleset_id}")))?;
+        let p1: Vec<PokemonSet> = serde_json::from_str(p1_team).map_err(js_err)?;
+        let p2: Vec<PokemonSet> = serde_json::from_str(p2_team).map_err(js_err)?;
+        let battle =
+            Battle::from_fixture_with_ruleset(&dex.dex, seed, &p1, &p2, ruleset).map_err(js_err)?;
+        let recorder = Some(Recorder::new(&dex.dex, &battle, [p1, p2], seed));
+        Ok(WasmBattle { dex: dex.dex.clone(), battle, log_cursor: 0, recorder })
+    }
+
+    /// Canonical identifier of this battle's active ruleset (`"gen2stadium2"`,
+    /// `"castle-tournament"`, `"castle-raw"`, etc.).
+    pub fn ruleset(&self) -> String {
+        self.battle.ruleset.canonical_id()
     }
 
     /// A `nc2000-fork-v1` document's battle, log ON and empty. Equal seeds
@@ -1719,6 +1775,11 @@ impl WasmKifu {
     pub fn new(dex: &WasmDex, code: &str) -> Result<WasmKifu, JsError> {
         let replay = Replay::decode(&dex.dex, code).map_err(|e| JsError::new(&e))?;
         Ok(Self { dex: dex.dex.clone(), replay, code: code.into() })
+    }
+
+    /// Canonical identifier of the replay's recorded ruleset.
+    pub fn ruleset(&self) -> String {
+        self.replay.ruleset.canonical_id()
     }
 
     pub fn scenes(&self, side: Option<usize>) -> Result<String, JsError> {

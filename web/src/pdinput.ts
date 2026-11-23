@@ -94,6 +94,8 @@ export const PDINPUT_ITEM_CODES: Record<string, number> = {
   dragonscale: 152,
   berserkgene: 153,
   heavyball: 158,
+  mail: 159,
+  flowermail: 159,
   levelball: 160,
   lureball: 161,
   fastball: 162,
@@ -106,12 +108,61 @@ export const PDINPUT_ITEM_CODES: Record<string, number> = {
   upgrade: 173,
   berry: 174,
   goldberry: 175,
+  sportball: 178,
+  parkball: 178,
+  surfmail: 182,
+  litebluemail: 183,
+  portraitmail: 184,
+  lovelymail: 185,
+  eonmail: 186,
+  morphmail: 187,
+  blueskymail: 188,
+  musicmail: 189,
+  miragemail: 190,
 };
 
 /** Gen 2 / PBS `PDINPUT.cgi` item spelling overrides where `data/i18n-ja.json`
- * uses a Gen 3+ spelling (e.g. `くろいメガネ` vs PBS `くろいめがね`). */
+ * uses a generic or Gen 3+ name (`mail` -> `はながらボール`, `sportball` -> `パークボール`). */
 export const PDINPUT_ITEM_NAME_OVERRIDES: Record<string, string> = {
   blackglasses: "くろいめがね",
+  mail: "はながらボール",
+  flowermail: "はながらボール",
+  sportball: "パークボール",
+  parkball: "パークボール",
+};
+
+/** Canonical Gen 2 Hidden Power DV spreads (Atk/Def DVs; Spe=15, Spc=15, HP derived). */
+export const GEN2_HIDDEN_POWER_DVS: Record<string, { atk: number; def: number }> = {
+  fighting: { atk: 12, def: 12 },
+  flying: { atk: 12, def: 13 },
+  poison: { atk: 12, def: 14 },
+  ground: { atk: 12, def: 15 },
+  rock: { atk: 13, def: 12 },
+  bug: { atk: 13, def: 13 },
+  ghost: { atk: 13, def: 14 },
+  steel: { atk: 13, def: 15 },
+  fire: { atk: 14, def: 12 },
+  water: { atk: 14, def: 13 },
+  grass: { atk: 14, def: 14 },
+  electric: { atk: 14, def: 15 },
+  psychic: { atk: 15, def: 12 },
+  ice: { atk: 15, def: 13 },
+  dragon: { atk: 15, def: 14 },
+  dark: { atk: 15, def: 15 },
+};
+
+/** Items that are inert in Gym Leader's Castle PBS (`PS.cgi`) due to Gen 2 bugs.
+ * NEVER silently auto-rewrite these to their functional counterparts (`iceberry` /
+ * `dragonscale`), as that can cause Item Clause collisions. */
+export const CASTLE_INERT_ITEMS: Record<string, { replacement: string; reason: string }> = {
+  bitterberry: {
+    replacement: "iceberry",
+    reason: "Bitter Berry (ID 84) is inert in Castle PBS; Ice Berry (ID 81) cures both burn and confusion.",
+  },
+  dragonfang: {
+    replacement: "dragonscale",
+    reason: "Dragon Fang (ID 145) is inert in Castle PBS; Dragon Scale (ID 152) boosts Dragon moves by 1.1x.",
+  },
 };
 
 export interface PdinputDexSpecies {
@@ -124,6 +175,7 @@ export interface PdinputDexMove {
   num: number;
   name: string;
   pp: number;
+  noPPBoosts?: boolean;
 }
 
 export interface PdinputDex {
@@ -143,6 +195,10 @@ export interface SetInput {
   level?: number;
   item?: string;
   moves?: string[];
+  /** Per-move PP Up counts (`0..=3`, clamped; `noPPBoosts` moves forced to `0`). */
+  ppUps?: number[];
+  /** Default PP Up count for moves not overridden by `ppUps` (default `3`). */
+  ppUp?: number;
   ivs?: { hp?: number; atk?: number; def?: number; spa?: number; spd?: number; spe?: number };
   evs?: { hp?: number; atk?: number; def?: number; spa?: number; spd?: number; spe?: number };
 }
@@ -173,6 +229,98 @@ export interface EncodedTeam {
   mons: EncodedMon[];
 }
 
+export interface CastleItemAuditFinding {
+  severity: "warning" | "error";
+  code: "item-castle-inert" | "item-clause";
+  slot: number;
+  species: string;
+  item: string;
+  itemCode?: number;
+  suggestedItem?: string;
+  message: string;
+}
+
+export interface CastleItemAuditReport {
+  ok: boolean;
+  warnings: CastleItemAuditFinding[];
+  errors: CastleItemAuditFinding[];
+  findings: CastleItemAuditFinding[];
+}
+
+/** Non-mutating Castle item audit for `PDINPUT.cgi` exports (§7-C.2):
+ * emits warnings on inert `bitterberry` (ID 84) / `dragonfang` (ID 145)
+ * and errors on Item Clause duplicates without ever silently rewriting items. */
+export function auditCastleTeamForPdinput(
+  sets: readonly SetInput[],
+): CastleItemAuditReport {
+  const findings: CastleItemAuditFinding[] = [];
+  const seenByCode = new Map<number, number>();
+  const seenById = new Map<string, number>();
+
+  for (let slot = 0; slot < sets.length; slot++) {
+    const s = sets[slot] ?? {};
+    const species = toId(s.species ?? s.name ?? "");
+    const itemId = toId(s.item ?? "");
+    if (!itemId) continue;
+
+    const itemCode = PDINPUT_ITEM_CODES[itemId];
+    const inert = CASTLE_INERT_ITEMS[itemId];
+    if (inert) {
+      findings.push({
+        severity: "warning",
+        code: "item-castle-inert",
+        slot,
+        species,
+        item: itemId,
+        itemCode,
+        suggestedItem: inert.replacement,
+        message: inert.reason,
+      });
+    }
+
+    const dupSlot =
+      itemCode !== undefined ? seenByCode.get(itemCode) : seenById.get(itemId);
+    if (dupSlot !== undefined) {
+      findings.push({
+        severity: "error",
+        code: "item-clause",
+        slot,
+        species,
+        item: itemId,
+        itemCode,
+        message: `Duplicate held item "${itemId}" (also on slot ${dupSlot + 1}) violates Item Clause.`,
+      });
+    } else {
+      if (itemCode !== undefined) seenByCode.set(itemCode, slot);
+      seenById.set(itemId, slot);
+    }
+  }
+
+  const warnings = findings.filter((f) => f.severity === "warning");
+  const errors = findings.filter((f) => f.severity === "error");
+  return { ok: errors.length === 0, warnings, errors, findings };
+}
+
+function detectTypedHiddenPower(rawMoves: readonly string[]): string | undefined {
+  for (const rawMove of rawMoves) {
+    if (!rawMove) continue;
+    const mId = toId(rawMove);
+    if (mId.startsWith("hiddenpower") && mId.length > "hiddenpower".length) {
+      const hpType = mId.slice("hiddenpower".length);
+      if (hpType in GEN2_HIDDEN_POWER_DVS) return hpType;
+    }
+  }
+  return undefined;
+}
+
+function shouldAutofillHiddenPowerDvs(ivs: SetInput["ivs"]): boolean {
+  if (!ivs) return true;
+  const values = [ivs.hp, ivs.atk, ivs.def, ivs.spa, ivs.spd, ivs.spe].filter(
+    (v): v is number => typeof v === "number",
+  );
+  return values.length === 0 || values.every((v) => v === 31);
+}
+
 export function encodeMonForPdinput(
   rawSet: unknown,
   dex: PdinputDex,
@@ -186,11 +334,27 @@ export function encodeMonForPdinput(
   if (!jpSpecies) throw new Error(`Missing JP species name for ${spId}`);
 
   const level = typeof s.level === "number" ? s.level : 50;
+  const rawMoves = Array.isArray(s.moves) ? s.moves : [];
+  const typedHp = detectTypedHiddenPower(rawMoves);
+
   const ivs = s.ivs ?? {};
-  const atkDv = Math.max(0, Math.min(15, Math.floor((ivs.atk ?? 31) / 2)));
-  const defDv = Math.max(0, Math.min(15, Math.floor((ivs.def ?? 31) / 2)));
-  const speDv = Math.max(0, Math.min(15, Math.floor((ivs.spe ?? 31) / 2)));
-  const spcDv = Math.max(0, Math.min(15, Math.floor((ivs.spa ?? 31) / 2)));
+  let atkDv: number;
+  let defDv: number;
+  let speDv: number;
+  let spcDv: number;
+  if (typedHp && shouldAutofillHiddenPowerDvs(s.ivs)) {
+    const canonical = GEN2_HIDDEN_POWER_DVS[typedHp];
+    atkDv = canonical.atk;
+    defDv = canonical.def;
+    speDv = 15;
+    spcDv = 15;
+  } else {
+    const rawSpc = ivs.spa ?? ivs.spd ?? 31;
+    atkDv = Math.max(0, Math.min(15, Math.floor((ivs.atk ?? 31) / 2)));
+    defDv = Math.max(0, Math.min(15, Math.floor((ivs.def ?? 31) / 2)));
+    speDv = Math.max(0, Math.min(15, Math.floor((ivs.spe ?? 31) / 2)));
+    spcDv = Math.max(0, Math.min(15, Math.floor(rawSpc / 2)));
+  }
   const hpDv =
     ((atkDv & 1) << 3) |
     ((defDv & 1) << 2) |
@@ -198,13 +362,13 @@ export function encodeMonForPdinput(
     (spcDv & 1);
 
   const evs = s.evs ?? {};
+  const rawSpcEv = evs.spa ?? evs.spd ?? 255;
   const doHp = Math.max(0, Math.min(63, Math.floor((evs.hp ?? 255) / 4)));
   const doAtk = Math.max(0, Math.min(63, Math.floor((evs.atk ?? 255) / 4)));
   const doDef = Math.max(0, Math.min(63, Math.floor((evs.def ?? 255) / 4)));
   const doSpe = Math.max(0, Math.min(63, Math.floor((evs.spe ?? 255) / 4)));
-  const doSpc = Math.max(0, Math.min(63, Math.floor((evs.spa ?? 255) / 4)));
+  const doSpc = Math.max(0, Math.min(63, Math.floor(rawSpcEv / 4)));
 
-  const rawMoves = Array.isArray(s.moves) ? s.moves : [];
   const moveCodes: number[] = [];
   const movePps: number[] = [];
   const ppUps: [number, number, number, number] = [0, 0, 0, 0];
@@ -219,7 +383,16 @@ export function encodeMonForPdinput(
       if (!mv) throw new Error(`Unknown move: ${rawMove}`);
       const jpMv = ja.moves[mId];
       if (!jpMv) throw new Error(`Missing JP move name for ${mId}`);
-      const ppUp = 3;
+      const noBoosts = mv.noPPBoosts === true || mId === "sketch" || mId === "struggle";
+      const requestedPpUp =
+        Array.isArray(s.ppUps) && typeof s.ppUps[i] === "number"
+          ? s.ppUps[i]
+          : typeof s.ppUp === "number"
+            ? s.ppUp
+            : 3;
+      const ppUp = noBoosts
+        ? 0
+        : Math.max(0, Math.min(3, Math.trunc(requestedPpUp)));
       // PDINPUT.cgi uses `dex_num + 1` and `base_pp + floor(base_pp / 5) * ppUp`
       // (including 64 PP for base-40 PP moves).
       moveCodes.push(mv.num + 1);
