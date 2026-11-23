@@ -116,7 +116,7 @@ impl Battle {
                     }
                     // #4 Castle PBS: Pursuit KO cancels the planned switch so a free
                     // replacement request (CHANGE) opens in after_action.
-                    return self.after_action(dex, None);
+                    return self.after_action(dex, None, false);
                 }
             }
             ActionKind::RunSwitch => {
@@ -140,12 +140,13 @@ impl Battle {
                 }
             }
         }
-        self.after_action(dex, action.pokemon)
+        let is_run_switch = matches!(action.choice, ActionKind::RunSwitch);
+        self.after_action(dex, action.pokemon, is_run_switch)
     }
 
     /// The tail of runAction shared by all action kinds (phazing, faints,
     /// forced switches, Update events).
-    fn after_action(&mut self, dex: &Dex, _pokemon: Option<PokeId>) {
+    fn after_action(&mut self, dex: &Dex, _pokemon: Option<PokeId>, is_run_switch: bool) {
         // phazing (Roar etc.)
         for side_n in 0..2u8 {
             if let Some(active) = self.active_id(side_n as usize) {
@@ -161,10 +162,18 @@ impl Battle {
 
         self.clear_active_move(false);
 
+        // #2 Castle PBS: defer faint_messages across simultaneous RunSwitch batches
+        // (e.g. dual replacement switches onto Spikes) so 1v1 dual Spikes KO is DRAW.
+        let defer_faint = self.is_castle()
+            && is_run_switch
+            && matches!(self.queue.first().map(|a| &a.choice), Some(ActionKind::RunSwitch));
+
         // fainting
-        self.faint_messages(dex, false);
-        if self.ended {
-            return;
+        if !defer_faint {
+            self.faint_messages(dex, false);
+            if self.ended {
+                return;
+            }
         }
 
         // gen <= 3: switching in fainted pokemon after every move
@@ -762,9 +771,9 @@ impl Battle {
             }
         }
 
-        // 4. Perish Song countdown & fainting (1P -> 2P)
+        // 4. Perish Song countdown & fainting (1P -> 2P; asymmetric 0-remaining loser queued first)
         if let Some(ps_cond) = crate::cond_id!(dex, "perishsong") {
-            let mut any_faint = false;
+            let mut perish_faints: Vec<(PokeId, Option<PokeId>)> = Vec::new();
             for side_n in 0..2usize {
                 let Some(id) = self.active_id(side_n) else { continue };
                 if self.poke(id).fainted || self.poke(id).hp <= 0 {
@@ -789,12 +798,23 @@ impl Battle {
                     if d == 0 {
                         self.poke_mut(id).volatiles.retain(|(k, _)| *k != ps_cond);
                         self.refresh_poke_mask(dex, id);
-                        self.pokemon_faint(id, src, EffectHandle::Cond(ps_cond));
-                        any_faint = true;
+                        perish_faints.push((id, src));
                     }
                 }
             }
-            if any_faint {
+            if !perish_faints.is_empty() {
+                // #7 Castle PBS: when both active mons perish simultaneously and only one
+                // side has 0 bench remaining, queue the 0-remaining loser first in faint_queue.
+                if perish_faints.len() == 2 {
+                    let p1_last = self.sides[0].pokemon_left <= 1;
+                    let p2_last = self.sides[1].pokemon_left <= 1;
+                    if !p1_last && p2_last {
+                        perish_faints.swap(0, 1);
+                    }
+                }
+                for (id, src) in perish_faints {
+                    self.pokemon_faint(id, src, EffectHandle::Cond(ps_cond));
+                }
                 self.faint_messages(dex, false);
                 if self.ended {
                     return;

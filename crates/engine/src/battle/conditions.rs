@@ -1690,8 +1690,14 @@ fn dispatch_cond(
             if !b.queue_cancel_move(holder) {
                 return RV::Undef;
             }
-            let holder_speed = b.poke(holder).speed;
-            let switching_speed = b.poke(switching).speed;
+            let (holder_speed, switching_speed) = if b.is_castle() {
+                (
+                    b.get_pokemon_action_speed_f64(dex, holder),
+                    b.get_pokemon_action_speed_f64(dex, switching),
+                )
+            } else {
+                (b.poke(holder).speed as f64, b.poke(switching).speed as f64)
+            };
             if holder_speed < switching_speed
                 || (holder_speed == switching_speed && b.prng.random_chance(1, 2))
             {

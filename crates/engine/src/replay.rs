@@ -62,10 +62,27 @@ impl Recorder {
                 .enumerate()
                 .map(|(i, set)| {
                     let p = &battle.sides[side].roster[i];
+                    let item: String = if battle.is_castle() {
+                        let raw_id = toid(&set.item);
+                        if let Some(idx) = Dex::castle_extra_mail_index(&raw_id) {
+                            crate::dex::CASTLE_EXTRA_MAILS[idx].0.into()
+                        } else {
+                            p.item.map(|id| dex.items.key(id)).unwrap_or("").into()
+                        }
+                    } else {
+                        p.item.map(|id| dex.items.key(id)).unwrap_or("").into()
+                    };
+                    let gender = if battle.is_castle() {
+                        Some(p.gender.as_str().into())
+                    } else {
+                        set.gender
+                            .clone()
+                            .filter(|g| matches!(g.as_str(), "M" | "F" | "N"))
+                    };
                     PokemonSet {
                         name: p.name.as_str().into(),
                         species: dex.species.key(p.base_species).into(),
-                        item: p.item.map(|id| dex.items.key(id)).unwrap_or("").into(),
+                        item,
                         ability: String::new(),
                         moves: p
                             .base_move_slots
@@ -74,10 +91,7 @@ impl Recorder {
                             .collect(),
                         level: p.level as u8,
                         happiness: Some(p.happiness),
-                        gender: set
-                            .gender
-                            .clone()
-                            .filter(|g| matches!(g.as_str(), "M" | "F" | "N")),
+                        gender,
                         ivs: Some(
                             STATS
                                 .iter()
@@ -220,20 +234,40 @@ impl Replay {
         if self.bot_side > 1 || self.rounds.len() > MAX_ROUNDS {
             return Err("replay limits exceeded".into());
         }
+        let is_castle = self.ruleset.is_castle();
+        let mut castle_initial = if is_castle {
+            Some(self.initial(dex)?)
+        } else {
+            None
+        };
         let mut teams = Bits::default();
-        for team in &self.teams {
+        for (side_idx, team) in self.teams.iter().enumerate() {
             if team.is_empty() || team.len() > 6 {
                 return Err("team size out of range".into());
             }
-            for p in team {
+            for (slot_idx, p) in team.iter().enumerate() {
                 let species = dex.species.id(&toid(&p.species)).ok_or("unknown species")?;
                 teams.put(u16::from(species) as u32, 8)?;
-                let item = if p.item.is_empty() {
-                    0
+                if is_castle {
+                    let item = if p.item.is_empty() {
+                        0
+                    } else {
+                        let raw_id = toid(&p.item);
+                        if let Some(idx) = Dex::castle_extra_mail_index(&raw_id) {
+                            (dex.items.len() + 1 + idx) as u32
+                        } else {
+                            u16::from(dex.castle_item_id(&raw_id).ok_or("unknown item")?) as u32 + 1
+                        }
+                    };
+                    teams.put(item, 7)?;
                 } else {
-                    u16::from(dex.items.id(&toid(&p.item)).ok_or("unknown item")?) as u32 + 1
-                };
-                teams.put(item, 6)?;
+                    let item = if p.item.is_empty() {
+                        0
+                    } else {
+                        u16::from(dex.items.id(&toid(&p.item)).ok_or("unknown item")?) as u32 + 1
+                    };
+                    teams.put(item, 6)?;
+                }
                 teams.put(p.level as u32, 8)?;
                 if p.moves.is_empty() || p.moves.len() > 4 {
                     return Err("move count out of range".into());
@@ -246,39 +280,59 @@ impl Replay {
                     };
                     teams.put(id, 9)?;
                 }
-                for k in STATS {
+                if let Some(ref b0) = castle_initial {
+                    let roster_p = &b0.sides[side_idx].roster[slot_idx];
+                    for i in 0..6 {
+                        teams.put((roster_p.set_ivs[i].clamp(0, 31) >> 1) as u32, 4)?;
+                    }
+                    for i in 0..6 {
+                        teams.put(roster_p.set_evs[i].clamp(0, 255) as u32, 8)?;
+                    }
+                    teams.put(p.happiness.unwrap_or(255) as u32, 8)?;
                     teams.put(
-                        (p.ivs
-                            .as_ref()
-                            .and_then(|m| m.get(k))
-                            .copied()
-                            .unwrap_or(31)
-                            .min(31)
-                            >> 1) as u32,
-                        4,
+                        match roster_p.gender.as_str() {
+                            "M" => 1,
+                            "F" => 2,
+                            "N" => 3,
+                            _ => 0,
+                        },
+                        2,
+                    )?;
+                } else {
+                    for k in STATS {
+                        teams.put(
+                            (p.ivs
+                                .as_ref()
+                                .and_then(|m| m.get(k))
+                                .copied()
+                                .unwrap_or(31)
+                                .min(31)
+                                >> 1) as u32,
+                            4,
+                        )?;
+                    }
+                    for k in STATS {
+                        teams.put(
+                            p.evs
+                                .as_ref()
+                                .and_then(|m| m.get(k))
+                                .copied()
+                                .unwrap_or(0)
+                                .min(255) as u32,
+                            8,
+                        )?;
+                    }
+                    teams.put(p.happiness.unwrap_or(255) as u32, 8)?;
+                    teams.put(
+                        match p.gender.as_deref() {
+                            Some("M") => 1,
+                            Some("F") => 2,
+                            Some("N") => 3,
+                            _ => 0,
+                        },
+                        2,
                     )?;
                 }
-                for k in STATS {
-                    teams.put(
-                        p.evs
-                            .as_ref()
-                            .and_then(|m| m.get(k))
-                            .copied()
-                            .unwrap_or(0)
-                            .min(255) as u32,
-                        8,
-                    )?;
-                }
-                teams.put(p.happiness.unwrap_or(255) as u32, 8)?;
-                teams.put(
-                    match p.gender.as_deref() {
-                        Some("M") => 1,
-                        Some("F") => 2,
-                        Some("N") => 3,
-                        _ => 0,
-                    },
-                    2,
-                )?;
                 let name = if p.name == dex.species.get(species).name {
                     ""
                 } else {
@@ -294,7 +348,10 @@ impl Replay {
             }
         }
         let mut actions = Bits::default();
-        let mut battle = self.initial(dex)?;
+        let mut battle = match castle_initial.take() {
+            Some(b) => b,
+            None => self.initial(dex)?,
+        };
         for (round, picks) in self.rounds.iter().enumerate() {
             let needs = battle.needs_choice();
             if !needs.iter().any(|n| *n) {
@@ -414,15 +471,30 @@ impl Replay {
                     .get(input.get(8)? as usize)
                     .ok_or("unknown species")?
                     .clone();
-                let item = input.get(6)?;
-                let item = if item == 0 {
-                    String::new()
+                let item = if ruleset.is_castle() {
+                    let raw_item = input.get(7)? as usize;
+                    if raw_item == 0 {
+                        String::new()
+                    } else if raw_item <= dex.items.keys.len() {
+                        dex.items.keys[raw_item - 1].clone()
+                    } else if let Some((k, _)) =
+                        crate::dex::CASTLE_EXTRA_MAILS.get(raw_item - 1 - dex.items.keys.len())
+                    {
+                        (*k).to_string()
+                    } else {
+                        return Err("unknown item".into());
+                    }
                 } else {
-                    dex.items
-                        .keys
-                        .get(item as usize - 1)
-                        .ok_or("unknown item")?
-                        .clone()
+                    let item = input.get(6)?;
+                    if item == 0 {
+                        String::new()
+                    } else {
+                        dex.items
+                            .keys
+                            .get(item as usize - 1)
+                            .ok_or("unknown item")?
+                            .clone()
+                    }
                 };
                 let level = input.get(8)? as u8;
                 if level == 0 {

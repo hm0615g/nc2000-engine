@@ -99,9 +99,7 @@ pub fn dispatch_item(
         ItemCbOp::FocusBandDamage => {
             let t = tpoke.unwrap();
             let damage = relay.as_num();
-            let is_move = matches!(source_effect, EffectHandle::MoveEff(_))
-                || (b.is_castle()
-                    && matches!(source_effect, EffectHandle::Cond(c) if Some(c) == crate::cond_id!(dex, "confusion")));
+            let is_move = matches!(source_effect, EffectHandle::MoveEff(_));
             if b.prng.random_chance(30, 256) && damage >= b.poke(t).hp as f64 && is_move {
                 if !b.is_castle() {
                     let ts = b.poke_str(t);
@@ -117,7 +115,14 @@ pub fn dispatch_item(
                 .active_move
                 .as_ref()
                 .and_then(|m| m.id)
-                .is_some_and(|m| dex.move_static(m).kingsrock);
+                .is_some_and(|m| {
+                    dex.move_static(m).kingsrock
+                        && !(b.is_castle()
+                            && matches!(
+                                dex.moves.key(m),
+                                "counter" | "mirrorcoat" | "selfdestruct" | "explosion"
+                            ))
+                });
             if has_kr {
                 if let Some(am) = b.active_move.as_mut() {
                     am.secondaries.push(HitEffect {
@@ -206,23 +211,28 @@ pub fn dispatch_item(
             b.remove_volatile(dex, t, "confusion");
             RV::Undef
         }
-        ItemCbOp::BurntBerryUpdate => status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Frz),
-        ItemCbOp::IceBerryUpdate => {
-            let t = tpoke.unwrap();
+        ItemCbOp::BurntBerryUpdate => {
             if b.is_castle() {
-                // #33 Castle PBS: Ice Berry (ID 81) cures BOTH Burn and Confusion!
-                let has_conf = crate::cond_id!(dex, "confusion")
-                    .is_some_and(|c| b.poke(t).has_volatile(c));
-                if b.poke(t).status == Status::Brn || has_conf {
-                    b.eat_item(dex, t, false, None, EffectHandle::None);
-                }
-                RV::Undef
-            } else {
-                status_berry_update(b, dex, t, |s| s == Status::Brn)
+                return RV::Undef; // #32/#33 Castle PBS: handled uniformly via immediate foe check & EOT.
             }
+            status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Frz)
         }
-        ItemCbOp::PrzCureBerryUpdate => status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Par),
+        ItemCbOp::IceBerryUpdate => {
+            if b.is_castle() {
+                return RV::Undef; // #32/#33 Castle PBS: handled uniformly via immediate foe check & EOT.
+            }
+            status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Brn)
+        }
+        ItemCbOp::PrzCureBerryUpdate => {
+            if b.is_castle() {
+                return RV::Undef; // #32/#33 Castle PBS: handled uniformly via immediate foe check & EOT.
+            }
+            status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Par)
+        }
         ItemCbOp::PsnCureBerryUpdate => {
+            if b.is_castle() {
+                return RV::Undef; // #32/#33 Castle PBS: handled uniformly via immediate foe check & EOT.
+            }
             status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Psn || s == Status::Tox)
         }
         // gen2stadium2nc2000: Mint/Miracle Berry trigger onBeforeMove

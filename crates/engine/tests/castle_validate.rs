@@ -536,3 +536,219 @@ fn replay_roundtrips_castle_and_preserves_ps_bit_exact() {
         assert_eq!(replayed.log, battle.log);
     }
 }
+
+#[test]
+fn castle_validate_audit_fixes_items_evs_tyrogue_level_sum_and_replay_bare() {
+    let (dex, ls) = load_data();
+    let castle = Ruleset::castle_tournament();
+
+    // 1. Hitmonchan + High Jump Kick Tyrogue evolution warning (typo fix "hijumpkick" -> "highjumpkick").
+    {
+        let rules = CastleRules::embedded();
+        // Atk DV 14 != Def DV 15 -> Hitmonchan + High Jump Kick must trigger Tyrogue warning!
+        assert!(rules.needs_tyrogue_warning(
+            "hitmonchan",
+            &["highjumpkick"],
+            50,
+            14,
+            15,
+            [63, 63, 63, 63, 63]
+        ));
+        let mut chan = base_mon("Hitmonchan", 50, &["High Jump Kick", "Rest"], "");
+        chan["ivs"] = json!({"hp": 14, "atk": 28, "def": 30, "spa": 30, "spd": 30, "spe": 30});
+        let r = validate_team_with_ruleset(&dex, &ls, &pad_team(vec![chan]), castle);
+        assert_eq!(r["ok"], true, "{r}");
+        assert!(
+            finding_codes(&r)
+                .iter()
+                .any(|(sev, c)| sev == "warning" && c == "ev-tyrogue-evolution"),
+            "Hitmonchan + High Jump Kick must emit ev-tyrogue-evolution warning: {r}"
+        );
+    }
+
+    // 2. Partial EV map in Castle defaults omitted keys to 255 (not 0).
+    {
+        let mut partial = base_mon("Snorlax", 55, &["Body Slam", "Rest"], "");
+        partial["evs"] = json!({"hp": 140, "def": 100}); // omitted atk/spa/spd/spe default to 255 -> 35-63-25-63-63 (legal!)
+        let raw = pad_team(vec![partial]);
+        let v = validate_team_with_ruleset(&dex, &ls, &raw, castle);
+        assert_eq!(v["ok"], true, "Partial EV map should default omitted keys to 255: {v}");
+        assert_eq!(v["warnings"], 0, "{v}");
+        let c = canonicalize_team_with_ruleset(&dex, &ls, &raw, castle);
+        assert_eq!(c["ok"], true, "{c}");
+        assert_eq!(
+            c["team"][0]["evs"],
+            json!({"hp": 140, "atk": 255, "def": 100, "spa": 255, "spd": 255, "spe": 255})
+        );
+    }
+
+    // 3. `level-sum-highest` gated off in Castle (55 + five 51s: lowest-3 = 153 <= 155 -> legal in Castle, error in PS).
+    {
+        let sets = vec![
+            base_mon("Snorlax", 55, &["Body Slam", "Rest"], ""),
+            base_mon("Zapdos", 51, &["Thunderbolt", "Rest"], ""),
+            base_mon("Suicune", 51, &["Surf", "Rest"], ""),
+            base_mon("Cloyster", 51, &["Surf", "Spikes"], ""),
+            base_mon("Marowak", 51, &["Earthquake", "Rest"], ""),
+            base_mon("Umbreon", 51, &["Toxic", "Rest"], ""),
+        ];
+        let raw = serde_json::to_string(&sets).unwrap();
+        let vc = validate_team_with_ruleset(&dex, &ls, &raw, castle);
+        assert_eq!(vc["ok"], true, "55 + 5x51 must be legal in Castle: {vc}");
+        let vp = validate_team(&dex, &ls, &raw);
+        assert_eq!(vp["ok"], false, "55 + 5x51 must fail level-sum-highest in PS: {vp}");
+        assert!(finding_codes(&vp).iter().any(|(_, c)| c == "level-sum-highest"));
+    }
+
+    // 4. `item-castle-inert` warnings fire for CastlePbs even under LearnsetPolicy::PsGen2Stadium2!
+    {
+        let castle_ps_ls = Ruleset::CastlePbs(CastleOverlayConfig {
+            learnset_policy: LearnsetPolicy::PsGen2Stadium2,
+            ..CastleOverlayConfig::tournament()
+        });
+        let raw = pad_team(vec![
+            base_mon("Snorlax", 55, &["Lovely Kiss", "Rest"], "Bitter Berry"),
+            base_mon("Dragonite", 55, &["Dragon Breath", "Rest"], "Dragon Fang"),
+        ]);
+        let v = validate_team_with_ruleset(&dex, &ls, &raw, castle_ps_ls);
+        assert_eq!(v["ok"], true, "PsGen2Stadium2 learnset allows Lovely Kiss: {v}");
+        assert_eq!(v["warnings"], 2, "Inert item warnings must still fire under CastlePbs+PsGen2Stadium2: {v}");
+    }
+
+    // 5. All 11 Castle inert items: alias dedup (`mail`+`flowermail`, `sportball`+`parkball`) vs distinct mails!
+    {
+        let distinct = vec![
+            base_mon("Snorlax", 55, &["Body Slam", "Rest"], "Surf Mail"),
+            base_mon("Zapdos", 50, &["Thunderbolt", "Rest"], "Eon Mail"),
+            base_mon("Suicune", 50, &["Surf", "Rest"], "Flower Mail"),
+            base_mon("Cloyster", 50, &["Surf", "Spikes"], "Park Ball"),
+            base_mon("Marowak", 50, &["Earthquake", "Rest"], "Mirage Mail"),
+            base_mon("Umbreon", 50, &["Toxic", "Rest"], "Blue Sky Mail"),
+        ];
+        let raw_ok = serde_json::to_string(&distinct).unwrap();
+        let v_ok = validate_team_with_ruleset(&dex, &ls, &raw_ok, castle);
+        assert_eq!(v_ok["ok"], true, "Distinct Castle inert items must validate cleanly: {v_ok}");
+        let c_ok = canonicalize_team_with_ruleset(&dex, &ls, &raw_ok, castle);
+        assert_eq!(c_ok["ok"], true, "{c_ok}");
+        assert_eq!(c_ok["team"][0]["item"], "Surf Mail");
+        assert_eq!(c_ok["team"][1]["item"], "Eon Mail");
+        assert_eq!(c_ok["team"][2]["item"], "Mail");
+        assert_eq!(c_ok["team"][3]["item"], "Sport Ball");
+
+        // Duplicate aliases caught by Item Clause: mail + flowermail AND sportball + parkball!
+        let dup_mail = pad_team(vec![
+            base_mon("Snorlax", 55, &["Body Slam", "Rest"], "Mail"),
+            base_mon("Zapdos", 50, &["Thunderbolt", "Rest"], "Flower Mail"),
+        ]);
+        let vm = validate_team_with_ruleset(&dex, &ls, &dup_mail, castle);
+        assert_eq!(vm["ok"], false, "mail + flowermail must trigger item-clause: {vm}");
+        assert!(finding_codes(&vm).iter().any(|(_, c)| c == "item-clause"));
+
+        let dup_ball = pad_team(vec![
+            base_mon("Snorlax", 55, &["Body Slam", "Rest"], "Sport Ball"),
+            base_mon("Zapdos", 50, &["Thunderbolt", "Rest"], "Park Ball"),
+        ]);
+        let vb = validate_team_with_ruleset(&dex, &ls, &dup_ball, castle);
+        assert_eq!(vb["ok"], false, "sportball + parkball must trigger item-clause: {vb}");
+        assert!(finding_codes(&vb).iter().any(|(_, c)| c == "item-clause"));
+    }
+
+    // 6. Bare Castle Replay::encode (evs: None, ivs: None, typed HP Fire, extra mails) round-trips 100% identically!
+    {
+        let bare_team = vec![
+            PokemonSet {
+                name: "Snorlax".into(),
+                species: "Snorlax".into(),
+                item: "Surf Mail".into(),
+                ability: String::new(),
+                moves: vec!["Body Slam".into(), "Rest".into()],
+                level: 50,
+                evs: None,
+                ivs: None,
+                happiness: None,
+                gender: None,
+            },
+            PokemonSet {
+                name: "Zapdos".into(),
+                species: "Zapdos".into(),
+                item: "Eon Mail".into(),
+                ability: String::new(),
+                moves: vec!["Thunderbolt".into(), "Hidden Power Fire".into()],
+                level: 50,
+                evs: None,
+                ivs: None,
+                happiness: None,
+                gender: None,
+            },
+            PokemonSet {
+                name: "Cloyster".into(),
+                species: "Cloyster".into(),
+                item: "Park Ball".into(),
+                ability: String::new(),
+                moves: vec!["Surf".into(), "Spikes".into()],
+                level: 50,
+                evs: None,
+                ivs: None,
+                happiness: None,
+                gender: None,
+            },
+        ];
+        let replay = Replay {
+            teams: [bare_team.clone(), bare_team],
+            seed: "7,8,9,10".into(),
+            caps: [None, None],
+            open: true,
+            bot_side: 1,
+            ruleset: castle,
+            rounds: Vec::new(),
+        };
+        let orig_b = replay.initial(&dex).unwrap();
+        assert_eq!(orig_b.sides[0].roster[0].maxhp, 266);
+        let code = replay.encode(&dex).unwrap();
+        let decoded = Replay::decode(&dex, &code).unwrap();
+        assert_eq!(decoded.teams[0][0].item, "surfmail");
+        assert_eq!(decoded.teams[0][1].item, "eonmail");
+        assert_eq!(decoded.teams[0][2].item, "sportball");
+        let dec_b = decoded.initial(&dex).unwrap();
+        assert_eq!(dec_b.sides[0].roster[0].maxhp, 266);
+        assert_eq!(dec_b.sides[0].roster[1].set_ivs, orig_b.sides[0].roster[1].set_ivs);
+        assert_eq!(dec_b.state_key128(), orig_b.state_key128());
+        assert_eq!(decoded.encode(&dex).unwrap(), code);
+    }
+
+    // 7. Ruleset::canonical_id & Ruleset::parse_id custom round-trip (with & without -l{jp|ps})!
+    {
+        for cfg in [
+            CastleOverlayConfig {
+                recoil_1v1_attacker_wins: false,
+                perish_dbond_lastmon_forfeit: true,
+                turn_limit: Some(50),
+                overflow_mode: true,
+                learnset_policy: LearnsetPolicy::PsGen2Stadium2,
+            },
+            CastleOverlayConfig {
+                recoil_1v1_attacker_wins: true,
+                perish_dbond_lastmon_forfeit: false,
+                turn_limit: None,
+                overflow_mode: false,
+                learnset_policy: LearnsetPolicy::CastleJpEvents,
+            },
+        ] {
+            let r = Ruleset::CastlePbs(cfg);
+            let cid = r.canonical_id();
+            assert_eq!(Ruleset::parse_id(&cid), Some(r), "failed round-trip for {cid}");
+        }
+        // Backward-compatible parsing without -l...
+        let legacy = Ruleset::parse_id("castle-custom-r0-p1-t50-o1").unwrap();
+        assert_eq!(
+            legacy,
+            Ruleset::CastlePbs(CastleOverlayConfig {
+                recoil_1v1_attacker_wins: false,
+                perish_dbond_lastmon_forfeit: true,
+                turn_limit: Some(50),
+                overflow_mode: true,
+                learnset_policy: LearnsetPolicy::CastleJpEvents,
+            })
+        );
+    }
+}

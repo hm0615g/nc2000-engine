@@ -219,7 +219,9 @@ impl Ruleset {
                 Some(Self::castle_raw_cgi(true))
             }
             "castle-free" | "pbs-free" => Some(Self::castle_free()),
-            _ => None,
+            _ => lower
+                .strip_prefix("castle-custom-")
+                .and_then(parse_castle_custom),
         }
     }
 
@@ -240,12 +242,50 @@ impl Ruleset {
                 "castle-free".to_string()
             }
             Self::CastlePbs(cfg) => format!(
-                "castle-custom-r{}-p{}-t{}-o{}",
+                "castle-custom-r{}-p{}-t{}-o{}-l{}",
                 cfg.recoil_1v1_attacker_wins as u8,
                 cfg.perish_dbond_lastmon_forfeit as u8,
                 cfg.turn_limit.map_or_else(|| "none".to_string(), |t| t.to_string()),
                 cfg.overflow_mode as u8,
+                match cfg.learnset_policy {
+                    LearnsetPolicy::CastleJpEvents => "jp",
+                    LearnsetPolicy::PsGen2Stadium2 => "ps",
+                },
             ),
         }
     }
+}
+
+fn parse_castle_custom(rest: &str) -> Option<Ruleset> {
+    let parts: Vec<&str> = rest.split('-').collect();
+    if !(4..=5).contains(&parts.len()) {
+        return None;
+    }
+    let parse_bit = |s: &str, prefix: char| -> Option<bool> {
+        match s.strip_prefix(prefix)? {
+            "0" => Some(false),
+            "1" => Some(true),
+            _ => None,
+        }
+    };
+    let recoil_1v1_attacker_wins = parse_bit(parts[0], 'r')?;
+    let perish_dbond_lastmon_forfeit = parse_bit(parts[1], 'p')?;
+    let turn_limit = match parts[2].strip_prefix('t')? {
+        "none" => None,
+        num => Some(num.parse::<u16>().ok()?),
+    };
+    let overflow_mode = parse_bit(parts[3], 'o')?;
+    let learnset_policy = match parts.get(4).copied() {
+        None => LearnsetPolicy::CastleJpEvents,
+        Some("ljp") => LearnsetPolicy::CastleJpEvents,
+        Some("lps") => LearnsetPolicy::PsGen2Stadium2,
+        Some(_) => return None,
+    };
+    Some(Ruleset::CastlePbs(CastleOverlayConfig {
+        recoil_1v1_attacker_wins,
+        perish_dbond_lastmon_forfeit,
+        turn_limit,
+        overflow_mode,
+        learnset_policy,
+    }))
 }

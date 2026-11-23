@@ -2028,6 +2028,80 @@ impl Dex {
     }
 }
 
+/// Distinct Gen 2 mail items supported in Gym Leader's Castle PBS (`PDINPUT.cgi`,
+/// PBS item codes 182..=190) beyond `data/gen2stadium2.json`'s 62 items.
+/// Kept outside `dex.items` so PS item indices and `dex.items.len() == 62` stay bit-exact.
+pub const CASTLE_EXTRA_MAILS: [(&str, &str); 9] = [
+    ("surfmail", "Surf Mail"),
+    ("litebluemail", "Lite Blue Mail"),
+    ("portraitmail", "Portrait Mail"),
+    ("lovelymail", "Lovely Mail"),
+    ("eonmail", "Eon Mail"),
+    ("morphmail", "Morph Mail"),
+    ("blueskymail", "Blue Sky Mail"),
+    ("musicmail", "Music Mail"),
+    ("miragemail", "Mirage Mail"),
+];
+
+impl Dex {
+    /// Index (`0..9`) if `item_id` (already `toid`-normalized) is one of the 9
+    /// distinct Gen 2 mail items supported only in Castle PBS mode.
+    #[inline]
+    pub fn castle_extra_mail_index(item_id: &str) -> Option<usize> {
+        CASTLE_EXTRA_MAILS.iter().position(|(k, _)| *k == item_id)
+    }
+
+    /// Canonical Castle item key used for Item Clause deduplication and validation:
+    /// - `flowermail` canonicalizes to `mail` (both PBS code 159),
+    /// - `parkball` canonicalizes to `sportball` (both PBS code 178),
+    /// - the 9 distinct Gen 2 mails keep their own distinct keys (`surfmail`..`miragemail`),
+    /// - all 62 dex items map to their interned key.
+    pub fn castle_item_canonical_key(&self, item_id: &str) -> Option<&'static str> {
+        match item_id {
+            "flowermail" => self.items.id("mail").map(|id| self.items.key(id)),
+            "parkball" => self.items.id("sportball").map(|id| self.items.key(id)),
+            _ => {
+                if let Some(id) = self.items.id(item_id) {
+                    Some(self.items.key(id))
+                } else {
+                    Self::castle_extra_mail_index(item_id).map(|i| CASTLE_EXTRA_MAILS[i].0)
+                }
+            }
+        }
+    }
+
+    /// Canonical display name for a Castle item id (`flowermail` -> `"Mail"`,
+    /// `parkball` -> `"Sport Ball"`, extra mails -> `"Surf Mail"`, etc.).
+    pub fn castle_item_display_name(&self, item_id: &str) -> Option<&str> {
+        match item_id {
+            "flowermail" => self.items.id("mail").map(|id| self.items.get(id).name.as_str()),
+            "parkball" => self.items.id("sportball").map(|id| self.items.get(id).name.as_str()),
+            _ => {
+                if let Some(id) = self.items.id(item_id) {
+                    Some(self.items.get(id).name.as_str())
+                } else {
+                    Self::castle_extra_mail_index(item_id).map(|i| CASTLE_EXTRA_MAILS[i].1)
+                }
+            }
+        }
+    }
+
+    /// Runtime `ItemId` for a Castle held item, mapping `flowermail` and the 9
+    /// extra Gen 2 mails onto `mail` (so `p.item.is_some()` and Thief defense work
+    /// cleanly within the 62-item table) and `parkball` onto `sportball`.
+    pub fn castle_item_id(&self, item_id: &str) -> Option<ItemId> {
+        if let Some(id) = self.items.id(item_id) {
+            return Some(id);
+        }
+        match item_id {
+            "flowermail" => self.items.id("mail"),
+            "parkball" => self.items.id("sportball"),
+            _ if Self::castle_extra_mail_index(item_id).is_some() => self.items.id("mail"),
+            _ => None,
+        }
+    }
+}
+
 fn classify_duration_cb(cond: &str) -> DurationCbKind {
     match cond {
         "partiallytrapped" => DurationCbKind::Rand3To6,

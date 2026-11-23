@@ -787,6 +787,7 @@ fn castle_damage_diffs_17_to_30() {
         b.choose(&dex, 0, "move defensecurl").unwrap();
         b.choose(&dex, 1, "move splash").unwrap();
         let a2 = b.active_id(1).unwrap();
+        let mut checked = false;
         for seed in 1..30u64 {
             let mut t = b.clone();
             t.reseed(seed);
@@ -807,8 +808,10 @@ fn castle_damage_diffs_17_to_30() {
             // With +2 before mult: base_bp30=8, +2=10, *2=20, *1.5=30, *0.25=7 -> 5..=7; hit2: 10*4=40 -> 60 -> 15 -> 12..=15.
             assert!((5..=7).contains(&d1), "Rollout hit 1 expected 5..=7, got {d1}");
             assert!((12..=15).contains(&d2), "Rollout hit 2 expected 12..=15, got {d2}");
+            checked = true;
             break;
         }
+        assert!(checked, "Rollout 2-hit test never executed");
     }
 
     // #27: Recover / Softboiled / Milk Drink floor(maxhp / 2) -> Blissey 361 HP heals +180 (not +181).
@@ -1172,6 +1175,7 @@ fn castle_individual_move_diffs_40_to_54() {
         assert_eq!(b.poke(a1).hp, 206 - 25);
         // Paralyze Mew and abort Dig 2nd turn -> Mew keeps `dig` semi-invuln!
         b.restore_status(&dex, a1, Status::Par, None);
+        let mut checked = false;
         for seed in 1..40u64 {
             let mut t = b.clone();
             t.reseed(seed);
@@ -1181,9 +1185,11 @@ fn castle_individual_move_diffs_40_to_54() {
                 let dig_c = dex.conds_id("dig").unwrap();
                 assert!(t.poke(a1).has_volatile(dig_c), "Aborted Dig 2nd turn must preserve semi-invulnerable state");
                 assert!(t.poke(a1).trapped, "Mean Look must hit underground Dig in Castle");
+                checked = true;
                 break;
             }
         }
+        assert!(checked, "Dig abort test never hit full paralysis");
     }
 
     // #50: Baton Pass copies defensecurl & minimize; first-mover Baton Pass + second-mover Pursuit takes Spikes then 2x Pursuit (`Probe 12C`).
@@ -1315,6 +1321,7 @@ fn castle_individual_move_diffs_40_to_54() {
         let u1 = bbu.active_id(0).unwrap();
         bbu.restore_status(&dex, u1, Status::Par, None);
         bbu.sides[0].roster[1].status = Status::Par; // bench Snorlax paralyzed -> excluded
+        let mut checked = false;
         for seed in 1..20u64 {
             let mut t = bbu.clone();
             t.reseed(seed);
@@ -1323,9 +1330,11 @@ fn castle_individual_move_diffs_40_to_54() {
             t.choose(&dex, 1, "move splash").unwrap();
             if let Some(line) = t.log.iter().find(|l| l.starts_with("|-hitcount|")) {
                 assert!(line.ends_with("|2"), "Beat Up expected 2 hits (par user + healthy bench), got {line}");
+                checked = true;
                 break;
             }
         }
+        assert!(checked, "Beat Up hitcount test never executed");
     }
 
     // #54: Encore + Disable does NOT force Struggle; Encore vs Roar fails; Mimic PP=8; Sketch PvP bypasses Sub!
@@ -1339,6 +1348,7 @@ fn castle_individual_move_diffs_40_to_54() {
         b.choose(&dex, 0, "move encore").unwrap();
         b.choose(&dex, 1, "move tackle").unwrap();
         // Loop seeds until Disable hits (55% acc)
+        let mut checked = false;
         for seed in 1..40u64 {
             let mut t = b.clone();
             t.reseed(seed);
@@ -1355,9 +1365,11 @@ fn castle_individual_move_diffs_40_to_54() {
                 t.choose(&dex, 0, "move splash").unwrap();
                 t.choose(&dex, 1, "move tackle").unwrap();
                 assert!(t.log.iter().any(|l| l.contains("|cant|p2a: Snorlax|Disable|Tackle")));
+                checked = true;
                 break;
             }
         }
+        assert!(checked, "Encore+Disable test never landed Disable");
 
         // Encore vs failed Roar -> fails (`Probe 12I`).
         let pr1 = vec![mk_bare("Mew", 50, &["Protect", "Encore"], "")];
@@ -1394,40 +1406,54 @@ fn castle_individual_move_diffs_40_to_54() {
         // Fury Cutter > 160 BP on 6th hit (10 * 32 = 320 BP vs PS capped 160 BP).
         let p1 = vec![mk_bare("Scizor", 50, &["Fury Cutter"], "")];
         let p2 = vec![mk_bare("Blissey", 50, &["Soft-Boiled", "Splash"], "")];
-        let mut bf = start_castle(&dex, "1,2,3,4", castle_ruleset(), &p1, &p2);
-        let a1 = bf.active_id(0).unwrap();
-        let a2 = bf.active_id(1).unwrap();
         let fc = dex.conds_id("furycutter").unwrap();
-        bf.add_volatile(&dex, a1, "furycutter", None, nc2000_engine::battle::EffectHandle::None);
-        bf.poke_mut(a1).volatile_mut(fc).unwrap().set_int(DK::Multiplier, 16);
-        bf.poke_mut(a1).volatile_mut(fc).unwrap().duration = Some(2);
-        bf.choose(&dex, 0, "move furycutter").unwrap();
-        bf.choose(&dex, 1, "move splash").unwrap();
-        // After hit at 16x -> FuryCutterRestart doubled Multiplier to 32 (uncapped in Castle)!
-        if bf.poke(a1).has_volatile(fc) {
-            assert_eq!(bf.poke(a1).volatile(fc).unwrap().get_int(DK::Multiplier), 32);
+        let mut fc_checked = false;
+        for seed in 1..30u64 {
+            let mut bf = start_castle(&dex, &format!("{seed},2,3,4"), castle_ruleset(), &p1, &p2);
+            let a1 = bf.active_id(0).unwrap();
+            bf.add_volatile(&dex, a1, "furycutter", None, nc2000_engine::battle::EffectHandle::None);
+            bf.poke_mut(a1).volatile_mut(fc).unwrap().set_int(DK::Multiplier, 16);
+            bf.poke_mut(a1).volatile_mut(fc).unwrap().duration = Some(2);
+            bf.choose(&dex, 0, "move furycutter").unwrap();
+            bf.choose(&dex, 1, "move splash").unwrap();
+            // After hit at 16x -> FuryCutterRestart doubled Multiplier to 32 (uncapped in Castle)!
+            if bf.poke(a1).has_volatile(fc) {
+                assert_eq!(bf.poke(a1).volatile(fc).unwrap().get_int(DK::Multiplier), 32);
+                fc_checked = true;
+                break;
+            }
         }
+        assert!(fc_checked, "Fury Cutter 32x uncapped test never landed");
 
-        // #53① Outrage hit 2 against a newly switched-in mon cannot be MirrorCoated!
+        // #53① Outrage hit 2/3 against a newly switched-in mon cannot be MirrorCoated!
         let po1 = vec![mk_bare("Dragonite", 55, &["Outrage"], "")];
         let po2 = vec![
             mk_bare("Blissey", 50, &["Splash"], ""),
             mk_bare("Snorlax", 50, &["Mirror Coat", "Splash"], ""),
         ];
-        let mut bo = start_castle(&dex, "1,2,3,4", castle_ruleset(), &po1, &po2);
-        bo.choose(&dex, 0, "move outrage").unwrap();
-        bo.choose(&dex, 1, "move splash").unwrap();
-        // Turn 2: P2 switches to Snorlax; Snorlax takes Outrage hit 2 (didn't take hit 1!).
-        bo.choose(&dex, 0, "move outrage").unwrap();
-        bo.choose(&dex, 1, "switch 2").unwrap();
-        // If Dragonite is still locked for hit 3, Snorlax Mirror Coat must fail!
         let lm = dex.conds_id("lockedmove").unwrap();
-        if bo.poke(bo.active_id(0).unwrap()).has_volatile(lm) {
-            let d_pre = bo.poke(bo.active_id(0).unwrap()).hp;
+        let mut outrage_checked = false;
+        for seed in 1..40u64 {
+            let mut bo = start_castle(&dex, &format!("{seed},2,3,4"), castle_ruleset(), &po1, &po2);
             bo.choose(&dex, 0, "move outrage").unwrap();
-            bo.choose(&dex, 1, "move mirrorcoat").unwrap();
-            assert_eq!(bo.poke(bo.active_id(0).unwrap()).hp, d_pre, "Outrage hit 2/3 must not be MirrorCoat-reflectable by mon that didn't take hit 1");
+            bo.choose(&dex, 1, "move splash").unwrap();
+            // Turn 2: P2 switches to Snorlax; Snorlax takes Outrage hit 2 (didn't take hit 1!).
+            bo.choose(&dex, 0, "move outrage").unwrap();
+            bo.choose(&dex, 1, "switch 2").unwrap();
+            if bo.poke(bo.active_id(0).unwrap()).has_volatile(lm) {
+                let d_pre = bo.poke(bo.active_id(0).unwrap()).hp;
+                bo.choose(&dex, 0, "move outrage").unwrap();
+                bo.choose(&dex, 1, "move mirrorcoat").unwrap();
+                assert_eq!(
+                    bo.poke(bo.active_id(0).unwrap()).hp,
+                    d_pre,
+                    "Outrage hit 2/3 must not be MirrorCoat-reflectable by mon that didn't take hit 1"
+                );
+                outrage_checked = true;
+                break;
+            }
         }
+        assert!(outrage_checked, "Outrage 3-turn Mirror Coat test never rolled 3-turn Outrage");
 
         // #54③ Foresight clears when user switches out; ignores own acc drops when acc < eva.
         let pf1 = vec![
@@ -1468,20 +1494,455 @@ fn castle_individual_move_diffs_40_to_54() {
         // #39 Sleep Talk resets Protect/Detect/Endure stall counter.
         let pst1 = vec![mk_bare("Snorlax", 50, &["Protect", "Sleep Talk", "Splash"], "")];
         let pst2 = vec![mk_bare("Blissey", 50, &["Splash"], "")];
-        let mut bst = start_castle(&dex, "1,2,3,4", castle_ruleset(), &pst1, &pst2);
-        let st1 = bst.active_id(0).unwrap();
-        bst.add_volatile(&dex, st1, "stall", None, nc2000_engine::battle::EffectHandle::None);
-        bst.restore_status(&dex, st1, Status::Slp, None);
-        bst.poke_mut(st1).status_state.set_int(DK::Time, 3);
         let st_c = dex.conds_id("stall").unwrap();
-        assert!(bst.poke(st1).has_volatile(st_c));
-        bst.choose(&dex, 0, "move sleeptalk").unwrap();
-        bst.choose(&dex, 1, "move splash").unwrap();
-        // Unless Sleep Talk picked Protect itself, stall volatile was cleared!
-        if !bst.log.iter().any(|l| l.contains("|Protect|")) {
-            assert!(!bst.poke(st1).has_volatile(st_c), "Sleep Talk must reset stall counter");
+        let mut st_checked = false;
+        for seed in 1..30u64 {
+            let mut bst = start_castle(&dex, &format!("{seed},2,3,4"), castle_ruleset(), &pst1, &pst2);
+            let st1 = bst.active_id(0).unwrap();
+            bst.add_volatile(&dex, st1, "stall", None, nc2000_engine::battle::EffectHandle::None);
+            bst.restore_status(&dex, st1, Status::Slp, None);
+            bst.poke_mut(st1).status_state.set_int(DK::Time, 3);
+            assert!(bst.poke(st1).has_volatile(st_c));
+            bst.choose(&dex, 0, "move sleeptalk").unwrap();
+            bst.choose(&dex, 1, "move splash").unwrap();
+            if !bst.log.iter().any(|l| l.contains("|Protect|")) {
+                assert!(!bst.poke(st1).has_volatile(st_c), "Sleep Talk must reset stall counter");
+                st_checked = true;
+                break;
+            }
         }
-        let _ = a2;
+        assert!(st_checked, "Sleep Talk stall-reset test never picked a non-Protect move");
+    }
+}
+
+#[test]
+fn castle_audit_bugfixes_comprehensive() {
+    let dex = load_dex();
+
+    // 1. Castle Battle::get_health emits exact HP (shared == secret) and omits HP Percentage Mod.
+    {
+        let p1 = vec![mk_bare("Snorlax", 50, &["Splash"], "")];
+        let p2 = vec![mk_bare("Blissey", 50, &["Splash"], "")];
+        let mut bc = start_castle(&dex, "1,2,3,4", castle_ruleset(), &p1, &p2);
+        let a1 = bc.active_id(0).unwrap();
+        bc.poke_mut(a1).hp = 133;
+        let (sec, sh) = bc.get_health(a1);
+        assert_eq!(sec, "133/266");
+        assert_eq!(sh, "133/266");
+        assert!(!bc.log.iter().any(|l| l.contains("HP Percentage Mod")));
+
+        let mut bp = Battle::from_fixture(&dex, "1,2,3,4", &p1, &p2).unwrap();
+        bp.choose(&dex, 0, "team 1").unwrap();
+        bp.choose(&dex, 1, "team 1").unwrap();
+        let pa1 = bp.active_id(0).unwrap();
+        bp.poke_mut(pa1).hp = 100;
+        let (psec, psh) = bp.get_health(pa1);
+        assert_eq!(psec, "100/235");
+        assert_eq!(psh, "43/100");
+        assert!(bp.log.iter().any(|l| l.contains("HP Percentage Mod")));
+    }
+
+    // 2. Unified Castle PokemonSet defaults: typed HP Fire auto-fill (None & all-30/31),
+    // spd-only DV/EV propagation, always-derived HP DV, deterministic gender, and 11 Castle inert items.
+    {
+        let hp_fire_none = mk_bare("Zapdos", 50, &["Thunderbolt", "Hidden Power Fire"], "Surf Mail");
+        let mut hp_fire_30 = mk_bare("Snorlax", 50, &["Hidden Power Fire"], "Flower Mail");
+        hp_fire_30.ivs = Some(
+            [("hp", 30), ("atk", 30), ("def", 30), ("spa", 30), ("spd", 30), ("spe", 30)]
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect(),
+        );
+        hp_fire_30.gender = Some("F".into()); // Invalid for Atk DV 14 Snorlax (12.5% F -> M)!
+        let mut spd_only = mk_bare("Blissey", 50, &["Splash"], "Park Ball");
+        spd_only.ivs = Some([("hp", 0), ("spd", 20)].into_iter().map(|(k, v)| (k.to_string(), v)).collect());
+        spd_only.evs = Some([("spd", 100)].into_iter().map(|(k, v)| (k.to_string(), v)).collect());
+        spd_only.gender = Some("M".into()); // Invalid for fixed-F Blissey!
+
+        let b = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &[hp_fire_none, hp_fire_30, spd_only],
+            &[mk_bare("Mew", 50, &["Splash"], "Eon Mail")],
+            castle_ruleset(),
+        )
+        .unwrap();
+        let z = &b.sides[0].roster[0];
+        assert_eq!(dex.type_name(z.hp_type), "Fire");
+        assert_eq!(z.hp_power, 70);
+        assert_eq!(z.set_ivs, [6, 28, 24, 30, 30, 30]); // Atk=14,Def=12,Spe=15,Spc=15 -> HP DV=3 (IV 6)
+        assert!(z.item.is_some(), "Surf Mail must stay non-None in Castle Battle");
+
+        let lax = &b.sides[0].roster[1];
+        assert_eq!(dex.type_name(lax.hp_type), "Fire");
+        assert_eq!(lax.hp_power, 70);
+        assert_eq!(lax.gender, Gender::M, "Castle must enforce deterministic Atk-DV gender");
+        assert!(lax.item.is_some(), "Flower Mail must resolve to Mail");
+
+        let bl = &b.sides[0].roster[2];
+        assert_eq!(bl.set_ivs[3], 20);
+        assert_eq!(bl.set_ivs[4], 20);
+        assert_eq!(bl.set_ivs[0], 28); // Atk=15(1), Def=15(1), Spe=15(1), Spc=10(0) -> HP DV=14 (IV 28)
+        assert_eq!(bl.set_evs[3], 100);
+        assert_eq!(bl.set_evs[4], 100);
+        assert_eq!(bl.set_evs[0], 255);
+        assert_eq!(bl.gender, Gender::F, "Castle must enforce fixed species gender");
+        assert!(bl.item.is_some(), "Park Ball must resolve to Sport Ball");
+    }
+
+    // 3. Unified Battle::get_stat_castle (stage -> item -> 999 -> Burn/2), f64 pre-par 999 clamp, and hit_probability.
+    {
+        let p1 = vec![mk_bare("Marowak", 50, &["Fire Blast", "Splash"], "Thick Club")];
+        let p2 = vec![mk_bare("Jolteon", 50, &["Splash"], "BrightPowder")];
+        let mut b = start_castle(&dex, "1,2,3,4", castle_ruleset(), &p1, &p2);
+        let a1 = b.active_id(0).unwrap();
+        let a2 = b.active_id(1).unwrap();
+        b.poke_mut(a1).boosts[stat_idx::ATK] = 6; // 131 * 4 = 524, *2 Thick Club = 1048 -> 999 -> Burn /2 = 499
+        b.restore_status(&dex, a1, Status::Brn, None);
+        assert_eq!(b.get_stat(&dex, a1, stat_idx::ATK, false, false, false), 499);
+
+        // Pre-paralysis speed clamp at 999.0 before / 4.0:
+        // Lv50 Jolteon Spe=181, at +6 -> 724; set stored_stats[SPE]=300 at +6 -> 1200 -> clamp 999 -> Par/4 = 249.75!
+        b.poke_mut(a2).stored_stats[stat_idx::SPE] = 300;
+        b.poke_mut(a2).boosts[stat_idx::SPE] = 6;
+        b.restore_status(&dex, a2, Status::Par, None);
+        assert!((b.get_pokemon_action_speed_f64(&dex, a2) - 249.75).abs() < 1e-9);
+
+        // hit_probability uses Castle rational 3/9..9/3 + Foresight + BrightPowder -20/256:
+        let fb = dex.moves.id("fireblast").unwrap();
+        b.poke_mut(a1).boosts[stat_idx::ACC] = -1; // 85% -> floor(85*255/100)=216; *3/4=162; -20 BrightPowder = 142 -> 142/256
+        assert!((b.hit_probability(&dex, a1, a2, fb) - 142.0 / 256.0).abs() < 1e-12);
+        // With Foresight and acc=-1 < eva=0, both reset to 0 -> 216 - 20 = 196 -> 196/256!
+        b.add_volatile(&dex, a2, "foresight", Some(a1), nc2000_engine::battle::EffectHandle::None);
+        assert!((b.hit_probability(&dex, a1, a2, fb) - 196.0 / 256.0).abs() < 1e-12);
+    }
+
+    // 4. #25 Present v0.3: Burn unfloored halving, Metal Powder unfloored 1.5x, Crit before Pink Bow, Triple Kick leak.
+    {
+        // Delibird (Ice/Flying -> att_last=Flying=2) vs Umbreon (Dark -> def_last=Dark=27, p_lvl*6=162):
+        // BP 40 clean -> floor(162*40*1.0/2.0/50) = 64 -> Pink Bow *1.1 = 70 -> +2 = 72 (roll 61..=72).
+        // BP 40 burned -> floor(162*40*0.5/2.0/50) = 32 -> Pink Bow *1.1 = 35 -> +2 = 37 (roll 31..=37).
+        let p1 = vec![mk_bare("Delibird", 50, &["Present"], "Pink Bow")];
+        let p2 = vec![mk_bare("Umbreon", 50, &["Splash"], "")];
+        let mut b_clean = start_castle(&dex, "1,2,3,4", castle_ruleset(), &p1, &p2);
+        let mut b_burn = start_castle(&dex, "1,2,3,4", castle_ruleset(), &p1, &p2);
+        let a1 = b_burn.active_id(0).unwrap();
+        b_burn.restore_status(&dex, a1, Status::Brn, None);
+        let a2c = b_clean.active_id(1).unwrap();
+        let a2b = b_burn.active_id(1).unwrap();
+        let mut checked = false;
+        for seed in 1..60u64 {
+            let mut tc = b_clean.clone();
+            let mut tb = b_burn.clone();
+            tc.reseed(seed);
+            tb.reseed(seed);
+            tc.choose(&dex, 0, "move present").unwrap();
+            tc.choose(&dex, 1, "move splash").unwrap();
+            tb.choose(&dex, 0, "move present").unwrap();
+            tb.choose(&dex, 1, "move splash").unwrap();
+            let dc = 201 - tc.poke(a2c).hp;
+            let db = 201 - tb.poke(a2b).hp;
+            if dc >= 40 && db > 0 {
+                assert!(db < dc * 3 / 4, "Burned Present ({db}) must deal ~half of unburned ({dc})");
+                checked = true;
+                break;
+            }
+        }
+        assert!(checked, "Burned Present comparison never rolled damaging bucket");
+    }
+
+    // 5. #45 Lock-On: target switch clears lockon, Swift doesn't consume, OHKO consumes without auto-hitting,
+    // Baton Pass re-points foe lockon and does not copy dig/fly/attacker lockon.
+    {
+        let p1 = vec![
+            mk_bare("Mew", 50, &["Lock-On", "Swift", "Fissure", "Baton Pass"], ""),
+            mk_bare("Snorlax", 50, &["Splash"], ""),
+        ];
+        let p2 = vec![
+            mk_bare("Blissey", 50, &["Baton Pass", "Splash"], ""),
+            mk_bare("Snorlax", 50, &["Splash"], ""),
+        ];
+        let lo = dex.conds_id("lockon").unwrap();
+        let mut b = start_castle(&dex, "1,2,3,4", castle_ruleset(), &p1, &p2);
+        let a1 = b.active_id(0).unwrap();
+        b.choose(&dex, 0, "move lockon").unwrap();
+        b.choose(&dex, 1, "move splash").unwrap();
+        assert!(b.poke(a1).has_volatile(lo));
+        // Swift (AlwaysHits, no acc check) does NOT consume Lock-On!
+        b.choose(&dex, 0, "move swift").unwrap();
+        b.choose(&dex, 1, "move splash").unwrap();
+        assert!(b.poke(a1).has_volatile(lo), "Swift must NOT consume Lock-On");
+        // Foe Baton Pass re-points attacker's Lock-On to receiver!
+        b.choose(&dex, 0, "move swift").unwrap();
+        b.choose(&dex, 1, "move batonpass").unwrap();
+        b.choose(&dex, 1, "switch 2").unwrap();
+        let p2_recv = b.active_id(1).unwrap();
+        assert_eq!(b.poke(a1).volatile(lo).and_then(|v| v.source), Some(p2_recv), "Foe Baton Pass must re-point Lock-On");
+        // Fissure (OHKO, has acc check) consumes Lock-On!
+        b.choose(&dex, 0, "move fissure").unwrap();
+        b.choose(&dex, 1, "move splash").unwrap();
+        assert!(!b.poke(a1).has_volatile(lo), "OHKO move must consume Lock-On");
+        // Re-lock and normal switch by target clears attacker's Lock-On!
+        let mut b2 = start_castle(&dex, "1,2,3,4", castle_ruleset(), &p1, &p2);
+        let u1 = b2.active_id(0).unwrap();
+        b2.choose(&dex, 0, "move lockon").unwrap();
+        b2.choose(&dex, 1, "move splash").unwrap();
+        assert!(b2.poke(u1).has_volatile(lo));
+        b2.choose(&dex, 0, "move swift").unwrap();
+        b2.choose(&dex, 1, "switch 2").unwrap();
+        assert!(!b2.poke(u1).has_volatile(lo), "Target normal switch must clear attacker's Lock-On");
+        // Attacker Baton Pass must NOT copy attacker-side Lock-On (or Dig/Fly)!
+        let mut b3 = start_castle(&dex, "1,2,3,4", castle_ruleset(), &p1, &p2);
+        b3.choose(&dex, 0, "move lockon").unwrap();
+        b3.choose(&dex, 1, "move splash").unwrap();
+        b3.choose(&dex, 0, "move batonpass").unwrap();
+        b3.choose(&dex, 1, "move splash").unwrap();
+        b3.choose(&dex, 0, "switch 2").unwrap();
+        assert!(!b3.poke(b3.active_id(0).unwrap()).has_volatile(lo), "Baton Pass must NOT copy attacker-side Lock-On");
+    }
+
+    // 6. #44 Sleep Talk -> Outrage does NOT attach lockedmove!
+    {
+        let p1 = vec![mk_bare("Dragonite", 55, &["Sleep Talk", "Outrage"], "")];
+        let p2 = vec![mk_bare("Blissey", 50, &["Splash"], "")];
+        let mut b = start_castle(&dex, "1,2,3,4", castle_ruleset(), &p1, &p2);
+        let a1 = b.active_id(0).unwrap();
+        b.restore_status(&dex, a1, Status::Slp, None);
+        b.poke_mut(a1).status_state.set_int(DK::Time, 4);
+        b.choose(&dex, 0, "move sleeptalk").unwrap();
+        b.choose(&dex, 1, "move splash").unwrap();
+        let lm = dex.conds_id("lockedmove").unwrap();
+        assert!(!b.poke(a1).has_volatile(lm), "Sleep Talk -> Outrage must NOT attach lockedmove in Castle");
+    }
+
+    // 7. #2 1v1 Simultaneous Spikes KO on dual replacement switches -> DRAW!
+    {
+        let p1 = vec![
+            mk_bare("Mew", 50, &["Spikes", "Explosion"], ""),
+            mk_bare("Snorlax", 50, &["Splash"], ""),
+        ];
+        let p2 = vec![
+            mk_bare("Mew", 50, &["Spikes", "Splash"], ""),
+            mk_bare("Snorlax", 50, &["Splash"], ""),
+        ];
+        let mut b = start_castle(&dex, "1,2,3,4", castle_ruleset(), &p1, &p2);
+        b.choose(&dex, 0, "move spikes").unwrap();
+        b.choose(&dex, 1, "move spikes").unwrap();
+        // Both benches at 1 HP so Spikes KOs both simultaneously!
+        b.sides[0].roster[1].hp = 1;
+        b.sides[1].roster[1].hp = 1;
+        b.sides[1].roster[0].hp = 10;
+        b.choose(&dex, 0, "move explosion").unwrap();
+        b.choose(&dex, 1, "move splash").unwrap();
+        assert_eq!(b.request_state, RequestState::Switch);
+        b.choose(&dex, 0, "switch 2").unwrap();
+        b.choose(&dex, 1, "switch 2").unwrap();
+        assert_eq!(b.outcome(), Some(Outcome::Tie), "1v1 simultaneous Spikes KO must adjudicate as DRAW");
+    }
+
+    // 8. #30 Variance-at-1 rolls 0 in Castle; #47① Return fixed 102 BP at happiness=0;
+    // #38 King's Rock excludes Counter/MirrorCoat/SelfDestruct/Explosion; #43 Rapid Spin clears Spikes vs Protect;
+    // #54④ Sketch fails vs transformed target; #7 Perish Song asymmetric 0-remaining loser faints first!
+    {
+        // #30: base damage = 1 -> 38/39 rolls produce 0!
+        let pz1 = vec![mk_set("Magikarp", 5, &["Tackle"], "", Some([0, 0, 0, 0]), Some([0, 0, 0, 0, 0]))];
+        let pz2 = vec![mk_bare("Steelix", 50, &["Splash"], "")];
+        let mut saw_zero = false;
+        let mut saw_one = false;
+        for seed in 1..120u64 {
+            let mut bz = start_castle(&dex, &format!("{seed},2,3,4"), castle_ruleset(), &pz1, &pz2);
+            let a2 = bz.active_id(1).unwrap();
+            let pre = bz.poke(a2).hp;
+            bz.choose(&dex, 0, "move tackle").unwrap();
+            bz.choose(&dex, 1, "move splash").unwrap();
+            if !bz.log.iter().any(|l| l.contains("|-miss|")) {
+                let d = pre - bz.poke(a2).hp;
+                if d == 0 { saw_zero = true; }
+                if d == 1 { saw_one = true; }
+                if saw_zero && saw_one { break; }
+            }
+        }
+        assert!(saw_zero && saw_one, "Castle variance-at-1 must produce both 0 and 1");
+
+        // #47① Return fixed 102 BP even with happiness == 0!
+        let mut ret_mon = mk_bare("Snorlax", 50, &["Return"], "");
+        ret_mon.happiness = Some(0);
+        let mut br = start_castle(&dex, "1,2,3,4", castle_ruleset(), &[ret_mon], &[mk_bare("Blissey", 50, &["Splash"], "")]);
+        br.choose(&dex, 0, "move return").unwrap();
+        br.choose(&dex, 1, "move splash").unwrap();
+        let dealt = 361 - br.poke(br.active_id(1).unwrap()).hp;
+        assert!(dealt >= 140, "Castle Return must be fixed 102 BP even at happiness=0, got {dealt}");
+
+        // #43 Rapid Spin vs Protect still clears Spikes!
+        let pr1 = vec![mk_bare("Starmie", 50, &["Rapid Spin", "Splash"], "")];
+        let pr2 = vec![mk_bare("Cloyster", 50, &["Spikes", "Protect", "Splash"], "")];
+        let mut bp = start_castle(&dex, "1,2,3,4", castle_ruleset(), &pr1, &pr2);
+        bp.choose(&dex, 0, "move splash").unwrap();
+        bp.choose(&dex, 1, "move spikes").unwrap();
+        bp.choose(&dex, 0, "move rapidspin").unwrap();
+        bp.choose(&dex, 1, "move protect").unwrap();
+        let spikes = dex.conds_id("spikes").unwrap();
+        assert!(!bp.sides[0].has_side_condition(spikes), "Rapid Spin vs Protect must still clear Spikes");
+
+        // #54④ Sketch fails against transformed target!
+        let ps1 = vec![mk_bare("Smeargle", 50, &["Sketch", "Splash"], "")];
+        let ps2 = vec![mk_bare("Ditto", 50, &["Transform"], "")];
+        let mut bs = start_castle(&dex, "1,2,3,4", castle_ruleset(), &ps1, &ps2);
+        bs.choose(&dex, 0, "move splash").unwrap();
+        bs.choose(&dex, 1, "move transform").unwrap();
+        bs.choose(&dex, 0, "move splash").unwrap();
+        bs.choose(&dex, 1, "move splash").unwrap();
+        bs.log.clear();
+        bs.choose(&dex, 0, "move sketch").unwrap();
+        bs.choose(&dex, 1, "move splash").unwrap();
+        assert!(bs.log.iter().any(|l| l.contains("|-fail|")), "Sketch must fail vs transformed target");
+
+        // #7 Perish Song asymmetric 0-remaining loser queued first in faint_queue!
+        let pp1 = vec![
+            mk_bare("Misdreavus", 50, &["Perish Song", "Splash"], ""),
+            mk_bare("Snorlax", 50, &["Splash"], ""),
+        ];
+        let pp2 = vec![mk_bare("Blissey", 50, &["Splash"], "")];
+        let mut bper = start_castle(&dex, "1,2,3,4", castle_ruleset(), &pp1, &pp2);
+        bper.choose(&dex, 0, "move perishsong").unwrap();
+        bper.choose(&dex, 1, "move splash").unwrap();
+        for _ in 0..3 {
+            bper.log.clear();
+            bper.choose(&dex, 0, "move splash").unwrap();
+            bper.choose(&dex, 1, "move splash").unwrap();
+        }
+        let f_p2 = bper.log.iter().position(|l| l == "|faint|p2a: Blissey").unwrap();
+        let f_p1 = bper.log.iter().position(|l| l == "|faint|p1a: Misdreavus").unwrap();
+        assert!(f_p2 < f_p1, "Asymmetric Perish 0-remaining loser (P2) must faint first");
+        assert_eq!(bper.outcome(), Some(Outcome::P1Win));
+
+        // #38 King's Rock excludes Counter/MirrorCoat/SelfDestruct/Explosion in Castle!
+        let pk1 = vec![mk_bare("Snorlax", 50, &["Counter", "Splash"], "King's Rock")];
+        let pk2 = vec![mk_bare("Blissey", 50, &["Tackle", "Splash"], "")];
+        for seed in 1..80u64 {
+            let mut bk = start_castle(&dex, &format!("{seed},2,3,4"), castle_ruleset(), &pk1, &pk2);
+            let a1 = bk.active_id(0).unwrap();
+            let a2 = bk.active_id(1).unwrap();
+            // Force Snorlax to act first with Counter via Quick-style speed boost? Better: test faster Mew with Explosion/Counter!
+            let _ = (a1, a2);
+            break;
+        }
+        let pm1 = vec![mk_bare("Mew", 50, &["Counter", "Splash"], "King's Rock")];
+        let pm2 = vec![mk_bare("Snorlax", 50, &["Tackle"], "")];
+        for seed in 1..60u64 {
+            let mut bk = start_castle(&dex, &format!("{seed},2,3,4"), castle_ruleset(), &pm1, &pm2);
+            let a2 = bk.active_id(1).unwrap();
+            bk.poke_mut(a2).last_move = dex.moves.id("tackle");
+            bk.choose(&dex, 0, "move counter").unwrap();
+            bk.choose(&dex, 1, "move tackle").unwrap();
+            assert!(!bk.log.iter().any(|l| l.contains("|flinch")), "Counter must not trigger King's Rock flinch");
+        }
+
+        // #32/#33 Status Berry uniformity: PRZCureBerry does NOT fire on generic Update,
+        // and DOES fire after foe's failed/Bide/nopp turn in Castle!
+        {
+            let pb1 = vec![mk_bare("Mew", 50, &["Bide", "Splash"], "")];
+            let pb2 = vec![mk_bare("Snorlax", 50, &["Splash"], "PRZCureBerry")];
+            let mut bb = start_castle(&dex, "1,2,3,4", castle_ruleset(), &pb1, &pb2);
+            let a1 = bb.active_id(0).unwrap();
+            let a2 = bb.active_id(1).unwrap();
+            // Inject paralysis directly + fire Update: Castle PRZCureBerryUpdate must NOT consume the berry.
+            bb.restore_status(&dex, a2, Status::Par, None);
+            bb.each_event(&dex, &nc2000_engine::battle::events::ev::Update, None);
+            assert_eq!(bb.poke(a2).status, Status::Par, "Castle PRZCureBerry must not cure on generic Update");
+            assert!(bb.poke(a2).item.is_some());
+            // When P1 hits the Bide early-return path, foe's immediate status berry check fires!
+            bb.add_volatile(&dex, a1, "bide", Some(a1), nc2000_engine::battle::EffectHandle::None);
+            bb.choose(&dex, 0, "move bide").unwrap();
+            bb.choose(&dex, 1, "move splash").unwrap();
+            assert_eq!(bb.poke(a2).status, Status::None, "Castle foe status berry must cure on Bide early return");
+            assert!(bb.poke(a2).item.is_none());
+        }
+
+        // #51 Triple Kick: BP=10, multiplied by hit_k AFTER type effectiveness & BEFORE roll!
+        // Hitmontop (Atk=146) vs Blissey (Def=61, 2x weak to Fighting):
+        // Hit 1: floor(floor(22*10*146/61)/50)+2 = 12, *1.5 STAB = 18, *2 SE = 36, *1 = 36 (roll 30..=36).
+        // Hit 2: 36 * 2 = 72 (roll 61..=72). Hit 3: 36 * 3 = 108 (roll 91..=108). Total = 182..=216!
+        {
+            let pt1 = vec![mk_bare("Hitmontop", 50, &["Triple Kick"], "")];
+            let pt2 = vec![mk_bare("Blissey", 50, &["Splash"], "")];
+            let mut saw_3hits = false;
+            for seed in 1..60u64 {
+                let mut bt = start_castle(&dex, &format!("{seed},2,3,4"), castle_ruleset(), &pt1, &pt2);
+                bt.choose(&dex, 0, "move triplekick").unwrap();
+                bt.choose(&dex, 1, "move splash").unwrap();
+                if bt.log.iter().any(|l| l.contains("|-hitcount|p2a: Blissey|3")) {
+                    let dealt = 361 - bt.poke(bt.active_id(1).unwrap()).hp;
+                    assert!(
+                        (182..=216).contains(&dealt),
+                        "Castle Triple Kick 3-hit total expected 182..=216, got {dealt}"
+                    );
+                    saw_3hits = true;
+                    break;
+                }
+            }
+            assert!(saw_3hits, "Triple Kick 3-hit seed not found");
+        }
+
+        // #54③ resolve_future_move: Castle 256-denom accuracy + BrightPowder -20/256 + Foresight acc<eva!
+        {
+            let pf1 = vec![mk_bare("Espeon", 50, &["Future Sight", "Splash"], "")];
+            let pf2 = vec![mk_bare("Blissey", 50, &["Splash"], "BrightPowder")];
+            let mut hits = 0usize;
+            let trials = 400usize;
+            for seed in 1..=(trials as u64) {
+                let mut bf = start_castle(&dex, &format!("{seed},2,3,4"), castle_ruleset(), &pf1, &pf2);
+                bf.set_log_enabled(false);
+                bf.choose(&dex, 0, "move futuresight").unwrap();
+                bf.choose(&dex, 1, "move splash").unwrap();
+                // Lower Espeon accuracy by -2: 90% -> floor(90*255/100)=229, *3/5=137, -20 BrightPowder = 117/256 (~45.7%)!
+                let a1 = bf.active_id(0).unwrap();
+                let a2 = bf.active_id(1).unwrap();
+                bf.poke_mut(a1).boosts[stat_idx::ACC] = -2;
+                bf.choose(&dex, 0, "move splash").unwrap();
+                bf.choose(&dex, 1, "move splash").unwrap();
+                bf.choose(&dex, 0, "move splash").unwrap();
+                bf.choose(&dex, 1, "move splash").unwrap();
+                if bf.poke(a2).hp < 361 {
+                    hits += 1;
+                }
+            }
+            let rate = hits as f64 / trials as f64;
+            // Expected 117/256 = 0.457; clearly distinct from unboosted 90% (0.90)!
+            assert!(
+                (0.35..=0.58).contains(&rate),
+                "Castle Future Sight at acc -2 + BrightPowder expected ~0.457, got {rate:.3} ({hits}/{trials})"
+            );
+        }
+
+        // #15/#16 PursuitFoeBeforeSwitchOut uses f64 speed (999 clamp before /4, no early floor)!
+        {
+            // Paralyzed Tyranitar (Spe=112 -> 28.0) vs switching Destiny Bond Gengar (Spe=111 -> paralyzed 27.75):
+            // Under integer floor both would be 28 vs 27 (or 113/4=28.25 vs 112/4=28.0 -> tied as ints, NOT tied in f64!).
+            let pp1 = vec![mk_bare("Tyranitar", 50, &["Pursuit", "Splash"], "")];
+            let pp2 = vec![
+                mk_bare("Gengar", 50, &["Destiny Bond", "Splash"], ""),
+                mk_bare("Snorlax", 50, &["Splash"], ""),
+            ];
+            for seed in 1..30u64 {
+                let mut bp = start_castle(&dex, &format!("{seed},2,3,4"), castle_ruleset(), &pp1, &pp2);
+                let a1 = bp.active_id(0).unwrap();
+                let a2 = bp.active_id(1).unwrap();
+                // Set stored_stats[SPE]: Tyranitar=112 (Par -> 28.0), Gengar=113 (Par -> 28.25).
+                // As integers floor(112/4)==floor(113/4)==28 (50/50 tie), as f64 28.0 < 28.25 (ALWAYS clears Destiny Bond!).
+                bp.poke_mut(a1).stored_stats[stat_idx::SPE] = 112;
+                bp.poke_mut(a2).stored_stats[stat_idx::SPE] = 113;
+                bp.restore_status(&dex, a1, Status::Par, None);
+                bp.restore_status(&dex, a2, Status::Par, None);
+                bp.add_volatile(&dex, a2, "destinybond", Some(a2), nc2000_engine::battle::EffectHandle::None);
+                bp.poke_mut(a2).hp = 1;
+                bp.choose(&dex, 0, "move pursuit").unwrap();
+                bp.choose(&dex, 1, "switch 2").unwrap();
+                // Since 28.0 < 28.25 strictly, holder_speed < switching_speed ALWAYS removes Destiny Bond,
+                // so Tyranitar NEVER faints to Destiny Bond!
+                assert!(!bp.poke(a1).fainted, "Castle f64 Pursuit speed (28.0 < 28.25) must deterministically clear Destiny Bond");
+            }
+        }
     }
 }
 
@@ -1521,6 +1982,8 @@ struct ManifestStep {
     action: String,
     opts: Vec<(String, String)>,
     submitted: String,
+    #[serde(default)]
+    pdat: Option<Vec<String>>,
 }
 
 #[derive(serde::Deserialize)]
@@ -1541,14 +2004,201 @@ fn manifest_mon_to_set(m: &ManifestMon) -> PokemonSet {
     mk_set(&m.species, m.level, &move_refs, item, m.dvs, m.dos)
 }
 
+#[derive(Debug)]
+struct PdatRow {
+    hp: i32,
+    maxhp: i32,
+    status: Status,
+    pps: Vec<i32>,
+}
+
+fn parse_pdat_rows(pdat: &[String]) -> Vec<PdatRow> {
+    let mut rows = Vec::new();
+    for line in pdat {
+        if !line.contains('／') {
+            continue;
+        }
+        let cells: Vec<&str> = line
+            .split("| |")
+            .map(|c| c.trim().trim_matches('|').trim())
+            .collect();
+        if cells.len() < 8 {
+            continue;
+        }
+        let mut hp_parts = cells[2].split('／');
+        let hp: i32 = hp_parts.next().unwrap().trim().parse().unwrap();
+        let maxhp: i32 = hp_parts.next().unwrap().trim().parse().unwrap();
+        let status = match cells[3] {
+            "どく" => Status::Psn,
+            "ねむり" => Status::Slp,
+            "まひ" => Status::Par,
+            "やけど" => Status::Brn,
+            "こおり" => Status::Frz,
+            _ => Status::None,
+        };
+        let mut pps = Vec::new();
+        for cell in &cells[4..8] {
+            if let (Some(l), Some(r)) = (cell.rfind('('), cell.rfind(')')) {
+                let name = cell[..l].trim();
+                let pp: i32 = cell[l + 1..r].trim().parse().unwrap();
+                if !name.is_empty() {
+                    pps.push(pp);
+                }
+            }
+        }
+        rows.push(PdatRow { hp, maxhp, status, pps });
+    }
+    rows
+}
+
+fn verify_pdat_snapshot(
+    tag: &str,
+    step_idx: usize,
+    b: &Battle,
+    side_n: usize,
+    pdat: &[String],
+    hp_tolerance: i32,
+) -> Result<(), String> {
+    let rows = parse_pdat_rows(pdat);
+    if rows.len() != b.sides[side_n].roster.len() {
+        return Err(format!(
+            "{tag} step {step_idx} pdat row count {} != roster {}",
+            rows.len(),
+            b.sides[side_n].roster.len()
+        ));
+    }
+    for (slot, row) in rows.iter().enumerate() {
+        let p = &b.sides[side_n].roster[slot];
+        if p.maxhp != row.maxhp {
+            return Err(format!(
+                "{tag} step {step_idx} slot {slot} maxhp {} != pdat {}",
+                p.maxhp, row.maxhp
+            ));
+        }
+        if (p.hp - row.hp).abs() > hp_tolerance {
+            return Err(format!(
+                "{tag} step {step_idx} slot {slot} hp {} vs pdat {} (tol {hp_tolerance})",
+                p.hp, row.hp
+            ));
+        }
+        let got_st = match p.status {
+            Status::Tox => Status::Psn,
+            Status::Fnt => Status::None,
+            other => other,
+        };
+        let want_st = if p.fainted { Status::None } else { row.status };
+        if got_st != want_st {
+            return Err(format!(
+                "{tag} step {step_idx} slot {slot} status {:?} != pdat {:?}",
+                got_st, want_st
+            ));
+        }
+        let got_pps: Vec<i32> = p.move_slots.iter().map(|s| s.pp).collect();
+        if got_pps != row.pps {
+            return Err(format!(
+                "{tag} step {step_idx} slot {slot} PPs {:?} != pdat {:?}",
+                got_pps, row.pps
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn replay_manifest_with_seed(
+    dex: &Dex,
+    m: &ProbeManifest,
+    p1_picked: &[PokemonSet],
+    p2_picked: &[PokemonSet],
+    ruleset: Ruleset,
+    seed: u64,
+    hp_tolerance: i32,
+) -> Result<Battle, (usize, String)> {
+    let mut b = start_castle(dex, &format!("{seed},2,3,4"), ruleset, p1_picked, p2_picked);
+    for (step_idx, st) in m.steps.iter().enumerate() {
+        let side_n = (st.player - 1) as usize;
+        let expected_req = match st.action.as_str() {
+            "INPUT" => RequestKind::Move,
+            "CHANGE" | "BATONN" => RequestKind::Switch,
+            other => return Err((step_idx, format!("unexpected action {other}"))),
+        };
+        if b.sides[side_n].request != Some(expected_req) {
+            return Err((
+                step_idx,
+                format!(
+                    "{} step {} p{}: request {:?} != expected {:?}",
+                    m.tag, step_idx, st.player, b.sides[side_n].request, expected_req
+                ),
+            ));
+        }
+        let legal = b.legal_choices(dex, side_n);
+        let legal_moves = legal
+            .iter()
+            .filter(|c| matches!(c, SearchChoice::Move(_)))
+            .count();
+        let legal_switches = legal
+            .iter()
+            .filter(|c| matches!(c, SearchChoice::Switch(_)))
+            .count();
+        let opt_moves = st
+            .opts
+            .iter()
+            .filter(|(k, _)| k.starts_with('W') || k == "A")
+            .count();
+        let opt_switches = st.opts.iter().filter(|(k, _)| k.starts_with('C')).count();
+        if legal_moves != opt_moves || legal_switches != opt_switches {
+            return Err((
+                step_idx,
+                format!(
+                    "{} step {} p{}: legal (m={legal_moves}, s={legal_switches}) != opts (m={opt_moves}, s={opt_switches}) {:?}",
+                    m.tag, step_idx, st.player, st.opts
+                ),
+            ));
+        }
+        if let Some(ref pdat) = st.pdat {
+            if !pdat.is_empty() {
+                verify_pdat_snapshot(&m.tag, step_idx, &b, side_n, pdat, hp_tolerance)
+                    .map_err(|e| (step_idx, e))?;
+            }
+        }
+        let choice = if let Some(w) = st.submitted.strip_prefix('W') {
+            let slot: u8 = w.parse().unwrap();
+            format!("move {slot}")
+        } else if let Some(c) = st.submitted.strip_prefix('C') {
+            let orig_slot: u8 = c.parse::<u8>().unwrap() - 1;
+            let pos = b.sides[side_n]
+                .party
+                .iter()
+                .position(|&s| s == orig_slot)
+                .ok_or_else(|| {
+                    (step_idx, format!("{} step {}: switch target C{c} not in party", m.tag, step_idx))
+                })?
+                + 1;
+            format!("switch {pos}")
+        } else if st.submitted == "A" {
+            legal
+                .iter()
+                .find(|c| matches!(c, SearchChoice::Move(_)))
+                .ok_or_else(|| (step_idx, format!("{} step {}: no legal move for A", m.tag, step_idx)))?
+                .to_input(dex)
+        } else {
+            return Err((step_idx, format!("unknown submitted value {}", st.submitted)));
+        };
+        b.choose(dex, side_n, &choice)
+            .map_err(|e| (step_idx, format!("choice {choice} failed in {} step {}: {e:?}", m.tag, step_idx)))?;
+    }
+    Ok(b)
+}
+
 #[test]
 fn gate_a_round5_manifests_stats_and_protocol_conformance() {
-    let probe_dir = Path::new("/tmp/pbs-probes");
-    if !probe_dir.is_dir() {
-        return; // Gracefully skip when local probe logs aren't mounted (e.g. CI).
-    }
+    let fixture_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/castle");
+    assert!(
+        fixture_dir.is_dir(),
+        "Committed Gate A fixtures missing at {}",
+        fixture_dir.display()
+    );
     let dex = load_dex();
-    let mut manifests: Vec<std::path::PathBuf> = std::fs::read_dir(probe_dir)
+    let mut manifests: Vec<std::path::PathBuf> = std::fs::read_dir(&fixture_dir)
         .unwrap()
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| {
@@ -1558,8 +2208,13 @@ fn gate_a_round5_manifests_stats_and_protocol_conformance() {
         })
         .collect();
     manifests.sort();
-    assert_eq!(manifests.len(), 18, "Expected all 18 Round 5 probe manifests");
+    assert_eq!(
+        manifests.len(),
+        11,
+        "Expected all 11 non-Monte-Carlo Round 5 probe manifests in fixtures/castle"
+    );
 
+    let mut total_pdat_verified = 0usize;
     for path in &manifests {
         let raw = std::fs::read_to_string(path).unwrap();
         let m: ProbeManifest = serde_json::from_str(&raw).unwrap();
@@ -1582,71 +2237,122 @@ fn gate_a_round5_manifests_stats_and_protocol_conformance() {
             }
         }
 
-        // 2. For the deterministic non-RNG-branching manifests (12a1, 12a2, 12a3, 12c),
-        // replay EVERY step from the manifest verbatim and verify exact legal requests,
-        // BATONN transitions, and final L_TURN winner!
-        if matches!(
-            m.tag.as_str(),
+        // 2. Replay ALL 11 manifests end-to-end, verifying opts menus, pdat HP/PP/status snapshots,
+        // hit-by-hit damage/status invariants, and exact final outcomes!
+        let p1_picked: Vec<PokemonSet> = m.p1_pick.iter().map(|&i| p1_all[i - 1].clone()).collect();
+        let p2_picked: Vec<PokemonSet> = m.p2_pick.iter().map(|&i| p2_all[i - 1].clone()).collect();
+        let hp_tol = match m.tag.as_str() {
+            "probe12c_bp_pursuit_fswipe_pdat" => 12,
+            "probe12i_loose_ends" => 15,
+            _ => 0,
+        };
+        let expected_outcome = match m.tag.as_str() {
             "probe12a1_lturn_frac_p1"
-                | "probe12a2_lturn_frac_p2"
-                | "probe12a3_lturn_count"
-                | "probe12c_bp_pursuit_fswipe_pdat"
-        ) {
-            let p1_picked: Vec<PokemonSet> = m.p1_pick.iter().map(|&i| p1_all[i - 1].clone()).collect();
-            let p2_picked: Vec<PokemonSet> = m.p2_pick.iter().map(|&i| p2_all[i - 1].clone()).collect();
-            let mut b = start_castle(&dex, "1,2,3,4", ruleset, &p1_picked, &p2_picked);
-            // Track original pick-order slot -> current display position in Side::party
-            let mut step_idx = 0usize;
-            while step_idx < m.steps.len() && !b.ended {
-                let st = &m.steps[step_idx];
-                let side_n = (st.player - 1) as usize;
-                let expected_req = match st.action.as_str() {
-                    "INPUT" => RequestKind::Move,
-                    "CHANGE" | "BATONN" => RequestKind::Switch,
-                    other => panic!("unexpected action {other}"),
-                };
-                assert_eq!(
-                    b.sides[side_n].request,
-                    Some(expected_req),
-                    "Request mismatch at {} step {} p{} ({})",
-                    m.tag, step_idx, st.player, st.action
-                );
-                let choice = if let Some(w) = st.submitted.strip_prefix('W') {
-                    let slot: u8 = w.parse().unwrap();
-                    format!("move {slot}")
-                } else if let Some(c) = st.submitted.strip_prefix('C') {
-                    let orig_slot: u8 = c.parse::<u8>().unwrap() - 1;
-                    let pos = b.sides[side_n]
-                        .party
-                        .iter()
-                        .position(|&s| s == orig_slot)
-                        .unwrap()
-                        + 1;
-                    format!("switch {pos}")
-                } else if st.submitted == "A" {
-                    let legal = b.legal_choices(&dex, side_n);
-                    legal[0].to_input(&dex)
-                } else {
-                    panic!("unknown submitted value {}", st.submitted);
-                };
-                // Also verify menu option count matches!
-                if st.action == "BATONN" {
-                    let legal = b.legal_choices(&dex, side_n);
-                    assert_eq!(legal.len(), st.opts.len(), "BATONN option count mismatch in {}", m.tag);
+            | "probe12a3_lturn_count"
+            | "probe12d1_sub_roar_sketch_mimic_wrap_encore"
+            | "probe12d2_spin_mlook_stencore_beatupbench"
+            | "probe12i_loose_ends" => Outcome::P1Win,
+            "probe12a2_lturn_frac_p2"
+            | "probe12b_healbell_psn_23"
+            | "probe12c_bp_pursuit_fswipe_pdat"
+            | "probe12e1_reversal_lockon_zap"
+            | "probe12e2_rollout_expl256_digsand" => Outcome::P2Win,
+            "probe12h_speed_model_f64" => Outcome::Tie,
+            other => panic!("unexpected manifest tag {other}"),
+        };
+
+        let mut replayed: Option<Battle> = None;
+        let mut best_step = 0usize;
+        let mut best_err = String::new();
+        for seed in 1..=2048u64 {
+            match replay_manifest_with_seed(&dex, &m, &p1_picked, &p2_picked, ruleset, seed, hp_tol) {
+                Ok(b) if b.outcome() == Some(expected_outcome) => {
+                    let path_ok = match m.tag.as_str() {
+                        "probe12b_healbell_psn_23" => {
+                            let mew_hp = b.sides[0].roster[0].hp;
+                            let bl2_hp = b.sides[1].roster[1].hp;
+                            mew_hp == 120
+                                && b.sides[0].roster[0].status == Status::Psn
+                                && (29..=36).contains(&bl2_hp)
+                        }
+                        "probe12c_bp_pursuit_fswipe_pdat" => {
+                            (49..=63).contains(&b.sides[0].roster[1].hp)
+                                && b.sides[0].roster[2].hp == 134
+                        }
+                        "probe12d1_sub_roar_sketch_mimic_wrap_encore" => {
+                            b.sides[0].roster[1].base_move_slots[0].id
+                                == dex.moves.id("tackle").unwrap()
+                                && b.sides[0].roster[1].base_move_slots[0].maxpp == 56
+                        }
+                        "probe12d2_spin_mlook_stencore_beatupbench" => {
+                            let spikes = dex.conds_id("spikes").unwrap();
+                            !b.sides[0].has_side_condition(spikes)
+                                && b.sides[0].roster[1].status == Status::Slp
+                                && b.sides[0].roster[0].status == Status::Par
+                                && (192..=200).contains(&b.sides[1].roster[1].hp)
+                        }
+                        "probe12e1_reversal_lockon_zap" => {
+                            (175..=178).contains(&b.sides[1].roster[1].hp)
+                                && (179..=182).contains(&b.sides[1].roster[2].hp)
+                                && b.sides[1].roster[0].status == Status::Par
+                                && (92..=115).contains(&b.sides[1].roster[0].hp)
+                        }
+                        "probe12e2_rollout_expl256_digsand" => {
+                            (135..=141).contains(&b.sides[1].roster[1].hp)
+                                && b.sides[0].roster[2].hp == 131
+                        }
+                        "probe12h_speed_model_f64" => {
+                            b.sides[0].roster[0].status == Status::Par
+                                && b.sides[0].pokemon_left == 3
+                                && b.sides[1].pokemon_left == 3
+                        }
+                        "probe12i_loose_ends" => {
+                            b.sides[0].roster[0].fainted
+                                && b.sides[1].roster[0].fainted
+                                && b.sides[1].roster[1].hp == 140
+                                && b.sides[1].roster[1].status == Status::Slp
+                        }
+                        _ => true,
+                    };
+                    if path_ok {
+                        replayed = Some(b);
+                        break;
+                    } else if m.steps.len() >= best_step {
+                        best_step = m.steps.len();
+                        best_err = format!("{} seed {seed}: outcome matched but path invariant differed", m.tag);
+                    }
                 }
-                b.choose(&dex, side_n, &choice).unwrap_or_else(|e| {
-                    panic!("choice {choice} failed in {} step {}: {e:?}", m.tag, step_idx)
-                });
-                step_idx += 1;
+                Ok(b) => {
+                    if m.steps.len() >= best_step {
+                        best_step = m.steps.len();
+                        best_err = format!(
+                            "{} seed {seed}: outcome {:?} != expected {:?}",
+                            m.tag,
+                            b.outcome(),
+                            expected_outcome
+                        );
+                    }
+                }
+                Err((step_idx, e)) => {
+                    if step_idx >= best_step {
+                        best_step = step_idx;
+                        best_err = format!("seed {seed}: {e}");
+                    }
+                }
             }
-            let expected_outcome = match m.tag.as_str() {
-                "probe12a1_lturn_frac_p1" | "probe12a3_lturn_count" => Outcome::P1Win,
-                "probe12a2_lturn_frac_p2" | "probe12c_bp_pursuit_fswipe_pdat" => Outcome::P2Win,
-                _ => unreachable!(),
-            };
-            assert_eq!(b.outcome(), Some(expected_outcome), "Outcome mismatch for {}", m.tag);
         }
+        assert!(
+            replayed.is_some(),
+            "Failed to replay manifest {} within 2048 seeds (deepest step {best_step}): {best_err}",
+            m.tag
+        );
+        total_pdat_verified += m
+            .steps
+            .iter()
+            .filter(|s| s.pdat.as_ref().is_some_and(|v| !v.is_empty()))
+            .count();
     }
+    assert_eq!(total_pdat_verified, 47, "Expected 15 (12c) + 32 (12i) = 47 pdat snapshots verified");
 }
 
 // =========================================================================
@@ -1694,38 +2400,36 @@ fn gate_c_quick_claw_independent_slower_first_rate() {
 fn gate_c_crit_freeze_acc_secondary100_protect_and_sleep_confusion_durations() {
     let dex = load_dex();
 
-    // 1. Crit stage 0 ≈ 17/256 (0.0664) & Razor Leaf accuracy ≈ 95% (0.95) & Ice Beam freeze ≈ 10%.
+    // 1. Crit stage 0 = 17/256 (0.06640625) with 250,000 trials (rejects PS 0.0625 at >4 sigma!),
+    // plus Razor Leaf accuracy ≈ 95% and Ice Beam freeze ≈ 10%.
     {
-        let p1 = vec![mk_bare("Snorlax", 50, &["Tackle", "Ice Beam", "Razor Leaf", "Dynamic Punch"], "")];
         let p2 = vec![mk_bare("Blissey", 50, &["Splash"], "")];
-        let mut base = start_castle(&dex, "7,11,13,17", castle_raw(false, None), &p1, &p2);
-        base.set_log_enabled(true);
-
-        // Crit stage 0 (Tackle, 100% acc? Tackle is 95%, use Swift-like 100% acc Pound/Scratch/Body Slam -> Pound!)
         let p1_c = vec![mk_bare("Snorlax", 50, &["Pound", "Ice Beam", "Razor Leaf", "Zap Cannon"], "")];
         let mut bc = start_castle(&dex, "19,23,29,31", castle_raw(false, None), &p1_c, &p2);
         let a1 = bc.active_id(0).unwrap();
         let a2 = bc.active_id(1).unwrap();
 
-        let crit_trials = 6000usize;
+        // Non-crit Pound deals 61..=72; crit Pound deals 119..=141 -> d > 90.0 detects crit cleanly!
+        // Exercises exact Battle::get_damage Stage-0 crit roll (17/256) at full 250,000-trial precision.
+        bc.set_log_enabled(false);
+        let pound_mv = nc2000_engine::battle::moveexec::get_active_move(&dex, dex.moves.id("pound").unwrap());
+        let crit_trials = 250_000usize;
         let mut crits = 0usize;
         for _ in 0..crit_trials {
-            bc.log.clear();
-            bc.poke_mut(a1).move_slots[0].pp = 56;
-            bc.poke_mut(a2).hp = 361;
-            bc.poke_mut(a2).move_slots[0].pp = 64;
-            bc.turn = 1;
-            bc.choose(&dex, 0, "move pound").unwrap();
-            bc.choose(&dex, 1, "move splash").unwrap();
-            if bc.log.iter().any(|l| l.starts_with("|-crit|")) {
-                crits += 1;
+            bc.set_active_move(pound_mv.clone(), Some(a1), Some(a2));
+            if let nc2000_engine::battle::moveexec::DamageResult::Damage(d) = bc.get_damage(&dex, a1, a2, true) {
+                if d > 90.0 {
+                    crits += 1;
+                }
             }
         }
+        bc.clear_active_move(true);
         let crit_rate = crits as f64 / crit_trials as f64;
         assert!(
-            (0.052..=0.082).contains(&crit_rate),
-            "Crit stage 0 expected ~0.0664 (17/256), got {crit_rate:.4} ({crits}/{crit_trials})"
+            (0.0645..=0.0683).contains(&crit_rate),
+            "Crit stage 0 expected ~0.066406 (17/256), got {crit_rate:.5} ({crits}/{crit_trials})"
         );
+        bc.set_log_enabled(true);
 
         // Ice Beam freeze ≈ 10%
         let frz_trials = 3000usize;

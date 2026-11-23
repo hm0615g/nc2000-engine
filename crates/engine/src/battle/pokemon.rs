@@ -78,11 +78,9 @@ impl Battle {
     }
 
     /// Castle PBS (`PS.cgi`) stat calculation (#17, #18, #20, #24②, #35):
-    /// - Exact rational stage multiplier (`2/(2-s)` for negative, `(2+s)/2` for positive).
-    /// - Burn Atk /2 and Paralysis Spe /4 are ALWAYS active (never cleared by boosts or Haze).
-    /// - Thick Club is skipped on confusion self-hits (#24②).
-    /// - Metal Powder checks `base_species == ditto` (persists after Transform, #35).
-    /// - `ovfl=1` wraps item/screen doublings modulo 1024 instead of clamping at 999 (#18).
+    /// Delegates directly to `crate::compact::get_stat_castle` for exact
+    /// `DamageCalc.java` + `Probe 3A/3B` order:
+    /// `stage -> item -> screen -> (if ovfl { % 1024 } else { min(999) }) -> Burn/2 / Par/4 -> max(1)`.
     fn get_stat_castle(
         &self,
         dex: &Dex,
@@ -93,34 +91,28 @@ impl Battle {
         fast_return: bool,
     ) -> i32 {
         let p = self.poke(id);
-        let mut val = p.stored_stats[stat];
-        let boost = if unboosted { 0 } else { p.boosts[stat].clamp(-6, 6) };
-        if boost > 0 {
-            val = val * (2 + boost as i32) / 2;
-        } else if boost < 0 {
-            val = val * 2 / (2 - boost as i32);
-        }
-        if stat == stat_idx::SPE && p.status == Status::Par {
-            val /= 4;
-        }
-        if stat == stat_idx::ATK && !unmodified && p.status == Status::Brn {
-            val /= 2;
-        }
-        val = val.clamp(1, 999);
-        if fast_return {
-            return val;
-        }
-
-        let dt = crate::compact::dex_tables(dex);
-        let side = &self.sides[id.side as usize];
-        if !unboosted && !side.side_conditions.is_empty() {
-            if stat == stat_idx::DEF && dt.refl_cond.is_some_and(|c| side.has_side_condition(c)) {
-                val *= 2;
-            } else if stat == stat_idx::SPD && dt.ls_cond.is_some_and(|c| side.has_side_condition(c)) {
-                val *= 2;
+        let boost = if unboosted { 0 } else { p.boosts[stat] };
+        let is_paralyzed = p.status == Status::Par;
+        let is_burned = p.status == Status::Brn;
+        let (has_reflect, has_light_screen) = if !fast_return
+            && !unboosted
+            && (stat == stat_idx::DEF || stat == stat_idx::SPD)
+        {
+            let dt = crate::compact::dex_tables(dex);
+            let side = &self.sides[id.side as usize];
+            if side.side_conditions.is_empty() {
+                (false, false)
+            } else if stat == stat_idx::DEF {
+                (dt.refl_cond.is_some_and(|c| side.has_side_condition(c)), false)
+            } else {
+                (false, dt.ls_cond.is_some_and(|c| side.has_side_condition(c)))
             }
-        }
-        if let Some(item_id) = p.item {
+        } else {
+            (false, false)
+        };
+        let item_kind = if fast_return {
+            crate::compact::ItemStatKind::None
+        } else if let Some(item_id) = p.item {
             let ki = &dex.known_items;
             let ks = &dex.known_species;
             let is_confusion = self
@@ -132,28 +124,36 @@ impl Battle {
                 && Some(item_id) == ki.thickclub
                 && (Some(p.species) == ks.cubone || Some(p.species) == ks.marowak)
             {
-                val *= 2;
+                crate::compact::ItemStatKind::ThickClub
             } else if stat == stat_idx::SPA
                 && Some(item_id) == ki.lightball
                 && Some(p.species) == ks.pikachu
             {
-                val *= 2;
+                crate::compact::ItemStatKind::LightBall
             } else if (stat == stat_idx::DEF || stat == stat_idx::SPD)
                 && Some(item_id) == ki.metalpowder
                 && Some(p.base_species) == ks.ditto
             {
-                val += val / 2;
+                crate::compact::ItemStatKind::MetalPowder
+            } else {
+                crate::compact::ItemStatKind::None
             }
-        }
-
-        if self.ruleset.overflow_mode() {
-            if val >= 1024 {
-                val %= 1024;
-            }
-            val.max(1)
         } else {
-            val.clamp(1, 999)
-        }
+            crate::compact::ItemStatKind::None
+        };
+        crate::compact::get_stat_castle(
+            p.stored_stats[stat],
+            boost,
+            stat,
+            unboosted,
+            unmodified,
+            is_paralyzed,
+            is_burned,
+            has_reflect,
+            has_light_screen,
+            item_kind,
+            self.ruleset.overflow_mode(),
+        )
     }
 
     /// Probability that `move_id`, used by `att` against `def`, lands —
@@ -177,15 +177,36 @@ impl Battle {
             Accuracy::AlwaysHits => return 1.0,
             Accuracy::Pct(p) => p.clamp(0, 100) as u8,
         };
-        crate::compact::hit_probability_branchless(
-            base_pct,
-            false,
-            self.poke(att).boosts[stat_idx::ACC],
-            self.poke(def).boosts[stat_idx::EVA],
-            ms.ignore_accuracy,
-            ms.ignore_evasion,
-            ms.ignore_positive_evasion,
-        )
+        if self.is_castle() {
+            let has_foresight = crate::cond_id!(dex, "foresight")
+                .is_some_and(|c| self.poke(def).has_volatile(c));
+            let has_brightpowder = self.poke(def).item.is_some()
+                && self.poke(def).item == dex.known_items.brightpowder;
+            let acc = crate::compact::lookup_accuracy_threshold_castle(
+                base_pct,
+                self.poke(att).boosts[stat_idx::ACC],
+                self.poke(def).boosts[stat_idx::EVA],
+                ms.ignore_accuracy,
+                ms.ignore_evasion,
+                has_foresight,
+                has_brightpowder,
+            );
+            if acc >= 255 {
+                1.0
+            } else {
+                acc as f64 / 256.0
+            }
+        } else {
+            crate::compact::hit_probability_branchless(
+                base_pct,
+                false,
+                self.poke(att).boosts[stat_idx::ACC],
+                self.poke(def).boosts[stat_idx::EVA],
+                ms.ignore_accuracy,
+                ms.ignore_evasion,
+                ms.ignore_positive_evasion,
+            )
+        }
     }
 
     /// gen3 `pokemon.getActionSpeed()`.
@@ -202,7 +223,8 @@ impl Battle {
 
     /// Action speed as `f64`. In Castle PBS (#15, #16), Paralysis `/ 4.0` and Speed
     /// stage rational multipliers are NOT truncated (matching Perl `PS.cgi` `f64`
-    /// comparisons; exact ties break 50/50 randomly).
+    /// comparisons; exact ties break 50/50 randomly), with pre-paralysis speed clamped
+    /// to `999.0` (`DamageCalc.java:54-62`, matching `get_castle_speed_x3360`).
     pub fn get_pokemon_action_speed_f64(&self, dex: &Dex, id: PokeId) -> f64 {
         if !self.is_castle() {
             return self.get_pokemon_action_speed(dex, id) as f64;
@@ -220,6 +242,9 @@ impl Battle {
             spe = spe * (2 + boost as i32) as f64 / 2.0;
         } else if boost < 0 {
             spe = spe * 2.0 / (2 - boost as i32) as f64;
+        }
+        if spe > 999.0 {
+            spe = 999.0;
         }
         if p.status == Status::Par {
             spe /= 4.0;
@@ -891,11 +916,19 @@ impl Battle {
         let is_castle = self.is_castle();
         let dc_cond = crate::cond_id!(dex, "defensecurl");
         let min_cond = crate::cond_id!(dex, "minimize");
+        let dig_cond = crate::cond_id!(dex, "dig");
+        let fly_cond = crate::cond_id!(dex, "fly");
+        let lo_cond = crate::cond_id!(dex, "lockon");
         let copied: Vec<(crate::dex::CondId, EffectState)> = self
             .poke(from)
             .volatiles
             .iter()
             .filter(|(c, _)| {
+                if is_castle
+                    && (Some(*c) == dig_cond || Some(*c) == fly_cond || Some(*c) == lo_cond)
+                {
+                    return false;
+                }
                 !dex.cond(*c).no_copy
                     || (is_castle && (Some(*c) == dc_cond || Some(*c) == min_cond))
             })
@@ -926,6 +959,17 @@ impl Battle {
             }
             self.poke_mut(id).volatiles.push((c, state));
         }
+        // #45 Castle PBS: re-point active foe's Lock-On target from passer to receiver
+        // BEFORE clear_volatile(from) runs.
+        if is_castle {
+            if let (Some(foe), Some(lo)) = (self.active_id(1 - from.side as usize), lo_cond) {
+                if let Some(vs) = self.poke_mut(foe).volatile_mut(lo) {
+                    if vs.source == Some(from) {
+                        vs.source = Some(id);
+                    }
+                }
+            }
+        }
         self.refresh_poke_mask(dex, id);
         self.clear_volatile(dex, from, true);
         // singleEvent('Copy') per volatile: no gen2 condition has onCopy.
@@ -948,18 +992,26 @@ impl Battle {
         for (ls, lp) in linked {
             self.remove_linked_volatiles(dex, id, ls, lp);
         }
-        // #54③ Castle PBS: Foresight is cleared when the user switches out.
+        // #54③ & #45 Castle PBS: clear foe's Foresight and Lock-On anchored to `id` on switch-out/faint.
         if self.is_castle() {
-            if let (Some(foe), Some(fs_cond)) = (
-                self.active_id(1 - id.side as usize),
-                crate::cond_id!(dex, "foresight"),
-            ) {
-                let clear_fs = self
-                    .poke(foe)
-                    .volatile(fs_cond)
-                    .is_some_and(|v| v.source == Some(id));
-                if clear_fs {
-                    self.remove_volatile_id(dex, foe, fs_cond);
+            if let Some(foe) = self.active_id(1 - id.side as usize) {
+                if let Some(fs_cond) = crate::cond_id!(dex, "foresight") {
+                    if self
+                        .poke(foe)
+                        .volatile(fs_cond)
+                        .is_some_and(|v| v.source == Some(id))
+                    {
+                        self.remove_volatile_id(dex, foe, fs_cond);
+                    }
+                }
+                if let Some(lo_cond) = crate::cond_id!(dex, "lockon") {
+                    if self
+                        .poke(foe)
+                        .volatile(lo_cond)
+                        .is_some_and(|v| v.source == Some(id))
+                    {
+                        self.remove_volatile_id(dex, foe, lo_cond);
+                    }
                 }
             }
         }

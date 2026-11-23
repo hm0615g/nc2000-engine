@@ -432,8 +432,8 @@ impl CastleRules {
         let has = |m: &str| base_moves.iter().any(|&x| x == m);
         let must_check = breed_gen == 2
             || (species_id == "hitmonlee"
-                && ((has("hijumpkick") && level < 26) || has("dizzypunch")))
-            || (species_id == "hitmonchan" && (has("hijumpkick") || has("dizzypunch")));
+                && ((has("highjumpkick") && level < 26) || has("dizzypunch")))
+            || (species_id == "hitmonchan" && (has("highjumpkick") || has("dizzypunch")));
         if !must_check {
             return false;
         }
@@ -617,9 +617,13 @@ fn hp_autofill(ls: &Learnsets, hp_type: &str, ivs: &[i64; 6]) -> Option<[i64; 6]
 }
 
 /// Validate one set. `mon` params carry the species id + display slot.
+/// `is_castle` enables Castle PBS ruleset mechanics (inert item warnings,
+/// 11 extra Castle inert items, partial EV default 255) independently of
+/// `castle` (`LearnsetPolicy::CastleJpEvents`).
 fn validate_set(
     dex: &Dex,
     ls: &Learnsets,
+    is_castle: bool,
     castle: Option<&CastleRules>,
     set: &RawSet,
     slot: usize,
@@ -787,15 +791,21 @@ fn validate_set(
         }
     }
 
-    // item: empty ok; otherwise must exist in the gen-2 dex.
+    // item: empty ok; otherwise must exist in the gen-2 dex (or the 11 Castle PBS inert items).
     // Castle mode warns on inert `bitterberry` (ID 84) / `dragonfang` (ID 145)
-    // WITHOUT ever silently rewriting them (§7-C.2).
+    // WITHOUT ever silently rewriting them (§7-C.2), independently of LearnsetPolicy.
     if !set.item.is_empty() {
         let item_id = toid(&set.item);
-        if dex.items.id(&item_id).is_none() {
+        let item_known = if is_castle {
+            dex.castle_item_canonical_key(&item_id).is_some()
+        } else {
+            dex.items.id(&item_id).is_some()
+        };
+        if !item_known {
             out.push(err("item-unknown", mon_with(json!({ "item": set.item }))));
-        } else if let Some(cr) = castle {
-            if cr.is_inert_item(&item_id) {
+        } else if is_castle {
+            let inert_rules = castle.unwrap_or_else(|| CastleRules::embedded());
+            if inert_rules.is_inert_item(&item_id) {
                 let (pbs_id, suggested, suggested_pbs_id) = match item_id.as_str() {
                     "bitterberry" => (84, "iceberry", 81),
                     "dragonfang" => (145, "dragonscale", 152),
@@ -878,10 +888,22 @@ fn validate_set(
     }
 
     // EVs (gen-2 stat exp): 0..=255 each, SpA==SpD; Castle enforces `ev_rules.txt`
+    // and defaults omitted keys in partial EV maps to 255 (§7-C.1 parity with Battle/pdinput).
     if set.evs.is_none() {
         out.push(fix("evs-missing", mon.clone()));
     } else {
-        let evs = six(&set.evs, 0);
+        let mut evs = six(&set.evs, if is_castle { 255 } else { 0 });
+        if is_castle {
+            if let Some(m) = &set.evs {
+                let has_spa = m.contains_key("spa");
+                let has_spd = m.contains_key("spd");
+                if has_spa && !has_spd {
+                    evs[4] = evs[3];
+                } else if !has_spa && has_spd {
+                    evs[3] = evs[4];
+                }
+            }
+        }
         let mut range_ok = true;
         for (i, k) in STAT_KEYS.iter().enumerate() {
             if !(0..=255).contains(&evs[i]) {
@@ -923,7 +945,7 @@ fn validate_set(
                     }
                 }
             }
-        } else if evs.iter().copied().fold(0i64, i64::saturating_add) == 0 {
+        } else if !is_castle && evs.iter().copied().fold(0i64, i64::saturating_add) == 0 {
             out.push(err("ev-zero", mon.clone()));
         }
     }
@@ -964,7 +986,13 @@ fn validate_set(
 
 // ------------------------------------------------------------ team analysis
 
-fn analyze(dex: &Dex, ls: &Learnsets, castle: Option<&CastleRules>, sets: &[RawSet]) -> Vec<Value> {
+fn analyze(
+    dex: &Dex,
+    ls: &Learnsets,
+    is_castle: bool,
+    castle: Option<&CastleRules>,
+    sets: &[RawSet],
+) -> Vec<Value> {
     let mut out = Vec::new();
 
     if sets.len() < MIN_TEAM_SIZE {
@@ -974,7 +1002,7 @@ fn analyze(dex: &Dex, ls: &Learnsets, castle: Option<&CastleRules>, sets: &[RawS
         out.push(err("team-size", json!({ "size": sets.len(), "max": MAX_TEAM_SIZE })));
     }
 
-    // Species Clause (by species identity) + Item Clause (limit 1) +
+    // Species Clause (by species identity) + Item Clause (limit 1, PBS item-code dedup in Castle) +
     // Nickname Clause (dupes; a name matching the mon's own species is exempt)
     let mut species_seen: Vec<String> = Vec::new();
     let mut items_seen: Vec<String> = Vec::new();
@@ -988,10 +1016,17 @@ fn analyze(dex: &Dex, ls: &Learnsets, castle: Option<&CastleRules>, sets: &[RawS
             species_seen.push(sid.clone());
             let item = toid(&set.item);
             if !item.is_empty() {
-                if items_seen.contains(&item) {
+                let dedup_key = if is_castle {
+                    dex.castle_item_canonical_key(&item)
+                        .map(str::to_string)
+                        .unwrap_or_else(|| item.clone())
+                } else {
+                    item.clone()
+                };
+                if items_seen.contains(&dedup_key) {
                     out.push(err("item-clause", json!({ "mon": sid, "slot": i, "item": item })));
                 }
-                items_seen.push(item);
+                items_seen.push(dedup_key);
             }
             let species_name = &dex.species.get(id).name;
             if !set.name.is_empty() && &set.name != species_name {
@@ -1006,8 +1041,8 @@ fn analyze(dex: &Dex, ls: &Learnsets, castle: Option<&CastleRules>, sets: &[RawS
         }
     }
 
-    // Max Total Level = 155 over the picked 3 (PS's exact two checks,
-    // including the index-existence semantics for short teams)
+    // Max Total Level = 155 over the picked 3 (PS checks both lowest-3 and highest+lowest-2;
+    // Castle only requires lowest-3 <= 155).
     let mut levels: Vec<i64> = sets
         .iter()
         .map(|s| match s.level {
@@ -1025,7 +1060,7 @@ fn analyze(dex: &Dex, ls: &Learnsets, castle: Option<&CastleRules>, sets: &[RawS
             out.push(err("level-sum", json!({ "sum": sum, "limit": MAX_TOTAL_LEVEL })));
         }
     }
-    if levels.len() >= PICKED_TEAM_SIZE - 1 && !levels.is_empty() {
+    if !is_castle && castle.is_none() && levels.len() >= PICKED_TEAM_SIZE - 1 && !levels.is_empty() {
         let low_sum = levels[..PICKED_TEAM_SIZE - 1]
             .iter()
             .copied()
@@ -1040,7 +1075,7 @@ fn analyze(dex: &Dex, ls: &Learnsets, castle: Option<&CastleRules>, sets: &[RawS
     }
 
     for (i, set) in sets.iter().enumerate() {
-        validate_set(dex, ls, castle, set, i, &mut out);
+        validate_set(dex, ls, is_castle, castle, set, i, &mut out);
     }
     out
 }
@@ -1054,30 +1089,35 @@ pub fn validate_team(dex: &Dex, ls: &Learnsets, team_json: &str) -> Value {
         Ok(sets) => sets,
         Err(e) => return verdict(vec![err("json-invalid", json!({ "detail": e }))]),
     };
-    verdict(analyze(dex, ls, None, &sets))
+    verdict(analyze(dex, ls, false, None, &sets))
 }
 
 /// Validate a team under an explicit [`Ruleset`].
 /// Under `Ruleset::PsStadium2` this is 100% identical to [`validate_team`].
-/// Under `Ruleset::CastlePbs` (when `LearnsetPolicy::CastleJpEvents` is active)
-/// it enforces JP event learnsets (`moveWhiteList.csv`), exact 5th-column
-/// min-level move combinations (`moveBlackList.csv`), `levelLowerLimit.csv`,
-/// no-OHKO, `ev_rules.txt` effort-level legality, and non-mutating warnings
-/// for inert `bitterberry`/`dragonfang`.
+/// Under `Ruleset::CastlePbs`:
+/// - Always applies Castle ruleset mechanics (inert `bitterberry`/`dragonfang`
+///   warnings, 11 extra Castle inert items with PBS item-code Item Clause dedup,
+///   lowest-3 level sum only, partial EV 255 defaults);
+/// - When `LearnsetPolicy::CastleJpEvents` is active, also enforces JP event
+///   learnsets (`moveWhiteList.csv`), exact 5th-column min-level move
+///   combinations (`moveBlackList.csv`), `levelLowerLimit.csv`, no-OHKO, and
+///   `ev_rules.txt` effort-level legality.
 pub fn validate_team_with_ruleset(
     dex: &Dex,
     ls: &Learnsets,
     team_json: &str,
     ruleset: Ruleset,
 ) -> Value {
-    if ruleset.learnset_policy() == LearnsetPolicy::PsGen2Stadium2 {
+    if ruleset.is_ps() {
         return validate_team(dex, ls, team_json);
     }
+    let castle = (ruleset.learnset_policy() == LearnsetPolicy::CastleJpEvents)
+        .then(|| CastleRules::embedded());
     let sets = match parse_team(team_json) {
         Ok(sets) => sets,
         Err(e) => return verdict_with_warnings(vec![err("json-invalid", json!({ "detail": e }))]),
     };
-    verdict_with_warnings(analyze(dex, ls, Some(CastleRules::embedded()), &sets))
+    verdict_with_warnings(analyze(dex, ls, true, castle, &sets))
 }
 
 fn parse_team(team_json: &str) -> Result<Vec<RawSet>, String> {
@@ -1119,32 +1159,36 @@ fn unown_a_dvs(hp_type: Option<&str>) -> Option<(i64, i64)> {
 /// changed, `errors` what remains (species/level/move legality, clauses —
 /// not auto-fixable). `ok` = parseable and no remaining errors.
 pub fn canonicalize_team(dex: &Dex, ls: &Learnsets, team_json: &str) -> Value {
-    canonicalize_team_inner(dex, ls, team_json, None, false)
+    canonicalize_team_inner(dex, ls, team_json, false, None, false)
 }
 
 /// Canonicalize a team under an explicit [`Ruleset`].
 /// Under `Ruleset::PsStadium2` this matches [`canonicalize_team`].
-/// Under `Ruleset::CastlePbs` (with `LearnsetPolicy::CastleJpEvents`):
-/// - Unspecified EVs default to `255` (effort level 63) per §7-C.1;
+/// Under `Ruleset::CastlePbs`:
+/// - Unspecified EVs (and omitted keys in partial EV maps) default to `255` (effort level 63) per §7-C.1;
 /// - Explicit all-zero EVs (`0-0-0-0-0`) are preserved (legal under `ev_rules.txt`);
 /// - Inert items (`bitterberry`/`dragonfang`) are NEVER silently rewritten (reported in `warnings`);
-/// - Remaining errors reflect Castle JP event learnsets, `moveBlackList.csv`, and `ev_rules.txt`.
+/// - Castle extra inert items (`flowermail`->`Mail`, `parkball`->`Sport Ball`, 9 distinct Gen 2 mails) are normalized;
+/// - When `LearnsetPolicy::CastleJpEvents` is active, remaining errors reflect Castle JP event learnsets, `moveBlackList.csv`, and `ev_rules.txt`.
 pub fn canonicalize_team_with_ruleset(
     dex: &Dex,
     ls: &Learnsets,
     team_json: &str,
     ruleset: Ruleset,
 ) -> Value {
-    if ruleset.learnset_policy() == LearnsetPolicy::PsGen2Stadium2 {
+    if ruleset.is_ps() {
         return canonicalize_team(dex, ls, team_json);
     }
-    canonicalize_team_inner(dex, ls, team_json, Some(CastleRules::embedded()), true)
+    let castle = (ruleset.learnset_policy() == LearnsetPolicy::CastleJpEvents)
+        .then(|| CastleRules::embedded());
+    canonicalize_team_inner(dex, ls, team_json, true, castle, true)
 }
 
 fn canonicalize_team_inner(
     dex: &Dex,
     ls: &Learnsets,
     team_json: &str,
+    is_castle: bool,
     castle: Option<&CastleRules>,
     include_warnings: bool,
 ) -> Value {
@@ -1172,7 +1216,6 @@ fn canonicalize_team_inner(
         return out;
     };
 
-    let is_castle = castle.is_some();
     let mut applied: Vec<Value> = Vec::new();
     let mut fixed_sets: Vec<Value> = Vec::new();
     for (slot, raw) in arr.iter().enumerate() {
@@ -1198,7 +1241,7 @@ fn canonicalize_team_inner(
     // Remaining problems on the fixed team (errors + optional warnings;
     // canonicalization leaves no fix-severity findings behind by construction).
     let fixed: Vec<RawSet> = fixed_sets.iter().map(raw_set).collect();
-    let findings = analyze(dex, ls, castle, &fixed);
+    let findings = analyze(dex, ls, is_castle, castle, &fixed);
     let errors: Vec<Value> = findings
         .iter()
         .filter(|f| f["severity"] == "error")
@@ -1374,7 +1417,19 @@ fn canonicalize_set(
             note(fix("evs-missing", mon_with(json!({}))));
             [255i64; 6]
         }
-        Some(_) => six(&set.evs, 0),
+        Some(m) => {
+            let mut e = six(&set.evs, if is_castle { 255 } else { 0 });
+            if is_castle {
+                let has_spa = m.contains_key("spa");
+                let has_spd = m.contains_key("spd");
+                if has_spa && !has_spd {
+                    e[4] = e[3];
+                } else if !has_spa && has_spd {
+                    e[3] = e[4];
+                }
+            }
+            e
+        }
     };
     let clamped: Vec<usize> = (0..6).filter(|&i| !(0..=255).contains(&evs[i])).collect();
     if !clamped.is_empty() {
@@ -1415,10 +1470,18 @@ fn canonicalize_set(
         None => 255,
     };
 
-    // item: normalize to the dex display name when known
-    let item = match dex.items.id(&toid(&set.item)) {
-        Some(iid) if !set.item.is_empty() => dex.items.get(iid).name.clone(),
-        _ => set.item.clone(),
+    // item: normalize to the dex display name when known (including Castle inert items)
+    let item = if set.item.is_empty() {
+        String::new()
+    } else if is_castle {
+        dex.castle_item_display_name(&toid(&set.item))
+            .map(str::to_string)
+            .unwrap_or_else(|| set.item.clone())
+    } else {
+        match dex.items.id(&toid(&set.item)) {
+            Some(iid) => dex.items.get(iid).name.clone(),
+            None => set.item.clone(),
+        }
     };
 
     let stat_obj = |vals: [i64; 6]| -> Value {
