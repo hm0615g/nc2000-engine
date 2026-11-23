@@ -33,6 +33,11 @@ fn make_set(species: &str, level: u8, item: &str, moves: &[&str]) -> PokemonSet 
 }
 
 fn make_set_evs(species: &str, level: u8, item: &str, moves: &[&str], hp_ev: u16, hp_iv: u8) -> PokemonSet {
+    let hp_dv = (hp_iv >> 1) & 15;
+    let atk_iv = if (hp_dv & 8) != 0 { 30 } else { 28 };
+    let def_iv = if (hp_dv & 4) != 0 { 30 } else { 28 };
+    let spe_iv = if (hp_dv & 2) != 0 { 30 } else { 28 };
+    let spc_iv = if (hp_dv & 1) != 0 { 30 } else { 28 };
     serde_json::from_value(serde_json::json!({
         "name": species,
         "species": species,
@@ -40,7 +45,7 @@ fn make_set_evs(species: &str, level: u8, item: &str, moves: &[&str], hp_ev: u16
         "item": item,
         "gender": "M",
         "moves": moves,
-        "ivs": { "hp": hp_iv, "atk": 30, "def": 30, "spa": 30, "spd": 30, "spe": 30 },
+        "ivs": { "hp": hp_iv, "atk": atk_iv, "def": def_iv, "spa": spc_iv, "spd": spc_iv, "spe": spe_iv },
         "evs": { "hp": hp_ev, "atk": 255, "def": 255, "spa": 255, "spd": 255, "spe": 255 }
     }))
     .unwrap()
@@ -1074,4 +1079,96 @@ fn belief_determinize_respects_observed_maxhp_and_hp_evidence() {
         hp_type_name, "Fire",
         "HP Fire (max 201 HP) must never be determinized at observed_maxhp == 205"
     );
+}
+
+#[test]
+fn castle_player_channel_exact_hp_with_protocol_open_and_blind_agents() {
+    use nc2000_bot::blind::{BlindAgent, OpenAgent};
+    use nc2000_bot::player::PlayerChannel;
+    use nc2000_bot::Agent;
+    use nc2000_engine::battle::SearchChoice;
+
+    let dex = load_dex();
+    let own = sample_six(&dex);
+    let foe = sample_six(&dex);
+    let mut b = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        &own,
+        &foe,
+        Ruleset::castle_tournament(),
+    )
+    .unwrap();
+    let mut ch = PlayerChannel::new(0);
+    let pool = MetaPool {
+        teams: vec![MetaTeam {
+            id: "foe".into(),
+            sets: foe.clone(),
+            weight: None,
+        }],
+    };
+    let mut proto = ProtocolAgent::new_with_ruleset(
+        &dex,
+        0,
+        pool.clone(),
+        RmConfig::default(),
+        13,
+        Ruleset::castle_tournament(),
+    );
+    proto.set_own_team(own.clone());
+
+    // TeamPreview -> pick 3
+    let f0 = ch.frame(&mut b, &dex).unwrap();
+    for l in &f0.lines {
+        assert!(!l.contains("HP Percentage Mod"), "Castle log must omit HP Percentage Mod: {l}");
+        proto.push_line(&dex, l);
+    }
+    proto.on_request(&dex, &f0.request.to_string()).unwrap();
+
+    b.choose(&dex, 0, "team 1,2,3").unwrap();
+    b.choose(&dex, 1, "team 1,2,3").unwrap();
+
+    // Turn 1: PlayerChannel must deliver exact opponent maxhp (292/292, NEVER 100/100!)
+    let f1 = ch.frame(&mut b, &dex).unwrap();
+    assert!(
+        f1.lines.iter().any(|l| l.contains("|switch|p2a:") && l.contains("|292/292")),
+        "Castle PlayerChannel must emit exact opponent HP 292/292: {:?}",
+        f1.lines
+    );
+    assert!(
+        !f1.lines.iter().any(|l| l.contains("|100/100")),
+        "Castle PlayerChannel must NOT emit /100 percentages: {:?}",
+        f1.lines
+    );
+    for l in &f1.lines {
+        proto.push_line(&dex, l);
+    }
+    proto.on_request(&dex, &f1.request.to_string()).unwrap();
+    let synth = proto.battle().expect("Castle ProtocolAgent synthesized battle");
+    assert_eq!(synth.sides[1].roster[0].base_maxhp, 292);
+    assert_eq!(synth.sides[1].roster[0].hp, 292);
+
+    // Step 1 turn so both sides take damage and verify exact damaged HP via PlayerChannel + OpenAgent + BlindAgent
+    b.choose(&dex, 0, "move 1").unwrap();
+    b.choose(&dex, 1, "move 1").unwrap();
+    let f2 = ch.frame(&mut b, &dex).unwrap();
+    for l in &f2.lines {
+        assert!(!l.ends_with("/100"), "Castle damage line must use exact maxhp, not /100: {l}");
+        proto.push_line(&dex, l);
+    }
+    proto.on_request(&dex, &f2.request.to_string()).unwrap();
+    let synth2 = proto.battle().expect("Castle ProtocolAgent turn 2 battle");
+    assert_eq!(synth2.sides[1].roster[0].hp, b.sides[1].roster[0].hp);
+
+    // OpenAgent & BlindAgent must choose legally without panicking on observed_maxhp
+    use std::sync::Arc;
+    let mut cfg = RmConfig::default();
+    cfg.iterations = 16;
+    let mut open_agent = OpenAgent::new(cfg.clone(), None, 42);
+    let mut blind_agent = BlindAgent::new(cfg, Arc::new(pool), None, 42);
+    let legal = b.legal_choices(&dex, 0);
+    let oc: SearchChoice = open_agent.choose(&b, &dex, 0, &legal);
+    let bc: SearchChoice = blind_agent.choose(&b, &dex, 0, &legal);
+    assert!(legal.contains(&oc), "OpenAgent returned illegal choice {oc:?}");
+    assert!(legal.contains(&bc), "BlindAgent returned illegal choice {bc:?}");
 }
