@@ -137,6 +137,9 @@ pub struct KnownTypes {
     pub grass: TypeId,
     pub fighting: TypeId,
     pub ground: TypeId,
+    pub dragon: TypeId,
+    pub steel: TypeId,
+    pub poison: TypeId,
 }
 
 /// Item ids referenced by hot paths (`getStat`, compact specs, masks, rollouts).
@@ -156,6 +159,17 @@ pub struct KnownItems {
     pub berserkgene: Option<ItemId>,
     pub brightpowder: Option<ItemId>,
     pub scopelens: Option<ItemId>,
+    pub dragonscale: Option<ItemId>,
+    pub dragonfang: Option<ItemId>,
+    pub iceberry: Option<ItemId>,
+    pub bitterberry: Option<ItemId>,
+    pub burntberry: Option<ItemId>,
+    pub przcureberry: Option<ItemId>,
+    pub psncureberry: Option<ItemId>,
+    pub focusband: Option<ItemId>,
+    pub kingsrock: Option<ItemId>,
+    pub pinkbow: Option<ItemId>,
+    pub polkadotbow: Option<ItemId>,
 }
 
 /// Move ids referenced by hot paths (search legality, masks, compact tables, rollouts).
@@ -204,6 +218,24 @@ pub struct KnownMoves {
     pub flamewheel: Option<MoveId>,
     pub sacredfire: Option<MoveId>,
     pub hiddenpower: Option<MoveId>,
+    pub triattack: Option<MoveId>,
+    pub fissure: Option<MoveId>,
+    pub horndrill: Option<MoveId>,
+    pub guillotine: Option<MoveId>,
+    pub falseswipe: Option<MoveId>,
+    pub triplekick: Option<MoveId>,
+    pub twineedle: Option<MoveId>,
+    pub rollout: Option<MoveId>,
+    pub furycutter: Option<MoveId>,
+    pub outrage: Option<MoveId>,
+    pub thrash: Option<MoveId>,
+    pub petaldance: Option<MoveId>,
+    pub rage: Option<MoveId>,
+    pub bide: Option<MoveId>,
+    pub sketch: Option<MoveId>,
+    pub present: Option<MoveId>,
+    pub pursuit: Option<MoveId>,
+    pub rapidspin: Option<MoveId>,
 }
 
 /// Species ids referenced by the stat / item hot path.
@@ -1383,6 +1415,9 @@ impl Dex {
             grass: tid("Grass"),
             fighting: tid("Fighting"),
             ground: tid("Ground"),
+            dragon: tid("Dragon"),
+            steel: tid("Steel"),
+            poison: tid("Poison"),
         };
 
         let moves = Table::build(file.moves);
@@ -1760,6 +1795,17 @@ impl Dex {
             berserkgene: items.id("berserkgene"),
             brightpowder: items.id("brightpowder"),
             scopelens: items.id("scopelens"),
+            dragonscale: items.id("dragonscale"),
+            dragonfang: items.id("dragonfang"),
+            iceberry: items.id("iceberry"),
+            bitterberry: items.id("bitterberry"),
+            burntberry: items.id("burntberry"),
+            przcureberry: items.id("przcureberry"),
+            psncureberry: items.id("psncureberry"),
+            focusband: items.id("focusband"),
+            kingsrock: items.id("kingsrock"),
+            pinkbow: items.id("pinkbow"),
+            polkadotbow: items.id("polkadotbow"),
         };
         let known_moves = KnownMoves {
             sleeptalk: moves.id("sleeptalk"),
@@ -1805,6 +1851,24 @@ impl Dex {
             flamewheel: moves.id("flamewheel"),
             sacredfire: moves.id("sacredfire"),
             hiddenpower: moves.id("hiddenpower"),
+            triattack: moves.id("triattack"),
+            fissure: moves.id("fissure"),
+            horndrill: moves.id("horndrill"),
+            guillotine: moves.id("guillotine"),
+            falseswipe: moves.id("falseswipe"),
+            triplekick: moves.id("triplekick"),
+            twineedle: moves.id("twineedle"),
+            rollout: moves.id("rollout"),
+            furycutter: moves.id("furycutter"),
+            outrage: moves.id("outrage"),
+            thrash: moves.id("thrash"),
+            petaldance: moves.id("petaldance"),
+            rage: moves.id("rage"),
+            bide: moves.id("bide"),
+            sketch: moves.id("sketch"),
+            present: moves.id("present"),
+            pursuit: moves.id("pursuit"),
+            rapidspin: moves.id("rapidspin"),
         };
         let species = Table::build(file.species);
         let species_types: Vec<TypeList> = species

@@ -427,17 +427,19 @@ impl Battle {
             }
             if boost_by != 0 {
                 success = Some(true);
-                // brn/par drop removal on boost
-                if stat == 0 && self.poke(target).status == Status::Brn {
-                    let c = crate::cond_id!(dex, "brnattackdrop").unwrap();
-                    if self.poke(target).has_volatile(c) {
-                        self.remove_volatile(dex, target, "brnattackdrop");
+                // brn/par drop removal on boost (PS Stadium 2 only; Castle PBS #20 keeps burn/par drops)
+                if !self.is_castle() {
+                    if stat == 0 && self.poke(target).status == Status::Brn {
+                        let c = crate::cond_id!(dex, "brnattackdrop").unwrap();
+                        if self.poke(target).has_volatile(c) {
+                            self.remove_volatile(dex, target, "brnattackdrop");
+                        }
                     }
-                }
-                if stat == 4 && self.poke(target).status == Status::Par {
-                    let c = crate::cond_id!(dex, "parspeeddrop").unwrap();
-                    if self.poke(target).has_volatile(c) {
-                        self.remove_volatile(dex, target, "parspeeddrop");
+                    if stat == 4 && self.poke(target).status == Status::Par {
+                        let c = crate::cond_id!(dex, "parspeeddrop").unwrap();
+                        if self.poke(target).has_volatile(c) {
+                            self.remove_volatile(dex, target, "parspeeddrop");
+                        }
                     }
                 }
                 if self.log_enabled {

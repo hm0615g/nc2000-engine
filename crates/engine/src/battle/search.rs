@@ -932,15 +932,20 @@ impl Battle {
             return;
         }
 
-        let moves = &self.poke(active).move_slots;
-        for slot in moves {
-            let choice = SearchChoice::Move(slot.id);
-            if !slot.disabled && slot.pp > 0 && !out.contains(&choice) {
-                out.push(choice);
+        // #54① Castle PBS: Encore + Disable keeps the Encored move selectable (no Struggle).
+        if let Some(enc_id) = self.castle_encore_disabled_move(dex, active) {
+            out.push(SearchChoice::Move(enc_id));
+        } else {
+            let moves = &self.poke(active).move_slots;
+            for slot in moves {
+                let choice = SearchChoice::Move(slot.id);
+                if !slot.disabled && slot.pp > 0 && !out.contains(&choice) {
+                    out.push(choice);
+                }
             }
-        }
-        if out.is_empty() {
-            out.push(SearchChoice::Move(dex.known_moves.struggle.unwrap()));
+            if out.is_empty() {
+                out.push(SearchChoice::Move(dex.known_moves.struggle.unwrap()));
+            }
         }
 
         // voluntary switches

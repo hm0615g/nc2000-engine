@@ -195,6 +195,17 @@ fn damage_callback(b: &mut Battle, dex: &Dex, m: MoveId, source: PokeId, target:
             if last.move_id != last_move_of_source {
                 return DamageResult::False;
             }
+            // #18 Castle PBS ovfl=1: missed Fissure / Horn Drill reflected by Counter deals target.maxhp OHKO.
+            if b.is_castle()
+                && b.ruleset.overflow_mode()
+                && want_physical
+                && last.damage == -1
+            {
+                return DamageResult::Damage(b.poke(target).maxhp as f64);
+            }
+            if last.damage < 0 {
+                return DamageResult::False;
+            }
             let cat = dex.move_static(last.move_id).category;
             let is_physical = cat == Category::Physical;
             if is_physical == want_physical && cat != Category::Status {
@@ -228,16 +239,33 @@ fn base_power_callback(
         BasePowerCbKind::FlailReversal => {
             let p = b.poke(source);
             let ratio = ((p.hp as f64 * 48.0 / p.maxhp as f64).floor() as i32).max(1);
-            Some(match ratio {
-                r if r < 2 => 200,
-                r if r < 5 => 150,
-                r if r < 10 => 100,
-                r if r < 17 => 80,
-                r if r < 33 => 40,
-                _ => 20,
-            })
+            if b.is_castle() {
+                // #48 Castle PBS: keep PS 48-bucket thresholds for 200/150/100/80,
+                // and use strict `< 0.775` for the 40 vs 20 threshold (Probe 12E1).
+                Some(match ratio {
+                    r if r < 2 => 200,
+                    r if r < 5 => 150,
+                    r if r < 10 => 100,
+                    r if r < 17 => 80,
+                    _ if (p.hp as f64) / (p.maxhp as f64) < 0.775 => 40,
+                    _ => 20,
+                })
+            } else {
+                Some(match ratio {
+                    r if r < 2 => 200,
+                    r if r < 5 => 150,
+                    r if r < 10 => 100,
+                    r if r < 17 => 80,
+                    r if r < 33 => 40,
+                    _ => 20,
+                })
+            }
         }
         BasePowerCbKind::Frustration => {
+            // #47① Castle PBS: no happiness mechanic; Frustration is fixed 102 BP.
+            if b.is_castle() {
+                return Some(102);
+            }
             let bp = (255 - b.poke(source).happiness as i32) * 10 / 25;
             if bp == 0 { None } else { Some(bp) }
         }
@@ -251,7 +279,9 @@ fn base_power_callback(
         }
         BasePowerCbKind::Pursuit => {
             let t = b.poke(target);
-            if t.being_called_back || t.switch_flag.is_set() {
+            // #50② Castle PBS: first-mover Baton Pass hit by second-mover Pursuit takes 2x (BP 80).
+            let bp_switched = b.is_castle() && b.bp_switched_this_turn[target.side as usize];
+            if t.being_called_back || t.switch_flag.is_set() || bp_switched {
                 Some(base_power * 2)
             } else {
                 Some(base_power)
@@ -274,20 +304,27 @@ fn base_power_callback(
                 b.add_volatile(dex, source, "furycutter", None, EffectHandle::None);
             }
             let mult = b.poke(source).volatile(fc).map(|v| v.get_int(crate::state::DK::Multiplier)).unwrap_or(1);
-            Some(clamp_int_range(base_power as f64 * mult as f64, Some(1.0), Some(160.0)) as i32)
+            if b.is_castle() {
+                // #52 Castle PBS: Fury Cutter doubles without the 160 BP cap until miss.
+                Some((base_power as i64 * mult).min(1_000_000) as i32)
+            } else {
+                Some(clamp_int_range(base_power as f64 * mult as f64, Some(1.0), Some(160.0)) as i32)
+            }
         }
         BasePowerCbKind::Rollout => {
             let ro = crate::cond_id!(dex, "rollout").unwrap();
             let dc = crate::cond_id!(dex, "defensecurl").unwrap();
             let mut bp = base_power as i64;
             let has_rollout = b.poke(source).has_volatile(ro);
+            let mut castle_mult = 1i64;
             if has_rollout {
                 let (hit_count, contact) = {
                     let v = b.poke(source).volatile(ro).unwrap();
                     (v.get_int(crate::state::DK::HitCount), v.get_int(crate::state::DK::ContactHitCount))
                 };
                 if hit_count != 0 {
-                    bp *= 1i64 << contact;
+                    castle_mult = 1i64 << contact;
+                    bp *= castle_mult;
                 }
                 if b.poke(source).status != Status::Slp {
                     let v = b.poke_mut(source).volatile_mut(ro).unwrap();
@@ -299,9 +336,19 @@ fn base_power_callback(
                 }
             }
             if b.poke(source).has_volatile(dc) {
+                castle_mult *= 2;
                 bp *= 2;
             }
-            Some(bp as i32)
+            if b.is_castle() {
+                // #26 Castle PBS: compute base damage at BP 30, add +2, then multiply by
+                // `2^(k-1) * (2 if defensecurl)` BEFORE weather/STAB/effectiveness/random!
+                if let Some(am) = b.active_move.as_mut() {
+                    am.magnitude = Some(castle_mult);
+                }
+                Some(base_power)
+            } else {
+                Some(bp as i32)
+            }
         }
         BasePowerCbKind::None => unported_base_power_cb(dex, m),
     }
@@ -488,6 +535,17 @@ fn exec_move_cb_op(
             RV::Undef
         }
         MoveCbOp::PresentModifyMove => {
+            // #25⑤ Castle PBS: Present against Substitute always uses BP 40 (no heal/80/120 roll).
+            let target_has_sub = b.is_castle()
+                && source.is_some_and(|t| {
+                    crate::cond_id!(dex, "substitute").is_some_and(|c| b.poke(t).has_volatile(c))
+                });
+            if target_has_sub {
+                if let Some(am) = b.active_move.as_mut() {
+                    am.base_power = 40;
+                }
+                return RV::Undef;
+            }
             let bucket = b.prng.random_bucketed(10, &[2, 6, 9, 10]);
             if let Some(am) = b.active_move.as_mut() {
                 match bucket {
@@ -505,11 +563,14 @@ fn exec_move_cb_op(
         MoveCbOp::BeatUpModifyMove => {
             let user = tpoke.unwrap();
             let side = &b.sides[user.side as usize];
+            let is_castle = b.is_castle();
             let allies: Vec<PokeId> = side
                 .party
                 .iter()
                 .map(|&slot| PokeId { side: user.side, slot })
-                .filter(|&id| !b.poke(id).fainted && b.poke(id).status == Status::None)
+                // #53③ Castle PBS: statused user still participates (`status == None || id == user`),
+                // while statused bench allies are excluded (Probe 11D + Probe 12D2).
+                .filter(|&id| !b.poke(id).fainted && (b.poke(id).status == Status::None || (is_castle && id == user)))
                 .collect();
             if let Some(am) = b.active_move.as_mut() {
                 am.move_type = dex.known_types.unknown;
@@ -527,6 +588,12 @@ fn exec_move_cb_op(
                 return RV::Undef;
             }
             b.add_volatile(dex, user, "rollout", None, EffectHandle::None);
+            // #53① Castle PBS: remember hit-1 target for Counter eligibility on hits 2..5.
+            if b.is_castle() {
+                if let (Some(t), Some(vs)) = (source, b.poke_mut(user).volatile_mut(ro)) {
+                    vs.set(crate::state::DK::TargetSlot, crate::state::Scalar::Slot(t.side, t.slot));
+                }
+            }
             let src_eff = b.active_move.as_ref().and_then(|am| am.source_effect);
             if src_eff.is_some() {
                 if let Some(t) = source {
@@ -559,6 +626,13 @@ fn exec_move_cb_op(
             let user = tpoke.unwrap();
             if !b.queue_will_act() {
                 return RV::False;
+            }
+            // #39 Castle PBS: first turn Protect/Detect/Endure also rolls 255/256.
+            if b.is_castle() {
+                let st = crate::cond_id!(dex, "stall").unwrap();
+                if !b.poke(user).has_volatile(st) {
+                    return RV::from_bool(b.prng.random_chance(255, 256));
+                }
             }
             b.run_event(dex, &ev::StallMove, EvTarget::Poke(user), None, EffectHandle::None, None, false, false)
         }
@@ -677,6 +751,14 @@ fn exec_move_cb_op(
             let t = tpoke.unwrap();
             let fs = crate::cond_id!(dex, "foresight").unwrap();
             let lo = crate::cond_id!(dex, "lockon").unwrap();
+            if b.is_castle() {
+                // #45 / §7-A.3 Castle PBS: check `user` (source) for existing `lockon`,
+                // fixing the PS user/target mixup so re-Lock-On fails properly.
+                if source.is_some_and(|u| b.poke(u).has_volatile(lo)) {
+                    return RV::False;
+                }
+                return RV::Undef;
+            }
             if b.poke(t).has_volatile(fs) || b.poke(t).has_volatile(lo) {
                 return RV::False;
             }
@@ -749,7 +831,13 @@ fn exec_move_cb_op(
                     DamageResult::Zero => 0.0,
                     _ => panic!("Couldn't get {} recoil", dex.moves.key(m)),
                 };
-                let amount = clamp_int_range(d / 8.0, Some(1.0), None);
+                // #29 Castle PBS: Hi Jump Kick / Jump Kick miss recoil is floor(intended / 4)
+                // ignoring target maxhp (PS is 1/8).
+                let amount = if b.is_castle() {
+                    clamp_int_range((d / 4.0).floor(), Some(1.0), None)
+                } else {
+                    clamp_int_range(d / 8.0, Some(1.0), None)
+                };
                 b.damage(dex, amount, Some(user), Some(user), DamageEffect::Effect(move_eff), false);
             }
             RV::Undef
@@ -757,14 +845,30 @@ fn exec_move_cb_op(
         MoveCbOp::OutrageMoveFail => {
             let user = source.unwrap();
             b.add_volatile(dex, user, "lockedmove", None, EffectHandle::None);
+            if b.is_castle() {
+                // Mark hit-1 as not having landed on any defender so hits 2..3 cannot be Countered.
+                let lm = crate::cond_id!(dex, "lockedmove").unwrap();
+                if let Some(vs) = b.poke_mut(user).volatile_mut(lm) {
+                    if vs.get(crate::state::DK::TargetSlot).is_none() {
+                        vs.set(crate::state::DK::TargetSlot, crate::state::Scalar::Slot(255, 255));
+                    }
+                }
+            }
             RV::Undef
         }
         // ---------------------------------------------------------- onDamage
         MoveCbOp::FalseSwipeDamage => {
             let t = tpoke.unwrap();
             let damage = relay.as_num();
-            if damage >= b.poke(t).hp as f64 {
-                return RV::Num(b.poke(t).hp as f64 - 1.0);
+            let hp = b.poke(t).hp;
+            if damage >= hp as f64 {
+                if b.is_castle() {
+                    // #53② Castle PBS: record pre-hit HP so Counter reflects `2 * old_hp = 2 * (dealt + 1)`.
+                    if let Some(am) = b.active_move.as_mut() {
+                        am.magnitude = Some(hp as i64);
+                    }
+                }
+                return RV::Num(hp as f64 - 1.0);
             }
             RV::Undef
         }
@@ -773,8 +877,11 @@ fn exec_move_cb_op(
             b.add(&["-clearallboost"]);
             for id in b.get_all_active(false) {
                 b.poke_mut(id).boosts = [0; 7];
-                b.remove_volatile(dex, id, "brnattackdrop");
-                b.remove_volatile(dex, id, "parspeeddrop");
+                // #20 / §7-A.3 Castle PBS: Haze does NOT clear Burn Atk halving or Paralysis Spe quartering.
+                if !b.is_castle() {
+                    b.remove_volatile(dex, id, "brnattackdrop");
+                    b.remove_volatile(dex, id, "parspeeddrop");
+                }
             }
             RV::Undef
         }
@@ -794,7 +901,8 @@ fn exec_move_cb_op(
                 } else {
                     let ps_cond = crate::cond_id!(dex, "perishsong").unwrap();
                     if !b.poke(id).has_volatile(ps_cond) {
-                        b.add_volatile(dex, id, "perishsong", None, EffectHandle::None);
+                        let ps_src = if b.is_castle() { Some(user) } else { None };
+                        b.add_volatile(dex, id, "perishsong", ps_src, EffectHandle::None);
                         let ts = b.poke_str(id);
                         b.add(&["-start", &ts, "perish3", "[silent]"]);
                         result = true;
@@ -820,13 +928,26 @@ fn exec_move_cb_op(
         }
         MoveCbOp::BellyDrumHit => {
             let t = tpoke.unwrap();
-            if b.poke(t).boosts[stat_idx::ATK] >= 6
-                || b.poke(t).hp as f64 <= b.poke(t).maxhp as f64 / 2.0
-            {
-                return RV::False;
+            if b.is_castle() {
+                // #41 Castle PBS: Belly Drum succeeds at `hp == floor(maxhp / 2)`, leaving 1 HP.
+                let half = b.poke(t).maxhp / 2;
+                let hp = b.poke(t).hp;
+                if b.poke(t).boosts[stat_idx::ATK] >= 6 || hp < half || half <= 0 {
+                    return RV::False;
+                }
+                let cost = if hp == half { (hp - 1).max(0) as f64 } else { half as f64 };
+                if cost > 0.0 {
+                    b.direct_damage(dex, cost, Some(t), None, EffectHandle::None);
+                }
+            } else {
+                if b.poke(t).boosts[stat_idx::ATK] >= 6
+                    || b.poke(t).hp as f64 <= b.poke(t).maxhp as f64 / 2.0
+                {
+                    return RV::False;
+                }
+                let maxhp = b.poke(t).maxhp as f64;
+                b.direct_damage(dex, maxhp / 2.0, Some(t), None, EffectHandle::None);
             }
-            let maxhp = b.poke(t).maxhp as f64;
-            b.direct_damage(dex, maxhp / 2.0, Some(t), None, EffectHandle::None);
             // max-out atk in +2 steps, stopping when 999 is reached
             let original = b.poke(t).boosts[stat_idx::ATK];
             let mut current = original as i32;
@@ -872,6 +993,9 @@ fn exec_move_cb_op(
             let t = tpoke.unwrap();
             let user = source.unwrap();
             let Some(last) = b.poke(t).last_move else { return RV::False };
+            if b.is_castle() && Some(last) == dex.known_moves.curse {
+                return RV::False;
+            }
             let attack_type = if dex.moves.key(last) == "struggle" {
                 dex.known_types.normal
             } else {
@@ -908,6 +1032,10 @@ fn exec_move_cb_op(
             for slot in party {
                 let id = PokeId { side: user.side, slot };
                 b.pokemon_clear_status(dex, id);
+                // #14 Castle PBS: Heal Bell resets Toxic counter (`residualdmg`) completely (Probe 12B).
+                if b.is_castle() {
+                    b.remove_volatile(dex, id, "residualdmg");
+                }
             }
             RV::Undef
         }
@@ -915,6 +1043,13 @@ fn exec_move_cb_op(
             let t = tpoke.unwrap();
             let user = source.unwrap();
             b.add_volatile(dex, user, "lockon", Some(t), EffectHandle::None);
+            if b.is_castle() {
+                // #45② Castle PBS: Lock-On / Mind Reader persists across non-attack turns (no EOT expiry).
+                let lo = crate::cond_id!(dex, "lockon").unwrap();
+                if let Some(vs) = b.poke_mut(user).volatile_mut(lo) {
+                    vs.duration = None;
+                }
+            }
             let us = b.poke_str(user);
             let of = format!("[of] {}", b.poke_str(t));
             let name = format!("move: {}", dex.move_static(m).name);
@@ -928,6 +1063,12 @@ fn exec_move_cb_op(
         }
         MoveCbOp::MetronomeHit => {
             let user = tpoke.unwrap();
+            // #47② Castle PBS: 240 choices with 1/240 `???????` miss.
+            if b.is_castle() && b.prng.random_chance(1, 240) {
+                let us = b.poke_str(user);
+                b.add(&["-miss", &us]);
+                return RV::Undef;
+            }
             let own: Vec<MoveId> = b.poke(user).move_slots.iter().map(|s| s.id).collect();
             let mut pool: Vec<(i32, MoveId)> = Vec::new();
             for i in 0..dex.moves.len() {
@@ -969,12 +1110,25 @@ fn exec_move_cb_op(
             let ms = dex.move_static(last);
             let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
             let mut maxpp = ms.pp * (5 + pp_ups) / 5;
-            if ms.pp == 40 {
+            if ms.pp == 40 && !b.is_castle() {
                 maxpp -= pp_ups;
             }
+            // #54④ Castle PBS: Mimic copied move PP = `5 + mimic_pp_ups` (`8` at max PP Up, Probe 10E).
+            let copied_pp = if b.is_castle() {
+                let mimic_base_pp = dex.move_static(mimic_id).pp;
+                let mimic_maxpp = b.poke(user).move_slots[idx].maxpp;
+                let mimic_pp_ups = if mimic_base_pp > 0 {
+                    ((mimic_maxpp * 5) / mimic_base_pp - 5).clamp(0, 3)
+                } else {
+                    0
+                };
+                (5 + mimic_pp_ups).min(maxpp)
+            } else {
+                ms.pp.min(5)
+            };
             b.poke_mut(user).move_slots[idx] = MoveSlot {
                 id: last,
-                pp: ms.pp.min(5),
+                pp: copied_pp,
                 maxpp,
                 disabled: false,
                 used: false,
@@ -1052,6 +1206,10 @@ fn exec_move_cb_op(
             let t = tpoke.unwrap();
             let user = source.unwrap();
             let boosts = b.poke(t).boosts;
+            // #46 Castle PBS: Psych Up fails if target has all 0 boosts (Probe 8C).
+            if b.is_castle() && boosts == [0; 7] {
+                return RV::False;
+            }
             b.poke_mut(user).boosts = boosts;
             let us = b.poke_str(user);
             let ts = b.poke_str(t);
@@ -1079,11 +1237,67 @@ fn exec_move_cb_op(
             RV::Undef
         }
         MoveCbOp::SketchHit => {
-            b.add(&["-nothing"]);
+            if !b.is_castle() {
+                b.add(&["-nothing"]);
+                return RV::Undef;
+            }
+            // #54④ Castle PBS: Sketch succeeds in PvP (and bypasses Substitute, Probe 12D1).
+            let t = tpoke.unwrap();
+            let user = source.unwrap();
+            if b.poke(user).transformed {
+                return RV::False;
+            }
+            let Some(last) = b.poke(t).last_move else { return RV::False };
+            let last_key = dex.moves.key(last);
+            if dex.move_static(last).has_flag(dex, "nosketch")
+                || matches!(
+                    last_key,
+                    "struggle"
+                        | "selfdestruct"
+                        | "explosion"
+                        | "metronome"
+                        | "mimic"
+                        | "mirrormove"
+                        | "sleeptalk"
+                        | "transform"
+                        | "sketch"
+                )
+            {
+                return RV::False;
+            }
+            if b.poke(user).move_slots.iter().any(|s| s.id == last) {
+                return RV::False;
+            }
+            let sketch_id = dex.known_moves.sketch.unwrap();
+            let Some(idx) = b.poke(user).move_slots.iter().position(|s| s.id == sketch_id) else {
+                return RV::False;
+            };
+            let ms = dex.move_static(last);
+            let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
+            let maxpp = ms.pp * (5 + pp_ups) / 5; // Castle PP40+3 = 64
+            let new_slot = MoveSlot {
+                id: last,
+                pp: maxpp,
+                maxpp,
+                disabled: false,
+                used: false,
+                shared: true,
+            };
+            b.poke_mut(user).move_slots[idx] = new_slot;
+            if let Some(base) = b.poke_mut(user).base_move_slots.iter_mut().find(|s| s.id == sketch_id) {
+                *base = new_slot;
+            }
+            let us = b.poke_str(user);
+            let name = ms.name.clone();
+            b.add(&["-activate", &us, "move: Sketch", &name]);
             RV::Undef
         }
         MoveCbOp::SleepTalkHit => {
             let user = tpoke.unwrap();
+            // #39 Castle PBS: Sleep Talk resets Protect/Detect/Endure stall counter.
+            if b.is_castle() {
+                b.remove_volatile(dex, user, "stall");
+            }
             let mut moves: Vec<MoveId> = Vec::new();
             for slot in &b.poke(user).move_slots {
                 let ms = dex.move_static(slot.id);
@@ -1541,6 +1755,18 @@ impl Battle {
             self.clear_active_move(true);
             return;
         }
+        // #36② Castle PBS: if first-mover Spite zeroed this selected move's PP mid-turn,
+        // Mystery Berry triggers right before BeforeMove (even if immobilized afterwards).
+        if self.is_castle() && self.poke(pokemon).item == dex.known_items.mysteryberry {
+            if let Some(idx) = self
+                .poke(pokemon)
+                .move_slots
+                .iter()
+                .position(|s| s.id == move_id && s.pp == 0)
+            {
+                self.castle_eat_mystery_berry_at(dex, pokemon, idx);
+            }
+        }
         let before = self.run_event(
             dex,
             &ev::BeforeMove,
@@ -1554,8 +1780,18 @@ impl Battle {
         if !before.truthy() {
             self.run_event(dex, &ev::MoveAborted, EvTarget::Poke(pokemon), target, move_eff, None, false, false);
             self.clear_active_move(true);
+            if self.is_castle() {
+                // #32② Castle PBS: if first-mover used Rest holding Mint/Miracle Berry and
+                // second-mover was immobilized, foe eats its berry before AfterMoveSelf.
+                if let Some(foe) = self.active_id(1 - pokemon.side as usize) {
+                    self.castle_check_immediate_status_berry(dex, foe);
+                }
+            }
             // This is only run for sleep and fully paralysed.
             self.run_event(dex, &ev::AfterMoveSelf, EvTarget::Poke(pokemon), target, move_eff, None, false, false);
+            if self.is_castle() && !self.poke(pokemon).fainted && self.poke(pokemon).hp > 0 {
+                self.castle_partially_trapped_after_move_self(dex, pokemon);
+            }
             return;
         }
         // beforeMoveCallback (bide)
@@ -1592,6 +1828,36 @@ impl Battle {
             move_eff,
             None,
         );
+        if self.is_castle() {
+            // #44 Castle PBS: Outrage/Thrash/Petal Dance confuses immediately after the
+            // final turn's self-action (before opponent moves), blocked by Safeguard.
+            if !self.poke(pokemon).fainted && self.poke(pokemon).hp > 0 {
+                if let Some(lm_cond) = crate::cond_id!(dex, "lockedmove") {
+                    let expired = if let Some(vs) = self.poke_mut(pokemon).volatile_mut(lm_cond) {
+                        if let Some(d) = vs.duration {
+                            if d > 0 {
+                                vs.duration = Some(d - 1);
+                                d - 1 == 0
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    };
+                    if expired {
+                        self.remove_volatile_id(dex, pokemon, lm_cond);
+                    }
+                }
+            }
+            // #32①② Castle PBS: foe eats Mint/Miracle/status berry immediately after move
+            // (and before actor's AfterMoveSelf poison/burn).
+            if let Some(foe) = self.active_id(1 - pokemon.side as usize) {
+                self.castle_check_immediate_status_berry(dex, foe);
+            }
+        }
         // gen2: if !move.selfSwitch && foe active has hp → AfterMoveSelf
         let move_self_switch = dex.move_static(move_id).self_switch.is_some();
         let foe_hp = self
@@ -1600,7 +1866,61 @@ impl Battle {
             .unwrap_or(false);
         if !move_self_switch && foe_hp {
             self.run_event(dex, &ev::AfterMoveSelf, EvTarget::Poke(pokemon), target, move_eff, None, false, false);
+            // #6 Castle PBS: Wrap/Bind/Fire Spin/Clamp/Whirlpool tick in AfterMoveSelf
+            // (right after poison/burn/leech seed, before opponent acts — Probe 6 + 12I).
+            if self.is_castle() && !self.poke(pokemon).fainted && self.poke(pokemon).hp > 0 {
+                self.castle_partially_trapped_after_move_self(dex, pokemon);
+            }
         }
+    }
+
+    /// #6 Castle PBS: `partiallytrapped` (Bind/Wrap/Clamp/Fire Spin/Whirlpool) ticks
+    /// 1/16 maxhp in `AfterMoveSelf` rather than EOT.
+    fn castle_partially_trapped_after_move_self(&mut self, dex: &Dex, pokemon: PokeId) {
+        let Some(pt) = crate::cond_id!(dex, "partiallytrapped") else { return };
+        if !self.poke(pokemon).has_volatile(pt) {
+            return;
+        }
+        let (trapper, divisor, src_move, dur) = {
+            let st = self.poke(pokemon).volatile(pt).unwrap();
+            (
+                st.source,
+                st.get_int(crate::state::DK::BoundDivisor).max(1),
+                st.source_effect,
+                st.duration,
+            )
+        };
+        let trapper_gone = match trapper {
+            Some(tr_id) => {
+                let tp = self.poke(tr_id);
+                !tp.is_active || tp.hp <= 0
+            }
+            None => true,
+        };
+        if trapper_gone {
+            self.poke_mut(pokemon).volatiles.retain(|(k, _)| *k != pt);
+            self.refresh_poke_mask(dex, pokemon);
+            return;
+        }
+        if let Some(d) = dur {
+            if d <= 1 {
+                self.remove_volatile_id(dex, pokemon, pt);
+                return;
+            }
+            if let Some(st) = self.poke_mut(pokemon).volatile_mut(pt) {
+                st.duration = Some(d - 1);
+            }
+        }
+        let _ = src_move;
+        let dmg = self.poke(pokemon).base_maxhp as f64 / divisor as f64;
+        self.damage(
+            dex,
+            dmg,
+            Some(pokemon),
+            None,
+            DamageEffect::Effect(EffectHandle::Cond(pt)),
+            false,
+        );
     }
 
     /// pokemon.getSemiLockedMove.
@@ -1900,6 +2220,17 @@ impl Battle {
 
         let invuln = self.run_event(dex, &ev::Invulnerability, EvTarget::Poke(target), Some(pokemon), move_eff, None, false, false);
         if invuln == RV::False {
+            // #43 Castle PBS: Rapid Spin clears Spikes/Leech Seed/Bind even on miss/invuln.
+            if self.is_castle() && Some(move_id) == dex.known_moves.rapidspin {
+                rapid_spin_cleanup(self, dex, pokemon);
+            }
+            // #45 Castle PBS: targeting attack missing due to invuln consumes Lock-On.
+            if self.is_castle() && target != pokemon {
+                let lo = crate::cond_id!(dex, "lockon").unwrap();
+                if self.poke(pokemon).volatile(lo).and_then(|v| v.source) == Some(target) {
+                    self.remove_volatile_id(dex, pokemon, lo);
+                }
+            }
             self.attr_last_move(&["[miss]"]);
             let ps = self.poke_str(pokemon);
             self.add(&["-miss", &ps]);
@@ -1907,6 +2238,10 @@ impl Battle {
         }
 
         if !self.run_move_immunity_of(dex, target, true) {
+            // #43 Castle PBS: Rapid Spin vs Ghost still clears Spikes/Leech Seed/Bind (Probe 12D2).
+            if self.is_castle() && Some(move_id) == dex.known_moves.rapidspin {
+                rapid_spin_cleanup(self, dex, pokemon);
+            }
             return MoveOutcome::Fail;
         }
 
@@ -1957,7 +2292,58 @@ impl Battle {
             Accuracy::Pct(a) => Some(a as f64),
         };
         if let Some(a) = acc_num {
-            if !ohko && (0.0..=100.0).contains(&a) {
+            if self.is_castle() {
+                // #21 & #54③ Castle PBS: exact rational 3/9..9/3 accuracy/evasion table
+                // and Foresight ignoring own accuracy drops when `acc < eva`.
+                let mut acc = (a * 255.0 / 100.0).floor();
+                if ohko {
+                    let plevel = self.poke(pokemon).level as f64;
+                    let tlevel = self.poke(target).level as f64;
+                    if plevel >= tlevel {
+                        acc += (plevel - tlevel) * 2.0;
+                        acc = acc.min(255.0);
+                    } else {
+                        let ts = self.poke_str(target);
+                        self.add(&["-immune", &ts, "[ohko]"]);
+                        return MoveOutcome::Fail;
+                    }
+                }
+                let mut acc_boost = if ignore_accuracy {
+                    0
+                } else {
+                    self.poke(pokemon).boosts[stat_idx::ACC].clamp(-6, 6)
+                };
+                let mut eva_boost = if ignore_evasion {
+                    0
+                } else {
+                    self.poke(target).boosts[stat_idx::EVA].clamp(-6, 6)
+                };
+                if ignore_positive_evasion && eva_boost > 0 {
+                    eva_boost = 0;
+                }
+                let has_foresight = crate::cond_id!(dex, "foresight")
+                    .is_some_and(|c| self.poke(target).has_volatile(c));
+                if has_foresight {
+                    if acc_boost < eva_boost {
+                        acc_boost = 0;
+                        eva_boost = 0;
+                    } else if eva_boost > 0 {
+                        eva_boost = 0;
+                    }
+                }
+                if acc_boost > 0 {
+                    acc *= (3 + acc_boost as i32) as f64 / 3.0;
+                } else if acc_boost < 0 {
+                    acc *= 3.0 / (3 - acc_boost as i32) as f64;
+                }
+                if eva_boost > 0 {
+                    acc *= 3.0 / (3 + eva_boost as i32) as f64;
+                } else if eva_boost < 0 {
+                    acc *= (3 - eva_boost as i32) as f64 / 3.0;
+                }
+                acc = acc.floor().clamp(1.0, 255.0);
+                acc_num = Some(acc);
+            } else if !ohko && (0.0..=100.0).contains(&a) {
                 let acc = crate::compact::lookup_accuracy_threshold(
                     a as u8,
                     self.poke(pokemon).boosts[stat_idx::ACC],
@@ -2029,8 +2415,31 @@ impl Battle {
                 Accuracy::Pct(v) => Some(v as f64),
             };
         }
+        // #45 Castle PBS: consume Lock-On when user uses a targeting move against the locked target
+        // (excluding Lock-On/Mind Reader themselves and self-moves like Splash).
+        if self.is_castle() && target != pokemon {
+            let lo = crate::cond_id!(dex, "lockon").unwrap();
+            let mv_key = dex.moves.key(move_id);
+            if !matches!(mv_key, "lockon" | "mindreader")
+                && self.poke(pokemon).volatile(lo).and_then(|v| v.source) == Some(target)
+            {
+                self.remove_volatile_id(dex, pokemon, lo);
+            }
+        }
         if let Some(a) = acc_num {
             if a != 255.0 && !self.prng.random_chance(a as u32, 256) {
+                // #43 Castle PBS: Rapid Spin clears Spikes/Leech Seed/Bind even on miss.
+                if self.is_castle() && Some(move_id) == dex.known_moves.rapidspin {
+                    rapid_spin_cleanup(self, dex, pokemon);
+                }
+                // #18 Castle PBS ovfl=1: missed Fissure / Horn Drill is Counter-reflectable for OHKO.
+                if self.is_castle()
+                    && self.ruleset.overflow_mode()
+                    && (Some(move_id) == dex.known_moves.fissure
+                        || Some(move_id) == dex.known_moves.horndrill)
+                {
+                    self.got_attacked(target, Some(move_id), Some(-1.0), pokemon);
+                }
                 self.attr_last_move(&["[miss]"]);
                 let ps = self.poke_str(pokemon);
                 self.add(&["-miss", &ps]);
@@ -2077,6 +2486,10 @@ impl Battle {
                 if matches!(move_damage, MoveOutcome::Fail) {
                     break;
                 }
+                // #51① Castle PBS: Triple Kick 2nd/3rd hit multiplier leaks to same-turn 2nd actor.
+                if self.is_castle() && Some(move_id) == dex.known_moves.triplekick {
+                    self.triple_kick_mult = (i + 1) as u8;
+                }
                 null_damage = false;
                 let dmg_num = move_damage.num().unwrap_or(0.0);
                 mh_damage = MoveOutcome::Damage(dmg_num);
@@ -2104,7 +2517,56 @@ impl Battle {
             return damage;
         }
         if self.active_move.as_ref().unwrap().category != Category::Status {
-            self.got_attacked(target, Some(move_id), damage.num(), pokemon);
+            let mut record_attack = true;
+            let mut recorded_dmg = damage.num();
+            if self.is_castle() {
+                // #53① Castle PBS: multi-turn Outrage/Thrash/Petal Dance/Rollout are only
+                // Counter/MirrorCoat-reflectable if target took hit 1.
+                let is_locked_rampage = Some(move_id) == dex.known_moves.outrage
+                    || Some(move_id) == dex.known_moves.thrash
+                    || Some(move_id) == dex.known_moves.petaldance;
+                if is_locked_rampage {
+                    if let Some(lm) = crate::cond_id!(dex, "lockedmove") {
+                        if let Some(vs) = self.poke_mut(pokemon).volatile_mut(lm) {
+                            match vs.get(crate::state::DK::TargetSlot) {
+                                None => {
+                                    vs.set(
+                                        crate::state::DK::TargetSlot,
+                                        crate::state::Scalar::Slot(target.side, target.slot),
+                                    );
+                                }
+                                Some(crate::state::Scalar::Slot(s, sl))
+                                    if (s, sl) != (target.side, target.slot) =>
+                                {
+                                    record_attack = false;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                } else if Some(move_id) == dex.known_moves.rollout {
+                    if let Some(ro) = crate::cond_id!(dex, "rollout") {
+                        if let Some(crate::state::Scalar::Slot(s, sl)) = self
+                            .poke(pokemon)
+                            .volatile(ro)
+                            .and_then(|v| v.get(crate::state::DK::TargetSlot))
+                        {
+                            if (s, sl) != (target.side, target.slot) {
+                                record_attack = false;
+                            }
+                        }
+                    }
+                }
+                // #53② Castle PBS: False Swipe lethal clamp leaves 1 HP but Counter reflects 2 * old_hp.
+                if Some(move_id) == dex.known_moves.falseswipe {
+                    if let Some(old_hp) = self.active_move.as_ref().and_then(|am| am.magnitude) {
+                        recorded_dmg = Some(old_hp as f64);
+                    }
+                }
+            }
+            if record_attack {
+                self.got_attacked(target, Some(move_id), recorded_dmg, pokemon);
+            }
         }
         if self.active_move.as_ref().unwrap().ohko {
             self.add(&["-ohko"]);
@@ -2127,11 +2589,20 @@ impl Battle {
             (am.recoil, am.total_damage.unwrap_or(0))
         };
         if let Some((num, den)) = recoil {
-            if total_damage > 0
-                && (self.sides[pokemon.side as usize].pokemon_left > 1
-                    || self.sides[target.side as usize].pokemon_left > 1
-                    || self.poke(target).hp > 0)
-            {
+            // #42 Castle PBS: Struggle vs Ghost deals 0 recoil.
+            let struggle_vs_ghost = self.is_castle()
+                && Some(move_id) == dex.known_moves.struggle
+                && self.poke(target).has_type(dex.known_types.ghost);
+            // #1 Castle PBS: NEVER skip recoil on 1v1 KO (always apply recoil; mutual KO adjudicated in faint_messages).
+            let allow_recoil = if self.is_castle() {
+                total_damage > 0 && !struggle_vs_ghost
+            } else {
+                total_damage > 0
+                    && (self.sides[pokemon.side as usize].pokemon_left > 1
+                        || self.sides[target.side as usize].pokemon_left > 1
+                        || self.poke(target).hp > 0)
+            };
+            if allow_recoil {
                 // post-#11704: gen4's applyRecoilDamage override (mod chain
                 // gen2stadium2→gen2→gen3→gen4) — Math.floor, and the damage
                 // source is the recoiler itself (no [of] attribution)
@@ -2141,6 +2612,9 @@ impl Battle {
                     None,
                 );
                 self.damage(dex, amount, Some(pokemon), Some(pokemon), DamageEffect::Recoil, false);
+                if self.is_castle() && self.poke(pokemon).hp <= 0 && self.poke(target).hp <= 0 {
+                    self.recoil_ko_side = Some(pokemon.side);
+                }
             }
         }
         damage
@@ -2308,7 +2782,15 @@ impl Battle {
             if let Some((hn, hd)) = md.heal {
                 if !self.poke(t).fainted {
                     let maxhp = self.poke(t).maxhp as f64;
-                    let amount = (maxhp * hn as f64 / hd as f64).round();
+                    let amount = if self.is_castle() && move_id == dex.known_moves.present {
+                        // #25④ Castle PBS: Present heal bucket restores 80 fixed HP.
+                        80.0
+                    } else if self.is_castle() {
+                        // #27 Castle PBS: Recover/Softboiled/Milk Drink use floor(maxhp / 2).
+                        (maxhp * hn as f64 / hd as f64).floor()
+                    } else {
+                        (maxhp * hn as f64 / hd as f64).round()
+                    };
                     let healed = self.pokemon_heal(t, amount);
                     match healed {
                         None => {
@@ -2473,28 +2955,52 @@ impl Battle {
                             if (st == "brn" || st == "frz") && self.poke(t).has_type(move_type) {
                                 continue;
                             }
+                            // #51② Castle PBS: Twineedle cannot poison Steel-types.
+                            if self.is_castle()
+                                && move_id == dex.known_moves.twineedle
+                                && st == "psn"
+                                && self.poke(t).has_type(dex.known_types.steel)
+                            {
+                                continue;
+                            }
                         }
-                        if secondary.volatile_status.as_deref() == Some("flinch")
+                        // #12 Castle PBS: flinch applies even to sleeping/frozen targets (Probe 8E).
+                        if !self.is_castle()
+                            && secondary.volatile_status.as_deref() == Some("flinch")
                             && matches!(self.poke(t).status, Status::Slp | Status::Frz)
                             && !secondary.kingsrock
                         {
                             continue;
                         }
-                        let (is_multi, last_hit) = {
+                        let (is_multi, hit_num, last_hit) = {
                             let am = self.active_move.as_ref().unwrap();
-                            (am.multihit.is_some(), am.last_hit)
+                            (am.multihit.is_some(), am.hit, am.last_hit)
                         };
-                        if !is_multi || last_hit {
+                        // #51② Castle PBS: Twineedle poison rolls ONLY on hit 1 (King's Rock still on last_hit).
+                        let allow_hit = if self.is_castle()
+                            && move_id == dex.known_moves.twineedle
+                            && !secondary.kingsrock
+                        {
+                            hit_num == 1
+                        } else {
+                            !is_multi || last_hit
+                        };
+                        if allow_hit {
                             match secondary.chance {
                                 None => {
                                     self.move_hit(dex, Some(t), pokemon, MoveHitData::Sub(secondary.clone()), true, is_self);
                                 }
                                 Some(chance) => {
-                                    let effect_chance = ((chance as f64) * 255.0 / 100.0).floor();
-                                    if self.prng.random_chance(effect_chance as u32, 256) {
+                                    // #22 Castle PBS: 100% secondary effects trigger 100.0% (no 1/256 fail).
+                                    if self.is_castle() && chance >= 100 {
                                         self.move_hit(dex, Some(t), pokemon, MoveHitData::Sub(secondary.clone()), true, is_self);
-                                    } else if effect_chance == 255.0 {
-                                        self.hint("In Gen 2, moves with a 100% secondary effect chance will not trigger in 1/256 uses.", false);
+                                    } else {
+                                        let effect_chance = ((chance as f64) * 255.0 / 100.0).floor();
+                                        if self.prng.random_chance(effect_chance as u32, 256) {
+                                            self.move_hit(dex, Some(t), pokemon, MoveHitData::Sub(secondary.clone()), true, is_self);
+                                        } else if effect_chance == 255.0 {
+                                            self.hint("In Gen 2, moves with a 100% secondary effect chance will not trigger in 1/256 uses.", false);
+                                        }
                                     }
                                 }
                             }
@@ -2651,6 +3157,16 @@ impl Battle {
         if base_power == 0 {
             return DamageResult::Undefined;
         }
+        // #52 Castle PBS: Rage multiplies BP by max(1, counter) (`1x, 1x, 2x, 3x...`).
+        let move_id_opt = self.active_move.as_ref().and_then(|m| m.id);
+        if self.is_castle() && move_id_opt == dex.known_moves.rage {
+            if let Some(rc) = crate::cond_id!(dex, "rage") {
+                if let Some(vs) = self.poke(source).volatile(rc) {
+                    let mult = vs.get_int(crate::state::DK::Counter).max(1) as i32;
+                    base_power = base_power.saturating_mul(mult);
+                }
+            }
+        }
         base_power = clamp_int_range(base_power as f64, Some(1.0), None) as i32;
 
         // crit
@@ -2670,7 +3186,12 @@ impl Battle {
         const CRIT_MULT: [u32; 6] = [0, 16, 8, 4, 3, 2];
         let mut is_crit = will_crit.unwrap_or(false);
         if will_crit.is_none() && crit_ratio > 0 {
-            is_crit = self.prng.random_chance(1, CRIT_MULT[crit_ratio]);
+            // #23 Castle PBS: base crit stage 0 = 17/256 (PS: 1/16).
+            is_crit = if self.is_castle() && crit_ratio == 1 {
+                self.prng.random_chance(17, 256)
+            } else {
+                self.prng.random_chance(1, CRIT_MULT[crit_ratio])
+            };
         }
         if is_crit
             && self
@@ -2797,32 +3318,141 @@ impl Battle {
                 };
                 i as f64
             };
-            attack = 10.0;
             let att = self.poke(source).types;
             let def = self.poke(target).types;
             let att_last = att.t[(att.n.max(1) - 1) as usize];
             let def_last = def.t[(def.n.max(1) - 1) as usize];
+            if self.is_castle() {
+                // #25 Castle PBS Present v0.3 formula (majin_damagepzt.js + present_bug.txt):
+                // - level_term = def_type2 * 6 (instead of floor(lv*2/5)+2)
+                // - atk = 1 / (2 - normal_aishou) scaled by Atk stage, Thick Club, Burn
+                // - def = att_type2 (Normal 0 -> 1) scaled by Def stage, Metal Powder, Reflect
+                let total_mod = self.run_effectiveness(dex, target);
+                let aishou: f64 = match total_mod {
+                    m if m <= -2 => 0.25,
+                    -1 => 0.5,
+                    0 => 1.0,
+                    1 => 2.0,
+                    _ => 4.0,
+                };
+                let mut p_att = 1.0 / (2.0 - aishou);
+                let mut p_def = type_index(dex.type_name(att_last));
+                let p_lvl = type_index(dex.type_name(def_last));
+                if !unboosted {
+                    let ab = self.poke(source).boosts[stat_idx::ATK].clamp(-6, 6);
+                    if ab > 0 {
+                        p_att *= (2 + ab as i32) as f64 / 2.0;
+                    } else if ab < 0 {
+                        p_att *= 2.0 / (2 - ab as i32) as f64;
+                    }
+                    let db = self.poke(target).boosts[stat_idx::DEF].clamp(-6, 6);
+                    if db > 0 {
+                        p_def *= (2 + db as i32) as f64 / 2.0;
+                    } else if db < 0 {
+                        p_def *= 2.0 / (2 - db as i32) as f64;
+                    }
+                }
+                let ki = &dex.known_items;
+                let ks = &dex.known_species;
+                if self.poke(source).item == ki.thickclub
+                    && (Some(self.poke(source).species) == ks.cubone
+                        || Some(self.poke(source).species) == ks.marowak)
+                {
+                    p_att *= 2.0;
+                }
+                if self.poke(target).item == ki.metalpowder
+                    && Some(self.poke(target).base_species) == ks.ditto
+                {
+                    p_def = (p_def * 1.5).floor().max(1.0);
+                }
+                if !unboosted {
+                    let dt = crate::compact::dex_tables(dex);
+                    if dt
+                        .refl_cond
+                        .is_some_and(|c| self.sides[target.side as usize].has_side_condition(c))
+                    {
+                        p_def *= 2.0;
+                    }
+                }
+                if !noburndrop && self.poke(source).status == Status::Brn {
+                    p_att = (p_att * 0.5).floor();
+                    if p_att == 0.0 {
+                        p_att = 1.0;
+                    }
+                }
+                if p_def <= 0.0 {
+                    p_def = 1.0;
+                }
+                let mut damage = (p_lvl * 6.0 * base_power * p_att / p_def / 50.0).floor();
+                let rv = self.run_event(
+                    dex,
+                    &ev::ModifyDamage,
+                    EvTarget::Poke(source),
+                    Some(target),
+                    move_eff,
+                    Some(RV::Num(damage)),
+                    false,
+                    false,
+                );
+                damage = rv.as_num().floor();
+                if is_crit {
+                    damage *= 2.0;
+                }
+                damage = damage.min(997.0) + 2.0;
+                if self.poke(source).has_type(dex.known_types.normal) {
+                    damage += (damage / 2.0).floor();
+                }
+                if total_mod < 0 {
+                    if !suppress_messages {
+                        let ts = self.poke_str(target);
+                        self.add(&["-resisted", &ts]);
+                    }
+                    damage = (damage * aishou).floor();
+                }
+                if !no_damage_variance && damage > 1.0 {
+                    let mode = self.prng.damage_roll_mode();
+                    if mode == DamageRollMode::Exact {
+                        damage = self.prng.apply_damage_variance(damage);
+                    } else {
+                        let context = self.damage_roll_context(dex, target);
+                        damage = self.prng.apply_damage_variance_with_context(damage, Some(&context));
+                    }
+                }
+                return DamageResult::Damage(damage);
+            }
+            attack = 10.0;
             defense = type_index(dex.type_name(att_last));
             level = type_index(dex.type_name(def_last));
             self.hint("Gen 2 Present has a glitched damage calculation using the secondary types of the Pokemon for the Attacker's Level and Defender's Defense.", true);
         }
 
-        // stadium2 rollover fix
-        if attack >= 256.0 || defense >= 256.0 {
-            attack = clamp_int_range(
-                (clamp_int_range(attack, Some(1.0), Some(999.0)) / 4.0).floor(),
-                Some(1.0),
-                None,
-            );
-            defense = clamp_int_range(
-                (clamp_int_range(defense, Some(1.0), Some(999.0)) / 4.0).floor(),
-                Some(1.0),
-                None,
-            );
-        }
+        if self.is_castle() {
+            // #19 Castle PBS: apply Explosion/Selfdestruct Def/2 AFTER 999/ovfl and BEFORE >=256 /4 check!
+            if selfdestruct && def_stat == 1 {
+                defense = clamp_int_range((defense / 2.0).floor(), Some(1.0), None);
+            }
+            if attack >= 256.0 || defense >= 256.0 {
+                attack = clamp_int_range((attack / 4.0).floor(), Some(1.0), None);
+                defense = clamp_int_range((defense / 4.0).floor(), Some(1.0), None);
+            }
+        } else {
+            // stadium2 rollover fix
+            if attack >= 256.0 || defense >= 256.0 {
+                attack = clamp_int_range(
+                    (clamp_int_range(attack, Some(1.0), Some(999.0)) / 4.0).floor(),
+                    Some(1.0),
+                    None,
+                );
+                defense = clamp_int_range(
+                    (clamp_int_range(defense, Some(1.0), Some(999.0)) / 4.0).floor(),
+                    Some(1.0),
+                    None,
+                );
+            }
 
-        if selfdestruct && def_stat == 1 {
-            defense = clamp_int_range((defense / 2.0).floor(), Some(1.0), None);
+            if selfdestruct && def_stat == 1 {
+                defense = clamp_int_range((defense / 2.0).floor(), Some(1.0), None);
+            }
         }
 
         let mut damage = level * 2.0;
@@ -2846,13 +3476,54 @@ impl Battle {
             false,
         );
         damage = rv.as_num().floor();
-        damage = clamp_int_range(damage, Some(1.0), Some(997.0));
+        let kt = &dex.known_types;
+        if self.is_castle() {
+            // #34 Castle PBS: Dragon Scale boosts Dragon 1.1x (Dragon Fang is inert in items.rs).
+            if mv_type == kt.dragon
+                && self.poke(source).item.is_some()
+                && self.poke(source).item == dex.known_items.dragonscale
+            {
+                damage = (damage * 1.1).floor();
+            }
+            // #42 Castle PBS: Struggle benefits from Pink Bow / Polkadot Bow 1.1x.
+            if move_id_opt == dex.known_moves.struggle {
+                let it = self.poke(source).item;
+                if it.is_some()
+                    && (it == dex.known_items.pinkbow || it == dex.known_items.polkadotbow)
+                {
+                    damage = (damage * 1.1).floor();
+                }
+            }
+            damage = damage.clamp(0.0, 997.0);
+        } else {
+            damage = clamp_int_range(damage, Some(1.0), Some(997.0));
+        }
         damage += 2.0;
+
+        if self.is_castle() {
+            // #26 Castle PBS: Rollout + Defense Curl multiplier applies AFTER +2 and BEFORE weather/STAB/eff/random!
+            if move_id_opt == dex.known_moves.rollout {
+                if let Some(mult) = self.active_move.as_ref().and_then(|am| am.magnitude) {
+                    if mult > 1 {
+                        damage *= mult as f64;
+                    }
+                }
+            }
+            // #51① Castle PBS: Triple Kick 2nd/3rd hit multiplier leaks to same-turn second actor
+            // (excluding Rollout, Fury Cutter, Triple Kick, fixed damage, and confusion self-hit).
+            if self.triple_kick_mult >= 2
+                && !is_confusion
+                && move_id_opt != dex.known_moves.triplekick
+                && move_id_opt != dex.known_moves.rollout
+                && move_id_opt != dex.known_moves.furycutter
+            {
+                damage *= self.triple_kick_mult as f64;
+            }
+        }
 
         // weather modifiers
         let rain = self.field.weather.is_some() && self.field.weather == crate::cond_id!(dex, "raindance");
         let sun = self.field.weather.is_some() && self.field.weather == crate::cond_id!(dex, "sunnyday");
-        let kt = &dex.known_types;
         let is_solarbeam = self.active_move.as_ref().unwrap().id.map(|m| dex.move_static(m).is_solarbeam).unwrap_or(false);
         if (mv_type == kt.water && rain) || (mv_type == kt.fire && sun) {
             damage = (damage * 1.5).floor();
@@ -2860,8 +3531,13 @@ impl Battle {
             damage = (damage / 2.0).floor();
         }
 
-        // STAB
-        if mv_type != kt.unknown && self.poke(source).has_type(mv_type) {
+        // STAB (#42 Castle PBS: Struggle gets Normal 1.5x STAB even though effectiveness is typeless).
+        let stab_type = if self.is_castle() && move_id_opt == dex.known_moves.struggle {
+            kt.normal
+        } else {
+            mv_type
+        };
+        if stab_type != kt.unknown && self.poke(source).has_type(stab_type) {
             damage += (damage / 2.0).floor();
         }
 
@@ -2899,7 +3575,8 @@ impl Battle {
             }
         }
 
-        if base_power != 0.0 && damage.floor() == 0.0 {
+        // #30 Castle PBS: final damage 0 is allowed (no min-1 clamp).
+        if !self.is_castle() && base_power != 0.0 && damage.floor() == 0.0 {
             return DamageResult::Damage(1.0);
         }
         DamageResult::Damage(damage)

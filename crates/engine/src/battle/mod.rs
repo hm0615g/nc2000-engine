@@ -604,22 +604,7 @@ impl Battle {
         }
         let name = PokeName::new(crate::state::truncate_utf8_bytes(&name[..char_end], 24));
 
-        // gender: set.gender || species.gender || battle.sample(['M','F'])
-        let gender = match set.gender.as_deref() {
-            Some("M") => Gender::M,
-            Some("F") => Gender::F,
-            Some("N") => Gender::N,
-            _ => match species.gender.as_deref() {
-                Some("M") => Gender::M,
-                Some("F") => Gender::F,
-                Some("N") => Gender::N,
-                _ => {
-                    let pick = self.prng.sample_index(2);
-                    if pick == 0 { Gender::M } else { Gender::F }
-                }
-            },
-        };
-
+        let is_castle = self.is_castle();
         let happiness = set.happiness.unwrap_or(255);
 
         let mut base_move_slots = MoveSlots::default();
@@ -631,9 +616,9 @@ impl Battle {
             let move_id = dex.canonical_move_id(move_id);
             let ms = dex.move_static(move_id);
             let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
-            // calculatePP: pp * (5 + ppUps) / 5; gen<=2 && pp==40 → -= ppUps
+            // calculatePP: pp * (5 + ppUps) / 5; gen<=2 && pp==40 → -= ppUps (PS: 61, Castle PBS #54④: 64)
             let mut pp = ms.pp * (5 + pp_ups) / 5;
-            if ms.pp == 40 {
+            if ms.pp == 40 && !is_castle {
                 pp -= pp_ups;
             }
             base_move_slots.push(MoveSlot { id: move_id, pp, maxpp: pp, disabled: false, used: false, shared: true });
@@ -642,21 +627,81 @@ impl Battle {
         // stat math (battle.statModify, nature neutral, tr = u32-trunc)
         let stat_keys = ["hp", "atk", "def", "spa", "spd", "spe"];
         let mut ivs = [31i32; 6];
-        let mut evs = [0i32; 6];
+        let mut evs = if is_castle { [255i32; 6] } else { [0i32; 6] };
+        let mut has_iv = [false; 6];
+        let mut has_ev = [false; 6];
         for (i, key) in stat_keys.iter().enumerate() {
             if let Some(m) = &set.ivs {
                 if let Some(&v) = m.get(*key) {
                     ivs[i] = v as i32;
+                    has_iv[i] = true;
                 }
             }
             if let Some(m) = &set.evs {
                 if let Some(&v) = m.get(*key) {
                     evs[i] = v as i32;
+                    has_ev[i] = true;
                 }
             }
-            ivs[i] = ivs[i].clamp(0, 31) & 30; // gen<=2: DVs = even IVs
-            evs[i] = evs[i].clamp(0, 255);
         }
+        if is_castle {
+            // §7-C.1 Castle defaults: single Special DV/EV (spd mirrors spa when omitted)
+            // and HP DV derived from Atk/Def/Spe/Spc parity when omitted.
+            if !has_iv[4] {
+                ivs[4] = ivs[3];
+            }
+            if has_ev[3] && !has_ev[4] {
+                evs[4] = evs[3];
+            }
+            for i in 1..6 {
+                ivs[i] = ivs[i].clamp(0, 31) & 30;
+            }
+            if !has_iv[0] {
+                let a = (ivs[1] / 2) & 1;
+                let d = (ivs[2] / 2) & 1;
+                let s = (ivs[5] / 2) & 1;
+                let c = (ivs[3] / 2) & 1;
+                ivs[0] = ((a << 3) | (d << 2) | (s << 1) | c) * 2;
+            } else {
+                ivs[0] = ivs[0].clamp(0, 31) & 30;
+            }
+            for e in &mut evs {
+                *e = (*e).clamp(0, 255);
+            }
+        } else {
+            for i in 0..6 {
+                ivs[i] = ivs[i].clamp(0, 31) & 30; // gen<=2: DVs = even IVs
+                evs[i] = evs[i].clamp(0, 255);
+            }
+        }
+
+        // gender: PS uses set.gender || species.gender || battle.sample(['M','F']).
+        // Castle (§7-C.1) derives unspecified gender deterministically from Atk DV vs species genderRatio.
+        let gender = match set.gender.as_deref() {
+            Some("M") => Gender::M,
+            Some("F") => Gender::F,
+            Some("N") => Gender::N,
+            _ => match species.gender.as_deref() {
+                Some("M") => Gender::M,
+                Some("F") => Gender::F,
+                Some("N") => Gender::N,
+                _ => {
+                    if is_castle {
+                        let f_ratio = species
+                            .extra
+                            .get("genderRatio")
+                            .and_then(|gr| gr.get("F"))
+                            .and_then(|v| v.as_f64())
+                            .unwrap_or(0.5);
+                        let threshold = (f_ratio * 16.0).round() as i32;
+                        if (ivs[1] / 2) < threshold { Gender::F } else { Gender::M }
+                    } else {
+                        let pick = self.prng.sample_index(2);
+                        if pick == 0 { Gender::M } else { Gender::F }
+                    }
+                }
+            },
+        };
         let bs = &species.base_stats;
         let bases = [bs.hp, bs.atk, bs.def, bs.spa, bs.spd, bs.spe];
         let level = set.level as i32;

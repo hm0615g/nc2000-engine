@@ -108,10 +108,14 @@ impl Battle {
                 let se = source_effect.map(EffectHandle::MoveEff);
                 let pos = self.poke(pokemon).position;
                 if self.switch_in(dex, *target, pos, se, false) == Err(()) {
-                    // pursuitfaint: in gen 2-4 the switch still happens
-                    let mut requeued = action.clone();
-                    requeued.priority = -101.0;
-                    self.queue.insert(0, requeued);
+                    if !self.is_castle() {
+                        // pursuitfaint: in gen 2-4 the switch still happens
+                        let mut requeued = action.clone();
+                        requeued.priority = -101.0;
+                        self.queue.insert(0, requeued);
+                    }
+                    // #4 Castle PBS: Pursuit KO cancels the planned switch so a free
+                    // replacement request (CHANGE) opens in after_action.
                     return self.after_action(dex, None);
                 }
             }
@@ -126,7 +130,11 @@ impl Battle {
                 self.add(&[""]);
                 self.clear_active_move(true);
                 self.update_all_speeds(dex);
-                self.field_event(dex, &ev::Residual, None);
+                if self.is_castle() {
+                    self.castle_residual(dex);
+                } else {
+                    self.field_event(dex, &ev::Residual, None);
+                }
                 if !self.ended {
                     self.add(&["upkeep"]);
                 }
@@ -276,9 +284,20 @@ impl Battle {
             self.faint_queue.insert(0, last);
         }
         let mut faint_data: Option<FaintEntry> = None;
+        let db_cond = crate::cond_id!(dex, "destinybond");
+        let ps_cond = crate::cond_id!(dex, "perishsong");
+        let mut dbond_caster: Option<u8> = None;
+        let mut perish_caster: Option<u8> = None;
         while !self.faint_queue.is_empty() {
             let entry = self.faint_queue.remove(0);
             let pokemon = entry.target;
+            if let Some(EffectHandle::Cond(c)) = entry.effect {
+                if Some(c) == db_cond {
+                    dbond_caster = entry.source.map(|s| s.side);
+                } else if Some(c) == ps_cond && perish_caster.is_none() {
+                    perish_caster = entry.source.map(|s| s.side);
+                }
+            }
             faint_data = Some(entry.clone());
             if !self.poke(pokemon).fainted
                 && self
@@ -320,15 +339,28 @@ impl Battle {
             }
         }
 
-        // gen2: fainting skips moves only
-        for active in self.get_all_active(true) {
-            self.queue_cancel_move(active);
+        if self.is_castle() {
+            // #3 Castle PBS Turn-Cut: any faint skips all remaining queued moves
+            // AND voluntary switches (warping straight to replacement + EOT).
+            self.queue.retain(|a| {
+                !matches!(
+                    a.choice,
+                    ActionKind::Move { .. }
+                        | ActionKind::Switch { insta: false, .. }
+                        | ActionKind::BeforeTurnMove { .. }
+                )
+            });
+        } else {
+            // gen2: fainting skips moves only
+            for active in self.get_all_active(true) {
+                self.queue_cancel_move(active);
+            }
         }
 
         let p1_left = self.sides[0].pokemon_left;
         let p2_left = self.sides[1].pokemon_left;
         if p1_left == 0 && p2_left == 0 {
-            // Self-KO clause
+            // Self-KO clause (Explosion / Self-Destruct)
             let p1_last = self.sides[0].last_move.is_some();
             let p2_last = self.sides[1].last_move.is_some();
             if p1_last && !p2_last {
@@ -336,6 +368,29 @@ impl Battle {
                 return true;
             } else if p2_last && !p1_last {
                 self.win(Some(0));
+                return true;
+            }
+            if let Some(overlay) = self.ruleset.castle_overlay() {
+                // #1 Layer 2: 1v1 recoil mutual KO
+                if let Some(attacker_side) = self.recoil_ko_side {
+                    if overlay.recoil_1v1_attacker_wins {
+                        self.win(Some(attacker_side as usize));
+                    } else {
+                        self.win(None);
+                    }
+                    return true;
+                }
+                // Layer 2: 1v1 Perish Song / Destiny Bond mutual KO
+                if let Some(caster_side) = dbond_caster.or(perish_caster) {
+                    if overlay.perish_dbond_lastmon_forfeit {
+                        self.win(Some(1 - caster_side as usize));
+                    } else {
+                        self.win(None);
+                    }
+                    return true;
+                }
+                // #2 Castle PBS: 1v1 Sandstorm / simultaneous Spikes mutual KO -> DRAW
+                self.win(None);
                 return true;
             }
             let winner = faint_data.as_ref().map(|f| 1 - f.target.side as usize);
@@ -355,6 +410,7 @@ impl Battle {
         // cannot mis-adjudicate a later 1v1 mutual faint (e.g. Sandstorm/Perish).
         self.sides[0].last_move = None;
         self.sides[1].last_move = None;
+        self.recoil_ko_side = None;
         if let Some(fd) = faint_data {
             self.run_event(
                 dex,
@@ -399,6 +455,9 @@ impl Battle {
     pub fn end_turn(&mut self, dex: &Dex) {
         self.turn += 1;
         self.last_successful_move_this_turn = None;
+        self.triple_kick_mult = 0;
+        self.recoil_ko_side = None;
+        self.bp_switched_this_turn = [false, false];
 
         for side_n in 0..2usize {
             if let Some(active) = self.active_id(side_n) {
@@ -464,6 +523,14 @@ impl Battle {
             self.sides[side_n].fainted_last_turn = self.sides[side_n].fainted_this_turn;
             self.sides[side_n].fainted_this_turn = None;
             self.sides[side_n].last_move = None;
+        }
+
+        // #8 Castle PBS turn limit (`L_TURN`): judge by alive count -> sum of alive hp/maxhp ratios -> tie.
+        if let Some(limit) = self.ruleset.turn_limit() {
+            if self.turn > limit {
+                self.judge_castle_turn_limit();
+                return;
+            }
         }
 
         // maybeTriggerEndlessBattleClause: turn limits only matter past 100
@@ -574,5 +641,394 @@ impl Battle {
         choice.forced_switches_left = forced_switches;
         choice.forced_passes_left = forced_passes;
         choice.switch_ins.clear();
+    }
+
+    /// #5, #6, #7 Castle PBS end-of-turn residual resolution in strict fixed `1P -> 2P` order:
+    /// 1. Future Sight (`1P -> 2P`)
+    /// 2. Screens & Safeguard expiry (`1P -> 2P`)
+    /// 3. Weather duration / upkeep & Sandstorm damage (`1P -> 2P`)
+    /// 4. Perish Song countdown & simultaneous faint (`1P -> 2P`)
+    /// 5. Per-side `[Active Item -> Active Freeze Thaw]` (`1P -> 2P`)
+    /// 6. Remaining volatile expirations (Encore, Disable, Protect, Endure, Flinch, Pursuit,
+    ///    Stall, FuryCutter, Bide, Rollout, TwoTurnMove; skipping PartiallyTrapped / LockOn /
+    ///    LockedMove / PerishSong)
+    fn castle_residual(&mut self, dex: &Dex) {
+        // 1. Future Sight (1P -> 2P)
+        if let Some(fm) = crate::cond_id!(dex, "futuremove") {
+            for side_n in 0..2u8 {
+                let due = self.sides[side_n as usize]
+                    .slot_conditions
+                    .iter()
+                    .find(|(c, _)| *c == fm)
+                    .map(|(_, st)| (self.turn as i64 - 1) >= st.get_int(DK::EndingTurn))
+                    .unwrap_or(false);
+                if due {
+                    if let Some(active) = self.active_id(side_n as usize) {
+                        self.remove_slot_condition(dex, active, fm);
+                        self.faint_messages(dex, false);
+                        if self.ended {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Screens & Safeguard expiration (1P -> 2P)
+        for side_n in 0..2u8 {
+            let side_conds: Vec<(crate::dex::CondId, u32)> = self.sides[side_n as usize]
+                .side_conditions
+                .iter()
+                .filter_map(|(c, st)| st.duration.map(|_| (*c, st.effect_order)))
+                .collect();
+            for (c, tok) in side_conds {
+                let expired = if let Some((_, st)) = self.sides[side_n as usize]
+                    .side_conditions
+                    .iter_mut()
+                    .find(|(k, s)| *k == c && s.effect_order == tok)
+                {
+                    if let Some(d) = st.duration {
+                        if d > 0 {
+                            st.duration = Some(d - 1);
+                            d - 1 == 0
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+                if expired {
+                    self.remove_side_condition(dex, side_n, c);
+                }
+            }
+        }
+
+        // 3. Weather duration / upkeep & Sandstorm damage (1P -> 2P)
+        if let Some(w) = self.field.weather {
+            let expired = if let Some(d) = self.field.weather_state.duration {
+                if d > 0 {
+                    self.field.weather_state.duration = Some(d - 1);
+                    d - 1 == 0
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+            if expired {
+                self.clear_weather(dex);
+            } else {
+                match dex.conds_key(w) {
+                    "raindance" => self.add(&["-weather", "RainDance", "[upkeep]"]),
+                    "sunnyday" => self.add(&["-weather", "SunnyDay", "[upkeep]"]),
+                    "sandstorm" => {
+                        self.add(&["-weather", "Sandstorm", "[upkeep]"]);
+                        let eff = EffectHandle::Cond(w);
+                        for side_n in 0..2usize {
+                            if let Some(id) = self.active_id(side_n) {
+                                if !self.poke(id).fainted && self.poke(id).hp > 0 {
+                                    let dmg = self.poke(id).base_maxhp as f64 / 8.0;
+                                    self.damage(
+                                        dex,
+                                        dmg,
+                                        Some(id),
+                                        None,
+                                        super::conditions::DamageEffect::Effect(eff),
+                                        false,
+                                    );
+                                }
+                            }
+                        }
+                        self.faint_messages(dex, false);
+                        if self.ended {
+                            return;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // 4. Perish Song countdown & fainting (1P -> 2P)
+        if let Some(ps_cond) = crate::cond_id!(dex, "perishsong") {
+            let mut any_faint = false;
+            for side_n in 0..2usize {
+                let Some(id) = self.active_id(side_n) else { continue };
+                if self.poke(id).fainted || self.poke(id).hp <= 0 {
+                    continue;
+                }
+                let (new_dur, src) = match self.poke_mut(id).volatile_mut(ps_cond) {
+                    Some(vs) => {
+                        let d = vs.duration.unwrap_or(0);
+                        if d > 0 {
+                            vs.duration = Some(d - 1);
+                            (Some(d - 1), vs.source)
+                        } else {
+                            (None, vs.source)
+                        }
+                    }
+                    None => (None, None),
+                };
+                if let Some(d) = new_dur {
+                    let ts = self.poke_str(id);
+                    let tag = format!("perish{d}");
+                    self.add(&["-start", &ts, &tag]);
+                    if d == 0 {
+                        self.poke_mut(id).volatiles.retain(|(k, _)| *k != ps_cond);
+                        self.refresh_poke_mask(dex, id);
+                        self.pokemon_faint(id, src, EffectHandle::Cond(ps_cond));
+                        any_faint = true;
+                    }
+                }
+            }
+            if any_faint {
+                self.faint_messages(dex, false);
+                if self.ended {
+                    return;
+                }
+            }
+        }
+
+        // 5. Per-side [Active Item -> Natural Freeze Thaw] (1P -> 2P)
+        let ki = &dex.known_items;
+        let conf_cond = crate::cond_id!(dex, "confusion");
+        for side_n in 0..2usize {
+            let Some(id) = self.active_id(side_n) else { continue };
+            if self.poke(id).fainted || self.poke(id).hp <= 0 {
+                continue;
+            }
+            if let Some(item) = self.poke(id).item {
+                let it = Some(item);
+                if it == ki.leftovers {
+                    let amount = self.poke(id).base_maxhp as f64 / 16.0;
+                    self.heal(
+                        dex,
+                        amount,
+                        Some(id),
+                        None,
+                        super::dmg::HealEffect::Effect(EffectHandle::Item(item)),
+                    );
+                } else if it == ki.berryjuice {
+                    if self.poke(id).hp < self.poke(id).maxhp / 2 {
+                        let ok = self
+                            .run_event(
+                                dex,
+                                &ev::TryHeal,
+                                EvTarget::Poke(id),
+                                None,
+                                EffectHandle::Item(item),
+                                Some(super::RV::Num(20.0)),
+                                false,
+                                false,
+                            )
+                            .truthy();
+                        if ok && self.use_item(dex, id, None, EffectHandle::Item(item)) {
+                            self.heal(
+                                dex,
+                                20.0,
+                                Some(id),
+                                None,
+                                super::dmg::HealEffect::Effect(EffectHandle::Item(item)),
+                            );
+                        }
+                    }
+                } else if it == ki.berry || it == ki.goldberry {
+                    if self.poke(id).hp < self.poke(id).maxhp / 2 {
+                        self.eat_item(dex, id, false, None, EffectHandle::Item(item));
+                    }
+                } else if it == ki.mintberry {
+                    if self.poke(id).status == Status::Slp {
+                        self.eat_item(dex, id, false, None, EffectHandle::Item(item));
+                    }
+                } else if it == ki.miracleberry {
+                    let has_conf = conf_cond.is_some_and(|c| self.poke(id).has_volatile(c));
+                    if self.poke(id).status != Status::None || has_conf {
+                        self.eat_item(dex, id, false, None, EffectHandle::Item(item));
+                    }
+                } else if it == ki.iceberry {
+                    let has_conf = conf_cond.is_some_and(|c| self.poke(id).has_volatile(c));
+                    if self.poke(id).status == Status::Brn || has_conf {
+                        self.eat_item(dex, id, false, None, EffectHandle::Item(item));
+                    }
+                } else if it == ki.burntberry {
+                    if self.poke(id).status == Status::Frz {
+                        self.eat_item(dex, id, false, None, EffectHandle::Item(item));
+                    }
+                } else if it == ki.przcureberry {
+                    if self.poke(id).status == Status::Par {
+                        self.eat_item(dex, id, false, None, EffectHandle::Item(item));
+                    }
+                } else if it == ki.psncureberry {
+                    if matches!(self.poke(id).status, Status::Psn | Status::Tox) {
+                        self.eat_item(dex, id, false, None, EffectHandle::Item(item));
+                    }
+                } else if it == ki.mysteryberry {
+                    if let Some(slot_idx) = self.poke(id).move_slots.iter().position(|s| s.pp == 0) {
+                        self.castle_eat_mystery_berry_at(dex, id, slot_idx);
+                    }
+                }
+            }
+            if !self.poke(id).fainted && self.poke(id).status == Status::Frz {
+                if self.prng.random_chance(25, 256) {
+                    self.cure_status(dex, id, false);
+                }
+            }
+        }
+
+        // 6. Remaining volatile expirations (1P -> 2P)
+        let pt_cond = crate::cond_id!(dex, "partiallytrapped");
+        let lo_cond = crate::cond_id!(dex, "lockon");
+        let lm_cond = crate::cond_id!(dex, "lockedmove");
+        let ps_cond = crate::cond_id!(dex, "perishsong");
+        let en_cond = crate::cond_id!(dex, "encore");
+        let ro_cond = crate::cond_id!(dex, "rollout");
+        for side_n in 0..2usize {
+            let Some(id) = self.active_id(side_n) else { continue };
+            if self.poke(id).fainted || self.poke(id).hp <= 0 {
+                continue;
+            }
+            let vols: Vec<(crate::dex::CondId, u32)> = self
+                .poke(id)
+                .volatiles
+                .iter()
+                .filter_map(|(c, st)| {
+                    if Some(*c) == pt_cond
+                        || Some(*c) == lo_cond
+                        || Some(*c) == lm_cond
+                        || Some(*c) == ps_cond
+                    {
+                        return None;
+                    }
+                    if st.duration.is_some() || Some(*c) == en_cond || Some(*c) == ro_cond {
+                        Some((*c, st.effect_order))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            for (c, tok) in vols {
+                if self.poke(id).fainted {
+                    break;
+                }
+                let still_same = self
+                    .poke(id)
+                    .volatile(c)
+                    .is_some_and(|st| st.effect_order == tok);
+                if !still_same {
+                    continue;
+                }
+                // Rollout: clear silently if Struggle was used
+                if Some(c) == ro_cond {
+                    let is_struggle = self
+                        .poke(id)
+                        .last_move
+                        .is_some_and(|lm| Some(lm) == dex.known_moves.struggle);
+                    if is_struggle {
+                        self.poke_mut(id).volatiles.retain(|(k, _)| *k != c);
+                        self.refresh_poke_mask(dex, id);
+                        continue;
+                    }
+                }
+                let expired = if let Some(st) = self.poke_mut(id).volatile_mut(c) {
+                    if let Some(d) = st.duration {
+                        if d > 0 {
+                            st.duration = Some(d - 1);
+                            d - 1 == 0
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+                if expired {
+                    self.remove_volatile_id(dex, id, c);
+                    continue;
+                }
+                // Encore: also ends at EOT if Encored move has 0 PP
+                if Some(c) == en_cond {
+                    let pp_left = self
+                        .poke(id)
+                        .volatile(c)
+                        .and_then(|s| s.get_move())
+                        .and_then(|mid| self.poke(id).get_move_slot(mid).map(|s| s.pp))
+                        .unwrap_or(0);
+                    if pp_left <= 0 {
+                        self.remove_volatile_id(dex, id, c);
+                    }
+                }
+            }
+        }
+        self.faint_messages(dex, false);
+    }
+
+    /// #36 Castle PBS helper: consume Mystery Berry to restore +5 PP (unclamped) to `slot_idx`.
+    pub(crate) fn castle_eat_mystery_berry_at(&mut self, dex: &Dex, id: PokeId, slot_idx: usize) {
+        let Some(item) = self.poke(id).item else { return };
+        if Some(item) != dex.known_items.mysteryberry {
+            return;
+        }
+        self.add_volatile(dex, id, "leppaberry", None, EffectHandle::None);
+        if let Some(lb) = crate::cond_id!(dex, "leppaberry") {
+            if let Some(vs) = self.poke_mut(id).volatile_mut(lb) {
+                vs.slot_ref = Some(slot_idx as u8);
+            }
+        }
+        self.eat_item(dex, id, false, None, EffectHandle::Item(item));
+    }
+
+    /// #32 Castle PBS helper: trigger Mint/Miracle/Ice/status berries immediately on `id`
+    /// (called for foe right after actor's move and before actor's AfterMoveSelf poison/burn).
+    pub(crate) fn castle_check_immediate_status_berry(&mut self, dex: &Dex, id: PokeId) {
+        if self.poke(id).fainted || self.poke(id).hp <= 0 {
+            return;
+        }
+        let Some(item) = self.poke(id).item else { return };
+        let ki = &dex.known_items;
+        let it = Some(item);
+        let conf_cond = crate::cond_id!(dex, "confusion");
+        let has_conf = conf_cond.is_some_and(|c| self.poke(id).has_volatile(c));
+        let st = self.poke(id).status;
+        let should_eat = (it == ki.mintberry && st == Status::Slp)
+            || (it == ki.miracleberry && (st != Status::None || has_conf))
+            || (it == ki.iceberry && (st == Status::Brn || has_conf))
+            || (it == ki.burntberry && st == Status::Frz)
+            || (it == ki.przcureberry && st == Status::Par)
+            || (it == ki.psncureberry && matches!(st, Status::Psn | Status::Tox));
+        if should_eat {
+            self.eat_item(dex, id, false, None, EffectHandle::Item(item));
+        }
+    }
+
+    /// #8 Castle PBS `L_TURN` judging: alive count -> sum of alive `hp/maxhp` ratios -> tie.
+    fn judge_castle_turn_limit(&mut self) {
+        let p1_alive = self.sides[0].pokemon_left;
+        let p2_alive = self.sides[1].pokemon_left;
+        if p1_alive != p2_alive {
+            self.win(Some(if p1_alive > p2_alive { 0 } else { 1 }));
+            return;
+        }
+        let ratio_sum = |side: &Side| -> f64 {
+            side.party
+                .iter()
+                .map(|&slot| &side.roster[slot as usize])
+                .filter(|p| !p.fainted && p.hp > 0 && p.maxhp > 0)
+                .map(|p| p.hp as f64 / p.maxhp as f64)
+                .sum()
+        };
+        let r1 = ratio_sum(&self.sides[0]);
+        let r2 = ratio_sum(&self.sides[1]);
+        if (r1 - r2).abs() <= 1e-12 {
+            self.win(None);
+        } else if r1 > r2 {
+            self.win(Some(0));
+        } else {
+            self.win(Some(1));
+        }
     }
 }

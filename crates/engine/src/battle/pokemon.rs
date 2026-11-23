@@ -15,6 +15,9 @@ impl Battle {
     /// gen2stadium2 `pokemon.getStat(statName, unboosted, unmodified, fastReturn)`.
     /// `stat` is an index into stored_stats (0=atk..4=spe).
     pub fn get_stat(&self, dex: &Dex, id: PokeId, stat: usize, unboosted: bool, unmodified: bool, fast_return: bool) -> i32 {
+        if self.is_castle() {
+            return self.get_stat_castle(dex, id, stat, unboosted, unmodified, fast_return);
+        }
         let dt = crate::compact::dex_tables(dex);
         let p = self.poke(id);
         let boost = if unboosted { 0 } else { p.boosts[stat] };
@@ -74,6 +77,85 @@ impl Battle {
         )
     }
 
+    /// Castle PBS (`PS.cgi`) stat calculation (#17, #18, #20, #24②, #35):
+    /// - Exact rational stage multiplier (`2/(2-s)` for negative, `(2+s)/2` for positive).
+    /// - Burn Atk /2 and Paralysis Spe /4 are ALWAYS active (never cleared by boosts or Haze).
+    /// - Thick Club is skipped on confusion self-hits (#24②).
+    /// - Metal Powder checks `base_species == ditto` (persists after Transform, #35).
+    /// - `ovfl=1` wraps item/screen doublings modulo 1024 instead of clamping at 999 (#18).
+    fn get_stat_castle(
+        &self,
+        dex: &Dex,
+        id: PokeId,
+        stat: usize,
+        unboosted: bool,
+        unmodified: bool,
+        fast_return: bool,
+    ) -> i32 {
+        let p = self.poke(id);
+        let mut val = p.stored_stats[stat];
+        let boost = if unboosted { 0 } else { p.boosts[stat].clamp(-6, 6) };
+        if boost > 0 {
+            val = val * (2 + boost as i32) / 2;
+        } else if boost < 0 {
+            val = val * 2 / (2 - boost as i32);
+        }
+        if stat == stat_idx::SPE && p.status == Status::Par {
+            val /= 4;
+        }
+        if stat == stat_idx::ATK && !unmodified && p.status == Status::Brn {
+            val /= 2;
+        }
+        val = val.clamp(1, 999);
+        if fast_return {
+            return val;
+        }
+
+        let dt = crate::compact::dex_tables(dex);
+        let side = &self.sides[id.side as usize];
+        if !unboosted && !side.side_conditions.is_empty() {
+            if stat == stat_idx::DEF && dt.refl_cond.is_some_and(|c| side.has_side_condition(c)) {
+                val *= 2;
+            } else if stat == stat_idx::SPD && dt.ls_cond.is_some_and(|c| side.has_side_condition(c)) {
+                val *= 2;
+            }
+        }
+        if let Some(item_id) = p.item {
+            let ki = &dex.known_items;
+            let ks = &dex.known_species;
+            let is_confusion = self
+                .active_move
+                .as_ref()
+                .is_some_and(|am| am.is_confusion_self_hit);
+            if stat == stat_idx::ATK
+                && !is_confusion
+                && Some(item_id) == ki.thickclub
+                && (Some(p.species) == ks.cubone || Some(p.species) == ks.marowak)
+            {
+                val *= 2;
+            } else if stat == stat_idx::SPA
+                && Some(item_id) == ki.lightball
+                && Some(p.species) == ks.pikachu
+            {
+                val *= 2;
+            } else if (stat == stat_idx::DEF || stat == stat_idx::SPD)
+                && Some(item_id) == ki.metalpowder
+                && Some(p.base_species) == ks.ditto
+            {
+                val += val / 2;
+            }
+        }
+
+        if self.ruleset.overflow_mode() {
+            if val >= 1024 {
+                val %= 1024;
+            }
+            val.max(1)
+        } else {
+            val.clamp(1, 999)
+        }
+    }
+
     /// Probability that `move_id`, used by `att` against `def`, lands —
     /// mirroring `try_move_hit`'s gen-2 accuracy roll: base accuracy scaled by
     /// the attacker's accuracy stage and the defender's evasion stage (the
@@ -116,6 +198,33 @@ impl Battle {
             return QUICK_CLAW_ACTION_SPEED;
         }
         speed
+    }
+
+    /// Action speed as `f64`. In Castle PBS (#15, #16), Paralysis `/ 4.0` and Speed
+    /// stage rational multipliers are NOT truncated (matching Perl `PS.cgi` `f64`
+    /// comparisons; exact ties break 50/50 randomly).
+    pub fn get_pokemon_action_speed_f64(&self, dex: &Dex, id: PokeId) -> f64 {
+        if !self.is_castle() {
+            return self.get_pokemon_action_speed(dex, id) as f64;
+        }
+        let p = self.poke(id);
+        if self.quick_claw_for(id.side as usize)
+            && p.item.is_some()
+            && p.item == dex.known_items.quickclaw
+        {
+            return QUICK_CLAW_ACTION_SPEED as f64;
+        }
+        let mut spe = p.stored_stats[stat_idx::SPE] as f64;
+        let boost = p.boosts[stat_idx::SPE].clamp(-6, 6);
+        if boost > 0 {
+            spe = spe * (2 + boost as i32) as f64 / 2.0;
+        } else if boost < 0 {
+            spe = spe * 2.0 / (2 - boost as i32) as f64;
+        }
+        if p.status == Status::Par {
+            spe /= 4.0;
+        }
+        spe
     }
 
     pub fn update_speed(&mut self, dex: &Dex, id: PokeId) {
@@ -243,10 +352,23 @@ impl Battle {
             }
         }
 
+        // #9 Castle PBS Sleep Clause: foe-inflicted sleep fails (no forfeit) if defender's
+        // side already has any alive sleeping Pokemon (including one sleeping via Rest).
+        // Self-inflicted Rest (source.side == id.side) is always permitted.
+        if self.is_castle()
+            && status == "slp"
+            && source.is_some_and(|s| s.side != id.side)
+            && self.has_sleeping_pokemon(id.side as usize)
+        {
+            self.add(&["-message", "Sleep Clause activated."]);
+            return RV::False;
+        }
+
         if !self.start_status(dex, id, status, source, source_effect).truthy() {
             return RV::False;
         }
-        if status == "slp"
+        if !self.is_castle()
+            && status == "slp"
             && source.is_some_and(|s| s.side != id.side)
             && self.field.pseudo_weather.iter().any(|(c, _)| {
                 Some(*c) == crate::cond_id!(dex, "stadiumsleepclause")
@@ -358,7 +480,16 @@ impl Battle {
         let ts = self.poke_str(id);
         let status = self.poke(id).status.as_str().to_string();
         self.add(&["-curestatus", &ts, &status, if silent { "[silent]" } else { "[msg]" }]);
-        if self.poke(id).status == Status::Slp && self.remove_volatile(dex, id, "nightmare") {
+        // #13 Castle PBS: Miracle Berry waking a sleeping Pokemon does NOT clear Nightmare.
+        let keep_nightmare = self.is_castle()
+            && matches!(
+                self.current_effect(),
+                EffectHandle::Item(it) if Some(it) == dex.known_items.miracleberry
+            );
+        if self.poke(id).status == Status::Slp
+            && !keep_nightmare
+            && self.remove_volatile(dex, id, "nightmare")
+        {
             let ts = self.poke_str(id);
             self.add(&["-end", &ts, "Nightmare", "[silent]"]);
         }
@@ -372,7 +503,16 @@ impl Battle {
         if p.hp <= 0 || p.status == Status::None {
             return false;
         }
-        if self.poke(id).status == Status::Slp && self.remove_volatile(dex, id, "nightmare") {
+        // #13 Castle PBS: Miracle Berry waking a sleeping Pokemon does NOT clear Nightmare.
+        let keep_nightmare = self.is_castle()
+            && matches!(
+                self.current_effect(),
+                EffectHandle::Item(it) if Some(it) == dex.known_items.miracleberry
+            );
+        if self.poke(id).status == Status::Slp
+            && !keep_nightmare
+            && self.remove_volatile(dex, id, "nightmare")
+        {
             let ts = self.poke_str(id);
             self.add(&["-end", &ts, "Nightmare", "[silent]"]);
         }
@@ -748,11 +888,17 @@ impl Battle {
     pub fn copy_volatile_from(&mut self, dex: &Dex, id: PokeId, from: PokeId) {
         // this.clearVolatile() — incoming bench mon is already clean.
         self.poke_mut(id).boosts = self.poke(from).boosts;
+        let is_castle = self.is_castle();
+        let dc_cond = crate::cond_id!(dex, "defensecurl");
+        let min_cond = crate::cond_id!(dex, "minimize");
         let copied: Vec<(crate::dex::CondId, EffectState)> = self
             .poke(from)
             .volatiles
             .iter()
-            .filter(|(c, _)| !dex.cond(*c).no_copy)
+            .filter(|(c, _)| {
+                !dex.cond(*c).no_copy
+                    || (is_castle && (Some(*c) == dc_cond || Some(*c) == min_cond))
+            })
             .map(|(c, s)| (*c, s.clone()))
             .collect();
         for (c, state) in copied {
@@ -801,6 +947,21 @@ impl Battle {
             .collect();
         for (ls, lp) in linked {
             self.remove_linked_volatiles(dex, id, ls, lp);
+        }
+        // #54③ Castle PBS: Foresight is cleared when the user switches out.
+        if self.is_castle() {
+            if let (Some(foe), Some(fs_cond)) = (
+                self.active_id(1 - id.side as usize),
+                crate::cond_id!(dex, "foresight"),
+            ) {
+                let clear_fs = self
+                    .poke(foe)
+                    .volatile(fs_cond)
+                    .is_some_and(|v| v.source == Some(id));
+                if clear_fs {
+                    self.remove_volatile_id(dex, foe, fs_cond);
+                }
+            }
         }
         let p = self.poke_mut(id);
         p.boosts = [0; 7];
@@ -1275,7 +1436,7 @@ impl Battle {
             let pp = ms.pp.min(5);
             let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
             let mut maxpp = ms.pp * (5 + pp_ups) / 5;
-            if ms.pp == 40 {
+            if ms.pp == 40 && !self.is_castle() {
                 maxpp -= pp_ups;
             }
             self.poke_mut(id).move_slots.push(MoveSlot {
