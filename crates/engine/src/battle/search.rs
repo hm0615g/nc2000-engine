@@ -50,6 +50,7 @@ struct CachedBenchMon {
     species: u16,
     hp: i32,
     speed: i32,
+    last_damage: i64,
     previously_switched_in: i32,
     status_effect_order: u32,
     item: Option<crate::dex::ItemId>,
@@ -133,6 +134,7 @@ impl BattleSearchCache {
                     species: p.species.0,
                     hp: p.hp,
                     speed: p.speed,
+                    last_damage: p.last_damage,
                     previously_switched_in: p.previously_switched_in,
                     status_effect_order: p.status_state.effect_order,
                     item: p.item,
@@ -738,6 +740,9 @@ impl Battle {
                         && p.species.0 == u.species
                         && p.hp == u.hp
                         && p.speed == u.speed
+                        && p.last_damage == u.last_damage
+                        && p.hurt_this_turn.is_none()
+                        && p.attacked_by.is_empty()
                         && p.item == u.item
                         && p.last_item == u.last_item
                         && p.volatiles.is_empty()

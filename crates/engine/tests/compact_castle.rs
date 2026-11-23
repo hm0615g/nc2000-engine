@@ -2429,8 +2429,8 @@ fn fuzzer_parity_high_fixes_invuln_ohko_glare_triplekick_present_hash() {
             t_tk.mons[0].type_mask,
             -2,
             false,
-            1,
             3,
+            1,
         );
         // Check that post-type `* 3` is distinct or exact and that execution stays within valid bounds.
         assert!(hit1_base > 0 && wrong_before_type_hit3 >= hit1_base * 3);
@@ -2644,25 +2644,44 @@ fn fuzzer_parity_medium_fixes_futuresight_hp_berserk_toxic_spite_rest_conf_psych
         assert_eq!(c2.mons[1].item, 0);
     }
 
-    // 15.4 Castle `AfterSwitchInSelf` Toxic `residualdmg` increments BEFORE damage (`quantum_1_16 * (c+1)`).
+    // 15.4 Castle `AfterSwitchInSelf` Toxic `residualdmg` matches `Battle` pre-increment (`quantum_1_16 * c`, then `c -> c+1`).
     {
         let p1 = vec![
             mk_set("Jolteon", 55, "", &["Baton Pass", "Splash"], "M"),
             mk_set("Snorlax", 55, "", &["Splash"], "M"),
         ];
         let p2 = vec![mk_set("Blissey", 55, "", &["Splash"], "F")];
-        let (t_c, mut cb_c) = start_compact(&dex, Ruleset::castle_tournament(), &p1, &p2);
-        cb_c.mons[0].set_status(Status::Tox as u8, 0x10 | 1); // residual counter = 1
-        cb_c.mons[1].set_status(Status::Psn as u8, 0);
+        let mut b = Battle::from_fixture_with_ruleset(
+            &dex,
+            "1,2,3,4",
+            &p1,
+            &p2,
+            Ruleset::castle_tournament(),
+        )
+        .unwrap();
+        b.choose(&dex, 0, "team 1,2").unwrap();
+        b.choose(&dex, 1, "team 1").unwrap();
+        let j_id = b.active_id(0).unwrap();
+        b.poke_mut(j_id).status = Status::Tox;
+        b.add_volatile(&dex, j_id, "residualdmg", None, nc2000_engine::battle::EffectHandle::None);
+        let rd = nc2000_engine::cond_id!(&dex, "residualdmg").unwrap();
+        b.poke_mut(j_id).volatile_mut(rd).unwrap().set_int(nc2000_engine::state::DK::Counter, 2);
+        let s_id = nc2000_engine::state::PokeId { side: 0, slot: 1 };
+        b.poke_mut(s_id).status = Status::Psn;
+        b.refresh_poke_mask(&dex, s_id);
+        let (t_c, mut cb_c) = CompactBattle::from_battle(&b, &dex);
         let max1 = t_c.mons[1].maxhp;
-        cb_c.step_turn(&t_c, [0, 0]); // Baton Pass residual counter=1 to poisoned Snorlax!
-        // Increments 1 -> 2 BEFORE damage, dealing `quantum_1_16 * 2`!
-        assert_eq!(cb_c.mons[1].status_counter(), 0x10 | 2);
+        b.choose(&dex, 0, "move 1").unwrap();
+        b.choose(&dex, 1, "move 1").unwrap();
+        b.choose(&dex, 0, "switch 2").unwrap();
+        cb_c.step_turn(&t_c, [0, 0]);
+        assert_eq!(cb_c.mons[1].status_counter(), 0x10 | 3);
         assert_eq!(
             cb_c.mons[1].hp(),
-            max1 - t_c.mons[1].quantum_1_16 * 2,
-            "Castle AfterSwitchInSelf residualdmg must increment BEFORE damage"
+            b.poke(s_id).hp as i16,
+            "Castle AfterSwitchInSelf residualdmg must match Battle exactly"
         );
+        assert_eq!(cb_c.mons[1].hp(), max1 - t_c.mons[1].quantum_1_16 * 2);
     }
 
     // 15.5 Castle Mystery Berry `Spite` timing: does NOT consume inside Spite if victim uses another move;
