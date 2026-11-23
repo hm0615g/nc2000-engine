@@ -304,8 +304,12 @@ impl EndgameSession {
         clock: &mut impl FnMut() -> f64,
     ) -> f64 {
         let start = clock();
+        // Scale per-leaf wall cap with the decision's solver budget (5%, clamped to 2..30 ms)
+        // so slow CPUs or cold WASM JIT after CompactBattle mid-game turns still complete a
+        // 2-slice leaf closure instead of aborting after 1 slice when plenty of budget remains.
+        let leaf_cap_ms = (self.budget_ms * self.cfg.solver_fraction * 0.05).clamp(2.0, 30.0);
         for _ in 0..4 {
-            if clock() - start >= 2.0 {
+            if clock() - start >= leaf_cap_ms {
                 break;
             }
             let before = self.stats.runs;
