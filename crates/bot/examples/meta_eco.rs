@@ -10233,7 +10233,7 @@ fn assemble_3v3_compact(
         turn: 1,
         weather_kind: nc2000_engine::compact::CompactWeather::None,
         weather_turns: 0,
-        quick_claw_roll: (((prng_seed >> 32) & 0xFF) < 60) as u8,
+        quick_claw_roll: if ((prng_seed >> 32) & 0xFF) < 60 { 0b11 } else { 0 },
         outcome: 0,
         speed_order: 0,
         clause_flags: 5,

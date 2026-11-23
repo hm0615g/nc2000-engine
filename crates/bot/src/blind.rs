@@ -825,17 +825,17 @@ pub(crate) fn root_search_key_cached(
     let s1 = battle.sides[1].active.is_some_and(|r| {
         battle.sides[1].roster[r as usize].speed == nc2000_engine::state::QUICK_CLAW_ACTION_SPEED
     });
-    if !battle.quick_claw_roll && !s0 && !s1 {
+    if !battle.any_quick_claw_roll() && !s0 && !s1 {
         return crate::smmcts::key_of_with_claw_omit(cfg, dex, battle, true, cache);
     }
-    let coin = battle.quick_claw_roll;
+    let coin = battle.quick_claw_rolls;
     let speeds = [0, 1].map(|side| battle.active_id(side).map(|id| (id, battle.poke(id).speed)));
-    battle.quick_claw_roll = false;
+    battle.quick_claw_rolls = [false, false];
     if s0 || s1 {
         battle.update_all_speeds(dex);
     }
     let key = crate::smmcts::key_of_with_claw_omit(cfg, dex, battle, true, cache);
-    battle.quick_claw_roll = coin;
+    battle.quick_claw_rolls = coin;
     if s0 || s1 {
         for (id, speed) in speeds.into_iter().flatten() {
             battle.poke_mut(id).speed = speed;
@@ -918,7 +918,7 @@ pub struct BlindSearch {
     scratch: Option<Box<Battle>>,
     scratch_world_id: u64,
     next_world_id: u64,
-    det_cache: FxHashMap<(TeamPlanPick, u64, [u8; 6], bool), CachedDetRoot>,
+    det_cache: FxHashMap<(TeamPlanPick, u64, [u8; 6], [bool; 2]), CachedDetRoot>,
     det_cache_obs_rev: u64,
     world_pool: Vec<SampledWorld>,
     planned_team_picks: Vec<TeamPlanPick>,
@@ -1113,7 +1113,7 @@ impl BlindSearch {
         base.set_log_enabled(false);
         let base_idle = base.is_idle_move_request();
         if base_idle {
-            base.quick_claw_roll = false;
+            base.quick_claw_rolls = [false, false];
             base.update_all_speeds(dex);
         }
         let turn_cap = base.turn.saturating_add(cfg.horizon);
@@ -1235,10 +1235,10 @@ impl BlindSearch {
         obs: &Observer,
         plan_pick: TeamPlanPick,
         rng_probe: &mut SplitMix64,
-    ) -> (u64, bool, [u8; 6], usize) {
+    ) -> (u64, [bool; 2], [u8; 6], usize) {
         let seed = rng_probe.next();
         let mut prng = nc2000_engine::prng::Prng::new(seed);
-        let qc = prng.random_chance(60, 256);
+        let qc = Battle::roll_quick_claw_with(self.base.ruleset, &mut prng);
         let post_qc_seed = prng.seed();
 
         let opp = 1 - self.side;
@@ -1288,7 +1288,7 @@ impl BlindSearch {
                     plan_pick,
                     fb_key,
                     party_key,
-                    if share_qc_cache { false } else { qc },
+                    if share_qc_cache { [false, false] } else { qc },
                 );
                 if let Some(cached) = self.det_cache.get(&cache_key) {
                     self.rng = rng_probe;
@@ -1308,7 +1308,7 @@ impl BlindSearch {
                     };
                     self.scratch_world_id = world_id;
                     sim.reseed(post_qc_seed);
-                    sim.quick_claw_roll = if zero_preview_qc { false } else { qc };
+                    sim.quick_claw_rolls = if zero_preview_qc { [false, false] } else { qc };
                     std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
                     return (sim, root, type_index, cache, world_id);
                 }
@@ -1321,12 +1321,12 @@ impl BlindSearch {
                     None => Box::new(self.base.clone()),
                 };
                 belief.determinize_in_place_planned(dex, &mut sim, obs, plan_pick, &mut self.rng);
-                let sampled_qc = sim.quick_claw_roll;
+                let sampled_qc = sim.quick_claw_rolls;
                 let opp = 1 - self.side;
                 if zero_preview_qc {
-                    sim.quick_claw_roll = false;
-                } else if unseen_idle && sampled_qc {
-                    sim.quick_claw_roll = false;
+                    sim.quick_claw_rolls = [false, false];
+                } else if unseen_idle && (sampled_qc[0] || sampled_qc[1]) {
+                    sim.quick_claw_rolls = [false, false];
                     if let Some(a) = sim.active_id(opp) {
                         if !sim.poke(a).fainted {
                             sim.update_speed(dex, a);
@@ -1365,7 +1365,7 @@ impl BlindSearch {
                     );
                 }
                 if unseen_idle {
-                    sim.quick_claw_roll = sampled_qc;
+                    sim.quick_claw_rolls = sampled_qc;
                 }
                 return (sim, root, type_index, cache, world_id);
             }
@@ -1380,12 +1380,12 @@ impl BlindSearch {
         };
         belief.determinize_in_place_planned(dex, &mut sim, obs, plan_pick, &mut self.rng);
         canonicalize_unseen_bench(dex, &mut sim, 1 - self.side);
-        let sampled_qc = sim.quick_claw_roll;
+        let sampled_qc = sim.quick_claw_rolls;
         let opp = 1 - self.side;
         if zero_preview_qc {
-            sim.quick_claw_roll = false;
-        } else if unseen_idle && sampled_qc {
-            sim.quick_claw_roll = false;
+            sim.quick_claw_rolls = [false, false];
+        } else if unseen_idle && (sampled_qc[0] || sampled_qc[1]) {
+            sim.quick_claw_rolls = [false, false];
             if let Some(a) = sim.active_id(opp) {
                 if !sim.poke(a).fainted {
                     sim.update_speed(dex, a);
@@ -1405,7 +1405,7 @@ impl BlindSearch {
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         let (root, type_index) = self.resolve_root(dex, &mut sim, Some(&cache));
         if unseen_idle {
-            sim.quick_claw_roll = sampled_qc;
+            sim.quick_claw_rolls = sampled_qc;
         }
         (sim, root, type_index, cache, world_id)
     }
@@ -1492,9 +1492,9 @@ impl BlindSearch {
         self.scratch_world_id = world_id;
         let seed = self.rng.next();
         let mut prng = nc2000_engine::prng::Prng::new(seed);
-        let qc = prng.random_chance(60, 256);
+        let qc = Battle::roll_quick_claw_with(sim.ruleset, &mut prng);
         sim.reseed(prng.seed());
-        sim.quick_claw_roll = qc;
+        sim.quick_claw_rolls = qc;
         std::mem::swap(&mut sim.listener_pool, &mut self.base.listener_pool);
         if !self.hidden_timers.is_empty() {
             resample_hidden_timers(dex, &mut sim, &self.hidden_timers, &mut self.timer_rng);
@@ -1517,7 +1517,7 @@ impl BlindSearch {
         }
         let (mut sim, root, type_index, pick, cache) =
             self.next_determinized_world(dex, belief, obs);
-        if trace.is_some() && self.base_idle && sim.quick_claw_roll {
+        if trace.is_some() && self.base_idle && sim.any_quick_claw_roll() {
             sim.update_all_speeds(dex);
         }
         // Forced switches have `replies == 0` and an empty `cells` matrix, so
@@ -1797,7 +1797,7 @@ impl BlindSearch {
         }
         let (mut sim, root, type_index, pick, cache) =
             self.next_determinized_world(dex, belief, obs);
-        if trace.is_some() && self.base_idle && sim.quick_claw_roll {
+        if trace.is_some() && self.base_idle && sim.any_quick_claw_roll() {
             sim.update_all_speeds(dex);
         }
         let (my_pick, forced_reply, override_reply) = match forcing {
@@ -3371,7 +3371,7 @@ mod mixed_selection_tests {
             let mut roots = Vec::new();
             let mut continuation = Vec::new();
             for coin in [false, true] {
-                b.quick_claw_roll = coin;
+                b.set_quick_claw_roll(coin);
                 let before = format!("{b:?}");
                 roots.push(root_search_key(&cfg, &dex, &mut b));
                 continuation.push(key_of(&cfg, &dex, &mut b));
@@ -3383,7 +3383,7 @@ mod mixed_selection_tests {
         let obs = Observer::new(&b, 0);
         let belief = Belief::pinned_from_battle(&b, &obs);
         let mut alternative = b.clone();
-        alternative.quick_claw_roll = !b.quick_claw_roll;
+        alternative.set_quick_claw_roll(!b.quick_claw_rolls[0]);
         alternative.update_all_speeds(&dex);
         let mut states = [&b, &alternative].map(|state| {
             BlindSearch::new(
@@ -3411,9 +3411,9 @@ mod mixed_selection_tests {
         );
         b.mid_turn = true;
         assert!(!b.is_idle_move_request());
-        b.quick_claw_roll = false;
+        b.set_quick_claw_roll(false);
         let key = root_search_key(&cfg, &dex, &mut b);
-        b.quick_claw_roll = true;
+        b.set_quick_claw_roll(true);
         assert_ne!(key, root_search_key(&cfg, &dex, &mut b));
     }
 
@@ -3426,12 +3426,12 @@ mod mixed_selection_tests {
         let mut battle = Battle::from_fixture(&dex, "1,2,3,4", &[set.clone()], &[set]).unwrap();
         let choices = [0, 1].map(|side| Some(battle.legal_choices(&dex, side)[0]));
         battle.apply_choices(&dex, choices).unwrap();
-        battle.quick_claw_roll = false;
+        battle.set_quick_claw_roll(false);
         let key = root_type_key(&mut battle);
         let rng = battle.prng.clone();
-        battle.quick_claw_roll = true;
+        battle.set_quick_claw_roll(true);
         assert_eq!(root_type_key(&mut battle), key);
-        assert!(battle.quick_claw_roll);
+        assert!(battle.any_quick_claw_roll());
         assert_eq!(format!("{rng:?}"), format!("{:?}", battle.prng));
         let cfg = RmConfig {
             hp_buckets: 4,

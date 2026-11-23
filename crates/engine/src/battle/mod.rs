@@ -485,9 +485,21 @@ impl Battle {
         p1: &[PokemonSet],
         p2: &[PokemonSet],
     ) -> Result<Battle, EngineError> {
+        Self::from_fixture_with_ruleset(dex, seed, p1, p2, crate::rules::Ruleset::PsStadium2)
+    }
+
+    /// Constructs a battle in team-preview state under an explicit [`crate::rules::Ruleset`].
+    pub fn from_fixture_with_ruleset(
+        dex: &Dex,
+        seed: &str,
+        p1: &[PokemonSet],
+        p2: &[PokemonSet],
+        ruleset: crate::rules::Ruleset,
+    ) -> Result<Battle, EngineError> {
         let prng = Prng::from_seed_str(seed)
             .ok_or_else(|| EngineError::InvalidChoice(format!("bad seed: {seed}")))?;
         let mut battle = Battle {
+            ruleset,
             preview_level_caps: [Some(MAX_TOTAL_LEVEL); 2],
             prng: crate::prng::BattleRng::seeded(prng),
             turn: 0,
@@ -507,7 +519,10 @@ impl Battle {
             last_move_line: -1,
             last_successful_move_this_turn: None,
             last_damage: 0,
-            quick_claw_roll: false,
+            quick_claw_rolls: [false, false],
+            triple_kick_mult: 0,
+            recoil_ko_side: None,
+            bp_switched_this_turn: [false, false],
             speed_order: [0, 1],
             format_data: EffectState { id: EffId::Format, ..Default::default() },
             sent_log_pos: 0,

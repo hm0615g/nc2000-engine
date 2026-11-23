@@ -109,7 +109,7 @@ impl Battle {
     /// gen3 `pokemon.getActionSpeed()`.
     pub fn get_pokemon_action_speed(&self, dex: &Dex, id: PokeId) -> i32 {
         let speed = self.get_stat(dex, id, stat_idx::SPE, false, false, false);
-        if self.quick_claw_roll
+        if self.quick_claw_for(id.side as usize)
             && self.poke(id).item.is_some()
             && self.poke(id).item == dex.known_items.quickclaw
         {

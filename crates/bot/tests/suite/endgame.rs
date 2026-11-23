@@ -114,7 +114,7 @@ fn protocol_endgame_decisions_ignore_hidden_truth_including_durations() {
                 state.duration = Some(7);
             }
         }
-        b.quick_claw_roll = !a.quick_claw_roll;
+        b.set_quick_claw_roll(!a.quick_claw_rolls[0]);
         b.reseed(1234567);
         let frames = [a, b].map(|mut truth| PlayerChannel::new(0).frame(&mut truth, &dex).unwrap());
         assert_eq!(frames[0], frames[1]);

@@ -1347,6 +1347,7 @@ pub struct MatchTable {
     pub sandstorm_immune_mask: u32,
     pub poison_immune_mask: u32,
     pub match_fingerprint: u64,
+    pub ruleset: crate::rules::Ruleset,
 }
 
 impl Default for MatchTable {
@@ -1368,6 +1369,7 @@ impl Default for MatchTable {
             sandstorm_immune_mask: 0,
             poison_immune_mask: 0,
             match_fingerprint: 0,
+            ruleset: crate::rules::Ruleset::PsStadium2,
         }
     }
 }
@@ -2009,6 +2011,10 @@ impl CompactBattle {
         for m in &static_mons {
             fp = fp.wrapping_add(m.static_fp).wrapping_mul(0xf1357aea2e62a9c5);
         }
+        let rs_tag = battle.ruleset.fingerprint_tag();
+        if rs_tag != 0 {
+            fp = fp.wrapping_add(rs_tag).wrapping_mul(0xf1357aea2e62a9c5);
+        }
         compact_sides[0].pad = (fp >> 16) as u8;
         compact_sides[1].pad = (fp >> 24) as u8;
 
@@ -2029,6 +2035,7 @@ impl CompactBattle {
             sandstorm_immune_mask: dt.sandstorm_immune_mask,
             poison_immune_mask: dt.poison_immune_mask,
             match_fingerprint: fp,
+            ruleset: battle.ruleset,
         };
         let cb = CompactBattle {
             mons: compact_mons,
@@ -2036,7 +2043,8 @@ impl CompactBattle {
             turn: battle.turn,
             weather_kind,
             weather_turns,
-            quick_claw_roll: battle.quick_claw_roll as u8,
+            quick_claw_roll: (battle.quick_claw_rolls[0] as u8)
+                | ((battle.quick_claw_rolls[1] as u8) << 1),
             outcome,
             speed_order: if battle.mid_turn {
                 battle.speed_order.first().copied().unwrap_or(0).clamp(0, 1) as u8
@@ -2138,12 +2146,31 @@ impl CompactBattle {
         )
     }
 
+    /// Whether Quick Claw rolled active for `side` (`bit 0 = P1, bit 1 = P2`).
+    #[inline(always)]
+    pub const fn quick_claw_for(&self, side: usize) -> bool {
+        (self.quick_claw_roll & (1u8 << side)) != 0
+    }
+
+    #[inline(always)]
+    fn roll_quick_claw_mask(ruleset: crate::rules::Ruleset, rng: &mut Prng) -> u8 {
+        if ruleset.independent_quick_claw() {
+            let p1 = rng.random_chance(60, 256) as u8;
+            let p2 = rng.random_chance(60, 256) as u8;
+            p1 | (p2 << 1)
+        } else if rng.random_chance(60, 256) {
+            0b11
+        } else {
+            0
+        }
+    }
+
     /// Compute a party Pokemon's action speed (matching `Battle::get_pokemon_action_speed`).
     #[inline(always)]
     pub fn mon_action_speed(&self, table: &MatchTable, side: usize, party_slot: usize) -> i32 {
         let p_idx = side * 3 + party_slot;
         let mon = &self.mons[p_idx];
-        if self.quick_claw_roll != 0 && table.item_spec(mon.item).is_quick_claw {
+        if self.quick_claw_for(side) && table.item_spec(mon.item).is_quick_claw {
             return QUICK_CLAW_ACTION_SPEED;
         }
         self.mon_stat(table, side, party_slot, stat_idx::SPE, false, false)
@@ -2536,7 +2563,7 @@ impl CompactBattle {
         };
         let qc_active = (!is_switch)
             & table.item_spec(mon.item).is_quick_claw
-            & (self.quick_claw_roll != 0);
+            & self.quick_claw_for(side);
         ActionSortKey::new(phase, prio, qc_active, speed, tie_bit)
     }
 
@@ -2622,7 +2649,7 @@ impl CompactBattle {
                 if self.turn > 1000 {
                     self.outcome = 3; // Tie
                 } else {
-                    self.quick_claw_roll = rng.random_chance(60, 256) as u8;
+                    self.quick_claw_roll = Self::roll_quick_claw_mask(table.ruleset, &mut rng);
                 }
             }
         }
@@ -4203,7 +4230,7 @@ impl CompactBattle {
                 if self.turn > 1000 {
                     self.outcome = 3; // Tie
                 } else {
-                    self.quick_claw_roll = rng.random_chance(60, 256) as u8;
+                    self.quick_claw_roll = Self::roll_quick_claw_mask(table.ruleset, &mut rng);
                 }
             }
         }
@@ -5712,9 +5739,9 @@ mod tests {
             b_sand.set_weather(&dex, "sandstorm", None, crate::battle::EffectHandle::None);
             b_sand.poke_mut(b_sand.active_id(0).unwrap()).hp = 1;
             b_sand.poke_mut(b_sand.active_id(1).unwrap()).hp = 1;
-            b_sand.quick_claw_roll = false;
+            b_sand.set_quick_claw_roll(false);
             let mut b_qc = b_sand.clone();
-            b_qc.quick_claw_roll = true;
+            b_qc.set_quick_claw_roll(true);
             let (t_s, mut cb_sand) = CompactBattle::from_battle(&b_sand, &dex);
             b_sand.choose(&dex, 0, "move 1").unwrap();
             b_sand.choose(&dex, 1, "move 1").unwrap();
@@ -5737,7 +5764,7 @@ mod tests {
 
             // 1v1 Perish Song mutual KO
             let mut b_per = b.clone();
-            b_per.quick_claw_roll = false;
+            b_per.set_quick_claw_roll(false);
             let p_cid = crate::cond_id!(&dex, "perishsong").unwrap();
             for s in 0..2usize {
                 let id = b_per.active_id(s).unwrap();

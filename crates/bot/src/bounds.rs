@@ -2647,7 +2647,7 @@ mod tests {
             let solver = BoundSolver::new(&dex,BoundConfig { dead_quick_claw_quotient:true,
                 dead_damage_quotient:damage,..BoundConfig::default() });
             let mut alternate = root.clone();
-            alternate.quick_claw_roll = !root.quick_claw_roll;
+            alternate.set_quick_claw_roll(!root.quick_claw_rolls[0]);
             assert_eq!(solver.node_key(&root),solver.node_key(&alternate));
             assert_ne!(solver.node_key(&root),BoundSolver::new(&dex,BoundConfig {
                 dead_damage_quotient:damage,..BoundConfig::default() }).node_key(&root));
@@ -2658,7 +2658,7 @@ mod tests {
             holder.sides[side].roster[slot].fainted = fainted;
             assert!(holder.quick_claw_roll_observable(&dex));
             let mut alternate = holder.clone();
-            alternate.quick_claw_roll = !holder.quick_claw_roll;
+            alternate.set_quick_claw_roll(!holder.quick_claw_rolls[0]);
             assert_ne!(solver.node_key(&holder),solver.node_key(&alternate));
         }
         root.sides[0].roster[0].move_slots = battle(&dex,&["Counter"],&["Splash"]).sides[0].roster[0].move_slots.clone();
@@ -2675,7 +2675,7 @@ mod tests {
         root.apply_choices(&dex,preview).unwrap();
         let solver = BoundSolver::new(&dex,BoundConfig { dead_quick_claw_quotient:true,..BoundConfig::default() });
         let mut alternate = root.clone();
-        alternate.quick_claw_roll = !root.quick_claw_roll;
+        alternate.set_quick_claw_roll(!root.quick_claw_rolls[0]);
         let legal = [0,1].map(|side|root.legal_choices(&dex,side));
         assert_eq!(legal,[0,1].map(|side|alternate.legal_choices(&dex,side)));
         for &a in &legal[0] { for &b in &legal[1] {
@@ -2726,7 +2726,7 @@ mod tests {
         let choices=[0,1].map(|side|root.legal_choices(&dex,side).first().copied());
         let mut kernels=Vec::new();
         for roll in [false,true] {
-            root.quick_claw_roll=roll;
+            root.set_quick_claw_roll(roll);
             let step=enumerate_step(&dex,&root,choices,100_000).unwrap();
             let mut kernel=HashMap::new();
             for leaf in step.leaves {
@@ -2766,7 +2766,7 @@ mod tests {
         for &a in &legal[0] { for &b in &legal[1] {
             let mut kernels=Vec::new();
             for roll in [false,true] {
-                root.quick_claw_roll=roll;
+                root.set_quick_claw_roll(roll);
                 let step=enumerate_step(&dex,&root,[Some(a),Some(b)],100_000).unwrap();
                 let mut kernel=HashMap::new();
                 for leaf in step.leaves {
@@ -2797,7 +2797,7 @@ mod tests {
         let choices=[0,1].map(|side|root.legal_choices(&dex,side).first().copied());
         let mut values=Vec::new();
         for roll in [false,true] {
-            root.quick_claw_roll=roll;
+            root.set_quick_claw_roll(roll);
             let step=enumerate_step(&dex,&root,choices,100_000).unwrap();
             values.push(step.leaves.iter().map(|leaf|leaf.prob*super::outcome_value(&leaf.battle).unwrap()).sum::<f64>());
         }

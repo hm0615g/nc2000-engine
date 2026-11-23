@@ -307,7 +307,7 @@ fn faster_than_foe(b: &Battle, dex: &Dex, side: usize) -> bool {
     let (Some(me), Some(foe)) = (b.active_id(side), b.active_id(1 - side)) else {
         return false;
     };
-    if !b.quick_claw_roll
+    if !b.quick_claw_for(1 - side)
         && b.poke(foe).item.is_some()
         && b.poke(foe).item == dex.known_items.quickclaw
     {
@@ -1581,7 +1581,7 @@ mod dominated_action_tests {
         );
         // …and when the coin is up it is the speed comparison itself that
         // says we are second.
-        b.quick_claw_roll = true;
+        b.set_quick_claw_roll(true);
         assert!(
             !noop(&b, 0, "sleeppowder"),
             "coin up: the foe is faster outright"
@@ -1604,7 +1604,7 @@ mod dominated_action_tests {
                 "a Quick Claw foe may sleep us first ({key})"
             );
         }
-        claw.quick_claw_roll = true;
+        claw.set_quick_claw_roll(true);
         for key in ["sleeptalk", "snore"] {
             assert!(
                 !st_noop(&claw, key),

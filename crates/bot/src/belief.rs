@@ -1705,7 +1705,7 @@ impl Belief {
         // never models a foe preempt on the one turn it is deciding. Resample
         // it at the engine's own rate, drawn from the battle PRNG that was
         // just reseeded so the belief's own stream stays bit-identical.
-        out.quick_claw_roll = out.prng.random_chance(60, 256);
+        out.roll_quick_claw();
 
         let opp = obs.opp();
         let roster_len = out.sides[opp].roster.len();
@@ -4804,6 +4804,7 @@ fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex) {
 /// or hidden-overwrite side of the determinizer.
 fn audit_battle_hidden(b: &Battle) {
     let Battle {
+        ruleset: _,            // public ruleset configuration
         preview_level_caps: _,
         prng: _,               // HIDDEN → reseeded by determinize
         turn: _,               // public
@@ -4823,7 +4824,10 @@ fn audit_battle_hidden(b: &Battle) {
         last_move_line: _,     // log bookkeeping
         last_successful_move_this_turn: _, // public move history
         last_damage: _,        // public damage events
-        quick_claw_roll: _,    // hidden per-turn coin → resampled by determinize
+        quick_claw_rolls: _,   // hidden per-turn coin(s) → resampled by determinize
+        triple_kick_mult: _,   // public mid-turn state (0 between turns)
+        recoil_ko_side: _,     // public mid-turn state (None between turns)
+        bp_switched_this_turn: _, // public mid-turn state ([false, false] between turns)
         speed_order: _,        // public (resolved order was displayed)
         format_data: _,        // static
         sent_log_pos: _,       // log bookkeeping

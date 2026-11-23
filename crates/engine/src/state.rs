@@ -1995,6 +1995,7 @@ impl ActiveMove {
 
 #[derive(Debug)]
 pub struct Battle {
+    pub ruleset: crate::rules::Ruleset,
     pub preview_level_caps: [Option<u32>; 2],
     pub prng: BattleRng,
     pub turn: u16,
@@ -2019,7 +2020,16 @@ pub struct Battle {
     pub last_move_line: i64,
     pub last_successful_move_this_turn: Option<MoveId>,
     pub last_damage: i64,
-    pub quick_claw_roll: bool,
+    /// Per-side Quick Claw rolls `[p1, p2]`. In `PsStadium2` both entries share
+    /// a single 60/256 coin; in `CastlePbs` each side rolls 60/256 independently.
+    pub quick_claw_rolls: [bool; 2],
+    /// Castle PBS Triple Kick multiplier leak (`0` = none, `1..=3` = leaked hit multiplier
+    /// applied to same-turn second actor's damage). Always `0` on `PsStadium2`.
+    pub triple_kick_mult: u8,
+    /// Tracks side (`0` or `1`) that self-KO'd via move recoil this turn (for Castle 1v1 recoil rule).
+    pub recoil_ko_side: Option<u8>,
+    /// Tracks whether each side switched in via Baton Pass earlier this turn (for Castle 2x Pursuit).
+    pub bp_switched_this_turn: [bool; 2],
     /// Field-position values sorted by speed at last runSwitch (resolvePriority).
     pub speed_order: [usize; 2],
     /// Format data effect state (unused scalars, kept for parity).
@@ -2045,10 +2055,11 @@ pub struct Battle {
 }
 
 clone_reusing_fields!(Battle {
-    preview_level_caps, prng, turn, request_state, mid_turn, started,
+    ruleset, preview_level_caps, prng, turn, request_state, mid_turn, started,
     ended, winner, field, sides, queue, faint_queue,
     log, log_enabled, effect_order, event_depth, last_move_line, last_successful_move_this_turn,
-    last_damage, quick_claw_roll, speed_order, format_data, sent_log_pos, event_stack,
+    last_damage, quick_claw_rolls, triple_kick_mult, recoil_ko_side, bp_switched_this_turn,
+    speed_order, format_data, sent_log_pos, event_stack,
     effect_stack, active_move, active_pokemon, active_target, last_move_id, pending_boosts,
     listener_pool, battle_mask,
 });
@@ -2145,6 +2156,57 @@ impl Side {
 }
 
 impl Battle {
+    #[inline]
+    pub const fn is_castle(&self) -> bool {
+        self.ruleset.is_castle()
+    }
+
+    #[inline]
+    pub const fn quick_claw_for(&self, side: usize) -> bool {
+        self.quick_claw_rolls[side]
+    }
+
+    #[inline]
+    pub const fn any_quick_claw_roll(&self) -> bool {
+        self.quick_claw_rolls[0] || self.quick_claw_rolls[1]
+    }
+
+    #[inline]
+    pub fn set_quick_claw_roll(&mut self, roll: bool) {
+        self.quick_claw_rolls = [roll, roll];
+    }
+
+    /// Roll this turn's Quick Claw coin(s) according to `self.ruleset`.
+    /// - `PsStadium2`: single shared 60/256 coin mirrored to both sides (bit-exact PS RNG).
+    /// - `CastlePbs`: two independent 60/256 coins `[p1, p2]`.
+    #[inline]
+    pub fn roll_quick_claw(&mut self) {
+        if self.ruleset.independent_quick_claw() {
+            let p1 = self.prng.random_chance(60, 256);
+            let p2 = self.prng.random_chance(60, 256);
+            self.quick_claw_rolls = [p1, p2];
+        } else {
+            let shared = self.prng.random_chance(60, 256);
+            self.quick_claw_rolls = [shared, shared];
+        }
+    }
+
+    /// Roll Quick Claw coin(s) from a standalone `Prng` using `ruleset`.
+    #[inline]
+    pub fn roll_quick_claw_with(
+        ruleset: crate::rules::Ruleset,
+        prng: &mut crate::prng::Prng,
+    ) -> [bool; 2] {
+        if ruleset.independent_quick_claw() {
+            let p1 = prng.random_chance(60, 256);
+            let p2 = prng.random_chance(60, 256);
+            [p1, p2]
+        } else {
+            let shared = prng.random_chance(60, 256);
+            [shared, shared]
+        }
+    }
+
     /// Fast search-simulation state reset equivalent to `self.clone_from(source)`.
     /// When `same_roster_sets[s]` is `true` (e.g. own team across all determinizations,
     /// or both sides when resetting from the same world), skips copying untouched
@@ -2156,6 +2218,7 @@ impl Battle {
         same_roster_sets: [bool; 2],
     ) {
         let Battle {
+            ruleset,
             preview_level_caps,
             ref prng,
             turn,
@@ -2175,7 +2238,10 @@ impl Battle {
             last_move_line,
             last_successful_move_this_turn,
             last_damage,
-            quick_claw_roll,
+            quick_claw_rolls,
+            triple_kick_mult,
+            recoil_ko_side,
+            bp_switched_this_turn,
             speed_order,
             format_data,
             sent_log_pos,
@@ -2190,6 +2256,7 @@ impl Battle {
             battle_mask,
         } = *source;
 
+        self.ruleset = ruleset;
         self.preview_level_caps = preview_level_caps;
         self.prng.clone_from(prng);
         self.turn = turn;
@@ -2228,7 +2295,10 @@ impl Battle {
         self.last_move_line = last_move_line;
         self.last_successful_move_this_turn = last_successful_move_this_turn;
         self.last_damage = last_damage;
-        self.quick_claw_roll = quick_claw_roll;
+        self.quick_claw_rolls = quick_claw_rolls;
+        self.triple_kick_mult = triple_kick_mult;
+        self.recoil_ko_side = recoil_ko_side;
+        self.bp_switched_this_turn = bp_switched_this_turn;
         self.speed_order = speed_order;
         self.format_data = format_data;
         self.sent_log_pos = sent_log_pos;

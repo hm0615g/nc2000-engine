@@ -492,7 +492,7 @@ impl Battle {
         }
 
         // gen2 quick claw roll — every endTurn, RNG parity critical
-        self.quick_claw_roll = self.prng.random_chance(60, 256);
+        self.roll_quick_claw();
 
         self.make_request(dex, RequestState::Move);
     }

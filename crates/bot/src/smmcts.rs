@@ -400,21 +400,22 @@ pub(crate) fn key_of_with_claw_omit(
     let buckets = (cfg.hp_buckets > 0).then_some(cfg.hp_buckets);
     if let Some(c) = cache {
         let omit_qc = force_omit_claw || !quick_claw_observable_fast(b, dex, c);
-        let saved_qc = b.quick_claw_roll;
-        if omit_qc && saved_qc {
-            b.quick_claw_roll = false;
+        let saved_qc = b.quick_claw_rolls;
+        let any_qc = saved_qc[0] || saved_qc[1];
+        if omit_qc && any_qc {
+            b.quick_claw_rolls = [false, false];
         }
         let key = b.search_key_with_cache(dex, buckets, false, false, c);
-        if omit_qc && saved_qc {
-            b.quick_claw_roll = saved_qc;
+        if omit_qc && any_qc {
+            b.quick_claw_rolls = saved_qc;
         }
         debug_assert_eq!(
             key,
             if force_omit_claw {
-                let q = b.quick_claw_roll;
-                b.quick_claw_roll = false;
+                let q = b.quick_claw_rolls;
+                b.quick_claw_rolls = [false, false];
                 let k = b.search_key(buckets, false);
-                b.quick_claw_roll = q;
+                b.quick_claw_rolls = q;
                 k
             } else {
                 b.search_key_canonical_claw(dex, buckets, false)
@@ -423,10 +424,10 @@ pub(crate) fn key_of_with_claw_omit(
         return key;
     }
     if force_omit_claw {
-        let saved_qc = b.quick_claw_roll;
-        b.quick_claw_roll = false;
+        let saved_qc = b.quick_claw_rolls;
+        b.quick_claw_rolls = [false, false];
         let key = b.search_key(buckets, false);
-        b.quick_claw_roll = saved_qc;
+        b.quick_claw_rolls = saved_qc;
         return key;
     }
     b.search_key_canonical_claw(dex, buckets, false)
@@ -682,8 +683,8 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
                     == nc2000_engine::state::QUICK_CLAW_ACTION_SPEED
             });
             if (s0 || s1) && sim.is_idle_move_request() {
-                let qc = sim.quick_claw_roll;
-                sim.quick_claw_roll = false;
+                let qc = sim.quick_claw_rolls;
+                sim.quick_claw_rolls = [false, false];
                 if s0 {
                     if let Some(id) = sim.active_id(0) {
                         sim.update_speed(dex, id);
@@ -694,7 +695,7 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
                         sim.update_speed(dex, id);
                     }
                 }
-                sim.quick_claw_roll = qc;
+                sim.quick_claw_rolls = qc;
             }
         }
         let key = key_of_cached(cfg, dex, sim, cache);
@@ -1530,9 +1531,9 @@ mod tests {
                 };
                 let cache = build_search_cache(&candidate, &dex, &state);
                 let mut a = state.clone();
-                a.quick_claw_roll = false;
+                a.set_quick_claw_roll(false);
                 let mut b = state.clone();
-                b.quick_claw_roll = true;
+                b.set_quick_claw_roll(true);
                 let before = [a.state_key128(), b.state_key128()];
                 assert_eq!(
                     key_of(&candidate, &dex, &mut a) != key_of(&candidate, &dex, &mut b),
@@ -1560,14 +1561,14 @@ mod tests {
         // Simulate two trajectories reaching the exact same Turn 2 idle board
         // (`quick_claw_roll == false`), differing only in whether Turn 1 had
         // `quick_claw_roll == true` during Turn 1 Residual (`speed == 65535`).
-        b0.quick_claw_roll = false;
+        b0.set_quick_claw_roll(false);
         b0.choose(&dex, 0, "move reflect").unwrap();
         b0.choose(&dex, 1, "move confuseray").unwrap();
-        b1.quick_claw_roll = true;
+        b1.set_quick_claw_roll(true);
         b1.choose(&dex, 0, "move reflect").unwrap();
         b1.choose(&dex, 1, "move confuseray").unwrap();
-        b0.quick_claw_roll = false;
-        b1.quick_claw_roll = false;
+        b0.set_quick_claw_roll(false);
+        b1.set_quick_claw_roll(false);
         assert!(b0.is_idle_move_request() && b1.is_idle_move_request());
         assert_ne!(
             b0.sides[0].roster[0].speed,

@@ -14,5 +14,8 @@ pub mod dex;
 pub mod fxhash;
 pub mod prng;
 pub mod replay;
+pub mod rules;
 pub mod state;
 pub mod validate;
+
+pub use rules::{CastleOverlayConfig, LearnsetPolicy, Ruleset};
