@@ -151,7 +151,10 @@ impl CompiledPreviewPicker {
         if enabled {
             for key in artifact.policies.keys() {
                 let parsed: Value = serde_json::from_str(key).expect("compiled preview key json");
-                let own = parsed[0].as_array().expect("compiled preview own array");
+                let Some(own) = parsed[0].as_array() else {
+                    // Castle keys store `[meta, own, foe]` where `parsed[0]` is a metadata object.
+                    continue;
+                };
                 let roster: Vec<Value> = own.iter().map(|p| json!([p[0], p[1]])).collect();
                 let facts: Vec<Value> = own
                     .iter()
@@ -186,34 +189,44 @@ impl CompiledPreviewPicker {
         if !self.enabled {
             return None;
         }
-        if compiled_preview::build_fingerprint() != self.artifact.build || c != self.artifact.c {
-            return None;
-        }
         let battle = agent.battle()?;
         let observer = agent.observer()?;
         let search = agent.search()?;
         if !search.is_preview() {
             return None;
         }
-        let key = compiled_preview::key(battle, agent.side())?;
-        let parsed: Value = serde_json::from_str(&key).ok()?;
-        let foe_str = serde_json::to_string(&parsed[1]).ok()?;
-        let observed: Vec<Value> = observer
-            .mons()
-            .iter()
-            .map(|m| {
-                json!([
-                    m.species.0,
-                    m.level,
-                    format!("{:?}", m.gender),
-                    m.preview_has_item
-                ])
-            })
-            .collect();
-        let observed_str = serde_json::to_string(&observed).ok()?;
-        if self.public_rosters.get(&foe_str).and_then(|v| v.as_deref()) != Some(observed_str.as_str())
+        if compiled_preview::policy_epoch_for(battle.ruleset) != self.artifact.build
+            || c != self.artifact.c
         {
             return None;
+        }
+        let key = if battle.is_castle() {
+            let foe_items: Vec<bool> = observer.mons().iter().map(|m| m.preview_has_item).collect();
+            compiled_preview::castle_key_from_flags(battle, agent.side(), &foe_items)?
+        } else {
+            compiled_preview::key(battle, agent.side())?
+        };
+        if !battle.is_castle() {
+            let parsed: Value = serde_json::from_str(&key).ok()?;
+            let foe_str = serde_json::to_string(&parsed[1]).ok()?;
+            let observed: Vec<Value> = observer
+                .mons()
+                .iter()
+                .map(|m| {
+                    json!([
+                        m.species.0,
+                        m.level,
+                        format!("{:?}", m.gender),
+                        m.preview_has_item
+                    ])
+                })
+                .collect();
+            let observed_str = serde_json::to_string(&observed).ok()?;
+            if self.public_rosters.get(&foe_str).and_then(|v| v.as_deref())
+                != Some(observed_str.as_str())
+            {
+                return None;
+            }
         }
         let choices = self.artifact.policies.get(&key)?;
         if choices.is_empty() {

@@ -157,18 +157,7 @@ pub(crate) fn foe_blocks_status_or_volatile(
 pub(crate) fn certain_self_loss(b: &Battle, dex: &Dex, side: usize, c: SearchChoice) -> bool {
     match c {
         SearchChoice::Move(id) => {
-            if b.sides[side].pokemon_left != 1 {
-                return false;
-            }
-            if dex.move_static(id).selfdestruct {
-                return true;
-            }
-            let km = &dex.known_moves;
-            let sid = Some(id);
-            (sid == km.perishsong || sid == km.destinybond)
-                && b.ruleset
-                    .castle_overlay()
-                    .is_some_and(|cfg| cfg.perish_dbond_lastmon_forfeit)
+            b.sides[side].pokemon_left == 1 && dex.move_static(id).selfdestruct
         }
         _ => false,
     }
@@ -256,13 +245,6 @@ pub(crate) fn dominated_reason(
     c: SearchChoice,
 ) -> Option<&'static str> {
     if certain_self_loss(b, dex, side, c) {
-        if let SearchChoice::Move(id) = c {
-            let km = &dex.known_moves;
-            let sid = Some(id);
-            if sid == km.perishsong || sid == km.destinybond {
-                return Some("Perish Song and Destiny Bond forfeit from the last mon");
-            }
-        }
         return Some("self-KO with the last mon");
     }
     if let Some(why) = public_sleep_forfeit_reason(b, dex, side, c) {
@@ -367,10 +349,16 @@ fn faster_than_foe(b: &Battle, dex: &Dex, side: usize) -> bool {
         return false;
     }
     if b.is_castle() {
-        let qc_me = b.quick_claw_for(side);
-        let qc_foe = b.quick_claw_for(1 - side);
-        if qc_me != qc_foe {
-            return qc_me;
+        let qc_me = b.quick_claw_for(side)
+            && b.poke(me).item.is_some()
+            && b.poke(me).item == dex.known_items.quickclaw;
+        let qc_foe = b.quick_claw_for(1 - side)
+            && b.poke(foe).item.is_some()
+            && b.poke(foe).item == dex.known_items.quickclaw;
+        match (qc_me, qc_foe) {
+            (true, false) => return true,
+            (false, true) | (true, true) => return false,
+            (false, false) => {}
         }
         let mp = b.poke(me);
         let fp = b.poke(foe);
@@ -830,13 +818,7 @@ fn public_self_ko_reason(
             return None;
         }
     }
-    let km = &dex.known_moves;
-    let sid = Some(id);
-    if sid == km.perishsong || sid == km.destinybond {
-        Some("Perish Song and Destiny Bond forfeit from the last mon")
-    } else {
-        Some("self-KO with the last mon")
-    }
+    Some("self-KO with the last mon")
 }
 
 fn public_sleep_forfeit_reason(
@@ -906,12 +888,9 @@ fn raw_public_noop_reason(
     if ms.force_switch && !b.can_switch((1 - side) as u8) {
         return Some("there is nobody left to phaze in");
     }
-    // Perish Song / Destiny Bond fail (`onPrepareHit`) from the last own mon in PS
-    // (and in true 1v1 under Castle raw CGI; tournament Castle treats them as forfeit above).
-    if (sid == km.perishsong || sid == km.destinybond)
-        && b.sides[side].pokemon_left == 1
-        && (b.ruleset.is_ps() || b.sides[1 - side].pokemon_left == 1)
-    {
+    // Perish Song / Destiny Bond fail (`onPrepareHit`) as harmless no-ops from the last own mon
+    // in both PS and Castle (`Probe 11A2`), so `wait_exempt` preserves them as safe wait moves.
+    if (sid == km.perishsong || sid == km.destinybond) && b.sides[side].pokemon_left == 1 {
         return Some("Perish Song and Destiny Bond fail from the last mon");
     }
     // Baton Pass fails when our own bench has no non-fainted switch target.

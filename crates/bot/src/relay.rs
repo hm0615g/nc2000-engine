@@ -699,7 +699,7 @@ struct ActiveRelayLookup {
 }
 
 #[inline]
-fn stat_with_boost(
+pub fn stat_with_boost(
     cb: &CompactBattle,
     table: &MatchTable,
     side: usize,
@@ -720,35 +720,19 @@ fn stat_with_boost(
         }
     };
     if table.ruleset.is_castle() {
-        let mut val = spec.stored_stats[stat_idx] as i32;
-        let b = boost.clamp(-6, 6) as i32;
-        if b > 0 {
-            val = val * (2 + b) / 2;
-        } else if b < 0 {
-            val = val * 2 / (2 - b);
-        }
-        val = val.clamp(1, 999);
-        if stat_idx == 4 && mon.status_raw() == Status::Par as u8 {
-            val = (val / 4).max(1);
-        }
-        if stat_idx == 0 && mon.status_raw() == Status::Brn as u8 {
-            val = (val / 2).max(1);
-        }
-        if (stat_idx == 1 && side_st.reflect_turns > 0)
-            || (stat_idx == 3 && side_st.lightscreen_turns > 0)
-        {
-            val *= 2;
-        }
-        match item_kind {
-            ItemStatKind::ThickClub if stat_idx == 0 => val *= 2,
-            ItemStatKind::LightBall if stat_idx == 2 => val *= 2,
-            ItemStatKind::MetalPowder if stat_idx == 1 || stat_idx == 3 => val = val * 3 / 2,
-            _ => {}
-        }
-        if table.ruleset.overflow_mode() && val >= 1024 {
-            val = (val % 1024).max(1);
-        }
-        return val.clamp(1, 999);
+        return nc2000_engine::compact::get_stat_castle(
+            spec.stored_stats[stat_idx] as i32,
+            boost,
+            stat_idx,
+            false,
+            false,
+            mon.status_raw() == Status::Par as u8,
+            mon.status_raw() == Status::Brn as u8,
+            side_st.reflect_turns > 0,
+            side_st.lightscreen_turns > 0,
+            item_kind,
+            table.ruleset.overflow_mode(),
+        );
     }
     let has_par = (mon.status_raw() == Status::Par as u8)
         & ((mon.vol_flags & vol_bit::PAR_SPEED_DROP) != 0);
@@ -838,7 +822,9 @@ fn best_move_profile(
         {
             continue;
         }
-        let (type_mod, is_immune) = table.effectiveness_ext(mspec.move_type, def_spec, false);
+        let def_foresight = (def_mon.vol_flags & vol_bit::FORESIGHT) != 0;
+        let (type_mod, is_immune) =
+            table.effectiveness_ext(mspec.move_type, def_spec, def_foresight);
         if is_immune {
             continue;
         }
@@ -851,6 +837,7 @@ fn best_move_profile(
             mspec.ignore_accuracy,
             mspec.ignore_evasion,
             mspec.ignore_positive_evasion,
+            def_foresight,
             def_bp,
         ) as f32;
 
@@ -866,8 +853,13 @@ fn best_move_profile(
             let (ai, di) = if mspec.is_physical { (0, 1) } else { (2, 3) };
             let mut atk = stat_with_boost(cb, table, att_side, att_slot, ai, att_boosts[ai]);
             let mut def = stat_with_boost(cb, table, def_side, def_slot, di, def_boosts[di]);
-            let has_tb_item = mspec.move_type != NO_TYPE_ID
-                && table.item_spec(att_mon.item).boost_type == mspec.move_type;
+            let item_boost_type = if is_castle {
+                table.item_spec(att_mon.item).castle_boost_type
+            } else {
+                table.item_spec(att_mon.item).boost_type
+            };
+            let has_tb_item =
+                mspec.move_type != NO_TYPE_ID && item_boost_type == mspec.move_type;
             let base = if is_castle {
                 // Castle PBS: Explosion Def/2 before >= 256 / 4; allow 0 minimum damage.
                 if mspec.is_selfdestruct && mspec.is_physical {
@@ -1011,6 +1003,7 @@ fn disrupt_hit_prob(
                 false,
                 false,
                 false,
+                false,
                 brightpowder,
             );
             if thr == 255 {
@@ -1082,8 +1075,13 @@ fn canonical_mon_key(
         let ispec = table.item_spec(mon.item);
         let active_stat = (ispec.stat_kind != ItemStatKind::None
             && ispec.stat_kind == spec.species_stat_kind) as u64;
-        // `boost_type` is `0..=17` for type boosters or `0xFF` (`& 0x1F == 31`) for none.
-        let boost_5b = (ispec.boost_type & 0x1F) as u64;
+        // `boost_type` / `castle_boost_type` is `0..=17` for type boosters or `0xFF` (`& 0x1F == 31`) for none.
+        let eff_boost_type = if table.ruleset.is_castle() {
+            ispec.castle_boost_type
+        } else {
+            ispec.boost_type
+        };
+        let boost_5b = (eff_boost_type & 0x1F) as u64;
         (
             1u64
                 | ((ispec.is_leftovers as u64) << 1)
@@ -3845,6 +3843,7 @@ pub fn best_midturn_bp_switch(
         }
     }
 
+    let incoming_atk_from_lead = (cb.bp_switch_flags & (1u8 << (2 + side))) != 0;
     let mut best_act = None;
     let mut best_val = -1.0f32;
     for &c in cs {
@@ -3870,7 +3869,7 @@ pub fn best_midturn_bp_switch(
                 def_side,
                 &foe_slots[..n_foes],
                 &foe_hps[..n_foes],
-                false,
+                incoming_atk_from_lead,
                 0.0,
             );
             if val > best_val {
@@ -3895,7 +3894,9 @@ pub fn rollout_relay_pick(
     deterministic: bool,
     rng: &mut SplitMix64,
 ) -> RelayRolloutDecision {
-    if cb.sides[side].request != 1 {
+    if cb.sides[side].request != 1
+        || table.ruleset.turn_limit().is_some_and(|lim| cb.turn >= lim)
+    {
         return RelayRolloutDecision::NotApplicable;
     }
     let att_slot = cb.sides[side].active_idx as usize;

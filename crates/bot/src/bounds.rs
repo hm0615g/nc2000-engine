@@ -1975,7 +1975,10 @@ impl<'d> BoundSolver<'d> {
                 fixed_hi += prob * bounds.hi;
                 continue;
             }
-            if self.cfg.defer_eager_frontier && l.battle.outcome().is_none() && !self.nodes.contains_key(&lookup) {
+            if self.cfg.defer_eager_frontier
+                && outcome_value(&l.battle).is_none()
+                && !self.nodes.contains_key(&lookup)
+            {
                 if let Some(script) = script {
                     pending.push(Pending { script, mass:prob });
                     self.stats.deferred_eager_leaves += 1;
@@ -2307,7 +2310,7 @@ impl<'d> BoundSolver<'d> {
     }
 
     fn check_stall_edge(&mut self, parent: &Battle, child: &Battle) {
-        if child.outcome().is_some() {
+        if outcome_value(child).is_some() {
             return;
         }
         let invalid = self

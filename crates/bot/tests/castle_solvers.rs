@@ -508,7 +508,9 @@ fn linear_castle_mechanics_crit_explosion_neg_stage_berry_recoil_speed_sleep_and
         "Castle 4-turn sleep (counter=5, {r_slp5}) must be worse than 3-turn sleep (counter=4, {r_slp4})"
     );
 
-    // 8. Equal-Perish seat asymmetry in Castle (`1P -> 2P`, Probe 12I) vs PS strict antisymmetry.
+    // 8. Equal-Perish 1v1 adjudication: PS faster wins (antisymmetric); Castle honors
+    //    `perish_dbond_lastmon_forfeit` caster bit (`turn_extra_flags` bit 2/3) in 1v1,
+    //    draws (`0.0`) under `raw_cgi` or ambiguous caster, and has zero seat bias in non-1v1.
     let p_fast = make_set("Zapdos", 55, "No Item", &["Splash"]);
     let p_slow = make_set("Snorlax", 50, "No Item", &["Splash"]);
     let (t_per_ps01, mut cb_per_ps01) = CompactBattle::from_battle(
@@ -523,11 +525,26 @@ fn linear_castle_mechanics_crit_explosion_neg_stage_berry_recoil_speed_sleep_and
         &start_battle(&dex, Ruleset::castle_tournament(), &[p_fast.clone()], &[p_slow.clone()]),
         &dex,
     );
-    let (t_per_cs10, mut cb_per_cs10) = CompactBattle::from_battle(
-        &start_battle(&dex, Ruleset::castle_tournament(), &[p_slow], &[p_fast]),
+    let (t_per_raw, mut cb_per_raw) = CompactBattle::from_battle(
+        &start_battle(&dex, Ruleset::castle_raw_cgi(false), &[p_fast.clone()], &[p_slow.clone()]),
         &dex,
     );
-    for cb in [&mut cb_per_ps01, &mut cb_per_ps10, &mut cb_per_cs01, &mut cb_per_cs10] {
+    let (t_per_2v2, mut cb_per_2v2) = CompactBattle::from_battle(
+        &start_battle(
+            &dex,
+            Ruleset::castle_tournament(),
+            &[p_fast.clone(), p_slow.clone()],
+            &[p_slow.clone(), p_fast.clone()],
+        ),
+        &dex,
+    );
+    for cb in [
+        &mut cb_per_ps01,
+        &mut cb_per_ps10,
+        &mut cb_per_cs01,
+        &mut cb_per_raw,
+        &mut cb_per_2v2,
+    ] {
         cb.mons[0].vol_flags |= vol_bit::PERISH_SONG;
         cb.mons[0].set_perish_turns(1);
         cb.mons[3].vol_flags |= vol_bit::PERISH_SONG;
@@ -537,11 +554,31 @@ fn linear_castle_mechanics_crit_explosion_neg_stage_berry_recoil_speed_sleep_and
     let m_ps10 = compact_perish_margin(&cb_per_ps10, &t_per_ps10);
     assert!(m_ps01 > 0.9 && (m_ps01 + m_ps10).abs() < 1e-12, "PS perish antisymmetric: {m_ps01} vs {m_ps10}");
 
-    let m_cs01 = compact_perish_margin(&cb_per_cs01, &t_per_cs01);
-    let m_cs10 = compact_perish_margin(&cb_per_cs10, &t_per_cs10);
+    // Castle 1v1: no caster bit -> draw (0.0); P1 caster -> -1.0; P2 caster -> +1.0; raw CGI -> 0.0.
+    assert_eq!(compact_perish_margin(&cb_per_cs01, &t_per_cs01), 0.0);
+    cb_per_cs01.turn_extra_flags = 1 << 2; // P1 cast Perish Song
     assert!(
-        m_cs01 < -0.9 && m_cs10 < -0.9,
-        "Castle fixed 1P->2P Perish order disadvantages seat 0 regardless of speed: {m_cs01}, {m_cs10}"
+        compact_perish_margin(&cb_per_cs01, &t_per_cs01) < -0.9,
+        "Castle 1v1 P1-caster Perish must forfeit P1"
+    );
+    cb_per_cs01.turn_extra_flags = 1 << 3; // P2 cast Perish Song
+    assert!(
+        compact_perish_margin(&cb_per_cs01, &t_per_cs01) > 0.9,
+        "Castle 1v1 P2-caster Perish must forfeit P2 (+margin for P1)"
+    );
+    cb_per_raw.turn_extra_flags = 1 << 2;
+    assert_eq!(
+        compact_perish_margin(&cb_per_raw, &t_per_raw),
+        0.0,
+        "Castle raw CGI without perish_dbond_lastmon_forfeit must draw (0.0)"
+    );
+    cb_per_2v2.turn_extra_flags = 1 << 2;
+    cb_per_2v2.mons[0].vol_flags |= vol_bit::TRAPPED_OR_LOCKED;
+    cb_per_2v2.mons[3].vol_flags |= vol_bit::TRAPPED_OR_LOCKED;
+    assert_eq!(
+        compact_perish_margin(&cb_per_2v2, &t_per_2v2),
+        0.0,
+        "Castle non-1v1 equal Perish must have zero seat bias"
     );
 }
 
@@ -820,7 +857,9 @@ fn mask_transformed_ditto_hp_and_all_castle_mask_rules() {
         "Castle blocks Ghost Curse vs Substitute"
     );
 
-    // 6. `perish_dbond_lastmon_forfeit` overlay toggle.
+    // 6. Last-mon Perish Song & Destiny Bond fail as harmless no-ops in BOTH Battle & CompactBattle
+    //    (Probe 11A2), so `wait_exempt` MUST preserve them as safe wait moves even under tournament overlay,
+    //    while non-wait-exempt states mask them as no-ops (not forfeits).
     let db_user = make_set("Gengar", 50, "No Item", &["Destiny Bond", "Perish Song", "Reflect"]);
     let f1 = make_set("Snorlax", 50, "No Item", &["Body Slam"]);
     let f2 = make_set("Zapdos", 50, "No Item", &["Thunderbolt"]);
@@ -836,24 +875,42 @@ fn mask_transformed_ditto_hp_and_all_castle_mask_rules() {
         &[db_user],
         &[f1, f2],
     );
-    // Poison foe so wait_exempt == true (distinguishes forfeit from plain no-op!).
+    // Poison foe so wait_exempt == true: safe wait moves MUST stay unmasked in both rulesets!
     for b in [&mut b_tour, &mut b_raw] {
         let def = b.active_id(1).unwrap();
         b.poke_mut(def).status = Status::Psn;
     }
     let db_c = mv(&dex, "destinybond");
     let ps_c = mv(&dex, "perishsong");
-    let tour_dom = dominated_actions(&b_tour, &dex, 0);
-    let raw_dom = dominated_actions(&b_raw, &dex, 0);
     assert!(
-        tour_dom.iter().any(|&(c, why)| c == db_c && why.contains("forfeit"))
-            && tour_dom.iter().any(|&(c, why)| c == ps_c && why.contains("forfeit")),
-        "Castle tournament overlay must mask last-mon Destiny Bond / Perish Song as forfeit"
+        !dominated_actions(&b_tour, &dex, 0)
+            .iter()
+            .any(|&(c, _)| c == db_c || c == ps_c),
+        "Castle tournament wait_exempt must preserve last-mon Destiny Bond / Perish Song as safe wait moves"
     );
     assert!(
-        !raw_dom.iter().any(|&(c, _)| c == db_c || c == ps_c),
-        "Castle raw CGI without perish_dbond_lastmon_forfeit must NOT mask them as forfeit"
+        !public_dominated_actions(&b_tour, &dex, 0)
+            .iter()
+            .any(|&(c, _)| c == db_c || c == ps_c),
+        "Castle tournament public wait_exempt must preserve last-mon Destiny Bond / Perish Song"
     );
+    assert!(
+        !dominated_actions(&b_raw, &dex, 0)
+            .iter()
+            .any(|&(c, _)| c == db_c || c == ps_c),
+        "Castle raw CGI wait_exempt must preserve last-mon Destiny Bond / Perish Song"
+    );
+    // Clear foe poison -> wait_exempt == false -> masked as no-op (NOT forfeit) in both!
+    for b in [&mut b_tour, &mut b_raw] {
+        let def = b.active_id(1).unwrap();
+        b.poke_mut(def).status = Status::None;
+        let dom = dominated_actions(b, &dex, 0);
+        assert!(
+            dom.iter().any(|&(c, why)| c == db_c && !why.contains("forfeit"))
+                && dom.iter().any(|&(c, why)| c == ps_c && !why.contains("forfeit")),
+            "Last-mon Destiny Bond / Perish Song must be masked as harmless no-op when not wait_exempt: {dom:?}"
+        );
+    }
 }
 
 #[test]
@@ -952,7 +1009,11 @@ fn turn_limit_80_judge_and_cache_separation_across_solvers_and_compiled_preview(
         },
         7,
     );
-    let _ = mcts.choose(&b_prox, &dex, 0, &legal);
+    let picked = mcts.choose(&b_prox, &dex, 0, &legal);
+    assert!(
+        legal.contains(&picked),
+        "MCTS at Castle L_TURN=80 must return a legal action: {picked:?}"
+    );
 
     // 2. Stall solver respects Castle `turn_limit = Some(80)` (does NOT wait for turn 1000).
     let mut b_stall = start_battle(
@@ -1086,4 +1147,375 @@ fn turn_limit_80_judge_and_cache_separation_across_solvers_and_compiled_preview(
     let k_cs_ovfl = compiled_preview::key(&b_prev_cs, 0).unwrap();
     assert_ne!(k_cs0, k_cs_free, "Castle preview key must encode turn_limit");
     assert_ne!(k_cs0, k_cs_ovfl, "Castle preview key must encode overflow_mode");
+    assert_eq!(
+        compiled_preview::castle_key_from_flags(&b_prev_cs, 0, &[true, false]),
+        compiled_preview::castle_key(&b_prev_cs, 0, Some(&[true, false]))
+    );
+}
+
+#[test]
+fn audit_fixes_qc_mask_stat_parity_dragon_items_foresight_2v1_lturn_sandstorm_bp_and_tableset() {
+    let dex = conformance::load_dex();
+
+    // 1. mask.rs Quick Claw item check: non-QC slower mon with `quick_claw_rolls = [true, false]`
+    //    must NOT be treated as faster than foe (no false-positive full-HP Rest masking).
+    let slow_rest = make_set("Snorlax", 50, "Leftovers", &["Rest", "Body Slam"]);
+    let fast_foe = make_set("Zapdos", 55, "Leftovers", &["Thunderbolt"]);
+    let mut b_qc = start_battle(
+        &dex,
+        Ruleset::castle_tournament(),
+        &[slow_rest],
+        &[fast_foe],
+    );
+    b_qc.quick_claw_rolls = [true, false];
+    let rest_c = mv(&dex, "rest");
+    assert!(
+        !dominated_actions(&b_qc, &dex, 0).iter().any(|&(c, _)| c == rest_c),
+        "Non-QC Snorlax with quick_claw_rolls=[true,false] must NOT be treated as faster than Zapdos"
+    );
+    // Actually give Snorlax Quick Claw -> now it IS faster -> full-HP Rest is masked.
+    let p1a = b_qc.active_id(0).unwrap();
+    b_qc.poke_mut(p1a).item = dex.known_items.quickclaw;
+    assert!(
+        dominated_actions(&b_qc, &dex, 0).iter().any(|&(c, _)| c == rest_c),
+        "Quick Claw Snorlax with quick_claw_rolls=[true,false] IS faster -> full-HP Rest masked"
+    );
+    // Both hold Quick Claw and both roll true -> speed tie -> NOT strictly faster -> unmasked.
+    let p2a = b_qc.active_id(1).unwrap();
+    b_qc.poke_mut(p2a).item = dex.known_items.quickclaw;
+    b_qc.quick_claw_rolls = [true, true];
+    assert!(
+        !dominated_actions(&b_qc, &dex, 0).iter().any(|&(c, _)| c == rest_c),
+        "Dual Quick Claw tie [true,true] must NOT claim strictly faster"
+    );
+
+    // 2. eval::ruleset_mon_stat & relay::stat_with_boost exact parity vs compact::get_stat_castle
+    //    on Burned +6 Thick Club Marowak under both ovfl=false and ovfl=true.
+    let wak = make_set("Marowak", 55, "Thick Club", &["Earthquake"]);
+    let ditto = make_set("Ditto", 50, "Metal Powder", &["Transform"]);
+    for ovfl in [false, true] {
+        let rs = Ruleset::CastlePbs(CastleOverlayConfig {
+            overflow_mode: ovfl,
+            ..CastleOverlayConfig::tournament()
+        });
+        let b_st = start_battle(&dex, rs, &[wak.clone()], &[ditto.clone()]);
+        let (t_st, mut cb_st) = CompactBattle::from_battle(&b_st, &dex);
+        cb_st.mons[0].set_status(Status::Brn as u8, 0);
+        cb_st.mons[0].boosts[0] = 6;
+        cb_st.sides[1].reflect_turns = 5;
+        cb_st.sides[1].lightscreen_turns = 5;
+        for (side, stat_i) in [(0, 0), (0, 1), (0, 4), (1, 1), (1, 3)] {
+            for boost in -6i8..=6 {
+                let p_idx = side * 3;
+                let spec = &t_st.mons[p_idx];
+                let mon = &cb_st.mons[p_idx];
+                let ispec = t_st.item_spec(mon.item);
+                let item_kind = if ispec.stat_kind == spec.species_stat_kind {
+                    ispec.stat_kind
+                } else {
+                    nc2000_engine::compact::ItemStatKind::None
+                };
+                let expected = nc2000_engine::compact::get_stat_castle(
+                    spec.stored_stats[stat_i] as i32,
+                    boost,
+                    stat_i,
+                    false,
+                    false,
+                    mon.status_raw() == Status::Par as u8,
+                    mon.status_raw() == Status::Brn as u8,
+                    cb_st.sides[side].reflect_turns > 0,
+                    cb_st.sides[side].lightscreen_turns > 0,
+                    item_kind,
+                    ovfl,
+                );
+                let e_val = nc2000_bot::eval::ruleset_mon_stat(
+                    &cb_st,
+                    &t_st,
+                    side,
+                    0,
+                    stat_i,
+                    Some(boost),
+                    false,
+                    false,
+                );
+                let r_val =
+                    nc2000_bot::relay::stat_with_boost(&cb_st, &t_st, side, 0, stat_i, boost);
+                assert_eq!(e_val, expected, "eval stat mismatch ovfl={ovfl} side={side} stat={stat_i} b={boost}");
+                assert_eq!(r_val, expected, "relay stat mismatch ovfl={ovfl} side={side} stat={stat_i} b={boost}");
+            }
+        }
+        // Explicitly verify Burned +6 Thick Club Marowak Atk:
+        // ovfl=false: stored*4*2 > 999 -> clamped to 999 -> Burn /2 = 499!
+        // ovfl=true: (stored*4*2 % 1024) >> 1 (distinct from 499!)
+        let atk_eval = nc2000_bot::eval::ruleset_mon_stat(&cb_st, &t_st, 0, 0, 0, Some(6), false, false);
+        if !ovfl {
+            assert_eq!(atk_eval, 499, "Burned +6 Thick Club Marowak ovfl=false must clamp 999 then /2 = 499");
+        } else {
+            let stored = t_st.mons[0].stored_stats[0] as i32;
+            let raw = ((stored * 8) % 1024) >> 1;
+            assert_eq!(atk_eval, raw.max(1));
+        }
+    }
+
+    // 3. Dragon Scale vs Dragon Fang inversion across PS and Castle (`eval.rs` & `linear.rs`).
+    let king_scale = make_set("Kingdra", 55, "Dragon Scale", &["DragonBreath"]);
+    let king_fang = make_set("Kingdra", 55, "Dragon Fang", &["DragonBreath"]);
+    let king_none = make_set("Kingdra", 55, "No Item", &["DragonBreath"]);
+    let target = make_set("Snorlax", 55, "No Item", &["Splash"]);
+    let db_id = dex.moves.id("dragonbreath").unwrap();
+    for (rs, scale_boosts, fang_boosts) in [
+        (Ruleset::PsStadium2, false, true),
+        (Ruleset::castle_tournament(), true, false),
+    ] {
+        let b_n = start_battle(&dex, rs, &[king_none.clone()], &[target.clone()]);
+        let b_s = start_battle(&dex, rs, &[king_scale.clone()], &[target.clone()]);
+        let b_f = start_battle(&dex, rs, &[king_fang.clone()], &[target.clone()]);
+        let h_n = nc2000_bot::eval::expected_hit_fraction(&b_n, &dex, b_n.active_id(0).unwrap(), b_n.active_id(1).unwrap(), db_id);
+        let h_s = nc2000_bot::eval::expected_hit_fraction(&b_s, &dex, b_s.active_id(0).unwrap(), b_s.active_id(1).unwrap(), db_id);
+        let h_f = nc2000_bot::eval::expected_hit_fraction(&b_f, &dex, b_f.active_id(0).unwrap(), b_f.active_id(1).unwrap(), db_id);
+        let (tn, cbn) = CompactBattle::from_battle(&b_n, &dex);
+        let (ts, cbs) = CompactBattle::from_battle(&b_s, &dex);
+        let (tf, cbf) = CompactBattle::from_battle(&b_f, &dex);
+        let kn = DmgKernel1D::for_move(&cbn, &tn, 0, 0, 1, 0, 0).mean_dmg;
+        let ks = DmgKernel1D::for_move(&cbs, &ts, 0, 0, 1, 0, 0).mean_dmg;
+        let kf = DmgKernel1D::for_move(&cbf, &tf, 0, 0, 1, 0, 0).mean_dmg;
+        if scale_boosts {
+            assert!(h_s > h_n * 1.05 && ks > kn * 1.05, "Castle Dragon Scale must boost DragonBreath");
+            assert!((h_f - h_n).abs() < 1e-12 && (kf - kn).abs() < 1e-6, "Castle Dragon Fang must NOT boost");
+        } else if fang_boosts {
+            assert!(h_f > h_n * 1.05 && kf > kn * 1.05, "PS Dragon Fang must boost DragonBreath");
+            assert!((h_s - h_n).abs() < 1e-12 && (ks - kn).abs() < 1e-6, "PS Dragon Scale must NOT boost");
+        }
+    }
+
+    // 4. Castle Foresight `acc < eva` both-zero rule on non-Ghost defender in `eval.rs` & `linear.rs`.
+    let zap = make_set("Zapdos", 55, "No Item", &["Thunderbolt"]);
+    let lax = make_set("Snorlax", 55, "No Item", &["Splash"]);
+    let mut b_fore = start_battle(&dex, Ruleset::castle_tournament(), &[zap], &[lax]);
+    let p1 = b_fore.active_id(0).unwrap();
+    let p2 = b_fore.active_id(1).unwrap();
+    b_fore.poke_mut(p1).boosts[5] = -2; // acc = -2
+    b_fore.poke_mut(p2).boosts[6] = 1; // eva = +1 -> acc < eva!
+    let tb_id = dex.moves.id("thunderbolt").unwrap();
+    let h_no_fore = nc2000_bot::eval::expected_hit_fraction(&b_fore, &dex, p1, p2, tb_id);
+    b_fore.add_volatile(&dex, p2, "foresight", Some(p1), EffectHandle::None);
+    let h_with_fore = nc2000_bot::eval::expected_hit_fraction(&b_fore, &dex, p1, p2, tb_id);
+    let (tf_cb, cb_fore) = CompactBattle::from_battle(&b_fore, &dex);
+    let k_fore = DmgKernel1D::for_move(&cb_fore, &tf_cb, 0, 0, 1, 0, 0);
+    let miss_fore = k_fore.pts[..k_fore.len].iter().find(|&&(d, _)| d == 0).map_or(0.0, |&(_, p)| p);
+    assert!(
+        h_with_fore > h_no_fore * 1.8 && miss_fore < 1e-6,
+        "Castle Foresight with acc(-2) < eva(+1) must zero both stages (h_no={h_no_fore}, h_yes={h_with_fore}, miss={miss_fore})"
+    );
+
+    // 5. 2v1 Castle `L_TURN=80` alive-count judge in `linear.rs` (both non-heal and heal Bellman paths)
+    //    plus cache separation between 2v1 and 1v1 at turns 79 and 80!
+    let low_mon = make_set("Snorlax", 50, "No Item", &["Splash"]);
+    let low_heal = make_set("Starmie", 50, "No Item", &["Splash", "Recover"]);
+    let hi_mon = make_set("Blissey", 50, "No Item", &["Splash"]);
+    let hi_heal = make_set("Blissey", 50, "No Item", &["Splash", "Soft-Boiled"]);
+    for (p1s, p2s) in [
+        (vec![low_mon.clone(), low_mon.clone()], vec![hi_mon.clone()]),
+        (vec![low_heal.clone(), low_heal.clone()], vec![hi_heal.clone()]),
+    ] {
+        for turn in [79u16, 80u16] {
+            let b21 = start_battle(&dex, Ruleset::castle_tournament(), &p1s, &p2s);
+            let (t21, mut cb21) = CompactBattle::from_battle(&b21, &dex);
+            cb21.turn = turn;
+            // At 15% HP, even a 50% Recover only reaches 65% (< 100%) on turn 80,
+            // while at turn 79 with Recover (50%), two Recovers would tie 100% vs 100% -> test 10% HP at turn 80
+            // and 15% HP with Recover disabled/enabled appropriately.
+            cb21.mons[0].hp_pool[0] = (t21.mons[0].maxhp / 5).max(1); // 20% HP
+            cb21.mons[1].hp_pool[0] = (t21.mons[1].maxhp / 5).max(1); // 20% HP
+            cb21.mons[3].hp_pool[0] = t21.mons[3].maxhp; // 100% HP
+            if turn == 79 {
+                // Limit to 1 turn of healing gap on Starmie by setting Recover PP to 1 -> max 70% < 100%
+                cb21.mons[0].pp[1] = 1;
+            }
+            let r21 = toeplitz_coupled_race(&cb21, &t21, 0, 0, 1, 0);
+            assert!(
+                r21 > 0.99,
+                "2v1 Castle turn={turn} must use alive-count judge (+1.0), NOT 1v1 HP ratio, got {r21}"
+            );
+            // Flip to 1v2: Side 0 has 1 mon at 100%, Side 1 has 2 mons at 20% -> Side 0 loses (-1.0)!
+            // Also drop Side 0 bench -> true 1v1 at same turn with identical active mons -> HP ratio gives <= 0!
+            cb21.sides[0].alive_mask = 0b001;
+            cb21.mons[1].hp_pool[0] = 0;
+            if turn == 80 {
+                let r11 = toeplitz_coupled_race(&cb21, &t21, 0, 0, 1, 0);
+                assert!(
+                    r11 < -0.99,
+                    "1v1 Castle turn=80 with 20% (+Recover=70%) vs 100% HP must lose (-1.0) without colliding with 2v1 cache, got {r11}"
+                );
+            } else {
+                // At turn 79 with no heal (Splash vs Splash), 1v1 is -1.0; with Recover (2 turns -> 100% tie) it's 0.0 (< 0.5, strictly != +1.0 from 2v1 cache!).
+                let r11 = toeplitz_coupled_race(&cb21, &t21, 0, 0, 1, 0);
+                assert!(
+                    r11 < 0.01,
+                    "1v1 Castle turn=79 must NOT collide with 2v1 (+1.0) Bellman cache, got {r11}"
+                );
+            }
+        }
+    }
+
+    // 6. Sandstorm + AfterMoveSelf residual priority in `linear.rs::mutual_eot_payoff`.
+    let fast_s = make_set("Zapdos", 55, "No Item", &["Splash"]);
+    let slow_s = make_set("Snorlax", 50, "No Item", &["Splash"]);
+    let b_sand_brn = start_battle(&dex, Ruleset::castle_tournament(), &[fast_s], &[slow_s]);
+    let (t_sb, mut cb_sb) = CompactBattle::from_battle(&b_sand_brn, &dex);
+    cb_sb.weather_kind = CompactWeather::Sandstorm;
+    cb_sb.weather_turns = 5;
+    cb_sb.mons[0].hp_pool[0] = 1;
+    cb_sb.mons[3].hp_pool[0] = 1;
+    // Slow Snorlax is Burned (AfterMoveSelf ticks before EOT Sandstorm) -> Snorlax faints first -> Zapdos wins (+1.0)!
+    cb_sb.mons[3].set_status(Status::Brn as u8, 0);
+    let r_sb = toeplitz_coupled_race(&cb_sb, &t_sb, 0, 0, 1, 0);
+    assert!(
+        r_sb > 0.99,
+        "In Castle Sandstorm, Burned mon takes AfterMoveSelf before EOT Sandstorm and loses: {r_sb}"
+    );
+    // Both Burned -> faster Zapdos takes AfterMoveSelf first and loses (-1.0)!
+    cb_sb.mons[0].set_status(Status::Brn as u8, 0);
+    let r_both_brn = toeplitz_coupled_race(&cb_sb, &t_sb, 0, 0, 1, 0);
+    assert!(
+        r_both_brn < -0.99,
+        "When both are Burned in Castle Sandstorm, faster mover takes AfterMoveSelf first and loses: {r_both_brn}"
+    );
+
+    // 7. Turn-80 directed BP `alive_mask` guard in `relay.rs` & `mcts.rs` + `best_midturn_bp_switch` Pursuit flag.
+    let passer = make_set("Jolteon", 55, "No Item", &["Baton Pass", "Agility", "Substitute", "Thunderbolt"]);
+    let recv_weak = make_set("Alakazam", 50, "No Item", &["Psychic"]);
+    let recv_bulk = make_set("Skarmory", 50, "No Item", &["Drill Peck"]);
+    let foe_p = make_set("Tyranitar", 55, "No Item", &["Pursuit"]);
+    let foe_b = make_set("Snorlax", 50, "No Item", &["Splash"]);
+    let b_t80_bp = start_battle(
+        &dex,
+        Ruleset::castle_tournament(),
+        &[passer.clone(), recv_weak.clone(), recv_bulk.clone()],
+        &[foe_p.clone(), foe_b.clone()],
+    );
+    let (t_bp80, mut cb_bp80) = CompactBattle::from_battle(&b_t80_bp, &dex);
+    cb_bp80.turn = 80;
+    cb_bp80.mons[0].boosts[4] = 2;
+    cb_bp80.mons[0].hp_pool[0] = t_bp80.mons[0].maxhp / 5;
+    cb_bp80.mons[1].hp_pool[0] = t_bp80.mons[1].maxhp / 5;
+    cb_bp80.mons[2].hp_pool[0] = t_bp80.mons[2].maxhp / 5;
+    cb_bp80.mons[3].hp_pool[0] = t_bp80.mons[3].maxhp;
+    cb_bp80.mons[4].hp_pool[0] = t_bp80.mons[4].maxhp;
+    let mut piv = [1u8; 2];
+    let mut rng = nc2000_bot::SplitMix64::new(7);
+    let rel_dec = nc2000_bot::relay::rollout_relay_pick(
+        &cb_bp80,
+        &t_bp80,
+        &EvalWeights::default(),
+        0,
+        &[0, 1, 2, 3, 5, 6],
+        0,
+        &mut piv,
+        true,
+        &mut rng,
+    );
+    assert!(
+        matches!(rel_dec, nc2000_bot::relay::RelayRolloutDecision::NotApplicable),
+        "rollout_relay_pick must return NotApplicable at Castle turn == 80"
+    );
+    // Directly invoke `apply_compact_actions_with_bp_target` at turn 80 with directed BP code to slot 2 (Skarmory):
+    // Side 0 has 3 alive mons vs Side 1's 2 alive mons, so Turn-80 judge MUST keep alive_mask == 0b111 -> P1Win!
+    let mut cb_bp_test = cb_bp80;
+    cb_bp_test.mons[0].hp_pool[0] = t_bp80.mons[0].maxhp;
+    cb_bp_test.mons[2].hp_pool[0] = t_bp80.mons[2].maxhp;
+    // Choose Splash-like foe (turn 80 ends at EOT with judge): use foe slot 1 (Splash) active so no KO happens.
+    cb_bp_test.sides[1].active_idx = 1;
+    let directed_bp = ((2u8 + 1) << 4) | 0; // directed BP move 0 -> recv slot 2
+    nc2000_bot::mcts::apply_compact_actions_with_bp_target(&mut cb_bp_test, &t_bp80, [directed_bp, 0]);
+    if cb_bp_test.sides[0].request == 2 {
+        cb_bp_test.apply_actions(&t_bp80, [6, 7]);
+    }
+    assert_eq!(cb_bp_test.sides[0].alive_mask, 0b111, "Turn-80 directed BP must never lose bench alive_mask bits");
+    assert_eq!(cb_bp_test.outcome, 1, "3v2 low-HP Side 0 must win Turn-80 alive-count judge (outcome=1)");
+
+    // `best_midturn_bp_switch` honors `bp_switch_flags` incoming 2x Pursuit bit (`1 << (2 + side)`):
+    let mut cb_mid = CompactBattle::from_battle(&b_t80_bp, &dex).1;
+    cb_mid.sides[0].request = 2;
+    cb_mid.bp_switch_flags = (1 << 0) | (1 << 2); // side 0 fast-BP paused before Tyranitar's Pursuit
+    cb_mid.mons[1].hp_pool[0] = t_bp80.mons[1].maxhp / 2; // Alakazam in OHKO range of Castle 2x Pursuit
+    cb_mid.mons[2].hp_pool[0] = t_bp80.mons[2].maxhp; // Skarmory resists Pursuit cleanly
+    let pick_bp = nc2000_bot::relay::best_midturn_bp_switch(
+        &cb_mid,
+        &t_bp80,
+        &EvalWeights::default(),
+        0,
+        &[5, 6],
+    );
+    assert_eq!(
+        pick_bp,
+        Some(6),
+        "best_midturn_bp_switch with Castle incoming Pursuit flag must pick bulky Skarmory (6) over OHKO'd Alakazam (5)"
+    );
+
+    // 8. `TableSet` refuses Castle battles (preventing PS seat-symmetric tables from answering Castle preview).
+    let root = conformance::fixture::repo_root();
+    let pool = nc2000_bot::preview::load_meta_pool(&root.join("data/meta-pool-v0/meta-pool.json"));
+    let mut ts = nc2000_bot::TableSet::from_pool(&dex, &pool);
+    let pair_text = std::fs::read_to_string(root.join("fixtures/preview-tables-test/pair-00-01.json")).unwrap();
+    ts.add_pair_json(&pair_text).unwrap();
+    let b_ps_prev = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        &pool.teams[0].sets,
+        &pool.teams[1].sets,
+        Ruleset::PsStadium2,
+    )
+    .unwrap();
+    let b_cs_prev = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        &pool.teams[0].sets,
+        &pool.teams[1].sets,
+        Ruleset::castle_tournament(),
+    )
+    .unwrap();
+    assert!(ts.lookup(&b_ps_prev, 0).is_some(), "PS TableSet must serve matching PS preview");
+    assert!(ts.lookup(&b_cs_prev, 0).is_none(), "PS TableSet must refuse Castle preview lookup");
+    assert!(ts.side_index(&b_cs_prev, 0).is_none(), "PS TableSet must refuse Castle side_index");
+    assert!(
+        ts.set_index_with_ruleset(&dex, &pool.teams[0].sets, Ruleset::castle_tournament()).is_none(),
+        "PS TableSet must refuse Castle set_index_with_ruleset"
+    );
+
+    // 9. SkuctSearch clamps `turn_cap` to Castle `L_TURN=80` and evaluates exact turn-limit judge.
+    let mut b_sk = start_battle(
+        &dex,
+        Ruleset::castle_tournament(),
+        &[make_set("Snorlax", 55, "Leftovers", &["Splash", "Rest"])],
+        &[make_set("Snorlax", 55, "Leftovers", &["Splash"])],
+    );
+    b_sk.turn = 80;
+    let p1s = b_sk.active_id(0).unwrap();
+    let p2s = b_sk.active_id(1).unwrap();
+    b_sk.poke_mut(p1s).hp = b_sk.poke(p1s).maxhp;
+    b_sk.poke_mut(p2s).hp = b_sk.poke(p2s).maxhp / 3;
+    let mut sk = nc2000_bot::smmcts::SkuctSearch::new(
+        &b_sk,
+        &dex,
+        nc2000_bot::RmConfig {
+            iterations: 32,
+            ..nc2000_bot::RmConfig::default()
+        },
+        13,
+    );
+    sk.step(&dex, 32);
+    let legal_sk = b_sk.clone().legal_choices(&dex, 0);
+    let chosen_sk = sk.best(0).expect("SkuctSearch at Castle turn 80 must pick a move");
+    assert!(legal_sk.contains(&chosen_sk), "SkuctSearch at Castle turn 80 must pick a legal move");
+    let best_mean = sk.means(0).into_iter().fold(0.0f64, f64::max);
+    assert!(
+        best_mean > 0.95,
+        "SkuctSearch at Castle turn 80 must observe turn-limit judge win (>0.95), got {best_mean}"
+    );
+    assert!(
+        sk.mean_depth() <= 1.5,
+        "SkuctSearch at Castle turn 80 must clamp turn_cap to L_TURN=80 (depth={})",
+        sk.mean_depth()
+    );
 }

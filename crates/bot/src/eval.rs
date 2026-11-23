@@ -148,7 +148,7 @@ pub(crate) fn ruleset_flail_bp(ruleset: Ruleset, hp: i32, maxhp: i32) -> i32 {
 }
 
 /// Ruleset-aware Gen 2 accuracy threshold out of 256 (exact `-20/256` BrightPowder subtraction;
-/// PS GB integer tables vs Castle exact `3/9..9/3` fractions).
+/// PS GB integer tables vs Castle exact `3/9..9/3` fractions with Foresight `acc < eva` rule).
 #[inline]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn ruleset_accuracy_threshold(
@@ -159,6 +159,7 @@ pub(crate) fn ruleset_accuracy_threshold(
     ignore_accuracy: bool,
     ignore_evasion: bool,
     ignore_positive_evasion: bool,
+    foresight_active: bool,
     brightpowder: bool,
 ) -> u8 {
     if ruleset.is_ps() {
@@ -172,34 +173,15 @@ pub(crate) fn ruleset_accuracy_threshold(
             brightpowder,
         );
     }
-    let mut acc = ((base_pct.min(100) as f64) * 255.0 / 100.0).floor();
-    let a = if ignore_accuracy {
-        0
-    } else {
-        acc_boost.clamp(-6, 6)
-    };
-    let e_raw = eva_boost.clamp(-6, 6);
-    let e = if ignore_evasion || (ignore_positive_evasion && e_raw > 0) {
-        0
-    } else {
-        e_raw
-    };
-    if a > 0 {
-        acc = acc * ((3 + a) as f64) / 3.0;
-    } else if a < 0 {
-        acc = acc * 3.0 / ((3 - a) as f64);
-    }
-    if e > 0 {
-        acc = acc * 3.0 / ((3 + e) as f64);
-    } else if e < 0 {
-        acc = acc * ((3 - e) as f64) / 3.0;
-    }
-    let raw = acc.floor().clamp(1.0, 255.0) as u8;
-    if brightpowder {
-        raw.saturating_sub(20)
-    } else {
-        raw
-    }
+    nc2000_engine::compact::lookup_accuracy_threshold_castle(
+        base_pct,
+        acc_boost,
+        eva_boost,
+        ignore_accuracy,
+        ignore_evasion,
+        foresight_active,
+        brightpowder,
+    )
 }
 
 /// Ruleset-aware hit probability in `[0.0, 1.0]` with exact `-20/256` BrightPowder subtraction.
@@ -214,6 +196,7 @@ pub(crate) fn ruleset_hit_probability(
     ignore_accuracy: bool,
     ignore_evasion: bool,
     ignore_positive_evasion: bool,
+    foresight_active: bool,
     brightpowder: bool,
 ) -> f64 {
     if always_hit {
@@ -227,6 +210,7 @@ pub(crate) fn ruleset_hit_probability(
         ignore_accuracy,
         ignore_evasion,
         ignore_positive_evasion,
+        foresight_active,
         brightpowder,
     );
     if thr == 255 {
@@ -238,11 +222,10 @@ pub(crate) fn ruleset_hit_probability(
 
 /// Ruleset-aware effective stat calculation on `CompactBattle`:
 /// - PS: exact `get_stat_branchless` / `cb.mon_stat` parity.
-/// - Castle: exact integer fractions `int(stat * 2 / (2 - stage))` for negative stages,
-///   Burn/Par never cleared by stat stage changes or Haze, optional `ovfl` `% 1024`.
+/// - Castle: delegates directly to `nc2000_engine::compact::get_stat_castle`.
 #[inline]
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn ruleset_mon_stat(
+pub fn ruleset_mon_stat(
     cb: &CompactBattle,
     table: &MatchTable,
     side: usize,
@@ -287,33 +270,6 @@ pub(crate) fn ruleset_mon_stat(
             item_kind,
         );
     }
-    let eff_boost = if unboosted { 0 } else { boost.clamp(-6, 6) };
-    let stored = spec.stored_stats[stat_i] as i32;
-    let mut val = if eff_boost >= 0 {
-        (stored * (2 + eff_boost as i32)) / 2
-    } else {
-        (stored * 2) / (2 - eff_boost as i32)
-    };
-    if stat_i == 4 && mon.status_raw() == Status::Par as u8 {
-        val /= 4;
-    }
-    if stat_i == 0 && !unmodified && mon.status_raw() == Status::Brn as u8 {
-        val /= 2;
-    }
-    if table.ruleset.overflow_mode() {
-        if val >= 1024 {
-            val %= 1024;
-        }
-        val = val.max(1);
-    } else {
-        val = val.clamp(1, 999);
-    }
-    if !unboosted
-        && ((stat_i == 1 && side_st.reflect_turns > 0)
-            || (stat_i == 3 && side_st.lightscreen_turns > 0))
-    {
-        val *= 2;
-    }
     let ispec = table.item_spec(mon.item);
     let item_kind = if ispec.stat_kind != nc2000_engine::compact::ItemStatKind::None
         && ispec.stat_kind == spec.species_stat_kind
@@ -322,18 +278,19 @@ pub(crate) fn ruleset_mon_stat(
     } else {
         nc2000_engine::compact::ItemStatKind::None
     };
-    match item_kind {
-        nc2000_engine::compact::ItemStatKind::ThickClub if stat_i == 0 => val *= 2,
-        nc2000_engine::compact::ItemStatKind::LightBall if stat_i == 2 => val *= 2,
-        nc2000_engine::compact::ItemStatKind::MetalPowder if stat_i == 1 || stat_i == 3 => {
-            val += val / 2;
-        }
-        _ => {}
-    }
-    if table.ruleset.overflow_mode() && val >= 1024 {
-        val = (val % 1024).max(1);
-    }
-    val.max(1)
+    nc2000_engine::compact::get_stat_castle(
+        spec.stored_stats[stat_i] as i32,
+        boost,
+        stat_i,
+        unboosted,
+        unmodified,
+        mon.status_raw() == Status::Par as u8,
+        mon.status_raw() == Status::Brn as u8,
+        side_st.reflect_turns > 0,
+        side_st.lightscreen_turns > 0,
+        item_kind,
+        table.ruleset.overflow_mode(),
+    )
 }
 
 #[inline]
@@ -635,7 +592,8 @@ pub fn best_hit_fraction(b: &Battle, dex: &Dex, att: PokeId, def: PokeId) -> f64
     let def_hp = d.hp.max(1) as f64;
     let level_factor = (a.level as f64 * 2.0 / 5.0 + 2.0).floor();
     let def_has_ghost = d.has_type(dex.known_types.ghost);
-    let def_foresight = def_has_ghost && dt.fore_cond.is_some_and(|id| d.has_volatile(id));
+    let def_has_foresight = dt.fore_cond.is_some_and(|id| d.has_volatile(id));
+    let def_foresight = def_has_ghost && def_has_foresight;
     let def_has_flying = d.has_type(dex.known_types.flying);
 
     let mut phys_stats: Option<(f64, f64)> = None;
@@ -719,6 +677,7 @@ pub fn best_hit_fraction(b: &Battle, dex: &Dex, att: PokeId, def: PokeId) -> f64
             mspec.ignore_accuracy,
             mspec.ignore_evasion,
             mspec.ignore_positive_evasion,
+            def_has_foresight,
             false,
         );
 
@@ -751,7 +710,13 @@ pub fn best_hit_fraction(b: &Battle, dex: &Dex, att: PokeId, def: PokeId) -> f64
             }
             let mut dmg = (level_factor * base_power as f64 * atk / defense / 50.0).floor();
             if let Some(iid) = a.item {
-                if mt != 0xFF && dt.item_specs[iid.0 as usize].boost_type == mt {
+                let ispec = &dt.item_specs[iid.0 as usize];
+                let boost_type = if b.is_castle() {
+                    ispec.castle_boost_type
+                } else {
+                    ispec.boost_type
+                };
+                if mt != 0xFF && boost_type == mt {
                     dmg += (dmg / 10.0).floor();
                 }
             }
@@ -875,6 +840,7 @@ pub fn expected_hit_fraction(
         }
     }
 
+    let def_has_foresight = dt.fore_cond.is_some_and(|id| d.has_volatile(id));
     let acc = ruleset_hit_probability(
         b.ruleset,
         mspec.base_acc_pct,
@@ -884,6 +850,7 @@ pub fn expected_hit_fraction(
         mspec.ignore_accuracy,
         mspec.ignore_evasion,
         mspec.ignore_positive_evasion,
+        def_has_foresight,
         false,
     );
 
@@ -907,9 +874,13 @@ pub fn expected_hit_fraction(
             / 50.0)
             .floor();
         if let Some(iid) = a.item {
-            if move_type.0 != nc2000_engine::compact::NO_TYPE_ID
-                && dt.item_specs[iid.0 as usize].boost_type == move_type.0
-            {
+            let ispec = &dt.item_specs[iid.0 as usize];
+            let boost_type = if b.is_castle() {
+                ispec.castle_boost_type
+            } else {
+                ispec.boost_type
+            };
+            if move_type.0 != nc2000_engine::compact::NO_TYPE_ID && boost_type == move_type.0 {
                 dmg += (dmg / 10.0).floor();
             }
         }

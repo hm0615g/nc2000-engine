@@ -168,7 +168,11 @@ fn gate_d_fresh_vs_cached_compact_and_batonn_choice_parity() {
     assert_eq!(b.turn, cb_fresh.turn);
     // Relay eligibility matches Battle/CompactBattle state
     assert!(is_relay_eligible(&cb_cached, &t_cached, 0));
-    let _ = relay_surplus_for_side(&cb_cached, &t_cached, &EvalWeights::default(), 0, 0.5);
+    let surp = relay_surplus_for_side(&cb_cached, &t_cached, &EvalWeights::default(), 0, 0.5);
+    assert!(
+        surp.is_finite() && (0.0..=1.0).contains(&surp),
+        "relay_surplus_for_side must be finite and non-negative: {surp}"
+    );
 }
 
 #[test]
@@ -298,11 +302,45 @@ fn gate_d_seat_asymmetry_eot_perish_and_berry_boundaries() {
         b_1v1_p2.poke_mut(id).volatile_mut(perish_cid).unwrap().duration = Some(1);
     }
     let (t_p2, mut cb_p2) = CompactBattle::from_battle(&b_1v1_p2, &dex);
+    let perish_m_p2 = compact_perish_margin(&cb_p2, &t_p2);
+    assert!(
+        perish_m_p2 > 0.0,
+        "linear compact_perish_margin must reflect Castle P2-caster 1v1 Perish forfeit (+margin for P1): {perish_m_p2}"
+    );
     b_1v1_p2.choose(&dex, 0, "move splash").unwrap();
     b_1v1_p2.choose(&dex, 1, "move splash").unwrap();
     cb_p2.step_turn(&t_p2, [0, 0]);
     assert_eq!(b_1v1_p2.outcome(), Some(Outcome::P1Win));
     assert_eq!(cb_p2.outcome, 1);
+
+    // Raw CGI (perish_dbond_lastmon_forfeit = false): 1v1 Perish mutual KO draws (`0.0` margin & Outcome::Tie)!
+    let mut b_1v1_raw = Battle::from_fixture_with_ruleset(
+        &dex,
+        "1,2,3,4",
+        &[fast_mon.clone()],
+        &[slow_mon.clone()],
+        Ruleset::castle_raw_cgi(false),
+    )
+    .unwrap();
+    b_1v1_raw.choose(&dex, 0, "team 1").unwrap();
+    b_1v1_raw.choose(&dex, 1, "team 1").unwrap();
+    let raw_caster = b_1v1_raw.active_id(1);
+    for s in 0..2 {
+        let id = b_1v1_raw.active_id(s).unwrap();
+        b_1v1_raw.add_volatile(&dex, id, "perishsong", raw_caster, nc2000_engine::battle::EffectHandle::None);
+        b_1v1_raw.poke_mut(id).volatile_mut(perish_cid).unwrap().duration = Some(1);
+    }
+    let (t_raw, mut cb_raw) = CompactBattle::from_battle(&b_1v1_raw, &dex);
+    assert_eq!(
+        compact_perish_margin(&cb_raw, &t_raw),
+        0.0,
+        "Castle raw CGI 1v1 Perish mutual KO must have 0.0 margin"
+    );
+    b_1v1_raw.choose(&dex, 0, "move splash").unwrap();
+    b_1v1_raw.choose(&dex, 1, "move splash").unwrap();
+    cb_raw.step_turn(&t_raw, [0, 0]);
+    assert_eq!(b_1v1_raw.outcome(), Some(Outcome::Tie));
+    assert_eq!(cb_raw.outcome, 3);
 
     // 1v1 Sandstorm mutual KO in Castle -> DRAW (Tie / 3) in BOTH Battle and CompactBattle!
     let mut b_sand = Battle::from_fixture_with_ruleset(
@@ -324,7 +362,13 @@ fn gate_d_seat_asymmetry_eot_perish_and_berry_boundaries() {
     cb_sand.step_turn(&t_sand, [0, 0]);
     assert_eq!(b_sand.outcome(), Some(Outcome::Tie));
     assert_eq!(cb_sand.outcome, 3);
-    let _ = compact_linear_diff(&cb1, &t1, 0.0, 0.0, 0.2, 1.0);
+    assert_eq!(
+        compact_perish_margin(&cb1, &t1),
+        0.0,
+        "Castle 2v2 equal Perish must have zero seat bias"
+    );
+    let lin_2v2 = compact_linear_diff(&cb1, &t1, 0.0, 0.0, 0.2, 1.0);
+    assert_eq!(lin_2v2, 0.0, "2v2 equal Perish Castle linear_diff must be 0.0: {lin_2v2}");
 
     // 2. Healing berry strict `< floor(maxhp / 2)` boundary parity across Battle & CompactBattle
     let mut b_berry = Battle::from_fixture_with_ruleset(
@@ -528,4 +572,188 @@ fn gate_d_ditto_hp_mask_dual_claw_observer_belief_preview_validate_replay() {
     assert_eq!(decoded.ruleset, Ruleset::castle_tournament());
     let replayed = decoded.at(&dex, decoded.rounds.len()).unwrap();
     assert_eq!(replayed.state_key128(), rec_b.state_key128());
+}
+
+#[test]
+fn gate_d_seeded_randomized_castle_differential_sweep() {
+    let dex = load_dex();
+    let w = EvalWeights::default();
+    let pool = vec![
+        mk("Snorlax", 55, "Leftovers", &["Body Slam", "Earthquake", "Curse", "Rest"]),
+        mk("Marowak", 55, "Thick Club", &["Earthquake", "Rock Slide", "Swords Dance", "Body Slam"]),
+        mk("Kingdra", 50, "Dragon Scale", &["Surf", "DragonBreath", "Rest", "Sleep Talk"]),
+        mk("Jolteon", 50, "Mint Berry", &["Thunderbolt", "Agility", "Substitute", "Baton Pass"]),
+        mk("Tyranitar", 55, "Quick Claw", &["Pursuit", "Rock Slide", "Earthquake", "Roar"]),
+        mk("Starmie", 50, "Gold Berry", &["Surf", "Psychic", "Recover", "Rapid Spin"]),
+        mk("Gengar", 50, "Bright Powder", &["Thunderbolt", "Ice Punch", "Hypnosis", "Destiny Bond"]),
+        mk("Skarmory", 50, "Leftovers", &["Drill Peck", "Whirlwind", "Rest", "Curse"]),
+        mk("Cloyster", 50, "Leftovers", &["Spikes", "Surf", "Ice Beam", "Explosion"]),
+        mk("Zapdos", 55, "Magnet", &["Thunderbolt", "Drill Peck", "Rest", "Sleep Talk"]),
+        mk("Misdreavus", 50, "Miracle Berry", &["Mean Look", "Perish Song", "Protect", "Thunder"]),
+        mk("Vaporeon", 50, "Leftovers", &["Surf", "Acid Armor", "Baton Pass", "Rest"]),
+        mk("Ditto", 50, "Metal Powder", &["Transform"]),
+        mk("Machamp", 50, "Scope Lens", &["Cross Chop", "Rock Slide", "Foresight", "Rest"]),
+    ];
+
+    let mut rng = nc2000_bot::SplitMix64::new(0xC457_1E20_2611_2301);
+    let mut total_states = 0usize;
+
+    for game_idx in 0..24usize {
+        let ruleset = match game_idx % 4 {
+            0 => Ruleset::castle_tournament(),
+            1 => Ruleset::castle_raw_cgi(false),
+            2 => Ruleset::CastlePbs(CastleOverlayConfig {
+                overflow_mode: true,
+                ..CastleOverlayConfig::tournament()
+            }),
+            _ => Ruleset::castle_free(),
+        };
+        let mut p1 = Vec::with_capacity(3);
+        let mut p2 = Vec::with_capacity(3);
+        let mut used1 = [false; 14];
+        let mut used2 = [false; 14];
+        while p1.len() < 3 {
+            let i = rng.below(pool.len());
+            if !used1[i] {
+                used1[i] = true;
+                let mut s = pool[i].clone();
+                if p1.len() > 0 {
+                    s.level = 50;
+                }
+                p1.push(s);
+            }
+        }
+        while p2.len() < 3 {
+            let i = rng.below(pool.len());
+            if !used2[i] {
+                used2[i] = true;
+                let mut s = pool[i].clone();
+                if p2.len() > 0 {
+                    s.level = 50;
+                }
+                p2.push(s);
+            }
+        }
+
+        let seed_str = format!(
+            "{},{},{},{}",
+            (rng.next() & 0xFFFF) as u16,
+            (rng.next() & 0xFFFF) as u16,
+            (rng.next() & 0xFFFF) as u16,
+            (rng.next() & 0xFFFF) as u16
+        );
+        let mut b = Battle::from_fixture_with_ruleset(&dex, &seed_str, &p1, &p2, ruleset).unwrap();
+        b.set_log_enabled(false);
+        b.choose(&dex, 0, "team 1,2,3").unwrap();
+        b.choose(&dex, 1, "team 1,2,3").unwrap();
+        // Exercise near-L_TURN boundary on every 4th tournament game
+        if game_idx % 4 == 0 && game_idx >= 12 {
+            b.turn = 74;
+        }
+        let rcache = RosterCompactCache::from_battle(&b, &dex);
+
+        for _step in 0..16 {
+            if b.ended || b.outcome().is_some() {
+                break;
+            }
+            total_states += 1;
+
+            let (t_fresh, cb_fresh) = CompactBattle::from_battle(&b, &dex);
+            let (t_cached, cb_cached) =
+                CompactBattle::from_battle_with_roster_cache(&b, &dex, Some(&rcache));
+            assert_eq!(t_fresh.ruleset, ruleset);
+            assert_eq!(t_fresh.match_fingerprint, t_cached.match_fingerprint);
+            assert_eq!(cb_fresh.search_hash(), cb_cached.search_hash());
+            assert_eq!(cb_fresh, cb_cached);
+
+            // Cross-layer eval & judge parity
+            let v_b = eval01(&b, &dex, &w);
+            let v_c = compact_eval01(&cb_fresh, &t_fresh, &w);
+            let v_bs = compact_eval01_blindspot(&cb_fresh, &t_fresh, &w);
+            assert!((v_b - v_c).abs() < 1e-9, "game={game_idx} eval01={v_b} compact={v_c}");
+            assert!(v_bs.is_finite() && (0.0..=1.0).contains(&v_bs));
+            assert!(
+                (castle_judge_value_battle(&b) - compact_castle_judge_value(&cb_fresh, &t_fresh))
+                    .abs()
+                    < 1e-12
+            );
+            assert_eq!(
+                turn_limit_outcome_value(&b),
+                compact_turn_limit_outcome(&cb_fresh, &t_fresh)
+            );
+
+            // Unified Castle stat parity across eval, relay, and compact::get_stat_castle
+            for s in 0..2usize {
+                let slot = cb_fresh.sides[s].active_idx as usize;
+                if (cb_fresh.sides[s].alive_mask & (1 << slot)) != 0 {
+                    let p_idx = s * 3 + slot;
+                    let mon = &cb_fresh.mons[p_idx];
+                    let spec = &t_fresh.mons[p_idx];
+                    let ispec = t_fresh.item_spec(mon.item);
+                    let item_kind = if ispec.stat_kind == spec.species_stat_kind {
+                        ispec.stat_kind
+                    } else {
+                        nc2000_engine::compact::ItemStatKind::None
+                    };
+                    for stat_i in 0..5usize {
+                        let exp = nc2000_engine::compact::get_stat_castle(
+                            spec.stored_stats[stat_i] as i32,
+                            mon.boosts[stat_i],
+                            stat_i,
+                            false,
+                            false,
+                            mon.status_raw() == Status::Par as u8,
+                            mon.status_raw() == Status::Brn as u8,
+                            cb_fresh.sides[s].reflect_turns > 0,
+                            cb_fresh.sides[s].lightscreen_turns > 0,
+                            item_kind,
+                            ruleset.overflow_mode(),
+                        );
+                        assert_eq!(
+                            nc2000_bot::eval::ruleset_mon_stat(
+                                &cb_fresh, &t_fresh, s, slot, stat_i, None, false, false
+                            ),
+                            exp
+                        );
+                        assert_eq!(
+                            nc2000_bot::relay::stat_with_boost(
+                                &cb_fresh,
+                                &t_fresh,
+                                s,
+                                slot,
+                                stat_i,
+                                mon.boosts[stat_i]
+                            ),
+                            exp
+                        );
+                    }
+                }
+            }
+
+            // Legal choice parity & mask sanity
+            let mut choices = [None, None];
+            for s in 0..2usize {
+                assert_eq!(
+                    legal_action_codes_from_battle(&mut b, &dex, s),
+                    compact_legal_vec(&cb_fresh, &t_fresh, s),
+                    "game={game_idx} turn={} side={s} legal mismatch",
+                    b.turn
+                );
+                let leg = b.legal_choices(&dex, s);
+                if !leg.is_empty() {
+                    let dom = dominated_actions(&b, &dex, s);
+                    // Never mask every legal choice unless only self-KO / pure-noop choices remain
+                    for &(c, _) in &dom {
+                        assert!(leg.contains(&c), "masked choice not in legal set");
+                    }
+                    choices[s] = Some(leg[rng.below(leg.len())]);
+                }
+            }
+            if choices == [None, None] {
+                break;
+            }
+            b.apply_choices(&dex, choices).unwrap();
+        }
+    }
+    assert!(total_states >= 100, "sweep must exercise >= 100 Castle states, got {total_states}");
 }

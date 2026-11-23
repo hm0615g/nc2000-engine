@@ -110,15 +110,50 @@ fn is_toxic_residual(ruleset: Ruleset, status_raw: u8, cnt_packed: u8) -> bool {
             || (!ruleset.is_castle() && status_raw == Status::Brn as u8))
 }
 
+/// Castle `L_TURN` terminal adjudication mode when both active mons survive to the turn limit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+enum HorizonJudge {
+    /// True 1v1 (`n0 == n1 == 1`): adjudicate by active HP fraction.
+    HpRatio = 0,
+    /// `n0 > n1`: side `s0` wins unconditionally on survival to `L_TURN` (alive-count judge).
+    Side0AliveWin = 1,
+    /// `n0 < n1`: side `s1` wins unconditionally on survival to `L_TURN` (alive-count judge).
+    Side1AliveWin = 2,
+}
+
 /// Remaining turns including the current turn when Castle has a nearby finite `L_TURN` judge.
+/// Returns `Some((rem, judge))` only when surviving to `L_TURN` has a well-defined outcome:
+/// - `n0 != n1`: alive-count judge (`1.0` if `n0 > n1` else `0.0`).
+/// - `n0 == n1 == 1`: 1v1 HP-ratio judge.
+/// - `n0 == n1 >= 2`: `None` (bench HP ratios are outside the 1v1 Bellman state space).
 #[inline]
-fn finite_turn_horizon(cb: &CompactBattle, table: &MatchTable) -> Option<u16> {
+fn finite_turn_horizon(
+    cb: &CompactBattle,
+    table: &MatchTable,
+    s0: usize,
+    s1: usize,
+) -> Option<(u16, HorizonJudge)> {
     if !table.ruleset.is_castle() {
         return None;
     }
     let lim = table.ruleset.turn_limit()?;
     let rem = lim.saturating_add(1).saturating_sub(cb.turn);
-    (rem <= 12).then_some(rem)
+    if rem > 12 {
+        return None;
+    }
+    let n0 = cb.sides[s0].alive_mask.count_ones();
+    let n1 = cb.sides[s1].alive_mask.count_ones();
+    let judge = if n0 > n1 {
+        HorizonJudge::Side0AliveWin
+    } else if n0 < n1 {
+        HorizonJudge::Side1AliveWin
+    } else if n0 == 1 {
+        HorizonJudge::HpRatio
+    } else {
+        return None;
+    };
+    Some((rem, judge))
 }
 
 #[inline]
@@ -137,11 +172,30 @@ fn speed_ord_u8(
     }
 }
 
+#[inline]
+fn has_after_move_self_slip(m: &nc2000_engine::compact::CompactMon) -> bool {
+    let st = m.status_raw();
+    st == Status::Brn as u8
+        || st == Status::Psn as u8
+        || st == Status::Tox as u8
+        || (m.vol_flags & (vol_bit::LEECH_SEED | vol_bit::CURSE)) != 0
+        || (m.partially_trapped()
+            && m.ext_timers[nc2000_engine::compact::ext_timer_idx::PARTIAL_TRAP_TURNS] > 1)
+        || ((m.vol_flags & vol_bit::NIGHTMARE) != 0
+            && (st == Status::Slp as u8
+                || (m.ext_flags & nc2000_engine::compact::ext_vol_bit::MIRACLE_NIGHTMARE) != 0))
+}
+
 /// Side-`s0` payoff on a 1v1 mutual residual/EOT KO:
 /// - `PsStadium2`: faster side wins (`turn.rs:341`), `0.5` on speed tie.
-/// - `CastlePbs`: Sandstorm mutual KO is `0.5` (Draw, `Probe 2B`); non-Sandstorm
-///   `AfterMoveSelf` mutual KO causes the first mover to faint before the second takes slip
-///   (`0.0` if `s0` faster, `1.0` if `s1` faster, `0.5` on tie).
+/// - `CastlePbs`:
+///   - `AfterMoveSelf` slip damage (Burn/Poison/Toxic/Leech Seed/Curse/PartialTrap/Nightmare)
+///     ticks during the move phase BEFORE EOT Sandstorm:
+///     - If only one side has `AfterMoveSelf` slip, that side faints first (loses).
+///     - If both sides have `AfterMoveSelf` slip, the faster mover ticks and faints first
+///       (`0.0` if `s0` faster, `1.0` if `s1` faster, `0.5` on tie).
+///   - Only when NEITHER side has `AfterMoveSelf` slip and both take Sandstorm does mutual
+///     Sandstorm KO resolve to `0.5` (Draw, `Probe 2B`).
 #[inline]
 fn mutual_eot_payoff(
     cb: &CompactBattle,
@@ -161,6 +215,21 @@ fn mutual_eot_payoff(
     }
     let idx0 = s0 * 3 + slot0;
     let idx1 = s1 * 3 + slot1;
+    let ams0 = has_after_move_self_slip(&cb.mons[idx0]);
+    let ams1 = has_after_move_self_slip(&cb.mons[idx1]);
+    if ams0 && !ams1 {
+        return 0.0;
+    }
+    if !ams0 && ams1 {
+        return 1.0;
+    }
+    if ams0 && ams1 {
+        return match spd_ord {
+            2 => 0.0,
+            0 => 1.0,
+            _ => 0.5,
+        };
+    }
     let sand_active = cb.weather_turns > 0 && cb.weather_kind == CompactWeather::Sandstorm;
     let both_sand = sand_active
         && (table.mons[idx0].type_mask & table.sandstorm_immune_mask) == 0
@@ -502,6 +571,7 @@ impl DmgKernel1D {
             mspec.ignore_accuracy,
             mspec.ignore_evasion,
             mspec.ignore_positive_evasion,
+            def_foresight,
             table.item_spec(def_mon.item).is_brightpowder,
         ) as f32;
         if p_hit <= 0.0 {
@@ -600,8 +670,13 @@ impl DmgKernel1D {
             if is_crit {
                 d *= 2;
             }
+            let item_boost_type = if is_castle {
+                table.item_spec(att_mon.item).castle_boost_type
+            } else {
+                table.item_spec(att_mon.item).boost_type
+            };
             if mspec.move_type != nc2000_engine::compact::NO_TYPE_ID
-                && table.item_spec(att_mon.item).boost_type == mspec.move_type
+                && item_boost_type == mspec.move_type
             {
                 d = d * 110 / 100;
             }
@@ -1551,7 +1626,7 @@ fn eval_exact_root_table(
     slot0: usize,
     s1: usize,
     slot1: usize,
-    horizon: Option<u16>,
+    horizon: Option<(u16, HorizonJudge)>,
 ) -> f64 {
     let idx = [s0 * 3 + slot0, s1 * 3 + slot1];
     let hp = [cb.mons[idx[0]].hp(), cb.mons[idx[1]].hp()];
@@ -1574,7 +1649,7 @@ fn eval_exact_root_table(
         .castle_overlay()
         .map_or(true, |cfg| cfg.recoil_1v1_attacker_wins);
     let gamma = if horizon.is_some() { 1.0f32 } else { GAMMA };
-    let is_final_turn = horizon == Some(1);
+    let final_judge = horizon.and_then(|(rem, judge)| (rem == 1).then_some(judge));
     let spd_ord = speed_ord_u8(cb, table, s0, slot0, s1, slot1);
     let mutual_eot_val = mutual_eot_payoff(cb, table, s0, slot0, s1, slot1, spd_ord);
 
@@ -2081,24 +2156,30 @@ fn eval_exact_root_table(
                 for &(hp_fir_end, f_lo, f_hi, f_w, p_fir) in &fir_end[..fir_len] {
                     let cont = if hp_fir_end <= 0 {
                         win_second
-                    } else if is_final_turn {
-                        let (r0, r1) = if first == 0 {
-                            (
-                                hp_fir_end as f64 / maxhp[0] as f64,
-                                hp_sec_end as f64 / maxhp[1] as f64,
-                            )
-                        } else {
-                            (
-                                hp_sec_end as f64 / maxhp[0] as f64,
-                                hp_fir_end as f64 / maxhp[1] as f64,
-                            )
-                        };
-                        if (r0 - r1).abs() <= 1e-12 {
-                            0.5f32
-                        } else if r0 > r1 {
-                            1.0f32
-                        } else {
-                            0.0f32
+                    } else if let Some(judge) = final_judge {
+                        match judge {
+                            HorizonJudge::Side0AliveWin => 1.0f32,
+                            HorizonJudge::Side1AliveWin => 0.0f32,
+                            HorizonJudge::HpRatio => {
+                                let (r0, r1) = if first == 0 {
+                                    (
+                                        hp_fir_end as f64 / maxhp[0] as f64,
+                                        hp_sec_end as f64 / maxhp[1] as f64,
+                                    )
+                                } else {
+                                    (
+                                        hp_sec_end as f64 / maxhp[0] as f64,
+                                        hp_fir_end as f64 / maxhp[1] as f64,
+                                    )
+                                };
+                                if (r0 - r1).abs() <= 1e-12 {
+                                    0.5f32
+                                } else if r0 > r1 {
+                                    1.0f32
+                                } else {
+                                    0.0f32
+                                }
+                            }
                         }
                     } else {
                         let (b0_lo, b0_hi, w0, b1_lo, b1_hi, w1) = if first == 0 {
@@ -2436,8 +2517,11 @@ fn l1_state_key(
     if ruleset_tag != 0 {
         h.write_u64(ruleset_tag);
         let seat_bit = u64::from(!table.ruleset.is_seat_antisymmetric() && s0 == 0);
-        let hor = finite_turn_horizon(cb, table).unwrap_or(0xFF) as u64;
-        h.write_u64(seat_bit | (hor << 8));
+        let (hor, judge_bits) = match finite_turn_horizon(cb, table, s0, s1) {
+            Some((rem, judge)) => (rem as u64, judge as u64),
+            None => (0xFFu64, 0u64),
+        };
+        h.write_u64(seat_bit | (hor << 8) | (judge_bits << 24));
     }
 
     h.finish()
@@ -2448,7 +2532,7 @@ fn l1_state_key(
 fn l2_operator_key(
     ruleset_tag: u64,
     mutual_eot_val: f32,
-    horizon: Option<u16>,
+    horizon: Option<(u16, HorizonJudge)>,
     max_s0: usize,
     max_s1: usize,
     spd_ord: u8,
@@ -2473,9 +2557,12 @@ fn l2_operator_key(
     h.write_u64(hdr);
     if ruleset_tag != 0 {
         h.write_u64(ruleset_tag);
+        let (hor, judge_bits) = match horizon {
+            Some((rem, judge)) => (rem as u64, judge as u64),
+            None => (0xFFu64, 0u64),
+        };
         h.write_u64(
-            (mutual_eot_val.to_bits() as u64)
-                | ((horizon.unwrap_or(0xFF) as u64) << 32),
+            (mutual_eot_val.to_bits() as u64) | (hor << 32) | (judge_bits << 48),
         );
     }
 
@@ -2794,7 +2881,7 @@ fn solve_bellman_into(
     max_s1: usize,
     spd_ord: u8,
     mutual_eot_val: f32,
-    horizon: Option<u16>,
+    horizon: Option<(u16, HorizonJudge)>,
     ops: &[Side1DOps; 2],
     out: &mut CachedBellman,
 ) {
@@ -2832,18 +2919,25 @@ fn solve_bellman_into(
     let mut heal_mask0 = [0u32; B16 + 1];
     let mut heal_mask1 = [0u32; B16 + 1];
 
-    if let Some(rem) = horizon {
-        // Finite-horizon Castle `L_TURN` backward induction from the 1v1 HP-ratio judge.
+    if let Some((rem, judge)) = horizon {
+        // Finite-horizon Castle `L_TURN` backward induction: alive-count judge when `n0 != n1`,
+        // exact 1v1 HP-ratio judge when `n0 == n1 == 1`.
         for slp0 in 0..=max_s0 {
             for slp1 in 0..=max_s1 {
                 for b0 in 1..=B16 {
                     for b1 in 1..=B16 {
-                        out.v_table[slp0][slp1][b0][b1] = if b0 > b1 {
-                            1.0
-                        } else if b0 < b1 {
-                            0.0
-                        } else {
-                            0.5
+                        out.v_table[slp0][slp1][b0][b1] = match judge {
+                            HorizonJudge::Side0AliveWin => 1.0,
+                            HorizonJudge::Side1AliveWin => 0.0,
+                            HorizonJudge::HpRatio => {
+                                if b0 > b1 {
+                                    1.0
+                                } else if b0 < b1 {
+                                    0.0
+                                } else {
+                                    0.5
+                                }
+                            }
                         };
                     }
                 }
@@ -3076,7 +3170,7 @@ fn with_solved_bellman<R>(
     let (ops, max_s0, max_s1, spd_ord) = Side1DOps::build_pair(cb, table, s0, slot0, s1, slot1);
     let ruleset_tag = table.ruleset.fingerprint_tag();
     let mutual_eot_val = mutual_eot_payoff(cb, table, s0, slot0, s1, slot1, spd_ord);
-    let horizon = finite_turn_horizon(cb, table);
+    let horizon = finite_turn_horizon(cb, table, s0, s1);
     let op_key = l2_operator_key(
         ruleset_tag,
         mutual_eot_val,
@@ -3213,16 +3307,22 @@ pub fn toeplitz_coupled_race(
         return 0.0;
     }
 
-    let horizon = finite_turn_horizon(cb, table);
-    if horizon == Some(0) {
-        let r0 = (hp0 as f64) / (table.mons[idx0].maxhp.max(1) as f64);
-        let r1 = (hp1 as f64) / (table.mons[idx1].maxhp.max(1) as f64);
-        return if (r0 - r1).abs() <= 1e-12 {
-            0.0
-        } else if r0 > r1 {
-            1.0
-        } else {
-            -1.0
+    let horizon = finite_turn_horizon(cb, table, s0, s1);
+    if let Some((0, judge)) = horizon {
+        return match judge {
+            HorizonJudge::Side0AliveWin => 1.0,
+            HorizonJudge::Side1AliveWin => -1.0,
+            HorizonJudge::HpRatio => {
+                let r0 = (hp0 as f64) / (table.mons[idx0].maxhp.max(1) as f64);
+                let r1 = (hp1 as f64) / (table.mons[idx1].maxhp.max(1) as f64);
+                if (r0 - r1).abs() <= 1e-12 {
+                    0.0
+                } else if r0 > r1 {
+                    1.0
+                } else {
+                    -1.0
+                }
+            }
         };
     }
 
@@ -3234,8 +3334,9 @@ pub fn toeplitz_coupled_race(
     }
 
     // Pure stopping-time race from the 1D Toeplitz survival curves S_0(k), S_1(k)
-    let steps = horizon.map_or(6usize, |rem| (rem as usize).min(6));
-    let is_turn_limit_horizon = horizon.is_some_and(|rem| (rem as usize) <= steps);
+    let steps = horizon.map_or(6usize, |(rem, _)| (rem as usize).min(6));
+    let turn_limit_judge =
+        horizon.and_then(|(rem, judge)| ((rem as usize) <= steps).then_some(judge));
     let d0 = survival_curve_detail(cb, table, s1, slot1, s0, slot0, hp0, steps, true);
     let d1 = survival_curve_detail(cb, table, s0, slot0, s1, slot1, hp1, steps, true);
 
@@ -3258,28 +3359,38 @@ pub fn toeplitz_coupled_race(
         let sim_atk = (sim_ko - sim_eot).max(0.0);
         margin += f1 * d0.surv[k] - f0 * d1.surv[k] + sim_atk * spd_sign + sim_eot * eot_sign;
     }
-    if is_turn_limit_horizon {
-        // Castle `L_TURN` judge on surviving mass: exact P(hp_frac0 > hp_frac1) - P(hp_frac1 > hp_frac0).
-        let mut p_win = 0.0f64;
-        let mut p_loss = 0.0f64;
-        for b0 in 1..=B32 {
-            let p0 = d0.dist[b0] as f64;
-            if p0 <= 0.0 {
-                continue;
+    if let Some(judge) = turn_limit_judge {
+        match judge {
+            HorizonJudge::Side0AliveWin => {
+                margin += d0.surv[steps] * d1.surv[steps];
             }
-            for b1 in 1..=B32 {
-                let p1 = d1.dist[b1] as f64;
-                if p1 <= 0.0 {
-                    continue;
+            HorizonJudge::Side1AliveWin => {
+                margin -= d0.surv[steps] * d1.surv[steps];
+            }
+            HorizonJudge::HpRatio => {
+                // Castle `L_TURN` judge on surviving mass: exact P(hp_frac0 > hp_frac1) - P(hp_frac1 > hp_frac0).
+                let mut p_win = 0.0f64;
+                let mut p_loss = 0.0f64;
+                for b0 in 1..=B32 {
+                    let p0 = d0.dist[b0] as f64;
+                    if p0 <= 0.0 {
+                        continue;
+                    }
+                    for b1 in 1..=B32 {
+                        let p1 = d1.dist[b1] as f64;
+                        if p1 <= 0.0 {
+                            continue;
+                        }
+                        if b0 > b1 {
+                            p_win += p0 * p1;
+                        } else if b0 < b1 {
+                            p_loss += p0 * p1;
+                        }
+                    }
                 }
-                if b0 > b1 {
-                    p_win += p0 * p1;
-                } else if b0 < b1 {
-                    p_loss += p0 * p1;
-                }
+                margin += p_win - p_loss;
             }
         }
-        margin += p_win - p_loss;
     } else {
         margin += d0.surv[steps] * d1.surv[steps] * (d0.mean_hp_frac - d1.mean_hp_frac);
     }
@@ -3440,11 +3551,26 @@ pub fn compact_perish_margin(cb: &CompactBattle, table: &MatchTable) -> f64 {
     if let Some(hits) = both_trapped_equal_perish {
         let both_surv = s0[hits] * s1[hits];
         if table.ruleset.is_castle() {
-            // Castle PBS (`Probe 12I`): simultaneous Perish faint order is fixed `1P -> 2P`,
-            // so seat 0 (`1P`) faints first (seat-asymmetric).
+            // Castle PBS (`Probe 12I`): 1v1 simultaneous Perish faint resolves by
+            // `perish_dbond_lastmon_forfeit` (caster forfeits) when enabled, else draw (`0.0`);
+            // non-1v1 simultaneous Perish has no seat bias (`0.0`).
             let n0 = cb.sides[0].alive_mask.count_ones();
             let n1 = cb.sides[1].alive_mask.count_ones();
-            let sign = if n0 == 1 && n1 == 1 { -1.0 } else { -0.25 };
+            let sign = if n0 == 1 && n1 == 1 {
+                let forfeit = table
+                    .ruleset
+                    .castle_overlay()
+                    .is_some_and(|c| c.perish_dbond_lastmon_forfeit);
+                let p1_cast = (cb.turn_extra_flags & (1 << 2)) != 0;
+                let p2_cast = (cb.turn_extra_flags & (1 << 3)) != 0;
+                if forfeit && (p1_cast ^ p2_cast) {
+                    if p1_cast { -1.0 } else { 1.0 }
+                } else {
+                    0.0
+                }
+            } else {
+                0.0
+            };
             margin += both_surv * sign;
         } else {
             // PS Stadium 2 (`turn.rs:341`): faster side faints first in queue and wins 1v1 tie-break.

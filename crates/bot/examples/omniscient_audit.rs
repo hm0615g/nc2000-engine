@@ -85,8 +85,17 @@ struct CompiledRoster6 {
 
 impl CompiledRoster6 {
     fn compile(dex: &Dex, sets: &[PokemonSet]) -> Self {
+        Self::compile_with_ruleset(dex, sets, nc2000_engine::rules::Ruleset::PsStadium2)
+    }
+
+    fn compile_with_ruleset(
+        dex: &Dex,
+        sets: &[PokemonSet],
+        ruleset: nc2000_engine::rules::Ruleset,
+    ) -> Self {
         assert_eq!(sets.len(), 6);
         let legal = legal_triples_sets(sets);
+        let is_castle = ruleset.is_castle();
         let ensure_det_gender = |s: &mut PokemonSet| {
             if s.gender.is_none() {
                 if let Some(sid) = dex.species.id(&s.species) {
@@ -94,6 +103,26 @@ impl CompiledRoster6 {
                     s.gender = Some(match sp.gender.as_deref() {
                         Some("N") => "N".to_string(),
                         Some("F") => "F".to_string(),
+                        Some("M") => "M".to_string(),
+                        _ if is_castle => {
+                            let atk_iv = s
+                                .ivs
+                                .as_ref()
+                                .and_then(|m| m.get("atk").copied())
+                                .unwrap_or(30) as i32;
+                            let f_ratio = sp
+                                .extra
+                                .get("genderRatio")
+                                .and_then(|gr| gr.get("F"))
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.5);
+                            let threshold = (f_ratio * 16.0).round() as i32;
+                            if (atk_iv / 2) < threshold {
+                                "F".to_string()
+                            } else {
+                                "M".to_string()
+                            }
+                        }
                         _ => "M".to_string(),
                     });
                 }
@@ -114,7 +143,7 @@ impl CompiledRoster6 {
             let i1 = 2 * k + 1;
             let s0 = [clean_sets[i0].clone(), dummy50.clone(), dummy50.clone()];
             let s1 = [clean_sets[i1].clone(), dummy50.clone(), dummy50.clone()];
-            let mut b = Battle::from_fixture(dex, "1,2,3,4", &s0, &s1).unwrap();
+            let mut b = Battle::from_fixture_with_ruleset(dex, "1,2,3,4", &s0, &s1, ruleset).unwrap();
             b.set_log_enabled(false);
             b.apply_choices(
                 dex,
@@ -178,6 +207,12 @@ fn assemble_3v3_compact(
     for m in &static_mons {
         fp = fp
             .wrapping_add(m.static_fp)
+            .wrapping_mul(0xf1357aea2e62a9c5);
+    }
+    let rs_tag = r_a.base_table.ruleset.fingerprint_tag();
+    if rs_tag != 0 {
+        fp = fp
+            .wrapping_add(rs_tag)
             .wrapping_mul(0xf1357aea2e62a9c5);
     }
     let table = MatchTable {
@@ -330,9 +365,16 @@ fn eval_full_preview_matrix_compact(
 
 // Corrected experiments initialize every selected lineup through the engine;
 // copied compact templates can carry entry effects on unseen bench members.
+// On Castle PBS (seat-asymmetric 1P vs 2P), seat-averages `(v_ab + 1 - v_ba) / 2`.
 fn native_preview_matrix(dex:&Dex,a:&CompiledRoster6,b:&CompiledRoster6,ns:u32,turns:u16,seed:u64)->Vec<f64> {
+    let ruleset = a.base_table.ruleset;
     let mut matrix=vec![0.;a.legal.len()*b.legal.len()];
-    let template=Battle::from_fixture(dex,"1,2,3,4",&a.sets,&b.sets).unwrap();
+    let template=Battle::from_fixture_with_ruleset(dex,"1,2,3,4",&a.sets,&b.sets,ruleset).unwrap();
+    let template_ba = if ruleset.is_castle() {
+        Some(Battle::from_fixture_with_ruleset(dex,"1,2,3,4",&b.sets,&a.sets,ruleset).unwrap())
+    } else {
+        None
+    };
     for (ia,ta) in a.legal.iter().enumerate() {for (ib,tb) in b.legal.iter().enumerate() {
         let mut value=0.;for k in 0..ns {
             let mut root=template.clone();root.set_log_enabled(false);
@@ -340,8 +382,20 @@ fn native_preview_matrix(dex:&Dex,a:&CompiledRoster6,b:&CompiledRoster6,ns:u32,t
             root.reseed(pair_seed);
             root.apply_choices(dex,[Some(SearchChoice::Team(ta.map(|i|i as u8+1))),Some(SearchChoice::Team(tb.map(|i|i as u8+1)))]).unwrap();
             let (table,mut state)=nc2000_engine::compact::CompactBattle::from_battle(&root,dex);
-            value+=nc2000_bot::mcts::compact_playout_value(&mut state,&table,&nc2000_bot::Playout::heavy(),turns,
+            let v_ab = nc2000_bot::mcts::compact_playout_value(&mut state,&table,&nc2000_bot::Playout::heavy(),turns,
                 &mut SplitMix64::new(pair_seed ^ 0xA5A55A5AF0F00F0F),nc2000_bot::mcts::RolloutRules::default());
+            if let Some(ref tmpl_ba) = template_ba {
+                let mut root_ba = tmpl_ba.clone();
+                root_ba.set_log_enabled(false);
+                root_ba.reseed(pair_seed);
+                root_ba.apply_choices(dex,[Some(SearchChoice::Team(tb.map(|i|i as u8+1))),Some(SearchChoice::Team(ta.map(|i|i as u8+1)))]).unwrap();
+                let (tab_ba, mut st_ba) = nc2000_engine::compact::CompactBattle::from_battle(&root_ba, dex);
+                let v_ba = 1.0 - nc2000_bot::mcts::compact_playout_value(&mut st_ba,&tab_ba,&nc2000_bot::Playout::heavy(),turns,
+                    &mut SplitMix64::new(pair_seed ^ 0x5A5AA5A50F0FF0F0),nc2000_bot::mcts::RolloutRules::default());
+                value += 0.5 * (v_ab + v_ba);
+            } else {
+                value += v_ab;
+            }
         }matrix[ia*b.legal.len()+ib]=value/ns as f64;
     }}matrix
 }
@@ -873,7 +927,13 @@ fn play_omniscient_duel_game(
                 for line in frame.lines {agent.push_line(dex,&line);}
                 assert!(agent.on_request(dex,&frame.request.to_string()).unwrap());
                 let input=if matches!(battle.request_state,RequestState::TeamPreview) {
-                    let key=nc2000_bot::compiled_preview::key(agent.battle().unwrap(),side_blue).unwrap();
+                    let b_obs = agent.battle().unwrap();
+                    let key = if b_obs.is_castle() {
+                        let flags: Vec<bool> = agent.observer().unwrap().mons().iter().map(|m| m.preview_has_item).collect();
+                        nc2000_bot::compiled_preview::castle_key_from_flags(b_obs, side_blue, &flags).unwrap()
+                    } else {
+                        nc2000_bot::compiled_preview::key(b_obs, side_blue).unwrap()
+                    };
                     let choices=compiled["policies"][key].as_array().unwrap();
                     choices[blue_seed as u32 as usize % choices.len()].as_str().unwrap().to_string()
                 } else {agent.step(dex,base_iters).unwrap();agent.best(dex).unwrap()};
@@ -1546,8 +1606,9 @@ fn main() {
         s.parse::<u16>().expect("override turn"), find_flag("--blue-override-action").expect("override action")));
     assert!(blue_override.is_none() || trace_dir.is_some(), "interventions require --trace-dir");
     let corrected=args.iter().any(|a|a=="--corrected-product");
+    let ruleset = nc2000_engine::rules::Ruleset::PsStadium2;
     let compiled:Value=serde_json::from_slice(&std::fs::read(root.join("data/compiled-preview-v1.json")).unwrap()).unwrap();
-    if corrected {assert_eq!(compiled["build"],nc2000_bot::compiled_preview::build_fingerprint(),"stale corrected preview artifact");}
+    if corrected {assert_eq!(compiled["build"],nc2000_bot::compiled_preview::policy_epoch_for(ruleset),"stale corrected preview artifact");}
     let base_iters: u32 = find_flag("--iters")
         .and_then(|v| v.parse().ok())
         .unwrap_or(400);
@@ -2386,7 +2447,7 @@ fn main() {
     }
     let report = json!({
         "corrected_product":corrected,"seed":seed,"max_turns":max_turns,"k_oracle":k_oracle,"same_budget":same_budget,
-        "build":nc2000_bot::compiled_preview::build_fingerprint(),
+        "build":nc2000_bot::compiled_preview::policy_epoch_for(ruleset),
         "blue_preview":"regenerated compiled choices[u32(seed)%64] when corrected_product=true",
         "blue_api":"ProtocolAgent with trusted PlayerChannel when corrected_product=true",
         "matchup_sampling":if corrected {"independent weighted draws per mirrored block"}else{"historical complementary QMC"},
@@ -2453,7 +2514,19 @@ fn choose_production_action(
             bel.candidate_count(),
             expected_preview_cands
         );
-        let key = nc2000_bot::compiled_preview::key(agent.battle().unwrap(), side).unwrap();
+        let b_obs = agent.battle().unwrap();
+        let key = if b_obs.is_castle() {
+            let flags: Vec<bool> = agent
+                .observer()
+                .unwrap()
+                .mons()
+                .iter()
+                .map(|m| m.preview_has_item)
+                .collect();
+            nc2000_bot::compiled_preview::castle_key_from_flags(b_obs, side, &flags).unwrap()
+        } else {
+            nc2000_bot::compiled_preview::key(b_obs, side).unwrap()
+        };
         if allow_table
             && compiled["policies"]
                 .get(&key)
@@ -3168,7 +3241,7 @@ fn run_production_challenger_duels(
     }
     let report = json!({
         "mode": "production_challenger_duels",
-        "build": nc2000_bot::compiled_preview::build_fingerprint(),
+        "build": nc2000_bot::compiled_preview::policy_epoch_for(nc2000_engine::rules::Ruleset::PsStadium2),
         "seed": seed,
         "base_iters": base_iters,
         "preview_iters": preview_iters,
@@ -3477,9 +3550,20 @@ fn play_fallback_eval_game(
                 }
             }
             let input = if is_preview {
-                let key =
-                    nc2000_bot::compiled_preview::key(blue_agent.battle().unwrap(), side_blue)
-                        .unwrap();
+                let b_obs = blue_agent.battle().unwrap();
+                let key = if b_obs.is_castle() {
+                    let flags: Vec<bool> = blue_agent
+                        .observer()
+                        .unwrap()
+                        .mons()
+                        .iter()
+                        .map(|m| m.preview_has_item)
+                        .collect();
+                    nc2000_bot::compiled_preview::castle_key_from_flags(b_obs, side_blue, &flags)
+                        .unwrap()
+                } else {
+                    nc2000_bot::compiled_preview::key(b_obs, side_blue).unwrap()
+                };
                 if blue_allow_table
                     && compiled["policies"]
                         .get(&key)
@@ -3844,7 +3928,7 @@ fn run_fallback_non_degradation(
     }
     let report = json!({
         "mode": "fallback_non_degradation_audit",
-        "build": nc2000_bot::compiled_preview::build_fingerprint(),
+        "build": nc2000_bot::compiled_preview::policy_epoch_for(nc2000_engine::rules::Ruleset::PsStadium2),
         "seed": seed,
         "base_iters": base_iters,
         "preview_iters": preview_iters,

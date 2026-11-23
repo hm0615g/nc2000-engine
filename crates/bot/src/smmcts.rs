@@ -649,6 +649,17 @@ pub(crate) fn run_iteration_with_root_child_value_cached(
             crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, Some(o)));
             break outcome_reward(o);
         }
+        if let Some(v) = crate::eval::turn_limit_outcome_value(sim) {
+            let inferred = if (v - 1.0).abs() < 1e-9 {
+                Some(nc2000_engine::battle::Outcome::P1Win)
+            } else if v.abs() < 1e-9 {
+                Some(nc2000_engine::battle::Outcome::P2Win)
+            } else {
+                Some(nc2000_engine::battle::Outcome::Tie)
+            };
+            crate::mcts::set_last_sim_end(crate::mcts::SimEndInfo::from_battle(sim, inferred));
+            break v;
+        }
         if at_root {
             if let Some(value) = root_child_value
                 .as_deref_mut()
@@ -868,7 +879,11 @@ impl SkuctSearch {
         let mut root = battle.clone();
         root.set_log_enabled(false);
         let cache = build_search_cache(&cfg, dex, &root);
-        let turn_cap = root.turn.saturating_add(cfg.horizon);
+        let raw_cap = root.turn.saturating_add(cfg.horizon);
+        let turn_cap = root
+            .ruleset
+            .turn_limit()
+            .map_or(raw_cap, |lim| raw_cap.min(lim));
         let nodes = vec![Node::at(&mut root, dex)];
         let mut table = FxHashMap::default();
         table.insert(key_of_cached(&cfg, dex, &mut root, Some(&cache)), 0usize);

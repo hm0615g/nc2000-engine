@@ -374,24 +374,40 @@ pub struct TableSet {
     sig_to_idx: HashMap<TeamSig, usize>,
     tables: HashMap<(usize, usize), PairTable>,
     actions: Vec<[u8; 3]>,
+    ruleset: Ruleset,
 }
 
 impl TableSet {
     /// Signature index over the pool with no tables yet — the
     /// filesystem-free construction path (M9 wasm: JS fetches pair JSONs and
-    /// feeds them through `add_pair_json`).
+    /// feeds them through `add_pair_json`). Defaults to `Ruleset::PsStadium2`.
     pub fn from_pool(dex: &Dex, pool: &MetaPool) -> TableSet {
+        Self::from_pool_with_ruleset(dex, pool, Ruleset::PsStadium2)
+    }
+
+    pub fn from_pool_with_ruleset(dex: &Dex, pool: &MetaPool, ruleset: Ruleset) -> TableSet {
         let mut sig_to_idx = HashMap::new();
         let mut ids = Vec::new();
         let mut levels = Vec::new();
         for (i, t) in pool.teams.iter().enumerate() {
             ids.push(t.id.clone());
             levels.push(t.sets.iter().map(|s| s.level).collect());
-            if sig_to_idx.insert(team_sig(dex, &t.sets), i).is_some() {
+            if sig_to_idx.insert(team_sig_with_ruleset(dex, &t.sets, ruleset), i).is_some() {
                 eprintln!("warning: duplicate team signature in pool at {}", t.id);
             }
         }
-        TableSet { ids, levels, sig_to_idx, tables: HashMap::new(), actions: preview_actions() }
+        TableSet {
+            ids,
+            levels,
+            sig_to_idx,
+            tables: HashMap::new(),
+            actions: preview_actions(),
+            ruleset,
+        }
+    }
+
+    pub fn ruleset(&self) -> Ruleset {
+        self.ruleset
     }
 
     /// Register one baked pair table. Errors when the table references team
@@ -472,20 +488,27 @@ impl TableSet {
     /// A blind agent must resolve its own side with `side_index` and the
     /// opponent through its belief, then call `pair_by_idx` (M10b).
     pub fn lookup(&self, battle: &Battle, side: usize) -> Option<(&PairTable, bool)> {
+        if battle.ruleset != self.ruleset || battle.is_castle() {
+            return None;
+        }
         let me = self.side_index(battle, side)?;
         let opp = self.side_index(battle, 1 - side)?;
         self.pair_by_idx(me, opp)
     }
 
     /// Pool index of one side's roster by full-set signature. Legitimate
-    /// public knowledge only for the caller's OWN side.
+    /// public knowledge only for the caller's OWN side. Refuses Castle battles
+    /// (seat-symmetric `PairTable`s must not answer Castle team preview).
     pub fn side_index(&self, battle: &Battle, side: usize) -> Option<usize> {
+        if battle.ruleset != self.ruleset || battle.is_castle() {
+            return None;
+        }
         self.sig_to_idx.get(&roster_sig(battle, side)).copied()
     }
 
     /// Pool index of a team of `PokemonSet`s by full-set signature.
     pub fn set_index(&self, dex: &Dex, sets: &[PokemonSet]) -> Option<usize> {
-        self.set_index_with_ruleset(dex, sets, Ruleset::PsStadium2)
+        self.set_index_with_ruleset(dex, sets, self.ruleset)
     }
 
     pub fn set_index_with_ruleset(
@@ -494,6 +517,9 @@ impl TableSet {
         sets: &[PokemonSet],
         ruleset: Ruleset,
     ) -> Option<usize> {
+        if ruleset != self.ruleset || ruleset.is_castle() {
+            return None;
+        }
         let b = Battle::from_fixture_with_ruleset(dex, "1,2,3,4", sets, sets, ruleset).ok()?;
         self.sig_to_idx.get(&roster_sig(&b, 0)).copied()
     }

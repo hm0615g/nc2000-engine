@@ -10094,8 +10094,17 @@ struct CompiledRoster6 {
 
 impl CompiledRoster6 {
     fn compile(dex: &Dex, sets: &[PokemonSet]) -> Self {
+        Self::compile_with_ruleset(dex, sets, nc2000_engine::rules::Ruleset::PsStadium2)
+    }
+
+    fn compile_with_ruleset(
+        dex: &Dex,
+        sets: &[PokemonSet],
+        ruleset: nc2000_engine::rules::Ruleset,
+    ) -> Self {
         assert_eq!(sets.len(), 6, "CompiledRoster6 requires a 6-Pokemon team");
         let legal = legal_triples_sets(sets);
+        let is_castle = ruleset.is_castle();
         let ensure_det_gender = |s: &mut PokemonSet| {
             if s.gender.is_none() {
                 if let Some(sid) = dex.species.id(&s.species) {
@@ -10103,6 +10112,26 @@ impl CompiledRoster6 {
                     s.gender = Some(match sp.gender.as_deref() {
                         Some("N") => "N".to_string(),
                         Some("F") => "F".to_string(),
+                        Some("M") => "M".to_string(),
+                        _ if is_castle => {
+                            let atk_iv = s
+                                .ivs
+                                .as_ref()
+                                .and_then(|m| m.get("atk").copied())
+                                .unwrap_or(30) as i32;
+                            let f_ratio = sp
+                                .extra
+                                .get("genderRatio")
+                                .and_then(|gr| gr.get("F"))
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.5);
+                            let threshold = (f_ratio * 16.0).round() as i32;
+                            if (atk_iv / 2) < threshold {
+                                "F".to_string()
+                            } else {
+                                "M".to_string()
+                            }
+                        }
                         _ => "M".to_string(),
                     });
                 }
@@ -10123,8 +10152,10 @@ impl CompiledRoster6 {
             let i1 = 2 * k + 1;
             let s0 = [clean_sets[i0].clone(), dummy50.clone(), dummy50.clone()];
             let s1 = [clean_sets[i1].clone(), dummy50.clone(), dummy50.clone()];
-            let mut b = nc2000_engine::state::Battle::from_fixture(dex, "1,2,3,4", &s0, &s1)
-                .expect("valid 3v3 fixture");
+            let mut b = nc2000_engine::state::Battle::from_fixture_with_ruleset(
+                dex, "1,2,3,4", &s0, &s1, ruleset,
+            )
+            .expect("valid 3v3 fixture");
             b.set_log_enabled(false);
             b.apply_choices(
                 dex,
@@ -10188,6 +10219,12 @@ fn assemble_3v3_compact(
     for m in &static_mons {
         fp = fp
             .wrapping_add(m.static_fp)
+            .wrapping_mul(0xf1357aea2e62a9c5);
+    }
+    let rs_tag = r_a.base_table.ruleset.fingerprint_tag();
+    if rs_tag != 0 {
+        fp = fp
+            .wrapping_add(rs_tag)
             .wrapping_mul(0xf1357aea2e62a9c5);
     }
     let table = MatchTable {
@@ -17545,17 +17582,20 @@ fn cmd_bake_catalog_preview(args: &[String]) {
     );
 
     // Also update data/compiled-preview-v1.json directly using nc2000_bot::compiled_preview::key(&b, 0)
+    let comp_ruleset = nc2000_engine::rules::Ruleset::PsStadium2;
+    let comp_epoch = nc2000_bot::compiled_preview::policy_epoch_for(comp_ruleset);
     let comp_path = root.join("data/compiled-preview-v1.json");
     let comp_txt = std::fs::read_to_string(&comp_path).expect("read data/compiled-preview-v1.json");
     let mut comp_v: Value = serde_json::from_str(&comp_txt).unwrap();
     let mut new_comp_policies = serde_json::Map::new();
     for i in 0..n_teams {
         for j in 0..n_teams {
-            let b = nc2000_engine::state::Battle::from_fixture(
+            let b = nc2000_engine::state::Battle::from_fixture_with_ruleset(
                 &dex,
                 "1,2,3,4",
                 &entries[i].raw_sets,
                 &entries[j].raw_sets,
+                comp_ruleset,
             )
             .unwrap();
             let key = nc2000_bot::compiled_preview::key(&b, 0).unwrap();
@@ -17569,6 +17609,8 @@ fn cmd_bake_catalog_preview(args: &[String]) {
         }
     }
     assert_eq!(new_comp_policies.len(), 990);
+    comp_v["policyEpoch"] = json!(comp_epoch);
+    comp_v["build"] = json!(comp_epoch);
     comp_v["policies"] = Value::Object(new_comp_policies);
     comp_v["matchups"] = json!(990);
     comp_v["method"] = out_matrix["method"].clone();

@@ -460,7 +460,7 @@ pub fn compact_playout_value(
 /// Apply compact rollout actions while honoring directed Baton Pass receiver codes
 /// (`((recv_slot + 1) << 4) | move_slot`) without touching `crates/engine`.
 #[inline]
-fn apply_compact_actions_with_bp_target(
+pub fn apply_compact_actions_with_bp_target(
     cb: &mut nc2000_engine::compact::CompactBattle,
     table: &nc2000_engine::compact::MatchTable,
     picks: [u8; 2],
@@ -473,6 +473,10 @@ fn apply_compact_actions_with_bp_target(
         if picks[0] >= 16 { picks[0] & 3 } else { picks[0] },
         if picks[1] >= 16 { picks[1] & 3 } else { picks[1] },
     ];
+    if table.ruleset.turn_limit().is_some_and(|lim| cb.turn >= lim) {
+        cb.apply_actions(table, raw_picks);
+        return;
+    }
     let backup = *cb;
     let mut masked_bits = [0u8; 2];
     for s in 0..2usize {
@@ -493,13 +497,17 @@ fn apply_compact_actions_with_bp_target(
         }
     }
     cb.apply_actions(table, raw_picks);
-    // Restore hidden alive bench bits; if a directed receiver fainted mid-turn while a 3rd mon
-    // was masked (avoiding single-bench auto-switch), replay cleanly with unmasked alive_mask.
+    // Restore hidden alive bench bits; if the battle terminated (e.g. turn-limit judge) or
+    // a directed receiver/passer fainted mid-turn while a 3rd mon was masked (avoiding
+    // single-bench auto-switch), replay cleanly with unmasked alive_mask.
     let mut need_fallback = false;
     for s in 0..2usize {
         if masked_bits[s] != 0 {
             let recv_slot = ((picks[s] >> 4).wrapping_sub(1)).min(2) as usize;
-            if cb.mons[s * 3 + recv_slot].hp() <= 0 || cb.mons[s * 3 + backup.sides[s].active_idx as usize].hp() <= 0 {
+            if cb.outcome != 0
+                || cb.mons[s * 3 + recv_slot].hp() <= 0
+                || cb.mons[s * 3 + backup.sides[s].active_idx as usize].hp() <= 0
+            {
                 need_fallback = true;
             } else {
                 cb.sides[s].alive_mask |= masked_bits[s];

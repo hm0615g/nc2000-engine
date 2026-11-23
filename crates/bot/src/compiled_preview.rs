@@ -63,6 +63,16 @@ pub fn castle_key(
     Some(serde_json::json!([meta, own, foe]).to_string())
 }
 
+/// Convenience helper for blind Castle callers passing observed public `preview_has_item` flags
+/// rather than reading opponent held items from a full-info `Battle`.
+pub fn castle_key_from_flags(
+    battle: &Battle,
+    side: usize,
+    foe_has_item: &[bool],
+) -> Option<String> {
+    castle_key(battle, side, Some(foe_has_item))
+}
+
 /// Bump manually ONLY when PS team-preview / search policy intentionally changes.
 pub const POLICY_EPOCH: &str = "policy-v1";
 
