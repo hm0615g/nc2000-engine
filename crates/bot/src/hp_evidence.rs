@@ -232,6 +232,7 @@ mod tests {
                             excluded_items: 0,
                             item: ItemObs::default(),
                             appeared: true,
+                            observed_maxhp: None,
                         };
                         let corrected = project(&dex, p, &obs, &mut SplitMix64::new(1))
                             .unwrap_or_else(|| p.clone());
@@ -283,6 +284,7 @@ mod tests {
             excluded_items: 0,
             item: ItemObs::default(),
             appeared: true,
+            observed_maxhp: None,
         };
         for mask in [u16::MAX, 1 << 15] {
             obs.hp_type_mask = mask;

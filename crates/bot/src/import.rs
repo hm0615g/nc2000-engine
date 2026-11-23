@@ -43,6 +43,7 @@ use nc2000_engine::battle::{
     EffectHandle, PokemonSet, SearchChoice,
 };
 use nc2000_engine::dex::{toid, Category, Dex, FixedDamage, MoveId, SpeciesId};
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::{
     Action, ActionKind, Battle, Gender, MoveSlot, MoveSlots, PokeId, PokeName, RequestState,
     Status, SwitchFlag, DK,
@@ -267,6 +268,7 @@ struct TrackSide {
 pub struct ProtocolTracker {
     /// Our side (0 = p1).
     side: usize,
+    ruleset: Ruleset,
     sides: [TrackSide; 2],
     /// (weather key, upkeeps seen since set).
     weather: Option<(String, u16)>,
@@ -275,6 +277,10 @@ pub struct ProtocolTracker {
     /// Transient current move `((side, slot), move_id, crit)` while resolving
     /// a `|move|` block (used to estimate Substitute `[damage]`).
     cur_move: Option<((usize, usize), MoveId, bool)>,
+    /// True if a mon fainted during switch-in (Spikes / switch-in poison or burn)
+    /// before any move resolved this turn — Castle PBS cuts both remaining actions
+    /// and EOT residuals on such a Turn-Cut.
+    switch_faint_this_turn: bool,
 }
 
 /// Locking (thrash-class) move keys: `lockedmove` continuation turns emit
@@ -289,14 +295,28 @@ impl ProtocolTracker {
             .map(|m| if m.fainted { (0, m.hp_den) } else { (m.pixels, m.hp_den) }).collect());
     }
     pub fn new(side: usize) -> ProtocolTracker {
+        Self::new_with_ruleset(side, Ruleset::PsStadium2)
+    }
+
+    pub fn new_with_ruleset(side: usize, ruleset: Ruleset) -> ProtocolTracker {
         ProtocolTracker {
             side,
+            ruleset,
             sides: [TrackSide::default(), TrackSide::default()],
             weather: None,
             turn: 0,
             upkeep_this_turn: false,
             cur_move: None,
+            switch_faint_this_turn: false,
         }
+    }
+
+    pub fn ruleset(&self) -> Ruleset {
+        self.ruleset
+    }
+
+    pub fn set_ruleset(&mut self, ruleset: Ruleset) {
+        self.ruleset = ruleset;
     }
 
     pub fn turn(&self) -> u16 {
@@ -335,20 +355,33 @@ impl ProtocolTracker {
 
     /// Opponent preview facts as M10a `MonObs` (feeds `Observer::from_mons`).
     pub(crate) fn observer_mons(&self) -> Vec<MonObs> {
+        let is_castle = self.ruleset.is_castle();
         self.sides[1 - self.side]
             .mons
             .iter()
-            .map(|m| MonObs {
-                species: m.species,
-                level: m.level,
-                gender: m.gender,
-                name: m.name.clone(),
-                preview_has_item: m.preview_item,
-                revealed_moves: Vec::new(),
-                hp_type_mask: u16::MAX,
-                item: Default::default(),
-                excluded_items: 0,
-                appeared: m.appeared,
+            .map(|m| {
+                let observed_maxhp = if m.appeared
+                    && !m.fainted
+                    && m.hp_den > 0
+                    && (is_castle || (m.hp_den != HP_DEN_PERCENT && m.hp_den != HP_DEN_PIXELS))
+                {
+                    Some(m.hp_den)
+                } else {
+                    None
+                };
+                MonObs {
+                    species: m.species,
+                    level: m.level,
+                    gender: m.gender,
+                    name: m.name.clone(),
+                    preview_has_item: m.preview_item,
+                    revealed_moves: Vec::new(),
+                    hp_type_mask: u16::MAX,
+                    item: Default::default(),
+                    excluded_items: 0,
+                    appeared: m.appeared,
+                    observed_maxhp,
+                }
             })
             .collect()
     }
@@ -517,6 +550,7 @@ impl ProtocolTracker {
                 self.turn = arg(1).parse().unwrap_or(self.turn + 1);
                 self.upkeep_this_turn = false;
                 self.cur_move = None;
+                self.switch_faint_this_turn = false;
                 for s in self.sides.iter_mut() {
                     s.acted_this_turn = false;
                     s.pending_bp = false;
@@ -556,6 +590,9 @@ impl ProtocolTracker {
                 self.on_switch(dex, &parts, cmd == "drag");
             }
             "faint" => {
+                if self.cur_move.is_none() && !self.upkeep_this_turn {
+                    self.switch_faint_this_turn = true;
+                }
                 if let Some((s, m)) = self.subject(arg(1)) {
                     let side = &mut self.sides[s];
                     side.fainted_this_turn = Some(m);
@@ -640,9 +677,13 @@ impl ProtocolTracker {
                 if let Some(s) =
                     self.subject(arg(1)).map(|(s, _)| s).or_else(|| Self::side_subject(arg(1)))
                 {
+                    let reset_tox = self.ruleset.is_castle();
                     for mon in self.sides[s].mons.iter_mut() {
                         if !mon.fainted {
                             cure(mon);
+                            if reset_tox {
+                                mon.comp_res = None;
+                            }
                         }
                     }
                 }
@@ -652,16 +693,19 @@ impl ProtocolTracker {
                     if let Some(i) = boost_index(arg(2)) {
                         let d: i8 = arg(3).parse().unwrap_or(0);
                         let d = if cmd == "-unboost" { -d } else { d };
+                        let keep_status_drops = self.ruleset.is_castle();
                         let mon = &mut self.sides[s].mons[m];
                         let b = &mut mon.boosts[i];
                         *b = (*b + d).clamp(-6, 6);
-                        // any spe change while par (atk while brn) publicly
-                        // removes the Stadium stat-drop companion volatile
-                        if d != 0 && i == 4 && mon.status == Status::Par {
-                            mon.comp_par = false;
-                        }
-                        if d != 0 && i == 0 && mon.status == Status::Brn {
-                            mon.comp_brn = false;
+                        // On PS, any spe change while par (atk while brn) publicly
+                        // removes the Stadium stat-drop companion volatile; Castle retains them.
+                        if !keep_status_drops {
+                            if d != 0 && i == 4 && mon.status == Status::Par {
+                                mon.comp_par = false;
+                            }
+                            if d != 0 && i == 0 && mon.status == Status::Brn {
+                                mon.comp_brn = false;
+                            }
                         }
                     }
                 }
@@ -675,12 +719,15 @@ impl ProtocolTracker {
                 }
             }
             "-clearallboost" => {
-                // Haze: boosts cleared AND the par/brn drop volatiles removed
+                // Haze: boosts cleared (and on PS, the par/brn drop volatiles removed)
+                let keep_status_drops = self.ruleset.is_castle();
                 for s in self.sides.iter_mut() {
                     if let Some(a) = s.active {
                         s.mons[a].boosts = [0; 7];
-                        s.mons[a].comp_par = false;
-                        s.mons[a].comp_brn = false;
+                        if !keep_status_drops {
+                            s.mons[a].comp_par = false;
+                            s.mons[a].comp_brn = false;
+                        }
                     }
                 }
             }
@@ -857,11 +904,13 @@ impl ProtocolTracker {
                 let om = &mut self.sides[side].mons[old];
                 om.active = false;
                 if bp {
+                    let castle_bp = self.ruleset.is_castle();
                     let vols: Vec<TVol> = om
                         .vols
                         .iter()
                         .filter(|v| {
-                            dex.conds_id(&v.key).map_or(false, |c| !dex.cond(c).no_copy)
+                            (castle_bp && matches!(v.key.as_str(), "defensecurl" | "minimize"))
+                                || dex.conds_id(&v.key).map_or(false, |c| !dex.cond(c).no_copy)
                         })
                         .cloned()
                         .collect();
@@ -1205,6 +1254,7 @@ impl ProtocolTracker {
         // floor of maxpp-consistency is exact up to the cap)
         if what == "item: Mystery Berry" {
             if let Some(mid) = parts.get(3).and_then(|n| dex.moves.id(&toid(n))) {
+                let is_castle = self.ruleset.is_castle();
                 let mon = &mut self.sides[s].mons[m];
                 let list = if mon.transformed_into.is_some() {
                     &mut mon.transformed_uses
@@ -1212,7 +1262,12 @@ impl ProtocolTracker {
                     &mut mon.uses
                 };
                 if let Some((_, n)) = list.iter_mut().find(|(id, _)| *id == mid) {
-                    *n = (*n - 5).max(0);
+                    if is_castle {
+                        // Castle Mystery Berry adds +5 PP without clamping to maxpp.
+                        *n -= 5;
+                    } else {
+                        *n = (*n - 5).max(0);
+                    }
                 }
             }
             return;
@@ -1632,8 +1687,9 @@ impl ProtocolTracker {
         let me = self.side;
         let opp = 1 - me;
         let (p1, p2): (&[PokemonSet], &[PokemonSet]) = (own_sets, own_sets);
-        let mut b = Battle::from_fixture(dex, &rng.battle_seed(), p1, p2)
-            .map_err(|e| format!("from_fixture: {e:?}"))?;
+        let mut b =
+            Battle::from_fixture_with_ruleset(dex, &rng.battle_seed(), p1, p2, self.ruleset)
+                .map_err(|e| format!("from_fixture: {e:?}"))?;
         b.set_log_enabled(false);
         b.preview_level_caps=req.preview_level_caps.unwrap_or([Some(MAX_TOTAL_LEVEL as u32);2]);
 
@@ -1785,7 +1841,7 @@ impl ProtocolTracker {
                 p.status = Status::None;
             } else {
                 let maxhp = b.poke(id).maxhp;
-                let hp = impute_hp(tm.pixels, tm.hp_den, maxhp);
+                let hp = impute_hp_mode(tm.pixels, tm.hp_den, maxhp, self.ruleset.is_castle());
                 b.poke_mut(id).hp = hp;
             }
             // item: mirror impute_mon's contract (Observer knowledge wins)
@@ -2129,7 +2185,10 @@ impl ProtocolTracker {
                     }
                 }
             }
-            if !self.upkeep_this_turn {
+            // In Castle PBS, a switch-in faint (Spikes / switch-in poison or burn before moves)
+            // triggers a full Turn-Cut skipping EOT Residual; normal move KOs still run EOT after CHANGE.
+            let castle_turn_cut = self.ruleset.is_castle() && self.switch_faint_this_turn;
+            if !self.upkeep_this_turn && !castle_turn_cut {
                 b.queue.push(Action {
                     choice: ActionKind::Residual,
                     order: 300,
@@ -2491,6 +2550,32 @@ fn set_item_raw(b: &mut Battle, id: PokeId, item: Option<nc2000_engine::dex::Ite
 /// (den = 100) announces `ceil(100*hp/maxhp)` with a not-quite-full 100
 /// knocked down to 99; the legacy pixel bar (den = 48) announces
 /// `floor(48*hp/maxhp)` clamped to >= 1.
+pub fn impute_hp_mode(cur: i32, den: i32, maxhp: i32, exact_hp: bool) -> i32 {
+    if exact_hp {
+        if cur <= 0 {
+            return 0;
+        }
+        if den > 0 && cur >= den {
+            return maxhp;
+        }
+        return cur.clamp(1, maxhp.max(1));
+    }
+    impute_hp(cur, den, maxhp)
+}
+
+pub fn announce_hp_mode(hp: i32, maxhp: i32, den: i32, exact_hp: bool) -> i32 {
+    if exact_hp {
+        if hp <= 0 {
+            return 0;
+        }
+        if maxhp <= 0 || hp >= maxhp {
+            return if den > 0 { den } else { maxhp };
+        }
+        return hp.clamp(1, maxhp);
+    }
+    announce_hp(hp, maxhp, den)
+}
+
 pub fn impute_hp(cur: i32, den: i32, maxhp: i32) -> i32 {
     let den = if den > 0 { den } else { HP_DEN_PIXELS };
     if cur <= 0 {
@@ -2599,6 +2684,17 @@ impl ProtocolAgent {
         cfg: RmConfig,
         seed: u64,
     ) -> ProtocolAgent {
+        Self::new_with_ruleset(dex, side, pool, cfg, seed, Ruleset::PsStadium2)
+    }
+
+    pub fn new_with_ruleset(
+        dex: &Dex,
+        side: usize,
+        pool: MetaPool,
+        cfg: RmConfig,
+        seed: u64,
+        ruleset: Ruleset,
+    ) -> ProtocolAgent {
         let tables = TableSet::from_pool(dex, &pool);
         ProtocolAgent {
             side,
@@ -2610,7 +2706,7 @@ impl ProtocolAgent {
             prior: None,
             pick_prior: None,
             fallback_policy: crate::belief::FallbackPolicy::default(),
-            tracker: ProtocolTracker::new(side),
+            tracker: ProtocolTracker::new_with_ruleset(side, ruleset),
             history: Vec::new(),
             observer: None,
             belief: None,
@@ -2623,6 +2719,17 @@ impl ProtocolAgent {
             request: None,
             legality_drift: 0,
             projections: 0,
+        }
+    }
+
+    pub fn ruleset(&self) -> Ruleset {
+        self.tracker.ruleset()
+    }
+
+    pub fn set_ruleset(&mut self, ruleset: Ruleset) {
+        self.tracker.set_ruleset(ruleset);
+        if let Some(obs) = self.observer.as_mut() {
+            obs.set_ruleset(ruleset);
         }
     }
 
@@ -2746,7 +2853,11 @@ impl ProtocolAgent {
             if self.tracker.opp_roster_len() == 0 {
                 return Err("no |poke| preview lines seen before first request".to_string());
             }
-            let mut obs = Observer::from_mons(self.side, self.tracker.observer_mons());
+            let mut obs = Observer::from_mons_with_ruleset(
+                self.side,
+                self.tracker.observer_mons(),
+                self.tracker.ruleset(),
+            );
             sync_names(&mut obs, &self.tracker);
             for line in std::mem::take(&mut self.history) {
                 obs.ingest_line(&line, dex);
@@ -4760,10 +4871,13 @@ impl ProtocolAgent {
         }
         let request_json = spec.request_json(dex)?;
         let req = Request::parse(dex, &request_json)?;
+        let ruleset = self.tracker.ruleset();
         self.own_sets = spec.own_sets.clone();
         self.tracker = ProtocolTracker::from_spec(dex, spec)?;
+        self.tracker.set_ruleset(ruleset);
         self.history.clear();
-        let obs = Observer::from_position(dex, spec)?;
+        let mut obs = Observer::from_position(dex, spec)?;
+        obs.set_ruleset(ruleset);
         let mut belief = match &self.pinned_sets {
             Some(sets) => Belief::pinned_checked(dex, "opponent", sets, &obs)?,
             None => Belief::with_fallback_policy(dex, &self.pool, &obs, self.fallback_policy),

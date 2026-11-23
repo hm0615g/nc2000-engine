@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use nc2000_engine::battle::{PokemonSet, SearchChoice};
 use nc2000_engine::dex::Dex;
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::Battle;
 
 use crate::agent::Agent;
@@ -144,7 +145,11 @@ pub fn roster_sig(battle: &Battle, side: usize) -> TeamSig {
 /// Signature of a pool team, via a throwaway battle so canonicalization
 /// (string → id, item/move normalization) is exactly the live path.
 pub fn team_sig(dex: &Dex, sets: &[PokemonSet]) -> TeamSig {
-    let b = Battle::from_fixture(dex, "1,2,3,4", sets, sets)
+    team_sig_with_ruleset(dex, sets, Ruleset::PsStadium2)
+}
+
+pub fn team_sig_with_ruleset(dex: &Dex, sets: &[PokemonSet], ruleset: Ruleset) -> TeamSig {
+    let b = Battle::from_fixture_with_ruleset(dex, "1,2,3,4", sets, sets, ruleset)
         .expect("pool team failed to construct");
     roster_sig(&b, 0)
 }
@@ -216,6 +221,14 @@ pub struct BakeCfg {
     pub eps: f64,
     pub max_turns: u16,
     pub seed: u64,
+}
+
+impl BakeCfg {
+    /// Effective per-game turn cap honoring `ruleset.turn_limit()`.
+    #[inline]
+    pub fn effective_max_turns(&self, ruleset: Ruleset) -> u16 {
+        crate::runner::effective_turn_cap(ruleset, self.max_turns)
+    }
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -472,7 +485,16 @@ impl TableSet {
 
     /// Pool index of a team of `PokemonSet`s by full-set signature.
     pub fn set_index(&self, dex: &Dex, sets: &[PokemonSet]) -> Option<usize> {
-        let b = Battle::from_fixture(dex, "1,2,3,4", sets, sets).ok()?;
+        self.set_index_with_ruleset(dex, sets, Ruleset::PsStadium2)
+    }
+
+    pub fn set_index_with_ruleset(
+        &self,
+        dex: &Dex,
+        sets: &[PokemonSet],
+        ruleset: Ruleset,
+    ) -> Option<usize> {
+        let b = Battle::from_fixture_with_ruleset(dex, "1,2,3,4", sets, sets, ruleset).ok()?;
         self.sig_to_idx.get(&roster_sig(&b, 0)).copied()
     }
 

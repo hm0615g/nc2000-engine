@@ -1735,14 +1735,15 @@ impl Belief {
         }
 
         // ---- per-mon set imputation (all 6 roster mons, picked or not)
+        let exact_hp = out.is_castle();
         for slot in 0..roster_len {
             let mon = &mut out.sides[opp].roster[slot];
             let mo = &obs.mons()[slot];
             let projected = crate::hp_evidence::project(dex, &refs[slot], mo, rng);
-            impute_mon(mon, projected.as_ref().unwrap_or(&refs[slot]), mo, dex);
+            impute_mon(mon, projected.as_ref().unwrap_or(&refs[slot]), mo, dex, exact_hp);
             if mo.appeared {
                 if let Some(&(cur, den)) = self.hp_observations.as_ref().and_then(|h| h.get(slot)) {
-                    mon.hp = crate::import::impute_hp(cur, den, mon.maxhp);
+                    mon.hp = crate::import::impute_hp_mode(cur, den, mon.maxhp, exact_hp);
                 }
             }
             out.refresh_poke_mask(dex, PokeId { side: opp as u8, slot: slot as u8 });
@@ -4609,7 +4610,8 @@ fn build_refs(dex: &Dex, sets: &[PokemonSet], mons: &[MonObs]) -> Option<Vec<Pok
 
 fn consistent(dex: &Dex, refs: &[Pokemon], mons: &[MonObs]) -> bool {
     refs.iter().zip(mons).enumerate().all(|(slot, (r, mo))| {
-        crate::hp_evidence::consistent(dex, r, mo.hp_type_mask)
+        mo.observed_maxhp.is_none_or(|m| r.base_maxhp == m)
+            && crate::hp_evidence::consistent(dex, r, mo.hp_type_mask)
             && !crate::observe::Observer::is_item_excluded_for_slot_with_refs(
                 dex,
                 Some(refs),
@@ -4632,8 +4634,14 @@ fn consistent(dex: &Dex, refs: &[Pokemon], mons: &[MonObs]) -> bool {
 /// TOTAL destructure of `Pokemon` on purpose (the `state_key` trick): adding
 /// a state field breaks this fn until the field is triaged public (keep) /
 /// hidden (impute). Caller refreshes `handler_mask` afterwards.
-fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex) {
-    let public_hp = crate::import::announce_hp(dst.hp, dst.maxhp, 100);
+fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex, exact_hp: bool) {
+    let orig_hp = dst.hp;
+    let orig_maxhp = dst.maxhp;
+    let public_hp = if exact_hp {
+        0
+    } else {
+        crate::import::announce_hp(orig_hp, orig_maxhp, 100)
+    };
     debug_assert_eq!(refm.base_species, dst.base_species, "ref/roster species drift");
     debug_assert_eq!(refm.level, dst.level, "ref/roster level drift");
     let Pokemon {
@@ -4716,10 +4724,21 @@ fn impute_mon(dst: &mut Pokemon, refm: &Pokemon, mo: &MonObs, dex: &Dex) {
     }
     *base_maxhp = refm.base_maxhp;
     *maxhp = refm.base_maxhp;
-    // Only the announced HP bucket is public; unseen mons are full.
+    // Only the announced HP bucket is public on PS; Castle reveals exact HP directly.
+    // Unseen mons are full.
     let appeared = *previously_switched_in > 0 || *is_active || mo.appeared;
     if appeared {
-        *hp = crate::import::impute_hp(public_hp, 100, *maxhp);
+        if exact_hp {
+            *hp = if orig_hp <= 0 {
+                0
+            } else if orig_maxhp > 0 && orig_hp >= orig_maxhp {
+                *maxhp
+            } else {
+                orig_hp.clamp(1, (*maxhp).max(1))
+            };
+        } else {
+            *hp = crate::import::impute_hp(public_hp, 100, *maxhp);
+        }
     } else {
         *hp = *maxhp;
     }
@@ -4913,6 +4932,7 @@ mod fallback_tests {
             item: ItemObs::default(),
             excluded_items: 0,
             appeared: false,
+            observed_maxhp: None,
         }
     }
 

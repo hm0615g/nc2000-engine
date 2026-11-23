@@ -1116,7 +1116,10 @@ impl BlindSearch {
             base.quick_claw_rolls = [false, false];
             base.update_all_speeds(dex);
         }
-        let turn_cap = base.turn.saturating_add(cfg.horizon);
+        let mut turn_cap = base.turn.saturating_add(cfg.horizon);
+        if let Some(limit) = base.ruleset.turn_limit() {
+            turn_cap = turn_cap.min(limit);
+        }
         let my_acts = base.legal_choices(dex, side);
         let my_dominated_reasons: Vec<Option<&'static str>> = if compute_dominated {
             my_acts
@@ -3117,13 +3120,14 @@ fn draw_remaining_uniform(rng: &mut SplitMix64, min_d: u8, max_d: u8, elapsed: u
     (d - elapsed).max(1) as i32
 }
 
-fn resample_hidden_timers(
+pub fn resample_hidden_timers(
     dex: &Dex,
     sim: &mut Battle,
     specs: &[crate::player_state::HiddenTimerSpec],
     rng: &mut SplitMix64,
 ) {
     use crate::player_state::HiddenTimerKind;
+    let is_castle = sim.is_castle();
     for &spec in specs {
         let side = spec.side as usize;
         let slot = spec.slot as usize;
@@ -3140,13 +3144,19 @@ fn resample_hidden_timers(
         match spec.kind {
             HiddenTimerKind::Sleep { slept } => {
                 if sim.poke(id).status == Status::Slp {
-                    let rem = draw_remaining_uniform(rng, 2, 4, slept) as i64;
+                    // SlpBeforeMove decrements Time then wakes at <= 0:
+                    // PS non-Rest sleep 1..=3 turns => Time in 2..=4;
+                    // Castle non-Rest sleep 1..=4 turns => Time in 2..=5.
+                    let max_d = if is_castle { 5 } else { 4 };
+                    let rem = draw_remaining_uniform(rng, 2, max_d, slept) as i64;
                     sim.poke_mut(id).status_state.set_int(DK::Time, rem);
                 }
             }
             HiddenTimerKind::Confusion { ticks } => {
                 if let Some(cid) = dex.conds_id("confusion") {
                     if let Some(vs) = sim.poke_mut(id).volatile_mut(cid) {
+                        // ConfusionBeforeMove decrements Time then snaps out at 0:
+                        // 1..=4 confused turns => Time in 2..=5 (both PS and Castle).
                         let rem = draw_remaining_uniform(rng, 2, 5, ticks) as i64;
                         vs.set_int(DK::Time, rem);
                     }
@@ -3166,10 +3176,11 @@ fn resample_hidden_timers(
                 if let Some(cid) = dex.conds_id("disable") {
                     if let Some(vs) = sim.poke_mut(id).volatile_mut(cid) {
                         let bonus = u8::from(acted_on_start);
+                        let (min_b, max_b) = if is_castle { (1, 7) } else { (2, 5) };
                         vs.duration = Some(draw_remaining_uniform(
                             rng,
-                            2 + bonus,
-                            5 + bonus,
+                            min_b + bonus,
+                            max_b + bonus,
                             upkeeps,
                         ));
                     }
@@ -3185,7 +3196,11 @@ fn resample_hidden_timers(
             HiddenTimerKind::Bide { upkeeps } => {
                 if let Some(cid) = dex.conds_id("bide") {
                     if let Some(vs) = sim.poke_mut(id).volatile_mut(cid) {
-                        vs.duration = Some(draw_remaining_uniform(rng, 3, 4, upkeeps));
+                        // Bide unleashes when duration == 1:
+                        // PS stores 2..=3 turns => duration 3..=4;
+                        // Castle stores 1..=2 turns => duration 2..=3.
+                        let (min_d, max_d) = if is_castle { (2, 3) } else { (3, 4) };
+                        vs.duration = Some(draw_remaining_uniform(rng, min_d, max_d, upkeeps));
                     }
                 }
             }

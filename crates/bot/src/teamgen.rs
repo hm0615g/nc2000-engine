@@ -39,13 +39,14 @@ use serde_json::{json, Value};
 
 use nc2000_engine::battle::{Outcome, PokemonSet};
 use nc2000_engine::dex::{toid, Dex};
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::Battle;
 use nc2000_engine::validate::{canonicalize_team, validate_team, Learnsets};
 
 use crate::blind::{BlindAgent, OpenAgent};
 use crate::preview::MetaPool;
 use crate::rng::SplitMix64;
-use crate::runner::{play_game, GameResult};
+use crate::runner::{effective_turn_cap, play_game, GameResult};
 use crate::smmcts::{RmAgent, RmConfig, SelRule};
 use crate::Agent;
 
@@ -101,6 +102,28 @@ const TYPE_BOOST_ITEMS: [(&str, &str); 18] = [
     ("blackbelt", "Fighting"),
     ("blackglasses", "Dark"),
     ("dragonfang", "Dragon"),
+    ("hardstone", "Rock"),
+    ("metalcoat", "Steel"),
+    ("pinkbow", "Normal"),
+    ("polkadotbow", "Normal"),
+    ("poisonbarb", "Poison"),
+    ("sharpbeak", "Flying"),
+    ("silverpowder", "Bug"),
+    ("softsand", "Ground"),
+    ("spelltag", "Ghost"),
+];
+
+/// Castle PBS type-boosting items (1.1x): `dragonscale` replaces `dragonfang`.
+const CASTLE_TYPE_BOOST_ITEMS: [(&str, &str); 18] = [
+    ("charcoal", "Fire"),
+    ("mysticwater", "Water"),
+    ("magnet", "Electric"),
+    ("miracleseed", "Grass"),
+    ("nevermeltice", "Ice"),
+    ("twistedspoon", "Psychic"),
+    ("blackbelt", "Fighting"),
+    ("blackglasses", "Dark"),
+    ("dragonscale", "Dragon"),
     ("hardstone", "Rock"),
     ("metalcoat", "Steel"),
     ("pinkbow", "Normal"),
@@ -408,6 +431,7 @@ pub struct PoolTeamRaw {
 
 pub struct TeamGen {
     ls: Learnsets,
+    ruleset: Ruleset,
     /// Non-dominated format-legal species ids (sorted; 156 of 246).
     species_ids: Vec<String>,
     /// For each species id, same-type strictly higher-stat species ids (sorted
@@ -548,12 +572,26 @@ impl TeamGen {
 
         Ok(TeamGen {
             ls,
+            ruleset: Ruleset::PsStadium2,
             species_ids,
             species_dominators,
             all_items,
             pareto_by_aces,
             teams,
         })
+    }
+
+    pub fn with_ruleset(mut self, ruleset: Ruleset) -> Self {
+        self.ruleset = ruleset;
+        self
+    }
+
+    pub fn set_ruleset(&mut self, ruleset: Ruleset) {
+        self.ruleset = ruleset;
+    }
+
+    pub fn ruleset(&self) -> Ruleset {
+        self.ruleset
     }
 
     pub fn teams(&self) -> &[PoolTeamRaw] {
@@ -1783,7 +1821,7 @@ impl TeamGen {
     /// Non-dominated legal items for `raw[slot]` given teammates' held items.
     /// When `include_current` is true, `raw[slot]`'s current item is not
     /// filtered out for identity.
-    fn non_dominated_items(
+    pub fn non_dominated_items(
         &self,
         dex: &Dex,
         raw: &[Value],
@@ -1833,6 +1871,12 @@ impl TeamGen {
             };
         }
 
+        let is_castle = self.ruleset.is_castle();
+        let type_boost_items = if is_castle {
+            &CASTLE_TYPE_BOOST_ITEMS
+        } else {
+            &TYPE_BOOST_ITEMS
+        };
         let mut out = Vec::new();
         for item_name in &self.all_items {
             let id = toid(item_name);
@@ -1842,7 +1886,14 @@ impl TeamGen {
             if held.contains(&id) {
                 continue;
             }
-            if ZERO_EFFECT_ITEMS.contains(&id.as_str()) || id == "mail" {
+            if is_castle {
+                // Castle permits distinct dummy items (mail, Apricorn balls, stones, upgrade)
+                // for Thief-bait / Item Clause padding, while excluding bugged inert
+                // dragonfang (Dragon boost is dragonscale) and bitterberry (confusion cure is iceberry).
+                if id.is_empty() || matches!(id.as_str(), "dragonfang" | "bitterberry") {
+                    continue;
+                }
+            } else if ZERO_EFFECT_ITEMS.contains(&id.as_str()) || id == "mail" {
                 continue;
             }
             // Species-specific items
@@ -1852,7 +1903,7 @@ impl TeamGen {
                 }
             }
             // Type-boosting items require at least one damaging move of that type
-            if let Some(&(_, req_type)) = TYPE_BOOST_ITEMS.iter().find(|&&(it, _)| it == id) {
+            if let Some(&(_, req_type)) = type_boost_items.iter().find(|&&(it, _)| it == id) {
                 if !dmg_types.contains(req_type) {
                     continue;
                 }
@@ -1873,15 +1924,25 @@ impl TeamGen {
             }
             // Dominated status berries: single-condition cure berries for poison/burn/freeze
             // are strictly dominated by non-exhaustible competitive items, whereas PRZ Cure Berry
-            // and Bitter Berry remain valid when Miracle Berry is already held by a teammate.
+            // and confusion-cure berry (Bitter Berry on PS; Ice Berry ID 81 on Castle, which
+            // cures both Burn and Confusion) remain valid when Miracle Berry is already held.
             if id == "mintberry" && !has_rest && miracle_free {
                 continue;
             }
-            if matches!(id.as_str(), "przcureberry" | "bitterberry") && miracle_free {
-                continue;
-            }
-            if matches!(id.as_str(), "psncureberry" | "burntberry" | "iceberry") {
-                continue;
+            if is_castle {
+                if matches!(id.as_str(), "przcureberry" | "iceberry") && miracle_free {
+                    continue;
+                }
+                if matches!(id.as_str(), "psncureberry" | "burntberry") {
+                    continue;
+                }
+            } else {
+                if matches!(id.as_str(), "przcureberry" | "bitterberry") && miracle_free {
+                    continue;
+                }
+                if matches!(id.as_str(), "psncureberry" | "burntberry" | "iceberry") {
+                    continue;
+                }
             }
             out.push(item_name.clone());
         }
@@ -2909,6 +2970,17 @@ pub fn gauntlet_eval(
     gauntlet: &[Vec<PokemonSet>],
     cfg: &EvalCfg,
 ) -> EvalResult {
+    gauntlet_eval_with_ruleset(dex, candidate, gauntlet, cfg, Ruleset::PsStadium2)
+}
+
+pub fn gauntlet_eval_with_ruleset(
+    dex: &Dex,
+    candidate: &[PokemonSet],
+    gauntlet: &[Vec<PokemonSet>],
+    cfg: &EvalCfg,
+    ruleset: Ruleset,
+) -> EvalResult {
+    let max_turns = effective_turn_cap(ruleset, cfg.max_turns);
     let games = (cfg.games_per_opponent + cfg.games_per_opponent % 2) as usize;
     let mut jobs = Vec::with_capacity(gauntlet.len() * games);
     for opp in 0..gauntlet.len() {
@@ -2960,12 +3032,14 @@ pub fn gauntlet_eval(
                     } else {
                         (gauntlet[job.opp].as_slice(), candidate)
                     };
-                    let mut b = Battle::from_fixture(dex, &job.battle_seed, t1, t2).unwrap();
+                    let mut b =
+                        Battle::from_fixture_with_ruleset(dex, &job.battle_seed, t1, t2, ruleset)
+                            .unwrap();
                     b.set_log_enabled(false);
                     let res = if job.cand_is_p1 {
-                        play_game(dex, &mut b, &mut [&mut cand_agent, &mut opp_agent], cfg.max_turns)
+                        play_game(dex, &mut b, &mut [&mut cand_agent, &mut opp_agent], max_turns)
                     } else {
-                        play_game(dex, &mut b, &mut [&mut opp_agent, &mut cand_agent], cfg.max_turns)
+                        play_game(dex, &mut b, &mut [&mut opp_agent, &mut cand_agent], max_turns)
                     }
                     .unwrap();
                     let p1_score = match res {
@@ -3047,6 +3121,18 @@ pub fn gauntlet_eval_weighted(
     weights: &[f64],
     cfg: &WeightedEvalCfg,
 ) -> EvalResult {
+    gauntlet_eval_weighted_with_ruleset(dex, candidate, gauntlet, weights, cfg, Ruleset::PsStadium2)
+}
+
+pub fn gauntlet_eval_weighted_with_ruleset(
+    dex: &Dex,
+    candidate: &[PokemonSet],
+    gauntlet: &[Vec<PokemonSet>],
+    weights: &[f64],
+    cfg: &WeightedEvalCfg,
+    ruleset: Ruleset,
+) -> EvalResult {
+    let max_turns = effective_turn_cap(ruleset, cfg.max_turns);
     let games = (cfg.games_per_opponent + cfg.games_per_opponent % 2) as usize;
     let mut jobs = Vec::with_capacity(gauntlet.len() * games);
     for opp in 0..gauntlet.len() {
@@ -3103,21 +3189,23 @@ pub fn gauntlet_eval_weighted(
                     } else {
                         (gauntlet[job.opp].as_slice(), candidate)
                     };
-                    let mut b = Battle::from_fixture(dex, &job.battle_seed, t1, t2).unwrap();
+                    let mut b =
+                        Battle::from_fixture_with_ruleset(dex, &job.battle_seed, t1, t2, ruleset)
+                            .unwrap();
                     b.set_log_enabled(cfg.open_sheet || cfg.blind_pool.is_some());
                     let res = if job.cand_is_p1 {
                         play_game(
                             dex,
                             &mut b,
                             &mut [cand_agent.as_mut(), opp_agent.as_mut()],
-                            cfg.max_turns,
+                            max_turns,
                         )
                     } else {
                         play_game(
                             dex,
                             &mut b,
                             &mut [opp_agent.as_mut(), cand_agent.as_mut()],
-                            cfg.max_turns,
+                            max_turns,
                         )
                     }
                     .unwrap();
