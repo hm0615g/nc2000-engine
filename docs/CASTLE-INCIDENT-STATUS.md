@@ -244,3 +244,13 @@ The documentation follow-up commit and remote SHA are verified by the runner.
 - Existing RECOGNIZED_SOURCE_WITHOUT_PROTOCOL events remain investigation items; they were not a blocker in the replay.
 - The raw trace collection remains enabled; post-match parity audit is opt-in.
 - Live postrepair Castle battle and full-board parity are NOT TESTED.
+
+<!-- castle-upstream-alignment-fork-deploy-2026-11-24 -->
+## Verified fork source deployment (2026-11-24)
+
+- Fork: hm0615g/nc2000-engine, review-local-changes.
+- Source commit: 9e6cc2d610bc2253f7f9b2c8b3c9bb4e70a30707.
+- Verified the fork remote branch SHA equals the source commit after an explicit non-force push.
+- Tested: stage-1 real trace 20/20 PASS with 18 off-pool fallbacks; stage-2 two 128-iteration adaptive probes PASS; Discord selftest, Castle regressions, WASM Castle ruleset PASS.
+- Not certified: live Castle postrepair match, complete per-turn board parity, and full-budget 243000 iteration battle performance.
+- Old duplicate diagnostic scripts remain in the repository; removal deferred until independent dependency review.
