@@ -64,10 +64,10 @@ node tools/pbs-discord-bot.js --token "$DISCORD_TOKEN" --name "NC2000" --pass "n
   ▼
 [Layer 1: Bot Core (WASM MCTS + Data)]
   ・crates/wasm/pkg-node/nc2000_wasm.js (Dex + ProtocolSearcher)
-  ・data/kodoku-r3/conclusion-equilibrium-deme.json (Default: APEX4 Nash mixture)
+  ・data/team-pool-v3/flagship-mixture.json (Default flagship mixture; two sets)
   ・data/team-pool-v2/team-pool.json (Mercy: 8 human-origin Tier A teams)
   ・data/belief-pool-v3/belief-pool.json (Base opponent belief pool)
-  ・data/compiled-preview-v1.json (Compiled Team Preview opening book)
+  ・data/live-search.json (Adaptive battle and live preview)
 ```
 
 ---
@@ -109,10 +109,10 @@ node tools/pbs-discord-bot.js --token "$DISCORD_TOKEN" --name "NC2000" --pass "n
 ### Two-Stage Party Selection
 - **Default (`--tier default`)**:
   - Used on normal `@mentions`.
-  - `81,000` iterations (`c = 0.4`) + `pool:nash` (`data/kodoku-r3/conclusion-equilibrium-deme.json`, APEX4 40:30:15:15 mixture over `Snorlax55/Cloyster50/Gengar50/Heracross50/Marowak50/Starmie50`) + `data/compiled-preview-v1.json`.
+  - Default: adaptive battle search (cap 243,000), live preview search (729,000), `pool:flagship`.
 - **Mercy / Handicap (`--tier mercy`)**:
   - Triggered when the `@mention` includes any of: `手加減`, `てかげん`, `ハンデ`, `別パ`, `サブ`, `サブパ`, `tier a`, `tiera`, `tier-a`, `tier1`, `弱め`, `やさしく`, `優しく`, `mercy`, `handicap`.
-  - `81,000` iterations (`c = 0.4`) + `pool:tier-a` (`TIER_A_BOX_IDS` in `tools/pbs-client.js`: 8 iconic human-origin Tier A teams from `data/team-pool-v2/team-pool.json`).
+  - Mercy: adaptive battle search (cap 243,000), live preview search (729,000), `pool:tier-a`.
 
 ### Castle-Specific Information Leak Exploitation & Online Adaptation
 1. **Persistent Bench Exact HP & Status (`seenFoeMons`)**: `PS.cgi` shows exact `hp / maxHp` for active Pokémon. When an opponent mon switches out, its exact `hp_num / hp_den`, `status`, and revealed `ItemKnowledge` are preserved on the bench across turns.
@@ -123,7 +123,7 @@ node tools/pbs-discord-bot.js --token "$DISCORD_TOKEN" --name "NC2000" --pass "n
    - `data/pbs-matches.jsonl`: Appends a JSON summary after every game for offline prior expansion.
 5. **Raw Trace Archiving & Automatic Post-Match Parity Audit (`tools/pbs-parity-audit.js`)**:
    - `data/pbs-traces/<matchId>.jsonl` (git-ignored): Automatically saves a complete per-match JSONL bundle containing raw `PS.cgi` HTML (`TEAM_PREVIEW_CHECK`, per-turn `BATTLE_INPUT`/`BATTLE_CHANGE`, `PDAT`, `LLOG`, `FINISHED`), reconstructed `ProtocolTracker` / `PositionSpec` states, sanitizer clamp diffs, and `<select Name="MOVE">` projection paths.
-   - At the end of every match, `tools/pbs-client.js` automatically runs `auditMatchTrace()` across independent information channels (Top Status Table vs `PDAT` vs `LLOG` vs `PositionSpec` vs Rust WASM `ProtocolSearcher.setPosition()`).
+   - With `--post-match-audit`, `tools/pbs-client.js` runs `auditMatchTrace()` across independent information channels (Top Status Table vs `PDAT` vs `LLOG` vs `PositionSpec` vs Rust WASM `ProtocolSearcher.setPosition()`).
    - If any parser desync, unrecognized Japanese log line, sanitizer forced clamp, or action fallback occurs, `[PARITY_WARN]` is printed and the structured anomaly report is appended to `data/pbs-anomalies.jsonl`.
 
 ---
@@ -146,3 +146,14 @@ node tools/pbs-discord-bot.js --dry-run-pbs
 # Direct standalone Castle battle without Discord (e.g. in 第1 = Room C)
 node tools/pbs-client.js --room 第1 --name NC2000 --pass nc2pass --tier default --games 1
 ```
+
+## 7. Upstream-aligned runtime (2026-11-24)
+
+- Default team is the flagship mixture from team-pool-v3.
+- Default battle search is adaptive (243000 cap).
+- Team Preview uses live search (729000 iterations).
+- Unknown opposing teams use upstream WASM fallback, with strict public HP and legal-action checks.
+- Raw battle traces remain enabled. Post-match audit is optional with --post-match-audit.
+- Offline audit: node tools/pbs-parity-audit.js data/pbs-traces --no-out
+- Stage 1 replay: 20 decisions PASS; 18 upstream fallback decisions.
+- This is not yet live adaptive battle certification.

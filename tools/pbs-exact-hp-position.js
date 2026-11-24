@@ -78,7 +78,49 @@ function prepareExactHpPosition(options = {}) {
     searcher = new wasm.ProtocolSearcher(dex, side, poolJson, seed, c);
     searcher.setPosition(specJson);
     result.beforeBelief = readBelief();
-    if (!result.beforeBelief.count || result.beforeBelief.fallback) return stop('NO_PUBLIC_CANDIDATE');
+    if (!result.beforeBelief.count || result.beforeBelief.fallback) {
+      // Upstream rejects candidates inconsistent with the observed exact HP
+      // before the fork's old IV-template completion can run.  A zero-candidate
+      // belief is a normal hidden/custom team, not proof that search is unsafe.
+      // Leave unknown moves/items to the upstream fallback determinizer.
+      requireValue(result.beforeBelief.count === 0 &&
+        result.beforeBelief.fallback === true, 'Inconsistent engine fallback response');
+      const view = JSON.parse(searcher.stateView());
+      const party = view?.sides?.[foe]?.party;
+      requireValue(Array.isArray(party), 'Fallback root opponent party is missing');
+      result.rootChecks = evidence.map(observation => {
+        const input = roster[observation.slot];
+        const matches = party.filter(mon => norm(mon?.species) === norm(observation.species));
+        const native = matches.length === 1 ? matches[0] : null;
+        return {slot: observation.slot, species: norm(observation.species),
+          inputHp: input.hp_num, inputMaxHp: input.hp_den,
+          observedMaxHp: observation.maxHp, rootMatches: matches.length,
+          rootHp: native?.hp ?? null, rootMaxHp: native?.maxhp ?? null,
+          match: native !== null && integer(native.hp) && integer(native.maxhp) &&
+            native.hp === input.hp_num && native.maxhp === input.hp_den &&
+            native.maxhp === observation.maxHp &&
+            native.fainted === (input.hp_num === 0)};
+      });
+      if (!result.rootChecks.every(check => check.match)) return stop(
+        'FALLBACK_ROOT_HP_MISMATCH',
+        JSON.stringify(result.rootChecks.filter(check => !check.match)));
+      if (typeof position.ruleset === 'string') {
+        requireValue(typeof searcher.ruleset === 'function' &&
+          searcher.ruleset() === position.ruleset,
+        'Fallback ruleset mismatch');
+      }
+      const rootPolicy = JSON.parse(searcher.rootPolicy());
+      requireValue(rootPolicy?.iterations === 0 &&
+        Array.isArray(rootPolicy.actions) && rootPolicy.actions.length > 0,
+      'Fallback did not provide legal root actions');
+      result.afterBelief = result.beforeBelief;
+      result.poolJson = poolJson;
+      result.modelSource = 'UPSTREAM_OFF_POOL_FALLBACK';
+      result.status = 'READY';
+      result.searcher = searcher;
+      searcher = null;
+      return result;
+    }
     for (const candidateId of result.beforeBelief.candidates) {
       const team = teams.get(candidateId);
       requireValue(team, 'Engine returned an unknown candidate ID: ' + candidateId);
@@ -141,7 +183,9 @@ function prepareExactHpPosition(options = {}) {
 
 function completeExactHpPosition(options = {}) {
   const initial = prepareExactHpPosition(options);
-  const completion = {attempted: false, initialStatus: initial.status, parents: [], generated: [], totalWeight: 0};
+  const completion = {attempted: false, initialStatus: initial.status,
+    strategy: initial.modelSource ?? 'KNOWN_POOL_ORIGINAL',
+    parents: [], generated: [], totalWeight: 0};
   if (initial.status !== 'NO_EXACT_HP_CANDIDATE') return {...initial, completion};
   completion.attempted = true;
   let owned = null, answer = null;

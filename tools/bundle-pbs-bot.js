@@ -27,6 +27,21 @@ const DELIVERY_DIR = path.resolve(REPO, 'dist/pbs-delivery');
 const FILES_TO_COPY = [
   'tools/pbs-discord-bot.js',
   'tools/pbs-client.js',
+  'tools/pbs-parity-audit.js',
+  'tools/pbs-castle-continue-on-error.js',
+  'tools/pbs-castle-current-boundary.js',
+  'tools/pbs-castle-current-request.js',
+  'tools/pbs-castle-dictionary.js',
+  'tools/pbs-castle-item-hypotheses.js',
+  'tools/pbs-castle-observation-ledger.js',
+  'tools/pbs-castle-observation.js',
+  'tools/pbs-castle-position-reconcile.js',
+  'tools/pbs-castle-pp-observation.js',
+  'tools/pbs-castle-submission.js',
+  'tools/pbs-exact-hp-position.js',
+  'tools/pbs-v32-source-reader.js',
+  'tools/pbs-v32-decision-boundary.js',
+  'tools/pbs-converter-v32.reference.js',
   'tools/export-pdinput.js',
   'crates/wasm/pkg-node/nc2000_wasm.js',
   'crates/wasm/pkg-node/nc2000_wasm_bg.wasm',
@@ -38,7 +53,8 @@ const FILES_TO_COPY = [
   'data/team-pool-v2/team-pool.json',
   'data/kodoku-r3/conclusion-equilibrium-deme.json',
   'data/belief-pool-v3/belief-pool.json',
-  'data/compiled-preview-v1.json',
+  'data/team-pool-v3/team-pool.json',
+  'data/team-pool-v3/flagship-mixture.json',
 ];
 
 function copyRelFile(relPath) {
@@ -101,7 +117,6 @@ function main() {
     replyMode: 'reply',
     roomEnterGreetText: 'よろしくお願いします',
     postMatchThanksText: 'ありがとうございました',
-    iters: 81000,
     hostTimeoutSec: 240,
     roomWaitTimeoutSec: 90,
     autoPickRoomAfterSec: 15,
@@ -196,8 +211,8 @@ AIコーディングアシスタント（Claude / Cursor / ChatGPT 等）にこ�
 
 ## 3. 2段階の強さ・パーティ設定 ＆ データ蓄積
 
-- **デフォルト (\`--tier default\`)**: \`81,000\` iterations + **Nash均衡混合 (\`pool:nash\`、APEX4)** + 定跡選出ブック (\`compiled-preview-v1.json\`)
-- **手加減・別パ要求時 (\`--tier mercy\`)**: メンションに \`手加減\` / \`てかげん\` / \`別パ\` / \`サブ\` / \`Tier A\` / \`弱め\` 等が含まれる場合、\`81,000\` iterations + **Tier A サブパ箱 (\`pool:tier-a\`、人間由来の代表8構築)**
+- **デフォルト (\`--tier default\`)**: \`243,000\` iterations + **Nash均衡混合 (\`pool:flagship\`、flagship mixture)** + 定跡選出ブック (\`live Team Preview search\`)
+- **手加減・別パ要求時 (\`--tier mercy\`)**: メンションに \`手加減\` / \`てかげん\` / \`別パ\` / \`サブ\` / \`Tier A\` / \`弱め\` 等が含まれる場合、\`243,000\` iterations + **Tier A サブパ箱 (\`pool:tier-a\`、人間由来の代表8構築)**
 - **データ蓄積（Prior拡充用）**:
   - 対戦相手の型・選出・最大HP・持ち物履歴は \`data/pbs-opponent-db.json\` に自動保存され、連戦・再戦時に即座に相手適応Beliefとして使われます。
   - 全試合の要約ログは \`data/pbs-matches.jsonl\` に追記されます。定期的にこの2ファイルを回収してください。
@@ -450,8 +465,8 @@ AIコーディングアシスタント（Claude / Cursor / ChatGPT 等）にこ�
         <li><strong>自動部屋選択フォールバック</strong>: <code>応戦します</code> の後15秒間相手から部屋指定がない場合は、自動で <code>第1(C)</code>〜<code>第3(E)</code> の空き状況（または相手が待機中の部屋）をチェックし、Bot自ら <code>第1にて</code> → <code>よろしくお願いします</code> と投稿して入室します。</li>
         <li><strong>2段階パーティ切り替え</strong>:
           <ul>
-            <li><strong>通常時 (<code>default</code>)</strong>: <code>81,000</code> iterations + <strong>Nash均衡混合 (<code>pool:nash</code>、APEX4)</strong> + 定跡選出ブック</li>
-            <li><strong>手加減要求時 (<code>mercy</code>)</strong>: メンションに <code>手加減</code> / <code>別パ</code> / <code>サブ</code> / <code>Tier A</code> / <code>弱め</code> 等が含まれる場合、<code>81,000</code> iterations + <strong>Tier A サブパ箱 (<code>pool:tier-a</code>、人間由来の代表8構築)</strong></li>
+            <li><strong>通常時 (<code>default</code>)</strong>: <code>243,000</code> iterations + <strong>Nash均衡混合 (<code>pool:flagship</code>、flagship mixture)</strong> + 定跡選出ブック</li>
+            <li><strong>手加減要求時 (<code>mercy</code>)</strong>: メンションに <code>手加減</code> / <code>別パ</code> / <code>サブ</code> / <code>Tier A</code> / <code>弱め</code> 等が含まれる場合、<code>243,000</code> iterations + <strong>Tier A サブパ箱 (<code>pool:tier-a</code>、人間由来の代表8構築)</strong></li>
           </ul>
         </li>
         <li><strong>城固有の情報漏れ活用 & オンライン適応</strong>: 控えに引っ込んだ相手ポケモンの厳密 <code>HP / 最大HP</code>・状態異常・持ち物の永続追跡、<code>最大HP</code> からのめざパタイプ＆個体値絞り込み、たべのこし非所持 (<code>noLeftovers</code>) 自動推論、および <code>data/pbs-opponent-db.json</code> による再戦時の即時型適応を行います。</li>

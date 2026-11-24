@@ -50,9 +50,6 @@ const {
   resolveLegalPbsMoveOption,
   recordOpponentObservation,
 } = require('./pbs-client.js');
-const {
-  auditMatchTrace,
-} = require('./pbs-parity-audit.js');
 
 const REPO = path.resolve(__dirname, '..');
 
@@ -864,6 +861,8 @@ class CastleDiscordBot {
 
 async function runSelfTest() {
   const assert = require('assert');
+  // Keep diagnostic code out of the resident Discord bot's startup path.
+  const {auditMatchTrace} = require('./pbs-parity-audit.js');
 
   // Verify exact room mappings from the Castle Discord screenshots
   assert.deepStrictEqual(parseRoomFromText('第1へ'), {

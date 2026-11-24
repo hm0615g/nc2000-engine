@@ -76,6 +76,7 @@ if (args.help || args.h) {
   --match-log FILE     JSONL path for completed match records (default: data/pbs-matches.jsonl)
   --trace-dir DIR      Directory for per-match raw HTML + state trace bundles
                        (default: data/pbs-traces; --no-trace to disable)
+  --post-match-audit   Run post-match parity auditor (default: off)
   --anomaly-log FILE   JSONL path for automated parity check anomalies
                        (default: data/pbs-anomalies.jsonl; --no-anomaly-log to disable)
   --no-human-delay     Disable human-like minimum pacing delays
@@ -4416,22 +4417,26 @@ async function playOneGame(gameIdx, dependencies = {}) {
       errors: finishDetails.errors || [],
     });
 
+    // Audit is opt-in; raw traces remain available offline.
     let parityReport = null;
-    try {
-      const { auditMatchTrace, appendAnomalyReport } = require('./pbs-parity-audit.js');
-      parityReport = auditMatchTrace(traceEvents, {
-        filePath: traceFilePath || null,
-        reparse: false,
-      });
-      if (parityReport && parityReport.anomalies && parityReport.anomalies.length > 0) {
-        appendAnomalyReport(parityReport, ANOMALY_LOG_PATH);
-        log(
-          `[PARITY_WARN] Match ${matchId}: ${parityReport.errorCount} error(s), ${parityReport.warnCount} warning(s) ` +
-          `(${parityReport.anomalies.map(a => a.code).join(', ')})`
-        );
+    if (args['post-match-audit']) {
+      try {
+        const { auditMatchTrace, appendAnomalyReport } = require('./pbs-parity-audit.js');
+        parityReport = auditMatchTrace(traceEvents, {
+          filePath: traceFilePath || null,
+          reparse: false,
+        });
+        if (parityReport && parityReport.anomalies && parityReport.anomalies.length > 0) {
+          appendAnomalyReport(parityReport, ANOMALY_LOG_PATH);
+          log(
+            `[PARITY_WARN] Match ${matchId}: ${parityReport.errorCount} error(s), ${parityReport.warnCount} warning(s) ` +
+            `(${parityReport.anomalies.map(a => a.code).join(', ')})`
+          );
+        }
+      } catch (err) {
+        log(`Parity audit execution warning: ${err.message || err}`);
       }
-    } catch (err) {
-      log(`Parity audit execution warning: ${err.message || err}`);
+
     }
 
     if (previewSides && mySide !== null) {

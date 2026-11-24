@@ -214,3 +214,33 @@ The documentation follow-up commit and remote SHA are verified by the runner.
 - Tests: Node syntax for PS/Castle/observation PASS; PS help startup without external Showdown PASS; Castle help startup PASS; v3 catalog/flagship and Castle ruleset selection checks PASS; Castle continuation/faint unit tests PASS; cargo test -p nc2000-engine -p nc2000-bot PASS; PS native worker release build PASS; node WASM rebuild PASS; castle-ruleset Node test PASS.
 - Not covered: real PS runtime initialization with an installed Pokemon Showdown build, full live Castle/PS match, specific fault recovery under upstream WASM, and obtaining the hosts actual L_TURN when joining as P2. The upstream castle-bot-design.md still marks general default ruleset changes deferred. Do not label these FULLY_FIXED.
 - Previous successful Castle match boundary remains after 2026-11-20T21-13-05-615Z-K-g1.
+
+<!-- castle-upstream-alignment-stage2-2026-11-24 -->
+## Upstream-alignment repair (2026-11-24)
+
+- Baseline: fork 803de6ec3d8151a42c0d3ee74be39f61562ff855; upstream ba9a251323bd664d3381a59d45ee935b0086f3e7.
+- Evidence: 2026-11-24T02-30-58-075Z-K-g1 (8 decisions) and 2026-11-24T02-38-09-131Z-K-g1 (12 decisions).
+- Stage 1: upstream off-pool belief fallback permitted only after public HP and ruleset checks.
+- Stage 1 operator tests: replay 20/20 PASS, upstream fallback 18 decisions, Discord selftest PASS, Castle regression 14/14 PASS, WASM Castle ruleset PASS.
+- Stage 2: single battle decision pipeline retained; source parity, PP, HP and legal-action guards retained.
+- Stage 2: automatic post-match audit changed to opt-in; raw traces retained for offline audit.
+- Stage 2: bundle manifest updated for Castle modules and flagship v3; fixed iters omitted from example config; handoff updated.
+- Stage 2: two initial decisions tested using reduced-iteration WASM adaptive search, not production full-budget search.
+- Historical duplicate patch scripts retained pending separate deletion review.
+- Remaining: real post-deployment battle and full board parity certification.
+- Git commit/push: NOT PERFORMED by this script.
+
+<!-- castle-upstream-alignment-operator-verification-2026-11-24 -->
+## Upstream-alignment operator test results (2026-11-24)
+
+- Baseline HEAD: 803de6ec3d8151a42c0d3ee74be39f61562ff855.
+- Stage 1: PATCH_READY_FOR_REVIEW; mock gate PASS; node syntax PASS.
+- Stage 1: real Castle trace replay PASS (8 + 12 = 20 decisions); upstream off-pool fallback used in 18 decisions.
+- Stage 1: Discord selftest PASS; Castle regressions 14/14 PASS; WASM Castle ruleset PASS.
+- Stage 2: STAGE2_READY_FOR_REVIEW; bundle manifest PASS (30 files); Discord selftest PASS.
+- Stage 2: adaptive WASM search smoke PASS for both postmerge matches, 128 iterations each, upstream fallback used in both.
+- Stage 2: Castle regressions PASS; WASM Castle ruleset PASS; Git diff check PASS.
+- The two 128-iteration probes do not certify full-budget production adaptive search or full-turn parity.
+- Existing RECOGNIZED_SOURCE_WITHOUT_PROTOCOL events remain investigation items; they were not a blocker in the replay.
+- The raw trace collection remains enabled; post-match parity audit is opt-in.
+- Live postrepair Castle battle and full-board parity are NOT TESTED.
