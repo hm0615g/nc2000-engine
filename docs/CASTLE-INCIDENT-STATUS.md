@@ -270,3 +270,18 @@ The documentation follow-up commit and remote SHA are verified by the runner.
 - Operator regression on both actual traces: errorCount=0 in raw and reparse modes; Discord selftest PASS; continuation/faint regression PASS.
 - Position full certification remains INCOMPLETE; converter branches and hidden opponent state are not fully certified.
 - Worktree change only: no commit/push, no Castle request, no source deletion.
+
+<!-- castle-live-auditor-fork-verified-2026-11-24 -->
+## Verified fork deployment: Castle live trace auditor (2026-11-24)
+
+- Fork: hm0615g/nc2000-engine, branch review-local-changes.
+- Source commit: cc2c1abc53740e6b415f419fc6b9114682829eab.
+- Source branch SHA independently checked after non-force push to the explicit fork URL.
+- Live matches: 2026-11-24T04-16-23-779Z-K-g1 (LOSE, 15 decisions) and 2026-11-24T04-22-20-293Z-K-g1 (LOSE, 11 decisions).
+- Both matches: 26/26 normal observed decisions, 24 adaptive searches, 2 single legal choices, 26 confirmed submissions, zero observation exceptions or emergency fallbacks.
+- Reparsed audit after fix: 0 errors, 55 warnings total; 3 confirmed Castle CHANGE-page foe-count delays and 52 legacy-reparse/limited-certification warnings.
+- Negative action-mapping regression: PASS; prior operator run also verified unresolved count remains an error.
+- Discord selftest, Castle continuation and faint regression: PASS.
+- Auditor-only patch: no live battle performed after this code change.
+- Complete game-state certification remains PENDING: converter branches, hidden opponent state, and field effects are not all independently certified.
+- No upstream core, WASM, or Web changes. Old duplicate diagnostic tools were not deleted.
