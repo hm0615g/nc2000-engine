@@ -29,6 +29,7 @@
 
 use nc2000_engine::battle::PokemonSet;
 use nc2000_engine::dex::{toid, Dex};
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::{Battle, Status};
 use serde::{Deserialize, Serialize};
 
@@ -85,6 +86,10 @@ pub struct PositionSpec {
     /// Optional Stadium / Open Preview total level caps per side (`[me, opp]`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preview_level_caps: Option<[Option<u32>; 2]>,
+    /// Optional ruleset identifier (`"gen2stadium2"` when omitted, or Castle
+    /// ids like `"castle-tournament"`, `"castle-raw"`, `"castle-free"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ruleset: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -409,6 +414,14 @@ impl PositionSpec {
         Ok(spec)
     }
 
+    pub fn resolved_ruleset(&self) -> Result<Ruleset, String> {
+        match self.ruleset.as_deref() {
+            None => Ok(Ruleset::PsStadium2),
+            Some(id) => Ruleset::parse_id(id)
+                .ok_or_else(|| format!("ruleset: unknown ruleset `{id}`")),
+        }
+    }
+
     /// Structural checks that must hold before any of this reaches the
     /// engine. Deliberately fail-closed and specific: this is the one place
     /// a hand-typed position is rejected, and "it silently analyzed a
@@ -417,6 +430,7 @@ impl PositionSpec {
         if self.schema != SCHEMA {
             return Err(format!("schema: expected {SCHEMA}, got {}", self.schema));
         }
+        let _ = self.resolved_ruleset()?;
         if self.side > 1 {
             return Err(format!("side: {} (must be 0 or 1)", self.side));
         }
@@ -502,8 +516,15 @@ impl PositionSpec {
     /// Derived by constructing the sets through the real engine, so DVs,
     /// stat exp and the level all land exactly as they will in the battle.
     pub fn own_maxhps(&self, dex: &Dex) -> Result<Vec<i32>, String> {
-        let b = Battle::from_fixture(dex, STAT_SEED, &self.own_sets, &self.own_sets)
-            .map_err(|e| format!("own sets: {e:?}"))?;
+        let ruleset = self.resolved_ruleset()?;
+        let b = Battle::from_fixture_with_ruleset(
+            dex,
+            STAT_SEED,
+            &self.own_sets,
+            &self.own_sets,
+            ruleset,
+        )
+        .map_err(|e| format!("own sets: {e:?}"))?;
         Ok(b.sides[0].roster.iter().map(|p| p.maxhp).collect())
     }
 
@@ -644,6 +665,7 @@ impl PositionSpec {
             .own_sets
             .get(slot)
             .ok_or_else(|| format!("no set for own roster slot {slot}"))?;
+        let ruleset = self.resolved_ruleset()?;
         let encore = mon.volatile("encore").and_then(|v| v.move_key.clone());
         let disable = mon.volatile("disable").and_then(|v| v.move_key.clone());
         let mut out = Vec::new();
@@ -653,7 +675,7 @@ impl PositionSpec {
             }
             let key = toid(name);
             let id = dex.moves.id(&key).ok_or_else(|| format!("unknown move `{name}`"))?;
-            let maxpp = max_pp(dex, id);
+            let maxpp = max_pp_for_ruleset(dex, id, ruleset);
             let disabled = match (&encore, &disable) {
                 (Some(em), _) => plain(&toid(em)) != plain(&key),
                 (None, Some(dm)) => plain(&toid(dm)) == plain(&key),
@@ -806,10 +828,20 @@ pub fn plain(key: &str) -> &str {
 /// Max PP under this format's fixed 3 PP Ups — the same rule the engine
 /// applies when it builds a set (`battle/mod.rs`, `new_pokemon`).
 pub fn max_pp(dex: &Dex, id: nc2000_engine::dex::MoveId) -> i32 {
+    max_pp_for_ruleset(dex, id, Ruleset::PsStadium2)
+}
+
+/// Ruleset-aware max PP at 3 PP Ups (`64` for base-40 PP moves on Castle PBS,
+/// `61` on PS Stadium 2).
+pub fn max_pp_for_ruleset(
+    dex: &Dex,
+    id: nc2000_engine::dex::MoveId,
+    ruleset: Ruleset,
+) -> i32 {
     let ms = dex.move_static(id);
     let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
     let mut maxpp = ms.pp * (5 + pp_ups) / 5;
-    if ms.pp == 40 {
+    if ms.pp == 40 && !ruleset.is_castle() {
         maxpp -= pp_ups;
     }
     maxpp

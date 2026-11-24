@@ -1,0 +1,121 @@
+{
+  "candidate": "proposed",
+  "redistribution_tested": false,
+  "worst_measured_opponent": "sample-17-orig",
+  "largest_observed_gain": 0.03125,
+  "upper_gain_on_tested_shortlist": 0.41804337760869037,
+  "heldout_against_final_pool": {
+    "apex-c04-bug-3atkstar-boomgen-cam1-boom-lax": {
+      "score": 0.28125,
+      "blocks": 16,
+      "interval": [
+        0,
+        0.6680433776086904
+      ],
+      "wins": 9
+    },
+    "sample-14": {
+      "score": 0.4375,
+      "blocks": 16,
+      "interval": [
+        0.05070662239130963,
+        0.8242933776086904
+      ],
+      "wins": 14
+    },
+    "sample-17-orig": {
+      "score": 0.53125,
+      "blocks": 16,
+      "interval": [
+        0.14445662239130963,
+        0.9180433776086904
+      ],
+      "wins": 17
+    }
+  },
+  "phases": {
+    "screen": {
+      "games": 224,
+      "battle_seeds": 56,
+      "ties": 0,
+      "turn_caps": 0,
+      "sha256": "5eceedf226c9f05f1811490bcb48e012194a2a1aaf6125d73c170a73a426ec22"
+    },
+    "response": {
+      "games": 166,
+      "battle_seeds": 83,
+      "ties": 0,
+      "turn_caps": 0,
+      "sha256": "485980b75a3118e283c0aae60dd888a678b19a6a1c798e3fd4cd70a2c34d9473"
+    },
+    "refine": {
+      "games": 108,
+      "battle_seeds": 6,
+      "ties": 0,
+      "turn_caps": 0,
+      "sha256": "8e8d9e5716b9af14a5a8d447c16e0201b85f1c36999e45d4abae2f7fedd79661"
+    },
+    "fit": {
+      "games": 80,
+      "battle_seeds": 40,
+      "ties": 0,
+      "turn_caps": 0,
+      "sha256": "743edd035ffcc86dcc077b35df21ae9f294359aa85c2c82c86688383a077159e"
+    },
+    "deviation": {
+      "games": 214,
+      "battle_seeds": 107,
+      "ties": 0,
+      "turn_caps": 0,
+      "sha256": "dc5b9a464f9cf02112419e02c86199ff1e618239bc3c5bf6f88cd25455dbabf0"
+    },
+    "confirmation": {
+      "games": 128,
+      "battle_seeds": 16,
+      "ties": 0,
+      "turn_caps": 0,
+      "sha256": "7d0e4ec518a46514b7e9bbfa0a4655eb80850998287ca45a96c34a83d1ec7050"
+    },
+    "stratified": {
+      "games": 28,
+      "battle_seeds": 14,
+      "ties": 0,
+      "turn_caps": 0,
+      "sha256": "d3d09510db9aa09ccee77d4331477a89ea2f96cf74b713e03acf55d6ca7d97c7"
+    }
+  },
+  "games": 948,
+  "outside_parties_screened": 27,
+  "direct_deviations_screened": 67,
+  "stratified_repeat": {
+    "opponent": "sample-17-orig",
+    "heldout_preceding": {
+      "score": 0.53125,
+      "blocks": 16,
+      "interval": [
+        0.14445662239130963,
+        0.9180433776086904
+      ],
+      "wins": 17
+    },
+    "challenger": {
+      "score": 0.5261182747820295,
+      "blocks": 14,
+      "interval": [
+        0.07964227057534673,
+        0.9725942789887123
+      ]
+    },
+    "conditional_scores": {
+      "sample-07-beq-g2-c4": 0.25,
+      "sample-07": 0.25,
+      "apex-c04-bug-3atkstar-boomgen": 0.25,
+      "red-v10-s1105-r2-s0142": 0.75,
+      "apex-c08-surgical-142": 0.75,
+      "red-v10-s1105-r1-s0148": 0.5,
+      "red-v10-s1105-r2-s0155": 1.0
+    },
+    "sampling": "Two fresh seat-pairs per candidate type; challenger receives the full proposed pool throughout."
+  },
+  "bounds": "Two-sided simultaneous 95% Hoeffding intervals on independent seat-pair scores, Bonferroni across the final held-out opponents."
+}

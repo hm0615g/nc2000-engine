@@ -1,0 +1,54 @@
+{
+  "profiles": [
+    "D5",
+    "S4-tilt",
+    "incumbent",
+    "red-v10-s1105-r2-s0155"
+  ],
+  "comparisons": {
+    "D5": {
+      "nominee": "D5-mut",
+      "base": 0.5833333333333334,
+      "nominated": 0.5,
+      "paired_delta": {
+        "score": -0.08333333333333333,
+        "blocks": 6,
+        "interval": [
+          -1,
+          1
+        ]
+      }
+    },
+    "S4": {
+      "nominee": "S4-tilt",
+      "base": 0.3333333333333333,
+      "nominated": 0.5,
+      "paired_delta": {
+        "score": 0.16666666666666666,
+        "blocks": 6,
+        "interval": [
+          -0.9422185774883115,
+          1
+        ]
+      }
+    },
+    "incumbent": {
+      "nominee": "incumbent-tilt",
+      "base": 0.5833333333333334,
+      "nominated": 0.25,
+      "paired_delta": {
+        "score": -0.3333333333333333,
+        "blocks": 6,
+        "interval": [
+          -1,
+          0.7755519108216449
+        ]
+      }
+    }
+  },
+  "outsiders": {
+    "red-v10-s1105-r2-s0155": 0.5833333333333334,
+    "mjj-2010-garap-a": 0.5833333333333334,
+    "rental-cban-8": 0.3333333333333333
+  }
+}

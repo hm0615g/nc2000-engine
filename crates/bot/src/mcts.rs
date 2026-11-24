@@ -178,8 +178,8 @@ impl MctsAgent {
 
         // ---- selection / expansion
         let reward0 = loop {
-            if let Some(o) = sim.outcome() {
-                break outcome_reward(o);
+            if let Some(v) = eval::turn_limit_outcome_value(sim) {
+                break v;
             }
             if sim.turn > turn_cap {
                 break self.leaf_eval(sim, dex);
@@ -279,6 +279,28 @@ pub fn playout_value(
     playout_value_cached(sim, dex, playout, turn_cap, rng, rules, None)
 }
 
+#[inline]
+fn value_to_outcome(v: f64) -> Outcome {
+    if v >= 0.999_999 {
+        Outcome::P1Win
+    } else if v <= 0.000_001 {
+        Outcome::P2Win
+    } else {
+        Outcome::Tie
+    }
+}
+
+#[inline]
+pub(crate) fn value_to_outcome_code(v: f64) -> u8 {
+    if v >= 0.999_999 {
+        1
+    } else if v <= 0.000_001 {
+        2
+    } else {
+        3
+    }
+}
+
 pub fn playout_value_cached(
     sim: &mut Battle,
     dex: &Dex,
@@ -288,18 +310,20 @@ pub fn playout_value_cached(
     rules: RolloutRules,
     roster_cache: Option<&nc2000_engine::compact::RosterCompactCache>,
 ) -> f64 {
-    if let Some(o) = sim.outcome() {
+    if let Some(v) = eval::turn_limit_outcome_value(sim) {
+        let o = sim.outcome().unwrap_or_else(|| value_to_outcome(v));
         set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
-        return outcome_reward(o);
+        return v;
     }
     // If either side is still in TeamPreview, advance that single step on `Battle`
     // before converting the 3v3 party state into the 256-byte `CompactBattle` kernel.
     while sim.sides[0].request_state() == Some(nc2000_engine::state::RequestKind::TeamPreview)
         || sim.sides[1].request_state() == Some(nc2000_engine::state::RequestKind::TeamPreview)
     {
-        if let Some(o) = sim.outcome() {
+        if let Some(v) = eval::turn_limit_outcome_value(sim) {
+            let o = sim.outcome().unwrap_or_else(|| value_to_outcome(v));
             set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
-            return outcome_reward(o);
+            return v;
         }
         if sim.turn > turn_cap {
             set_last_sim_end(SimEndInfo::from_battle(sim, None));
@@ -327,9 +351,10 @@ pub fn playout_value_cached(
             .expect("legal_choices produced an illegal choice");
     }
 
-    if let Some(o) = sim.outcome() {
+    if let Some(v) = eval::turn_limit_outcome_value(sim) {
+        let o = sim.outcome().unwrap_or_else(|| value_to_outcome(v));
         set_last_sim_end(SimEndInfo::from_battle(sim, Some(o)));
-        return outcome_reward(o);
+        return v;
     }
     if sim.turn > turn_cap || matches!(playout, Playout::Heavy { turns: 0, .. }) {
         set_last_sim_end(SimEndInfo::from_battle(sim, None));
@@ -347,10 +372,14 @@ pub fn playout_value_cached(
         };
     }
 
+    let effective_cap = sim
+        .ruleset
+        .turn_limit()
+        .map_or(turn_cap, |lim| turn_cap.min(lim));
     let cutoff = match playout {
-        Playout::Uniform => turn_cap,
+        Playout::Uniform => effective_cap,
         Playout::Heavy { turns, .. } => {
-            turn_cap.min(sim.turn.saturating_add(turns.saturating_sub(1)))
+            effective_cap.min(sim.turn.saturating_add(turns.saturating_sub(1)))
         }
     };
 
@@ -374,23 +403,20 @@ pub fn compact_playout_value(
 ) -> f64 {
     let start_turn = cb.turn;
     let mut pivot_token = [1u8; 2];
+    let effective_cutoff = table
+        .ruleset
+        .turn_limit()
+        .map_or(cutoff, |lim| cutoff.min(lim));
     loop {
-        match cb.outcome {
-            1 => {
-                set_last_sim_end(SimEndInfo::from_compact(cb));
-                return 1.0;
+        if let Some(v) = eval::compact_turn_limit_outcome(cb, table) {
+            let mut info = SimEndInfo::from_compact(cb);
+            if info.outcome == 0 {
+                info.outcome = value_to_outcome_code(v);
             }
-            2 => {
-                set_last_sim_end(SimEndInfo::from_compact(cb));
-                return 0.0;
-            }
-            3 => {
-                set_last_sim_end(SimEndInfo::from_compact(cb));
-                return 0.5;
-            }
-            _ => {}
+            set_last_sim_end(info);
+            return v;
         }
-        if cb.turn > cutoff {
+        if cb.turn > effective_cutoff {
             set_last_sim_end(SimEndInfo::from_compact(cb));
             return match playout {
                 Playout::Uniform => compact_hp_eval(cb, table),
@@ -434,7 +460,7 @@ pub fn compact_playout_value(
 /// Apply compact rollout actions while honoring directed Baton Pass receiver codes
 /// (`((recv_slot + 1) << 4) | move_slot`) without touching `crates/engine`.
 #[inline]
-fn apply_compact_actions_with_bp_target(
+pub fn apply_compact_actions_with_bp_target(
     cb: &mut nc2000_engine::compact::CompactBattle,
     table: &nc2000_engine::compact::MatchTable,
     picks: [u8; 2],
@@ -447,6 +473,10 @@ fn apply_compact_actions_with_bp_target(
         if picks[0] >= 16 { picks[0] & 3 } else { picks[0] },
         if picks[1] >= 16 { picks[1] & 3 } else { picks[1] },
     ];
+    if table.ruleset.turn_limit().is_some_and(|lim| cb.turn >= lim) {
+        cb.apply_actions(table, raw_picks);
+        return;
+    }
     let backup = *cb;
     let mut masked_bits = [0u8; 2];
     for s in 0..2usize {
@@ -467,13 +497,17 @@ fn apply_compact_actions_with_bp_target(
         }
     }
     cb.apply_actions(table, raw_picks);
-    // Restore hidden alive bench bits; if a directed receiver fainted mid-turn while a 3rd mon
-    // was masked (avoiding single-bench auto-switch), replay cleanly with unmasked alive_mask.
+    // Restore hidden alive bench bits; if the battle terminated (e.g. turn-limit judge) or
+    // a directed receiver/passer fainted mid-turn while a 3rd mon was masked (avoiding
+    // single-bench auto-switch), replay cleanly with unmasked alive_mask.
     let mut need_fallback = false;
     for s in 0..2usize {
         if masked_bits[s] != 0 {
             let recv_slot = ((picks[s] >> 4).wrapping_sub(1)).min(2) as usize;
-            if cb.mons[s * 3 + recv_slot].hp() <= 0 || cb.mons[s * 3 + backup.sides[s].active_idx as usize].hp() <= 0 {
+            if cb.outcome != 0
+                || cb.mons[s * 3 + recv_slot].hp() <= 0
+                || cb.mons[s * 3 + backup.sides[s].active_idx as usize].hp() <= 0
+            {
                 need_fallback = true;
             } else {
                 cb.sides[s].alive_mask |= masked_bits[s];
@@ -487,14 +521,15 @@ fn apply_compact_actions_with_bp_target(
 }
 
 #[inline]
-fn compact_hp_eval(
+pub(crate) fn compact_hp_eval(
     cb: &nc2000_engine::compact::CompactBattle,
     table: &nc2000_engine::compact::MatchTable,
 ) -> f64 {
     let f = |s: usize| {
         let mut sum = 0.0;
         let mut cnt = 0.0;
-        for slot in 0..3usize {
+        for &slot_u8 in &cb.party_order(s) {
+            let slot = slot_u8 as usize;
             let idx = s * 3 + slot;
             let maxhp = table.mons[idx].maxhp;
             if maxhp > 0 {
@@ -681,7 +716,7 @@ fn compact_perish_combo(
         return None;
     }
     let foe_bench = cb.sides[foe_side].alive_mask.count_ones() > 1;
-    let me_trapped = (me.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0;
+    let me_trapped = me.is_trapped();
     if let Some(phaze_act) = phaze {
         let counting = (me.vol_flags & vol_bit::PERISH_SONG) != 0 && me.perish_turns() >= 2;
         if me_trapped && counting && foe_bench {
@@ -698,7 +733,7 @@ fn compact_perish_combo(
     if cb.best_hit_fraction(table, side, me_slot, foe_side, foe_slot) >= 1.0 {
         return None;
     }
-    if (foe.vol_flags & vol_bit::TRAPPED_OR_LOCKED) != 0 || !foe_bench {
+    if foe.is_trapped() || !foe_bench {
         return Some(song_act);
     }
     trap
@@ -832,8 +867,8 @@ fn compact_greedy_pick(
                     let can_pass = has_sub
                         || foe_asleep
                         || *me_faster_opt.get_or_insert_with(|| {
-                            cb.mon_action_speed(table, side, att_slot)
-                                > cb.mon_action_speed(table, def_side, def_slot)
+                            eval::compare_action_speed(cb, table, side, att_slot, def_side, def_slot)
+                                == std::cmp::Ordering::Greater
                         });
                     if can_pass {
                         if let Some(&bp_c) = cs.iter().find(|&&c| {
@@ -876,8 +911,8 @@ fn compact_greedy_pick(
                     && foe.timers[timer_idx::CONFUSION] >= 2
                     && me.hp() * 2 > table.mons[att_idx].maxhp.max(1)
                     && *me_faster_opt.get_or_insert_with(|| {
-                        cb.mon_action_speed(table, side, att_slot)
-                            > cb.mon_action_speed(table, def_side, def_slot)
+                        eval::compare_action_speed(cb, table, side, att_slot, def_side, def_slot)
+                            == std::cmp::Ordering::Greater
                     })
                 {
                     if let Some(&sub_c) = cs
@@ -1089,7 +1124,11 @@ impl Agent for MctsAgent {
         }
         let mut root = battle.clone();
         root.set_log_enabled(false);
-        let turn_cap = root.turn.saturating_add(self.cfg.horizon);
+        let raw_cap = root.turn.saturating_add(self.cfg.horizon);
+        let turn_cap = root
+            .ruleset
+            .turn_limit()
+            .map_or(raw_cap, |lim| raw_cap.min(lim));
 
         let mut nodes = vec![Node::new()];
         for _ in 0..self.cfg.iterations {

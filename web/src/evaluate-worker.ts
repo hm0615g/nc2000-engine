@@ -26,12 +26,15 @@ onmessage = (event: MessageEvent<WorkerRequest>) => {
   }
   if (started) return;
   started = true;
-  void run(event.data.run, event.data.beliefJson).catch((e) =>
+  const ruleset =
+    (event.data as { ruleset?: string }).ruleset ??
+    (event.data.run.config as { ruleset?: string }).ruleset;
+  void run(event.data.run, event.data.beliefJson, ruleset).catch((e) =>
     send({ type: "error", message: String(e), ...(e instanceof ToolError ? { issue: e.issue } : {}) }),
   );
 };
 
-async function run(run: EvaluationRun, beliefJson: string) {
+async function run(run: EvaluationRun, beliefJson: string, ruleset?: string) {
   await init();
   const dex = new Dex();
   try {
@@ -47,12 +50,20 @@ async function run(run: EvaluationRun, beliefJson: string) {
           playerSide === 0
             ? [run.config.player, opponent]
             : [opponent, run.config.player];
-        const battle = new Battle(
-          dex,
-          JSON.stringify(teams[0].sets),
-          JSON.stringify(teams[1].sets),
-          deriveBattleSeed(scheduled.battleSeed),
-        );
+        const battle = ruleset
+          ? Battle.withRuleset(
+              dex,
+              JSON.stringify(teams[0].sets),
+              JSON.stringify(teams[1].sets),
+              deriveBattleSeed(scheduled.battleSeed),
+              ruleset,
+            )
+          : new Battle(
+              dex,
+              JSON.stringify(teams[0].sets),
+              JSON.stringify(teams[1].sets),
+              deriveBattleSeed(scheduled.battleSeed),
+            );
         const agents: ProtocolSearcher[] = [];
         const channels: PlayerChannel[] = [];
         let game: GameResult;
@@ -61,8 +72,24 @@ async function run(run: EvaluationRun, beliefJson: string) {
             battle.setPreviewLevelCap(side, t.relaxed ? undefined : 155),
           );
           for (let side = 0; side < 2; side++) {
-            const agent = new ProtocolSearcher(dex, side, beliefJson,
-              scheduled.agentSeeds[side === playerSide ? 0 : 1], run.config.c, undefined);
+            const agent = ruleset
+              ? ProtocolSearcher.withRuleset(
+                  dex,
+                  side,
+                  beliefJson,
+                  scheduled.agentSeeds[side === playerSide ? 0 : 1],
+                  run.config.c,
+                  undefined,
+                  ruleset,
+                )
+              : new ProtocolSearcher(
+                  dex,
+                  side,
+                  beliefJson,
+                  scheduled.agentSeeds[side === playerSide ? 0 : 1],
+                  run.config.c,
+                  undefined,
+                );
             agent.setOwnTeam(JSON.stringify(teams[side].sets));
             agents.push(agent);
             channels.push(new PlayerChannel(side));

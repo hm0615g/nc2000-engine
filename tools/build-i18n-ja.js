@@ -1,6 +1,7 @@
 // Build data/i18n-ja.json — Japanese display names for everything the web
 // UI shows by name: the format's 251 species, 267 moves (251 real + 16
-// typed Hidden Power variants), 62 items, and 17 types.
+// typed Hidden Power variants), 73 items (62 PS dex + 11 Castle Mail/Ball),
+// and 17 types.
 //
 // One-time generator (M13): fetches official Japanese names from PokéAPI
 // (https://pokeapi.co, `names` arrays, language ja-Hrkt with ja fallback)
@@ -22,11 +23,13 @@ const DEX = require(path.join(ROOT, 'data', 'gen2stadium2.json'));
 const OUT = path.join(ROOT, 'data', 'i18n-ja.json');
 const API = 'https://pokeapi.co/api/v2';
 
-// Gen-2 exclusive items missing from PokéAPI (source: Bulbapedia jname).
+// Gen-2 exclusive items missing from PokéAPI + Castle PBS spelling overrides
+// and extra Gen 2 Mail / Park Ball items (source: Bulbapedia jname & PDINPUT.cgi).
 const MANUAL_ITEMS = {
   berry: 'きのみ',
   berserkgene: 'はかいのいでんし',
   bitterberry: 'にがいきのみ',
+  blackglasses: 'くろいめがね', // Gen 2 / PBS spelling (PokéAPI uses Gen 3+ くろいメガネ)
   burntberry: 'やけたきのみ',
   goldberry: 'おうごんのみ',
   iceberry: 'こおったきのみ',
@@ -38,6 +41,18 @@ const MANUAL_ITEMS = {
   pinkbow: 'ピンクのリボン',
   polkadotbow: 'みずたまリボン',
   mail: 'メール', // PS's generic gen-2 Mail item
+  // 11 Castle-only Gen 2 Mail & Park Ball items (PDINPUT.cgi IDs 159, 178, 182..190)
+  flowermail: 'はながらボール',
+  surfmail: 'なみのりメール',
+  litebluemail: 'みずいろメール',
+  portraitmail: 'にがおえメール',
+  lovelymail: 'ラブリーメール',
+  eonmail: 'ブイブイメール',
+  morphmail: 'へんしんメール',
+  blueskymail: 'あおぞらメール',
+  musicmail: 'おんぷメール',
+  miragemail: 'まぼろしメール',
+  parkball: 'パークボール',
 };
 
 // PS item id -> PokéAPI slug when the name-derived slug doesn't match.
@@ -132,13 +147,13 @@ async function main() {
     manualFills.push(`moves.${id} (composed: Hidden Power + type)`);
   }
 
-  // ---- items (62; slug from the PS display name, manual for gen-2-only)
+  // ---- items (62 PS dex + 11 Castle Mail/Ball = 73; slug from PS display name, manual for gen-2/Castle)
   const items = {};
   const itemEntries = Object.entries(DEX.items);
   await pool(itemEntries, async ([id, it]) => {
     if (MANUAL_ITEMS[id]) {
       items[id] = MANUAL_ITEMS[id];
-      manualFills.push(`items.${id} (Bulbapedia)`);
+      manualFills.push(`items.${id} (Bulbapedia/PBS)`);
       return;
     }
     const slug = ITEM_SLUG_OVERRIDES[id] ?? slugFromName(it.name);
@@ -147,6 +162,12 @@ async function main() {
     if (!name) throw new Error(`no ja name for item ${id} (slug ${slug})`);
     items[id] = name;
   });
+  for (const [id, name] of Object.entries(MANUAL_ITEMS)) {
+    if (!items[id]) {
+      items[id] = name;
+      manualFills.push(`items.${id} (Castle/PBS)`);
+    }
+  }
 
   const out = {
     meta: {

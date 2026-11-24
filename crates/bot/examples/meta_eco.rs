@@ -10094,8 +10094,17 @@ struct CompiledRoster6 {
 
 impl CompiledRoster6 {
     fn compile(dex: &Dex, sets: &[PokemonSet]) -> Self {
+        Self::compile_with_ruleset(dex, sets, nc2000_engine::rules::Ruleset::PsStadium2)
+    }
+
+    fn compile_with_ruleset(
+        dex: &Dex,
+        sets: &[PokemonSet],
+        ruleset: nc2000_engine::rules::Ruleset,
+    ) -> Self {
         assert_eq!(sets.len(), 6, "CompiledRoster6 requires a 6-Pokemon team");
         let legal = legal_triples_sets(sets);
+        let is_castle = ruleset.is_castle();
         let ensure_det_gender = |s: &mut PokemonSet| {
             if s.gender.is_none() {
                 if let Some(sid) = dex.species.id(&s.species) {
@@ -10103,6 +10112,26 @@ impl CompiledRoster6 {
                     s.gender = Some(match sp.gender.as_deref() {
                         Some("N") => "N".to_string(),
                         Some("F") => "F".to_string(),
+                        Some("M") => "M".to_string(),
+                        _ if is_castle => {
+                            let atk_iv = s
+                                .ivs
+                                .as_ref()
+                                .and_then(|m| m.get("atk").copied())
+                                .unwrap_or(30) as i32;
+                            let f_ratio = sp
+                                .extra
+                                .get("genderRatio")
+                                .and_then(|gr| gr.get("F"))
+                                .and_then(|v| v.as_f64())
+                                .unwrap_or(0.5);
+                            let threshold = (f_ratio * 16.0).round() as i32;
+                            if (atk_iv / 2) < threshold {
+                                "F".to_string()
+                            } else {
+                                "M".to_string()
+                            }
+                        }
                         _ => "M".to_string(),
                     });
                 }
@@ -10123,8 +10152,10 @@ impl CompiledRoster6 {
             let i1 = 2 * k + 1;
             let s0 = [clean_sets[i0].clone(), dummy50.clone(), dummy50.clone()];
             let s1 = [clean_sets[i1].clone(), dummy50.clone(), dummy50.clone()];
-            let mut b = nc2000_engine::state::Battle::from_fixture(dex, "1,2,3,4", &s0, &s1)
-                .expect("valid 3v3 fixture");
+            let mut b = nc2000_engine::state::Battle::from_fixture_with_ruleset(
+                dex, "1,2,3,4", &s0, &s1, ruleset,
+            )
+            .expect("valid 3v3 fixture");
             b.set_log_enabled(false);
             b.apply_choices(
                 dex,
@@ -10190,6 +10221,12 @@ fn assemble_3v3_compact(
             .wrapping_add(m.static_fp)
             .wrapping_mul(0xf1357aea2e62a9c5);
     }
+    let rs_tag = r_a.base_table.ruleset.fingerprint_tag();
+    if rs_tag != 0 {
+        fp = fp
+            .wrapping_add(rs_tag)
+            .wrapping_mul(0xf1357aea2e62a9c5);
+    }
     let table = MatchTable {
         mons: static_mons,
         move_specs,
@@ -10233,13 +10270,27 @@ fn assemble_3v3_compact(
         turn: 1,
         weather_kind: nc2000_engine::compact::CompactWeather::None,
         weather_turns: 0,
-        quick_claw_roll: (((prng_seed >> 32) & 0xFF) < 60) as u8,
+        quick_claw_roll: if table.ruleset.independent_quick_claw() {
+            ((((prng_seed >> 32) & 0xFF) < 60) as u8)
+                | (((((prng_seed >> 40) & 0xFF) < 60) as u8) << 1)
+        } else if ((prng_seed >> 32) & 0xFF) < 60 {
+            0b11
+        } else {
+            0
+        },
         outcome: 0,
         speed_order: 0,
         clause_flags: 5,
         hurt_damage_this_turn: [0, 0],
         hurt_cat_this_turn: [0, 0],
         match_fp_lo: fp as u16,
+        future_sight_dmg: [0, 0],
+        future_sight_turns: [0, 0],
+        future_sight_src: [0, 0],
+        bp_switch_flags: 0,
+        triple_kick_mult: 0,
+        turn_extra_flags: 0,
+        reserved_castle: [0; 5],
         prng_seed,
     };
     (table, cb)
@@ -10375,6 +10426,10 @@ fn eval_incremental_adaptive_preview_matrix_compact(
     (mean_mat, tot_n)
 }
 
+/// Transpose a **seat-symmetrized** `(ka x kb)` preview payoff matrix (`0.5 * (V_1P(A,B) + (1 - V_1P(B,A)))`).
+/// INVARIANT: Valid for both PS Stadium 2 and Castle PBS (`1P -> 2P` fixed EOT order) ONLY because
+/// `eval_crn_cell_pair_compact` averages both seat orientations `(A as P1, B as P2)` and `(B as P1, A as P2)`.
+/// Never pass a single-seat (`P1`-only) Castle payoff matrix into this function.
 fn transpose_preview_matrix(mat: &[f64], ka: usize, kb: usize) -> Vec<f64> {
     let mut out = vec![0.5f64; kb * ka];
     for ia in 0..ka {
@@ -17527,17 +17582,20 @@ fn cmd_bake_catalog_preview(args: &[String]) {
     );
 
     // Also update data/compiled-preview-v1.json directly using nc2000_bot::compiled_preview::key(&b, 0)
+    let comp_ruleset = nc2000_engine::rules::Ruleset::PsStadium2;
+    let comp_epoch = nc2000_bot::compiled_preview::policy_epoch_for(comp_ruleset);
     let comp_path = root.join("data/compiled-preview-v1.json");
     let comp_txt = std::fs::read_to_string(&comp_path).expect("read data/compiled-preview-v1.json");
     let mut comp_v: Value = serde_json::from_str(&comp_txt).unwrap();
     let mut new_comp_policies = serde_json::Map::new();
     for i in 0..n_teams {
         for j in 0..n_teams {
-            let b = nc2000_engine::state::Battle::from_fixture(
+            let b = nc2000_engine::state::Battle::from_fixture_with_ruleset(
                 &dex,
                 "1,2,3,4",
                 &entries[i].raw_sets,
                 &entries[j].raw_sets,
+                comp_ruleset,
             )
             .unwrap();
             let key = nc2000_bot::compiled_preview::key(&b, 0).unwrap();
@@ -17551,6 +17609,8 @@ fn cmd_bake_catalog_preview(args: &[String]) {
         }
     }
     assert_eq!(new_comp_policies.len(), 990);
+    comp_v["policyEpoch"] = json!(comp_epoch);
+    comp_v["build"] = json!(comp_epoch);
     comp_v["policies"] = Value::Object(new_comp_policies);
     comp_v["matchups"] = json!(990);
     comp_v["method"] = out_matrix["method"].clone();

@@ -8,16 +8,19 @@ pipeline for blind play (`search-profiles.json`).
 Never substitute one artifact for another ([`web/src/data.ts`](../web/src/data.ts),
 [`web/src/app.tsx`](../web/src/app.tsx)):
 
-1. **Catalog (`data/team-pool-v2/team-pool.json`)**: Playable built-in party list
+1. **Catalog (`data/team-pool-v3/team-pool.json`; historical `data/team-pool-v2/team-pool.json`)**: Playable built-in party list
    for humans and ordinary bot draws (`drawWeight`). Built-in player options and
    the ordinary bot draw share exact canonical sets.
 2. **Opponent prior (`data/belief-pool-v3/belief-pool.json`)**: Broad known-party
    candidate pool used by `Belief` across all doors and tools. Own-pool
    pruning never strips legal/human-facing archetypes out of the opponent prior.
-3. **Solved mixtures (`data/kodoku-r3/conclusion-equilibrium-deme.json` primary;
-   `data/kodoku-r3/conclusion-equilibrium-r1.json` and
+3. **Primary mixture (`data/team-pool-v3/flagship-mixture.json` primary;
+   `data/kodoku-r3/conclusion-equilibrium-deme.json`,
+   `data/kodoku-r3/conclusion-equilibrium-r1.json`, and
    `data/meta-nash-v3/pool-artifact.json` historical)**: Weighted party draw
-   tables when `?nash` / mixture selection is active.
+   tables when `?nash` / mixture selection is active. The
+   [adaptive bot audit](../data/nash-refresh-v1/README.md) records the measured
+   responses to the historical draw and the five-strategy candidate.
 
 Information mode (`blind` vs historical `open` for fork/kifu replay), search
 coefficients (`data/search-profiles.json`), and production iteration budgets
@@ -45,23 +48,19 @@ The offline pipeline is split into explicit versioned directories and tools:
    [`data/team-selection-v2/PROTOCOL.md`](../data/team-selection-v2/PROTOCOL.md),
    [`data/team-selection-v2/README.md`](../data/team-selection-v2/README.md), and
    [`data/meta-nash-v3/README.md`](../data/meta-nash-v3/README.md).
-4. **Product generation & verification (step 6)** (`tools/build-team-products-v2.js`):
+4. **Product generation & verification (step 6)** (`tools/build-team-products-v2.js`, `tools/build-team-products-v3.js`):
    Assembles the shipped catalog and checks memberships, canonical sets, draw
-   weights, and prior/training alignment. Current compiled preview policies
-   computed against the active catalog and prior are stored in
-   [`data/compiled-preview-v1.json`](../data/compiled-preview-v1.json)
-   (baked via [`crates/bot/examples/meta_eco/catalog_preview.rs`](../crates/bot/examples/meta_eco/catalog_preview.rs))
-   and documented in [`PREVIEW-PRIOR-COMPATIBILITY.md`](./PREVIEW-PRIOR-COMPATIBILITY.md).
+   weights, and prior/training alignment. Browser Team Preview now runs live
+   search directly on `CompactBattle` (the former pre-baked `compiled-preview-v1.json`
+   table was retired once live preview search became fast enough).
 
 ## Progress
 
 The blind rebuild (`c = 0.4`, unified catalog + broad opponent prior) and
-subsequent `training-v3` normalization, prior expansion, and compiled-preview
-bake are complete and live. For current artifact counts, fingerprints, and
-verification outputs, consult the authoritative data directories directly rather
-than duplicating snapshots here:
+subsequent `training-v3` normalization and prior expansion are complete and live.
+For current artifact counts, fingerprints, and verification outputs, consult the
+authoritative data directories directly rather than duplicating snapshots here:
 
 - Catalog: [`data/team-pool-v2/README.md`](../data/team-pool-v2/README.md)
 - Opponent prior: [`data/belief-pool-v3/README.md`](../data/belief-pool-v3/README.md)
 - Training & spread checks: [`data/training-v3/README.md`](../data/training-v3/README.md)
-- Compiled preview bake: [`data/compiled-preview-v1.json`](../data/compiled-preview-v1.json) & [`crates/bot/examples/meta_eco/catalog_preview.rs`](../crates/bot/examples/meta_eco/catalog_preview.rs)

@@ -81,7 +81,7 @@ impl ReplayOrigin {
     fn agent(&self, dex: &Dex, pool: MetaPool, cfg: RmConfig, seed: u64, side: usize) -> Result<ProtocolAgent, String> {
         let replay = Replay::decode(dex, &self.code)?;
         if self.round >= replay.rounds.len() || side > 1 { return Err("invalid replay fork point".into()); }
-        let mut agent = ProtocolAgent::new(dex, side, pool, cfg, seed);
+        let mut agent = ProtocolAgent::new_with_ruleset(dex, side, pool, cfg, seed, replay.ruleset);
         agent.set_own_team(replay.teams[side].clone());
         if replay.open { agent.pin_opponent(dex, replay.teams[1-side].clone())?; }
         let mut channel = PlayerChannel::new(side);
@@ -204,7 +204,9 @@ impl ForkSpec {
         if let Some(origin) = &self.exact_replay {
             return origin.agent(dex, pool, cfg, seed, self.bot_side());
         }
-        let mut agent = ProtocolAgent::new(dex, self.bot_side(), pool, cfg, seed);
+        let ruleset = self.position.resolved_ruleset()?;
+        let mut agent =
+            ProtocolAgent::new_with_ruleset(dex, self.bot_side(), pool, cfg, seed, ruleset);
         if self.info == Info::Open {
             agent.pin_opponent(dex, self.opponent_team.clone())?;
         }
@@ -242,7 +244,12 @@ impl ForkSpec {
         if stated.iter().map(|&s| s as u8).collect::<Vec<_>>() != truth {
             return Err("fork: opponent_position's party differs from the opponent's picks".into());
         }
-        let mut agent = ProtocolAgent::new(dex, opp, pool, cfg, seed);
+        let ruleset = if view.ruleset.is_some() {
+            view.resolved_ruleset()?
+        } else {
+            self.position.resolved_ruleset()?
+        };
+        let mut agent = ProtocolAgent::new_with_ruleset(dex, opp, pool, cfg, seed, ruleset);
         if self.info == Info::Open {
             agent.pin_opponent(dex, self.position.own_sets.clone())?;
         }

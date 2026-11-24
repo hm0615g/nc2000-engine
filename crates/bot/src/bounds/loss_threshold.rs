@@ -65,7 +65,7 @@ impl BoundSolver<'_> {
         threshold: f64,
     ) -> PolicyLossThresholdReport {
         assert!(side < 2 && threshold.is_finite() && (0.0..1.0).contains(&threshold));
-        assert!(battle.outcome().is_none() && !self.closed.contains_key(&self.node_key(battle)));
+        assert!(super::outcome_value(battle).is_none() && !self.closed.contains_key(&self.node_key(battle)));
         let started = Instant::now();
         let budget = self.cfg.work_budget;
         self.cfg.work_budget = 0;

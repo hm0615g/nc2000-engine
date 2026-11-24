@@ -39,13 +39,16 @@ use serde_json::{json, Value};
 
 use nc2000_engine::battle::{Outcome, PokemonSet};
 use nc2000_engine::dex::{toid, Dex};
+use nc2000_engine::rules::{LearnsetPolicy, Ruleset};
 use nc2000_engine::state::Battle;
-use nc2000_engine::validate::{canonicalize_team, validate_team, Learnsets};
+use nc2000_engine::validate::{
+    canonicalize_team_with_ruleset, validate_team_with_ruleset, CastleRules, Learnsets,
+};
 
 use crate::blind::{BlindAgent, OpenAgent};
 use crate::preview::MetaPool;
 use crate::rng::SplitMix64;
-use crate::runner::{play_game, GameResult};
+use crate::runner::{effective_turn_cap, play_game, GameResult};
 use crate::smmcts::{RmAgent, RmConfig, SelRule};
 use crate::Agent;
 
@@ -101,6 +104,28 @@ const TYPE_BOOST_ITEMS: [(&str, &str); 18] = [
     ("blackbelt", "Fighting"),
     ("blackglasses", "Dark"),
     ("dragonfang", "Dragon"),
+    ("hardstone", "Rock"),
+    ("metalcoat", "Steel"),
+    ("pinkbow", "Normal"),
+    ("polkadotbow", "Normal"),
+    ("poisonbarb", "Poison"),
+    ("sharpbeak", "Flying"),
+    ("silverpowder", "Bug"),
+    ("softsand", "Ground"),
+    ("spelltag", "Ghost"),
+];
+
+/// Castle PBS type-boosting items (1.1x): `dragonscale` replaces `dragonfang`.
+const CASTLE_TYPE_BOOST_ITEMS: [(&str, &str); 18] = [
+    ("charcoal", "Fire"),
+    ("mysticwater", "Water"),
+    ("magnet", "Electric"),
+    ("miracleseed", "Grass"),
+    ("nevermeltice", "Ice"),
+    ("twistedspoon", "Psychic"),
+    ("blackbelt", "Fighting"),
+    ("blackglasses", "Dark"),
+    ("dragonscale", "Dragon"),
     ("hardstone", "Rock"),
     ("metalcoat", "Steel"),
     ("pinkbow", "Normal"),
@@ -408,6 +433,7 @@ pub struct PoolTeamRaw {
 
 pub struct TeamGen {
     ls: Learnsets,
+    ruleset: Ruleset,
     /// Non-dominated format-legal species ids (sorted; 156 of 246).
     species_ids: Vec<String>,
     /// For each species id, same-type strictly higher-stat species ids (sorted
@@ -548,12 +574,26 @@ impl TeamGen {
 
         Ok(TeamGen {
             ls,
+            ruleset: Ruleset::PsStadium2,
             species_ids,
             species_dominators,
             all_items,
             pareto_by_aces,
             teams,
         })
+    }
+
+    pub fn with_ruleset(mut self, ruleset: Ruleset) -> Self {
+        self.ruleset = ruleset;
+        self
+    }
+
+    pub fn set_ruleset(&mut self, ruleset: Ruleset) {
+        self.ruleset = ruleset;
+    }
+
+    pub fn ruleset(&self) -> Ruleset {
+        self.ruleset
     }
 
     pub fn teams(&self) -> &[PoolTeamRaw] {
@@ -570,18 +610,130 @@ impl TeamGen {
         self.teams[i].sets.clone()
     }
 
+    fn species_min_level(&self, sid: &str) -> Option<i64> {
+        if self.ruleset.learnset_policy() == LearnsetPolicy::CastleJpEvents {
+            let cr = CastleRules::embedded();
+            if cr.is_banned_species(sid) {
+                return None;
+            }
+            return cr.species(sid).map(|s| s.min_level.max(50));
+        }
+        self.ls.species(sid).map(|l| l.min_level.max(50))
+    }
+
+    fn species_allows_move_at_level(&self, sid: &str, base_move: &str, level: i64) -> bool {
+        if self.ruleset.learnset_policy() == LearnsetPolicy::CastleJpEvents {
+            let cr = CastleRules::embedded();
+            if cr.is_banned_species(sid) || cr.is_ohko_move(base_move) {
+                return false;
+            }
+            let Some(sp) = cr.species(sid) else { return false };
+            return sp.allows(base_move)
+                && sp.move_min_level.get(base_move).is_none_or(|&mn| level >= mn);
+        }
+        let Some(l) = self.ls.species(sid) else { return false };
+        l.allows(base_move) && l.move_min_level.get(base_move).is_none_or(|&mn| level >= mn)
+    }
+
+    fn species_legal_moves_at_level(&self, dex: &Dex, sid: &str, level: i64) -> Option<Vec<String>> {
+        if self.ruleset.learnset_policy() == LearnsetPolicy::CastleJpEvents {
+            let cr = CastleRules::embedded();
+            if cr.is_banned_species(sid) {
+                return None;
+            }
+            let sp = cr.species(sid)?;
+            return Some(
+                sp.moves
+                    .iter()
+                    .filter(|m| {
+                        !cr.is_ohko_move(m)
+                            && dex.moves.id(m).is_some()
+                            && sp.move_min_level.get(m.as_str()).is_none_or(|&mn| level >= mn)
+                    })
+                    .cloned()
+                    .collect(),
+            );
+        }
+        let l = self.ls.species(sid)?;
+        Some(
+            l.moves
+                .iter()
+                .filter(|m| {
+                    dex.moves.id(m).is_some()
+                        && l.move_min_level.get(m.as_str()).is_none_or(|&mn| level >= mn)
+                })
+                .cloned()
+                .collect(),
+        )
+    }
+
+    fn castle_blacklist_violated(
+        &self,
+        sid: &str,
+        cur_bases: &BTreeSet<String>,
+        cand_base: &str,
+        level: i64,
+    ) -> bool {
+        if self.ruleset.learnset_policy() != LearnsetPolicy::CastleJpEvents {
+            return false;
+        }
+        let Some(sp) = CastleRules::embedded().species(sid) else {
+            return false;
+        };
+        sp.blacklist.iter().any(|rule| {
+            level < rule.min_level
+                && rule.moves.iter().any(|m| m == cand_base)
+                && rule
+                    .moves
+                    .iter()
+                    .all(|m| m == cand_base || cur_bases.contains(m))
+        })
+    }
+
+    fn castle_moveset_legal(&self, sid: &str, moves: &[String], level: i64) -> bool {
+        if self.ruleset.learnset_policy() != LearnsetPolicy::CastleJpEvents {
+            return true;
+        }
+        let Some(sp) = CastleRules::embedded().species(sid) else {
+            return false;
+        };
+        let bases: BTreeSet<String> = moves.iter().map(|m| base_id(m)).collect();
+        !sp.blacklist.iter().any(|rule| {
+            level < rule.min_level && rule.moves.iter().all(|m| bases.contains(m))
+        })
+    }
+
     /// Canonicalize + strict-validate a raw team. `None` = illegal (the
     /// canonicalizer could not repair it) — never emit such a team.
     pub fn canonize(&self, dex: &Dex, raw: &[Value]) -> Option<Vec<Value>> {
         let text = serde_json::to_string(raw).ok()?;
-        let r = canonicalize_team(dex, &self.ls, &text);
+        let r = canonicalize_team_with_ruleset(dex, &self.ls, &text, self.ruleset);
         if r["ok"] != json!(true) {
             return None;
         }
         let team = r["team"].as_array()?.clone();
-        // Strict re-validation: canonical output must carry zero findings.
-        let v = validate_team(dex, &self.ls, &serde_json::to_string(&team).ok()?);
-        if v["ok"] != json!(true) || !v["findings"].as_array()?.is_empty() {
+        // Strict re-validation: on PS canonical output must carry zero findings;
+        // on Castle PBS informational `"warning"` findings (e.g. `ev-effort-unverified`,
+        // `ev-tyrogue-evolution`, `item-castle-inert`) remain legal, rejecting only
+        // `"error"` findings.
+        let v = validate_team_with_ruleset(
+            dex,
+            &self.ls,
+            &serde_json::to_string(&team).ok()?,
+            self.ruleset,
+        );
+        if v["ok"] != json!(true) {
+            return None;
+        }
+        let findings = v["findings"].as_array()?;
+        if self.ruleset.is_castle() {
+            if findings
+                .iter()
+                .any(|f| f["severity"].as_str() == Some("error"))
+            {
+                return None;
+            }
+        } else if !findings.is_empty() {
             return None;
         }
         Some(team)
@@ -612,16 +764,15 @@ impl TeamGen {
                     if teammates.contains(dom) {
                         continue;
                     }
-                    let Some(ls_dom) = self.ls.species(dom) else { continue };
-                    if ls_dom.min_level > level {
+                    let Some(dom_min_lv) = self.species_min_level(dom) else { continue };
+                    if dom_min_lv > level {
                         if is_uncond_dom {
                             if let Some(donor) = (0..raw.len()).find(|&i| {
                                 i != slot
-                                    && set_level(&raw[i]) >= ls_dom.min_level
+                                    && set_level(&raw[i]) >= dom_min_lv
                                     && self
-                                        .ls
-                                        .species(&species_id(&raw[i]))
-                                        .is_none_or(|l| l.min_level.max(50) <= level)
+                                        .species_min_level(&species_id(&raw[i]))
+                                        .is_none_or(|mn| mn <= level)
                             }) {
                                 let donor_lv = set_level(&raw[donor]);
                                 raw[donor]["level"] = json!(level);
@@ -636,9 +787,8 @@ impl TeamGen {
                     }
                     let all_legal = cur_moves.iter().all(|m| {
                         let b = base_id(m);
-                        ls_dom.allows(&b)
-                            && ls_dom.move_min_level.get(b.as_str()).is_none_or(|&mn| level >= mn)
-                    });
+                        self.species_allows_move_at_level(dom, &b, level)
+                    }) && self.castle_moveset_legal(dom, &cur_moves, level);
                     if all_legal || is_uncond_dom {
                         let dom_name = dex.species.get(dex.species.id(dom).unwrap()).name.clone();
                         raw[slot]["species"] = json!(dom_name.clone());
@@ -1354,7 +1504,7 @@ impl TeamGen {
         let floors: Vec<i64> = (0..6)
             .map(|i| {
                 let sid = species_id(&raw[i]);
-                self.ls.species(&sid).map_or(50, |l| l.min_level.max(50))
+                self.species_min_level(&sid).unwrap_or(50)
             })
             .collect();
         let desired_levels: Vec<i64> = (0..6)
@@ -1440,7 +1590,7 @@ impl TeamGen {
             let mut sids: Vec<String> = Vec::new();
             for a in anchors {
                 let id = toid(a);
-                if self.ls.species(&id).is_none() || dex.species.id(&id).is_none() {
+                if self.species_min_level(&id).is_none() || dex.species.id(&id).is_none() {
                     return None;
                 }
                 if !sids.contains(&id) {
@@ -1471,11 +1621,11 @@ impl TeamGen {
             let mut assigned_levels = levels;
             let mut floor_ok = true;
             for i in 0..6 {
-                let fl = self.ls.species(&sids[i]).map_or(50, |l| l.min_level.max(50));
+                let fl = self.species_min_level(&sids[i]).unwrap_or(50);
                 if fl > assigned_levels[i] {
                     if let Some(donor) = (anchors.len()..6)
                         .chain(0..anchors.len())
-                        .find(|&j| assigned_levels[j] >= fl && self.ls.species(&sids[j]).map_or(50, |l| l.min_level.max(50)) <= assigned_levels[i])
+                        .find(|&j| assigned_levels[j] >= fl && self.species_min_level(&sids[j]).unwrap_or(50) <= assigned_levels[i])
                     {
                         assigned_levels.swap(i, donor);
                     } else {
@@ -1536,18 +1686,9 @@ impl TeamGen {
         level: i64,
         cur_moves: &[String],
     ) -> Vec<String> {
-        let Some(l) = self.ls.species(sid) else {
+        let Some(legal) = self.species_legal_moves_at_level(dex, sid, level) else {
             return Vec::new();
         };
-        let legal: Vec<String> = l
-            .moves
-            .iter()
-            .filter(|m| {
-                dex.moves.id(m).is_some()
-                    && l.move_min_level.get(m.as_str()).is_none_or(|&mn| level >= mn)
-            })
-            .cloned()
-            .collect();
         let legal_set: BTreeSet<&str> = legal.iter().map(String::as_str).collect();
         let cur_bases: BTreeSet<String> = cur_moves.iter().map(|m| base_id(m)).collect();
 
@@ -1571,6 +1712,10 @@ impl TeamGen {
         let mut out = Vec::new();
         for a in &legal {
             let a_str = a.as_str();
+            // 0. Castle moveBlackList.csv incompatibility filter
+            if self.castle_blacklist_violated(sid, &cur_bases, a_str, level) {
+                continue;
+            }
             // 1. Unconditional zero-effect / non-competitive moves in trainer battles
             if matches!(a_str, "splash" | "teleport" | "falseswipe" | "payday") {
                 continue;
@@ -1723,24 +1868,16 @@ impl TeamGen {
     /// where the species already learns a no-drawback 100%-accurate move of
     /// that type with BP > 70 and PP >= 5.
     fn non_dominated_hp_types(&self, dex: &Dex, sid: &str, level: i64) -> Vec<String> {
-        let Some(l) = self.ls.species(sid) else {
+        let Some(legal) = self.species_legal_moves_at_level(dex, sid, level) else {
             return Vec::new();
         };
-        let legal: Vec<&String> = l
-            .moves
-            .iter()
-            .filter(|m| {
-                dex.moves.id(m).is_some()
-                    && l.move_min_level.get(m.as_str()).is_none_or(|&mn| level >= mn)
-            })
-            .collect();
 
         let mut out = Vec::new();
         for &t in &HP_TYPES {
             let hp_id = format!("hiddenpower{t}");
             let Some(mid) = dex.moves.id(&hp_id) else { continue };
             let hp_type_name = &dex.moves.get(mid).move_type;
-            let dominated = legal.iter().any(|&m| {
+            let dominated = legal.iter().any(|m| {
                 let m_str = m.as_str();
                 let Some(id) = dex.moves.id(m_str) else { return false };
                 let md = dex.moves.get(id);
@@ -1783,7 +1920,7 @@ impl TeamGen {
     /// Non-dominated legal items for `raw[slot]` given teammates' held items.
     /// When `include_current` is true, `raw[slot]`'s current item is not
     /// filtered out for identity.
-    fn non_dominated_items(
+    pub fn non_dominated_items(
         &self,
         dex: &Dex,
         raw: &[Value],
@@ -1833,6 +1970,12 @@ impl TeamGen {
             };
         }
 
+        let is_castle = self.ruleset.is_castle();
+        let type_boost_items = if is_castle {
+            &CASTLE_TYPE_BOOST_ITEMS
+        } else {
+            &TYPE_BOOST_ITEMS
+        };
         let mut out = Vec::new();
         for item_name in &self.all_items {
             let id = toid(item_name);
@@ -1842,7 +1985,14 @@ impl TeamGen {
             if held.contains(&id) {
                 continue;
             }
-            if ZERO_EFFECT_ITEMS.contains(&id.as_str()) || id == "mail" {
+            if is_castle {
+                // Castle permits distinct dummy items (mail, Apricorn balls, stones, upgrade)
+                // for Thief-bait / Item Clause padding, while excluding bugged inert
+                // dragonfang (Dragon boost is dragonscale) and bitterberry (confusion cure is iceberry).
+                if id.is_empty() || matches!(id.as_str(), "dragonfang" | "bitterberry") {
+                    continue;
+                }
+            } else if ZERO_EFFECT_ITEMS.contains(&id.as_str()) || id == "mail" {
                 continue;
             }
             // Species-specific items
@@ -1852,7 +2002,7 @@ impl TeamGen {
                 }
             }
             // Type-boosting items require at least one damaging move of that type
-            if let Some(&(_, req_type)) = TYPE_BOOST_ITEMS.iter().find(|&&(it, _)| it == id) {
+            if let Some(&(_, req_type)) = type_boost_items.iter().find(|&&(it, _)| it == id) {
                 if !dmg_types.contains(req_type) {
                     continue;
                 }
@@ -1873,15 +2023,25 @@ impl TeamGen {
             }
             // Dominated status berries: single-condition cure berries for poison/burn/freeze
             // are strictly dominated by non-exhaustible competitive items, whereas PRZ Cure Berry
-            // and Bitter Berry remain valid when Miracle Berry is already held by a teammate.
+            // and confusion-cure berry (Bitter Berry on PS; Ice Berry ID 81 on Castle, which
+            // cures both Burn and Confusion) remain valid when Miracle Berry is already held.
             if id == "mintberry" && !has_rest && miracle_free {
                 continue;
             }
-            if matches!(id.as_str(), "przcureberry" | "bitterberry") && miracle_free {
-                continue;
-            }
-            if matches!(id.as_str(), "psncureberry" | "burntberry" | "iceberry") {
-                continue;
+            if is_castle {
+                if matches!(id.as_str(), "przcureberry" | "iceberry") && miracle_free {
+                    continue;
+                }
+                if matches!(id.as_str(), "psncureberry" | "burntberry") {
+                    continue;
+                }
+            } else {
+                if matches!(id.as_str(), "przcureberry" | "bitterberry") && miracle_free {
+                    continue;
+                }
+                if matches!(id.as_str(), "psncureberry" | "burntberry" | "iceberry") {
+                    continue;
+                }
             }
             out.push(item_name.clone());
         }
@@ -2217,7 +2377,7 @@ impl TeamGen {
         let floors: Vec<i64> = (0..raw.len())
             .map(|i| {
                 let sid = species_id(&raw[i]);
-                self.ls.species(&sid).map_or(50, |l| l.min_level.max(50))
+                self.species_min_level(&sid).unwrap_or(50)
             })
             .collect();
         let cur_levels: Vec<i64> = (0..raw.len()).map(|i| set_level(&raw[i])).collect();
@@ -2323,15 +2483,14 @@ impl TeamGen {
                     let donor = elig[chosen_idx];
                     let sid = species_id(&donor.set);
                     let level_hint = set_level(&raw[slot]);
-                    let min_lv = self.ls.species(&sid)?.min_level.max(50);
+                    let min_lv = self.species_min_level(&sid)?;
                     if min_lv > level_hint {
                         let swap_mate = (0..raw.len()).find(|&i| {
                             i != slot
                                 && set_level(&raw[i]) >= min_lv
                                 && self
-                                    .ls
-                                    .species(&species_id(&raw[i]))
-                                    .is_none_or(|l| l.min_level.max(50) <= level_hint)
+                                    .species_min_level(&species_id(&raw[i]))
+                                    .is_none_or(|mn| mn <= level_hint)
                         })?;
                         let donor_lv = set_level(&raw[swap_mate]);
                         raw[swap_mate]["level"] = json!(level_hint);
@@ -2386,16 +2545,15 @@ impl TeamGen {
             return None;
         }
         let level_hint = set_level(&raw[slot]);
-        let min_lv = self.ls.species(sid)?.min_level.max(50);
+        let min_lv = self.species_min_level(sid)?;
         if min_lv > level_hint {
             // Try swapping level with a teammate that has >= min_lv
             let donor = (0..raw.len()).find(|&i| {
                 i != slot
                     && set_level(&raw[i]) >= min_lv
                     && self
-                        .ls
-                        .species(&species_id(&raw[i]))
-                        .is_none_or(|l| l.min_level.max(50) <= level_hint)
+                        .species_min_level(&species_id(&raw[i]))
+                        .is_none_or(|mn| mn <= level_hint)
             })?;
             let donor_lv = set_level(&raw[donor]);
             raw[donor]["level"] = json!(level_hint);
@@ -2418,8 +2576,8 @@ impl TeamGen {
         held: &[String],
         rng: &mut SplitMix64,
     ) -> Option<Value> {
-        let l = self.ls.species(sid)?;
-        let level = level_hint.max(l.min_level).clamp(50, 55);
+        let min_lv = self.species_min_level(sid)?;
+        let level = level_hint.max(min_lv).clamp(50, 55);
         let moves = self.sample_non_dominated_moveset(dex, sid, level, rng)?;
         let species_name = dex.species.get(dex.species.id(sid)?).name.clone();
 
@@ -2538,8 +2696,10 @@ impl TeamGen {
         for _ in 0..downgrades {
             let slot = rng.below(6);
             let sid = species_id(&raw[slot]);
-            let Some(l) = self.ls.species(&sid) else { continue };
             let level = set_level(&raw[slot]);
+            let Some(legal_moves) = self.species_legal_moves_at_level(dex, &sid, level) else {
+                continue;
+            };
             let sp_types = &dex.species.get(dex.species.id(&sid)?).types;
             let score = |m: &str| -> Option<f64> {
                 let md = dex.moves.get(dex.moves.id(m).or_else(|| dex.moves.id(&base_id(m)))?);
@@ -2559,14 +2719,9 @@ impl TeamGen {
             else {
                 continue;
             };
-            let mut weak: Vec<(f64, &String)> = l
-                .moves
+            let mut weak: Vec<(f64, &String)> = legal_moves
                 .iter()
-                .filter(|m| {
-                    !cur_bases.contains(m)
-                        && dex.moves.id(m).is_some()
-                        && l.move_min_level.get(m.as_str()).is_none_or(|&mn| level >= mn)
-                })
+                .filter(|m| !cur_bases.contains(m))
                 .filter_map(|m| score(m).map(|s| (s, m)))
                 .collect();
             weak.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(b.1)));
@@ -2595,15 +2750,15 @@ impl TeamGen {
             return None;
         }
         sids.sort_by(|a, b| {
-            let fa = self.ls.species(a).map_or(50, |l| l.min_level);
-            let fb = self.ls.species(b).map_or(50, |l| l.min_level);
+            let fa = self.species_min_level(a).unwrap_or(50);
+            let fb = self.species_min_level(b).unwrap_or(50);
             fb.cmp(&fa).then(a.cmp(b))
         });
         let levels = self.sample_pareto_level_profile(rng);
         let mut raw: Vec<Value> = Vec::new();
         let mut held: Vec<String> = Vec::new();
         for (i, sid) in sids.iter().enumerate() {
-            if self.ls.species(sid).map_or(50, |l| l.min_level) > levels[i] {
+            if self.species_min_level(sid).unwrap_or(50) > levels[i] {
                 return None;
             }
             let mut set = self.derive_set(dex, sid, levels[i], &held, rng)?;
@@ -2909,6 +3064,17 @@ pub fn gauntlet_eval(
     gauntlet: &[Vec<PokemonSet>],
     cfg: &EvalCfg,
 ) -> EvalResult {
+    gauntlet_eval_with_ruleset(dex, candidate, gauntlet, cfg, Ruleset::PsStadium2)
+}
+
+pub fn gauntlet_eval_with_ruleset(
+    dex: &Dex,
+    candidate: &[PokemonSet],
+    gauntlet: &[Vec<PokemonSet>],
+    cfg: &EvalCfg,
+    ruleset: Ruleset,
+) -> EvalResult {
+    let max_turns = effective_turn_cap(ruleset, cfg.max_turns);
     let games = (cfg.games_per_opponent + cfg.games_per_opponent % 2) as usize;
     let mut jobs = Vec::with_capacity(gauntlet.len() * games);
     for opp in 0..gauntlet.len() {
@@ -2960,12 +3126,14 @@ pub fn gauntlet_eval(
                     } else {
                         (gauntlet[job.opp].as_slice(), candidate)
                     };
-                    let mut b = Battle::from_fixture(dex, &job.battle_seed, t1, t2).unwrap();
+                    let mut b =
+                        Battle::from_fixture_with_ruleset(dex, &job.battle_seed, t1, t2, ruleset)
+                            .unwrap();
                     b.set_log_enabled(false);
                     let res = if job.cand_is_p1 {
-                        play_game(dex, &mut b, &mut [&mut cand_agent, &mut opp_agent], cfg.max_turns)
+                        play_game(dex, &mut b, &mut [&mut cand_agent, &mut opp_agent], max_turns)
                     } else {
-                        play_game(dex, &mut b, &mut [&mut opp_agent, &mut cand_agent], cfg.max_turns)
+                        play_game(dex, &mut b, &mut [&mut opp_agent, &mut cand_agent], max_turns)
                     }
                     .unwrap();
                     let p1_score = match res {
@@ -3047,6 +3215,18 @@ pub fn gauntlet_eval_weighted(
     weights: &[f64],
     cfg: &WeightedEvalCfg,
 ) -> EvalResult {
+    gauntlet_eval_weighted_with_ruleset(dex, candidate, gauntlet, weights, cfg, Ruleset::PsStadium2)
+}
+
+pub fn gauntlet_eval_weighted_with_ruleset(
+    dex: &Dex,
+    candidate: &[PokemonSet],
+    gauntlet: &[Vec<PokemonSet>],
+    weights: &[f64],
+    cfg: &WeightedEvalCfg,
+    ruleset: Ruleset,
+) -> EvalResult {
+    let max_turns = effective_turn_cap(ruleset, cfg.max_turns);
     let games = (cfg.games_per_opponent + cfg.games_per_opponent % 2) as usize;
     let mut jobs = Vec::with_capacity(gauntlet.len() * games);
     for opp in 0..gauntlet.len() {
@@ -3103,21 +3283,23 @@ pub fn gauntlet_eval_weighted(
                     } else {
                         (gauntlet[job.opp].as_slice(), candidate)
                     };
-                    let mut b = Battle::from_fixture(dex, &job.battle_seed, t1, t2).unwrap();
+                    let mut b =
+                        Battle::from_fixture_with_ruleset(dex, &job.battle_seed, t1, t2, ruleset)
+                            .unwrap();
                     b.set_log_enabled(cfg.open_sheet || cfg.blind_pool.is_some());
                     let res = if job.cand_is_p1 {
                         play_game(
                             dex,
                             &mut b,
                             &mut [cand_agent.as_mut(), opp_agent.as_mut()],
-                            cfg.max_turns,
+                            max_turns,
                         )
                     } else {
                         play_game(
                             dex,
                             &mut b,
                             &mut [opp_agent.as_mut(), cand_agent.as_mut()],
-                            cfg.max_turns,
+                            max_turns,
                         )
                     }
                     .unwrap();

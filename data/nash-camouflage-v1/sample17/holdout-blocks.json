@@ -1,0 +1,146 @@
+[
+  {
+    "block": 0,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.14394166482048187
+  },
+  {
+    "block": 1,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.14394166482048187
+  },
+  {
+    "block": 2,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.14394166482048187
+  },
+  {
+    "block": 3,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.14394166482048187
+  },
+  {
+    "block": 4,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.14394166482048187
+  },
+  {
+    "block": 5,
+    "opponent": "sample-17-orig",
+    "stratum": "shared",
+    "weight": 0.14394166482048187
+  },
+  {
+    "block": 6,
+    "opponent": "sample-17-orig",
+    "stratum": "transfer",
+    "weight": 0.022725001846184797
+  },
+  {
+    "block": 7,
+    "opponent": "sample-17-orig",
+    "stratum": "transfer",
+    "weight": 0.022725001846184797
+  },
+  {
+    "block": 8,
+    "opponent": "sample-17-orig",
+    "stratum": "transfer",
+    "weight": 0.022725001846184797
+  },
+  {
+    "block": 9,
+    "opponent": "sample-17-orig",
+    "stratum": "transfer",
+    "weight": 0.022725001846184797
+  },
+  {
+    "block": 10,
+    "opponent": "sample-17-orig",
+    "stratum": "transfer",
+    "weight": 0.022725001846184797
+  },
+  {
+    "block": 11,
+    "opponent": "sample-17-orig",
+    "stratum": "transfer",
+    "weight": 0.022725001846184797
+  },
+  {
+    "block": 12,
+    "opponent": "sample07",
+    "stratum": "shared",
+    "weight": 0.14394166482048187
+  },
+  {
+    "block": 13,
+    "opponent": "sample07",
+    "stratum": "shared",
+    "weight": 0.14394166482048187
+  },
+  {
+    "block": 14,
+    "opponent": "sample07",
+    "stratum": "shared",
+    "weight": 0.14394166482048187
+  },
+  {
+    "block": 15,
+    "opponent": "sample07",
+    "stratum": "shared",
+    "weight": 0.14394166482048187
+  },
+  {
+    "block": 16,
+    "opponent": "sample07",
+    "stratum": "shared",
+    "weight": 0.14394166482048187
+  },
+  {
+    "block": 17,
+    "opponent": "sample07",
+    "stratum": "shared",
+    "weight": 0.14394166482048187
+  },
+  {
+    "block": 18,
+    "opponent": "sample07",
+    "stratum": "transfer",
+    "weight": 0.022725001846184797
+  },
+  {
+    "block": 19,
+    "opponent": "sample07",
+    "stratum": "transfer",
+    "weight": 0.022725001846184797
+  },
+  {
+    "block": 20,
+    "opponent": "sample07",
+    "stratum": "transfer",
+    "weight": 0.022725001846184797
+  },
+  {
+    "block": 21,
+    "opponent": "sample07",
+    "stratum": "transfer",
+    "weight": 0.022725001846184797
+  },
+  {
+    "block": 22,
+    "opponent": "sample07",
+    "stratum": "transfer",
+    "weight": 0.022725001846184797
+  },
+  {
+    "block": 23,
+    "opponent": "sample07",
+    "stratum": "transfer",
+    "weight": 0.022725001846184797
+  }
+]

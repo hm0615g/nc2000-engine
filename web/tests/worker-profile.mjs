@@ -36,7 +36,7 @@ try {
     await wasm.default();
     const dex = new wasm.Dex();
     const poolJson = await (await fetch("/data/belief-pool-v3/belief-pool.json")).text();
-    const catalog = await (await fetch("/data/team-pool-v2/team-pool.json")).json();
+    const catalog = await (await fetch("/data/team-pool-v3/team-pool.json")).json();
     const teams = catalog.teams.slice(0, 2).map((team) => JSON.stringify(team.sets));
     const seed = 7;
     const expected = (iterations, c) => {
@@ -60,7 +60,7 @@ try {
       for (const scenario of ["fixed", "early-flush", "late-flush", "background-complete"]) {
         const worker = new BotWorker();
         try {
-          await worker.newBattle(teams[0], teams[1], "1,2,3,4", { poolJson, side: 1, seed, compiledPreview: false });
+          await worker.newBattle(teams[0], teams[1], "1,2,3,4", { poolJson, side: 1, seed });
           const budget = 512;
           const promise = worker.search(1, budget, seed, scenario !== "fixed");
           if (scenario === "early-flush") worker.flush();
@@ -91,7 +91,7 @@ try {
       try {
         await worker.newBattle(JSON.stringify(fish), JSON.stringify(attacker), "1,2,3,4", {
           poolJson: JSON.stringify({ teams: [{ id: "fish", sets: fish }] }),
-          side: 1, seed, compiledPreview: false, adaptiveBudget: true,
+          side: 1, seed, adaptiveBudget: true,
         });
         const preview = await worker.search(1, 32, seed, false);
         if (preview.policy.iterations !== 32) throw new Error("adaptive budget truncated preview");
@@ -110,7 +110,7 @@ try {
         const worker = new BotWorker();
         const truth = new wasm.Battle(dex, teams[0], teams[1], "1,2,3,4");
         try {
-          await worker.newBattle(teams[0], teams[1], "1,2,3,4", { poolJson, side: 1, seed, compiledPreview: false });
+          await worker.newBattle(teams[0], teams[1], "1,2,3,4", { poolJson, side: 1, seed });
           const policies = [];
           for (let turn = 0; turn < 3; turn++) {
             const legal = JSON.parse(truth.legalChoices(1));

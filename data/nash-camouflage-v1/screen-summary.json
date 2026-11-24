@@ -1,0 +1,271 @@
+{
+  "shells": [
+    "D5",
+    "S4",
+    "incumbent"
+  ],
+  "matrix": [
+    [
+      0.5,
+      0.5,
+      0.35
+    ],
+    [
+      0.5,
+      0.5,
+      0.63125
+    ],
+    [
+      0.65,
+      0.36875,
+      0.5
+    ]
+  ],
+  "outer": [
+    0.19451461775683687,
+    0.8054853822431631,
+    0.0
+  ],
+  "matchups": {
+    "D5 vs S4": {
+      "score": 0.5,
+      "blocks": 20,
+      "interval": [
+        0.1963192690458474,
+        0.8036807309541526
+      ]
+    },
+    "S4 vs incumbent": {
+      "score": 0.63125,
+      "blocks": 16,
+      "interval": [
+        0.26243103374358384,
+        1
+      ]
+    },
+    "D5 vs incumbent": {
+      "score": 0.35,
+      "blocks": 20,
+      "interval": [
+        0.020118288023780906,
+        0.679881711976219
+      ]
+    }
+  },
+  "camouflage": {
+    "D5 vs S4": {
+      "score": 0.125,
+      "blocks": 20,
+      "interval": [
+        -0.4823614619083052,
+        0.7323614619083052
+      ],
+      "mixed": 0.5,
+      "singleton_weighted": 0.375,
+      "opponent_pick_changes": 24,
+      "outcome_changes": 15,
+      "outcome_changes_same_preview": 5,
+      "gain_by_type": {
+        "deme-r1-00-s0030": 0.125,
+        "deme-r1-00-s0030-beq-g2-c3-legal": 0.125,
+        "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal": -0.25,
+        "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal": 0.5,
+        "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal": 0.125
+      },
+      "opponent_pick_transitions": [
+        {
+          "mixed": "team 3, 5, 6",
+          "singleton": "team 5, 2, 3",
+          "games": 6
+        },
+        {
+          "mixed": "team 3, 5, 6",
+          "singleton": "team 5, 1, 4",
+          "games": 6
+        },
+        {
+          "mixed": "team 3, 5, 6",
+          "singleton": "team 4, 1, 5",
+          "games": 5
+        },
+        {
+          "mixed": "team 3, 5, 6",
+          "singleton": "team 1, 4, 5",
+          "games": 2
+        },
+        {
+          "mixed": "team 5, 2, 3",
+          "singleton": "team 5, 3, 6",
+          "games": 1
+        },
+        {
+          "mixed": "team 3, 5, 6",
+          "singleton": "team 3, 2, 5",
+          "games": 1
+        },
+        {
+          "mixed": "team 3, 5, 6",
+          "singleton": "team 1, 2, 5",
+          "games": 1
+        },
+        {
+          "mixed": "team 3, 5, 6",
+          "singleton": "team 5, 1, 2",
+          "games": 1
+        },
+        {
+          "mixed": "team 3, 5, 6",
+          "singleton": "team 4, 3, 5",
+          "games": 1
+        }
+      ]
+    },
+    "S4 vs D5": {
+      "score": -0.05,
+      "blocks": 20,
+      "interval": [
+        -0.6573614619083052,
+        0.5573614619083052
+      ],
+      "mixed": 0.5,
+      "singleton_weighted": 0.55,
+      "opponent_pick_changes": 18,
+      "outcome_changes": 14,
+      "outcome_changes_same_preview": 4,
+      "gain_by_type": {
+        "sample-07": -0.1,
+        "sample-07-beq-g1-c4": 0.1,
+        "sample-07-beq-g2-c4": 0.0,
+        "sample-07-beq-g1-c3": -0.2
+      },
+      "opponent_pick_transitions": [
+        {
+          "mixed": "team 4, 1, 6",
+          "singleton": "team 6, 1, 3",
+          "games": 5
+        },
+        {
+          "mixed": "team 1, 4, 6",
+          "singleton": "team 6, 1, 4",
+          "games": 3
+        },
+        {
+          "mixed": "team 6, 1, 4",
+          "singleton": "team 6, 1, 3",
+          "games": 3
+        },
+        {
+          "mixed": "team 6, 1, 4",
+          "singleton": "team 1, 4, 6",
+          "games": 2
+        },
+        {
+          "mixed": "team 4, 1, 6",
+          "singleton": "team 6, 1, 4",
+          "games": 2
+        },
+        {
+          "mixed": "team 6, 1, 4",
+          "singleton": "team 3, 1, 6",
+          "games": 2
+        },
+        {
+          "mixed": "team 4, 1, 6",
+          "singleton": "team 3, 1, 6",
+          "games": 1
+        }
+      ]
+    },
+    "incumbent vs S4": {
+      "score": 0.14375,
+      "blocks": 16,
+      "interval": [
+        -0.5938879325128323,
+        0.8813879325128322
+      ],
+      "mixed": 0.36875,
+      "singleton_weighted": 0.22500000000000003,
+      "opponent_pick_changes": 17,
+      "outcome_changes": 13,
+      "outcome_changes_same_preview": 4,
+      "gain_by_type": {
+        "apex-c04-bug-3atkstar-boomgen": 0.125,
+        "red-v10-s1105-r2-s0142": 0.125,
+        "apex-c08-surgical-142": 0.25,
+        "red-v10-s1105-r1-s0148": 0.125
+      },
+      "opponent_pick_transitions": [
+        {
+          "mixed": "team 6, 3, 5",
+          "singleton": "team 5, 3, 6",
+          "games": 15
+        },
+        {
+          "mixed": "team 6, 3, 5",
+          "singleton": "team 3, 5, 6",
+          "games": 2
+        }
+      ]
+    }
+  },
+  "by_type": {
+    "D5": {
+      "deme-r1-00-s0030": {
+        "S4": 0.5,
+        "incumbent": 0.3
+      },
+      "deme-r1-00-s0030-beq-g2-c3-legal": {
+        "S4": 0.75,
+        "incumbent": 0.44999999999999996
+      },
+      "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal": {
+        "S4": 0.125,
+        "incumbent": 0.35
+      },
+      "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal": {
+        "S4": 0.75,
+        "incumbent": 0.35
+      },
+      "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal": {
+        "S4": 0.375,
+        "incumbent": 0.3
+      }
+    },
+    "S4": {
+      "sample-07": {
+        "D5": 0.5,
+        "incumbent": 0.3
+      },
+      "sample-07-beq-g1-c4": {
+        "D5": 0.5,
+        "incumbent": 0.3
+      },
+      "sample-07-beq-g2-c4": {
+        "D5": 0.6,
+        "incumbent": 1.0
+      },
+      "sample-07-beq-g1-c3": {
+        "D5": 0.4,
+        "incumbent": 0.9249999999999999
+      }
+    },
+    "incumbent": {
+      "apex-c04-bug-3atkstar-boomgen": {
+        "S4": 0.5,
+        "D5": 0.8
+      },
+      "red-v10-s1105-r2-s0142": {
+        "S4": 0.25,
+        "D5": 0.5
+      },
+      "apex-c08-surgical-142": {
+        "S4": 0.375,
+        "D5": 0.9
+      },
+      "red-v10-s1105-r1-s0148": {
+        "S4": 0.25,
+        "D5": 0.30000000000000004
+      }
+    }
+  }
+}

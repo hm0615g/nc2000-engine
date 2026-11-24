@@ -24,6 +24,15 @@ fn canonicalize_pool_json(pool_json: &str) -> Rc<str> {
     })
 }
 
+fn preview_team_key(battle: &Battle, observer: &Observer) -> Option<String> {
+    if battle.is_castle() {
+        let flags: Vec<bool> = observer.mons().iter().map(|m| m.preview_has_item).collect();
+        nc2000_bot::compiled_preview::castle_key(battle, observer.side(), Some(&flags))
+    } else {
+        nc2000_bot::compiled_preview::key(battle, observer.side())
+    }
+}
+
 fn opponent_public_json(observer: &Observer) -> String {
     let public: Vec<_> = observer
         .mons()
@@ -81,7 +90,7 @@ impl Identity {
     /// Lightweight public-only roster payload (`{"opponentPublic": ...}`) for
     /// compiled-preview table lookup without serializing the 1.8 MB `pool` JSON.
     pub fn public_info(&self, battle: &Battle, observer: &Observer) -> Option<String> {
-        let _team_key = nc2000_bot::compiled_preview::key(battle, observer.side())?;
+        let _team_key = preview_team_key(battle, observer)?;
         let mut out = String::with_capacity(256);
         out.push_str("{\"opponentPublic\":");
         out.push_str(&opponent_public_json(observer));
@@ -90,14 +99,17 @@ impl Identity {
     }
 
     pub fn info(&self, battle: &Battle, observer: &Observer) -> Option<String> {
-        let team_key = nc2000_bot::compiled_preview::key(battle, observer.side())?;
+        let team_key = preview_team_key(battle, observer)?;
         let public_json = opponent_public_json(observer);
         // Exact lexicographical key order matching `serde_json::Map` (`BTreeMap`):
         // build, config, driver, format, opponentPublic, [pickPrior], pool, previewLevelCaps, prior, teamKey.
         let mut out = String::with_capacity(self.pool_canonical.len() + 512);
         out.push_str("{\"build\":");
         out.push_str(
-            &serde_json::to_string(nc2000_bot::compiled_preview::build_fingerprint()).unwrap(),
+            &serde_json::to_string(nc2000_bot::compiled_preview::policy_epoch_for(
+                battle.ruleset,
+            ))
+            .unwrap(),
         );
         out.push_str(",\"config\":");
         out.push_str(&serde_json::to_string(&self.config).unwrap());

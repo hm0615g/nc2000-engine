@@ -10,11 +10,12 @@ use std::time::Instant;
 
 use nc2000_engine::battle::{Outcome, PokemonSet};
 use nc2000_engine::dex::Dex;
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::Battle;
 
 use crate::agent::{Agent, RootSearchStats};
 use crate::rng::SplitMix64;
-use crate::runner::{play_game, GameResult};
+use crate::runner::{effective_turn_cap, play_game, GameResult};
 
 pub type AgentBuilder<'a> = &'a (dyn Fn(u64) -> Box<dyn Agent> + Sync);
 
@@ -63,6 +64,14 @@ impl DuelSpec {
             log_on: false,
             crn_agent_seeds: false,
         }
+    }
+
+    pub fn for_ruleset(games: usize, base_seed: u64, ruleset: Ruleset) -> Self {
+        let mut spec = Self::new(games, base_seed);
+        if let Some(limit) = ruleset.turn_limit() {
+            spec.max_turns = spec.max_turns.min(limit);
+        }
+        spec
     }
 }
 
@@ -174,6 +183,18 @@ pub fn run_duel(
     build_b: AgentBuilder,
     spec: DuelSpec,
 ) -> DuelStats {
+    run_duel_with_ruleset(dex, teams, build_a, build_b, spec, Ruleset::PsStadium2)
+}
+
+pub fn run_duel_with_ruleset(
+    dex: &Dex,
+    teams: &[Vec<PokemonSet>],
+    build_a: AgentBuilder,
+    build_b: AgentBuilder,
+    spec: DuelSpec,
+    ruleset: Ruleset,
+) -> DuelStats {
+    let max_turns = effective_turn_cap(ruleset, spec.max_turns);
     let games = spec.games + spec.games % 2;
     let mut sched_rng = SplitMix64::new(spec.base_seed);
     let mut specs = Vec::with_capacity(games);
@@ -224,11 +245,12 @@ pub fn run_duel(
                     let mut agent_b = Timed {
                         inner: build_b(sb), ns: 0, moves: 0, samples_ns: Vec::new(),
                     };
-                    let mut battle = Battle::from_fixture(
+                    let mut battle = Battle::from_fixture_with_ruleset(
                         dex,
                         &g.battle_seed,
                         &teams[g.team_p1],
                         &teams[g.team_p2],
+                        ruleset,
                     )
                     .unwrap();
                     battle.set_log_enabled(
@@ -241,7 +263,7 @@ pub fn run_duel(
                     } else {
                         (&mut agent_b, &mut agent_a)
                     };
-                    let res = play_game(dex, &mut battle, &mut [p1, p2], spec.max_turns).unwrap();
+                    let res = play_game(dex, &mut battle, &mut [p1, p2], max_turns).unwrap();
                     let p1_score = match res {
                         GameResult::Outcome(Outcome::P1Win) => 1.0,
                         GameResult::Outcome(Outcome::P2Win) => 0.0,

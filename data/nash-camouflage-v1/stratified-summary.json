@@ -1,0 +1,30 @@
+{
+  "opponent": "sample-17-orig",
+  "heldout_preceding": {
+    "score": 0.53125,
+    "blocks": 16,
+    "interval": [
+      0.14445662239130963,
+      0.9180433776086904
+    ],
+    "wins": 17
+  },
+  "challenger": {
+    "score": 0.5261182747820295,
+    "blocks": 14,
+    "interval": [
+      0.07964227057534673,
+      0.9725942789887123
+    ]
+  },
+  "conditional_scores": {
+    "sample-07-beq-g2-c4": 0.25,
+    "sample-07": 0.25,
+    "apex-c04-bug-3atkstar-boomgen": 0.25,
+    "red-v10-s1105-r2-s0142": 0.75,
+    "apex-c08-surgical-142": 0.75,
+    "red-v10-s1105-r1-s0148": 0.5,
+    "red-v10-s1105-r2-s0155": 1.0
+  },
+  "sampling": "Two fresh seat-pairs per candidate type; challenger receives the full proposed pool throughout."
+}

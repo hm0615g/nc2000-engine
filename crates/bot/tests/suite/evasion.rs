@@ -165,9 +165,14 @@ fn fixed_search_phazes_the_evasion_wall() {
     let dex = super::common::dex();
     let whirlwind = mid(&dex, "whirlwind");
     let b = wall(&dex, 6, 4);
-    let phazes = [1u64, 7, 42]
+    let seeds = [1u64, 2, 3, 4, 5, 6, 7, 8, 42];
+    let phazes = seeds
         .into_iter()
         .filter(|&s| skuct_pick(&dex, &b, 1500, s) == SearchChoice::Move(whirlwind))
         .count();
-    assert!(phazes >= 2, "fixed search should phaze in a majority of seeds (got {phazes}/3)");
+    assert!(
+        phazes >= 6,
+        "fixed search should phaze in at least 2/3 of seeds (got {phazes}/{})",
+        seeds.len()
+    );
 }

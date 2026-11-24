@@ -239,6 +239,28 @@ impl Battle {
             return Ok(());
         }
 
+        // #54① Castle PBS: Encore + Disable does NOT force Struggle; the Encored move stays selected
+        // and is blocked at execution time by DisableBeforeMove.
+        if let Some(enc_id) = self.castle_encore_disabled_move(dex, pokemon) {
+            let requested = resolved
+                .or_else(|| dex.moves.id(move_id_str))
+                .map(|m| dex.canonical_move_id(m));
+            if requested == Some(enc_id) {
+                let slot_idx = self.poke(pokemon).move_slots.iter().position(|s| s.id == enc_id);
+                self.sides[side_n].choice.actions.push(ChosenAction::Move {
+                    pokemon,
+                    target_loc: 0,
+                    move_id: enc_id,
+                    move_slot: slot_idx,
+                });
+                return Ok(());
+            }
+            return Err(EngineError::InvalidChoice(format!(
+                "p{}: {move_id_str} is disabled",
+                side_n + 1
+            )));
+        }
+
         // no valid moves → Struggle
         let moves = &self.poke(pokemon).move_slots;
         if !moves.iter().any(|slot| !slot.disabled && slot.pp > 0) {
@@ -306,6 +328,13 @@ impl Battle {
         let pokemon = self
             .active_id(side_n)
             .ok_or_else(|| EngineError::InvalidChoice("no active pokemon".into()))?;
+        if let Some(enc_id) = self.castle_encore_disabled_move(dex, pokemon) {
+            let idx = slot as usize - 1;
+            let slots = &self.poke(pokemon).move_slots;
+            if idx < slots.len() && slots[idx].id == enc_id {
+                return self.choose_move_id(dex, side_n, dex.moves.key(enc_id), Some(enc_id));
+            }
+        }
         let moves = self.pokemon_choosable_moves(pokemon);
         let idx = slot as usize - 1;
         if idx >= moves.len() {
@@ -313,6 +342,23 @@ impl Battle {
         }
         let id = moves[idx].0;
         self.choose_move_id(dex, side_n, dex.moves.key(id), Some(id))
+    }
+
+    /// #54① Castle PBS: if the active pokemon is Encored into a move that is also
+    /// Disabled (and still has PP > 0), return that move id so it remains selectable
+    /// instead of forcing Struggle.
+    pub(crate) fn castle_encore_disabled_move(&self, dex: &Dex, pokemon: PokeId) -> Option<MoveId> {
+        if !self.is_castle() {
+            return None;
+        }
+        let en = crate::cond_id!(dex, "encore")?;
+        let enc_move = self.poke(pokemon).volatile(en)?.get_move()?;
+        let slot = self.poke(pokemon).get_move_slot(enc_move)?;
+        if slot.disabled && slot.pp > 0 {
+            Some(enc_move)
+        } else {
+            None
+        }
     }
 
     /// pokemon.getMoves() reduced to (id, disabled) pairs; empty if no valid.
@@ -429,7 +475,7 @@ impl Battle {
                         .cb_mask
                         .has(dex.known.before_turn_callback)
                     {
-                        let speed = self.get_pokemon_action_speed(dex, *pokemon) as f64;
+                        let speed = self.get_pokemon_action_speed_f64(dex, *pokemon);
                         let mut btm_loc = *target_loc;
                         if btm_loc == 0 {
                             let ms = dex.move_static(*move_id);
@@ -475,7 +521,7 @@ impl Battle {
             ChosenAction::Pass => None,
             ChosenAction::Team { pokemon, index, priority } => {
                 self.update_speed(dex, pokemon);
-                let speed = self.get_pokemon_action_speed(dex, pokemon) as f64;
+                let speed = self.get_pokemon_action_speed_f64(dex, pokemon);
                 Some(Action {
                     choice: ActionKind::Team { index },
                     order: 1,
@@ -492,7 +538,7 @@ impl Battle {
                     _ => None,
                 };
                 self.poke_mut(pokemon).switch_flag = SwitchFlag::No;
-                let speed = self.get_pokemon_action_speed(dex, pokemon) as f64;
+                let speed = self.get_pokemon_action_speed_f64(dex, pokemon);
                 Some(Action {
                     choice: ActionKind::Switch { insta, target, source_effect },
                     order: if insta { 3 } else { 103 },
@@ -543,7 +589,7 @@ impl Battle {
                     false,
                 );
                 priority = rv.as_num();
-                let speed = self.get_pokemon_action_speed(dex, pokemon) as f64;
+                let speed = self.get_pokemon_action_speed_f64(dex, pokemon);
                 Some(Action {
                     choice: ActionKind::Move {
                         move_id,

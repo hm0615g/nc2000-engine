@@ -1,0 +1,122 @@
+{
+  "nominee": "mixed-counter",
+  "pool_vs_sample17": {
+    "original": {
+      "score": 0.46136789380487997,
+      "blocks": 12,
+      "interval": [
+        0,
+        0.9946405383634312
+      ]
+    },
+    "revised": {
+      "score": 0.4159178901125104,
+      "blocks": 12,
+      "interval": [
+        0,
+        0.9491905346710616
+      ]
+    },
+    "delta": {
+      "score": -0.045450003692369595,
+      "blocks": 12,
+      "interval": [
+        -1,
+        1
+      ]
+    }
+  },
+  "s0155_vs_sample17": {
+    "original": {
+      "score": 0.3333333333333333,
+      "blocks": 6,
+      "interval": [
+        0,
+        0.8877759554108224
+      ]
+    },
+    "revised": {
+      "score": 0.16666666666666666,
+      "blocks": 6,
+      "interval": [
+        0,
+        0.7211092887441557
+      ]
+    },
+    "delta": {
+      "score": -0.16666666666666666,
+      "blocks": 6,
+      "interval": [
+        -1,
+        0.9422185774883115
+      ]
+    }
+  },
+  "s0155_vs_guards": {
+    "sample07-guard": {
+      "original": {
+        "score": 0.6000000000000001,
+        "blocks": 4,
+        "interval": [
+          0,
+          1
+        ]
+      },
+      "revised": {
+        "score": 0.17500000000000002,
+        "blocks": 4,
+        "interval": [
+          0,
+          0.9063600487082412
+        ]
+      },
+      "delta": {
+        "score": -0.42500000000000004,
+        "blocks": 4,
+        "interval": [
+          -1,
+          1
+        ]
+      }
+    },
+    "incumbent": {
+      "original": {
+        "score": 0.475,
+        "blocks": 8,
+        "interval": [
+          0,
+          0.9965887841402485
+        ]
+      },
+      "revised": {
+        "score": 0.1375,
+        "blocks": 8,
+        "interval": [
+          0,
+          0.6590887841402486
+        ]
+      },
+      "delta": {
+        "score": -0.33749999999999997,
+        "blocks": 8,
+        "interval": [
+          -1,
+          0.7056775682804972
+        ]
+      }
+    }
+  },
+  "s0155_camouflage": {
+    "delta": {
+      "score": -0.08333333333333333,
+      "blocks": 6,
+      "interval": [
+        -1,
+        1
+      ]
+    },
+    "changed_opponent_selections": 5,
+    "changed_results": 5
+  },
+  "promote": false
+}

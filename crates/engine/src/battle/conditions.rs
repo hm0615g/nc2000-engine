@@ -119,8 +119,13 @@ fn dispatch_cond(
             } else {
                 b.add(&["-status", &ts, "slp"]);
             }
-            // 1-4 turns, guaranteed 1 turn of sleep (stadium2)
-            let time = b.prng.random_range(2, 5) as i64;
+            // PS stadium2: 1-3 turns asleep (`random_range(2, 5)`).
+            // #10 Castle PBS: uniform 1-4 turns asleep (`random_range(2, 6)`).
+            let time = if b.is_castle() {
+                b.prng.random_range(2, 6)
+            } else {
+                b.prng.random_range(2, 5)
+            } as i64;
             if let Some(st) = b.state_at_mut(state) {
                 st.set_int(crate::state::DK::Time, time);
             }
@@ -308,15 +313,46 @@ fn dispatch_cond(
             let mut fake = super::moveexec::synthetic_move(dex, 40);
             fake.base_move_type = base_move_type;
             fake.is_confusion_self_hit = true;
-            fake.no_damage_variance = true;
+            // #24① Castle PBS: confusion self-hit uses 217..=255/255 damage variance.
+            fake.no_damage_variance = !b.is_castle();
             fake.will_crit = Some(false);
             fake.selfdestruct = selfdestruct;
             let damage = super::moveexec::get_damage_synthetic(b, dex, t, t, fake);
-            let Some(damage) = damage else {
+            let Some(mut damage) = damage else {
                 panic!("Confusion damage not dealt");
             };
+            if b.is_castle() {
+                // #24③ Castle PBS: confusion self-hit damages user's own Substitute (body HP untouched).
+                let sub = crate::cond_id!(dex, "substitute").unwrap();
+                if b.poke(t).has_volatile(sub) {
+                    let sub_hp = b
+                        .poke(t)
+                        .volatile(sub)
+                        .map(|v| v.get_int(crate::state::DK::Hp))
+                        .unwrap_or(0);
+                    let dealt = (damage as i64).min(sub_hp);
+                    if let Some(vsq) = b.poke_mut(t).volatile_mut(sub) {
+                        vsq.set_int(crate::state::DK::Hp, sub_hp - dealt);
+                    }
+                    if sub_hp - dealt <= 0 {
+                        b.remove_volatile(dex, t, "substitute");
+                    } else {
+                        let ts = b.poke_str(t);
+                        b.add(&["-activate", &ts, "Substitute", "[damage]"]);
+                    }
+                    return RV::False;
+                }
+                // #38 Castle PBS: Focus Band (30/256, silent) also triggers on confusion self-hit.
+                if b.poke(t).item.is_some()
+                    && b.poke(t).item == dex.known_items.focusband
+                    && damage >= b.poke(t).hp as f64
+                    && b.prng.random_chance(30, 256)
+                {
+                    damage = (b.poke(t).hp - 1).max(0) as f64;
+                }
+            }
             let eff = EffectHandle::Cond(crate::cond_id!(dex, "confusion").unwrap());
-            b.direct_damage(dex, damage as f64, Some(t), None, eff);
+            b.direct_damage(dex, damage, Some(t), None, eff);
             RV::False
         }
         // ---------------------------------------------------------- flinch
@@ -403,7 +439,13 @@ fn dispatch_cond(
         }
         CondCbOp::ResidualDmgAfterMoveSelf => {
             let t = tpoke.unwrap();
-            if matches!(b.poke(t).status, Status::Brn | Status::Psn | Status::Tox) {
+            let active_status = if b.is_castle() {
+                // #14 Castle PBS: Toxic counter does not apply to Burn.
+                matches!(b.poke(t).status, Status::Psn | Status::Tox)
+            } else {
+                matches!(b.poke(t).status, Status::Brn | Status::Psn | Status::Tox)
+            };
+            if active_status {
                 let cid = crate::cond_id!(dex, "residualdmg").unwrap();
                 if let Some(vs) = b.poke_mut(t).volatile_mut(cid) {
                     let c = vs.get_int(crate::state::DK::Counter);
@@ -541,6 +583,12 @@ fn dispatch_cond(
                     return RV::Undef;
                 }
             }
+            // #11 Castle PBS: Tri Attack bypasses Freeze Clause.
+            if b.is_castle()
+                && matches!(source_effect, EffectHandle::MoveEff(m) if Some(m) == dex.known_moves.triattack)
+            {
+                return RV::Undef;
+            }
             if relay == RV::Str("frz") {
                 let side = t.side as usize;
                 let any_frz = b.sides[side]
@@ -640,7 +688,9 @@ fn dispatch_cond(
         }
         CondCbOp::NightmareAfterMoveSelf => {
             let t = tpoke.unwrap();
-            if b.poke(t).status == Status::Slp {
+            // #13 Castle PBS: Nightmare persists after Miracle Berry wakes the target
+            // and continues dealing 1/4 maxhp damage while awake.
+            if b.poke(t).status == Status::Slp || b.is_castle() {
                 let dmg = b.poke(t).base_maxhp as f64 / 4.0;
                 let eff = EffectHandle::Cond(crate::cond_id!(dex, "nightmare").unwrap());
                 b.damage(dex, dmg, Some(t), None, DamageEffect::Effect(eff), false);
@@ -684,6 +734,10 @@ fn dispatch_cond(
         // ---------------------------------------------------------- lockon
         CondCbOp::LockOnSourceAccuracy => {
             let StateLoc::Volatile(holder, _) = state else { return RV::Undef };
+            // #45 Castle PBS: Lock-On / Mind Reader does not make OHKO moves auto-hit.
+            if b.is_castle() && b.active_move.as_ref().is_some_and(|am| am.ohko) {
+                return RV::Undef;
+            }
             let locked_onto = b.state_at(state).and_then(|s| s.source);
             if source == Some(holder) && tpoke.is_some() && tpoke == locked_onto {
                 return RV::True;
@@ -707,7 +761,12 @@ fn dispatch_cond(
                 if !dex.move_static(m).has_flag(dex, "futuremove") {
                     let ts = b.poke_str(t);
                     b.add(&["-activate", &ts, "move: Destiny Bond"]);
-                    b.pokemon_faint(src, None, EffectHandle::None);
+                    if b.is_castle() {
+                        let db_eff = EffectHandle::Cond(crate::cond_id!(dex, "destinybond").unwrap());
+                        b.pokemon_faint(src, Some(t), db_eff);
+                    } else {
+                        b.pokemon_faint(src, None, EffectHandle::None);
+                    }
                 }
             }
             RV::Undef
@@ -766,7 +825,11 @@ fn dispatch_cond(
             let locked = b.poke(t).last_move_encore;
             let Some(locked) = locked else { return RV::False };
             let has_slot = b.poke(t).get_move_slot(locked).map(|s| s.pp).unwrap_or(0) > 0;
-            if dex.move_static(locked).has_flag(dex, "failencore") || !has_slot {
+            // #54② Castle PBS: Encore vs Roar / Whirlwind unconditionally fails.
+            let castle_fail_roar = b.is_castle()
+                && (Some(locked) == dex.known_moves.roar
+                    || Some(locked) == dex.known_moves.whirlwind);
+            if dex.move_static(locked).has_flag(dex, "failencore") || !has_slot || castle_fail_roar {
                 return RV::False;
             }
             let locked_key = dex.moves.key(locked);
@@ -844,7 +907,14 @@ fn dispatch_cond(
         // --------------------------------------------------------- disable
         CondCbOp::DisableStart => {
             let t = tpoke.unwrap();
-            if !b.queue_will_move(t) {
+            if b.is_castle() {
+                // #54① Castle PBS: Disable duration is uniform 1..=7 turns.
+                let base = b.prng.random_range(1, 8) as i32;
+                let extra = if !b.queue_will_move(t) { 1 } else { 0 };
+                if let Some(st) = b.state_at_mut(state) {
+                    st.duration = Some(base + extra);
+                }
+            } else if !b.queue_will_move(t) {
                 if let Some(st) = b.state_at_mut(state) {
                     if let Some(d) = st.duration {
                         st.duration = Some(d + 1);
@@ -972,7 +1042,8 @@ fn dispatch_cond(
                     am.recoil.is_some(),
                 )
             };
-            if stalling {
+            // #40 Castle PBS: Endure succeeds behind own Substitute (Protect/Detect still fail).
+            if stalling && !(b.is_castle() && move_key == "endure") {
                 let ss = b.poke_str(src);
                 b.add(&["-fail", &ss]);
                 return RV::Null;
@@ -994,6 +1065,9 @@ fn dispatch_cond(
             if category == crate::dex::Category::Status {
                 const SUB_BLOCKED: [&str; 6] =
                     ["leechseed", "lockon", "mindreader", "nightmare", "painsplit", "sketch"];
+                // #54④ Castle PBS: Sketch bypasses Substitute.
+                const SUB_BLOCKED_CASTLE: [&str; 5] =
+                    ["leechseed", "lockon", "mindreader", "nightmare", "painsplit"];
                 let mut vs = vs;
                 if move_key == "swagger" {
                     if let Some(am) = b.active_move.as_mut() {
@@ -1001,10 +1075,15 @@ fn dispatch_cond(
                     }
                     vs = None;
                 }
+                let blocked_by_list = if b.is_castle() {
+                    SUB_BLOCKED_CASTLE.contains(&move_key)
+                } else {
+                    SUB_BLOCKED.contains(&move_key)
+                };
                 if has_status
                     || (has_boosts && move_key != "swagger")
                     || vs == Some("confusion")
-                    || SUB_BLOCKED.contains(&move_key)
+                    || blocked_by_list
                 {
                     let ts = b.poke_str(t);
                     let name = b.active_move_name(dex);
@@ -1036,7 +1115,8 @@ fn dispatch_cond(
                 let ts = b.poke_str(t);
                 b.add(&["-activate", &ts, "Substitute", "[damage]"]);
             }
-            if has_recoil {
+            // #28 Castle PBS: Recoil moves (including Struggle) deal 0 HP recoil against Substitute.
+            if has_recoil && !b.is_castle() {
                 b.damage(dex, 1.0, Some(src), Some(t), DamageEffect::Recoil, false);
             }
             let move_eff = b
@@ -1060,7 +1140,14 @@ fn dispatch_cond(
         // ------------------------------------------------------------ bide
         CondCbOp::BideStart => {
             let t = tpoke.unwrap();
-            if let Some(st) = b.state_at_mut(state) {
+            if b.is_castle() {
+                // #52 Castle PBS: Bide stores for 1..=2 turns (`duration` in {2, 3}).
+                let dur = b.prng.random_range(2, 4) as i32;
+                if let Some(st) = b.state_at_mut(state) {
+                    st.duration = Some(dur);
+                    st.set_int(crate::state::DK::TotalDamage, 0);
+                }
+            } else if let Some(st) = b.state_at_mut(state) {
                 st.set_int(crate::state::DK::TotalDamage, 0);
             }
             let ts = b.poke_str(t);
@@ -1128,8 +1215,8 @@ fn dispatch_cond(
                 fake.self_effect = None;
                 fake.flags = dex.flag_bit("contact") | dex.flag_bit("protect");
                 fake.cb_mask = crate::dex::CbMask::EMPTY;
-                // the synthetic moveData has no ignoreImmunity: Physical → false
-                fake.ignore_immunity = false;
+                // #52 Castle PBS: Bide hits Ghost-types (PS: Physical → ignore_immunity = false).
+                fake.ignore_immunity = b.is_castle();
                 let saved_move = b.active_move.take();
                 let saved_pokemon = b.active_pokemon;
                 let saved_target = b.active_target;
@@ -1160,6 +1247,13 @@ fn dispatch_cond(
         // ------------------------------------------------------------ rage
         CondCbOp::RageStart => {
             let t = tpoke.unwrap();
+            if b.is_castle() {
+                if let Some(st) = b.state_at_mut(state) {
+                    if st.get(crate::state::DK::Counter).is_none() {
+                        st.set_int(crate::state::DK::Counter, 0);
+                    }
+                }
+            }
             let ts = b.poke_str(t);
             b.add(&["-singlemove", &ts, "Rage"]);
             RV::Undef
@@ -1168,14 +1262,33 @@ fn dispatch_cond(
             let t = tpoke.unwrap();
             let category = b.active_move.as_ref().map(|m| m.category);
             if source != Some(t) && category != Some(crate::dex::Category::Status) {
-                let eff = EffectHandle::Cond(crate::cond_id!(dex, "rage").unwrap());
-                b.boost(dex, &[(0, 1)], Some(t), source, eff);
+                if b.is_castle() {
+                    // #52 Castle PBS: Rage increments voltage counter ONLY when directly hit
+                    // right after using Rage (`move_this_turn == rage`); does NOT boost Atk +1.
+                    if b.poke(t).move_this_turn == dex.known_moves.rage {
+                        if let Some(st) = b.state_at_mut(state) {
+                            let c = st.get_int(crate::state::DK::Counter);
+                            st.set_int(crate::state::DK::Counter, c + 1);
+                        }
+                    }
+                } else {
+                    let eff = EffectHandle::Cond(crate::cond_id!(dex, "rage").unwrap());
+                    b.boost(dex, &[(0, 1)], Some(t), source, eff);
+                }
             }
             RV::Undef
         }
         CondCbOp::RageBeforeMove => {
             let t = tpoke.unwrap();
-            b.remove_volatile(dex, t, "rage");
+            // #52 Castle PBS: keep Rage multiplier across consecutive Rage uses; reset on any other move.
+            let keep_rage = b.is_castle()
+                && b.active_move
+                    .as_ref()
+                    .and_then(|m| m.id)
+                    == dex.known_moves.rage;
+            if !keep_rage {
+                b.remove_volatile(dex, t, "rage");
+            }
             RV::Undef
         }
         // --------------------------------------------------------- rollout
@@ -1209,9 +1322,13 @@ fn dispatch_cond(
             RV::Undef
         }
         CondCbOp::FuryCutterRestart => {
+            let is_castle = b.is_castle();
             if let Some(st) = b.state_at_mut(state) {
                 let m = st.get_int(crate::state::DK::Multiplier);
-                if m < 16 {
+                // #52 Castle PBS: Fury Cutter doubles without the 16x cap until miss.
+                if is_castle {
+                    st.set_int(crate::state::DK::Multiplier, (m.saturating_mul(2)).min(1 << 20));
+                } else if m < 16 {
                     st.set_int(crate::state::DK::Multiplier, m << 1);
                 }
                 st.duration = Some(2);
@@ -1344,12 +1461,24 @@ fn dispatch_cond(
         }
         // ----------------------------------------------------------- stall
         CondCbOp::StallStart => {
+            let init = if b.is_castle() { 1 } else { 127 };
             if let Some(st) = b.state_at_mut(state) {
-                st.set_int(crate::state::DK::Counter, 127);
+                st.set_int(crate::state::DK::Counter, init);
             }
             RV::Undef
         }
         CondCbOp::StallMove => {
+            if b.is_castle() {
+                // #39 Castle PBS: consecutive Protect/Detect/Endure table [255,127,63,31,15,7,3,1,0]/256.
+                const TABLE: [u32; 9] = [255, 127, 63, 31, 15, 7, 3, 1, 0];
+                let stage = b
+                    .state_at(state)
+                    .map(|s| s.get_int(crate::state::DK::Counter))
+                    .unwrap_or(1)
+                    .clamp(0, 8) as usize;
+                let num = TABLE[stage];
+                return RV::from_bool(num > 0 && b.prng.random_chance(num, 256));
+            }
             let counter = b
                 .state_at(state)
                 .and_then(|s| s.get(crate::state::DK::Counter))
@@ -1362,13 +1491,19 @@ fn dispatch_cond(
             RV::from_bool(b.prng.random_chance(c, 255))
         }
         CondCbOp::StallRestart => {
+            let is_castle = b.is_castle();
             if let Some(st) = b.state_at_mut(state) {
-                let c = st.get(crate::state::DK::Counter).map(|v| v.as_f64()).unwrap_or(127.0);
-                let half = c / 2.0;
-                if half.fract() == 0.0 {
-                    st.set(crate::state::DK::Counter, Scalar::Int(half as i64));
+                if is_castle {
+                    let stage = st.get_int(crate::state::DK::Counter);
+                    st.set_int(crate::state::DK::Counter, (stage + 1).min(8));
                 } else {
-                    st.set(crate::state::DK::Counter, Scalar::Float(half));
+                    let c = st.get(crate::state::DK::Counter).map(|v| v.as_f64()).unwrap_or(127.0);
+                    let half = c / 2.0;
+                    if half.fract() == 0.0 {
+                        st.set(crate::state::DK::Counter, Scalar::Int(half as i64));
+                    } else {
+                        st.set(crate::state::DK::Counter, Scalar::Float(half));
+                    }
                 }
                 st.duration = Some(2);
             }
@@ -1438,11 +1573,35 @@ fn dispatch_cond(
         }
         CondCbOp::TwoTurnMoveAborted => {
             let t = tpoke.unwrap();
+            if b.is_castle() {
+                // #49② Castle PBS: if Dig/Fly 2nd turn is aborted (confusion/par/attract/flinch),
+                // drop twoturnmove lock WITHOUT removing the `dig`/`fly` semi-invulnerable volatile!
+                let locked = b
+                    .state_at(state)
+                    .and_then(|s| s.get_move())
+                    .map(|m| dex.moves.key(m))
+                    .unwrap_or("");
+                if matches!(locked, "dig" | "fly") {
+                    if let Some(inv_cond) = dex.conds_id(locked) {
+                        if let Some(vs) = b.poke_mut(t).volatile_mut(inv_cond) {
+                            vs.duration = None;
+                        }
+                    }
+                    let ttm = crate::cond_id!(dex, "twoturnmove").unwrap();
+                    b.poke_mut(t).volatiles.retain(|(k, _)| *k != ttm);
+                    b.refresh_poke_mask(dex, t);
+                    return RV::Undef;
+                }
+            }
             b.remove_volatile(dex, t, "twoturnmove");
             RV::Undef
         }
         // ---------------------------------------------- dig / fly volatiles
         CondCbOp::DigImmunity => {
+            // #49① Castle PBS: Dig takes Sandstorm damage underground (Probe 12E2).
+            if b.is_castle() {
+                return RV::Undef;
+            }
             if relay == RV::Str("sandstorm") || relay == RV::Str("hail") {
                 return RV::False;
             }
@@ -1531,8 +1690,14 @@ fn dispatch_cond(
             if !b.queue_cancel_move(holder) {
                 return RV::Undef;
             }
-            let holder_speed = b.poke(holder).speed;
-            let switching_speed = b.poke(switching).speed;
+            let (holder_speed, switching_speed) = if b.is_castle() {
+                (
+                    b.get_pokemon_action_speed_f64(dex, holder),
+                    b.get_pokemon_action_speed_f64(dex, switching),
+                )
+            } else {
+                (b.poke(holder).speed as f64, b.poke(switching).speed as f64)
+            };
             if holder_speed < switching_speed
                 || (holder_speed == switching_speed && b.prng.random_chance(1, 2))
             {
@@ -1653,6 +1818,10 @@ fn two_turn_invuln(
             return RV::False;
         }
     }
+    // #49③ Castle PBS: Mean Look and Spider Web hit Dig/Fly.
+    if b.is_castle() && matches!(move_key, "meanlook" | "spiderweb") {
+        return RV::Undef;
+    }
     if matches!(
         move_key,
         "attract" | "curse" | "foresight" | "meanlook" | "mimic" | "nightmare" | "spiderweb"
@@ -1660,12 +1829,16 @@ fn two_turn_invuln(
     ) {
         return RV::False;
     }
-    if let (Some(t), Some(src)) = (tpoke, source) {
-        let lo = crate::cond_id!(dex, "lockon").unwrap();
-        let locked =
-            b.poke(src).volatile(lo).and_then(|v| v.source).map(|l| l == t).unwrap_or(false);
-        if b.poke(src).has_volatile(lo) && locked {
-            return RV::Undef;
+    // #45① Castle PBS: Lock-On / Mind Reader does NOT bypass Dig for non-hitting moves
+    // (Earthquake/Magnitude/Fissure already passed above).
+    if !(b.is_castle() && is_dig) {
+        if let (Some(t), Some(src)) = (tpoke, source) {
+            let lo = crate::cond_id!(dex, "lockon").unwrap();
+            let locked =
+                b.poke(src).volatile(lo).and_then(|v| v.source).map(|l| l == t).unwrap_or(false);
+            if b.poke(src).has_volatile(lo) && locked {
+                return RV::Undef;
+            }
         }
     }
     RV::False
@@ -1715,7 +1888,9 @@ fn residualdmg(b: &mut Battle, dex: &Dex, pokemon: PokeId) {
     let eff = EffectHandle::Cond(
         dex.conds_id(status.as_str()).unwrap_or_else(|| crate::cond_id!(dex, "brn").unwrap()),
     );
-    if b.poke(pokemon).has_volatile(rd) {
+    // #14 Castle PBS: Toxic counter (`residualdmg`) does NOT apply to Burn.
+    let use_rd = b.poke(pokemon).has_volatile(rd) && !(b.is_castle() && status == Status::Brn);
+    if use_rd {
         let counter = b.poke(pokemon).volatile(rd).map(|v| v.get_int(crate::state::DK::Counter)).unwrap_or(0);
         let maxhp = b.poke(pokemon).maxhp as f64;
         let dmg = super::clamp_int_range((maxhp / 16.0).floor() * counter as f64, Some(1.0), None);

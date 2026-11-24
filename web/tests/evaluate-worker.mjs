@@ -28,7 +28,7 @@ try {
     await loadEngine();
     const dex = new wasm.Dex();
     const beliefJson = await (await fetch("/data/belief-pool-v3/belief-pool.json")).text();
-    const catalog = await (await fetch("/data/team-pool-v2/team-pool.json")).json();
+    const catalog = await (await fetch("/data/team-pool-v3/team-pool.json")).json();
     const team = sets => readTeam(JSON.stringify(sets));
     const makeRun = (player, opponent, previewIterations, iterations, turnLimit) => ({
       version: 2, id: "worker-check", createdAt: "2026-10-24", seed: 9182,
@@ -76,8 +76,7 @@ try {
       }
     };
     try {
-      // Catalog matchups that the normal bot can answer from the artifact
-      // must still search both selections here, including a non-32 budget.
+      // Verify live Team Preview search runs for both sides, including a non-32 budget.
       const initial = makeRun(catalog.teams[0].sets, catalog.teams[1].sets, 65, 7, 3);
       const full = await execute(initial);
       verifyReplays(full.run);
@@ -93,7 +92,7 @@ try {
         const bot = new BotWorker();
         try {
           await bot.newBattle(JSON.stringify(initial.config.player.sets), JSON.stringify(initial.config.opponents[0].sets),
-            wasm.deriveBattleSeed(scheduled.battleSeed), { poolJson: beliefJson, side, seed: scheduled.agentSeeds[side], compiledPreview: false });
+            wasm.deriveBattleSeed(scheduled.battleSeed), { poolJson: beliefJson, side, seed: scheduled.agentSeeds[side] });
           const normal = await bot.search(side, 65, 99, false);
           const selected = full.run.pairs[0].games[0].selections[side];
           check(normal.src === "search" && normal.best === selected.input && normal.policy.iterations === selected.iterations, "selection differs from normal live bot");

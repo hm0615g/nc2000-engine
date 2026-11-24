@@ -132,11 +132,12 @@ impl LocalPlayer {
         let mut channel = PlayerChannel::new(side);
         let frame = channel.frame(&mut battle.clone(), dex)?;
         let consumed_hash = hash_log_lines(FNV_OFFSET, &battle.log[..channel.log_cursor()]);
-        let mut tracker = ProtocolTracker::new(side);
+        let mut tracker = ProtocolTracker::new_with_ruleset(side, battle.ruleset);
         for line in &frame.lines {
             tracker.push_line(dex, line);
         }
-        let mut observer = Observer::from_mons(side, tracker.observer_mons());
+        let mut observer =
+            Observer::from_mons_with_ruleset(side, tracker.observer_mons(), battle.ruleset);
         for (slot, name) in tracker.names(1 - side).iter().enumerate() {
             if !name.is_empty() {
                 observer.set_name(slot, name);

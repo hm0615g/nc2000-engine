@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { fetchCatalog, fetchDexJson, fetchI18nJa } from "./data";
 import { locale, type Locale } from "./i18n";
 import {
+  auditCastleTeamForPdinput,
   buildCookieInstallerScript,
   buildSinglePostSlotFields,
   cookieHeaderBytes,
@@ -10,9 +11,11 @@ import {
   PDINPUT_MAX_BATCH_SIZE,
   PDINPUT_URL,
   splitIntoPdinputBatches,
+  type CastleItemAuditReport,
   type EncodedTeam,
   type PdinputDex,
   type PdinputI18nJa,
+  type SetInput,
 } from "./pdinput";
 import type { MetaPool } from "./types";
 
@@ -44,6 +47,9 @@ interface CopyStrings {
   clearSelection: string;
   backToGame: string;
   stepIntervalLabel: string;
+  auditSummary: (errors: number, warnings: number) => string;
+  auditErrorBadge: (count: number) => string;
+  auditWarningBadge: (count: number) => string;
 }
 
 const COPY: Record<Locale, CopyStrings> = {
@@ -51,7 +57,7 @@ const COPY: Record<Locale, CopyStrings> = {
     eyebrow: "psense.lib.net / PDINPUT.cgi 連携",
     heading: "パーティプール自動インポーター",
     intro:
-      "標準パーティプール（team-pool-v2 全33構築）を psense.lib.net/_/PDINPUT.cgi の Cookie 形式（26フィールド PD レコード）に変換し、ブラウザへ一括または個別に自動登録します。",
+      "標準パーティプール（team-pool-v3 全33構築）を psense.lib.net/_/PDINPUT.cgi の Cookie 形式（26フィールド PD レコード）に変換し、ブラウザへ一括または個別に自動登録します。",
     limitNote:
       `※ psense.lib.net（Apache 1.3.39）の Cookie ヘッダ上限（8,190 bytes）により、1度に保持できるのは最大 ${PDINPUT_MAX_BATCH_SIZE} パーティ（約7.7KB）です。18パーティ以上登録すると 400 Bad Request になるため、全33パーティは前半（1〜17）と後半（18〜33）、または任意の最大17パーティに分けて取り込みます。`,
     batchSelectLabel: "取り込むバッチ（最大17パーティ）",
@@ -84,12 +90,16 @@ const COPY: Record<Locale, CopyStrings> = {
     clearSelection: "選択をクリア",
     backToGame: "← 対戦画面へ戻る",
     stepIntervalLabel: "送信間隔 (ms)",
+    auditSummary: (errors, warnings) =>
+      `Castle アイテム監査（選択中）: アイテム重複エラー ${errors} 件 / 無効アイテム警告 ${warnings} 件（自動書き換えは行いません）`,
+    auditErrorBadge: (count) => `アイテム重複エラー ×${count}`,
+    auditWarningBadge: (count) => `無効アイテム警告 ×${count}`,
   },
   en: {
     eyebrow: "psense.lib.net / PDINPUT.cgi Integration",
     heading: "Automated Party Pool Importer",
     intro:
-      "Encodes the built-in party pool (team-pool-v2, all 33 teams) into psense.lib.net/_/PDINPUT.cgi's 26-field PD cookie format and automatically imports them into your browser.",
+      "Encodes the built-in party pool (team-pool-v3, all 33 teams) into psense.lib.net/_/PDINPUT.cgi's 26-field PD cookie format and automatically imports them into your browser.",
     limitNote:
       `Note: Because psense.lib.net runs Apache 1.3.39 with an 8,190-byte Cookie header limit, at most ${PDINPUT_MAX_BATCH_SIZE} parties (~7.7 KB) can be stored at once before triggering 400 Bad Request. The 33-team catalog is split into Part 1 (1–17) and Part 2 (18–33), or any custom selection up to 17 teams.`,
     batchSelectLabel: "Batch preset (max 17 teams)",
@@ -122,6 +132,10 @@ const COPY: Record<Locale, CopyStrings> = {
     clearSelection: "Clear selection",
     backToGame: "← Back to NC2000",
     stepIntervalLabel: "Step interval (ms)",
+    auditSummary: (errors, warnings) =>
+      `Castle item audit (selected): ${errors} Item Clause error(s), ${warnings} inert-item warning(s) (items are never silently rewritten)`,
+    auditErrorBadge: (count) => `Item Clause error ×${count}`,
+    auditWarningBadge: (count) => `Inert item warning ×${count}`,
   },
 };
 
@@ -152,6 +166,7 @@ export function PdinputTool() {
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [error, setError] = useState("");
   const [allTeams, setAllTeams] = useState<EncodedTeam[]>([]);
+  const [audits, setAudits] = useState<Record<string, CastleItemAuditReport>>({});
   const [batches, setBatches] = useState<EncodedTeam[][]>([]);
   const [activeBatchIdx, setActiveBatchIdx] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -182,8 +197,15 @@ export function PdinputTool() {
         const encoded = catalog.teams.map((team) =>
           encodeTeamForPdinput(team, dex, ja),
         );
+        const auditMap: Record<string, CastleItemAuditReport> = {};
+        for (const team of catalog.teams) {
+          auditMap[team.id] = auditCastleTeamForPdinput(
+            team.sets as readonly SetInput[],
+          );
+        }
         const split = splitIntoPdinputBatches(encoded);
         setAllTeams(encoded);
+        setAudits(auditMap);
         setBatches(split);
         if (split.length > 0) {
           setSelectedIds(split[0].map((x) => x.id));
@@ -221,6 +243,14 @@ export function PdinputTool() {
     .map((id) => allTeams.find((x) => x.id === id))
     .filter((x): x is EncodedTeam => x !== undefined);
   const currentBytes = cookieHeaderBytes(selectedTeams);
+  const selectedAuditErrors = selectedTeams.reduce(
+    (acc, team) => acc + (audits[team.id]?.errors.length ?? 0),
+    0,
+  );
+  const selectedAuditWarnings = selectedTeams.reduce(
+    (acc, team) => acc + (audits[team.id]?.warnings.length ?? 0),
+    0,
+  );
   const installerScript = buildCookieInstallerScript(selectedTeams);
 
   function selectPreset(idx: number) {
@@ -365,6 +395,18 @@ export function PdinputTool() {
         <p class="modal-note" data-testid="pdinput-selection-summary">
           <strong>{t.customSelectLabel(selectedTeams.length, currentBytes)}</strong>
         </p>
+        {(selectedAuditErrors > 0 || selectedAuditWarnings > 0) && (
+          <div
+            class="pool-report"
+            data-testid="pdinput-audit-summary"
+            role="status"
+            style={{ marginTop: "8px" }}
+          >
+            <div class={selectedAuditErrors > 0 ? "pool-verdict no" : "pool-verdict"}>
+              {t.auditSummary(selectedAuditErrors, selectedAuditWarnings)}
+            </div>
+          </div>
+        )}
       </section>
 
       <section class="evaluate-card">
@@ -494,6 +536,7 @@ export function PdinputTool() {
             const slotIdx = selectedIds.indexOf(team.id);
             const checked = slotIdx !== -1;
             const targetSlot = checked ? slotIdx + 1 : (idx % PDINPUT_MAX_BATCH_SIZE) + 1;
+            const audit = audits[team.id];
             return (
               <div
                 key={team.id}
@@ -521,6 +564,16 @@ export function PdinputTool() {
                     {checked && (
                       <span class="badge" data-testid={`pdinput-slot-badge-${team.id}`}>
                         → PD{slotIdx} (No.{slotIdx + 1})
+                      </span>
+                    )}
+                    {audit && audit.errors.length > 0 && (
+                      <span class="badge" data-testid={`pdinput-audit-error-${team.id}`}>
+                        {t.auditErrorBadge(audit.errors.length)}
+                      </span>
+                    )}
+                    {audit && audit.warnings.length > 0 && (
+                      <span class="badge" data-testid={`pdinput-audit-warning-${team.id}`}>
+                        {t.auditWarningBadge(audit.warnings.length)}
                       </span>
                     )}
                   </label>
@@ -557,6 +610,18 @@ export function PdinputTool() {
                     </span>
                   ))}
                 </div>
+                {audit && audit.findings.length > 0 && (
+                  <ul
+                    data-testid={`pdinput-audit-findings-${team.id}`}
+                    style={{ margin: "2px 0 0", paddingLeft: "18px", fontSize: "0.82rem" }}
+                  >
+                    {audit.findings.map((f, fIdx) => (
+                      <li key={fIdx}>
+                        [{f.severity}:{f.code}] #{f.slot + 1} {f.species}: {f.message}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             );
           })}

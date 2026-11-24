@@ -7,6 +7,7 @@ use std::collections::{HashMap, VecDeque};
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct HpTransitionKey {
     fingerprint: [u8; 16],
+    ruleset_tag: u64,
     state: u128,
     damage_omitted: bool,
     claw_omitted: bool,
@@ -30,7 +31,17 @@ impl HpTransitionKey {
             || !battle.event_stack.is_empty() || !battle.effect_stack.is_empty()
             || battle.active_move.is_some() || battle.active_pokemon.is_some() || battle.active_target.is_some()
             || battle.pending_boosts.is_some() || battle.field.weather.is_some()
-            || battle.field.pseudo_weather.iter().any(|(id,_)|!matches!(dex.conds.key(*id),"maxtotallevel"|"stadiumsleepclause"|"freezeclausemod")) {
+            || (battle.ruleset.is_castle() && battle.ruleset.turn_limit().is_some_and(|lim| battle.turn >= lim))
+            || battle.field.pseudo_weather.iter().any(|(id,_)|!matches!(
+                dex.conds.key(*id),
+                "maxtotallevel"
+                    | "stadiumsleepclause"
+                    | "sleepclausemod"
+                    | "freezeclausemod"
+                    | "castlesleepclause"
+                    | "castlefreezeclause"
+                    | "castlepbs"
+            )) {
             return None;
         }
         for side in 0..2 {
@@ -65,7 +76,8 @@ impl HpTransitionKey {
         let state=if claw_omitted {canonical.state_key128_without_quick_claw_roll(dex,damage_omitted)}
             else if damage_omitted {canonical.state_key128_without_damage_bookkeeping()}
             else {canonical.state_key128()};
-        Some(Self {fingerprint:dex.replay_fingerprint,state,damage_omitted,claw_omitted,choices,script:script.to_vec()})
+        let ruleset_tag = battle.ruleset.fingerprint_tag();
+        Some(Self {fingerprint:dex.replay_fingerprint,ruleset_tag,state,damage_omitted,claw_omitted,choices,script:script.to_vec()})
     }
 }
 

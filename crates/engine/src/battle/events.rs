@@ -527,7 +527,11 @@ impl Battle {
             h.effect_order = self.state_at(h.state).map(|s| s.effect_order as f64).unwrap_or(0.0);
         }
         if let Holder::Poke(p) = h.holder {
-            h.speed = self.poke(p).speed as f64;
+            h.speed = if self.is_castle() {
+                self.get_pokemon_action_speed_f64(dex, p)
+            } else {
+                self.poke(p).speed as f64
+            };
             if ends_switch_in {
                 let fpv = self.field_position_value(p);
                 let idx = self.speed_order.iter().position(|&v| v == fpv).map(|i| i as f64).unwrap_or(-1.0);
@@ -1157,7 +1161,12 @@ impl Battle {
         for side in 0..2 {
             if let Some(id) = self.active_id(side) {
                 if !self.poke(id).fainted {
-                    buf[n] = (id, self.poke(id).speed as f64);
+                    let spe = if self.is_castle() {
+                        self.get_pokemon_action_speed_f64(dex, id)
+                    } else {
+                        self.poke(id).speed as f64
+                    };
+                    buf[n] = (id, spe);
                     n += 1;
                 }
             }

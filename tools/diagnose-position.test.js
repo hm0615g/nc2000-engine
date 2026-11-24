@@ -123,6 +123,104 @@ test('diagnose-position --actual-foe-spec computes oracle hindsight without setP
   ).trim();
   const report = JSON.parse(stdout);
   assert.equal(report.schema, 'nc2000-triage-report-v1');
+  assert.equal(report.ruleset, 'gen2stadium2');
   assert.equal(report.spec_valid, true);
   assert.equal(typeof report.oracle_hindsight_q_bot, 'number');
+});
+
+test('diagnose-position supports Castle ruleset via --ruleset and spec.ruleset', (t) => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nc2000-diag-castle-'));
+  t.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
+  const pool = JSON.parse(
+    fs.readFileSync(path.join(REPO, 'data/belief-pool-v3/belief-pool.json'), 'utf8'),
+  );
+  const mine = pool.teams[0];
+  const foe = pool.teams[1];
+  const pub = (sets, active) =>
+    sets.map((s, i) => ({
+      species: s.species,
+      level: s.level,
+      gender: s.gender ?? '',
+      item_flag: !!s.item,
+      hp_num: 100,
+      hp_den: 100,
+      appeared: i === active,
+      active: i === active,
+    }));
+
+  const baseSpec = {
+    schema: 'nc2000-position-v1',
+    side: 0,
+    turn: 1,
+    own_sets: mine.sets,
+    sides: [
+      { mons: pub(mine.sets, 0), active: 0, party: [0, 1, 2] },
+      { mons: pub(foe.sets, 0), active: 0 },
+    ],
+  };
+
+  // 1. CLI --ruleset castle alias resolves to canonical castle-tournament
+  const cliSpecPath = path.join(tmpDir, 'spec-cli.json');
+  fs.writeFileSync(cliSpecPath, JSON.stringify(baseSpec));
+  const cliOut = execFileSync(
+    'node',
+    [
+      'tools/diagnose-position.js',
+      '--spec',
+      cliSpecPath,
+      '--ruleset',
+      'castle',
+      '--iters',
+      '20,20',
+      '--seeds',
+      '1',
+    ],
+    { cwd: REPO, encoding: 'utf8' },
+  ).trim();
+  const cliReport = JSON.parse(cliOut);
+  assert.equal(cliReport.spec_valid, true);
+  assert.equal(cliReport.ruleset, 'castle-tournament');
+
+  // 2. Embedded spec.ruleset is honored without --ruleset flag
+  const embeddedSpecPath = path.join(tmpDir, 'spec-embedded.json');
+  fs.writeFileSync(
+    embeddedSpecPath,
+    JSON.stringify({ ...baseSpec, ruleset: 'castle-tournament' }),
+  );
+  const embOut = execFileSync(
+    'node',
+    [
+      'tools/diagnose-position.js',
+      '--spec',
+      embeddedSpecPath,
+      '--iters',
+      '20,20',
+      '--seeds',
+      '1',
+    ],
+    { cwd: REPO, encoding: 'utf8' },
+  ).trim();
+  const embReport = JSON.parse(embOut);
+  assert.equal(embReport.spec_valid, true);
+  assert.equal(embReport.ruleset, 'castle-tournament');
+
+  // 3. Unknown ruleset fails gracefully with CATEGORY_B1_RULE_INVALID_SPEC
+  const badOut = execFileSync(
+    'node',
+    [
+      'tools/diagnose-position.js',
+      '--spec',
+      cliSpecPath,
+      '--ruleset',
+      'unknown-ruleset',
+      '--iters',
+      '20,20',
+      '--seeds',
+      '1',
+    ],
+    { cwd: REPO, encoding: 'utf8' },
+  ).trim();
+  const badReport = JSON.parse(badOut);
+  assert.equal(badReport.spec_valid, false);
+  assert.equal(badReport.verdict, 'CATEGORY_B1_RULE_INVALID_SPEC');
 });

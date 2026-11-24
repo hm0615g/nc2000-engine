@@ -84,7 +84,7 @@ fn product_search_ignores_real_hp_counters_moves_and_battle_rng_on_both_sides() 
                 &["-damage", &subject, &secret],
                 &["-damage", &subject, &shared],
             );
-            b.quick_claw_roll = i == 1;
+            b.set_quick_claw_roll(i == 1);
             b.reseed(100 + i as u64);
             // The other player's unannounced pending input is not knowledge.
             let pending = b.legal_choices(&dex, 1 - side);
@@ -697,7 +697,7 @@ fn open_agent_has_zero_hidden_runtime_leaks() {
                 &["-damage", &t_sub, &secret],
                 &["-damage", &t_sub, &shared],
             );
-            b.quick_claw_roll = i == 1;
+            b.set_quick_claw_roll(i == 1);
             b.reseed(100 + i as u64);
             let pending = b.legal_choices(&dex, 1 - side);
             b.choose(&dex, 1 - side, &pending[i % pending.len()].to_input(&dex))

@@ -485,9 +485,21 @@ impl Battle {
         p1: &[PokemonSet],
         p2: &[PokemonSet],
     ) -> Result<Battle, EngineError> {
+        Self::from_fixture_with_ruleset(dex, seed, p1, p2, crate::rules::Ruleset::PsStadium2)
+    }
+
+    /// Constructs a battle in team-preview state under an explicit [`crate::rules::Ruleset`].
+    pub fn from_fixture_with_ruleset(
+        dex: &Dex,
+        seed: &str,
+        p1: &[PokemonSet],
+        p2: &[PokemonSet],
+        ruleset: crate::rules::Ruleset,
+    ) -> Result<Battle, EngineError> {
         let prng = Prng::from_seed_str(seed)
             .ok_or_else(|| EngineError::InvalidChoice(format!("bad seed: {seed}")))?;
         let mut battle = Battle {
+            ruleset,
             preview_level_caps: [Some(MAX_TOTAL_LEVEL); 2],
             prng: crate::prng::BattleRng::seeded(prng),
             turn: 0,
@@ -507,7 +519,10 @@ impl Battle {
             last_move_line: -1,
             last_successful_move_this_turn: None,
             last_damage: 0,
-            quick_claw_roll: false,
+            quick_claw_rolls: [false, false],
+            triple_kick_mult: 0,
+            recoil_ko_side: None,
+            bp_switched_this_turn: [false, false],
             speed_order: [0, 1],
             format_data: EffectState { id: EffId::Format, ..Default::default() },
             sent_log_pos: 0,
@@ -589,22 +604,7 @@ impl Battle {
         }
         let name = PokeName::new(crate::state::truncate_utf8_bytes(&name[..char_end], 24));
 
-        // gender: set.gender || species.gender || battle.sample(['M','F'])
-        let gender = match set.gender.as_deref() {
-            Some("M") => Gender::M,
-            Some("F") => Gender::F,
-            Some("N") => Gender::N,
-            _ => match species.gender.as_deref() {
-                Some("M") => Gender::M,
-                Some("F") => Gender::F,
-                Some("N") => Gender::N,
-                _ => {
-                    let pick = self.prng.sample_index(2);
-                    if pick == 0 { Gender::M } else { Gender::F }
-                }
-            },
-        };
-
+        let is_castle = self.is_castle();
         let happiness = set.happiness.unwrap_or(255);
 
         let mut base_move_slots = MoveSlots::default();
@@ -616,9 +616,9 @@ impl Battle {
             let move_id = dex.canonical_move_id(move_id);
             let ms = dex.move_static(move_id);
             let pp_ups = if ms.no_pp_boosts { 0 } else { 3 };
-            // calculatePP: pp * (5 + ppUps) / 5; gen<=2 && pp==40 → -= ppUps
+            // calculatePP: pp * (5 + ppUps) / 5; gen<=2 && pp==40 → -= ppUps (PS: 61, Castle PBS #54④: 64)
             let mut pp = ms.pp * (5 + pp_ups) / 5;
-            if ms.pp == 40 {
+            if ms.pp == 40 && !is_castle {
                 pp -= pp_ups;
             }
             base_move_slots.push(MoveSlot { id: move_id, pp, maxpp: pp, disabled: false, used: false, shared: true });
@@ -627,21 +627,109 @@ impl Battle {
         // stat math (battle.statModify, nature neutral, tr = u32-trunc)
         let stat_keys = ["hp", "atk", "def", "spa", "spd", "spe"];
         let mut ivs = [31i32; 6];
-        let mut evs = [0i32; 6];
+        let mut evs = if is_castle { [255i32; 6] } else { [0i32; 6] };
+        let mut has_iv = [false; 6];
+        let mut has_ev = [false; 6];
         for (i, key) in stat_keys.iter().enumerate() {
             if let Some(m) = &set.ivs {
                 if let Some(&v) = m.get(*key) {
                     ivs[i] = v as i32;
+                    has_iv[i] = true;
                 }
             }
             if let Some(m) = &set.evs {
                 if let Some(&v) = m.get(*key) {
                     evs[i] = v as i32;
+                    has_ev[i] = true;
                 }
             }
-            ivs[i] = ivs[i].clamp(0, 31) & 30; // gen<=2: DVs = even IVs
-            evs[i] = evs[i].clamp(0, 255);
         }
+        if is_castle {
+            // §7-C.1 Castle defaults:
+            // 1. Typed Hidden Power auto-fill when IVs are omitted or all-30/31
+            //    (canonical Gen 2 70-BP spread matching `validate.rs` & `pdinput.ts`).
+            let all_max_ivs = set.ivs.is_none() || ivs.iter().all(|&v| v == 30 || v == 31);
+            let typed_hp = set.moves.iter().find_map(|mv| {
+                let id = toid(mv);
+                let rest = id.strip_prefix("hiddenpower")?;
+                castle_canonical_hp_dvs(rest)
+            });
+            if all_max_ivs {
+                if let Some((atk_dv, def_dv)) = typed_hp {
+                    ivs[1] = atk_dv * 2;
+                    ivs[2] = def_dv * 2;
+                    ivs[3] = 30;
+                    ivs[4] = 30;
+                    ivs[5] = 30;
+                    has_iv[3] = true;
+                    has_iv[4] = true;
+                }
+            }
+            // 2. Single Special DV/EV (`spa` authoritative, `spd`-only fallback propagates to `spa`).
+            if !has_iv[3] && has_iv[4] {
+                ivs[3] = ivs[4];
+            } else {
+                ivs[4] = ivs[3];
+            }
+            if !has_ev[3] && has_ev[4] {
+                evs[3] = evs[4];
+            } else {
+                evs[4] = evs[3];
+            }
+            for i in 1..6 {
+                ivs[i] = ivs[i].clamp(0, 31) & 30;
+            }
+            // 3. Always derive HP DV from (Atk, Def, Spe, Spc) LSBs (Gen 2 PBS invariant).
+            let a = (ivs[1] / 2) & 1;
+            let d = (ivs[2] / 2) & 1;
+            let s = (ivs[5] / 2) & 1;
+            let c = (ivs[3] / 2) & 1;
+            ivs[0] = ((a << 3) | (d << 2) | (s << 1) | c) * 2;
+            for e in &mut evs {
+                *e = (*e).clamp(0, 255);
+            }
+        } else {
+            for i in 0..6 {
+                ivs[i] = ivs[i].clamp(0, 31) & 30; // gen<=2: DVs = even IVs
+                evs[i] = evs[i].clamp(0, 255);
+            }
+        }
+
+        // gender: PS uses set.gender || species.gender || battle.sample(['M','F']).
+        // Castle (§7-C.1) ALWAYS derives gender deterministically from species/Atk DV
+        // (matching PBS/pdinput even if set.gender carries a stale or invalid value).
+        let gender = if is_castle {
+            match species.gender.as_deref() {
+                Some("M") => Gender::M,
+                Some("F") => Gender::F,
+                Some("N") => Gender::N,
+                _ => {
+                    let f_ratio = species
+                        .extra
+                        .get("genderRatio")
+                        .and_then(|gr| gr.get("F"))
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.5);
+                    let threshold = (f_ratio * 16.0).round() as i32;
+                    if (ivs[1] / 2) < threshold { Gender::F } else { Gender::M }
+                }
+            }
+        } else {
+            match set.gender.as_deref() {
+                Some("M") => Gender::M,
+                Some("F") => Gender::F,
+                Some("N") => Gender::N,
+                _ => match species.gender.as_deref() {
+                    Some("M") => Gender::M,
+                    Some("F") => Gender::F,
+                    Some("N") => Gender::N,
+                    _ => {
+                        let pick = self.prng.sample_index(2);
+                        if pick == 0 { Gender::M } else { Gender::F }
+                    }
+                },
+            }
+        };
         let bs = &species.base_stats;
         let bases = [bs.hp, bs.atk, bs.def, bs.spa, bs.spd, bs.spe];
         let level = set.level as i32;
@@ -657,7 +745,13 @@ impl Battle {
             };
         }
 
-        let item = if set.item.is_empty() { None } else { dex.items.id(&toid(&set.item)) };
+        let item = if set.item.is_empty() {
+            None
+        } else if is_castle {
+            dex.castle_item_id(&toid(&set.item))
+        } else {
+            dex.items.id(&toid(&set.item))
+        };
 
         // gen 2 hidden power from DVs (ivs already clamped & 30)
         const HP_TYPES: [&str; 16] = [
@@ -772,19 +866,23 @@ impl Battle {
         if p.hp <= 0 {
             return ("0 fnt".into(), "0 fnt".into());
         }
-        let secret = format!("{}/{}", p.hp, p.maxhp);
-        // HP Percentage Mod (this format): shared HP is ceil(100*hp/maxhp),
-        // with a not-quite-full 100 knocked down to 99.
-        let percentage = {
-            let pct = (100 * p.hp + p.maxhp - 1) / p.maxhp;
-            if pct == 100 && p.hp < p.maxhp {
-                99
-            } else {
-                pct
-            }
+        let mut secret = format!("{}/{}", p.hp, p.maxhp);
+        // Castle PBS exposes exact HP to both players (no HP Percentage Mod).
+        let mut shared = if self.is_castle() {
+            secret.clone()
+        } else {
+            // HP Percentage Mod (this format): shared HP is ceil(100*hp/maxhp),
+            // with a not-quite-full 100 knocked down to 99.
+            let percentage = {
+                let pct = (100 * p.hp + p.maxhp - 1) / p.maxhp;
+                if pct == 100 && p.hp < p.maxhp {
+                    99
+                } else {
+                    pct
+                }
+            };
+            format!("{percentage}/100")
         };
-        let mut shared = format!("{percentage}/100");
-        let mut secret = secret;
         if p.status != Status::None {
             secret.push_str(&format!(" {}", p.status.as_str()));
             shared.push_str(&format!(" {}", p.status.as_str()));
@@ -802,7 +900,9 @@ impl Battle {
         self.add(&["rule", "Stadium Sleep Clause: Putting another foe to sleep while any teammate sleeps forfeits the battle"]);
         self.add(&["rule", "Freeze Clause Mod: Limit one foe frozen"]);
         self.add(&["rule", "OHKO Clause: OHKO moves are banned"]);
-        self.add(&["rule", "HP Percentage Mod: HP is shown in percentages"]);
+        if !self.is_castle() {
+            self.add(&["rule", "HP Percentage Mod: HP is shown in percentages"]);
+        }
         // runPickTeam → Team Preview onTeamPreview
         self.add(&["clearpoke"]);
         for id in self.get_all_pokemon() {
@@ -824,6 +924,29 @@ impl Battle {
         self.mid_turn = true;
         // requestState is set → turnLoop deferred until choices commit
     }
+}
+
+/// Canonical Gen 2 70-BP Hidden Power `(atk_dv, def_dv)` spreads (with Spe=15, Spc=15).
+fn castle_canonical_hp_dvs(hp_type: &str) -> Option<(i32, i32)> {
+    Some(match hp_type {
+        "fighting" => (12, 12),
+        "flying" => (12, 13),
+        "poison" => (12, 14),
+        "ground" => (12, 15),
+        "rock" => (13, 12),
+        "bug" => (13, 13),
+        "ghost" => (13, 14),
+        "steel" => (13, 15),
+        "fire" => (14, 12),
+        "water" => (14, 13),
+        "grass" => (14, 14),
+        "electric" => (14, 15),
+        "psychic" => (15, 12),
+        "ice" => (15, 13),
+        "dragon" => (15, 14),
+        "dark" => (15, 15),
+        _ => return None,
+    })
 }
 
 impl Side {

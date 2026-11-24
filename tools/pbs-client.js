@@ -58,9 +58,9 @@ if (args.help || args.h) {
                          host: only enter as P1 when the room is empty
                          join: wait until a human P1 enters, then join as P2
                          auto: join as P2 if P1 is waiting, else enter as P1
-  --tier TIER          default | mercy (default: default = 81k + pool:nash;
-                       mercy = 81k + pool:tier-a human-sized sub-party box)
-  --team SPEC          pool:nash | pool:tier-a | pool:random | pool:ID | FILE.json
+  --tier TIER          default | mercy (default: default = adaptive + pool:flagship;
+                       mercy = adaptive + pool:tier-a human-sized sub-party box)
+  --team SPEC          pool:flagship | pool:nash | pool:tier-a | pool:random | pool:ID | FILE.json
                        (default determined by --tier)
   --iters N            Override search iterations for BOTH battle and preview
                        (default: Web adaptive battle cap=243000 / preview=729000)
@@ -113,13 +113,16 @@ const MODE = String(args.mode || 'host').toLowerCase();
 const TIER = String(args.tier || 'default').toLowerCase();
 const DEFAULT_TEAM_BY_TIER = (TIER === 'mercy' || TIER === 'tiera' || TIER === 'tier-a' || TIER === 'sub')
   ? 'pool:tier-a'
-  : 'pool:nash';
+  : 'pool:flagship';
 const TEAMSPEC = String(args.team || DEFAULT_TEAM_BY_TIER);
 const GAMES = Math.max(1, parseInt(args.games || '1', 10));
 const POLL_MS = Math.max(500, parseInt(args['poll-ms'] || '2500', 10));
 const HOST_TIMEOUT_SEC = Math.max(0, parseInt(args['host-timeout-sec'] ?? '240', 10));
 const TLIMIT = Math.max(0, parseInt(args.tlimit || '0', 10));
 const LTURN = Math.max(0, parseInt(args.lturn || '0', 10));
+assert.ok(Number.isInteger(LTURN) && LTURN <= 65535, 'CASTLE_LTURN_RANGE');
+const CASTLE_RULESET = LTURN === 0 ? 'castle-free' : LTURN === 80
+  ? 'castle-tournament' : `castle-custom-r1-p1-t${LTURN}-o0-ljp`;
 const SEED = parseInt(args.seed || String(Date.now() & 0x7fffffff), 10);
 const RANDOM = Boolean(args.random);
 const QUIET = Boolean(args.quiet);
@@ -201,17 +204,14 @@ if (!Number.isSafeInteger(ITERS) || ITERS <= 0 ||
 // ------------------------------------------------------------------ data & i18n
 const dexData = JSON.parse(fs.readFileSync(path.join(REPO, 'data/gen2stadium2.json'), 'utf8'));
 const i18n = JSON.parse(fs.readFileSync(path.join(REPO, 'data/i18n-ja.json'), 'utf8'));
-const ownPool = JSON.parse(fs.readFileSync(path.join(REPO, 'data/team-pool-v2/team-pool.json'), 'utf8'));
+const ownPool = JSON.parse(fs.readFileSync(path.join(REPO, 'data/team-pool-v3/team-pool.json'), 'utf8'));
 const nashDeme = JSON.parse(fs.readFileSync(path.join(REPO, 'data/kodoku-r3/conclusion-equilibrium-deme.json'), 'utf8'));
+const flagshipMix = JSON.parse(fs.readFileSync(path.join(REPO, 'data/team-pool-v3/flagship-mixture.json'), 'utf8'));
 const beliefPoolJson = fs.readFileSync(path.join(REPO, 'data/belief-pool-v3/belief-pool.json'), 'utf8');
 const baseBeliefPool = JSON.parse(beliefPoolJson);
-let compiledPreview = null;
-try {
-  compiledPreview = JSON.parse(fs.readFileSync(path.join(REPO, 'data/compiled-preview-v1.json'), 'utf8'));
-} catch {}
 
 // Skeuomorphic "1 human player's sub-party box" for Tier A (mercy/handicap mode):
-// 8 distinct iconic human-origin archetypes from data/team-pool-v2/team-pool.json
+// 8 distinct iconic human-origin archetypes retained in the v3 catalog
 const TIER_A_BOX_IDS = [
   'sample-07',        // マルマイン/ケンタロス55/パルシェン/ガラガラ55/カビゴン/サンダー55
   'sample-08',        // ナッシー/カイリキー/ミルタンク/パルシェン/カビゴン55/サンダー55
@@ -281,7 +281,21 @@ function rngInt(n) {
 
 function pickTeam(specOverride) {
   const spec = String(specOverride || TEAMSPEC);
-  if (spec === 'pool:nash' || spec === 'nash' || spec === 'default') {
+  if (spec === 'pool:flagship' || spec === 'flagship' || spec === 'default') {
+    const teams = flagshipMix.teams;
+    assert.ok(Array.isArray(teams) && teams.length === 2, 'FLAGSHIP_MIXTURE_REQUIRED');
+    const total = teams.reduce((sum, t) => sum + (t.weight || 0), 0);
+    assert.ok(total > 0 && Math.abs(total - 1) < 1e-9, 'FLAGSHIP_WEIGHTS_INVALID');
+    let draw = rng() * total;
+    let selected = teams[teams.length - 1];
+    for (const row of teams) {
+      if (draw < row.weight) { selected = row; break; }
+      draw -= row.weight;
+    }
+    return {id: selected.id, sets: selected.sets,
+      label: `pool:flagship(${selected.id})`, tier: 'flagship'};
+  }
+  if (spec === 'pool:nash' || spec === 'nash') {
     const teams = nashDeme.teams;
     const total = teams.reduce((a, t) => a + (t.weight || 0), 0);
     let r = rng() * total;
@@ -3243,6 +3257,7 @@ function buildAndSanitizePositionSpec({
 
   const spec = {
     schema: 'nc2000-position-v1',
+    ruleset: CASTLE_RULESET,
     side: mySide,
     turn: effectiveTurn,
     upkeep_this_turn: Boolean(!teamPreview && llog?.upkeepThisTurn),
@@ -4377,6 +4392,9 @@ async function playOneGame(gameIdx, dependencies = {}) {
         SEED * 1000 + gameIdx * 10 + side,
         PROFILE.c
       );
+      assert.equal(typeof searcher.setRuleset, 'function', 'CASTLE_RULESET_WASM_REQUIRED');
+      searcher.setRuleset(CASTLE_RULESET);
+      assert.equal(searcher.ruleset(), CASTLE_RULESET, 'CASTLE_PREVIEW_RULESET_MISMATCH');
     }
     return searcher;
   };
@@ -4787,21 +4805,6 @@ async function playOneGame(gameIdx, dependencies = {}) {
             const s = ensureSearcher(mySide, true);
             s.setPosition(JSON.stringify(spec));
             // If we have not seen this opponent's shell before, check compiled preview book first
-            if (!hasCustomShellMemory && compiledPreview) {
-              try {
-                const cpKey = s.compiledPreviewKey();
-                if (cpKey && compiledPreview[cpKey] && compiledPreview[cpKey].choice) {
-                  choiceStr = compiledPreview[cpKey].choice;
-                  previewSource = 'compiled-book';
-                }
-              } catch (err) {
-                previewErrors.push({ stage: 'compiled_preview_key', message: String(err.message || err) });
-              }
-            }
-            if (!choiceStr && !hasCustomShellMemory) {
-              choiceStr = s.bakedPreview();
-              if (choiceStr) previewSource = 'baked';
-            }
             if (!choiceStr) {
               s.step(PREVIEW_ITERS);
               choiceStr = s.best();
@@ -4920,7 +4923,7 @@ async function playOneGame(gameIdx, dependencies = {}) {
               dictionaryPath: path.join(REPO, 'tools/pbs-castle-dictionary.js'),
               side: mySide, matchId, ownSets: team.sets, previewSides, pickedRosterSlots,
               seed: SEED * 1000 + gameIdx * 10 + mySide, c: PROFILE.c,
-              poolJson: beliefPoolJson,
+              poolJson: beliefPoolJson, rulesetId: CASTLE_RULESET,
               poolProvider: ({seenFoeMons: observed, foeSide, spec}) => buildDynamicBeliefPoolJson({
                 foePreviewMons: previewSides[foeSide], foeName,
                 seenFoeMons: observed, opponentDb, positionSpec: spec,
@@ -5141,5 +5144,6 @@ module.exports = {
   encodeFormEucJp,
   resolveBotOutcomeFromFinishedHtml,
   TIER_A_BOX_IDS,
+  castleRulesetId: CASTLE_RULESET,
   searchBudgets: Object.freeze({battle: ITERS, preview: PREVIEW_ITERS}),
 };

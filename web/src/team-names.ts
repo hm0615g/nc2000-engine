@@ -6,7 +6,55 @@ export interface TeamNameEntry {
 }
 
 export const CATALOG_TEAM_NAMES: Record<string, TeamNameEntry> = {
-  // Nash equilibrium
+  // Flagship strongest core (team-pool-v3)
+  "s0053-lefties-hpi": {
+    ja: "残飯めざ氷55サンダー・大文字55ガラガラ (s0053)",
+    en: "Lefties HP-Ice 55 Zapdos · Fire Blast 55 Marowak (s0053)",
+  },
+  "s0053-lefties-dp": {
+    ja: "残飯ドリくち55サンダー・めざ虫55ガラガラ (s0053)",
+    en: "Lefties Drill Peck 55 Zapdos · HP-Bug 55 Marowak (s0053)",
+  },
+
+  // Strict-LIVE verified top Tier-1 additions (team-pool-v3)
+  "pb-84": {
+    ja: "カジュアル寝言カビA (55ライコウ・55カビゴン)",
+    en: "Casual Sleep Talk Snorlax A (55 Raikou / 55 Snorlax)",
+  },
+  "mjj-2014-offantom": {
+    ja: "ナマステひつまぶし (55ポリゴン2・55リザ・55ケンタ)",
+    en: "Namaste Hitsumabushi (55 Porygon2 / 55 Charizard / 55 Tauros)",
+  },
+  "pb-122": {
+    ja: "55ライコウ・55ガラガラA (バトンサンダース)",
+    en: "55 Raikou / 55 Marowak A (AgilityPass Jolteon)",
+  },
+  "pb-131": {
+    ja: "55サンダー・55バンギラス (ハガネール・ヘラ)",
+    en: "55 Zapdos / 55 Tyranitar (Steelix / Heracross)",
+  },
+  "pb-87": {
+    ja: "サンダーバンギWA feat.まるころタンク",
+    en: "Zapdos Tyranitar WA feat. Miltank",
+  },
+  "mjj-type-QA-moudoku": {
+    ja: "致死量 (毒統一4エース)",
+    en: "Lethal Dose (Poison Quad-55)",
+  },
+  "pb-63": {
+    ja: "Who is ace? (55カビ・55フシギバナ・ハピナス)",
+    en: "Who is Ace? (55 Snorlax / 55 Venusaur / Blissey)",
+  },
+  "pb-66": {
+    ja: "カビパルサンダー自分用 (55カビ・ハガネール)",
+    en: "55 Snorlax Cloyster Zapdos (Steelix / Gengar)",
+  },
+  "mjj-2015-ayagen": {
+    ja: "8番道路ジム (55怪しい光ゲンガー・55フーディン)",
+    en: "Route 8 Gym (55 Confuse Ray Gengar / 55 Alakazam)",
+  },
+
+  // Historical Nash equilibrium (Kodoku v14)
   "apex-c08-surgical-142": {
     ja: "雨パル・めざ虫ガラ・冷ビスタ55カビ",
     en: "Rain Cloyster · HP-Bug Marowak 55 Snorlax",

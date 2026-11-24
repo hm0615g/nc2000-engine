@@ -43,8 +43,6 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const WebSocket = require('ws');
-const { sim, FORMAT, MOD } = require('./ps');
-const { Teams, TeamValidator, Dex } = sim;
 
 const REPO = path.join(__dirname, '..');
 
@@ -76,11 +74,11 @@ if (args.help || args.h) {
   --loginserver URL login API base for assertions (default
                     https://play.pokemonshowdown.com; only contacted when a
                     bare guest /trn is refused or --password is given)
-  --format ID       format id (default ${FORMAT})
+  --format ID       format id (default gen2nintendocup2000noohkostadium2strict)
   --team SPEC       pool:random | pool:ID | pool:IDX | FILE.json (required;
                     pool:random uses drawWeight when available)
   --pool FILE       own-team pool JSON override
-                    (default data/team-pool-v2/team-pool.json)
+                    (default data/team-pool-v3/team-pool.json)
   --team-dir DIR    rebuild the own-team pool from Showdown .txt teams in DIR
                     before each new battle; takes priority over --pool
   --no-validate-pool
@@ -132,6 +130,9 @@ if (args.help || args.h) {
   --quiet           per-game lines only`);
 	process.exit(0);
 }
+
+const { sim, FORMAT, MOD } = require('./ps');
+const { Teams, TeamValidator, Dex } = sim;
 
 const need = k => {
 	if (!args[k] || args[k] === true) {
@@ -220,7 +221,7 @@ const VALIDATE_POOL = !args['no-validate-pool'];
 const TEAM_DIR = args['team-dir'] && args['team-dir'] !== true ? resolveUserPath(String(args['team-dir'])) : '';
 const POOL_FILE = args.pool && args.pool !== true ?
 	resolveUserPath(String(args.pool)) :
-	path.join(REPO, 'data/team-pool-v2/team-pool.json');
+	path.join(REPO, 'data/team-pool-v3/team-pool.json');
 
 const DEFAULT_BELIEF_POOL_FILE =
 	path.join(REPO, 'data/belief-pool-v3/belief-pool.json');
@@ -513,222 +514,7 @@ if (!RANDOM && SEARCH_RUNTIME === 'wasm') {
 		});
 }
 
-const sha256Text = text =>
-	crypto.createHash('sha256').update(text).digest('hex');
-
-const DEFAULT_DEX_JSON =
-	fs.readFileSync(
-		path.join(REPO, 'data/gen2stadium2.json'),
-		'utf8'
-	);
-
-let compiledPreviewArtifact = null;
-let compiledPreviewPublicRosters = null;
-let compiledPreviewCompatible = false;
-let compiledPreviewCompatibilityReason = '';
-let compiledPreviewForkAttestation = null;
-let compiledPreviewForkAttestationValid = false;
-let compiledPreviewForkAttestationReason = '';
-
-const PS_CLIENT_COMPILED_PREVIEW_ENABLED = false;
-
-if (PS_CLIENT_COMPILED_PREVIEW_ENABLED && !RANDOM && WEB_POLICY && MODE === 'blind') {
-	try {
-		const compiledPreviewArtifactText = fs.readFileSync(
-			path.join(REPO, 'data/compiled-preview-v1.json'),
-			'utf8'
-		);
-
-		compiledPreviewArtifact = JSON.parse(compiledPreviewArtifactText);
-
-		if (compiledPreviewArtifact.format !== 'nc2000-compiled-preview-v1') {
-			throw new Error('unexpected compiled-preview format');
-		}
-		if (compiledPreviewArtifact.c !== PROFILE.c) {
-			throw new Error(
-				`compiled-preview c=${compiledPreviewArtifact.c}, search c=${PROFILE.c}`
-			);
-		}
-		if (compiledPreviewArtifact.iterations !== PREVIEW_ITERS) {
-			throw new Error(
-				`compiled-preview iterations=${compiledPreviewArtifact.iterations}, ` +
-				`web preview budget=${PREVIEW_ITERS}`
-			);
-		}
-		if (compiledPreviewArtifact.priorSha256 !== sha256Text(DEFAULT_BELIEF_POOL_JSON)) {
-			throw new Error('compiled-preview belief pool does not match');
-		}
-		if (compiledPreviewArtifact.dexSha256 !== sha256Text(DEFAULT_DEX_JSON)) {
-			throw new Error('compiled-preview dex does not match');
-		}
-
-		compiledPreviewPublicRosters = new Map();
-
-		for (const key of Object.keys(compiledPreviewArtifact.policies || {})) {
-			const [own] = JSON.parse(key);
-			const roster = JSON.stringify(
-				own.map(p => [p[0], p[1]])
-			);
-			const facts = JSON.stringify(
-				own.map(p => [p[0], p[1], p[2], p[8] !== null])
-			);
-
-			if (
-				compiledPreviewPublicRosters.has(roster) &&
-				compiledPreviewPublicRosters.get(roster) !== facts
-			) {
-				compiledPreviewPublicRosters.set(roster, null);
-			} else if (!compiledPreviewPublicRosters.has(roster)) {
-				compiledPreviewPublicRosters.set(roster, facts);
-			}
-		}
-
-		try {
-			compiledPreviewForkAttestation = JSON.parse(
-				fs.readFileSync(
-					path.join(
-						REPO,
-						'data/compiled-preview-fork-attestation-v1.json'
-					),
-					'utf8'
-				)
-			);
-
-			if (
-				compiledPreviewForkAttestation.format !==
-				'nc2000-compiled-preview-fork-attestation-v1'
-			) {
-				throw new Error('unexpected fork-attestation format');
-			}
-
-			if (
-				compiledPreviewForkAttestation.kind !==
-				'diagnostic-only-source-delta-v1'
-			) {
-				throw new Error('unexpected fork-attestation kind');
-			}
-
-			if (
-				compiledPreviewForkAttestation.artifactSha256 !==
-				sha256Text(compiledPreviewArtifactText)
-			) {
-				throw new Error('fork-attestation artifact SHA256 does not match');
-			}
-
-			if (
-				compiledPreviewForkAttestation.artifactBuild !==
-				compiledPreviewArtifact.build
-			) {
-				throw new Error('fork-attestation artifact build does not match');
-			}
-
-			if (
-				compiledPreviewForkAttestation.policyCount !==
-				Object.keys(compiledPreviewArtifact.policies || {}).length
-			) {
-				throw new Error('fork-attestation policy count does not match');
-			}
-
-			if (
-				compiledPreviewForkAttestation.policySha256 !==
-				sha256Text(JSON.stringify(compiledPreviewArtifact.policies || {}))
-			) {
-				throw new Error('fork-attestation policy SHA256 does not match');
-			}
-
-			compiledPreviewForkAttestationValid = true;
-		} catch (e) {
-			compiledPreviewForkAttestationReason =
-				e && e.message ? e.message : String(e);
-
-			compiledPreviewForkAttestation = null;
-			compiledPreviewForkAttestationValid = false;
-		}
-
-		compiledPreviewCompatible = true;
-	} catch (e) {
-		compiledPreviewCompatibilityReason = e && e.message ?
-			e.message : String(e);
-	}
-}
-
-function compiledPreviewBuildMatches(build) {
-	if (!compiledPreviewArtifact) return false;
-
-	if (build === compiledPreviewArtifact.build) {
-		return true;
-	}
-
-	return (
-		compiledPreviewForkAttestationValid &&
-		compiledPreviewForkAttestation &&
-		build === compiledPreviewForkAttestation.currentBuild
-	);
-}
-
-function compiledPreviewPick(searcher, seed) {
-	if (
-		!WEB_POLICY ||
-		MODE !== 'blind' ||
-		!compiledPreviewCompatible ||
-		BELIEF_PRIOR_ARG ||
-		!searcher
-	) {
-		return null;
-	}
-
-	let info;
-	try {
-		const text = searcher.previewCacheInfo();
-		if (!text) return null;
-		info = JSON.parse(text);
-	} catch {
-		return null;
-	}
-
-	if (
-		info.format !== 'nc2000-preview-cache-info-v1' ||
-		!compiledPreviewBuildMatches(info.build) ||
-		typeof info.teamKey !== 'string' ||
-		!Array.isArray(info.opponentPublic)
-	) {
-		return null;
-	}
-
-	let foe;
-	try {
-		[, foe] = JSON.parse(info.teamKey);
-	} catch {
-		return null;
-	}
-
-	const expectedPublic = compiledPreviewPublicRosters.get(
-		JSON.stringify(foe)
-	);
-	const observedPublic = JSON.stringify(
-		info.opponentPublic.map(p => p.slice(0, 4))
-	);
-
-	if (expectedPublic !== observedPublic) return null;
-
-	const choices = compiledPreviewArtifact.policies[info.teamKey];
-	if (!Array.isArray(choices) || !choices.length) return null;
-
-	const choice = choices[(seed >>> 0) % choices.length];
-
-	// Same safety property as the browser worker: never submit a compiled
-	// choice unless it exists in this searcher's actual ordered action space.
-	try {
-		const policy = JSON.parse(searcher.rootPolicy());
-		const legal = Array.isArray(policy.actions) ?
-			policy.actions.map(a => a.input) : [];
-		if (!legal.includes(choice)) return null;
-	} catch {
-		return null;
-	}
-
-	return choice;
-}
+// Team Preview always uses live search; the pre-baked table has been retired.
 
 if (WEB_POLICY) {
 	console.log(

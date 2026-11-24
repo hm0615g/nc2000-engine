@@ -6,7 +6,7 @@
   "counts": {
    "species": 251,
    "moves": 267,
-   "items": 62,
+   "items": 73,
    "types": 17
   },
   "manualFills": [
@@ -586,7 +586,7 @@
  "items": {
   "dragonscale": "りゅうのウロコ",
   "blackbelt": "くろおび",
-  "blackglasses": "くろいメガネ",
+  "blackglasses": "くろいめがね",
   "berryjuice": "きのみジュース",
   "dragonfang": "りゅうのキバ",
   "brightpowder": "ひかりのこな",
@@ -628,7 +628,18 @@
   "psncureberry": "どくけしのみ",
   "spelltag": "のろいのおふだ",
   "mail": "メール",
+  "flowermail": "はながらボール",
+  "surfmail": "なみのりメール",
+  "litebluemail": "みずいろメール",
+  "portraitmail": "にがおえメール",
+  "lovelymail": "ラブリーメール",
+  "eonmail": "ブイブイメール",
+  "morphmail": "へんしんメール",
+  "blueskymail": "あおぞらメール",
+  "musicmail": "おんぷメール",
+  "miragemail": "まぼろしメール",
   "sportball": "コンペボール",
+  "parkball": "パークボール",
   "stick": "ながねぎ",
   "thickclub": "ふといホネ",
   "quickclaw": "せんせいのツメ",

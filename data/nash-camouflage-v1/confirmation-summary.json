@@ -1,0 +1,46 @@
+{
+  "heldout": {
+    "apex-c04-bug-3atkstar-boomgen-cam1-boom-lax": {
+      "score": 0.28125,
+      "blocks": 16,
+      "interval": [
+        0,
+        0.6680433776086904
+      ],
+      "wins": 9
+    },
+    "sample-14": {
+      "score": 0.4375,
+      "blocks": 16,
+      "interval": [
+        0.05070662239130963,
+        0.8242933776086904
+      ],
+      "wins": 14
+    },
+    "sample-17-orig": {
+      "score": 0.53125,
+      "blocks": 16,
+      "interval": [
+        0.14445662239130963,
+        0.9180433776086904
+      ],
+      "wins": 17
+    }
+  },
+  "worst": "sample-17-orig",
+  "max_observed_gain": 0.03125,
+  "tested_upper_gain": 0.41804337760869037,
+  "candidate_camouflage": {
+    "score": 0.09375,
+    "blocks": 16,
+    "interval": [
+      -0.5853007578703098,
+      0.7728007578703098
+    ],
+    "opponent_pick_changes": 14,
+    "outcome_changes": 7
+  },
+  "try_redistribution": false,
+  "repair_target": null
+}

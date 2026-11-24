@@ -1,0 +1,92 @@
+{
+  "current-seven": {
+    "score": 0.36816892465916706,
+    "blocks": 10,
+    "interval": [
+      0,
+      0.8988451316020628
+    ],
+    "usage": {
+      "games": 20,
+      "featured_user_selected": 14,
+      "featured_move_attempted": 11,
+      "selection_counts": {
+        "Snorlax": 20,
+        "Suicune": 14,
+        "Misdreavus": 14,
+        "Alakazam": 6,
+        "Steelix": 6
+      },
+      "move_games": {
+        "Snorlax / Double-Edge": 16,
+        "Suicune / Ice Beam": 14,
+        "Snorlax / Curse": 13,
+        "Snorlax / Rest": 13,
+        "Misdreavus / Protect": 13,
+        "Suicune / Surf": 12,
+        "Misdreavus / Perish Song": 11,
+        "Misdreavus / Mean Look": 11,
+        "Suicune / Rest": 9,
+        "Suicune / Sleep Talk": 9,
+        "Alakazam / Psychic": 6,
+        "Steelix / Earthquake": 6,
+        "Steelix / Toxic": 5,
+        "Alakazam / Recover": 5,
+        "Snorlax / Earthquake": 4,
+        "Misdreavus / Destiny Bond": 3,
+        "Steelix / Roar": 3,
+        "Alakazam / Fire Punch": 3,
+        "Steelix / Explosion": 3,
+        "Alakazam / Encore": 2,
+        "Misdreavus / Struggle": 1
+      }
+    }
+  },
+  "incumbent": {
+    "score": 0.37727166926482675,
+    "blocks": 10,
+    "interval": [
+      0,
+      0.9079478762077224
+    ],
+    "usage": {
+      "games": 20,
+      "featured_user_selected": 20,
+      "featured_move_attempted": 18,
+      "selection_counts": {
+        "Suicune": 20,
+        "Snorlax": 20,
+        "Misdreavus": 20
+      },
+      "move_games": {
+        "Suicune / Ice Beam": 19,
+        "Suicune / Surf": 19,
+        "Misdreavus / Protect": 19,
+        "Misdreavus / Perish Song": 18,
+        "Suicune / Rest": 17,
+        "Snorlax / Curse": 17,
+        "Misdreavus / Mean Look": 17,
+        "Snorlax / Rest": 16,
+        "Suicune / Sleep Talk": 15,
+        "Snorlax / Double-Edge": 10,
+        "Misdreavus / Destiny Bond": 7,
+        "Snorlax / Earthquake": 5,
+        "Suicune / Struggle": 1
+      }
+    }
+  },
+  "by_current_shell": {
+    "APEX4": 0.0,
+    "Sample07": 0.33001682122739917,
+    "red-v10-s1105-r2-s0155": 0.7999824754315863
+  },
+  "change": {
+    "score": -0.009102744605659699,
+    "blocks": 10,
+    "interval": [
+      -1,
+      1
+    ]
+  },
+  "nominee": "hc75-1st-show"
+}

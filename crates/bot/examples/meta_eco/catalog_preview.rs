@@ -78,10 +78,11 @@ fn evaluate_matrix(
     max_turns: u16,
     base_seed: u64,
 ) -> Vec<f64> {
-    let mut ab = Battle::from_fixture(dex, "1,2,3,4", &a.sets, &b.sets).unwrap();
+    let ruleset = a.base_table.ruleset;
+    let mut ab = Battle::from_fixture_with_ruleset(dex, "1,2,3,4", &a.sets, &b.sets, ruleset).unwrap();
     ab.set_log_enabled(false);
     ab.log.clear();
-    let mut ba = Battle::from_fixture(dex, "1,2,3,4", &b.sets, &a.sets).unwrap();
+    let mut ba = Battle::from_fixture_with_ruleset(dex, "1,2,3,4", &b.sets, &a.sets, ruleset).unwrap();
     ba.set_log_enabled(false);
     ba.log.clear();
     let forward = preview_sig_sets(&a.sets) <= preview_sig_sets(&b.sets);
@@ -442,9 +443,11 @@ pub(super) fn run(args: &[String]) {
             .collect();
         assert_eq!(runtime, planned, "prior mismatch: {}", c.id);
     }
+    let ruleset = nc2000_engine::rules::Ruleset::PsStadium2;
+    let policy_epoch = compiled_preview::policy_epoch_for(ruleset);
     let basis = json!({
         "format":"prior-preview-basis-v1",
-        "policyEpoch":compiled_preview::POLICY_EPOCH,
+        "policyEpoch":policy_epoch,
         "dexSha256":file_sha("data/gen2stadium2.json"),
         "priorSha256":file_sha("data/belief-pool-v3/belief-pool.json"),
         "catalogSha256":file_sha("data/team-pool-v2/team-pool.json"),
@@ -681,7 +684,7 @@ pub(super) fn run(args: &[String]) {
                 casual(&raw, &ev, &c.legal)
             };
             let choices = quantize(&final_policy, &ev, &c.legal);
-            let b = Battle::from_fixture(&dex, "1,2,3,4", &c.sets, &d.sets).unwrap();
+            let b = Battle::from_fixture_with_ruleset(&dex, "1,2,3,4", &c.sets, &d.sets, ruleset).unwrap();
             let key = compiled_preview::key(&b, 0).unwrap();
             if let Some(old) = policies.insert(key, json!(choices)) {
                 assert_eq!(old, json!(choices), "hidden opponent set affected policy");
@@ -704,18 +707,18 @@ pub(super) fn run(args: &[String]) {
     }
     assert_eq!(policies.len(), catalog.len() * shells.len());
     let method="Tiered preview bake: production BlindSearch::from_observation (729,000 iterations, c=0.4, LocalPlayer public-only boundary, Belief prior over belief-pool-v3) when at least one side is Nash (149 keys); native-engine team-preview initialization followed by compact rollout matrices and prior-conditioned Bayesian RM+ with finite-sample shrinkage otherwise (841 keys).";
-    let artifact = json!({"format":"nc2000-compiled-preview-v1","policyEpoch":compiled_preview::POLICY_EPOCH,"build":compiled_preview::build_fingerprint(),"c":0.4,
+    let artifact = json!({"format":"nc2000-compiled-preview-v1","policyEpoch":policy_epoch,"build":policy_epoch,"c":0.4,
         "priorSha256":file_sha("data/belief-pool-v3/belief-pool.json"),"dexSha256":file_sha("data/gen2stadium2.json"),"catalogSha256":file_sha("data/team-pool-v2/team-pool.json"),
         "matchups":policies.len(),"iterations":preview_iters,"method":method,"jobsSha256":basis_hash,
         "computation":{"initialization":"native-engine-team-preview","seed":seed,"previewItersApex":preview_iters,"productionKeys":prod_jobs.len(),"rolloutApproximationKeys":policies.len()-prod_jobs.len(),"rolloutSeedsApex":ns_apex,"rolloutSeedsOther":ns_other,"maxTurns":max_turns,"solverSweeps":sweeps,"matrices":jobs.len(),"priorEntries":types.iter().map(|t|t.ids.len()).sum::<usize>(),"priorTypes":types.len()},"policies":policies});
-    let matrix = json!({"version":"training-v3-prior-preview-v1","policyEpoch":compiled_preview::POLICY_EPOCH,"method":method,"numTeams":catalog.len(),"numShells":shells.len(),
+    let matrix = json!({"version":"training-v3-prior-preview-v1","policyEpoch":policy_epoch,"method":method,"numTeams":catalog.len(),"numShells":shells.len(),
         "catalogSha256":file_sha("data/team-pool-v2/team-pool.json"),"priorSha256":file_sha("data/belief-pool-v3/belief-pool.json"),"dexSha256":file_sha("data/gen2stadium2.json"),
         "basisSha256":basis_hash,"teamIds":catalog.iter().map(|c|c.id.clone()).collect::<Vec<_>>(),"previewPolicies":preview_policies});
     write(&out.join("compiled-preview-v1.json"), &artifact);
     write(&out.join("preview-nash-matrix.json"), &matrix);
     write(
         &out.join("manifest.json"),
-        &json!({"basisSha256":basis_hash,"policyEpoch":compiled_preview::POLICY_EPOCH,"productionKeys":prod_jobs.len(),"rolloutApproximationKeys":policies.len()-prod_jobs.len(),"matrices":jobs.len(),"catalogParties":catalog.len(),"publicRosters":shells.len(),"priorTypes":types.len(),"elapsedSeconds":started.elapsed().as_secs_f64(),"artifactSha256":file_sha(out.join("compiled-preview-v1.json").to_str().unwrap())}),
+        &json!({"basisSha256":basis_hash,"policyEpoch":policy_epoch,"productionKeys":prod_jobs.len(),"rolloutApproximationKeys":policies.len()-prod_jobs.len(),"matrices":jobs.len(),"catalogParties":catalog.len(),"publicRosters":shells.len(),"priorTypes":types.len(),"elapsedSeconds":started.elapsed().as_secs_f64(),"artifactSha256":file_sha(out.join("compiled-preview-v1.json").to_str().unwrap())}),
     );
     eprintln!(
         "[prior-preview] wrote {} complete policies ({} production + {} rollout) to {} in {:.1}s",

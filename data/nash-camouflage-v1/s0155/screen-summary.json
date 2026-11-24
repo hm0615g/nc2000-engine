@@ -1,0 +1,50 @@
+{
+  "scores": {
+    "original-pool": 0.125,
+    "pure-counter": 0.125,
+    "mixed-counter": 0.5,
+    "pure-roar": 0.25,
+    "mixed-roar": 0.25,
+    "pure-boom": 0.125,
+    "mixed-boom": 0.125
+  },
+  "matched_camouflage": {
+    "mixed-counter": {
+      "delta": {
+        "score": 0.5,
+        "blocks": 4,
+        "interval": [
+          -0.8581015157406195,
+          1
+        ]
+      },
+      "changed_opponent_selections": 4,
+      "changed_results": 4
+    },
+    "mixed-roar": {
+      "delta": {
+        "score": 0.125,
+        "blocks": 4,
+        "interval": [
+          -1,
+          1
+        ]
+      },
+      "changed_opponent_selections": 3,
+      "changed_results": 3
+    },
+    "mixed-boom": {
+      "delta": {
+        "score": 0.0,
+        "blocks": 4,
+        "interval": [
+          -1,
+          1
+        ]
+      },
+      "changed_opponent_selections": 6,
+      "changed_results": 2
+    }
+  },
+  "nominee": "mixed-counter"
+}

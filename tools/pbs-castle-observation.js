@@ -145,7 +145,8 @@ function publicOpponent(spec, preview, foe, observations) {
 }
 
 function createObservationSession(options = {}) {
-  const {client, wasm, dex, dexData, side, matchId, poolProvider} = options;
+  const {client, wasm, dex, dexData, side, matchId, poolProvider, rulesetId = null} = options;
+  assert.ok(rulesetId === null || /^castle-(?:free|tournament|custom-r1-p1-t[0-9]+-o0-ljp)$/.test(rulesetId), 'CASTLE_RULESET_ID_INVALID');
   assert.ok(side === 0 || side === 1, 'PLAYER_SIDE_REQUIRED');
   assert.ok(typeof matchId === 'string' && matchId.length, 'MATCH_ID_REQUIRED');
   assert.ok(wasm && dex && client && dexData, 'OBSERVATION_RUNTIME_REQUIRED');
@@ -247,10 +248,16 @@ function createObservationSession(options = {}) {
       assert.equal(blockers.length, 0, 'UNSUPPORTED_OBSERVATION_BOUNDARY:' +
         blockers.map(row => row.kind).join(','));
       imported = new wasm.ProtocolSearcher(dex, side, basePoolJson, seed, c);
+      if (rulesetId !== null) {
+        assert.equal(typeof imported.setRuleset, 'function', 'CASTLE_RULESET_WASM_REQUIRED');
+        imported.setRuleset(rulesetId);
+        assert.equal(imported.ruleset(), rulesetId, 'CASTLE_IMPORTED_RULESET_MISMATCH');
+      }
       imported.setOwnTeam(JSON.stringify(ownSets));
       imported.pushLines(JSON.stringify(boundary.protocol));
       assert.equal(imported.onRequest(JSON.stringify(built.request)), true, 'CURRENT_REQUEST_REJECTED');
       const spec = JSON.parse(imported.positionSpec()), foe = 1 - side;
+      if (rulesetId !== null) assert.equal(spec.ruleset, rulesetId, 'CASTLE_OBSERVED_POSITION_RULESET_MISMATCH');
       for (const row of staged.sourceReport.faintedWithoutMaxHp) {
         const mon = spec.sides[foe].mons[row.slot];
         assert.equal(id(mon?.species), row.species, 'SOURCE_ZERO_HP_SPECIES_NOT_IN_SPEC');
@@ -300,6 +307,7 @@ function createObservationSession(options = {}) {
       exact = completeExactHpPosition({wasm, dex, side, poolJson: prior, spec,
         observations: staged.observations, speciesData: dexData.species, seed, c});
       assert.equal(exact.status, 'READY', 'PUBLIC_HP_POSITION_NOT_READY:' + exact.status + ':' + (exact.error ?? ''));
+      if (rulesetId !== null) assert.equal(exact.searcher.ruleset(), rulesetId, 'CASTLE_SEARCH_RULESET_MISMATCH');
       const stateView = JSON.parse(exact.searcher.stateView());
       const positioned = JSON.parse(exact.searcher.positionSpec());
       for (const row of staged.sourceReport.faintedWithoutMaxHp) {

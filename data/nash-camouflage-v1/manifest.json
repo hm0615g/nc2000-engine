@@ -1,0 +1,70 @@
+{
+  "wasm": "fd18b046ceb110bffe7664686ace7d969e6ec029b89b1d677b0e1ea578cfc5b4",
+  "data": {
+    "kodoku-beq-v1/novel_evolved_teams": "4b547b37bd41fcc110922efde101d83824615ab4f0c0438993f443ab3f746bd1",
+    "team-pool-v2/team-pool": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
+    "kodoku-r3/conclusion-equilibrium-deme": "dc4eba46a6291d52c4985a124d3a50ccfca3891220a8a431652ab2a1ef36c437",
+    "live-search": "ecab15ee3c9b96adc849da2c8f045084a6a238944e173fd5cdafc81762b5ee67",
+    "search-profiles": "157d49892b62fe4bb310e0a0d7f985ecabe6084ddcd5cad2e65ded65a2d9b862",
+    "nash-refresh-v1/candidate": "bd9fe4a7eb63c22e926df245083760b598c99c198df6cf2f63a4d13d50762977"
+  },
+  "runner": "b99e1b8f225fbf63e8ba8a08a949b6202212a1897761b140f99af52770224275",
+  "shards": {
+    "screen": {
+      "stage": "screen",
+      "tasks": "30b113db948e39432765f0b3752ea4e248aab21367fb0b1e009594692ab6bcf2",
+      "pools": "8337b5dd5a42ff474d6fc474815fd31dcd937d216fd8f9b106e7ec45954836a8",
+      "games": 192
+    },
+    "controls": {
+      "stage": "screen",
+      "tasks": "60273328944e390b936ddb216599b6c229c643953304e36876376f06b156e40c",
+      "pools": "8337b5dd5a42ff474d6fc474815fd31dcd937d216fd8f9b106e7ec45954836a8",
+      "games": 24
+    },
+    "controls-backup": {
+      "stage": "screen",
+      "tasks": "a1619971d2a54f8f203815f61ad46b6673d68fa43e76938d8010861e8b707a81",
+      "pools": "8337b5dd5a42ff474d6fc474815fd31dcd937d216fd8f9b106e7ec45954836a8",
+      "games": 8
+    },
+    "response": {
+      "stage": "response",
+      "tasks": "ab90f4c2a921b77297b790305fcf8da42e80ddcb559958e49eeb1b1900824a04",
+      "pools": "016a81ddba68a9b229f22907683b3ee0c17709fcbb068d49f639d7cb7fdaf5b3",
+      "games": 166
+    },
+    "refine": {
+      "stage": "refine",
+      "tasks": "bca8eb39a353d3e5e54f9f024ef500ee00d098af57c403213ccc1f96cd37dd01",
+      "pools": "016a81ddba68a9b229f22907683b3ee0c17709fcbb068d49f639d7cb7fdaf5b3",
+      "games": 108
+    },
+    "fit": {
+      "stage": "fit",
+      "tasks": "57006cfe4f9059141167572ead58dd7f9acaa580f250129969946f01b5ce0d69",
+      "pools": "016a81ddba68a9b229f22907683b3ee0c17709fcbb068d49f639d7cb7fdaf5b3",
+      "games": 80
+    },
+    "deviation": {
+      "stage": "deviation",
+      "tasks": "0451ef684dd91ebdb8549c099e8f2f5c1d79b26e32286baca967cee8acc05bce",
+      "pools": "4dd0c10569e1331b02754487eb3398e4a4b890ccb5924793334da63ede07a511",
+      "games": 214
+    },
+    "confirmation": {
+      "stage": "confirmation",
+      "tasks": "a4c7ccada908a37e74249e775e57e8c6c9167b73a2c978d169ab4399c5eee90c",
+      "pools": "4dd0c10569e1331b02754487eb3398e4a4b890ccb5924793334da63ede07a511",
+      "games": 128
+    },
+    "stratified": {
+      "stage": "stratified",
+      "tasks": "fc3499886e27af219a3b478e0220e603c3c8aa38fa986972641048b5d8e5b603",
+      "pools": "4dd0c10569e1331b02754487eb3398e4a4b890ccb5924793334da63ede07a511",
+      "games": 28
+    }
+  },
+  "colab_games_in_analysis": 0,
+  "additional_matched_colab_replays": 8
+}

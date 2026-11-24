@@ -137,6 +137,9 @@ pub struct KnownTypes {
     pub grass: TypeId,
     pub fighting: TypeId,
     pub ground: TypeId,
+    pub dragon: TypeId,
+    pub steel: TypeId,
+    pub poison: TypeId,
 }
 
 /// Item ids referenced by hot paths (`getStat`, compact specs, masks, rollouts).
@@ -156,6 +159,17 @@ pub struct KnownItems {
     pub berserkgene: Option<ItemId>,
     pub brightpowder: Option<ItemId>,
     pub scopelens: Option<ItemId>,
+    pub dragonscale: Option<ItemId>,
+    pub dragonfang: Option<ItemId>,
+    pub iceberry: Option<ItemId>,
+    pub bitterberry: Option<ItemId>,
+    pub burntberry: Option<ItemId>,
+    pub przcureberry: Option<ItemId>,
+    pub psncureberry: Option<ItemId>,
+    pub focusband: Option<ItemId>,
+    pub kingsrock: Option<ItemId>,
+    pub pinkbow: Option<ItemId>,
+    pub polkadotbow: Option<ItemId>,
 }
 
 /// Move ids referenced by hot paths (search legality, masks, compact tables, rollouts).
@@ -204,6 +218,24 @@ pub struct KnownMoves {
     pub flamewheel: Option<MoveId>,
     pub sacredfire: Option<MoveId>,
     pub hiddenpower: Option<MoveId>,
+    pub triattack: Option<MoveId>,
+    pub fissure: Option<MoveId>,
+    pub horndrill: Option<MoveId>,
+    pub guillotine: Option<MoveId>,
+    pub falseswipe: Option<MoveId>,
+    pub triplekick: Option<MoveId>,
+    pub twineedle: Option<MoveId>,
+    pub rollout: Option<MoveId>,
+    pub furycutter: Option<MoveId>,
+    pub outrage: Option<MoveId>,
+    pub thrash: Option<MoveId>,
+    pub petaldance: Option<MoveId>,
+    pub rage: Option<MoveId>,
+    pub bide: Option<MoveId>,
+    pub sketch: Option<MoveId>,
+    pub present: Option<MoveId>,
+    pub pursuit: Option<MoveId>,
+    pub rapidspin: Option<MoveId>,
 }
 
 /// Species ids referenced by the stat / item hot path.
@@ -1383,6 +1415,9 @@ impl Dex {
             grass: tid("Grass"),
             fighting: tid("Fighting"),
             ground: tid("Ground"),
+            dragon: tid("Dragon"),
+            steel: tid("Steel"),
+            poison: tid("Poison"),
         };
 
         let moves = Table::build(file.moves);
@@ -1760,6 +1795,17 @@ impl Dex {
             berserkgene: items.id("berserkgene"),
             brightpowder: items.id("brightpowder"),
             scopelens: items.id("scopelens"),
+            dragonscale: items.id("dragonscale"),
+            dragonfang: items.id("dragonfang"),
+            iceberry: items.id("iceberry"),
+            bitterberry: items.id("bitterberry"),
+            burntberry: items.id("burntberry"),
+            przcureberry: items.id("przcureberry"),
+            psncureberry: items.id("psncureberry"),
+            focusband: items.id("focusband"),
+            kingsrock: items.id("kingsrock"),
+            pinkbow: items.id("pinkbow"),
+            polkadotbow: items.id("polkadotbow"),
         };
         let known_moves = KnownMoves {
             sleeptalk: moves.id("sleeptalk"),
@@ -1805,6 +1851,24 @@ impl Dex {
             flamewheel: moves.id("flamewheel"),
             sacredfire: moves.id("sacredfire"),
             hiddenpower: moves.id("hiddenpower"),
+            triattack: moves.id("triattack"),
+            fissure: moves.id("fissure"),
+            horndrill: moves.id("horndrill"),
+            guillotine: moves.id("guillotine"),
+            falseswipe: moves.id("falseswipe"),
+            triplekick: moves.id("triplekick"),
+            twineedle: moves.id("twineedle"),
+            rollout: moves.id("rollout"),
+            furycutter: moves.id("furycutter"),
+            outrage: moves.id("outrage"),
+            thrash: moves.id("thrash"),
+            petaldance: moves.id("petaldance"),
+            rage: moves.id("rage"),
+            bide: moves.id("bide"),
+            sketch: moves.id("sketch"),
+            present: moves.id("present"),
+            pursuit: moves.id("pursuit"),
+            rapidspin: moves.id("rapidspin"),
         };
         let species = Table::build(file.species);
         let species_types: Vec<TypeList> = species
@@ -1960,6 +2024,80 @@ impl Dex {
             1 => 1,
             2 => -1,
             _ => 0,
+        }
+    }
+}
+
+/// Distinct Gen 2 mail items supported in Gym Leader's Castle PBS (`PDINPUT.cgi`,
+/// PBS item codes 182..=190) beyond `data/gen2stadium2.json`'s 62 items.
+/// Kept outside `dex.items` so PS item indices and `dex.items.len() == 62` stay bit-exact.
+pub const CASTLE_EXTRA_MAILS: [(&str, &str); 9] = [
+    ("surfmail", "Surf Mail"),
+    ("litebluemail", "Lite Blue Mail"),
+    ("portraitmail", "Portrait Mail"),
+    ("lovelymail", "Lovely Mail"),
+    ("eonmail", "Eon Mail"),
+    ("morphmail", "Morph Mail"),
+    ("blueskymail", "Blue Sky Mail"),
+    ("musicmail", "Music Mail"),
+    ("miragemail", "Mirage Mail"),
+];
+
+impl Dex {
+    /// Index (`0..9`) if `item_id` (already `toid`-normalized) is one of the 9
+    /// distinct Gen 2 mail items supported only in Castle PBS mode.
+    #[inline]
+    pub fn castle_extra_mail_index(item_id: &str) -> Option<usize> {
+        CASTLE_EXTRA_MAILS.iter().position(|(k, _)| *k == item_id)
+    }
+
+    /// Canonical Castle item key used for Item Clause deduplication and validation:
+    /// - `flowermail` canonicalizes to `mail` (both PBS code 159),
+    /// - `parkball` canonicalizes to `sportball` (both PBS code 178),
+    /// - the 9 distinct Gen 2 mails keep their own distinct keys (`surfmail`..`miragemail`),
+    /// - all 62 dex items map to their interned key.
+    pub fn castle_item_canonical_key(&self, item_id: &str) -> Option<&'static str> {
+        match item_id {
+            "flowermail" => self.items.id("mail").map(|id| self.items.key(id)),
+            "parkball" => self.items.id("sportball").map(|id| self.items.key(id)),
+            _ => {
+                if let Some(id) = self.items.id(item_id) {
+                    Some(self.items.key(id))
+                } else {
+                    Self::castle_extra_mail_index(item_id).map(|i| CASTLE_EXTRA_MAILS[i].0)
+                }
+            }
+        }
+    }
+
+    /// Canonical display name for a Castle item id (`flowermail` -> `"Mail"`,
+    /// `parkball` -> `"Sport Ball"`, extra mails -> `"Surf Mail"`, etc.).
+    pub fn castle_item_display_name(&self, item_id: &str) -> Option<&str> {
+        match item_id {
+            "flowermail" => self.items.id("mail").map(|id| self.items.get(id).name.as_str()),
+            "parkball" => self.items.id("sportball").map(|id| self.items.get(id).name.as_str()),
+            _ => {
+                if let Some(id) = self.items.id(item_id) {
+                    Some(self.items.get(id).name.as_str())
+                } else {
+                    Self::castle_extra_mail_index(item_id).map(|i| CASTLE_EXTRA_MAILS[i].1)
+                }
+            }
+        }
+    }
+
+    /// Runtime `ItemId` for a Castle held item, mapping `flowermail` and the 9
+    /// extra Gen 2 mails onto `mail` (so `p.item.is_some()` and Thief defense work
+    /// cleanly within the 62-item table) and `parkball` onto `sportball`.
+    pub fn castle_item_id(&self, item_id: &str) -> Option<ItemId> {
+        if let Some(id) = self.items.id(item_id) {
+            return Some(id);
+        }
+        match item_id {
+            "flowermail" => self.items.id("mail"),
+            "parkball" => self.items.id("sportball"),
+            _ if Self::castle_extra_mail_index(item_id).is_some() => self.items.id("mail"),
+            _ => None,
         }
     }
 }

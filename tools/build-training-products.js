@@ -3,17 +3,12 @@
 const fs = require('fs');
 const cp = require('child_process');
 const path = require('path');
-const crypto = require('crypto');
 const root = path.join(__dirname, '..');
 process.chdir(root);
 const { normalizeTraining } = require('./normalize-training');
 const read = p => JSON.parse(fs.readFileSync(p, 'utf8'));
-const sha = p => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
 const write = (p, d) => fs.writeFileSync(p, JSON.stringify(d, null,
-	p === 'data/compiled-preview-v1.json' ? undefined :
-	(p.includes('preview-nash-matrix') || p.includes('conclusion-equilibrium-r1') ? 2 : 1)) + '\n');
-cp.execFileSync('python3', ['tools/belief-pool-v3.py', 'build'], { stdio: 'inherit' });
-cp.execFileSync(process.execPath, ['tools/build-team-products-v2.js'], { stdio: 'inherit' });
+	p.includes('conclusion-equilibrium-r1') ? 2 : 1) + '\n');
 const dex = read('data/gen2stadium2.json');
 fs.mkdirSync('data/training-v3', { recursive: true });
 for (const [source, output] of [
@@ -35,6 +30,9 @@ for (const [source, output] of [
 	write(output, { source, trainingPolicy: 'training-v3',
 		teams: full.map(t => ({ ...t, sets: normalizeTraining(t.sets, dex) })) });
 }
+cp.execFileSync(process.execPath, ['tools/build-team-products-v3.js'], { stdio: 'inherit' });
+cp.execFileSync('python3', ['tools/belief-pool-v3.py', 'build'], { stdio: 'inherit' });
+cp.execFileSync(process.execPath, ['tools/build-team-products-v2.js'], { stdio: 'inherit' });
 const catalog = read('data/team-pool-v2/team-pool.json');
 const byId = new Map(catalog.teams.map(t => [t.id, t]));
 for (const p of ['data/kodoku-r3/conclusion-equilibrium-deme.json', 'data/kodoku-r3/conclusion-equilibrium-r1.json']) {
@@ -44,35 +42,3 @@ for (const p of ['data/kodoku-r3/conclusion-equilibrium-deme.json', 'data/kodoku
 	for (const t of data.teams) t.sets = byId.get(t.id)?.sets || normalizeTraining(t.sets, dex);
 	write(p, data);
 }
-const retirement = {
-	reason: 'training-v3 changes playable spreads and the opponent prior; old preview computations are invalid.',
-	priorSha256: sha('data/belief-pool-v3/belief-pool.json'),
-	catalogSha256: sha('data/team-pool-v2/team-pool.json'),
-};
-async function validatePreviews() {
- const { compatiblePolicyKeys, priorSnapshot } = await import('../web/src/preview-prior.mjs');
- const digest = text => crypto.createHash('sha256').update(text).digest('hex');
- const prior = read('data/belief-pool-v3/belief-pool.json');
- for (const p of ['data/compiled-preview-v1.json', 'data/team-pool-v2/preview-nash-matrix.json']) {
-  if (!fs.existsSync(p)) continue;
-  const artifact = read(p);
-  const catalogMatches = (artifact.catalogSha256 ?? artifact.inputs?.['data/team-pool-v2/team-pool.json']) === retirement.catalogSha256;
-  if (!artifact.status && catalogMatches && artifact.priorDependencies?.version === 1) {
-   if (artifact.policies) {
-    const valid = await compatiblePolicyKeys(artifact, prior, dex, digest);
-    console.log(`${p}: ${valid.size}/${Object.keys(artifact.policies).length} prior-compatible keys; others use live search`);
-   } else {
-    const current = await priorSnapshot(prior, dex, digest);
-    const changed = Object.entries(artifact.priorDependencies.shells).filter(([s, h]) => current[s] !== h).length;
-    console.log(`${p}: ${changed} changed shell distributions; historical matrix provenance preserved`);
-   }
-   continue;
-  }
-  if (!artifact.status && catalogMatches &&
-      (artifact.priorSha256 || artifact.inputs?.['data/belief-pool-v3/belief-pool.json']) === retirement.priorSha256) continue;
-  artifact.status = 'retired-training-v3';
-  artifact.retirement = retirement;
-  write(p, artifact);
- }
-}
-validatePreviews().catch(error => { console.error(error); process.exitCode = 1; });

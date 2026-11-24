@@ -1,0 +1,65 @@
+{
+  "challengers": {
+    "sample-17-orig": {
+      "base-seven": {
+        "score": 0.4393916685128515,
+        "blocks": 12,
+        "interval": [
+          0,
+          0.9241668967311414
+        ]
+      },
+      "enter-sample17": {
+        "score": 0.4507541694359439,
+        "blocks": 12,
+        "interval": [
+          0,
+          0.9355293976542338
+        ]
+      },
+      "delta": {
+        "score": 0.011362500923092399,
+        "blocks": 12,
+        "interval": [
+          -0.9581879555134873,
+          0.9809129573596722
+        ]
+      },
+      "shared_games": 12,
+      "identical_shared_action_hashes": 12
+    },
+    "sample07": {
+      "base-seven": {
+        "score": 0.47727499815381524,
+        "blocks": 12,
+        "interval": [
+          0,
+          0.9620502263721051
+        ]
+      },
+      "enter-sample17": {
+        "score": 0.5227250018461849,
+        "blocks": 12,
+        "interval": [
+          0.03794977362789498,
+          1
+        ]
+      },
+      "delta": {
+        "score": 0.045450003692369595,
+        "blocks": 12,
+        "interval": [
+          -0.9241004527442102,
+          1
+        ]
+      },
+      "shared_games": 12,
+      "identical_shared_action_hashes": 12
+    }
+  },
+  "peak": {
+    "base-seven": 0.47727499815381524,
+    "enter-sample17": 0.5227250018461849
+  },
+  "promote": false
+}

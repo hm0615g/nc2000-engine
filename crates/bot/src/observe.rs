@@ -55,6 +55,7 @@
 //! it can never false-filter the true team.
 
 use nc2000_engine::dex::{toid, Dex, ItemId, MoveId, SpeciesId};
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::{Battle, Gender, Status};
 
 pub const ITEM_LEFTOVERS: u16 = 1 << 0;
@@ -172,10 +173,13 @@ pub struct MonObs {
     pub hp_type_mask: u16,
     pub item: ItemObs,
     /// Bitmask of original held items deductively excluded by public
-    /// Gen 2 Stadium 2 timings (`ITEM_*` constants).
+    /// Gen 2 Stadium 2 / Castle timings (`ITEM_*` constants).
     pub excluded_items: u16,
     /// The mon has switched in at least once (its pick is public).
     pub appeared: bool,
+    /// Exact max HP observed from a non-percentage/non-pixel denominator or
+    /// Castle PBS exact-HP feed (`None` on standard PS `/100` or `/48` feeds).
+    pub observed_maxhp: Option<i32>,
 }
 
 /// Observation tracker for one side of one battle. Construct at battle
@@ -184,6 +188,7 @@ pub struct MonObs {
 #[derive(Clone)]
 pub struct Observer {
     side: usize,
+    ruleset: Ruleset,
     mons: Vec<MonObs>,
     /// Private diff snapshot of the opponent's item fields — never exposed;
     /// only its (publicly-announced) transitions produce knowledge.
@@ -226,6 +231,7 @@ pub struct Observer {
     opp_confused: bool,
     opp_leftovers_healed: bool,
     opp_safeguard: bool,
+    turn_had_faint: bool,
     own_active_species: Option<SpeciesId>,
     own_active_alive: bool,
     own_type_modified: bool,
@@ -256,7 +262,17 @@ impl Observer {
         dex: &Dex,
         spec: &crate::position::PositionSpec,
     ) -> Result<Observer, String> {
+        let ruleset = spec.resolved_ruleset()?;
+        Self::from_position_with_ruleset(dex, spec, ruleset)
+    }
+
+    pub fn from_position_with_ruleset(
+        dex: &Dex,
+        spec: &crate::position::PositionSpec,
+        ruleset: Ruleset,
+    ) -> Result<Observer, String> {
         let foe = spec.foe();
+        let is_castle = ruleset.is_castle();
         let item = |k: &crate::position::ItemKnowledge| -> Result<Option<Option<ItemId>>, String> {
             match k.to_obs() {
                 None => Ok(None),
@@ -304,6 +320,16 @@ impl Observer {
                     revealed.push(id);
                 }
             }
+            let observed_maxhp = if !m.fainted
+                && m.hp_den > 0
+                && ((is_castle && m.appeared)
+                    || (m.hp_den != crate::import::HP_DEN_PERCENT
+                        && m.hp_den != crate::import::HP_DEN_PIXELS))
+            {
+                Some(m.hp_den)
+            } else {
+                None
+            };
             mons.push(MonObs {
                 species,
                 level: m.level,
@@ -319,9 +345,10 @@ impl Observer {
                 item: ItemObs::from_parts(item(&m.item_original)?, item(&m.item_current)?, m.item_gained),
                 excluded_items: m.excluded_items,
                 appeared: m.appeared,
+                observed_maxhp,
             });
         }
-        let mut obs = Observer::from_mons(spec.side, mons);
+        let mut obs = Observer::from_mons_with_ruleset(spec.side, mons, ruleset);
         if let Some(a) = spec.sides[spec.side].active {
             if let Some(ms) = spec.sides[spec.side].mons.get(a) {
                 obs.own_active_species = dex.species.id(&toid(&ms.species));
@@ -361,10 +388,20 @@ impl Observer {
     /// are learned from switch lines by the caller (`set_name`) — subject
     /// resolution needs them before the mon's first `|move|` line, and
     /// switch lines always precede them.
+    #[allow(dead_code)]
     pub(crate) fn from_mons(side: usize, mons: Vec<MonObs>) -> Observer {
+        Self::from_mons_with_ruleset(side, mons, Ruleset::PsStadium2)
+    }
+
+    pub(crate) fn from_mons_with_ruleset(
+        side: usize,
+        mons: Vec<MonObs>,
+        ruleset: Ruleset,
+    ) -> Observer {
         let n = mons.len();
         Observer {
             side,
+            ruleset,
             mons,
             prev_item: vec![None; n],
             log_pos: 0,
@@ -380,6 +417,7 @@ impl Observer {
             opp_confused: false,
             opp_leftovers_healed: false,
             opp_safeguard: false,
+            turn_had_faint: false,
             own_active_species: None,
             own_active_alive: false,
             own_type_modified: false,
@@ -388,16 +426,24 @@ impl Observer {
         }
     }
 
+    pub fn ruleset(&self) -> Ruleset {
+        self.ruleset
+    }
+
+    pub fn set_ruleset(&mut self, ruleset: Ruleset) {
+        self.ruleset = ruleset;
+    }
+
     /// Protocol mode: feed one player-visible protocol line through the log
     /// channel (the only channel — see `from_mons`).
-    pub(crate) fn ingest_line(&mut self, line: &str, dex: &Dex) {
+    pub fn ingest_line(&mut self, line: &str, dex: &Dex) {
         if self.scan_line(line, dex) {
             self.revision += 1;
         }
     }
 
     /// Protocol mode: a mon appeared under `name` (resolves log subjects).
-    pub(crate) fn set_name(&mut self, slot: usize, name: &str) {
+    pub fn set_name(&mut self, slot: usize, name: &str) {
         if self.mons[slot].name != name {
             self.mons[slot].name = name.to_string();
         }
@@ -423,12 +469,14 @@ impl Observer {
                 item: ItemObs::default(),
                 excluded_items: 0,
                 appeared: false,
+                observed_maxhp: None,
             })
             .collect::<Vec<_>>();
         let prev_item = battle.sides[opp].roster.iter().map(|p| p.item).collect();
         let n = mons.len();
         Observer {
             side,
+            ruleset: battle.ruleset,
             mons,
             prev_item,
             log_pos: 0,
@@ -444,6 +492,7 @@ impl Observer {
             opp_confused: false,
             opp_leftovers_healed: false,
             opp_safeguard: false,
+            turn_had_faint: false,
             own_active_species: None,
             own_active_alive: false,
             own_type_modified: false,
@@ -524,15 +573,22 @@ impl Observer {
         let opp = self.opp();
 
         // ---- channel 1: state diff over public-equivalent fields
+        let is_castle = self.ruleset.is_castle();
         for (slot, p) in battle.sides[opp].roster.iter().enumerate() {
             let mo = &mut self.mons[slot];
             if !mo.appeared && (p.previously_switched_in > 0 || p.is_active) {
                 mo.appeared = true;
                 dirty = true;
             }
-            // moves: base-slot usage marks (every path is a public |move|)
+            if is_castle && mo.appeared && p.base_maxhp > 0 && mo.observed_maxhp != Some(p.base_maxhp) {
+                mo.observed_maxhp = Some(p.base_maxhp);
+                dirty = true;
+            }
+            // moves: base-slot usage marks (every path is a public |move|;
+            // Castle Mystery Berry can restore PP above maxpp without clamping)
             for s in p.base_move_slots.iter() {
-                if (s.pp < s.maxpp || s.used) && !mo.revealed_moves.contains(&s.id) {
+                let pp_changed = if is_castle { s.pp != s.maxpp } else { s.pp < s.maxpp };
+                if (pp_changed || s.used) && !mo.revealed_moves.contains(&s.id) {
                     mo.revealed_moves.push(s.id);
                     dirty = true;
                 }
@@ -691,29 +747,39 @@ impl Observer {
             }
             "turn" => {
                 self.opp_leftovers_healed = false;
+                self.turn_had_faint = false;
                 dirty |= self.check_on_update_exclusions();
             }
             "upkeep" => {
-                if let Some(m) = self.opp_active {
-                    if let Some((num, den)) = self.opp_hp[m] {
-                        if num > 0 && den > 0 {
-                            if num < den && !self.opp_leftovers_healed {
-                                dirty |= self.exclude_items(m, ITEM_LEFTOVERS);
-                            }
-                            let pct = crate::import::HP_DEN_PERCENT as u32;
-                            if (den == pct && num * 2 < pct)
-                                || (den != pct && (num + 1) * 2 <= den)
-                            {
-                                dirty |= self.exclude_items(
-                                    m,
-                                    ITEM_BERRY | ITEM_GOLD_BERRY | ITEM_BERRY_JUICE,
-                                );
-                            }
-                            if self.opp_status[m] == Status::Slp {
-                                dirty |=
-                                    self.exclude_items(m, ITEM_MINT_BERRY | ITEM_MIRACLE_BERRY);
-                            } else if self.opp_status[m] != Status::None || self.opp_confused {
-                                dirty |= self.exclude_items(m, ITEM_MIRACLE_BERRY);
+                // In Castle PBS, a mid-turn faint triggers Turn-Cut (no EOT runs);
+                // never falsely exclude Leftovers or berries on a Turn-Cut turn.
+                if !(self.ruleset.is_castle() && self.turn_had_faint) {
+                    if let Some(m) = self.opp_active {
+                        if let Some((num, den)) = self.opp_hp[m] {
+                            if num > 0 && den > 0 {
+                                if num < den && !self.opp_leftovers_healed {
+                                    dirty |= self.exclude_items(m, ITEM_LEFTOVERS);
+                                }
+                                let below_berry_thresh = if self.ruleset.is_castle() {
+                                    // Castle exact HP: healing berries trigger strictly at hp < floor(maxhp / 2).
+                                    num < den / 2
+                                } else {
+                                    let pct = crate::import::HP_DEN_PERCENT as u32;
+                                    (den == pct && num * 2 < pct)
+                                        || (den != pct && (num + 1) * 2 <= den)
+                                };
+                                if below_berry_thresh {
+                                    dirty |= self.exclude_items(
+                                        m,
+                                        ITEM_BERRY | ITEM_GOLD_BERRY | ITEM_BERRY_JUICE,
+                                    );
+                                }
+                                if self.opp_status[m] == Status::Slp {
+                                    dirty |=
+                                        self.exclude_items(m, ITEM_MINT_BERRY | ITEM_MIRACLE_BERRY);
+                                } else if self.opp_status[m] != Status::None || self.opp_confused {
+                                    dirty |= self.exclude_items(m, ITEM_MIRACLE_BERRY);
+                                }
                             }
                         }
                     }
@@ -734,21 +800,22 @@ impl Observer {
                     let slot = self.opp_subject(subj).or_else(|| self.opp_switch_slot(det, dex));
                     self.opp_active = slot;
                     if let Some(m) = slot {
-                        let (hp, st) = Self::parse_hp_status(hp_s);
+                        let (hp, st, has_frac) = Self::parse_hp_status(hp_s);
                         if let Some(pair) = hp {
-                            self.opp_hp[m] = Some(pair);
+                            dirty |= self.record_observed_hp(m, pair, has_frac);
                         }
                         self.opp_status[m] = st;
                     }
                 } else if self.subject_is_own_side(subj) {
                     let sp_name = det.split(',').next().unwrap_or("");
                     self.own_active_species = dex.species.id(&toid(sp_name));
-                    let (hp, _) = Self::parse_hp_status(hp_s);
+                    let (hp, _, _) = Self::parse_hp_status(hp_s);
                     self.own_active_alive = hp.map_or(true, |(n, _)| n > 0);
                     self.own_type_modified = false;
                 }
             }
             "faint" => {
+                self.turn_had_faint = true;
                 let subj = parts.get(1).copied().unwrap_or("");
                 if self.subject_is_opp_side(subj) {
                     self.log_suppress.iter_mut().for_each(|s| *s = false);
@@ -770,9 +837,9 @@ impl Observer {
                 let subj = parts.get(1).copied().unwrap_or("");
                 let hp_s = parts.get(2).copied().unwrap_or("");
                 if let Some(m) = self.opp_subject(subj) {
-                    let (hp, st) = Self::parse_hp_status(hp_s);
+                    let (hp, st, has_frac) = Self::parse_hp_status(hp_s);
                     if let Some(pair) = hp {
-                        self.opp_hp[m] = Some(pair);
+                        dirty |= self.record_observed_hp(m, pair, has_frac);
                         if pair.0 == 0 {
                             self.opp_status[m] = Status::None;
                         } else if st != Status::None {
@@ -780,7 +847,7 @@ impl Observer {
                         }
                     }
                 } else if self.subject_is_own_side(subj) {
-                    let (hp, _) = Self::parse_hp_status(hp_s);
+                    let (hp, _, _) = Self::parse_hp_status(hp_s);
                     if hp.is_some_and(|(n, _)| n == 0) {
                         self.own_active_alive = false;
                     }
@@ -790,9 +857,9 @@ impl Observer {
                 for pair_idx in [1usize, 3usize] {
                     if let (Some(subj), Some(hp_s)) = (parts.get(pair_idx), parts.get(pair_idx + 1)) {
                         if let Some(m) = self.opp_subject(subj) {
-                            let (hp, _) = Self::parse_hp_status(hp_s);
+                            let (hp, _, has_frac) = Self::parse_hp_status(hp_s);
                             if let Some(p) = hp {
-                                self.opp_hp[m] = Some(p);
+                                dirty |= self.record_observed_hp(m, p, has_frac);
                             }
                         }
                     }
@@ -879,7 +946,18 @@ impl Observer {
             }
             "-enditem" => {
                 if let Some(m) = self.opp_subject(parts.get(1).copied().unwrap_or("")) {
-                    if let Some(id) = dex.items.id(&toid(parts.get(2).copied().unwrap_or(""))) {
+                    let raw_key = toid(parts.get(2).copied().unwrap_or(""));
+                    // Castle ID 81 (iceberry) cures confusion while printing "Bitter Berry";
+                    // ID 84 (bitterberry) is completely inert and never triggers -enditem.
+                    let item_key = if self.ruleset.is_castle()
+                        && raw_key == "bitterberry"
+                        && !parts.iter().any(|p| p.contains("Thief"))
+                    {
+                        "iceberry"
+                    } else {
+                        raw_key.as_str()
+                    };
+                    if let Some(id) = dex.items.id(item_key) {
                         dirty |= self.mons[m].item.lost(id);
                     }
                 }
@@ -901,9 +979,9 @@ impl Observer {
             "-heal" => {
                 if let Some(m) = self.opp_subject(parts.get(1).copied().unwrap_or("")) {
                     let hp_s = parts.get(2).copied().unwrap_or("");
-                    let (hp, _) = Self::parse_hp_status(hp_s);
+                    let (hp, _, has_frac) = Self::parse_hp_status(hp_s);
                     if let Some(pair) = hp {
-                        self.opp_hp[m] = Some(pair);
+                        dirty |= self.record_observed_hp(m, pair, has_frac);
                     }
                     if let Some(item_name) =
                         parts.iter().find_map(|p| p.strip_prefix("[from] item: "))
@@ -1047,9 +1125,34 @@ impl Observer {
             _ => {}
         }
         if self.opp_confused {
-            bits |= ITEM_BITTER_BERRY;
+            if self.ruleset.is_castle() {
+                // Castle ID 81 (iceberry) cures BOTH Burn and Confusion;
+                // ID 84 (bitterberry) is completely inert and must NEVER be excluded.
+                bits |= ITEM_ICE_BERRY;
+            } else {
+                bits |= ITEM_BITTER_BERRY;
+            }
         }
         self.exclude_items(m, bits)
+    }
+
+    fn record_observed_hp(
+        &mut self,
+        slot: usize,
+        pair: (u32, u32),
+        exact_from_fraction: bool,
+    ) -> bool {
+        self.opp_hp[slot] = Some(pair);
+        if exact_from_fraction && pair.1 > 0 {
+            let den = pair.1 as i32;
+            let is_exact = self.ruleset.is_castle()
+                || (den != crate::import::HP_DEN_PERCENT && den != crate::import::HP_DEN_PIXELS);
+            if is_exact && self.mons[slot].observed_maxhp != Some(den) {
+                self.mons[slot].observed_maxhp = Some(den);
+                return true;
+            }
+        }
+        false
     }
 
     fn narrow_hp_mask(
@@ -1075,10 +1178,10 @@ impl Observer {
         }
     }
 
-    fn parse_hp_status(s: &str) -> (Option<(u32, u32)>, Status) {
+    fn parse_hp_status(s: &str) -> (Option<(u32, u32)>, Status, bool) {
         let s = s.trim();
         if s == "0 fnt" || s.starts_with("0 ") {
-            return (Some((0, crate::import::HP_DEN_PERCENT as u32)), Status::None);
+            return (Some((0, crate::import::HP_DEN_PERCENT as u32)), Status::None, false);
         }
         let mut iter = s.split_whitespace();
         let hp = iter.next().and_then(|frac| {
@@ -1086,7 +1189,8 @@ impl Observer {
             Some((a.parse::<u32>().ok()?, b.parse::<u32>().ok()?))
         });
         let st = iter.next().map(Status::from_str).unwrap_or(Status::None);
-        (hp, st)
+        let has_frac = hp.is_some();
+        (hp, st, has_frac)
     }
 
     fn opp_switch_slot(&self, details: &str, dex: &Dex) -> Option<usize> {
@@ -1159,6 +1263,7 @@ mod tests {
             item: Default::default(),
             excluded_items: 0,
             appeared: true,
+            observed_maxhp: None,
         }];
         // side 0 observes side 1 (`p2a:` subjects).
         Observer::from_mons(0, mons)
@@ -1238,6 +1343,7 @@ mod tests {
                 item: Default::default(),
                 excluded_items: 0,
                 appeared: true,
+                observed_maxhp: None,
             },
             MonObs {
                 species: dex.species.id("zapdos").unwrap(),
@@ -1250,6 +1356,7 @@ mod tests {
                 item: Default::default(),
                 excluded_items: 0,
                 appeared: false,
+                observed_maxhp: None,
             },
         ];
         let mut obs = Observer::from_mons(0, mons);

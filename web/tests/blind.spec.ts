@@ -61,7 +61,7 @@ const pool = JSON.parse(
 /** The catalog: the built-in lists and what the bot draws from. */
 const catalog = JSON.parse(
   readFileSync(
-    new URL("../../data/team-pool-v2/team-pool.json", import.meta.url),
+    new URL("../../data/team-pool-v3/team-pool.json", import.meta.url),
     "utf8",
   ),
 ) as { teams: PoolTeamJson[] };
@@ -134,7 +134,7 @@ async function seedStorage(page: Page, opts: SeedOpts = {}) {
       localStorage.setItem("nc2000-locale", "en");
       localStorage.setItem("nc2000-custom-teams", JSON.stringify(records));
       localStorage.removeItem("nc2000-belief-prior");
-      localStorage.removeItem("nc2000-team-pool-v2");
+      localStorage.removeItem("nc2000-team-pool-v3");
       if (initialPicks === undefined)
         localStorage.removeItem("nc2000-start-picks");
       else

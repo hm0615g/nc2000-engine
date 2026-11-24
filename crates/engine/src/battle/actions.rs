@@ -73,6 +73,9 @@ impl Battle {
             // End events for ability/item: no gen2 handlers.
             self.queue_cancel_action(old);
             if switch_copy {
+                if self.is_castle() {
+                    self.bp_switched_this_turn[side_n as usize] = true;
+                }
                 self.copy_volatile_from(dex, pokemon, old);
             }
             self.clear_volatile(dex, old, true);
@@ -175,12 +178,17 @@ impl Battle {
     /// queue.insertChoice({choice:'runSwitch', pokemon}).
     fn insert_choice_run_switch(&mut self, dex: &Dex, pokemon: PokeId) {
         self.update_speed(dex, pokemon);
+        let speed = if self.is_castle() {
+            self.get_pokemon_action_speed_f64(dex, pokemon)
+        } else {
+            self.poke(pokemon).speed as f64
+        };
         let action = Action {
             choice: ActionKind::RunSwitch,
             order: 101,
             priority: 0.0,
             fractional_priority: 0.0,
-            speed: self.poke(pokemon).speed as f64,
+            speed,
             pokemon: Some(pokemon),
         };
         self.insert_action_sorted(action);

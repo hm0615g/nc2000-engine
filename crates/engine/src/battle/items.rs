@@ -62,10 +62,14 @@ pub fn dispatch_item(
 
     match dex.items.get(item).cb_ops[cb.0 as usize] {
         ItemCbOp::TypeBoostModifyDamage => {
+            // #34 Castle PBS: Dragon Fang is inert (Dragon Scale boosts Dragon 1.1x in get_damage).
+            if b.is_castle() && Some(item) == dex.known_items.dragonfang {
+                return RV::Undef;
+            }
             if let Some(ty) = dex.items.get(item).type_boost {
                 let move_type = b.active_move.as_ref().map(|m| m.move_type);
                 if move_type == Some(ty) {
-                    return RV::Num(relay.as_num() * 1.1);
+                    return RV::Num((relay.as_num() * 1.1).floor());
                 }
             }
             RV::Undef
@@ -97,8 +101,10 @@ pub fn dispatch_item(
             let damage = relay.as_num();
             let is_move = matches!(source_effect, EffectHandle::MoveEff(_));
             if b.prng.random_chance(30, 256) && damage >= b.poke(t).hp as f64 && is_move {
-                let ts = b.poke_str(t);
-                b.add(&["-activate", &ts, "item: Focus Band"]);
+                if !b.is_castle() {
+                    let ts = b.poke_str(t);
+                    b.add(&["-activate", &ts, "item: Focus Band"]);
+                }
                 return RV::Num(b.poke(t).hp as f64 - 1.0);
             }
             RV::Undef
@@ -109,7 +115,14 @@ pub fn dispatch_item(
                 .active_move
                 .as_ref()
                 .and_then(|m| m.id)
-                .is_some_and(|m| dex.move_static(m).kingsrock);
+                .is_some_and(|m| {
+                    dex.move_static(m).kingsrock
+                        && !(b.is_castle()
+                            && matches!(
+                                dex.moves.key(m),
+                                "counter" | "mirrorcoat" | "selfdestruct" | "explosion"
+                            ))
+                });
             if has_kr {
                 if let Some(am) = b.active_move.as_mut() {
                     am.secondaries.push(HitEffect {
@@ -132,7 +145,12 @@ pub fn dispatch_item(
         // ------------------------------------------------------ berryjuice
         ItemCbOp::BerryJuiceResidual => {
             let t = tpoke.unwrap();
-            if b.poke(t).hp as f64 <= b.poke(t).maxhp as f64 / 2.0 {
+            let low = if b.is_castle() {
+                b.poke(t).hp < b.poke(t).maxhp / 2
+            } else {
+                b.poke(t).hp as f64 <= b.poke(t).maxhp as f64 / 2.0
+            };
+            if low {
                 let ok = b
                     .run_event(
                         dex,
@@ -154,7 +172,12 @@ pub fn dispatch_item(
         // ---------------------------------------------------- heal berries
         ItemCbOp::BerryResidual => {
             let t = tpoke.unwrap();
-            if b.poke(t).hp as f64 <= b.poke(t).maxhp as f64 / 2.0 {
+            let low = if b.is_castle() {
+                b.poke(t).hp < b.poke(t).maxhp / 2
+            } else {
+                b.poke(t).hp as f64 <= b.poke(t).maxhp as f64 / 2.0
+            };
+            if low {
                 b.eat_item(dex, t, false, None, EffectHandle::None);
             }
             RV::Undef
@@ -171,6 +194,9 @@ pub fn dispatch_item(
         }
         // -------------------------------------------------- status berries
         ItemCbOp::BitterBerryUpdate => {
+            if b.is_castle() {
+                return RV::Undef; // #33 Castle PBS: Bitter Berry (ID 84) is completely inert.
+            }
             let t = tpoke.unwrap();
             if crate::cond_id!(dex, "confusion").map(|c| b.poke(t).has_volatile(c)).unwrap_or(false) {
                 b.eat_item(dex, t, false, None, EffectHandle::None);
@@ -178,21 +204,53 @@ pub fn dispatch_item(
             RV::Undef
         }
         ItemCbOp::BitterBerryEat => {
+            if b.is_castle() {
+                return RV::Undef;
+            }
             let t = tpoke.unwrap();
             b.remove_volatile(dex, t, "confusion");
             RV::Undef
         }
-        ItemCbOp::BurntBerryUpdate => status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Frz),
-        ItemCbOp::IceBerryUpdate => status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Brn),
-        ItemCbOp::PrzCureBerryUpdate => status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Par),
+        ItemCbOp::BurntBerryUpdate => {
+            if b.is_castle() {
+                return RV::Undef; // #32/#33 Castle PBS: handled uniformly via immediate foe check & EOT.
+            }
+            status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Frz)
+        }
+        ItemCbOp::IceBerryUpdate => {
+            if b.is_castle() {
+                return RV::Undef; // #32/#33 Castle PBS: handled uniformly via immediate foe check & EOT.
+            }
+            status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Brn)
+        }
+        ItemCbOp::PrzCureBerryUpdate => {
+            if b.is_castle() {
+                return RV::Undef; // #32/#33 Castle PBS: handled uniformly via immediate foe check & EOT.
+            }
+            status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Par)
+        }
         ItemCbOp::PsnCureBerryUpdate => {
+            if b.is_castle() {
+                return RV::Undef; // #32/#33 Castle PBS: handled uniformly via immediate foe check & EOT.
+            }
             status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Psn || s == Status::Tox)
         }
         // gen2stadium2nc2000: Mint/Miracle Berry trigger onBeforeMove
         // (priority 11, before the sleep check) + onResidual, not onUpdate.
         ItemCbOp::MintBerryCheck => status_berry_update(b, dex, tpoke.unwrap(), |s| s == Status::Slp),
         ItemCbOp::BurntBerryEat => status_berry_eat(b, dex, tpoke.unwrap(), |s| s == Status::Frz),
-        ItemCbOp::IceBerryEat => status_berry_eat(b, dex, tpoke.unwrap(), |s| s == Status::Brn),
+        ItemCbOp::IceBerryEat => {
+            let t = tpoke.unwrap();
+            if b.is_castle() {
+                if b.poke(t).status == Status::Brn {
+                    b.cure_status(dex, t, false);
+                }
+                b.remove_volatile(dex, t, "confusion");
+                RV::Undef
+            } else {
+                status_berry_eat(b, dex, t, |s| s == Status::Brn)
+            }
+        }
         ItemCbOp::MintBerryEat => status_berry_eat(b, dex, tpoke.unwrap(), |s| s == Status::Slp),
         ItemCbOp::PrzCureBerryEat => status_berry_eat(b, dex, tpoke.unwrap(), |s| s == Status::Par),
         ItemCbOp::PsnCureBerryEat => {
@@ -215,6 +273,11 @@ pub fn dispatch_item(
         }
         // ---------------------------------------------------- mysteryberry
         ItemCbOp::MysteryBerryUpdate => {
+            // #36 Castle PBS: normal move PP=0 triggers at EOT item phase (1P->2P, slots 1..4);
+            // mid-turn Spite PP=0 triggers right before the victim's move in run_move.
+            if b.is_castle() {
+                return RV::Undef;
+            }
             let t = tpoke.unwrap();
             if b.poke(t).hp <= 0 {
                 return RV::Undef;
@@ -255,10 +318,12 @@ pub fn dispatch_item(
             };
             if let Some(i) = slot_idx {
                 let (move_id, shared) = {
+                    let is_castle = b.is_castle();
                     let p = b.poke_mut(t);
                     let s = &mut p.move_slots[i];
                     s.pp += 5;
-                    if s.pp > s.maxpp {
+                    // #36 Castle PBS: Mystery Berry does NOT clamp pp <= maxpp (e.g. Sketch 1->0->5).
+                    if !is_castle && s.pp > s.maxpp {
                         s.pp = s.maxpp;
                     }
                     (s.id, s.shared)

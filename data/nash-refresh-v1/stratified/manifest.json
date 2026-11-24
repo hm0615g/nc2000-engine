@@ -1,0 +1,36 @@
+{
+  "schedule_sha256": "682a102dbc24cb56290113b635cdfa551eaaeed2ca6044674433a42c23b5506b",
+  "current_source": "076fbdcc",
+  "historical_source": "a8ba973c",
+  "current_wasm": "fd18b046ceb110bffe7664686ace7d969e6ec029b89b1d677b0e1ea578cfc5b4",
+  "historical_wasm": "18b6f5fe5b32e0cb47fe79719b6b689d90fd91fe452cdd44c6c596722dc1d4f4",
+  "inputs_sha256": {
+    "kodoku-beq-v1/novel_evolved_teams": "4b547b37bd41fcc110922efde101d83824615ab4f0c0438993f443ab3f746bd1",
+    "team-pool-v2/team-pool": "5b7b7189e6c01b56285386bf03dc5837c26c58c9a0065cd7c08283c15029f56b",
+    "kodoku-r3/conclusion-equilibrium-deme": "dc4eba46a6291d52c4985a124d3a50ccfca3891220a8a431652ab2a1ef36c437",
+    "live-search": "ecab15ee3c9b96adc849da2c8f045084a6a238944e173fd5cdafc81762b5ee67",
+    "search-profiles": "157d49892b62fe4bb310e0a0d7f985ecabe6084ddcd5cad2e65ded65a2d9b862",
+    "nash-refresh-v1/candidate": "bd9fe4a7eb63c22e926df245083760b598c99c198df6cf2f63a4d13d50762977"
+  },
+  "runtime_gate": {
+    "block": 0,
+    "rowSeat": 0,
+    "actionSha256": "bd9db9c9bf1c4a4505198d04dd759a9a4fe3b2b0af2b7fda760afb1afad2dcce",
+    "turns": 11,
+    "outcome": "p2",
+    "previews": [
+      "team 6, 1, 3",
+      "team 5, 1, 4"
+    ],
+    "local_ms": 57783,
+    "colab_ms": 245203,
+    "local_node": "22.23.3",
+    "colab_node": "22.23.4"
+  },
+  "results_sha256": {
+    "games.jsonl": "aeb5c1ad9e9764d849d12117f2fb072c3918b5b35628665034de0a4e8c6abb88",
+    "repeat-games.jsonl": "30ebae06eb914b687edde381099365458a96dca0f4d9c58dd2e4f476591303ed",
+    "budget-games.jsonl": "4451e00b64b83dc8725ae35938c0f84ef8b922f05169edad7b71d8421f9e2bdf",
+    "pick-games.jsonl": "e28d852298d84d2bc4ef4c82957d506197ffe4c4a3d098b1241aa4093d79a3c7"
+  }
+}

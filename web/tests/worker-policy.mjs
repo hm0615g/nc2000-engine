@@ -1,7 +1,6 @@
 // Exercise the rebuilt WASM through the real worker, including a protocol
 // fork. This tests execution semantics, not playing strength.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { createServer as createHttpServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
@@ -17,17 +16,14 @@ try {
   browser = await chromium.launch();
   const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
-  const result = await page.evaluate(async ({ wasmUrl, compiledDisabled }) => {
+  const result = await page.evaluate(async ({ wasmUrl }) => {
     const { BotWorker } = await import("/src/bot.ts");
     const { searchProfile } = await import("/src/search-profile.ts");
     const wasm = await import(wasmUrl);
     await wasm.default();
     const dex = new wasm.Dex();
     const poolJson = await (await fetch("/data/belief-pool-v3/belief-pool.json")).text();
-    const catalog = await (await fetch("/data/team-pool-v2/team-pool.json")).json();
-    const { compiledPreviewMatches } = await import("/src/compiled-preview.ts");
-    if (await compiledPreviewMatches(poolJson, wasm.embeddedDexJson()) !== !compiledDisabled)
-      throw new Error("compiled-preview build setting was not enforced at runtime");
+    const catalog = await (await fetch("/data/team-pool-v3/team-pool.json")).json();
     const teams = catalog.teams.slice(0, 2).map(t => JSON.stringify(t.sets));
     const seed = 7, budget = 512, rows = [];
     const equal = (a, b, label) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(label); };
@@ -50,9 +46,16 @@ try {
         const trajectory = [];
         try {
           await worker.newBattle(teams[0], teams[1], "1,2,3,4", {
-            poolJson, side: 1, seed, compiledPreview: false, actionPolicy: mode,
+            poolJson, side: 1, seed, actionPolicy: mode,
           });
           for (let turn = 0; turn < 3; turn++) {
+            while (JSON.parse(battle.legalChoices(1)).length === 0) {
+              const wait0 = JSON.parse(battle.legalChoices(0));
+              if (!wait0.length) break;
+              battle.applyChoice(0, wait0[0].input);
+              worker.apply([[0, wait0[0].input]]);
+            }
+            if (JSON.parse(battle.legalChoices(1)).length === 0) break;
             const frame = JSON.parse(channel.frame(battle));
             reference.pushLines(JSON.stringify(frame.lines)); reference.onRequest(JSON.stringify(frame.request)); reference.step(budget);
             const mapInput = input => battle.resolveChoice(1, input);
@@ -75,7 +78,8 @@ try {
             if (mode === "visit-sample" && turn === 0 && result.playPolicy.actions.length < 2)
               throw new Error("visit sampling collapsed to one action");
             trajectory.push({ best: result.best, policy: result.playPolicy });
-            const picks = [[0, JSON.parse(battle.legalChoices(0))[0].input], [1, result.best]];
+            const legal0 = JSON.parse(battle.legalChoices(0));
+            const picks = legal0.length ? [[0, legal0[0].input], [1, result.best]] : [[1, result.best]];
             for (const [side, input] of picks) battle.applyChoice(side, input);
             worker.apply(picks);
           }
@@ -111,8 +115,8 @@ try {
         rows.push({ path: "fork", mode, decisions: 1, support: result.playPolicy.actions.length });
       } finally { worker.terminate(); reference.free(); battle.free(); }
     }
-    // Verify BotWorker passes pickPriorJson through to ProtocolSearcher and
-    // bypasses compiledPreview so PickPrior shifts Team Preview search.
+    // Verify BotWorker passes pickPriorJson through to ProtocolSearcher so
+    // PickPrior shifts live Team Preview search.
     const toId = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
     const previewMons = catalog.teams[1].sets.map(s => ({
       species: toId(s.species),
@@ -147,7 +151,7 @@ try {
         const refRep = JSON.parse(reference.setPickPrior(pickPriorJson));
         if (!refRep.applied) throw new Error("reference setPickPrior refused");
         await worker.newBattle(teams[0], teams[1], "1,2,3,4", {
-          poolJson, side: 1, seed, compiledPreview: true, pickPriorJson,
+          poolJson, side: 1, seed, pickPriorJson,
         });
         const frame = JSON.parse(channel.frame(battle));
         reference.pushLines(JSON.stringify(frame.lines));
@@ -157,7 +161,7 @@ try {
         const refRoot = JSON.parse(reference.rootPolicy());
         for (const row of refRoot.actions) row.input = battle.resolveChoice(1, row.input);
         equal(report, refRep, "worker pickPrior report mismatch");
-        equal(res.src, "search", "pickPrior must bypass compiledPreview lookup");
+        equal(res.src, "search", "pickPrior must run live Team Preview search");
         equal(res.policy, refRoot, "worker pickPrior policy diverged from reference");
         return res.policy;
       } finally {
@@ -171,9 +175,7 @@ try {
     rows.push({ path: "pick-prior", mode: "legacy", decisions: 2, shifted: true });
     dex.free();
     return rows;
-  }, { wasmUrl: "/@fs" + fileURLToPath(new URL("../../crates/wasm/pkg-web/nc2000_wasm.js", import.meta.url)),
-    compiledDisabled: process.env.NC2000_DISABLE_COMPILED_PREVIEW === "1" ||
-      JSON.parse(readFileSync(new URL("../../data/compiled-preview-v1.json", import.meta.url), "utf8")).status === "retired-training-v3" });
+  }, { wasmUrl: "/@fs" + fileURLToPath(new URL("../../crates/wasm/pkg-web/nc2000_wasm.js", import.meta.url)) });
   assert.equal(result.length, 7);
   console.log(JSON.stringify(result, null, 2));
 } finally {

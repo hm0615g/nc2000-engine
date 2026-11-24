@@ -4,9 +4,10 @@
 //! by depth-first backward induction over `enumerate_step`'s exact chance
 //! distributions. The game is finite and acyclic: `state_key` includes the
 //! turn counter and every within-turn step strictly advances the queue, and
-//! the engine auto-ties past turn 1000 — so plain memoized DFS is exact,
-//! no cycle handling needed. The memo is shared across `solve` calls
-//! (endgame positions from one game overlap heavily).
+//! finite-turn-limit rulesets terminate past `ruleset.turn_limit()` (1000-turn
+//! auto-tie on PS; `L_TURN` alive-count -> HP-ratio judge on Castle) — so plain
+//! memoized DFS is exact, no cycle handling needed. The memo is shared across
+//! `solve` calls (endgame positions from one game overlap heavily).
 //!
 //! Simultaneous decision nodes are zero-sum matrix games, solved by a
 //! compact tableau simplex on the classic positive-shift LP; the returned
@@ -15,7 +16,7 @@
 //! here is deterministic, so re-runs are bit-identical.
 
 use nc2000_engine::battle::enumerate::enumerate_step;
-use nc2000_engine::battle::{Outcome, SearchChoice};
+use nc2000_engine::battle::SearchChoice;
 use nc2000_engine::dex::Dex;
 use nc2000_engine::fxhash::FxHashMap;
 use nc2000_engine::state::Battle;
@@ -52,8 +53,8 @@ impl Default for ExactConfig {
     }
 }
 
-/// A certified value bracket: the true (turn-1000-tie) game value lies in
-/// `[lo, hi]` — chance handled exactly, lines truncated `horizon` turns
+/// A certified value bracket: the true game value (respecting `ruleset.turn_limit()`)
+/// lies in `[lo, hi]` — chance handled exactly, lines truncated `horizon` turns
 /// past the root contribute their full [0,1] uncertainty. `hi − lo` ≤ eps
 /// means solved-for-practical-purposes; width 0 means fully resolved.
 #[derive(Clone, Copy, Debug)]
@@ -161,7 +162,7 @@ impl<'d> ExactSolver<'d> {
         // the root layer back out. Cheaper than duplicating the recursion and
         // it inherits `solve`'s iterative deepening and budgets exactly.
         let certified = self.solve(b)?;
-        if b.outcome().is_some() {
+        if crate::eval::turn_limit_outcome_value(b).is_some() {
             return None;
         }
         // Re-walk at the horizon that actually certified the value, not at
@@ -257,12 +258,7 @@ impl<'d> ExactSolver<'d> {
     }
 
     fn ival(&mut self, b: &Battle) -> Option<(f64, f64)> {
-        if let Some(o) = b.outcome() {
-            let v = match o {
-                Outcome::P1Win => 1.0,
-                Outcome::Tie => 0.5,
-                Outcome::P2Win => 0.0,
-            };
+        if let Some(v) = crate::eval::turn_limit_outcome_value(b) {
             return Some((v, v));
         }
         let key = b.state_key128();

@@ -1,0 +1,18 @@
+[
+  {"block":0,"opponent":0,"rowSeat":0,"control":["preview",0],"test":["preview",1]},
+  {"block":0,"opponent":0,"rowSeat":1,"control":["preview",2],"test":["preview",3]},
+  {"block":1,"opponent":1,"rowSeat":0,"control":["pilot",14],"test":["preview",4]},
+  {"block":1,"opponent":1,"rowSeat":1,"control":["pilot",15],"test":["preview",5]},
+  {"block":2,"opponent":2,"rowSeat":0,"control":["pilot",30],"test":["pilot",30]},
+  {"block":2,"opponent":2,"rowSeat":1,"control":["pilot",31],"test":["pilot",31]},
+  {"block":3,"opponent":3,"rowSeat":0,"control":["pilot",46],"test":["preview",6]},
+  {"block":3,"opponent":3,"rowSeat":1,"control":["pilot",47],"test":["preview",7]},
+  {"block":4,"opponent":2,"rowSeat":0,"control":["pilot",58],"test":["preview",8]},
+  {"block":4,"opponent":2,"rowSeat":1,"control":["pilot",59],"test":["preview",9]},
+  {"block":5,"opponent":3,"rowSeat":0,"control":["pilot",74],"test":["preview",10]},
+  {"block":5,"opponent":3,"rowSeat":1,"control":["pilot",75],"test":["preview",11]},
+  {"block":6,"opponent":1,"rowSeat":0,"control":["pilot",84],"test":["preview",12]},
+  {"block":6,"opponent":1,"rowSeat":1,"control":["pilot",85],"test":["preview",13]},
+  {"block":7,"opponent":0,"rowSeat":0,"control":["preview",14],"test":["preview",15]},
+  {"block":7,"opponent":0,"rowSeat":1,"control":["preview",16],"test":["preview",17]}
+]

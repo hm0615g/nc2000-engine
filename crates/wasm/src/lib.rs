@@ -48,8 +48,12 @@ use nc2000_bot::{
 };
 use nc2000_engine::battle::{Outcome, PokemonSet, SearchChoice};
 use nc2000_engine::dex::{Category, Dex};
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::{Battle, Pokemon, RequestKind, Status, BOOST_NAMES};
-use nc2000_engine::validate::{canonicalize_team, validate_team, Learnsets};
+use nc2000_engine::validate::{
+    canonicalize_team, canonicalize_team_with_ruleset, validate_team, validate_team_with_ruleset,
+    Learnsets,
+};
 use nc2000_engine::replay::{Recorder, Replay};
 
 /// data/gen2stadium2.json baked into the binary (~416 KB, ~150 KB gzipped
@@ -152,6 +156,31 @@ impl WasmValidator {
     pub fn canonicalize_team(&self, team_json: &str) -> String {
         canonicalize_team(&self.dex, &self.learnsets, team_json).to_string()
     }
+
+    /// Validate a team under an explicit ruleset id (e.g. `"gen2stadium2"`,
+    /// `"castle"`, `"castle-tournament"`, `"castle-raw"`, `"castle-free"`).
+    #[wasm_bindgen(js_name = validateTeamWithRuleset)]
+    pub fn validate_team_with_ruleset(
+        &self,
+        team_json: &str,
+        ruleset_id: &str,
+    ) -> Result<String, JsError> {
+        let ruleset = Ruleset::parse_id(ruleset_id)
+            .ok_or_else(|| JsError::new(&format!("unknown ruleset: {ruleset_id}")))?;
+        Ok(validate_team_with_ruleset(&self.dex, &self.learnsets, team_json, ruleset).to_string())
+    }
+
+    /// Canonicalize a team under an explicit ruleset id (see `validateTeamWithRuleset`).
+    #[wasm_bindgen(js_name = canonicalizeTeamWithRuleset)]
+    pub fn canonicalize_team_with_ruleset(
+        &self,
+        team_json: &str,
+        ruleset_id: &str,
+    ) -> Result<String, JsError> {
+        let ruleset = Ruleset::parse_id(ruleset_id)
+            .ok_or_else(|| JsError::new(&format!("unknown ruleset: {ruleset_id}")))?;
+        Ok(canonicalize_team_with_ruleset(&self.dex, &self.learnsets, team_json, ruleset).to_string())
+    }
 }
 
 // ----------------------------------------------------------------- Battle
@@ -182,6 +211,33 @@ impl WasmBattle {
         let battle = Battle::from_fixture(&dex.dex, seed, &p1, &p2).map_err(js_err)?;
         let recorder = Some(Recorder::new(&dex.dex, &battle, [p1, p2], seed));
         Ok(WasmBattle { dex: dex.dex.clone(), battle, log_cursor: 0, recorder })
+    }
+
+    /// Construct a battle under an explicit ruleset id (e.g. `"gen2stadium2"`,
+    /// `"castle"`, `"castle-tournament"`, `"castle-raw"`, `"castle-raw-ovfl"`,
+    /// `"castle-free"`). Parameter order matches `new Battle(dex, p1Team, p2Team, seed)`.
+    #[wasm_bindgen(js_name = withRuleset)]
+    pub fn new_with_ruleset(
+        dex: &WasmDex,
+        p1_team: &str,
+        p2_team: &str,
+        seed: &str,
+        ruleset_id: &str,
+    ) -> Result<WasmBattle, JsError> {
+        let ruleset = Ruleset::parse_id(ruleset_id)
+            .ok_or_else(|| JsError::new(&format!("unknown ruleset: {ruleset_id}")))?;
+        let p1: Vec<PokemonSet> = serde_json::from_str(p1_team).map_err(js_err)?;
+        let p2: Vec<PokemonSet> = serde_json::from_str(p2_team).map_err(js_err)?;
+        let battle =
+            Battle::from_fixture_with_ruleset(&dex.dex, seed, &p1, &p2, ruleset).map_err(js_err)?;
+        let recorder = Some(Recorder::new(&dex.dex, &battle, [p1, p2], seed));
+        Ok(WasmBattle { dex: dex.dex.clone(), battle, log_cursor: 0, recorder })
+    }
+
+    /// Canonical identifier of this battle's active ruleset (`"gen2stadium2"`,
+    /// `"castle-tournament"`, `"castle-raw"`, etc.).
+    pub fn ruleset(&self) -> String {
+        self.battle.ruleset.canonical_id()
     }
 
     /// A `nc2000-fork-v1` document's battle, log ON and empty. Equal seeds
@@ -569,12 +625,22 @@ impl WasmBlindSearcher {
     /// Own canonical set + opponent public roster, at preview only.
     #[wasm_bindgen(js_name = compiledPreviewKey)]
     pub fn compiled_preview_key(&self, battle: &WasmBattle) -> Option<String> {
-        nc2000_bot::compiled_preview::key(&battle.battle, self.side)
+        if battle.battle.is_castle() {
+            let flags: Vec<bool> = self
+                .observer
+                .mons()
+                .iter()
+                .map(|m| m.preview_has_item)
+                .collect();
+            nc2000_bot::compiled_preview::castle_key(&battle.battle, self.side, Some(&flags))
+        } else {
+            nc2000_bot::compiled_preview::key(&battle.battle, self.side)
+        }
     }
 
     #[wasm_bindgen(js_name = compiledPreviewBuild)]
     pub fn compiled_preview_build(&self) -> String {
-        nc2000_bot::compiled_preview::build_fingerprint().to_string()
+        nc2000_bot::compiled_preview::policy_epoch_for(self.observer.ruleset()).to_string()
     }
 
     /// Opaque cache identity after observe(), for a blind preview only.
@@ -625,7 +691,10 @@ impl WasmBlindSearcher {
             // Pinned (open sheet): both sheets public — resolve the pair
             // directly by signature, no identification condition. Else the
             // M10 belief-mediated lookup (singleton identification only).
-            let pick = if self.belief.has_active_pick_draws(&self.observer) {
+            // Never serve PS baked pair tables in Castle battles.
+            let pick = if position.model().is_castle()
+                || self.belief.has_active_pick_draws(&self.observer)
+            {
                 None
             } else if self.pinned {
                 open_preview_pick(&self.tables, position.model(), self.side, &mut self.rng)
@@ -963,14 +1032,53 @@ impl WasmProtocolSearcher {
         c: Option<f64>,
         hp_buckets: Option<i32>,
     ) -> Result<WasmProtocolSearcher, JsError> {
+        Self::new_with_ruleset(dex, side, pool_json, seed, c, hp_buckets, "gen2stadium2")
+    }
+
+    /// Construct a `ProtocolSearcher` under an explicit ruleset id (e.g.
+    /// `"gen2stadium2"`, `"castle"`, `"castle-tournament"`, `"castle-raw"`,
+    /// `"castle-free"`).
+    #[wasm_bindgen(js_name = withRuleset)]
+    pub fn new_with_ruleset(
+        dex: &WasmDex,
+        side: usize,
+        pool_json: &str,
+        seed: u32,
+        c: Option<f64>,
+        hp_buckets: Option<i32>,
+        ruleset_id: &str,
+    ) -> Result<WasmProtocolSearcher, JsError> {
         if side > 1 {
             return Err(JsError::new("side must be 0 or 1"));
         }
+        let ruleset = Ruleset::parse_id(ruleset_id)
+            .ok_or_else(|| JsError::new(&format!("unknown ruleset: {ruleset_id}")))?;
         let pool = parse_cached_meta_pool(pool_json)?;
         let cfg = skuct_config(c.unwrap_or_else(|| profile_c("blind")), hp_buckets);
         let preview_cache_identity = Some(preview_cache::Identity::new("protocol", &cfg, pool_json));
-        let agent = ProtocolAgent::new(&dex.dex, side, pool, cfg, seed as u64);
-        Ok(WasmProtocolSearcher { dex: dex.dex.clone(), agent, preview_cache_identity, pinned: false, endgame: None, decision: DecisionSampler::new(seed as u64) })
+        let agent = ProtocolAgent::new_with_ruleset(&dex.dex, side, pool, cfg, seed as u64, ruleset);
+        Ok(WasmProtocolSearcher {
+            dex: dex.dex.clone(),
+            agent,
+            preview_cache_identity,
+            pinned: false,
+            endgame: None,
+            decision: DecisionSampler::new(seed as u64),
+        })
+    }
+
+    /// Switch the searcher's active ruleset id (call before the first request).
+    #[wasm_bindgen(js_name = setRuleset)]
+    pub fn set_ruleset(&mut self, ruleset_id: &str) -> Result<(), JsError> {
+        let ruleset = Ruleset::parse_id(ruleset_id)
+            .ok_or_else(|| JsError::new(&format!("unknown ruleset: {ruleset_id}")))?;
+        self.agent.set_ruleset(ruleset);
+        Ok(())
+    }
+
+    /// Canonical identifier of this searcher's active ruleset.
+    pub fn ruleset(&self) -> String {
+        self.agent.ruleset().canonical_id()
     }
 
     /// `c` defaults to the profile of the information policy the fork was
@@ -1148,12 +1256,26 @@ impl WasmProtocolSearcher {
 
     #[wasm_bindgen(js_name = compiledPreviewKey)]
     pub fn compiled_preview_key(&self) -> Option<String> {
-        nc2000_bot::compiled_preview::key(self.agent.battle()?, self.agent.side())
+        let battle = self.agent.battle()?;
+        if battle.is_castle() {
+            let flags: Option<Vec<bool>> = self
+                .agent
+                .observer()
+                .map(|o| o.mons().iter().map(|m| m.preview_has_item).collect());
+            nc2000_bot::compiled_preview::castle_key(battle, self.agent.side(), flags.as_deref())
+        } else {
+            nc2000_bot::compiled_preview::key(battle, self.agent.side())
+        }
     }
 
     #[wasm_bindgen(js_name = compiledPreviewBuild)]
     pub fn compiled_preview_build(&self) -> String {
-        nc2000_bot::compiled_preview::build_fingerprint().to_string()
+        let ruleset = self
+            .agent
+            .battle()
+            .map(|b| b.ruleset)
+            .unwrap_or_else(|| self.agent.ruleset());
+        nc2000_bot::compiled_preview::policy_epoch_for(ruleset).to_string()
     }
 
     /// Opaque cache identity after onRequest(), for a blind preview only.
@@ -1370,7 +1492,7 @@ impl WasmTables {
     /// argmax: {slots, input}}` with `mixed` restricted to p > 0, sorted
     /// descending, and `value` the side-a equilibrium value.
     pub fn resolve(&self, battle: &WasmBattle, side: usize) -> String {
-        if side > 1 {
+        if side > 1 || battle.battle.is_castle() {
             return r#"{"found":false}"#.to_string();
         }
         let Some((tab, i_am_a)) = self.set.lookup(&battle.battle, side) else {
@@ -1421,7 +1543,7 @@ impl WasmTables {
     /// (ready-to-apply input string), or `null` for unknown matchups.
     /// Deterministic per seed — one fresh seed per preview decision.
     pub fn sample(&self, battle: &WasmBattle, side: usize, seed: u32) -> Option<String> {
-        if side > 1 {
+        if side > 1 || battle.battle.is_castle() {
             return None;
         }
         let (tab, i_am_a) = self.set.lookup(&battle.battle, side)?;
@@ -1452,7 +1574,7 @@ impl WasmTables {
     /// The argmax-policy pick (pure best reply to the opponent's
     /// equilibrium), or `null` for unknown matchups.
     pub fn argmax(&self, battle: &WasmBattle, side: usize) -> Option<String> {
-        if side > 1 {
+        if side > 1 || battle.battle.is_castle() {
             return None;
         }
         let (tab, i_am_a) = self.set.lookup(&battle.battle, side)?;
@@ -1719,6 +1841,11 @@ impl WasmKifu {
     pub fn new(dex: &WasmDex, code: &str) -> Result<WasmKifu, JsError> {
         let replay = Replay::decode(&dex.dex, code).map_err(|e| JsError::new(&e))?;
         Ok(Self { dex: dex.dex.clone(), replay, code: code.into() })
+    }
+
+    /// Canonical identifier of the replay's recorded ruleset.
+    pub fn ruleset(&self) -> String {
+        self.replay.ruleset.canonical_id()
     }
 
     pub fn scenes(&self, side: Option<usize>) -> Result<String, JsError> {

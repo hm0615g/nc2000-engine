@@ -119,7 +119,7 @@ fn copied_moves_unknown_learnsets_and_quick_claw_keep_substitute_available() {
                 "unknown" => b.poke_mut(foe).species = dex.species.id("mewtwo").unwrap(),
                 "quickclaw" => {
                     b.poke_mut(foe).item = dex.items.id("quickclaw");
-                    b.quick_claw_roll = false;
+                    b.set_quick_claw_roll(false);
                 }
                 _ => unreachable!(),
             }

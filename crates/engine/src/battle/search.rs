@@ -50,6 +50,7 @@ struct CachedBenchMon {
     species: u16,
     hp: i32,
     speed: i32,
+    last_damage: i64,
     previously_switched_in: i32,
     status_effect_order: u32,
     item: Option<crate::dex::ItemId>,
@@ -133,6 +134,7 @@ impl BattleSearchCache {
                     species: p.species.0,
                     hp: p.hp,
                     speed: p.speed,
+                    last_damage: p.last_damage,
                     previously_switched_in: p.previously_switched_in,
                     status_effect_order: p.status_state.effect_order,
                     item: p.item,
@@ -541,6 +543,7 @@ impl Battle {
         // Total destructuring on purpose: adding a `Battle` field breaks
         // this fn until the field is placed (hashed or explicitly skipped).
         let Battle {
+            ruleset,
             preview_level_caps,
             prng: _, // chance is resampled by search
             turn,
@@ -560,7 +563,10 @@ impl Battle {
             last_move_line: _, // log bookkeeping
             last_successful_move_this_turn,
             last_damage,
-            quick_claw_roll,
+            quick_claw_rolls,
+            triple_kick_mult,
+            recoil_ko_side,
+            bp_switched_this_turn,
             speed_order,
             format_data,
             sent_log_pos: _, // log bookkeeping
@@ -574,6 +580,9 @@ impl Battle {
             listener_pool: _, // scratch buffers
             battle_mask: _,   // derived from hashed state
         } = self;
+        if *ruleset != crate::rules::Ruleset::PsStadium2 {
+            (ruleset, triple_kick_mult, recoil_ko_side, bp_switched_this_turn).hash(h);
+        }
         (turn, request_state, mid_turn, started, ended, winner).hash(h);
         if *preview_level_caps != [Some(super::MAX_TOTAL_LEVEL); 2] {
             preview_level_caps.hash(h);
@@ -596,7 +605,27 @@ impl Battle {
                 Some(_) => (last_damage / 16).hash(h),
             }
         }
-        (if omit_quick_claw_roll { false } else { *quick_claw_roll }, speed_order).hash(h);
+        if *ruleset == crate::rules::Ruleset::PsStadium2 {
+            (
+                if omit_quick_claw_roll {
+                    false
+                } else {
+                    quick_claw_rolls[0]
+                },
+                speed_order,
+            )
+                .hash(h);
+        } else {
+            (
+                if omit_quick_claw_roll {
+                    [false, false]
+                } else {
+                    *quick_claw_rolls
+                },
+                speed_order,
+            )
+                .hash(h);
+        }
         format_data.hash_state(h);
         // mid-event machinery: quiescent at request points, hashed as a guard
         (event_stack.len(), effect_stack.len(), active_move.is_some()).hash(h);
@@ -626,6 +655,7 @@ impl Battle {
     ) {
         use std::hash::Hash;
         let Battle {
+            ruleset,
             preview_level_caps,
             prng: _,
             turn,
@@ -645,7 +675,10 @@ impl Battle {
             last_move_line: _,
             last_successful_move_this_turn,
             last_damage,
-            quick_claw_roll,
+            quick_claw_rolls,
+            triple_kick_mult,
+            recoil_ko_side,
+            bp_switched_this_turn,
             speed_order,
             format_data,
             sent_log_pos: _,
@@ -659,6 +692,9 @@ impl Battle {
             listener_pool: _,
             battle_mask: _,
         } = self;
+        if *ruleset != crate::rules::Ruleset::PsStadium2 {
+            (ruleset, triple_kick_mult, recoil_ko_side, bp_switched_this_turn).hash(h);
+        }
         (turn, request_state, mid_turn, started, ended, winner).hash(h);
         if *preview_level_caps != [Some(super::MAX_TOTAL_LEVEL); 2] {
             preview_level_caps.hash(h);
@@ -704,6 +740,9 @@ impl Battle {
                         && p.species.0 == u.species
                         && p.hp == u.hp
                         && p.speed == u.speed
+                        && p.last_damage == u.last_damage
+                        && p.hurt_this_turn.is_none()
+                        && p.attacked_by.is_empty()
                         && p.item == u.item
                         && p.last_item == u.last_item
                         && p.volatiles.is_empty()
@@ -746,15 +785,27 @@ impl Battle {
                 Some(_) => (last_damage / 16).hash(h),
             }
         }
-        (
-            if omit_quick_claw_roll {
-                false
-            } else {
-                *quick_claw_roll
-            },
-            speed_order,
-        )
-            .hash(h);
+        if *ruleset == crate::rules::Ruleset::PsStadium2 {
+            (
+                if omit_quick_claw_roll {
+                    false
+                } else {
+                    quick_claw_rolls[0]
+                },
+                speed_order,
+            )
+                .hash(h);
+        } else {
+            (
+                if omit_quick_claw_roll {
+                    [false, false]
+                } else {
+                    *quick_claw_rolls
+                },
+                speed_order,
+            )
+                .hash(h);
+        }
         format_data.hash_state(h);
         (event_stack.len(), effect_stack.len(), active_move.is_some()).hash(h);
         (active_pokemon, active_target, last_move_id, pending_boosts).hash(h);
@@ -886,15 +937,20 @@ impl Battle {
             return;
         }
 
-        let moves = &self.poke(active).move_slots;
-        for slot in moves {
-            let choice = SearchChoice::Move(slot.id);
-            if !slot.disabled && slot.pp > 0 && !out.contains(&choice) {
-                out.push(choice);
+        // #54① Castle PBS: Encore + Disable keeps the Encored move selectable (no Struggle).
+        if let Some(enc_id) = self.castle_encore_disabled_move(dex, active) {
+            out.push(SearchChoice::Move(enc_id));
+        } else {
+            let moves = &self.poke(active).move_slots;
+            for slot in moves {
+                let choice = SearchChoice::Move(slot.id);
+                if !slot.disabled && slot.pp > 0 && !out.contains(&choice) {
+                    out.push(choice);
+                }
             }
-        }
-        if out.is_empty() {
-            out.push(SearchChoice::Move(dex.known_moves.struggle.unwrap()));
+            if out.is_empty() {
+                out.push(SearchChoice::Move(dex.known_moves.struggle.unwrap()));
+            }
         }
 
         // voluntary switches
@@ -1075,7 +1131,7 @@ mod tests {
 
         let mut det = base.clone();
         det.sides[1].roster[0].item = dex.items.id("quickclaw");
-        det.quick_claw_roll = true;
+        det.set_quick_claw_roll(true);
         det.update_all_speeds(&dex);
         let det_cache =
             BattleSearchCache::new_with_own_side_template(&det, &dex, Some(16), true, 0, &base_cache);
@@ -1085,7 +1141,7 @@ mod tests {
             det.search_key_canonical_claw(&dex, Some(16), true)
         );
         // Applying a fresh base-level speed mutation against base_cache still keeps parity
-        base.quick_claw_roll = true;
+        base.set_quick_claw_roll(true);
         base.update_all_speeds(&dex);
         assert_eq!(base.type_key_with_cache(&base_cache), base.type_key());
         assert_eq!(

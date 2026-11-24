@@ -6,15 +6,24 @@
 //! before scheduling or freeing resource generations.
 
 use nc2000_engine::dex::{Dex, MoveId};
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::{Battle, PokeId, RequestState};
 
-const TURN_LIMIT_RANK_BASE: i64 = 1001;
+#[inline]
+fn turn_limit_rank_base(turn_limit: Option<u16>) -> i64 {
+    match turn_limit {
+        Some(lim) => i64::from(lim) + 1,
+        None => i64::from(u16::MAX) + 1,
+    }
+}
 
 /// A narrowly certified last-mon ending in which only `healer` can regain HP.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OneSidedHeal {
     pub healer: usize,
     pub non_healer: usize,
+    ruleset: Ruleset,
+    turn_limit: Option<u16>,
     active: [PokeId; 2],
     move_ids: [Vec<MoveId>; 2],
     max_hp: [i32; 2],
@@ -26,6 +35,8 @@ pub struct OneSidedHeal {
 /// its well-founded rank is the lexicographic pair (total PP, turns left).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TwoSidedHeal {
+    ruleset: Ruleset,
+    turn_limit: Option<u16>,
     active: [PokeId; 2],
     move_ids: [Vec<MoveId>; 2],
     max_hp: [i32; 2],
@@ -142,6 +153,8 @@ pub fn classify_one_sided_heal(b: &Battle, dex: &Dex) -> Result<OneSidedHeal, Cl
     Ok(OneSidedHeal {
         healer,
         non_healer,
+        ruleset: b.ruleset,
+        turn_limit: b.ruleset.turn_limit(),
         active: audit.active,
         move_ids: audit.move_ids,
         max_hp: audit.max_hp,
@@ -155,6 +168,8 @@ pub fn classify_two_sided_heal(b: &Battle, dex: &Dex) -> Result<TwoSidedHeal, Cl
         return Err(ClassifyError::NotBothHealers);
     }
     Ok(TwoSidedHeal {
+        ruleset: b.ruleset,
+        turn_limit: b.ruleset.turn_limit(),
         active: audit.active,
         move_ids: audit.move_ids,
         max_hp: audit.max_hp,
@@ -166,7 +181,7 @@ fn audit_root(b: &Battle, dex: &Dex) -> Result<RootAudit, ClassifyError> {
     if !is_quiescent_move_request(b) {
         return Err(ClassifyError::NotQuiescent);
     }
-    if b.turn > 1000 {
+    if b.ruleset.turn_limit().is_some_and(|lim| b.turn > lim) {
         return Err(ClassifyError::TurnPastLimit { turn: b.turn });
     }
 
@@ -256,9 +271,6 @@ impl OneSidedHeal {
     /// Compute the scheduling rank after checking root identity invariants.
     pub fn rank(&self, b: &Battle) -> Result<MonotoneRank, EdgeError> {
         self.check_identity(b)?;
-        if b.turn > 1000 {
-            return Err(EdgeError::TurnPastLimit { turn: b.turn });
-        }
         let pp_total = self
             .active
             .iter()
@@ -271,7 +283,7 @@ impl OneSidedHeal {
             })
             .sum::<i64>();
         let non_healer_hp = b.poke(self.active[self.non_healer]).hp;
-        let turns_remaining = TURN_LIMIT_RANK_BASE - i64::from(b.turn);
+        let turns_remaining = turn_limit_rank_base(self.turn_limit) - i64::from(b.turn);
         Ok(MonotoneRank {
             value: pp_total + i64::from(non_healer_hp) + turns_remaining,
             pp_total,
@@ -315,7 +327,14 @@ impl OneSidedHeal {
     }
 
     fn check_identity(&self, b: &Battle) -> Result<(), EdgeError> {
-        check_identity(&self.active, &self.move_ids, &self.max_hp, b)
+        check_identity(
+            self.ruleset,
+            self.turn_limit,
+            &self.active,
+            &self.move_ids,
+            &self.max_hp,
+            b,
+        )
     }
 }
 
@@ -344,7 +363,7 @@ impl TwoSidedHeal {
         Ok(ResourceRank {
             healing_pp,
             pp_total,
-            turns_remaining: TURN_LIMIT_RANK_BASE - i64::from(b.turn),
+            turns_remaining: turn_limit_rank_base(self.turn_limit) - i64::from(b.turn),
         })
     }
 
@@ -372,20 +391,29 @@ impl TwoSidedHeal {
     }
 
     fn check_identity(&self, b: &Battle) -> Result<(), EdgeError> {
-        check_identity(&self.active, &self.move_ids, &self.max_hp, b)
+        check_identity(
+            self.ruleset,
+            self.turn_limit,
+            &self.active,
+            &self.move_ids,
+            &self.max_hp,
+            b,
+        )
     }
 }
 
 fn check_identity(
+    ruleset: Ruleset,
+    turn_limit: Option<u16>,
     active: &[PokeId; 2],
     move_ids: &[Vec<MoveId>; 2],
     max_hp: &[i32; 2],
     b: &Battle,
 ) -> Result<(), EdgeError> {
-    if !is_quiescent_move_request(b) {
+    if !is_quiescent_move_request(b) || b.ruleset != ruleset {
         return Err(EdgeError::NotQuiescent);
     }
-    if b.turn > 1000 {
+    if turn_limit.is_some_and(|lim| b.turn > lim) {
         return Err(EdgeError::TurnPastLimit { turn: b.turn });
     }
     for side in 0..2 {

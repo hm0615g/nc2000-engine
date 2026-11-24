@@ -13,9 +13,11 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{collections::HashMap, path::Path};
 
-const INPUTS: [&str; 7] = [
-    "data/team-pool-v2/team-pool.json",
+const INPUTS: [&str; 9] = [
+    "data/team-pool-v3/team-pool.json",
     "data/belief-pool-v3/belief-pool.json",
+    "data/team-pool-v3/flagship-mixture.json",
+    "data/team-pool-v2/team-pool.json",
     "data/kodoku-r3/conclusion-equilibrium-deme.json",
     "data/kodoku-r3/conclusion-equilibrium-r1.json",
     "data/meta-nash-v3/pool-artifact.json",

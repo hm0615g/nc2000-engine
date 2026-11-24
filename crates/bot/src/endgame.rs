@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use nc2000_engine::battle::SearchChoice;
 use nc2000_engine::dex::Dex;
+use nc2000_engine::rules::Ruleset;
 use nc2000_engine::state::Battle;
 use serde::{Deserialize, Serialize};
 
@@ -86,6 +87,7 @@ pub struct ConditionalValue {
 
 pub struct EndgameSession {
     cfg: EndgameConfig,
+    ruleset: Option<Ruleset>,
     cache: BoundCache,
     attempted: HashMap<u128, usize>,
     started_ms: f64,
@@ -104,12 +106,21 @@ impl EndgameSession {
         }
         Ok(Self {
             cfg,
+            ruleset: None,
             cache: BoundCache::default(),
             attempted: HashMap::new(),
             started_ms,
             budget_ms,
             stats: EndgameStats::default(),
         })
+    }
+
+    fn sync_ruleset(&mut self, ruleset: Ruleset) {
+        if self.ruleset.is_some_and(|r| r != ruleset) {
+            self.cache = BoundCache::default();
+            self.attempted.clear();
+        }
+        self.ruleset = Some(ruleset);
     }
 
     pub fn expired(&self, now_ms: f64) -> bool {
@@ -128,7 +139,7 @@ impl EndgameSession {
 
     pub fn eligible(&self, battle: &Battle) -> bool {
         battle.turn > 0
-            && battle.outcome().is_none()
+            && crate::eval::turn_limit_outcome_value(battle).is_none()
             && battle.sides.iter().all(|side| {
                 let living = side
                     .party
@@ -140,6 +151,24 @@ impl EndgameSession {
                     .count();
                 (1..=self.cfg.max_alive).contains(&living)
             })
+    }
+
+    #[inline]
+    pub fn can_probe(&self) -> bool {
+        self.cfg.solver_fraction > 0.0
+            && self.stats.solver_ms < self.budget_ms * self.cfg.solver_fraction
+    }
+
+    #[inline]
+    pub fn eligible_compact(
+        &self,
+        cb: &nc2000_engine::compact::CompactBattle,
+        table: &nc2000_engine::compact::MatchTable,
+    ) -> bool {
+        cb.turn > 0
+            && crate::eval::compact_turn_limit_outcome(cb, table).is_none()
+            && (1..=self.cfg.max_alive).contains(&(cb.sides[0].alive_mask.count_ones() as usize))
+            && (1..=self.cfg.max_alive).contains(&(cb.sides[1].alive_mask.count_ones() as usize))
     }
 
     fn bound_config(&self, work_budget: usize) -> BoundConfig {
@@ -155,6 +184,7 @@ impl EndgameSession {
     }
 
     pub fn retain_root(&mut self, dex: &Dex, root: &Battle, clock: &mut impl FnMut() -> f64) {
+        self.sync_ruleset(root.ruleset);
         let start = clock();
         let mut solver =
             BoundSolver::from_cache(dex, self.bound_config(0), std::mem::take(&mut self.cache));
@@ -190,6 +220,7 @@ impl EndgameSession {
         {
             return None;
         }
+        self.sync_ruleset(battle.ruleset);
         let start = clock();
         if self.expired(start) {
             return None;
@@ -273,8 +304,12 @@ impl EndgameSession {
         clock: &mut impl FnMut() -> f64,
     ) -> f64 {
         let start = clock();
+        // Scale per-leaf wall cap with the decision's solver budget (5%, clamped to 2..30 ms)
+        // so slow CPUs or cold WASM JIT after CompactBattle mid-game turns still complete a
+        // 2-slice leaf closure instead of aborting after 1 slice when plenty of budget remains.
+        let leaf_cap_ms = (self.budget_ms * self.cfg.solver_fraction * 0.05).clamp(2.0, 30.0);
         for _ in 0..4 {
-            if clock() - start >= 2.0 {
+            if clock() - start >= leaf_cap_ms {
                 break;
             }
             let before = self.stats.runs;
@@ -314,11 +349,16 @@ impl EndgameSearch {
         session: EndgameSession,
     ) -> Self {
         assert!(side < 2);
+        let raw_cap = battle.turn.saturating_add(cfg.horizon);
+        let turn_cap = battle
+            .ruleset
+            .turn_limit()
+            .map_or(raw_cap, |lim| raw_cap.min(lim));
         Self {
             search: SkuctSearch::new(battle, dex, cfg.clone(), seed),
             root: battle.clone(),
             side,
-            turn_cap: battle.turn.saturating_add(cfg.horizon),
+            turn_cap,
             cfg,
             session,
             policy: None,
@@ -423,7 +463,7 @@ pub struct EndgameAgent {
     pub search_nodes: usize,
     rng: SplitMix64,
     session: Option<EndgameSession>,
-    committed: Option<(u128, [u8; 16], usize, SearchChoice)>,
+    committed: Option<(u128, [u8; 16], Ruleset, usize, SearchChoice)>,
     policy: Vec<(SearchChoice, f64)>,
 }
 
@@ -468,9 +508,10 @@ impl crate::agent::Agent for EndgameAgent {
         choices: &[SearchChoice],
     ) -> SearchChoice {
         let key = battle.state_key128();
-        if let Some((old, fingerprint, old_side, choice)) = self.committed {
+        if let Some((old, fingerprint, old_ruleset, old_side, choice)) = self.committed {
             if old == key
                 && fingerprint == dex.replay_fingerprint
+                && old_ruleset == battle.ruleset
                 && old_side == side
                 && choices.contains(&choice)
             {
@@ -482,7 +523,7 @@ impl crate::agent::Agent for EndgameAgent {
             self.search_iterations = 0;
             self.search_nodes = 0;
             self.policy = vec![(choices[0], 1.0)];
-            self.committed = Some((key, dex.replay_fingerprint, side, choices[0]));
+            self.committed = Some((key, dex.replay_fingerprint, battle.ruleset, side, choices[0]));
             return choices[0];
         }
         let start = std::time::Instant::now();
@@ -518,7 +559,7 @@ impl crate::agent::Agent for EndgameAgent {
         self.search_iterations = search.search().iterations();
         self.search_nodes = search.search().node_count();
         self.session = Some(search.session);
-        self.committed = Some((key, dex.replay_fingerprint, side, choice));
+        self.committed = Some((key, dex.replay_fingerprint, battle.ruleset, side, choice));
         choice
     }
 

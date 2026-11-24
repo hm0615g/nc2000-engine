@@ -1,0 +1,916 @@
+{
+  "teams": [
+    {
+      "id": "deme-r1-00-s0030-beq-g2-c3-legal",
+      "source": "deme-r1-00-s0030-beq-g2-c3",
+      "sets": [
+        {
+          "name": "Tyranitar",
+          "species": "Tyranitar",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Rock Slide",
+            "Crunch",
+            "Dynamic Punch",
+            "Ice Beam"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Skarmory",
+          "species": "Skarmory",
+          "item": "Never-Melt Ice",
+          "ability": "No Ability",
+          "moves": [
+            "Drill Peck",
+            "Curse",
+            "Toxic",
+            "Rest"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Marowak",
+          "species": "Marowak",
+          "item": "Thick Club",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Fire Blast",
+            "Rock Slide",
+            "Swords Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Double-Edge",
+            "Curse",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Raikou",
+          "species": "Raikou",
+          "item": "Magnet",
+          "ability": "No Ability",
+          "moves": [
+            "Thunder",
+            "Hidden Power Ice",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 22,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Suicune",
+          "species": "Suicune",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Surf",
+            "Ice Beam",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 2,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ]
+    },
+    {
+      "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal",
+      "source": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0",
+      "sets": [
+        {
+          "name": "Tyranitar",
+          "species": "Tyranitar",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Rock Slide",
+            "Crunch",
+            "Dynamic Punch",
+            "Earthquake"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Skarmory",
+          "species": "Skarmory",
+          "item": "Never-Melt Ice",
+          "ability": "No Ability",
+          "moves": [
+            "Drill Peck",
+            "Steel Wing",
+            "Toxic",
+            "Rest"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Marowak",
+          "species": "Marowak",
+          "item": "Thick Club",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Fire Blast",
+            "Rock Slide",
+            "Swords Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Double-Edge",
+            "Curse",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Raikou",
+          "species": "Raikou",
+          "item": "Mystic Water",
+          "ability": "No Ability",
+          "moves": [
+            "Thunder",
+            "Hidden Power Ice",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 22,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Suicune",
+          "species": "Suicune",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Surf",
+            "Ice Beam",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 2,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ]
+    },
+    {
+      "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal",
+      "source": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4",
+      "sets": [
+        {
+          "name": "Tyranitar",
+          "species": "Tyranitar",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Rock Slide",
+            "Crunch",
+            "Dynamic Punch",
+            "Fire Blast"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Skarmory",
+          "species": "Skarmory",
+          "item": "Magnet",
+          "ability": "No Ability",
+          "moves": [
+            "Drill Peck",
+            "Curse",
+            "Toxic",
+            "Rest"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Marowak",
+          "species": "Marowak",
+          "item": "Thick Club",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Fire Blast",
+            "Rock Slide",
+            "Swords Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Double-Edge",
+            "Curse",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Raikou",
+          "species": "Raikou",
+          "item": "Never-Melt Ice",
+          "ability": "No Ability",
+          "moves": [
+            "Sleep Talk",
+            "Hidden Power Ice",
+            "Rest",
+            "Thunder"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 22,
+            "def": 26,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Suicune",
+          "species": "Suicune",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Surf",
+            "Ice Beam",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 2,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ]
+    },
+    {
+      "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal",
+      "source": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5",
+      "sets": [
+        {
+          "name": "Tyranitar",
+          "species": "Tyranitar",
+          "item": "Bright Powder",
+          "ability": "No Ability",
+          "moves": [
+            "Rock Slide",
+            "Crunch",
+            "Fire Blast",
+            "Ice Beam"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Skarmory",
+          "species": "Skarmory",
+          "item": "Never-Melt Ice",
+          "ability": "No Ability",
+          "moves": [
+            "Drill Peck",
+            "Curse",
+            "Toxic",
+            "Rest"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Marowak",
+          "species": "Marowak",
+          "item": "Thick Club",
+          "ability": "No Ability",
+          "moves": [
+            "Earthquake",
+            "Fire Blast",
+            "Rock Slide",
+            "Swords Dance"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Snorlax",
+          "species": "Snorlax",
+          "item": "Leftovers",
+          "ability": "No Ability",
+          "moves": [
+            "Double-Edge",
+            "Curse",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 255,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "M",
+          "ivs": {
+            "hp": 31,
+            "atk": 31,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        },
+        {
+          "name": "Raikou",
+          "species": "Raikou",
+          "item": "Magnet",
+          "ability": "No Ability",
+          "moves": [
+            "Thunder",
+            "Thunderbolt",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 2,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 55,
+          "happiness": 255
+        },
+        {
+          "name": "Suicune",
+          "species": "Suicune",
+          "item": "Scope Lens",
+          "ability": "No Ability",
+          "moves": [
+            "Surf",
+            "Ice Beam",
+            "Rest",
+            "Sleep Talk"
+          ],
+          "nature": "Serious",
+          "evs": {
+            "hp": 255,
+            "atk": 0,
+            "def": 255,
+            "spa": 255,
+            "spd": 255,
+            "spe": 255
+          },
+          "gender": "N",
+          "ivs": {
+            "hp": 31,
+            "atk": 2,
+            "def": 31,
+            "spa": 31,
+            "spd": 31,
+            "spe": 31
+          },
+          "level": 50,
+          "happiness": 255
+        }
+      ]
+    }
+  ],
+  "mixtures": {
+    "D5": [
+      {
+        "id": "deme-r1-00-s0030",
+        "weight": 0.2
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-legal",
+        "weight": 0.2
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal",
+        "weight": 0.2
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal",
+        "weight": 0.2
+      },
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal",
+        "weight": 0.2
+      }
+    ],
+    "S4": [
+      {
+        "id": "sample-07",
+        "weight": 0.25
+      },
+      {
+        "id": "sample-07-beq-g1-c4",
+        "weight": 0.25
+      },
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 0.25
+      },
+      {
+        "id": "sample-07-beq-g1-c3",
+        "weight": 0.25
+      }
+    ],
+    "deme-r1-00-s0030": [
+      {
+        "id": "deme-r1-00-s0030",
+        "weight": 1.0
+      }
+    ],
+    "deme-r1-00-s0030-beq-g2-c3-legal": [
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-legal",
+        "weight": 1.0
+      }
+    ],
+    "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal": [
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c0-legal",
+        "weight": 1.0
+      }
+    ],
+    "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal": [
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c4-legal",
+        "weight": 1.0
+      }
+    ],
+    "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal": [
+      {
+        "id": "deme-r1-00-s0030-beq-g2-c3-beq-g3-c5-legal",
+        "weight": 1.0
+      }
+    ],
+    "sample-07": [
+      {
+        "id": "sample-07",
+        "weight": 1.0
+      }
+    ],
+    "sample-07-beq-g1-c4": [
+      {
+        "id": "sample-07-beq-g1-c4",
+        "weight": 1.0
+      }
+    ],
+    "sample-07-beq-g2-c4": [
+      {
+        "id": "sample-07-beq-g2-c4",
+        "weight": 1.0
+      }
+    ],
+    "sample-07-beq-g1-c3": [
+      {
+        "id": "sample-07-beq-g1-c3",
+        "weight": 1.0
+      }
+    ],
+    "apex-c04-bug-3atkstar-boomgen": [
+      {
+        "id": "apex-c04-bug-3atkstar-boomgen",
+        "weight": 1.0
+      }
+    ],
+    "red-v10-s1105-r2-s0142": [
+      {
+        "id": "red-v10-s1105-r2-s0142",
+        "weight": 1.0
+      }
+    ],
+    "apex-c08-surgical-142": [
+      {
+        "id": "apex-c08-surgical-142",
+        "weight": 1.0
+      }
+    ],
+    "red-v10-s1105-r1-s0148": [
+      {
+        "id": "red-v10-s1105-r1-s0148",
+        "weight": 1.0
+      }
+    ]
+  }
+}

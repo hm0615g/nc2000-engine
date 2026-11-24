@@ -202,3 +202,15 @@ The documentation follow-up commit and remote SHA are verified by the runner.
 - New-match audit boundary: after 2026-11-20T21-13-05-615Z-K-g1 (started 2026-11-20T21:13:05.616Z). Do not count either recorded match as new in subsequent audits.
 - Next: deterministic no-network pre-POST observation-failure integration test, then verify live recovery, current-form legal choice and exactly one guarded submission without suppressing evidence.
 - This documentation change makes no Castle requests and changes no bot source.
+
+<!-- castle-upstream-sync-2026-11-24-v1 -->
+## Upstream master integration (2026-11-24)
+
+- Upstream: puniu3/nc2000-engine master at ba9a251323bd664d3381a59d45ee935b0086f3e7; common ancestor 0325ea9a2b8ebd4d5a49a3b7357e4ca483fae0c0.
+- Fork before merge: hm0615g/nc2000-engine review-local-changes at 5d973c4bd4156fb67a2af164e548b02d9630e4bc.
+- PS: preserved fork-only runtime, team directory, and Web-adaptive policy; adopted upstream default catalog team-pool-v3 and removed disabled compiled-preview table code. No PS network battle executed.
+- Castle: adopted upstream catalog team-pool-v3 and flagship mixture as the new default; legacy pool:nash stays explicitly selectable. Team Preview always uses live search; the observation and preview paths explicitly select castle-free for L_TURN=0, castle-tournament for 80, and custom Castle ruleset for other limits. No Castle HTTP request executed.
+- Conserved fork AGENTS.md safety rules alongside upstream contributor rules; core, WASM, engine and Web match upstream code.
+- Tests: Node syntax for PS/Castle/observation PASS; PS help startup without external Showdown PASS; Castle help startup PASS; v3 catalog/flagship and Castle ruleset selection checks PASS; Castle continuation/faint unit tests PASS; cargo test -p nc2000-engine -p nc2000-bot PASS; PS native worker release build PASS; node WASM rebuild PASS; castle-ruleset Node test PASS.
+- Not covered: real PS runtime initialization with an installed Pokemon Showdown build, full live Castle/PS match, specific fault recovery under upstream WASM, and obtaining the hosts actual L_TURN when joining as P2. The upstream castle-bot-design.md still marks general default ruleset changes deferred. Do not label these FULLY_FIXED.
+- Previous successful Castle match boundary remains after 2026-11-20T21-13-05-615Z-K-g1.
