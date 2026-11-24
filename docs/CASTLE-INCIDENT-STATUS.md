@@ -254,3 +254,19 @@ The documentation follow-up commit and remote SHA are verified by the runner.
 - Tested: stage-1 real trace 20/20 PASS with 18 off-pool fallbacks; stage-2 two 128-iteration adaptive probes PASS; Discord selftest, Castle regressions, WASM Castle ruleset PASS.
 - Not certified: live Castle postrepair match, complete per-turn board parity, and full-budget 243000 iteration battle performance.
 - Old duplicate diagnostic scripts remain in the repository; removal deferred until independent dependency review.
+
+<!-- castle-live-auditor-parity-fix-2026-11-24 -->
+## Post-deployment Castle trace auditor correction (2026-11-24)
+
+- Source: two raw traces starting 2026-11-24T04-16-23-779Z-K-g1 and 2026-11-24T04-22-20-293Z-K-g1.
+- Both finished (LOSE); all 26 decisions used the normal observed path: 24 adaptive searches, 2 forced single choices.
+- All 26 submissions confirmed once each; zero observation exceptions or emergency fallbacks.
+- Both encounters used UPSTREAM_OFF_POOL_FALLBACK while maintaining public-HP and legal-root checks.
+- Previously 24 ACTION_MAPPING_FALLBACK errors were false positives: auditor omitted observed:adaptive-search.
+- Three PDAT_FOE_REMAINING_MISMATCH entries were verified delayed Castle CHANGE counts: game1 turn11 Explosion; game2 turn4 Explosion and turn7 Self-Destruct.
+- Next independent INPUT PDAT corrected all three; both LLOG and final PositionSpec already agreed on fainting.
+- Auditor now downgrades only precisely confirmed CHANGE-page delays to CASTLE_CHANGE_FOE_REMAINING_DELAY_CONFIRMED warnings.
+- Negative checks retain ERROR for truly inconsistent mapping and for uncorrected foe count.
+- Operator regression on both actual traces: errorCount=0 in raw and reparse modes; Discord selftest PASS; continuation/faint regression PASS.
+- Position full certification remains INCOMPLETE; converter branches and hidden opponent state are not fully certified.
+- Worktree change only: no commit/push, no Castle request, no source deletion.

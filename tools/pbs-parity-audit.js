@@ -628,9 +628,35 @@ function auditMatchTrace(traceEvents, options = {}) {
         const foeAppearedCount = foeMons.filter(m => m.appeared).length;
         const expectedRemaining = 3 - foeFaintedCount;
         if (pdat.foeRemaining !== expectedRemaining || foeAppearedCount > 3) {
+          // Castle may show the previous foe count on a forced CHANGE page.
+          // Downgrade only when the next raw INPUT page independently fixes it
+          // and both observed searcher positions preserve the actual faints.
+          const next = decisionEvs[decisionEvs.indexOf(ev) + 1] || null;
+          const nativeFoe = ev.observationReport?.finalPositionSpec?.sides?.[foeSide]?.mons;
+          const nextNativeFoe = next?.observationReport?.finalPositionSpec?.sides?.[foeSide]?.mons;
+          let nextRawRemaining = null;
+          if (typeof next?.rawPdatHtml === 'string') {
+            try { nextRawRemaining = parsePdatHtml(next.rawPdatHtml).foeRemaining; }
+            catch { nextRawRemaining = null; }
+          }
+          const matchesFaints = mons => Array.isArray(mons)
+            && mons.filter(m => m.fainted).length === foeFaintedCount
+            && mons.filter(m => m.fainted).every(m => m.hp_num === 0);
+          const displayDelayConfirmed = ev.phase === 'CHANGE'
+            && next?.phase === 'INPUT'
+            && Number.isSafeInteger(turn) && next.turn === turn + 1
+            && next?.mySide === side
+            && foeAppearedCount <= 3 && foeFaintedCount >= 1
+            && pdat.foeRemaining === expectedRemaining + 1
+            && next?.pdat?.foeRemaining === expectedRemaining
+            && nextRawRemaining === expectedRemaining
+            && ev.observationRoute === 'CASTLE_OBSERVATION_UNCHANGED_CORE'
+            && ev.observationReport?.legalMatch === true
+            && next?.observationReport?.legalMatch === true
+            && matchesFaints(nativeFoe) && matchesFaints(nextNativeFoe);
           pushAnomaly(
-            'error',
-            'PDAT_FOE_REMAINING_MISMATCH',
+            displayDelayConfirmed ? 'warn' : 'error',
+            displayDelayConfirmed ? 'CASTLE_CHANGE_FOE_REMAINING_DELAY_CONFIRMED' : 'PDAT_FOE_REMAINING_MISMATCH',
             turn,
             dec,
             `PDAT foeRemaining=${pdat.foeRemaining} disagrees with LLOG (3 - ${foeFaintedCount} fainted = ${expectedRemaining}, appeared=${foeAppearedCount})`,
@@ -638,6 +664,7 @@ function auditMatchTrace(traceEvents, options = {}) {
               pdatFoeRemaining: pdat.foeRemaining,
               llogFoeFaintedCount: foeFaintedCount,
               llogFoeAppearedCount: foeAppearedCount,
+              displayDelayConfirmed,
             }
           );
         }
@@ -750,7 +777,7 @@ function auditMatchTrace(traceEvents, options = {}) {
         const mp = String(ev.mappingPath || '');
         const castleObservedVerified = ev.observationRoute === 'CASTLE_OBSERVATION_UNCHANGED_CORE'
           && ev.observationReport?.schema === 'pbs-castle-observation-report-v1'
-          && ['observed:search','observed:random','observed:only-option'].includes(mp)
+          && ['observed:search','observed:adaptive-search','observed:random','observed:only-option'].includes(mp)
           && typeof ev.bestChoice === 'string'
           && ev.bestChoice === ev.matchedAction
           && ev.chosenMoveValue === submittedVal
