@@ -297,3 +297,16 @@ The documentation follow-up commit and remote SHA are verified by the runner.
 - Offline tests in operator worktree: node syntax PASS, v3 catalog checks PASS, Discord selftest with default/flagship/mercy mock-spawn PASS, Castle continuation/faint regressions PASS, WASM Castle ruleset PASS.
 - No live Castle network requests were made; no live match test performed.
 - Git commit and push NOT PERFORMED by this patch script.
+
+<!-- castle-discord-catalog-fork-verified-2026-11-26 -->
+## Verified Discord default v3 catalog deployment (2026-11-26)
+
+- Fork: hm0615g/nc2000-engine, branch review-local-changes.
+- Source commit: a8e05c5286af47ec3d0eff9418f81c960bf915b3.
+- Source push verified by exact remote SHA comparison.
+- Default Discord tier now passes --team pool:random, weighted across 33 rows / 32 species shells in data/team-pool-v3/team-pool.json.
+- Explicit --team pool:flagship preserves the prior two-variant mixture. PBS_TEAM and config team override are supported.
+- Mercy tier continues to use pool:tier-a unless explicitly overridden.
+- Standalone pbs-client.js default remains unchanged. Core, WASM, and Web are unchanged.
+- Operator tests: Node syntax PASS, catalog weights PASS, Discord selftest PASS, Castle regression PASS, WASM Castle ruleset PASS.
+- Pre-push verification repeated in the source commit script. No live Castle match tested after this change.
