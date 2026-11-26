@@ -285,3 +285,15 @@ The documentation follow-up commit and remote SHA are verified by the runner.
 - Auditor-only patch: no live battle performed after this code change.
 - Complete game-state certification remains PENDING: converter branches, hidden opponent state, and field effects are not all independently certified.
 - No upstream core, WASM, or Web changes. Old duplicate diagnostic tools were not deleted.
+
+<!-- castle-discord-default-catalog-2026-11-26 -->
+## Discord default team change (2026-11-26)
+
+- For normal Discord challenges, pbs-discord-bot.js now forwards --team pool:random to pbs-client.js.
+- pool:random draws according to drawWeight from team-pool-v3/team-pool.json (33 team rows, 32 species shells, total mass 1).
+- Explicit --team pool:flagship restores the prior two-variant mixture. PBS_TEAM and config team override also supported.
+- Mercy tier defaults to pool:tier-a unless an explicit override is configured.
+- Direct standalone pbs-client.js default remains pool:flagship. Core, WASM, Web and opponent belief are unchanged.
+- Offline tests in operator worktree: node syntax PASS, v3 catalog checks PASS, Discord selftest with default/flagship/mercy mock-spawn PASS, Castle continuation/faint regressions PASS, WASM Castle ruleset PASS.
+- No live Castle network requests were made; no live match test performed.
+- Git commit and push NOT PERFORMED by this patch script.

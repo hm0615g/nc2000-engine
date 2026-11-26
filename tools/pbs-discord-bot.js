@@ -14,7 +14,7 @@
  * Verified Castle Discord workflow (`#2000-一撃なし`):
  * 1. Idles with zero traffic to `psense.lib.net` until a user `@mentions` the bot.
  * 2. Determines strength/party tier from the `@mention` text:
- *    - Default (`tier = "default"`): adaptive battle search (cap `243,000`, `c = 0.4`) + `pool:nash` (APEX4 equilibrium mixture).
+ *    - Default (`tier = "default"`): adaptive search (243,000 cap) + weighted v3 catalog (`pool:random`, 33 entries).
  *    - Mercy / Handicap (`tier = "mercy"`, triggered by `手加減`, `別パ`, `サブ`, `Tier A`, etc.):
  *      adaptive battle search (cap `243,000`, `c = 0.4`) + `pool:tier-a` (8 iconic human-origin Tier A teams).
  * 3. Replies `"応戦します"` (via Discord Reply) to the challenger's message:
@@ -162,6 +162,11 @@ function loadConfig(cliArgs = {}) {
     throw new Error('PBS_PREVIEW_ITERS must be a positive safe integer');
   }
 
+  const requestedTeam = cliArgs.team ?? process.env.PBS_TEAM ?? fileCfg.team ?? null;
+  if (requestedTeam !== null && (typeof requestedTeam !== 'string' || !requestedTeam.trim())) {
+    throw new Error('INVALID_TEAM_SPEC: --team requires a nonempty value');
+  }
+
   return {
     discordToken: cliArgs.token || process.env.DISCORD_TOKEN || fileCfg.discordToken || '',
     pbsName: cliArgs.name || process.env.PBS_NAME || fileCfg.pbsName || 'NC2000Bot',
@@ -192,6 +197,7 @@ function loadConfig(cliArgs = {}) {
     iters: Number(battleBudgetText),
     adaptiveBattle: !battleItersExplicit,
     previewIters: Number(previewBudgetText),
+    team: requestedTeam === null ? null : requestedTeam.trim(),
     hostTimeoutSec: parseInt(
       cliArgs['host-timeout-sec'] || process.env.HOST_TIMEOUT_SEC || fileCfg.hostTimeoutSec || '240',
       10
@@ -309,8 +315,8 @@ function parseRoomFromText(rawText, pbsBaseUrl = 'http://psense.lib.net/PBS/_/{R
 }
 
 /**
- * Detect whether a message requests mercy / handicap mode (`tier = "mercy"`, 81k + Tier A box)
- * or default mode (`tier = "default"`, 81k + Nash equilibrium mixture).
+ * Detect whether a message requests mercy (`tier = "mercy"`, Tier A box)
+ * or default mode (`tier = "default"`, weighted v3 catalog).
  */
 function detectRequestedTier(rawText) {
   const norm = normalizeFullwidthAscii(String(rawText || '')).toLowerCase();
@@ -627,12 +633,13 @@ class CastleDiscordBot {
 
   launchPbsMatch({ channelId, challengerName, tier, roomLetter, roomLabel, roomUrl }) {
     if (this.activeMatch) return;
+    const selectedTeam = this.config.team || (tier === 'mercy' ? 'pool:tier-a' : 'pool:random');
     const displayRoom = roomLabel || LETTER_TO_LABEL[roomLetter] || `${roomLetter}部屋`;
 
     if (this.config.dryRunPbs) {
       this.log(
         `[DRY-RUN-PBS] Would launch pbs-client.js in ${displayRoom} (${roomLetter}: ${roomUrl}) ` +
-        `for challenger "${challengerName}" [tier=${tier}, iters=${this.config.iters}, preview=${this.config.previewIters}].`
+        `for challenger "${challengerName}" [tier=${tier}, team=${selectedTeam}, iters=${this.config.iters}, preview=${this.config.previewIters}].`
       );
       return;
     }
@@ -645,6 +652,7 @@ class CastleDiscordBot {
       '--pass', this.config.pbsPass,
       '--msg', this.config.pbsMsg,
       '--tier', tier,
+      '--team', selectedTeam,
       '--preview-iters', String(this.config.previewIters),
       '--games', '1',
       '--mode', 'host',
@@ -663,7 +671,7 @@ class CastleDiscordBot {
     }
 
     this.log(
-      `Spawning pbs-client.js in ${displayRoom} (${roomLetter}: ${roomUrl}) [tier=${tier}, iters=${this.config.iters}, preview=${this.config.previewIters}]...`
+      `Spawning pbs-client.js in ${displayRoom} (${roomLetter}: ${roomUrl}) [tier=${tier}, team=${selectedTeam}, iters=${this.config.iters}, preview=${this.config.previewIters}]...`
     );
 
     const child = (this.spawnProcess || spawn)(process.execPath, cliArgs, {
@@ -939,6 +947,8 @@ async function runSelfTest() {
     ),
     'LOSE'
   );
+  assert.strictEqual(loadConfig({team: 'pool:flagship'}).team, 'pool:flagship');
+  assert.throws(() => loadConfig({team: true}), /INVALID_TEAM_SPEC/);
   const cfg = loadConfig({ 'dry-run-pbs': true, 'event-log': '', 'auto-pick-room-sec': '0' });
   cfg.eventLogPath = '';
   const bot = new CastleDiscordBot(cfg);
@@ -1017,10 +1027,11 @@ async function runSelfTest() {
   const { EventEmitter } = require('node:events');
   const { PassThrough } = require('node:stream');
 
-  const testEntryReply = (status, expectedReply) => {
+  const testEntryReply = (status, expectedReply, tier, override, expectedTeam) => {
     const testBot = new CastleDiscordBot({
       ...cfg,
       dryRunPbs: false,
+      team: override,
     });
     const child = new EventEmitter();
     child.stdout = new PassThrough();
@@ -1043,7 +1054,7 @@ async function runSelfTest() {
     testBot.launchPbsMatch({
       channelId: approvedChannel,
       challengerName: 'TestPlayer',
-      tier: 'default',
+      tier,
       roomLetter: 'K',
       roomLabel: '\u7b2cK',
       roomUrl: K_ROOM_URL,
@@ -1058,6 +1069,9 @@ async function runSelfTest() {
       invocation.argv[invocation.argv.indexOf('--mode') + 1],
       'host'
     );
+    assert.strictEqual(invocation.argv[invocation.argv.indexOf('--team') + 1], expectedTeam);
+    assert.strictEqual(invocation.argv[invocation.argv.indexOf('--tier') + 1], tier);
+    assert.strictEqual(invocation.argv.filter(a => a === '--team').length, 1);
     assert.ok(invocation.argv.includes('--entry-status-ipc'));
     assert.ok(invocation.options.stdio.includes('ipc'));
 
@@ -1092,12 +1106,9 @@ async function runSelfTest() {
   const failureGreeting =
     '\u73fe\u5728\u90e8\u5c4b\u304c\u5229\u7528\u3067\u304d\u307e\u305b\u3093';
 
-  testEntryReply(
-    'success',
-    `${successGreeting}\n${K_ROOM_LINK}`
-  );
-  testEntryReply('failed', failureGreeting);
-  testEntryReply('closed', failureGreeting);
+  testEntryReply('success', `${successGreeting}\n${K_ROOM_LINK}`, 'default', null, 'pool:random');
+  testEntryReply('failed', failureGreeting, 'default', 'pool:flagship', 'pool:flagship');
+  testEntryReply('closed', failureGreeting, 'mercy', null, 'pool:tier-a');
 
   console.log('[discord-bot] K-room IPC tests passed.');
 
@@ -1662,7 +1673,8 @@ async function main() {
       '  node tools/pbs-discord-bot.js              # Normal live operation\n' +
       '  node tools/pbs-discord-bot.js --observe    # Passive sniffer (logs room-bot messages without replying)\n' +
       '  node tools/pbs-discord-bot.js --dry-run-pbs # Replies "応戦します" and detects room without entering PS.cgi\n' +
-      '  node tools/pbs-discord-bot.js --selftest   # Run built-in state-machine self-test'
+      '  node tools/pbs-discord-bot.js --selftest   # Run built-in state-machine self-test\n' +
+      '  node tools/pbs-discord-bot.js --team pool:flagship # Use previous flagship mixture'
     );
     process.exit(1);
   }

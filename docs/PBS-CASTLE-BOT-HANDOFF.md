@@ -64,8 +64,8 @@ node tools/pbs-discord-bot.js --token "$DISCORD_TOKEN" --name "NC2000" --pass "n
   ▼
 [Layer 1: Bot Core (WASM MCTS + Data)]
   ・crates/wasm/pkg-node/nc2000_wasm.js (Dex + ProtocolSearcher)
-  ・data/team-pool-v3/flagship-mixture.json (Default flagship mixture; two sets)
-  ・data/team-pool-v2/team-pool.json (Mercy: 8 human-origin Tier A teams)
+  - data/team-pool-v3/team-pool.json (Discord default: pool:random, weighted catalog)
+  - data/team-pool-v3/flagship-mixture.json (Optional: pool:flagship, two variants)
   ・data/belief-pool-v3/belief-pool.json (Base opponent belief pool)
   ・data/live-search.json (Adaptive battle and live preview)
 ```
@@ -109,7 +109,7 @@ node tools/pbs-discord-bot.js --token "$DISCORD_TOKEN" --name "NC2000" --pass "n
 ### Two-Stage Party Selection
 - **Default (`--tier default`)**:
   - Used on normal `@mentions`.
-  - Default: adaptive battle search (cap 243,000), live preview search (729,000), `pool:flagship`.
+  - Discord default: adaptive battle search (cap 243,000), live preview search (729,000), `pool:random` from the weighted v3 catalog.
 - **Mercy / Handicap (`--tier mercy`)**:
   - Triggered when the `@mention` includes any of: `手加減`, `てかげん`, `ハンデ`, `別パ`, `サブ`, `サブパ`, `tier a`, `tiera`, `tier-a`, `tier1`, `弱め`, `やさしく`, `優しく`, `mercy`, `handicap`.
   - Mercy: adaptive battle search (cap 243,000), live preview search (729,000), `pool:tier-a`.
@@ -149,7 +149,7 @@ node tools/pbs-client.js --room 第1 --name NC2000 --pass nc2pass --tier default
 
 ## 7. Upstream-aligned runtime (2026-11-24)
 
-- Default team is the flagship mixture from team-pool-v3.
+- Discord default team is selected by weighted draw from team-pool-v3/team-pool.json (pool:random). Standalone pbs-client.js default is unchanged (pool:flagship).
 - Default battle search is adaptive (243000 cap).
 - Team Preview uses live search (729000 iterations).
 - Unknown opposing teams use upstream WASM fallback, with strict public HP and legal-action checks.
@@ -157,3 +157,13 @@ node tools/pbs-client.js --room 第1 --name NC2000 --pass nc2pass --tier default
 - Offline audit: node tools/pbs-parity-audit.js data/pbs-traces --no-out
 - Stage 1 replay: 20 decisions PASS; 18 upstream fallback decisions.
 - This is not yet live adaptive battle certification.
+
+## 8. Discord team source and explicit overrides (2026-11-26)
+
+- With no team option, normal Discord challenges use `pool:random`: weighted sampling from the 33 team rows in `data/team-pool-v3/team-pool.json` (32 distinct species shells).
+- Requests that select the mercy tier continue using `pool:tier-a`, unless a team override was explicitly configured.
+- Preserve the previous two-team flagship mixture with `node tools/pbs-discord-bot.js --team pool:flagship`.
+- Other supported overrides are `--team pool:random`, `--team pool:tier-a`, and `--team pool:ID`.
+- Persistent overrides: set `"team": "pool:flagship"` in `pbs-bot.config.json`, or set `PBS_TEAM=pool:flagship`. Precedence: CLI, environment, config, tier-based default.
+- `pbs-client.js` invoked directly without `--team` still defaults to `pool:flagship`; only Discord defaults change.
+- Team choice changes neither the WASM battle engine nor opponent belief estimation.

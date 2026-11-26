@@ -211,7 +211,7 @@ AIコーディングアシスタント（Claude / Cursor / ChatGPT 等）にこ�
 
 ## 3. 2段階の強さ・パーティ設定 ＆ データ蓄積
 
-- **デフォルト (\`--tier default\`)**: \`243,000\` iterations + **Nash均衡混合 (\`pool:flagship\`、flagship mixture)** + 定跡選出ブック (\`live Team Preview search\`)
+- **Default (\`--tier default\`)**: adaptive search (243,000 cap) + weighted v3 catalog (\`pool:random\`, \`data/team-pool-v3/team-pool.json\`). Optional old flagship: \`--team pool:flagship\`.
 - **手加減・別パ要求時 (\`--tier mercy\`)**: メンションに \`手加減\` / \`てかげん\` / \`別パ\` / \`サブ\` / \`Tier A\` / \`弱め\` 等が含まれる場合、\`243,000\` iterations + **Tier A サブパ箱 (\`pool:tier-a\`、人間由来の代表8構築)**
 - **データ蓄積（Prior拡充用）**:
   - 対戦相手の型・選出・最大HP・持ち物履歴は \`data/pbs-opponent-db.json\` に自動保存され、連戦・再戦時に即座に相手適応Beliefとして使われます。
@@ -465,7 +465,7 @@ AIコーディングアシスタント（Claude / Cursor / ChatGPT 等）にこ�
         <li><strong>自動部屋選択フォールバック</strong>: <code>応戦します</code> の後15秒間相手から部屋指定がない場合は、自動で <code>第1(C)</code>〜<code>第3(E)</code> の空き状況（または相手が待機中の部屋）をチェックし、Bot自ら <code>第1にて</code> → <code>よろしくお願いします</code> と投稿して入室します。</li>
         <li><strong>2段階パーティ切り替え</strong>:
           <ul>
-            <li><strong>通常時 (<code>default</code>)</strong>: <code>243,000</code> iterations + <strong>Nash均衡混合 (<code>pool:flagship</code>、flagship mixture)</strong> + 定跡選出ブック</li>
+            <li><strong>Normal (default)</strong>: adaptive search (243,000 cap) + v3 weighted catalog (<code>pool:random</code>, 33 entries). Explicit <code>--team pool:flagship</code> selects the prior two-variant flagship.</li>
             <li><strong>手加減要求時 (<code>mercy</code>)</strong>: メンションに <code>手加減</code> / <code>別パ</code> / <code>サブ</code> / <code>Tier A</code> / <code>弱め</code> 等が含まれる場合、<code>243,000</code> iterations + <strong>Tier A サブパ箱 (<code>pool:tier-a</code>、人間由来の代表8構築)</strong></li>
           </ul>
         </li>
